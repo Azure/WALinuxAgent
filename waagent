@@ -1,0 +1,2335 @@
+#!/usr/bin/python
+#
+# Windows Azure Linux Agent
+#
+# Copyright 2012 Microsoft Corporation
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# Requires Python 2.4+ and Openssl 1.0+
+#
+# Implements parts of RFC 2131, 1541, 1497 and
+# http://msdn.microsoft.com/en-us/library/cc227282%28PROT.10%29.aspx
+# http://msdn.microsoft.com/en-us/library/cc227259%28PROT.13%29.aspx
+#
+
+import array
+import base64
+import httplib
+import os
+import os.path
+import platform
+import pwd
+import re
+import shutil
+import socket
+import SocketServer
+import struct
+import sys
+import tempfile
+import textwrap
+import threading
+import time
+import traceback
+import xml.dom.minidom
+
+GuestAgentName = "WALinuxAgent"
+GuestAgentLongName = "Windows Azure Linux Agent"
+GuestAgentVersion = "rd_wala.120504-1323"
+ProtocolVersion = "2011-12-31"
+
+Config = None
+LinuxDistro = "UNKNOWN"
+Verbose = False
+WaAgent = None
+DiskActivated = False
+Openssl = "openssl"
+
+PossibleEthernetInterfaces = ["seth0", "seth1", "eth0", "eth1"]
+RulesFiles = [ "/lib/udev/rules.d/75-persistent-net-generator.rules",
+               "/etc/udev/rules.d/70-persistent-net.rules" ]
+VarLibDhcpDirectories = ["/var/lib/dhclient", "/var/lib/dhcpcd", "/var/lib/dhcp"]
+EtcDhcpClientConfFiles = ["/etc/dhcp/dhclient.conf", "/etc/dhcp3/dhclient.conf"]
+LibDir = "/var/lib/waagent"
+
+# This lets us index into a string or an array of integers transparently.
+def Ord(a):
+    if type(a) == type("a"):
+        a = ord(a)
+    return a
+
+def IsWindows():
+    return (platform.uname()[0] == "Windows")
+
+def IsLinux():
+    return (platform.uname()[0] == "Linux")
+
+def DetectLinuxDistro():
+    global LinuxDistro
+    if os.path.isfile("/etc/redhat-release"):
+        LinuxDistro = "RedHat"
+        return True
+    if os.path.isfile("/etc/lsb-release") and "Ubuntu" in GetFileContents("/etc/lsb-release"):
+        LinuxDistro = "Ubuntu"
+        return True
+    if os.path.isfile("/etc/debian_version"):
+        LinuxDistro = "Debian"
+        return True
+    if os.path.isfile("/etc/SuSE-release"):
+        LinuxDistro = "Suse"
+        return True
+    return False
+
+def IsRedHat():
+    return "RedHat" in LinuxDistro
+
+def IsUbuntu():
+    return "Ubuntu" in LinuxDistro
+
+def IsDebian():
+    return IsUbuntu() or "Debian" in LinuxDistro
+
+def IsSuse():
+    return "Suse" in LinuxDistro
+
+def UsesRpm():
+    return IsRedHat() or IsSuse()
+
+def UsesDpkg():
+    return IsDebian()
+
+def GetLastPathElement(path):
+    return path.rsplit('/', 1)[1]
+
+def GetFileContents(filepath):
+    file = None
+    try:
+        file = open(filepath)
+    except:
+        return None
+    if file == None:
+        return None
+    try:
+        return file.read()
+    finally:
+        file.close()
+
+def SetFileContents(filepath, contents):
+    file = open(filepath, "w")
+    try:
+        file.write(contents)
+    finally:
+        file.close()
+
+def AppendFileContents(filepath, contents):
+    file = open(filepath, "a")
+    try:
+        file.write(contents)
+    finally:
+        file.close()
+
+def ReplaceFileContentsAtomic(filepath, contents):
+    handle, temp = tempfile.mkstemp(dir = os.path.dirname(filepath))
+    try:
+        os.write(handle, contents)
+    finally:
+        os.close(handle)
+    try:
+        os.rename(temp, filepath)
+        return
+    except:
+        pass
+    os.remove(filepath)
+    os.rename(temp, filepath)
+
+def GetLineStartingWith(prefix, filepath):
+    for line in GetFileContents(filepath).split('\n'):
+        if line.startswith(prefix):
+            return line
+    return None
+
+def Run(a):
+    LogIfVerbose(a)
+    return os.system(a)
+
+def GetNodeTextData(a):
+    for b in a.childNodes:
+        if b.nodeType == b.TEXT_NODE:
+            return b.data
+
+def GetHome():
+    home = None
+    try:
+        home = GetLineStartingWith("HOME", "/etc/default/useradd").split('=')[1].strip()
+    except:
+        pass
+    if (home == None) or (home.startswith("/") == False):
+        home = "/home"
+    return home
+
+def ChangeOwner(filepath, user):
+    p = None
+    try:
+        p = pwd.getpwnam(user)
+    except:
+        pass
+    if p != None:
+        os.chown(filepath, p[2], p[3])
+
+def CreateDir(dirpath, user, mode):
+    try:
+        os.makedirs(dirpath, mode)
+    except:
+        pass
+    ChangeOwner(dirpath, user)
+
+def CreateAccount(user, password, expiration, thumbprint):
+    if IsWindows():
+        Log("Skipping CreateAccount on Windows")
+        return None
+    userentry = None
+    try:
+        userentry = pwd.getpwnam(user)
+    except:
+        pass
+    uidmin = None
+    try:
+        uidmin = int(GetLineStartingWith("UID_MIN", "/etc/login.defs").split()[1])
+    except:
+        pass
+    if uidmin == None:
+        uidmin = 100
+    if userentry != None and userentry[2] < uidmin:
+        Error("CreateAccount: " + user + " is a system user. Will not set password.")
+        return "Failed to set password for system user: " + user + " (0x06)."
+    if userentry == None:
+        command = "useradd -m " + user
+        if expiration != None:
+            command += " -e " + expiration.split('.')[0]
+        if Run(command):
+            Error("Failed to create user account: " + user)
+            return "Failed to create user account: " + user + " (0x07)."
+    else:
+        Log("CreateAccount: " + user + " already exists. Will update password.")
+    if password != None:
+        os.popen("chpasswd", "w").write(user + ":" + password + "\n")
+    try:
+        if password == None:
+            SetFileContents("/etc/sudoers.d/waagent", user + " ALL = (ALL) NOPASSWD: ALL\n")
+        else:
+            SetFileContents("/etc/sudoers.d/waagent", user + " ALL = (ALL) ALL\n")
+        os.chmod("/etc/sudoers.d/waagent", 0440)
+    except:
+        Error("CreateAccount: Failed to configure sudo access for user.")
+        return "Failed to configure sudo privileges (0x08)."
+    home = GetHome()
+    if thumbprint != None:
+        dir = home + "/" + user + "/.ssh"
+        CreateDir(dir, user, 0700)
+        pub = dir + "/id_rsa.pub"
+        prv = dir + "/id_rsa"
+        Run("ssh-keygen -y -f " + thumbprint + ".prv > " + pub)
+        SetFileContents(prv, GetFileContents(thumbprint + ".prv"))
+        for f in [pub, prv]:
+            os.chmod(f, 0600)
+            ChangeOwner(f, user)
+        SetFileContents(dir + "/authorized_keys", GetFileContents(pub))
+        ChangeOwner(dir + "/authorized_keys", user)
+    Log("Created user account: " + user)
+    return None
+
+def DeleteAccount(user):
+    if IsWindows():
+        Log("Skipping DeleteAccount on Windows")
+        return
+    userentry = None
+    try:
+        userentry = pwd.getpwnam(user)
+    except:
+        pass
+    if userentry == None:
+        Error("DeleteAccount: " + user + " not found.")
+        return
+    uidmin = None
+    try:
+        uidmin = int(GetLineStartingWith("UID_MIN", "/etc/login.defs").split()[1])
+    except:
+        pass
+    if uidmin == None:
+        uidmin = 100
+    if userentry[2] < uidmin:
+        Error("DeleteAccount: " + user + " is a system user. Will not delete account.")
+        return
+    Run("userdel -f -r " + user)
+    try:
+        os.remove("/etc/sudoers.d/waagent")
+    except:
+        pass
+    return
+
+def ReloadSshd():
+    name = None
+    if IsRedHat() or IsSuse():
+        name = "sshd"
+    if IsDebian():
+        name = "ssh"
+    if name == None:
+        return
+    if not Run("service " + name + " status | grep running"):
+        Run("service " + name + " reload")
+
+def IsInRangeInclusive(a, low, high):
+    return (a >= low and a <= high)
+
+def IsPrintable(ch):
+    return IsInRangeInclusive(ch, Ord('A'), Ord('Z')) or IsInRangeInclusive(ch, Ord('a'), Ord('z')) or IsInRangeInclusive(ch, Ord('0'), Ord('9'))
+
+def HexDump(buffer, size):
+    if size < 0:
+        size = len(buffer)
+    result = ""
+    for i in range(0, size):
+        if (i % 16) == 0:
+            result += "%06X: " % i
+        byte = struct.unpack("B", buffer[i])[0]
+        result += "%02X " % byte
+        if (i & 15) == 7:
+            result += " "
+        if ((i + 1) % 16) == 0 or (i + 1) == size:
+            j = i
+            while ((j + 1) % 16) != 0:
+                result += "   "
+                if (j & 7) == 7:
+                    result += " "
+                j += 1
+            result += " "
+            for j in range(i - (i % 16), i + 1):
+                byte = struct.unpack("B", buffer[j])[0]
+                k = '.'
+                if IsPrintable(byte):
+                    k = chr(byte)
+                result += k
+            if (i + 1) != size:
+                result += "\n"
+    return result
+
+def ThrottleLog(counter):
+    # Log everything up to 10, every 10 up to 100, then every 100.
+    return (counter < 10) or ((counter < 100) and ((counter % 10) == 0)) or ((counter % 100) == 0)
+
+def Logger():
+    class T(object):
+        def __init__(self):
+            self.File = None
+
+    self = T()
+
+    def LogToFile(message):
+        FilePath = ["/var/log/waagent.log", "waagent.log"][IsWindows()]
+        if not os.path.isfile(FilePath) and self.File != None:
+            self.File.close()
+            self.File = None
+        if self.File == None:
+            self.File = open(FilePath, "a")
+        self.File.write(message + "\n")
+        self.File.flush()
+
+    def Log(message):
+        LogWithPrefix("", message)
+
+    def LogWithPrefix(prefix, message):
+        t = time.localtime()
+        t = "%04u/%02u/%02u %02u:%02u:%02u " % (t.tm_year, t.tm_mon, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec)
+        t += prefix
+        for line in message.split('\n'):
+            line = t + line
+            print(line)
+            LogToFile(line)
+
+    return Log, LogWithPrefix
+
+Log, LogWithPrefix = Logger()
+
+def NoLog(message):
+    pass
+
+def LogIfVerbose(message):
+    if Verbose == True:
+        Log(message)
+
+def LogWithPrefixIfVerbose(prefix, message):
+    if Verbose == True:
+        LogWithPrefix(prefix, message)
+
+def Warn(message):
+    LogWithPrefix("WARNING:", message)
+
+def Error(message):
+    LogWithPrefix("ERROR:", message)
+
+def ErrorWithPrefix(prefix, message):
+    LogWithPrefix("ERROR:" + prefix, message)
+
+def Linux_ioctl_GetIpv4Address(ifname):
+    import fcntl
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    return socket.inet_ntoa(fcntl.ioctl(s.fileno(), 0x8915, struct.pack('256s', ifname[:15]))[20:24])
+
+def Linux_ioctl_GetInterfaceMac(ifname):
+    import fcntl
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    info = fcntl.ioctl(s.fileno(), 0x8927,  struct.pack('256s', ifname[:15]))
+    return ''.join(['%02X' % Ord(char) for char in info[18:24]])
+
+def GetIpv4Address():
+    if IsLinux():
+        for ifname in PossibleEthernetInterfaces:
+            try:
+                return Linux_ioctl_GetIpv4Address(ifname)
+            except IOError, e:
+                pass
+    else:
+        try:
+            return socket.gethostbyname(socket.gethostname())
+        except Exception, e:
+            ErrorWithPrefix("GetIpv4Address:", str(e))
+            ErrorWithPrefix("GetIpv4Address:", traceback.format_exc())
+
+def HexStringToByteArray(a):
+    b = ""
+    for c in range(0, len(a) / 2):
+        b += struct.pack("B", int(a[c * 2:c * 2 + 2], 16))
+    return b
+
+def GetMacAddress():
+    if IsWindows():
+        # Windows:   Physical Address. . . . . . . . . : 00-15-17-79-00-7F\n
+        a = "ipconfig /all | findstr /c:\"Physical Address\" | findstr /v \"00-00-00-00-00-00-00\""
+        a = os.popen(a).read()
+        a = re.sub("\s+$", "", a)
+        a = re.sub(".+ ", "", a)
+        a = re.sub(":", "", a)
+        a = re.sub("-", "", a)
+    else:
+        for ifname in PossibleEthernetInterfaces:
+            try:
+                a = Linux_ioctl_GetInterfaceMac(ifname)
+                break
+            except IOError, e:
+                pass
+    return HexStringToByteArray(a)
+
+def DeviceForIdePort(n):
+    if n > 3:
+        return None
+    g0 = "00000000"
+    if n > 1:
+        g0 = "00000001"
+        n = n - 2
+    device = None
+    path="/sys/bus/vmbus/devices/"
+    for vmbus in os.listdir(path):
+        guid=GetFileContents(path + vmbus + "/device_id").lstrip('{').split('-')
+        if guid[0] == g0 and guid[1] == "000" + str(n):
+            for root, dirs, files in os.walk(path + vmbus):
+                if root.endswith("/block"):
+                    device = dirs[0]
+                    break
+            break
+    return device
+
+class Util(object):
+    def _HttpGet(self, url, headers):
+        LogIfVerbose("HttpGet(" + url + ")")
+        maxRetry = 2
+        if url.startswith("http://"):
+            url = url[7:]
+            url = url[url.index("/"):]
+        for retry in range(0, maxRetry + 1):
+            strRetry = str(retry)
+            log = [NoLog, Log][retry > 0]
+            log("retry HttpGet(" + url + "),retry=" + strRetry)
+            response = None
+            strStatus = "None"
+            try:
+                httpConnection = httplib.HTTPConnection(self.Endpoint)
+                if headers == None:
+                    request = httpConnection.request("GET", url)
+                else:
+                    request = httpConnection.request("GET", url, None, headers)
+                response = httpConnection.getresponse()
+                strStatus = str(response.status)
+            except:
+                pass
+            log("response HttpGet(" + url + "),retry=" + strRetry + ",status=" + strStatus)
+            if response == None or response.status != httplib.OK:
+                Error("HttpGet(" + url + "),retry=" + strRetry + ",status=" + strStatus)
+                if retry == maxRetry:
+                    Log("return HttpGet(" + url + "),retry=" + strRetry + ",status=" + strStatus)
+                    return None
+                else:
+                    Log("sleep 10 seconds HttpGet(" + url + "),retry=" + strRetry + ",status=" + strStatus)
+                    time.sleep(10)
+            else:
+                log("return HttpGet(" + url + "),retry=" + strRetry + ",status=" + strStatus)
+                return response.read()
+
+    def HttpGetWithoutHeaders(self, url):
+        return self._HttpGet(url, None)
+
+    def HttpGetWithHeaders(self, url):
+        return self._HttpGet(url, {"x-ms-agent-name": GuestAgentName, "x-ms-version": ProtocolVersion})
+
+    def HttpSecureGetWithHeaders(self, url, transportCert):
+        return self._HttpGet(url, {"x-ms-agent-name": GuestAgentName,
+                                   "x-ms-version": ProtocolVersion,
+                                   "x-ms-cipher-name": "DES_EDE3_CBC",
+                                   "x-ms-guest-agent-public-x509-cert": transportCert})
+
+    def HttpPost(self, url, data):
+        LogIfVerbose("HttpPost(" + url + ")")
+        maxRetry = 2
+        for retry in range(0, maxRetry + 1):
+            strRetry = str(retry)
+            log = [NoLog, Log][retry > 0]
+            log("retry HttpPost(" + url + "),retry=" + strRetry)
+            response = None
+            strStatus = "None"
+            try:
+                httpConnection = httplib.HTTPConnection(self.Endpoint)
+                request = httpConnection.request("POST", url, data, {"x-ms-agent-name": GuestAgentName,
+                                                                     "Content-Type": "text/xml; charset=utf-8",
+                                                                     "x-ms-version": ProtocolVersion})
+                response = httpConnection.getresponse()
+                strStatus = str(response.status)
+            except:
+                pass
+            log("response HttpPost(" + url + "),retry=" + strRetry + ",status=" + strStatus)
+            if response == None or (response.status != httplib.OK and response.status != httplib.ACCEPTED):
+                Error("HttpPost(" + url + "),retry=" + strRetry + ",status=" + strStatus)
+                if retry == maxRetry:
+                    Log("return HttpPost(" + url + "),retry=" + strRetry + ",status=" + strStatus)
+                    return None
+                else:
+                    Log("sleep 10 seconds HttpPost(" + url + "),retry=" + strRetry + ",status=" + strStatus)
+                    time.sleep(10)
+            else:
+                log("return HttpPost(" + url + "),retry=" + strRetry + ",status=" + strStatus)
+                return response
+
+def LoadBalancerProbeServer(port):
+
+    class T(object):
+        def __init__(self, port):
+            enabled = Config.get("LBProbeResponder")
+            if enabled != None and enabled.lower().startswith("n"):
+                return
+            self.ProbeCounter = 0
+            self.server = SocketServer.TCPServer((GetIpv4Address(), port), TCPHandler)
+            self.server_thread = threading.Thread(target = self.server.serve_forever)
+            self.server_thread.setDaemon(True)
+            self.server_thread.start()
+
+        def shutdown(self):
+            global EnableLoadBalancerProbes
+            if not EnableLoadBalancerProbes:
+                return
+            self.server.shutdown()
+
+    class TCPHandler(SocketServer.BaseRequestHandler):
+        def GetHttpDateTimeNow(self):
+            # Date: Fri, 25 Mar 2011 04:53:10 GMT
+            return time.strftime("%a, %d %b %Y %H:%M:%S GMT", time.gmtime())
+
+        def handle(self):
+            context.ProbeCounter = (context.ProbeCounter + 1) % 1000000
+            log = [NoLog, LogIfVerbose][ThrottleLog(context.ProbeCounter)]
+            strCounter = str(context.ProbeCounter)
+            if context.ProbeCounter == 1:
+                Log("Receiving LB probes.")
+            log("Received LB probe # " + strCounter)
+            self.request.recv(1024)
+            self.request.send("HTTP/1.1 200 OK\r\nContent-Length: 2\r\nContent-Type: text/html\r\nDate: " + self.GetHttpDateTimeNow() + "\r\n\r\nOK")
+
+    context = T(port)
+    return context
+
+class ConfigurationProvider(object):
+    def __init__(self):
+        self.values = dict()
+        if os.path.isfile("/etc/waagent.conf") == False:
+            raise Exception("Missing configuration in /etc/waagent.conf")
+        try:
+            for line in GetFileContents("/etc/waagent.conf").split('\n'):
+                if not line.startswith("#") and "=" in line:
+                    parts = line.split()[0].split('=')
+                    value = parts[1].strip("\" ")
+                    if value != "None":
+                        self.values[parts[0]] = value
+                    else:
+                        self.values[parts[0]] = None
+        except:
+            Error("Unable to parse /etc/waagent.conf")
+            raise
+        return
+
+    def get(self, key):
+        return self.values.get(key)
+
+class EnvMonitor(object):
+    def __init__(self):
+        self.shutdown = False
+        self.HostName = socket.gethostname()
+        self.server_thread = threading.Thread(target = self.monitor)
+        self.server_thread.setDaemon(True)
+        self.server_thread.start()
+        self.published = False
+
+    def monitor(self):
+        publish = Config.get("Provisioning.MonitorHostName")
+        dhcpcmd = "pidof dhclient"
+        if IsSuse():
+            dhcpcmd = "pidof dhcpcd"
+        if IsDebian():
+            dhcpcmd = "pidof dhclient3"
+        dhcppid = os.popen(dhcpcmd).read()
+        while not self.shutdown:
+            for a in RulesFiles:
+                if os.path.isfile(a):
+                    if os.path.isfile(GetLastPathElement(a)):
+                        os.remove(GetLastPathElement(a))
+                    shutil.move(a, ".")
+                    Log("EnvMonitor: Moved " + a + " -> " + LibDir)
+            if publish != None and publish.lower().startswith("y"):
+                try:
+                    if socket.gethostname() != self.HostName:
+                        Log("EnvMonitor: Detected host name change: " + self.HostName + " -> " + socket.gethostname())
+                        self.HostName = socket.gethostname()
+                        WaAgent.UpdateAndPublishHostName(self.HostName)
+                        dhcppid = os.popen(dhcpcmd).read()
+                        self.published = True
+                except:
+                    pass
+            else:
+                self.published = True
+            pid = ""
+            if not os.path.isdir("/proc/" + dhcppid.strip()):
+                pid = os.popen(dhcpcmd).read()
+            if pid != "" and pid != dhcppid:
+                Log("EnvMonitor: Detected dhcp client restart. Restoring routing table.")
+                WaAgent.RestoreRoutes()
+                dhcppid = pid
+            time.sleep(5)
+
+    def SetHostName(self, name):
+        if socket.gethostname() == name:
+            self.published = True
+        else:
+            Run("hostname " + name)
+
+    def IsNamePublished(self):
+        return self.published
+
+    def shutdown(self):
+        self.shutdown = True
+        self.server_thread.join()
+
+class Certificates(object):
+#
+# <CertificateFile xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="certificates10.xsd">
+#  <Version>2010-12-15</Version>
+#  <Incarnation>2</Incarnation>
+#  <Format>Pkcs7BlobWithPfxContents</Format>
+#  <Data>MIILTAY...
+#  </Data>
+# </CertificateFile>
+#
+    def __init__(self):
+        self.reinitialize()
+
+    def reinitialize(self):
+        self.Incarnation = None
+        self.Role = None
+
+    def Parse(self, xmlText):
+        self.reinitialize()
+        SetFileContents("Certificates.xml", xmlText)
+        dom = xml.dom.minidom.parseString(xmlText)
+        for a in [ "CertificateFile", "Version", "Incarnation",
+                   "Format", "Data", ]:
+            if not dom.getElementsByTagName(a):
+                Error("Certificates.Parse: Missing " + a)
+                return None
+        node = dom.childNodes[0]
+        if node.localName != "CertificateFile":
+            Error("Certificates.Parse: root not CertificateFile")
+            return None
+        SetFileContents("Certificates.p7m",
+            "MIME-Version: 1.0\n"
+            + "Content-Disposition: attachment; filename=\"Certificates.p7m\"\n"
+            + "Content-Type: application/x-pkcs7-mime; name=\"Certificates.p7m\"\n"
+            + "Content-Transfer-Encoding: base64\n\n"
+            + GetNodeTextData(dom.getElementsByTagName("Data")[0]))
+        if Run(Openssl + " cms -decrypt -in Certificates.p7m -inkey TransportPrivate.pem -recip TransportCert.pem | " + Openssl + " pkcs12 -nodes -password pass: -out Certificates.pem"):
+            Error("Certificates.Parse: Failed to extract certificates from CMS message.")
+            return self
+        # There may be multiple certificates in this package. Split them.
+        file = open("Certificates.pem")
+        pindex = 1
+        cindex = 1
+        output = open("temp.pem", "w")
+        for line in file.readlines():
+            output.write(line)
+            if line.startswith("-----END PRIVATE KEY-----") or line.startswith("-----END CERTIFICATE-----"):
+                output.close()
+                if line.startswith("-----END PRIVATE KEY-----"):
+                    os.rename("temp.pem", str(pindex) + ".prv")
+                    pindex += 1
+                else:
+                    os.rename("temp.pem", str(cindex) + ".crt")
+                    cindex += 1
+                output = open("temp.pem", "w")
+        output.close()
+        os.remove("temp.pem")
+        keys = dict()
+        index = 1
+        filename = str(index) + ".crt"
+        while os.path.isfile(filename):
+            thumbprint = os.popen(Openssl + " x509 -in " + filename + " -fingerprint -noout").read().rstrip().split('=')[1].replace(':', '').upper()
+            pubkey=os.popen(Openssl + " x509 -in " + filename + " -pubkey -noout").read()
+            keys[pubkey] = thumbprint
+            os.rename(filename, thumbprint + ".crt")
+            os.chmod(thumbprint + ".crt", 0600)
+            if IsRedHat():
+                Run("chcon unconfined_u:object_r:ssh_home_t:s0 " + thumbprint + ".crt")
+            index += 1
+            filename = str(index) + ".crt"
+        index = 1
+        filename = str(index) + ".prv"
+        while os.path.isfile(filename):
+            pubkey = os.popen(Openssl + " rsa -in " + filename + " -pubout").read()
+            os.rename(filename, keys[pubkey] + ".prv")
+            os.chmod(keys[pubkey] + ".prv", 0600)
+            if IsRedHat():
+                Run("chcon unconfined_u:object_r:ssh_home_t:s0 " + keys[pubkey] + ".prv")
+            index += 1
+            filename = str(index) + ".prv"
+        return self
+
+class SharedConfig(object):
+#
+# <SharedConfig version="1.0.0.0" goalStateIncarnation="1">
+#   <Deployment name="db00a7755a5e4e8a8fe4b19bc3b330c3" guid="{ce5a036f-5c93-40e7-8adf-2613631008ab}" incarnation="2">
+#     <Service name="MyVMRoleService" guid="{00000000-0000-0000-0000-000000000000}" />
+#     <ServiceInstance name="db00a7755a5e4e8a8fe4b19bc3b330c3.1" guid="{d113f4d7-9ead-4e73-b715-b724b5b7842c}" />
+#   </Deployment>
+#   <Incarnation number="1" instance="MachineRole_IN_0" guid="{a0faca35-52e5-4ec7-8fd1-63d2bc107d9b}" />
+#   <Role guid="{73d95f1c-6472-e58e-7a1a-523554e11d46}" name="MachineRole" settleTimeSeconds="10" />
+#   <LoadBalancerSettings timeoutSeconds="0" waitLoadBalancerProbeCount="8">
+#     <Probes>
+#       <Probe name="MachineRole" />
+#       <Probe name="55B17C5E41A1E1E8FA991CF80FAC8E55" />
+#       <Probe name="3EA4DBC19418F0A766A4C19D431FA45F" />
+#     </Probes>
+#   </LoadBalancerSettings>
+#   <OutputEndpoints>
+#     <Endpoint name="MachineRole:Microsoft.WindowsAzure.Plugins.RemoteAccess.Rdp" type="SFS">
+#       <Target instance="MachineRole_IN_0" endpoint="Microsoft.WindowsAzure.Plugins.RemoteAccess.Rdp" />
+#     </Endpoint>
+#   </OutputEndpoints>
+#   <Instances>
+#     <Instance id="MachineRole_IN_0" address="10.115.153.75">
+#       <FaultDomains randomId="0" updateId="0" updateCount="0" />
+#       <InputEndpoints>
+#         <Endpoint name="a" address="10.115.153.75:80" protocol="http" isPublic="true" loadBalancedPublicAddress="70.37.106.197:80" enableDirectServerReturn="false" isDirectAddress="false" disableStealthMode="false">
+#           <LocalPorts>
+#             <LocalPortRange from="80" to="80" />
+#           </LocalPorts>
+#         </Endpoint>
+#         <Endpoint name="Microsoft.WindowsAzure.Plugins.RemoteAccess.Rdp" address="10.115.153.75:3389" protocol="tcp" isPublic="false" enableDirectServerReturn="false" isDirectAddress="false" disableStealthMode="false">
+#           <LocalPorts>
+#             <LocalPortRange from="3389" to="3389" />
+#           </LocalPorts>
+#         </Endpoint>
+#         <Endpoint name="Microsoft.WindowsAzure.Plugins.RemoteForwarder.RdpInput" address="10.115.153.75:20000" protocol="tcp" isPublic="true" loadBalancedPublicAddress="70.37.106.197:3389" enableDirectServerReturn="false" isDirectAddress="false" disableStealthMode="false">
+#           <LocalPorts>
+#             <LocalPortRange from="20000" to="20000" />
+#           </LocalPorts>
+#         </Endpoint>
+#       </InputEndpoints>
+#     </Instance>
+#   </Instances>
+# </SharedConfig>
+#
+    def __init__(self):
+        self.reinitialize()
+
+    def reinitialize(self):
+        self.Deployment = None
+        self.Incarnation = None
+        self.Role = None
+        self.LoadBalancerSettings = None
+        self.OutputEndpoints = None
+        self.Instances = None
+
+    def Parse(self, xmlText):
+        self.reinitialize()
+        SetFileContents("SharedConfig.xml", xmlText)
+        dom = xml.dom.minidom.parseString(xmlText)
+        for a in [ "SharedConfig", "Deployment", "Service",
+                   "ServiceInstance", "Incarnation", "Role", ]:
+            if not dom.getElementsByTagName(a):
+                Error("SharedConfig.Parse: Missing " + a)
+                return None
+        node = dom.childNodes[0]
+        if node.localName != "SharedConfig":
+            Error("SharedConfig.Parse: root not SharedConfig")
+            return None
+        program = Config.get("Role.TopologyConsumer")
+        if program != None:
+            os.spawnl(os.P_NOWAIT, program, program, LibDir + "/SharedConfig.xml")
+        return self
+
+class HostingEnvironmentConfig(object):
+#
+# <HostingEnvironmentConfig version="1.0.0.0" goalStateIncarnation="1">
+#   <StoredCertificates>
+#     <StoredCertificate name="Stored0Microsoft.WindowsAzure.Plugins.RemoteAccess.PasswordEncryption" certificateId="sha1:C093FA5CD3AAE057CB7C4E04532B2E16E07C26CA" storeName="My" configurationLevel="System" />
+#   </StoredCertificates>
+#   <Deployment name="db00a7755a5e4e8a8fe4b19bc3b330c3" guid="{ce5a036f-5c93-40e7-8adf-2613631008ab}" incarnation="2">
+#     <Service name="MyVMRoleService" guid="{00000000-0000-0000-0000-000000000000}" />
+#     <ServiceInstance name="db00a7755a5e4e8a8fe4b19bc3b330c3.1" guid="{d113f4d7-9ead-4e73-b715-b724b5b7842c}" />
+#   </Deployment>
+#   <Incarnation number="1" instance="MachineRole_IN_0" guid="{a0faca35-52e5-4ec7-8fd1-63d2bc107d9b}" />
+#   <Role guid="{73d95f1c-6472-e58e-7a1a-523554e11d46}" name="MachineRole" hostingEnvironmentVersion="1" software="" softwareType="ApplicationPackage" entryPoint="" parameters="" settleTimeSeconds="10" />
+#   <HostingEnvironmentSettings name="full" Runtime="rd_fabric_stable.110217-1402.RuntimePackage_1.0.0.8.zip">
+#     <CAS mode="full" />
+#     <PrivilegeLevel mode="max" />
+#     <AdditionalProperties><CgiHandlers></CgiHandlers></AdditionalProperties>
+#   </HostingEnvironmentSettings>
+#   <ApplicationSettings>
+#     <Setting name="__ModelData" value="&lt;m role=&quot;MachineRole&quot; xmlns=&quot;urn:azure:m:v1&quot;>&lt;r name=&quot;MachineRole&quot;>&lt;e name=&quot;a&quot; />&lt;e name=&quot;b&quot; />&lt;e name=&quot;Microsoft.WindowsAzure.Plugins.RemoteAccess.Rdp&quot; />&lt;e name=&quot;Microsoft.WindowsAzure.Plugins.RemoteForwarder.RdpInput&quot; />&lt;/r>&lt;/m>" />
+#     <Setting name="Microsoft.WindowsAzure.Plugins.Diagnostics.ConnectionString" value="DefaultEndpointsProtocol=http;AccountName=osimages;AccountKey=DNZQ..." />
+#     <Setting name="Microsoft.WindowsAzure.Plugins.RemoteAccess.AccountEncryptedPassword" value="MIIBnQYJKoZIhvcN..." />
+#     <Setting name="Microsoft.WindowsAzure.Plugins.RemoteAccess.AccountExpiration" value="2022-07-23T23:59:59.0000000-07:00" />
+#     <Setting name="Microsoft.WindowsAzure.Plugins.RemoteAccess.AccountUsername" value="test" />
+#     <Setting name="Microsoft.WindowsAzure.Plugins.RemoteAccess.Enabled" value="true" />
+#     <Setting name="Microsoft.WindowsAzure.Plugins.RemoteForwarder.Enabled" value="true" />
+#     <Setting name="Certificate|Microsoft.WindowsAzure.Plugins.RemoteAccess.PasswordEncryption" value="sha1:C093FA5CD3AAE057CB7C4E04532B2E16E07C26CA" />
+#   </ApplicationSettings>
+#   <ResourceReferences>
+#     <Resource name="DiagnosticStore" type="directory" request="Microsoft.Cis.Fabric.Controller.Descriptions.ServiceDescription.Data.Policy" sticky="true" size="1" path="db00a7755a5e4e8a8fe4b19bc3b330c3.MachineRole.DiagnosticStore\" disableQuota="false" />
+#   </ResourceReferences>
+# </HostingEnvironmentConfig>
+#
+    def __init__(self):
+        self.reinitialize()
+
+    def reinitialize(self):
+        self.StoredCertificates = None
+        self.Deployment = None
+        self.Incarnation = None
+        self.Role = None
+        self.HostingEnvironmentSettings = None
+        self.ApplicationSettings = None
+        self.Certificates = None
+        self.ResourceReferences = None
+
+    def Parse(self, xmlText):
+        self.reinitialize()
+        SetFileContents("HostingEnvironmentConfig.xml", xmlText)
+        dom = xml.dom.minidom.parseString(xmlText)
+        for a in [ "HostingEnvironmentConfig", "Deployment", "Service",
+                   "ServiceInstance", "Incarnation", "Role", ]:
+            if not dom.getElementsByTagName(a):
+                Error("HostingEnvironmentConfig.Parse: Missing " + a)
+                return None
+        node = dom.childNodes[0]
+        if node.localName != "HostingEnvironmentConfig":
+            Error("HostingEnvironmentConfig.Parse: root not HostingEnvironmentConfig")
+            return None
+        self.ApplicationSettings = dom.getElementsByTagName("Setting")
+        self.Certificates = dom.getElementsByTagName("StoredCertificate")
+        return self
+
+    def DecryptPassword(self, e):
+        SetFileContents("password.p7m",
+            "MIME-Version: 1.0\n"
+            + "Content-Disposition: attachment; filename=\"password.p7m\"\n"
+            + "Content-Type: application/x-pkcs7-mime; name=\"password.p7m\"\n"
+            + "Content-Transfer-Encoding: base64\n\n"
+            + textwrap.fill(e, 64))
+        return os.popen(Openssl + " cms -decrypt -in password.p7m -inkey Certificates.pem -recip Certificates.pem").read()
+
+    def ActivateResourceDisk(self):
+        global DiskActivated
+        if IsWindows():
+            DiskActivated = True
+            Log("Skipping ActivateResourceDisk on Windows")
+            return
+        format = Config.get("ResourceDisk.Format")
+        if format == None or format.lower().startswith("n"):
+            DiskActivated = True
+            return
+        device = DeviceForIdePort(1)
+        if device == None:
+            Error("ActivateResourceDisk: Unable to detect disk topology.")
+            return
+        device = "/dev/" + device
+        for entry in os.popen("mount").read().split():
+            if entry.startswith(device + "1"):
+                Log("ActivateResourceDisk: " + device + "1 is already mounted.")
+                DiskActivated = True
+                return
+        mountpoint = Config.get("ResourceDisk.MountPoint")
+        if mountpoint == None:
+            mountpoint = "/mnt/resource"
+        CreateDir(mountpoint, "root", 0755)
+        fs = Config.get("ResourceDisk.Filesystem")
+        if fs == None:
+            fs = "ext3"
+        if os.popen("sfdisk -q -c " + device + " 1").read().rstrip() == "7" and fs != "ntfs":
+            Run("sfdisk -c " + device + " 1 83")
+            Run("mkfs." + fs + " " + device + "1")
+        if Run("mount " + device + "1 " + mountpoint):
+            Error("ActivateResourceDisk: Failed to mount resource disk (" + device + "1).")
+            return
+        Log("Resource disk (" + device + "1) is mounted at " + mountpoint + " with fstype " + fs)
+        DiskActivated = True
+        swap = Config.get("ResourceDisk.EnableSwap")
+        if swap == None or swap.lower().startswith("n"):
+            return
+        sizeKB = int(Config.get("ResourceDisk.SwapSizeMB")) * 1024
+        if os.path.isfile(mountpoint + "/swapfile") and os.path.getsize(mountpoint + "/swapfile") != (sizeKB * 1024):
+            os.remove(mountpoint + "/swapfile")
+        if not os.path.isfile(mountpoint + "/swapfile"):
+            Run("dd if=/dev/zero of=" + mountpoint + "/swapfile bs=1024 count=" + str(sizeKB))
+            Run("mkswap " + mountpoint + "/swapfile")
+        if not Run("swapon " + mountpoint + "/swapfile"):
+            Log("Enabled " + str(sizeKB) + " KB of swap at " + mountpoint + "/swapfile")
+        else:
+            Error("ActivateResourceDisk: Failed to activate swap at " + mountpoint + "/swapfile")
+
+    def Process(self):
+        if DiskActivated == False:
+            diskThread = threading.Thread(target = self.ActivateResourceDisk)
+            diskThread.start()
+        User = None
+        Pass = None
+        Expiration = None
+        Thumbprint = None
+        for b in self.ApplicationSettings:
+            sname = b.getAttribute("name")
+            svalue = b.getAttribute("value")
+            if sname == "Microsoft.WindowsAzure.Plugins.RemoteAccess.AccountEncryptedPassword":
+                Pass = self.DecryptPassword(svalue)
+            elif sname == "Microsoft.WindowsAzure.Plugins.RemoteAccess.AccountUsername":
+                User = svalue
+            elif sname == "Microsoft.WindowsAzure.Plugins.RemoteAccess.AccountExpiration":
+                Expiration = svalue
+            elif sname == "Certificate|Microsoft.WindowsAzure.Plugins.RemoteAccess.PasswordEncryption":
+                Thumbprint = svalue.split(':')[1].upper()
+        if User != None and Pass != None:
+            if User != "root" and User != "" and Pass != "":
+                CreateAccount(User, Pass, Expiration, Thumbprint)
+            else:
+                Error("Not creating user account: user=" + User + " pass=" + Pass)
+        for c in self.Certificates:
+            cname = c.getAttribute("name")
+            csha1 = c.getAttribute("certificateId").split(':')[1].upper()
+            cpath = c.getAttribute("storeName")
+            clevel = c.getAttribute("configurationLevel")
+            if os.path.isfile(csha1 + ".prv"):
+                Log("Private key with thumbprint: " + csha1 + " was retrieved.")
+            if os.path.isfile(csha1 + ".crt"):
+                Log("Public cert with thumbprint: " + csha1 + " was retrieved.")
+        program = Config.get("Role.ConfigurationConsumer")
+        if program != None:
+            os.spawnl(os.P_NOWAIT, program, program, LibDir + "/HostingEnvironmentConfig.xml")
+
+class GoalState(Util):
+#
+# <GoalState xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="goalstate10.xsd">
+#   <Version>2010-12-15</Version>
+#   <Incarnation>1</Incarnation>
+#   <Machine>
+#     <ExpectedState>Started</ExpectedState>
+#     <LBProbePorts>
+#       <Port>16001</Port>
+#     </LBProbePorts>
+#   </Machine>
+#   <Container>
+#     <ContainerId>c6d5526c-5ac2-4200-b6e2-56f2b70c5ab2</ContainerId>
+#     <RoleInstanceList>
+#       <RoleInstance>
+#         <InstanceId>MachineRole_IN_0</InstanceId>
+#         <State>Started</State>
+#         <Configuration>
+#           <HostingEnvironmentConfig>http://10.115.153.40:80/machine/c6d5526c-5ac2-4200-b6e2-56f2b70c5ab2/MachineRole%5FIN%5F0?comp=config&amp;type=hostingEnvironmentConfig&amp;incarnation=1</HostingEnvironmentConfig>
+#           <SharedConfig>http://10.115.153.40:80/machine/c6d5526c-5ac2-4200-b6e2-56f2b70c5ab2/MachineRole%5FIN%5F0?comp=config&amp;type=sharedConfig&amp;incarnation=1</SharedConfig>
+#           <Certificates>http://10.115.153.40:80/machine/c6d5526c-5ac2-4200-b6e2-56f2b70c5ab2/MachineRole%5FIN%5F0?comp=certificates&amp;incarnation=1</Certificates>
+#         </Configuration>
+#       </RoleInstance>
+#     </RoleInstanceList>
+#   </Container>
+# </GoalState>
+#
+# There is only one Role for VM images.
+#
+# Of primary interest is:
+#  Machine/ExpectedState -- this is how shutdown is requested
+#  LBProbePorts -- an http server needs to run here
+#  We also note Container/ContainerID and RoleInstance/InstanceId to form the health report.
+#  And of course, Incarnation
+#
+    def __init__(self, Agent):
+        self.Agent = Agent
+        self.Endpoint = Agent.Endpoint
+        self.TransportCert = Agent.TransportCert
+        self.reinitialize()
+
+    def reinitialize(self):
+        self.Incarnation = None # integer
+        self.ExpectedState = None # "Started" or "Stopped"
+        self.HostingEnvironmentConfigUrl = None
+        self.HostingEnvironmentConfigXml = None
+        self.HostingEnvironmentConfig = None
+        self.SharedConfigUrl = None
+        self.SharedConfigXml = None
+        self.SharedConfig = None
+        self.CertificatesUrl = None
+        self.CertificatesXml = None
+        self.Certificates = None
+        self.RoleInstanceId = None
+        self.ContainerId = None
+        self.LoadBalancerProbePort = None # integer, ?list of integers
+
+    def Parse(self, xmlText):
+        self.reinitialize()
+        node = xml.dom.minidom.parseString(xmlText).childNodes[0]
+        if node.localName != "GoalState":
+            Error("GoalState.Parse: root not GoalState")
+            return None
+        for a in node.childNodes:
+            if a.nodeType == node.ELEMENT_NODE:
+                if a.localName == "Incarnation":
+                    self.Incarnation = GetNodeTextData(a)
+                elif a.localName == "Machine":
+                    for b in a.childNodes:
+                        if b.nodeType == node.ELEMENT_NODE:
+                            if b.localName == "ExpectedState":
+                                self.ExpectedState = GetNodeTextData(b)
+                                Log("ExpectedState: " + self.ExpectedState)
+                            elif b.localName == "LBProbePorts":
+                                for c in b.childNodes:
+                                    if c.nodeType == node.ELEMENT_NODE and c.localName == "Port":
+                                        self.LoadBalancerProbePort = int(GetNodeTextData(c))
+                elif a.localName == "Container":
+                    for b in a.childNodes:
+                        if b.nodeType == node.ELEMENT_NODE:
+                            if b.localName == "ContainerId":
+                                self.ContainerId = GetNodeTextData(b)
+                                Log("ContainerId: " + self.ContainerId)
+                            elif b.localName == "RoleInstanceList":
+                                for c in b.childNodes:
+                                    if c.localName == "RoleInstance":
+                                        for d in c.childNodes:
+                                            if d.nodeType == node.ELEMENT_NODE:
+                                                if d.localName == "InstanceId":
+                                                    self.RoleInstanceId = GetNodeTextData(d)
+                                                    Log("RoleInstanceId: " + self.RoleInstanceId)
+                                                elif d.localName == "State":
+                                                    pass
+                                                elif d.localName == "Configuration":
+                                                    for e in d.childNodes:
+                                                        if e.nodeType == node.ELEMENT_NODE:
+                                                            if e.localName == "HostingEnvironmentConfig":
+                                                                self.HostingEnvironmentConfigUrl = GetNodeTextData(e)
+                                                                LogIfVerbose("HostingEnvironmentConfigUrl:" + self.HostingEnvironmentConfigUrl)
+                                                                self.HostingEnvironmentConfigXml = self.HttpGetWithHeaders(self.HostingEnvironmentConfigUrl)
+                                                                self.HostingEnvironmentConfig = HostingEnvironmentConfig().Parse(self.HostingEnvironmentConfigXml)
+                                                            elif e.localName == "SharedConfig":
+                                                                self.SharedConfigUrl = GetNodeTextData(e)
+                                                                LogIfVerbose("SharedConfigUrl:" + self.SharedConfigUrl)
+                                                                self.SharedConfigXml = self.HttpGetWithHeaders(self.SharedConfigUrl)
+                                                                self.SharedConfig = SharedConfig().Parse(self.SharedConfigXml)
+                                                            elif e.localName == "Certificates":
+                                                                self.CertificatesUrl = GetNodeTextData(e)
+                                                                LogIfVerbose("CertificatesUrl:" + self.CertificatesUrl)
+                                                                self.CertificatesXml = self.HttpSecureGetWithHeaders(self.CertificatesUrl, self.TransportCert)
+                                                                self.Certificates = Certificates().Parse(self.CertificatesXml)
+        if self.Incarnation == None:
+            Error("GoalState.Parse: Incarnation missing")
+            return None
+        if self.ExpectedState == None:
+            Error("GoalState.Parse: ExpectedState missing")
+            return None
+        if self.RoleInstanceId == None:
+            Error("GoalState.Parse: RoleInstanceId missing")
+            return None
+        if self.ContainerId == None:
+            Error("GoalState.Parse: ContainerId missing")
+            return None
+        SetFileContents("GoalState." + self.Incarnation + ".xml", xmlText)
+        return self
+
+    def Process(self):
+        self.HostingEnvironmentConfig.Process()
+
+class OvfEnv(object):
+#
+# <?xml version="1.0" encoding="utf-8"?>
+# <Environment xmlns="http://schemas.dmtf.org/ovf/environment/1" xmlns:oe="http://schemas.dmtf.org/ovf/environment/1" xmlns:wa="http://schemas.microsoft.com/windowsazure" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+#    <wa:ProvisioningSection>
+#      <wa:Version>1.0</wa:Version>
+#      <LinuxProvisioningConfigurationSet xmlns="http://schemas.microsoft.com/windowsazure" xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
+#        <ConfigurationSetType>LinuxProvisioningConfiguration</ConfigurationSetType>
+#        <HostName>HostName</HostName>
+#        <UserName>UserName</UserName>
+#        <UserPassword>UserPassword</UserPassword>
+#        <DisableSshPasswordAuthentication>false</DisableSshPasswordAuthentication>
+#        <SSH>
+#          <PublicKeys>
+#            <PublicKey>
+#              <Fingerprint>EB0C0AB4B2D5FC35F2F0658D19F44C8283E2DD62</Fingerprint>
+#              <Path>$HOME/UserName/.ssh/authorized_keys</Path>
+#            </PublicKey>
+#          </PublicKeys>
+#          <KeyPairs>
+#            <KeyPair>
+#              <Fingerprint>EB0C0AB4B2D5FC35F2F0658D19F44C8283E2DD62</Fingerprint>
+#              <Path>$HOME/UserName/.ssh/id_rsa</Path>
+#            </KeyPair>
+#          </KeyPairs>
+#        </SSH>
+#      </LinuxProvisioningConfigurationSet>
+#    </wa:ProvisioningSection>
+# </Environment>
+#
+    def __init__(self):
+        self.reinitialize()
+
+    def reinitialize(self):
+        self.WaNs = "http://schemas.microsoft.com/windowsazure"
+        self.OvfNs = "http://schemas.dmtf.org/ovf/environment/1"
+        self.MajorVersion = 1
+        self.MinorVersion = 0
+        self.ComputerName = None
+        self.AdminPassword = None
+        self.UserName = None
+        self.UserPassword = None
+        self.DisableSshPasswordAuthentication = True
+        self.SshPublicKeys = []
+        self.SshKeyPairs = []
+
+    def Parse(self, xmlText):
+        self.reinitialize()
+        dom = xml.dom.minidom.parseString(xmlText)
+        if len(dom.getElementsByTagNameNS(self.OvfNs, "Environment")) != 1:
+            Error("Unable to parse OVF XML.")
+        section = None
+        newer = False
+        for p in dom.getElementsByTagNameNS(self.WaNs, "ProvisioningSection"):
+            for n in p.childNodes:
+                if n.localName == "Version":
+                    verparts = GetNodeTextData(n).split('.')
+                    major = int(verparts[0])
+                    minor = int(verparts[1])
+                    if major > self.MajorVersion:
+                        newer = True
+                    if major != self.MajorVersion:
+                        break
+                    if minor > self.MinorVersion:
+                        newer = True
+                    section = p
+        if newer == True:
+            Warn("Newer provisioning configuration detected. Please consider updating waagent.")
+        if section == None:
+            Error("Could not find ProvisioningSection with major version=" + str(self.MajorVersion))
+            return None
+        self.ComputerName = GetNodeTextData(section.getElementsByTagNameNS(self.WaNs, "HostName")[0])
+        self.UserName = GetNodeTextData(section.getElementsByTagNameNS(self.WaNs, "UserName")[0])
+        try:
+            self.UserPassword = GetNodeTextData(section.getElementsByTagNameNS(self.WaNs, "UserPassword")[0])
+        except:
+            pass
+        disableSshPass = section.getElementsByTagNameNS(self.WaNs, "DisableSshPasswordAuthentication")
+        if len(disableSshPass) != 0:
+            self.DisableSshPasswordAuthentication = (GetNodeTextData(disableSshPass[0]).lower() == "true")
+        for pkey in section.getElementsByTagNameNS(self.WaNs, "PublicKey"):
+            fp = None
+            path = None
+            for c in pkey.childNodes:
+                if c.localName == "Fingerprint":
+                    fp = GetNodeTextData(c).upper()
+                if c.localName == "Path":
+                    path = GetNodeTextData(c)
+            self.SshPublicKeys += [[fp, path]]
+        for keyp in section.getElementsByTagNameNS(self.WaNs, "KeyPair"):
+            fp = None
+            path = None
+            for c in keyp.childNodes:
+                if c.localName == "Fingerprint":
+                    fp = GetNodeTextData(c).upper()
+                if c.localName == "Path":
+                    path = GetNodeTextData(c)
+            self.SshKeyPairs += [[fp, path]]
+        return self
+
+    def PrepareDir(self, filepath):
+        home = GetHome()
+        # Expand HOME variable if present in path
+        path = os.path.normpath(filepath.replace("$HOME", home))
+        if (path.startswith("/") == False) or (path.endswith("/") == True):
+            return None
+        dir = path.rsplit('/', 1)[0]
+        if dir != "":
+            CreateDir(dir, "root", 0700)
+            if path.startswith(os.path.normpath(home + "/" + self.UserName + "/")):
+                ChangeOwner(dir, self.UserName)
+        return path
+
+    def NumberToBytes(self, i):
+        result = []
+        while i:
+            result.append(chr(i&0xFF))
+            i >>= 8
+        result.reverse()
+        return ''.join(result)
+
+    def BitsToString(self, a):
+        index=7
+        s = ""
+        c = 0
+        for bit in a:
+            c = c | (bit << index)
+            index = index - 1
+            if index == -1:
+                s = s + struct.pack('>B', c)
+                c = 0
+                index = 7
+        return s
+
+    def OpensslToSsh(self, file):
+        from pyasn1.codec.der import decoder as der_decoder
+        try:
+            f = open(file).read().replace('\n','').split("KEY-----")[1].split('-')[0]
+            k=der_decoder.decode(self.BitsToString(der_decoder.decode(base64.b64decode(f))[0][1]))[0]
+            n=k[0]
+            e=k[1]
+            keydata=""
+            keydata += struct.pack('>I',len("ssh-rsa"))
+            keydata += "ssh-rsa"
+            keydata += struct.pack('>I',len(self.NumberToBytes(e)))
+            keydata += self.NumberToBytes(e)
+            keydata += struct.pack('>I',len(self.NumberToBytes(n)) + 1)
+            keydata += "\0"
+            keydata += self.NumberToBytes(n)
+        except Exception, e:
+            print("OpensslToSsh: Exception " + str(e))
+            return None
+        return "ssh-rsa " + base64.b64encode(keydata) + "\n"
+
+    def Process(self):
+        error = None
+        WaAgent.EnvMonitor.SetHostName(self.ComputerName)
+        if self.DisableSshPasswordAuthentication:
+            filepath = "/etc/ssh/sshd_config"
+            # Disable RFC 4252 and RFC 4256 authentication schemes.
+            ReplaceFileContentsAtomic(filepath, "\n".join(filter(lambda a: not
+                (a.startswith("PasswordAuthentication") or a.startswith("ChallengeResponseAuthentication")),
+                GetFileContents(filepath).split('\n'))) + "PasswordAuthentication no\nChallengeResponseAuthentication no\n")
+            Log("Disabled SSH password-based authentication methods.")
+        if self.AdminPassword != None:
+            os.popen("chpasswd", "w").write("root:" + self.AdminPassword + "\n")
+        if self.UserName != None:
+            error = CreateAccount(self.UserName, self.UserPassword, None, None)
+        sel = os.popen("getenforce").read().startswith("Enforcing")
+        if sel == True and IsRedHat():
+            Run("setenforce 0")
+        home = GetHome()
+        for pkey in self.SshPublicKeys:
+            if not os.path.isfile(pkey[0] + ".crt"):
+                Error("PublicKey not found: " + pkey[0])
+                error = "Failed to deploy public key (0x09)."
+                continue
+            path = self.PrepareDir(pkey[1])
+            if path == None:
+                Error("Invalid path: " + pkey[1] + " for PublicKey: " + pkey[0])
+                error = "Invalid path for public key (0x03)."
+                continue
+            Run(Openssl + " x509 -in " + pkey[0] + ".crt -noout -pubkey > " + pkey[0] + ".pub")
+            if IsRedHat():
+                Run("chcon unconfined_u:object_r:ssh_home_t:s0 " + pkey[0] + ".pub")
+            if IsUbuntu():
+                # Only supported in new SSH releases
+                Run("ssh-keygen -i -m PKCS8 -f " + pkey[0] + ".pub >> " + path)
+            else:
+                SshPubKey = self.OpensslToSsh(pkey[0] + ".pub")
+                if SshPubKey != None:
+                    AppendFileContents(path, SshPubKey)
+                else:
+                    Error("Failed: " + pkey[0] + ".crt -> " + path)
+                    error = "Failed to deploy public key (0x04)."
+            if IsRedHat():
+                Run("chcon unconfined_u:object_r:ssh_home_t:s0 " + path)
+            if path.startswith(os.path.normpath(home + "/" + self.UserName + "/")):
+                ChangeOwner(path, self.UserName)
+        for keyp in self.SshKeyPairs:
+            if not os.path.isfile(keyp[0] + ".prv"):
+                Error("KeyPair not found: " + keyp[0])
+                error = "Failed to deploy key pair (0x0A)."
+                continue
+            path = self.PrepareDir(keyp[1])
+            if path == None:
+                Error("Invalid path: " + keyp[1] + " for KeyPair: " + keyp[0])
+                error = "Invalid path for key pair (0x05)."
+                continue
+            SetFileContents(path, GetFileContents(keyp[0] + ".prv"))
+            os.chmod(path, 0600)
+            Run("ssh-keygen -y -f " + keyp[0] + ".prv > " + path + ".pub")
+            if IsRedHat():
+                Run("chcon unconfined_u:object_r:ssh_home_t:s0 " + path)
+                Run("chcon unconfined_u:object_r:ssh_home_t:s0 " + path + ".pub")
+            if path.startswith(os.path.normpath(home + "/" + self.UserName + "/")):
+                ChangeOwner(path, self.UserName)
+                ChangeOwner(path + ".pub", self.UserName)
+        if sel == True and IsRedHat():
+            Run("setenforce 1")
+        while not WaAgent.EnvMonitor.IsNamePublished():
+            time.sleep(1)
+        ReloadSshd()
+        return error
+
+def UpdateAndPublishHostNameCommon(name):
+    # RedHat
+    if IsRedHat():
+        filepath = "/etc/sysconfig/network"
+        if os.path.isfile(filepath):
+            ReplaceFileContentsAtomic(filepath, "HOSTNAME=" + name + "\n"
+                + "\n".join(filter(lambda a: not a.startswith("HOSTNAME"), GetFileContents(filepath).split('\n'))))
+
+        for ethernetInterface in PossibleEthernetInterfaces:
+            filepath = "/etc/sysconfig/network-scripts/ifcfg-" + ethernetInterface
+            if os.path.isfile(filepath):
+                ReplaceFileContentsAtomic(filepath, "DHCP_HOSTNAME=" + name + "\n"
+                    + "\n".join(filter(lambda a: not a.startswith("DHCP_HOSTNAME"), GetFileContents(filepath).split('\n'))))
+
+    # Debian
+    if IsDebian():
+        SetFileContents("/etc/hostname", name)
+
+    for filepath in EtcDhcpClientConfFiles:
+        if os.path.isfile(filepath):
+            ReplaceFileContentsAtomic(filepath, "send host-name \"" + name + "\";\n"
+                + "\n".join(filter(lambda a: not a.startswith("send host-name"), GetFileContents(filepath).split('\n'))))
+
+    # Suse
+    if IsSuse():
+        SetFileContents("/etc/HOSTNAME", name)
+
+class Agent(Util):
+    def __init__(self):
+        self.GoalState = None
+        self.Endpoint = None
+        self.LoadBalancerProbeServer = None
+        self.HealthReportCounter = 0
+        self.TransportCert = ""
+        self.EnvMonitor = None
+        self.SendData = None
+        self.DhcpResponse = None
+
+    def CheckVersions(self):
+        #<?xml version="1.0" encoding="utf-8"?>
+        #<Versions>
+        #  <Preferred>
+        #    <Version>2010-12-15</Version>
+        #  </Preferred>
+        #  <Supported>
+        #    <Version>2010-12-15</Version>
+        #    <Version>2010-28-10</Version>
+        #  </Supported>
+        #</Versions>
+        global ProtocolVersion
+        protocolVersionSeen = False
+        node = xml.dom.minidom.parseString(self.HttpGetWithoutHeaders("/?comp=versions")).childNodes[0]
+        if node.localName != "Versions":
+            Error("CheckVersions: root not Versions")
+            return False
+        for a in node.childNodes:
+            if a.nodeType == node.ELEMENT_NODE and a.localName == "Supported":
+                for b in a.childNodes:
+                    if b.nodeType == node.ELEMENT_NODE and b.localName == "Version":
+                        v = GetNodeTextData(b)
+                        LogIfVerbose("Fabric supported wire protocol version: " + v)
+                        if v == ProtocolVersion:
+                            protocolVersionSeen = True
+            if a.nodeType == node.ELEMENT_NODE and a.localName == "Preferred":
+                v = GetNodeTextData(a.getElementsByTagName("Version")[0])
+                LogIfVerbose("Fabric preferred wire protocol version: " + v)
+                if ProtocolVersion < v:
+                    Warn("Newer wire protocol version detected. Please consider updating waagent.")
+        if not protocolVersionSeen:
+            Warn("Agent supported wire protocol version: " + ProtocolVersion + " was not advertised by Fabric.")
+            ProtocolVersion = "2011-08-31"
+        Log("Negotiated wire protocol version: " + ProtocolVersion)
+        return True
+
+    def Unpack(self, buffer, offset, range):
+        result = 0
+        for i in range:
+            result = (result << 8) | Ord(buffer[offset + i])
+        return result
+
+    def UnpackLittleEndian(self, buffer, offset, length):
+        return self.Unpack(buffer, offset, range(length - 1, -1, -1))
+
+    def UnpackBigEndian(self, buffer, offset, length):
+        return self.Unpack(buffer, offset, range(0, length))
+
+    def HexDump3(self, buffer, offset, length):
+        return ''.join(['%02X' % Ord(char) for char in buffer[offset:offset + length]])
+
+    def HexDump2(self, buffer):
+        return self.HexDump3(buffer, 0, len(buffer))
+
+    def BuildDhcpRequest(self):
+        #
+        # typedef struct _DHCP {
+        #     UINT8   Opcode;                     /* op:     BOOTREQUEST or BOOTREPLY */
+        #     UINT8   HardwareAddressType;        /* htype:  ethernet */
+        #     UINT8   HardwareAddressLength;      /* hlen:   6 (48 bit mac address) */
+        #     UINT8   Hops;                       /* hops:   0 */
+        #     UINT8   TransactionID[4];           /* xid:    random */
+        #     UINT8   Seconds[2];                 /* secs:   0 */
+        #     UINT8   Flags[2];                   /* flags:  0 or 0x8000 for broadcast */
+        #     UINT8   ClientIpAddress[4];         /* ciaddr: 0 */
+        #     UINT8   YourIpAddress[4];           /* yiaddr: 0 */
+        #     UINT8   ServerIpAddress[4];         /* siaddr: 0 */
+        #     UINT8   RelayAgentIpAddress[4];     /* giaddr: 0 */
+        #     UINT8   ClientHardwareAddress[16];  /* chaddr: 6 byte ethernet MAC address */
+        #     UINT8   ServerName[64];             /* sname:  0 */
+        #     UINT8   BootFileName[128];          /* file:   0  */
+        #     UINT8   MagicCookie[4];             /*   99  130   83   99 */
+        #                                         /* 0x63 0x82 0x53 0x63 */
+        #     /* options -- hard code ours */
+        #
+        #     UINT8 MessageTypeCode;              /* 53 */
+        #     UINT8 MessageTypeLength;            /* 1 */
+        #     UINT8 MessageType;                  /* 1 for DISCOVER */
+        #     UINT8 End;                          /* 255 */
+        # } DHCP;
+        #
+
+        # tuple of 244 zeros
+        # (struct.pack_into would be good here, but requires Python 2.5)
+        sendData = [0] * 244
+
+        transactionID = os.urandom(4)
+        macAddress = GetMacAddress()
+
+        # Opcode = 1
+        # HardwareAddressType = 1 (ethernet/MAC)
+        # HardwareAddressLength = 6 (ethernet/MAC/48 bits)
+        for a in range(0, 3):
+            sendData[a] = [1, 1, 6][a]
+
+        # fill in transaction id (random number to ensure response matches request)
+        for a in range(0, 4):
+            sendData[4 + a] = Ord(transactionID[a])
+
+        LogIfVerbose("BuildDhcpRequest: transactionId:%s,%04X" % (self.HexDump2(transactionID), self.UnpackBigEndian(sendData, 4, 4)))
+
+        # fill in ClientHardwareAddress
+        for a in range(0, 6):
+            sendData[0x1C + a] = Ord(macAddress[a])
+
+        # DHCP Magic Cookie: 99, 130, 83, 99
+        # MessageTypeCode = 53 DHCP Message Type
+        # MessageTypeLength = 1
+        # MessageType = DHCPDISCOVER
+        # End = 255 DHCP_END
+        for a in range(0, 8):
+            sendData[0xEC + a] = [99, 130, 83, 99, 53, 1, 1, 255][a]
+        return array.array("c", map(chr, sendData))
+
+    def IntegerToIpAddressV4String(self, a):
+        return "%u.%u.%u.%u" % ((a >> 24) & 0xFF, (a >> 16) & 0xFF, (a >> 8) & 0xFF, a & 0xFF)
+
+    def RouteAdd(self, net, mask, gateway):
+        if IsWindows():
+            return
+        net = self.IntegerToIpAddressV4String(net)
+        mask = self.IntegerToIpAddressV4String(mask)
+        gateway = self.IntegerToIpAddressV4String(gateway)
+        Run("/sbin/route add -net " + net + " netmask " + mask + " gw " + gateway)
+
+    def HandleDhcpResponse(self, sendData, receiveBuffer):
+        LogIfVerbose("HandleDhcpResponse")
+        bytesReceived = len(receiveBuffer)
+        if bytesReceived < 0xF6:
+            Error("HandleDhcpResponse: Too few bytes received " + str(bytesReceived))
+            return None
+
+        LogIfVerbose("BytesReceived: " + hex(bytesReceived))
+        LogWithPrefixIfVerbose("DHCP response:", HexDump(receiveBuffer, bytesReceived))
+
+        # check transactionId, cookie, MAC address
+        # cookie should never mismatch
+        # transactionId and MAC address may mismatch if we see a response meant from another machine
+
+        for offsets in [range(4, 4 + 4), range(0x1C, 0x1C + 6), range(0xEC, 0xEC + 4)]:
+            for offset in offsets:
+                sentByte = Ord(sendData[offset])
+                receivedByte = Ord(receiveBuffer[offset])
+                if sentByte != receivedByte:
+                    LogIfVerbose("HandleDhcpResponse: sent cookie:" + self.HexDump3(sendData, 0xEC, 4))
+                    LogIfVerbose("HandleDhcpResponse: rcvd cookie:" + self.HexDump3(receiveBuffer, 0xEC, 4))
+                    LogIfVerbose("HandleDhcpResponse: sent transactionID:" + self.HexDump3(sendData, 4, 4))
+                    LogIfVerbose("HandleDhcpResponse: rcvd transactionID:" + self.HexDump3(receiveBuffer, 4, 4))
+                    LogIfVerbose("HandleDhcpResponse: sent ClientHardwareAddress:" + self.HexDump3(sendData, 0x1C, 6))
+                    LogIfVerbose("HandleDhcpResponse: rcvd ClientHardwareAddress:" + self.HexDump3(receiveBuffer, 0x1C, 6))
+                    LogIfVerbose("HandleDhcpResponse: transactionId, cookie, or MAC address mismatch")
+                    return None
+        endpoint = None
+
+        #
+        # Walk all the returned options, parsing out what we need, ignoring the others.
+        # We need the custom option 245 to find the the endpoint we talk to,
+        # as well as, to handle some Linux DHCP client incompatibilities,
+        # options 3 for default gateway and 249 for routes. And 255 is end.
+        #
+
+        i = 0xF0 # offset to first option
+        while i < bytesReceived:
+            option = Ord(receiveBuffer[i])
+            length = 0
+            if (i + 1) < bytesReceived:
+                length = Ord(receiveBuffer[i + 1])
+            LogIfVerbose("DHCP option " + hex(option) + " at offset:" + hex(i) + " with length:" + hex(length))
+            if option == 255:
+                LogIfVerbose("DHCP packet ended at offset " + hex(i))
+                break
+            elif option == 249:
+                # http://msdn.microsoft.com/en-us/library/cc227282%28PROT.10%29.aspx
+                LogIfVerbose("Routes at offset:" + hex(i) + " with length:" + hex(length))
+                if length < 5:
+                    Error("Data too small for option " + option)
+                j = i + 2
+                while j < (i + length + 2):
+                    maskLengthBits = Ord(receiveBuffer[j])
+                    maskLengthBytes = (((maskLengthBits + 7) & ~7) >> 3)
+                    mask = 0xFFFFFFFF & (0xFFFFFFFF << (32 - maskLengthBits))
+                    j += 1
+                    net = self.UnpackBigEndian(receiveBuffer, j, maskLengthBytes)
+                    net <<= (32 - maskLengthBytes * 8)
+                    net &= mask
+                    j += maskLengthBytes
+                    gateway = self.UnpackBigEndian(receiveBuffer, j, 4)
+                    j += 4
+                    self.RouteAdd(net, mask, gateway)
+                if j != (i + length + 2):
+                    Error("HandleDhcpResponse: Unable to parse routes")
+            elif option == 3 or option == 245:
+                if i + 5 < bytesReceived:
+                    if length != 4:
+                        Error("HandleDhcpResponse: Endpoint or Default Gateway not 4 bytes")
+                        return None
+                    gateway = self.UnpackBigEndian(receiveBuffer, i + 2, 4)
+                    IpAddress = self.IntegerToIpAddressV4String(gateway)
+                    if option == 3:
+                        self.RouteAdd(0, 0, gateway)
+                        name = "DefaultGateway"
+                    else:
+                        endpoint = IpAddress
+                        name = "Windows Azure wire protocol endpoint"
+                    LogIfVerbose(name + ": " + IpAddress + " at " + hex(i))
+                else:
+                    Error("HandleDhcpResponse: Data too small for option " + option)
+            else:
+                LogIfVerbose("Skipping DHCP option " + hex(option) + " at " + hex(i) + " with length " + hex(length))
+            i += length + 2
+        return endpoint
+
+    def DoDhcpWork(self):
+        #
+        # Discover the wire server via DHCP option 245.
+        # And workaround incompatibility with Windows Azure DHCP servers.
+        #
+        ShortSleep = False # Sleep 1 second before retrying DHCP queries.
+
+        if not IsWindows():
+            Run("iptables -D INPUT -p udp --dport 68 -j ACCEPT")
+            Run("iptables -I INPUT -p udp --dport 68 -j ACCEPT")
+
+        sleepDurations = [0, 5, 10, 30, 60, 60, 60, 60]
+        maxRetry = len(sleepDurations)
+        lastTry = (maxRetry - 1)
+        for retry in range(0, maxRetry):
+            try:
+                strRetry = str(retry)
+                prefix = "DoDhcpWork: try=" + strRetry
+                LogIfVerbose(prefix)
+                sendData = self.BuildDhcpRequest()
+                LogWithPrefixIfVerbose("DHCP request:", HexDump(sendData, len(sendData)))
+                sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                if IsSuse():
+                    # This is required because sending after binding to 0.0.0.0 fails with
+                    # network unreachable when the default gateway is not set up.
+                    sock.bind((GetIpv4Address(), 68))
+                else:
+                    sock.bind(("0.0.0.0", 68))
+                sock.sendto(sendData, ("<broadcast>", 67))
+                receiveBuffer = sock.recv(1024)
+                sock.close()
+                endpoint = self.HandleDhcpResponse(sendData, receiveBuffer)
+                if endpoint == None:
+                    LogIfVerbose("DoDhcpWork: No endpoint found")
+                if endpoint != None or retry == lastTry:
+                    if endpoint != None:
+                        self.SendData = sendData
+                        self.DhcpResponse = receiveBuffer
+                    if retry == lastTry:
+                        LogIfVerbose("DoDhcpWork: try=" + strRetry)
+                    return endpoint
+                sleepDuration = [sleepDurations[retry % len(sleepDurations)], 1][ShortSleep]
+                LogIfVerbose("DoDhcpWork: sleep=" + str(sleepDuration))
+                time.sleep(sleepDuration)
+            except Exception, e:
+                ErrorWithPrefix(prefix, str(e))
+                ErrorWithPrefix(prefix, traceback.format_exc())
+        return None
+
+    def UpdateAndPublishHostName(self, name):
+        # Set hostname locally and publish to iDNS
+        Log("Setting host name: " + name)
+        UpdateAndPublishHostNameCommon(name)
+        for ethernetInterface in PossibleEthernetInterfaces:
+            if IsSuse():
+                Run("ifrenew " + ethernetInterface)
+            else:
+                Run("ifdown " + ethernetInterface + " && ifup " + ethernetInterface)
+        self.RestoreRoutes()
+
+    def RestoreRoutes(self):
+        if self.SendData != None and self.DhcpResponse != None:
+            self.HandleDhcpResponse(self.SendData, self.DhcpResponse)
+
+    def UpdateGoalState(self):
+        goalStateXml = None
+        maxRetry = 9
+        log = NoLog
+        for retry in range(1, maxRetry + 1):
+            strRetry = str(retry)
+            log("retry UpdateGoalState,retry=" + strRetry)
+            goalStateXml = self.HttpGetWithHeaders("/machine/?comp=goalstate")
+            if goalStateXml != None:
+                break
+            log = Log
+            time.sleep(retry)
+        if not goalStateXml:
+            Error("UpdateGoalState failed.")
+            return
+        Log("Retrieved GoalState from Windows Azure Fabric.")
+        self.GoalState = GoalState(self).Parse(goalStateXml)
+        return self.GoalState
+
+    def ReportReady(self):
+        counter = (self.HealthReportCounter + 1) % 1000000
+        self.HealthReportCounter = counter
+        healthReport = ("<?xml version=\"1.0\" encoding=\"utf-8\"?><Health xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\"><GoalStateIncarnation>"
+                        + self.GoalState.Incarnation
+                        + "</GoalStateIncarnation><Container><ContainerId>"
+                        + self.GoalState.ContainerId
+                        + "</ContainerId><RoleInstanceList><Role><InstanceId>"
+                        + self.GoalState.RoleInstanceId
+                        + "</InstanceId><Health><State>Ready</State></Health></Role></RoleInstanceList></Container></Health>")
+        a = self.HttpPost("/machine?comp=health", healthReport)
+        if a != None:
+            return a.getheader("x-ms-latest-goal-state-incarnation-number")
+        return None
+
+    def ReportNotReady(self, status, desc):
+        healthReport = ("<?xml version=\"1.0\" encoding=\"utf-8\"?><Health xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\"><GoalStateIncarnation>"
+                        + self.GoalState.Incarnation
+                        + "</GoalStateIncarnation><Container><ContainerId>"
+                        + self.GoalState.ContainerId
+                        + "</ContainerId><RoleInstanceList><Role><InstanceId>"
+                        + self.GoalState.RoleInstanceId
+                        + "</InstanceId><Health><State>NotReady</State>"
+                        + "<Details><SubStatus>" + status + "</SubStatus><Description>" + desc + "</Description></Details>"
+                        + "</Health></Role></RoleInstanceList></Container></Health>")
+        a = self.HttpPost("/machine?comp=health", healthReport)
+        if a != None:
+            return a.getheader("x-ms-latest-goal-state-incarnation-number")
+        return None
+
+    def ReportRoleProperties(self, thumbprint):
+        roleProperties = ("<?xml version=\"1.0\" encoding=\"utf-8\"?><RoleProperties><Container>"
+                        + "<ContainerId>" + self.GoalState.ContainerId + "</ContainerId>"
+                        + "<RoleInstances><RoleInstance>"
+                        + "<Id>" + self.GoalState.RoleInstanceId + "</Id>"
+                        + "<Properties><Property name=\"CertificateThumbprint\" value=\"" + thumbprint + "\" /></Properties>"
+                        + "</RoleInstance></RoleInstances></Container></RoleProperties>")
+        a = self.HttpPost("/machine?comp=roleProperties", roleProperties)
+        Log("Posted Role Properties. CertificateThumbprint=" + thumbprint)
+        return a
+
+    def LoadBalancerProbeServer_Shutdown(self):
+        if self.LoadBalancerProbeServer != None:
+            self.LoadBalancerProbeServer.shutdown()
+            self.LoadBalancerProbeServer = None
+
+    def GenerateTransportCert(self):
+        Run(Openssl + " req -x509 -nodes -subj /CN=LinuxTransport -days 32768 -newkey rsa:2048 -keyout TransportPrivate.pem -out TransportCert.pem")
+        cert = ""
+        for line in GetFileContents("TransportCert.pem").split('\n'):
+            if not "CERTIFICATE" in line:
+                cert += line.rstrip()
+        return cert
+
+    def Provision(self):
+        if IsWindows():
+            Log("Skipping Provision on Windows")
+            return
+        enabled = Config.get("Provisioning.Enabled")
+        if enabled != None and enabled.lower().startswith("n"):
+            return
+        Log("Provisioning image started.")
+        type = Config.get("Provisioning.SshHostKeyPairType")
+        if type == None:
+            type = "rsa"
+        regenerateKeys = Config.get("Provisioning.RegenerateSshHostKeyPair")
+        if regenerateKeys == None or regenerateKeys.lower().startswith("y"):
+            Run("rm -f /etc/ssh/ssh_host_*key*")
+            Run("ssh-keygen -N '' -t " + type + " -f /etc/ssh/ssh_host_" + type + "_key")
+            ReloadSshd()
+        SetFileContents(LibDir + "/provisioned", "")
+        dvd = "/dev/hdc"
+        if os.path.exists("/dev/sr0"):
+            dvd = "/dev/sr0"
+        if Run("fdisk -l " + dvd + " | grep Disk"):
+            return
+        CreateDir("/mnt/cdrom/secure", "root", 0700)
+        if Run("mount " + dvd + " /mnt/cdrom/secure"):
+            Error("Unable to provision: Failed to mount DVD.")
+            return "Failed to retrieve provisioning data (0x01)."
+        if not os.path.isfile("/mnt/cdrom/secure/ovf-env.xml"):
+            Error("Unable to provision: Missing ovf-env.xml on DVD.")
+            return "Failed to retrieve provisioning data (0x02)."
+        ovfxml = GetFileContents("/mnt/cdrom/secure/ovf-env.xml")
+        SetFileContents("ovf-env.xml", re.sub("<UserPassword>.*?<", "<UserPassword>*<", ovfxml))
+        Run("umount /mnt/cdrom/secure")
+        error = None
+        if ovfxml != None:
+            Log("Provisioning image using OVF settings in the DVD.")
+            ovfobj = OvfEnv().Parse(ovfxml)
+            if ovfobj != None:
+                error = ovfobj.Process()
+        # This is done here because regenerated SSH host key pairs may be potentially overwritten when processing the ovfxml
+        fingerprint = os.popen("ssh-keygen -lf /etc/ssh/ssh_host_" + type + "_key.pub").read().rstrip().split()[1].replace(':','')
+        self.ReportRoleProperties(fingerprint)
+        delRootPass = Config.get("Provisioning.DeleteRootPassword")
+        if delRootPass != None and delRootPass.lower().startswith("y"):
+            DeleteRootPassword()
+        Log("Provisioning image completed.")
+        return error
+
+    def Run(self):
+        if IsLinux():
+            SetFileContents("/var/run/waagent.pid", str(os.getpid()) + "\n")
+
+        if GetIpv4Address() == None:
+            Log("Waiting for network.")
+            while(GetIpv4Address() == None):
+                time.sleep(10)
+
+        Log("IPv4 address: " + GetIpv4Address())
+        Log("MAC  address: " + ":".join(["%02X" % Ord(a) for a in GetMacAddress()]))
+
+        # Consume Entropy in ACPI table provided by Hyper-V
+        try:
+            SetFileContents("/dev/random", GetFileContents("/sys/firmware/acpi/tables/OEM0"))
+        except:
+            pass
+
+        Log("Probing for Windows Azure environment.")
+        self.Endpoint = self.DoDhcpWork()
+
+        if self.Endpoint == None:
+            Log("Windows Azure environment not detected.")
+            while True:
+                time.sleep(60)
+
+        Log("Discovered Windows Azure endpoint: " + self.Endpoint)
+        if not self.CheckVersions():
+            Error("Agent.CheckVersions failed")
+            sys.exit(1)
+
+        self.EnvMonitor = EnvMonitor()
+
+        # Set SCSI timeout on root device
+        try:
+            timeout = Config.get("OS.RootDeviceScsiTimeout")
+            if timeout != None:
+                SetFileContents("/sys/block/" + DeviceForIdePort(0) + "/device/timeout", timeout)
+        except:
+            pass
+
+        global Openssl
+        Openssl = Config.get("OS.OpensslPath")
+        if Openssl == None:
+            Openssl = "openssl"
+
+        self.TransportCert = self.GenerateTransportCert()
+
+        incarnation = None # goalStateIncarnationFromHealthReport
+        currentPort = None # loadBalancerProbePort
+        goalState = None # self.GoalState, instance of GoalState
+        provisioned = os.path.exists(LibDir + "/provisioned")
+        program = Config.get("Role.StateConsumer")
+        provisionError = None
+        while True:
+            if (goalState == None) or (incarnation == None) or (goalState.Incarnation != incarnation):
+                goalState = self.UpdateGoalState()
+
+                if provisioned == False:
+                    self.ReportNotReady("Provisioning", "Starting")
+
+                goalState.Process()
+
+                if provisioned == False:
+                    provisionError = self.Provision()
+                    provisioned = True
+
+                #
+                # only one port supported
+                # restart server if new port is different than old port
+                # stop server if no longer a port
+                #
+                goalPort = goalState.LoadBalancerProbePort
+                if currentPort != goalPort:
+                    self.LoadBalancerProbeServer_Shutdown()
+                    currentPort = goalPort
+                    if currentPort != None:
+                        self.LoadBalancerProbeServer = LoadBalancerProbeServer(currentPort)
+
+            if program != None and DiskActivated == True:
+                os.spawnl(os.P_NOWAIT, program, program, "Ready")
+                program = None
+
+            if goalState.ExpectedState == "Stopped":
+                program = Config.get("Role.StateConsumer")
+                if program != None:
+                    Run(program + " Shutdown")
+                self.EnvMonitor.shutdown()
+                self.LoadBalancerProbeServer_Shutdown()
+                command = ["/sbin/shutdown -hP now", "shutdown /s /t 5"][IsWindows()]
+                Run(command)
+                return
+
+            sleepToReduceAccessDenied = 3
+            time.sleep(sleepToReduceAccessDenied)
+            i = None
+            if provisionError != None:
+                i = self.ReportNotReady("ProvisioningFailed", provisionError)
+            else:
+                i = self.ReportReady()
+            if i != None:
+                incarnation = i
+            time.sleep(25 - sleepToReduceAccessDenied)
+
+Init_Suse = """\
+#! /bin/sh
+
+### BEGIN INIT INFO
+# Provides: WindowsAzureLinuxAgent
+# Required-Start: $network sshd
+# Required-Stop: $network sshd
+# Default-Start: 3 5
+# Default-Stop: 0 1 2 6
+# Description: Start the WindowsAzureLinuxAgent
+### END INIT INFO
+
+WAZD_BIN=/usr/sbin/waagent
+test -x $WAZD_BIN || exit 5
+
+case "$1" in
+    start)
+        echo "Starting WindowsAzureLinuxAgent"
+        ## Start daemon with startproc(8). If this fails
+        ## the echo return value is set appropriate.
+
+        startproc -f $WAZD_BIN -daemon
+        exit $?
+        ;;
+    stop)
+        echo "Shutting down WindowsAzureLinuxAgent"
+        ## Stop daemon with killproc(8) and if this fails
+        ## set echo the echo return value.
+
+        killproc -p /var/run/waagent.pid $WAZD_BIN
+        exit $?
+        ;;
+    try-restart)
+        ## Stop the service and if this succeeds (i.e. the
+        ## service was running before), start it again.
+        $0 status >/dev/null &&  $0 restart
+        ;;
+    restart)
+        ## Stop the service and regardless of whether it was
+        ## running or not, start it again.
+        $0 stop
+        $0 start
+        ;;
+    force-reload|reload)
+        ;;
+    status)
+        echo -n "Checking for service WindowsAzureLinuxAgent "
+        ## Check status with checkproc(8), if process is running
+        ## checkproc will return with exit status 0.
+
+        checkproc -p $WAZD_PIDFILE $WAZD_BIN
+        exit $?
+        ;;
+    probe)
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|status|try-restart|restart|force-reload|reload}"
+        exit 1
+        ;;
+esac
+"""
+
+Init_RedHat = """\
+#!/bin/bash
+#
+# Init file for WindowsAzureLinuxAgent.
+#
+# chkconfig: 2345 60 80
+# description: WindowsAzureLinuxAgent
+#
+
+# source function library
+. /etc/rc.d/init.d/functions
+
+RETVAL=0
+FriendlyName="WindowsAzureLinuxAgent"
+WAZD_BIN=/usr/sbin/waagent
+
+start()
+{
+    echo -n $"Starting $FriendlyName: "
+    $WAZD_BIN -daemon &
+}
+
+stop()
+{
+    echo -n $"Stopping $FriendlyName: "
+    killproc -p /var/run/waagent.pid $WAZD_BIN
+    RETVAL=$?
+    echo
+    return $RETVAL
+}
+
+case "$1" in
+    start)
+        start
+        ;;
+    stop)
+        stop
+        ;;
+    restart)
+        stop
+        start
+        ;;
+    reload)
+        ;;
+    report)
+        ;;
+    status)
+        status $WAZD_BIN
+        RETVAL=$?
+        ;;
+    *)
+        echo $"Usage: $0 {start|stop|restart|status}"
+        RETVAL=1
+esac
+exit $RETVAL
+"""
+
+Init_Debian = """\
+#!/bin/sh
+### BEGIN INIT INFO
+# Provides:          WindowsAzureLinuxAgent
+# Required-Start:    $network $syslog
+# Required-Stop:     $network $syslog
+# Should-Start:      $network $syslog
+# Should-Stop:       $network $syslog
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: WindowsAzureLinuxAgent
+# Description:       WindowsAzureLinuxAgent
+### END INIT INFO
+
+. /lib/lsb/init-functions
+
+OPTIONS="-daemon"
+WAZD_BIN=/usr/sbin/waagent
+WAZD_PID=/var/run/waagent.pid
+
+case "$1" in
+    start)
+        log_begin_msg "Starting WindowsAzureLinuxAgent..."
+        pid=$( pidofproc $WAZD_BIN )
+        if [ -n "$pid" ] ; then
+              log_begin_msg "Already running."
+              log_end_msg 0
+              exit 0
+        fi
+        start-stop-daemon --start --quiet --oknodo --background --exec $WAZD_BIN -- $OPTIONS
+        log_end_msg $?
+        ;;
+
+    stop)
+        log_begin_msg "Stopping WindowsAzureLinuxAgent..."
+        start-stop-daemon --stop --quiet --oknodo --pidfile $WAZD_PID
+        ret=$?
+        rm -f $WAZD_PID
+        log_end_msg $ret
+        ;;
+    force-reload)
+        $0 restart
+        ;;
+    restart)
+        $0 stop
+        $0 start
+        ;;
+    status)
+        status_of_proc $WAZD_BIN && exit 0 || exit $?
+        ;;
+    *)
+        log_success_msg "Usage: /etc/init.d/waagent {start|stop|force-reload|restart|status}"
+        exit 1
+        ;;
+esac
+
+exit 0
+"""
+
+WaagentConf = """\
+#
+# Windows Azure Linux Agent Configuration
+#
+
+Role.StateConsumer=None                 # Specified program is invoked with "Ready" or "Shutdown".
+                                        # Shutdown will be initiated only after the program returns. Windows Azure will
+                                        # power off the VM if shutdown is not completed within ?? minutes.
+Role.ConfigurationConsumer=None         # Specified program is invoked with XML file argument specifying role configuration.
+Role.TopologyConsumer=None              # Specified program is invoked with XML file argument specifying role topology.
+
+Provisioning.Enabled=y                  #
+Provisioning.DeleteRootPassword=y       # Password authentication for root account will be unavailable.
+Provisioning.RegenerateSshHostKeyPair=y # Generate fresh host key pair.
+Provisioning.SshHostKeyPairType=rsa     # Supported values are "rsa", "dsa" and "ecdsa".
+Provisioning.MonitorHostName=y          # Monitor host name changes and publish changes via DHCP requests.
+
+ResourceDisk.Format=y                   # Format if unformatted. If 'n', resource disk will not be mounted.
+ResourceDisk.Filesystem=ext4            #
+ResourceDisk.MountPoint=/mnt/resource   #
+ResourceDisk.EnableSwap=n               # Create and use swapfile on resource disk.
+ResourceDisk.SwapSizeMB=0               # Size of the swapfile.
+
+LBProbeResponder=y                      # Respond to load balancer probes if requested by Windows Azure.
+
+Logs.Verbose=n                          #
+
+OS.RootDeviceScsiTimeout=300            # Root device timeout in seconds.
+OS.OpensslPath=None                     # If "None", the system default version is used.
+"""
+
+WaagentLogrotate = """\
+/var/log/waagent.log {
+    monthly
+    rotate 6
+    notifempty
+    missingok
+}
+"""
+
+def AddToLinuxKernelCmdline(options):
+    if os.path.isfile("/boot/grub/menu.lst"):
+        Run("sed -i --follow-symlinks '/kernel/s|$| " + options + " |' /boot/grub/menu.lst")
+    filepath = "/etc/default/grub"
+    if os.path.isfile(filepath):
+        filecontents = GetFileContents(filepath).split('\n')
+        current = filter(lambda a: a.startswith("GRUB_CMDLINE_LINUX"), filecontents)
+        ReplaceFileContentsAtomic(filepath,
+            "\n".join(filter(lambda a: not a.startswith("GRUB_CMDLINE_LINUX"), filecontents))
+            + current[0][:-1] + " " + options + "\"\n")
+        Run("update-grub")
+
+def ApplyVNUMAWorkaround():
+    VersionParts = platform.release().replace('-', '.').split('.')
+    if int(VersionParts[0]) > 2:
+        return
+    if int(VersionParts[1]) > 6:
+        return
+    if int(VersionParts[2]) > 37:
+        return
+    AddToLinuxKernelCmdline("numa=off")
+    # TODO: This is not ideal for offline installation.
+    print("Your kernel version " + platform.release() + " has a NUMA-related bug: NUMA has been disabled.")
+
+def RevertVNUMAWorkaround():
+    print("Automatic reverting of GRUB configuration is not yet supported. Please edit by hand.")
+
+def Install():
+    if IsWindows():
+        print("ERROR: -install invalid for Windows.")
+        return 1
+    os.chmod(sys.argv[0], 0755)
+    SwitchCwd()
+    requiredDeps = [ "/sbin/route", "/sbin/shutdown" ]
+    if IsDebian():
+        requiredDeps += [ "/usr/sbin/update-rc.d" ]
+    if IsSuse():
+        requiredDeps += [ "/sbin/insserv" ]
+    for a in requiredDeps:
+        if not os.path.isfile(a):
+            Error("Missing required dependency: " + a)
+            return 1
+    missing = False
+    for a in [ "ssh-keygen", "useradd", "openssl", "sfdisk",
+               "fdisk", "mkfs", "chpasswd", "sed", "grep", "sudo" ]:
+        if Run("which " + a + " > /dev/null 2>&1"):
+            Warn("Missing dependency: " + a)
+            missing = True
+    if missing == True:
+        Warn("Please resolve missing dependencies listed for full functionality.")
+    if UsesRpm():
+        if not Run("rpm --quiet -q NetworkManager"):
+            Error(GuestAgentLongName + " is not compatible with NetworkManager.")
+            return 1
+        if Run("rpm --quiet -q python-pyasn1"):
+            Error(GuestAgentLongName + " requires python-pyasn1.")
+            return 1
+    if UsesDpkg() and Run("dpkg -l network-manager | grep -q ^un"):
+        Error(GuestAgentLongName + " is not compatible with network-manager.")
+        return 1
+    for a in RulesFiles:
+        if os.path.isfile(a):
+            if os.path.isfile(GetLastPathElement(a)):
+                os.remove(GetLastPathElement(a))
+            shutil.move(a, ".")
+            Warn("Moved " + a + " -> " + LibDir + "/" + GetLastPathElement(a) )
+    filename = "waagent"
+    filepath = "/etc/init.d/" + filename
+    distro = IsRedHat() + IsDebian() * 2 + IsSuse() * 3
+    if distro == 0:
+        Error("Unable to detect Linux Distribution.")
+        return 1
+    init = [[Init_RedHat, "chkconfig --add " + filename],
+            [Init_Debian, "update-rc.d " + filename + " defaults"],
+            [Init_Suse, "insserv " + filename]][distro - 1]
+    SetFileContents(filepath, init[0])
+    os.chmod(filepath, 0755)
+    Run(init[1])
+    if os.path.isfile("/etc/waagent.conf"):
+        try:
+            os.remove("/etc/waagent.conf.old")
+        except:
+            pass
+        try:
+            os.rename("/etc/waagent.conf", "/etc/waagent.conf.old")
+            Warn("Existing /etc/waagent.conf has been renamed to /etc/waagent.conf.old")
+        except:
+            pass
+    SetFileContents("/etc/waagent.conf", WaagentConf)
+    SetFileContents("/etc/logrotate.d/waagent", WaagentLogrotate)
+    filepath = "/etc/ssh/sshd_config"
+    ReplaceFileContentsAtomic(filepath, "\n".join(filter(lambda a: not
+        a.startswith("ClientAliveInterval"),
+        GetFileContents(filepath).split('\n'))) + "ClientAliveInterval 180\n")
+    Log("Configured SSH client probing to keep connections alive.")
+    ApplyVNUMAWorkaround()
+    return 0
+
+def Uninstall():
+    if IsWindows():
+        print("ERROR: -uninstall invalid for windows, see waagent_service.exe")
+        return 1
+    SwitchCwd()
+    for a in RulesFiles:
+        if os.path.isfile(GetLastPathElement(a)):
+            try:
+                shutil.move(GetLastPathElement(a), a)
+                Warn("Moved " + LibDir + "/" + GetLastPathElement(a) + " -> " + a )
+            except:
+                pass
+    filename = "waagent"
+    a = IsRedHat() + IsDebian() * 2 + IsSuse() * 3
+    if a == 0:
+        Error("Unable to detect Linux Distribution.")
+        return 1
+    Run("service " + filename + " stop")
+    cmd = ["chkconfig --del " + filename,
+           "update-rc.d -f " + filename + " remove",
+           "insserv -r " + filename][a - 1]
+    Run(cmd)
+    for f in os.listdir(LibDir) + ["/etc/init.d/" + filename, "/etc/waagent.conf", "/etc/logrotate.d/waagent", "/etc/sudoers.d/waagent"]:
+        try:
+            os.remove(f)
+        except:
+            pass
+    RevertVNUMAWorkaround()
+    return 0
+
+def DeleteRootPassword():
+    SetFileContents("/etc/shadow-temp", "")
+    os.chmod("/etc/shadow-temp", 0000)
+    Run("(echo root:*LOCK*:14600:::::: && grep -v ^root /etc/shadow ) > /etc/shadow-temp")
+    Run("mv -f /etc/shadow-temp /etc/shadow")
+    Log("Root password deleted.")
+
+def Deprovision(force, deluser):
+    if IsWindows():
+        Run(os.environ["windir"] + "\\system32\\sysprep\\sysprep.exe /generalize")
+        return 0
+
+    SwitchCwd()
+    ovfxml = GetFileContents("ovf-env.xml")
+    ovfobj = None
+    if ovfxml != None:
+        ovfobj = OvfEnv().Parse(ovfxml)
+
+    print("WARNING! The waagent service will be stopped.")
+    print("WARNING! All SSH host key pairs will be deleted.")
+    print("WARNING! Nameserver configuration in /etc/resolv.conf will be deleted.")
+    print("WARNING! Cached DHCP leases will be deleted.")
+
+    delRootPass = Config.get("Provisioning.DeleteRootPassword")
+    if delRootPass != None and delRootPass.lower().startswith("y"):
+        print("WARNING! root password will be disabled. You will not be able to login as root.")
+
+    if ovfobj != None and deluser == True:
+        print("WARNING! " + ovfobj.UserName + " account and entire home directory will be deleted.")
+
+    if force == False and not raw_input('Do you want to proceed (y/n)? ').startswith('y'):
+        return 1
+
+    Run("service waagent stop")
+
+    if deluser == True:
+        DeleteAccount(ovfobj.UserName)
+
+    # Remove SSH host keys
+    regenerateKeys = Config.get("Provisioning.RegenerateSshHostKeyPair")
+    if regenerateKeys == None or regenerateKeys.lower().startswith("y"):
+        Run("rm -f /etc/ssh/ssh_host_*key*")
+
+    # Remove root password
+    if delRootPass != None and delRootPass.lower().startswith("y"):
+        DeleteRootPassword()
+
+    # Remove distribution specific networking configuration
+
+    UpdateAndPublishHostNameCommon("localhost.localdomain")
+
+    # RedHat, Suse, Debian
+    for a in VarLibDhcpDirectories:
+        Run("rm -f " + a + "/*")
+
+    # Clear LibDir, remove nameserver and root bash history
+    for f in os.listdir(LibDir) + ["/etc/resolv.conf", "/root/.bash_history", "/var/log/waagent.log"]:
+        try:
+            os.remove(f)
+        except:
+            pass
+
+    return 0
+
+def SwitchCwd():
+    if not IsWindows():
+        CreateDir(LibDir, "root", 0700)
+        os.chdir(LibDir)
+
+def Usage():
+    print("usage: " + sys.argv[0] + " [-verbose] [-force] [-help|-install|-uninstall|-deprovision[+user]|-version|-serialconsole|-daemon]")
+    return 0
+
+if GuestAgentVersion == "":
+    print("WARNING! This is a non-standard agent that does not include a valid version string.")
+if IsLinux() and not DetectLinuxDistro():
+    print("WARNING! Unable to detect Linux distribution. Some functionality may be broken.")
+
+if len(sys.argv) == 1:
+    sys.exit(Usage())
+
+args = []
+force = False
+for a in sys.argv[1:]:
+    if re.match("^([-/]*)(help|usage|\?)", a):
+        sys.exit(Usage())
+    elif re.match("^([-/]*)verbose", a):
+        Verbose = True
+    elif re.match("^([-/]*)force", a):
+        force = True
+    elif re.match("^([-/]*)(setup|install)", a):
+        sys.exit(Install())
+    elif re.match("^([-/]*)(uninstall)", a):
+        sys.exit(Uninstall())
+    else:
+        args.append(a)
+
+Config = ConfigurationProvider()
+
+verbose = Config.get("Logs.Verbose")
+if verbose != None and verbose.lower().startswith("y"):
+    Verbose = True
+
+daemon = False
+for a in args:
+    if re.match("^([-/]*)deprovision\+user", a):
+        sys.exit(Deprovision(force, True))
+    elif re.match("^([-/]*)deprovision", a):
+        sys.exit(Deprovision(force, False))
+    elif re.match("^([-/]*)daemon", a):
+        daemon = True
+    elif re.match("^([-/]*)version", a):
+        print(GuestAgentVersion + " running on " + LinuxDistro)
+        sys.exit(0)
+    elif re.match("^([-/]*)serialconsole", a):
+        AddToLinuxKernelCmdline("console=ttyS0 earlyprintk=ttyS0")
+        Log("Configured kernel to use ttyS0 as the boot console.")
+        sys.exit(0)
+    else:
+        print("Invalid command line parameter:" + a)
+        sys.exit(1)
+
+if daemon == False:
+    sys.exit(Usage())
+
+try:
+    SwitchCwd()
+    Log(GuestAgentLongName + " Version: " + GuestAgentVersion)
+    if IsLinux():
+        Log("Linux Distribution Detected      : " + LinuxDistro)
+    WaAgent = Agent()
+    WaAgent.Run()
+except Exception, e:
+    Error(traceback.format_exc())
+    Error("Exception: " + str(e))
+    sys.exit(1)
