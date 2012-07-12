@@ -76,6 +76,9 @@ def IsLinux():
 
 def DetectLinuxDistro():
     global LinuxDistro
+    if os.path.isfile("/etc/altlinux-release"):
+        LinuxDistro = "ALT"
+        return True
     if os.path.isfile("/etc/redhat-release"):
         LinuxDistro = "RedHat"
         return True
@@ -90,6 +93,9 @@ def DetectLinuxDistro():
         return True
     return False
 
+def IsALT():
+    return "ALT" in LinuxDistro
+
 def IsRedHat():
     return "RedHat" in LinuxDistro
 
@@ -103,7 +109,7 @@ def IsSuse():
     return "Suse" in LinuxDistro
 
 def UsesRpm():
-    return IsRedHat() or IsSuse()
+    return IsRedHat() or IsSuse() or IsALT()
 
 def UsesDpkg():
     return IsDebian()
@@ -216,6 +222,8 @@ def CreateAccount(user, password, expiration, thumbprint):
         command = "useradd -m " + user
         if expiration != None:
             command += " -e " + expiration.split('.')[0]
+        if IsALT():
+            command += " -Gwheel"
         if Run(command):
             Error("Failed to create user account: " + user)
             return "Failed to create user account: " + user + " (0x07)."
@@ -228,7 +236,10 @@ def CreateAccount(user, password, expiration, thumbprint):
             SetFileContents("/etc/sudoers.d/waagent", user + " ALL = (ALL) NOPASSWD: ALL\n")
         else:
             SetFileContents("/etc/sudoers.d/waagent", user + " ALL = (ALL) ALL\n")
-        os.chmod("/etc/sudoers.d/waagent", 0440)
+        if not IsALT():
+            os.chmod("/etc/sudoers.d/waagent", 0440)
+        else:
+            os.chmod("/etc/sudoers.d/waagent", 0400)
     except:
         Error("CreateAccount: Failed to configure sudo access for user.")
         return "Failed to configure sudo privileges (0x08)."
@@ -252,6 +263,7 @@ def DeleteAccount(user):
     if IsWindows():
         Log("Skipping DeleteAccount on Windows")
         return
+
     userentry = None
     try:
         userentry = pwd.getpwnam(user)
@@ -279,7 +291,7 @@ def DeleteAccount(user):
 
 def ReloadSshd():
     name = None
-    if IsRedHat() or IsSuse():
+    if IsRedHat() or IsSuse() or IsALT():
         name = "sshd"
     if IsDebian():
         name = "ssh"
@@ -598,7 +610,7 @@ class EnvMonitor(object):
     def monitor(self):
         publish = Config.get("Provisioning.MonitorHostName")
         dhcpcmd = "pidof dhclient"
-        if IsSuse():
+        if IsSuse() or IsALT():
             dhcpcmd = "pidof dhcpcd"
         if IsDebian():
             dhcpcmd = "pidof dhclient3"
@@ -1244,7 +1256,10 @@ class OvfEnv(object):
         error = None
         WaAgent.EnvMonitor.SetHostName(self.ComputerName)
         if self.DisableSshPasswordAuthentication:
-            filepath = "/etc/ssh/sshd_config"
+            if not IsALT():
+                filepath = "/etc/ssh/sshd_config"
+            else:
+                filepath = "/etc/openssh/sshd_config"
             # Disable RFC 4252 and RFC 4256 authentication schemes.
             ReplaceFileContentsAtomic(filepath, "\n".join(filter(lambda a: not
                 (a.startswith("PasswordAuthentication") or a.startswith("ChallengeResponseAuthentication")),
@@ -1312,13 +1327,17 @@ class OvfEnv(object):
         return error
 
 def UpdateAndPublishHostNameCommon(name):
-    # RedHat
-    if IsRedHat():
+    # RedHat or ALTLinux
+    if IsRedHat() or IsALT():
         filepath = "/etc/sysconfig/network"
         if os.path.isfile(filepath):
             ReplaceFileContentsAtomic(filepath, "HOSTNAME=" + name + "\n"
                 + "\n".join(filter(lambda a: not a.startswith("HOSTNAME"), GetFileContents(filepath).split('\n'))))
+            if IsALT():
+                os.chmod(filepath, 0644)
 
+    # RedHat
+    if IsRedHat():
         for ethernetInterface in PossibleEthernetInterfaces:
             filepath = "/etc/sysconfig/network-scripts/ifcfg-" + ethernetInterface
             if os.path.isfile(filepath):
@@ -1585,7 +1604,7 @@ class Agent(Util):
                 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
                 sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
                 sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-                if IsSuse():
+                if IsSuse() or IsALT():
                     # This is required because sending after binding to 0.0.0.0 fails with
                     # network unreachable when the default gateway is not set up.
                     sock.bind((GetIpv4Address(), 68))
@@ -1713,15 +1732,21 @@ class Agent(Util):
             type = "rsa"
         regenerateKeys = Config.get("Provisioning.RegenerateSshHostKeyPair")
         if regenerateKeys == None or regenerateKeys.lower().startswith("y"):
-            Run("rm -f /etc/ssh/ssh_host_*key*")
-            Run("ssh-keygen -N '' -t " + type + " -f /etc/ssh/ssh_host_" + type + "_key")
+            if not IsALT():
+                Run("rm -f /etc/ssh/ssh_host_*key*")
+                Run("ssh-keygen -N '' -t " + type + " -f /etc/ssh/ssh_host_" + type + "_key")
+            else:
+                Run("rm -f /etc/openssh/ssh_host_*key*")
+                Run("ssh-keygen -A")
             ReloadSshd()
         SetFileContents(LibDir + "/provisioned", "")
         dvd = "/dev/hdc"
         if os.path.exists("/dev/sr0"):
             dvd = "/dev/sr0"
-        if Run("fdisk -l " + dvd + " | grep Disk"):
+        if Run("fdisk -l " + dvd + " | grep Disk > /dev/null 2>&1"):
             return
+        if not os.path.exists("/mnt/cdrom"):
+            CreateDir("/mnt/cdrom", "root", 0755)
         CreateDir("/mnt/cdrom/secure", "root", 0700)
         if Run("mount " + dvd + " /mnt/cdrom/secure"):
             Error("Unable to provision: Failed to mount DVD.")
@@ -1739,7 +1764,10 @@ class Agent(Util):
             if ovfobj != None:
                 error = ovfobj.Process()
         # This is done here because regenerated SSH host key pairs may be potentially overwritten when processing the ovfxml
-        fingerprint = os.popen("ssh-keygen -lf /etc/ssh/ssh_host_" + type + "_key.pub").read().rstrip().split()[1].replace(':','')
+        if not IsALT():
+            fingerprint = os.popen("ssh-keygen -lf /etc/ssh/ssh_host_" + type + "_key.pub").read().rstrip().split()[1].replace(':','')
+        else:
+            fingerprint = os.popen("ssh-keygen -lf /etc/openssh/ssh_host_" + type + "_key.pub").read().rstrip().split()[1].replace(':','')
         self.ReportRoleProperties(fingerprint)
         delRootPass = Config.get("Provisioning.DeleteRootPassword")
         if delRootPass != None and delRootPass.lower().startswith("y"):
@@ -1970,6 +1998,73 @@ esac
 exit $RETVAL
 """
 
+Init_ALT = """\
+#!/bin/bash
+#
+# Init file for WindowsAzureLinuxAgent.
+#
+# chkconfig: 2345 60 80
+# description: WindowsAzureLinuxAgent
+#
+# processname: python
+# pidfile: /var/run/waagent.pid
+
+# source function library
+. /etc/init.d/functions
+
+RETVAL=0
+LOCKFILE=/var/lock/subsys/waagent
+PIDFILE=/var/run/waagent.pid
+
+WAZD_BIN=/usr/sbin/waagent
+
+start()
+{
+    start_daemon --pidfile "$PIDFILE" --lockfile "$LOCKFILE" --expect-user root --  $WAZD_BIN -daemon
+    RETVAL=$?
+    return $RETVAL
+}
+
+stop()
+{
+    stop_daemon --pidfile "$PIDFILE" --lockfile "$LOCKFILE" --expect-user root --displayname waagent --  python
+    RETVAL=$?
+    return $RETVAL
+}
+
+case "$1" in
+    start)
+        start
+        ;;
+    stop)
+        stop
+        ;;
+    restart)
+        stop
+        start
+        ;;
+
+    condstop)
+	if [ -e "$LOCKFILE" ]; then
+		stop
+	fi
+	;;
+    condrestart)
+	if [ -e "$LOCKFILE" ]; then
+		restart
+	fi
+	;;
+    status)
+        status --pidfile "$PIDFILE" --expect-user root --displayname waagent -- python
+        RETVAL=$?
+        ;;
+    *)
+        msg_usage "${0##*/} {start|stop|restart|condstop|condrestartstatus}"
+        RETVAL=1
+esac
+exit $RETVAL
+"""
+
 Init_Debian = """\
 #!/bin/sh
 ### BEGIN INIT INFO
@@ -2120,11 +2215,15 @@ def Install():
     if missing == True:
         Warn("Please resolve missing dependencies listed for full functionality.")
     if UsesRpm():
+        if IsALT():
+	    asn1_rpmname="python-module-pyasn1"
+	else:
+	    asn1_rpmname="python-pyasn1"
         if not Run("rpm --quiet -q NetworkManager"):
             Error(GuestAgentLongName + " is not compatible with NetworkManager.")
             return 1
-        if Run("rpm --quiet -q python-pyasn1"):
-            Error(GuestAgentLongName + " requires python-pyasn1.")
+        if Run("rpm --quiet -q " + asn1_rpmname):
+            Error(GuestAgentLongName + " requires " + asn1_rpmname + ".")
             return 1
     if UsesDpkg() and Run("dpkg -l network-manager | grep -q ^un"):
         Error(GuestAgentLongName + " is not compatible with network-manager.")
@@ -2137,13 +2236,14 @@ def Install():
             Warn("Moved " + a + " -> " + LibDir + "/" + GetLastPathElement(a) )
     filename = "waagent"
     filepath = "/etc/init.d/" + filename
-    distro = IsRedHat() + IsDebian() * 2 + IsSuse() * 3
+    distro = IsRedHat() + IsDebian() * 2 + IsSuse() * 3 + IsALT() * 4
     if distro == 0:
         Error("Unable to detect Linux Distribution.")
         return 1
     init = [[Init_RedHat, "chkconfig --add " + filename],
             [Init_Debian, "update-rc.d " + filename + " defaults"],
-            [Init_Suse, "insserv " + filename]][distro - 1]
+            [Init_Suse, "insserv " + filename],
+            [Init_ALT, "chkconfig --add " + filename]][distro - 1]
     SetFileContents(filepath, init[0])
     os.chmod(filepath, 0755)
     Run(init[1])
@@ -2159,7 +2259,10 @@ def Install():
             pass
     SetFileContents("/etc/waagent.conf", WaagentConf)
     SetFileContents("/etc/logrotate.d/waagent", WaagentLogrotate)
-    filepath = "/etc/ssh/sshd_config"
+    if not IsALT():
+        filepath = "/etc/ssh/sshd_config"
+    else:
+        filepath = "/etc/openssh/sshd_config"
     ReplaceFileContentsAtomic(filepath, "\n".join(filter(lambda a: not
         a.startswith("ClientAliveInterval"),
         GetFileContents(filepath).split('\n'))) + "ClientAliveInterval 180\n")
@@ -2180,14 +2283,15 @@ def Uninstall():
             except:
                 pass
     filename = "waagent"
-    a = IsRedHat() + IsDebian() * 2 + IsSuse() * 3
+    a = IsRedHat() + IsDebian() * 2 + IsSuse() * 3 + IsALT() * 4
     if a == 0:
         Error("Unable to detect Linux Distribution.")
         return 1
     Run("service " + filename + " stop")
     cmd = ["chkconfig --del " + filename,
            "update-rc.d -f " + filename + " remove",
-           "insserv -r " + filename][a - 1]
+           "insserv -r " + filename,
+           "chkconfig --del " + filename][a - 1]
     Run(cmd)
     for f in os.listdir(LibDir) + ["/etc/init.d/" + filename, "/etc/waagent.conf", "/etc/logrotate.d/waagent", "/etc/sudoers.d/waagent"]:
         try:
@@ -2198,10 +2302,13 @@ def Uninstall():
     return 0
 
 def DeleteRootPassword():
-    SetFileContents("/etc/shadow-temp", "")
-    os.chmod("/etc/shadow-temp", 0000)
-    Run("(echo root:*LOCK*:14600:::::: && grep -v ^root /etc/shadow ) > /etc/shadow-temp")
-    Run("mv -f /etc/shadow-temp /etc/shadow")
+    if not IsALT():
+        SetFileContents("/etc/shadow-temp", "")
+        os.chmod("/etc/shadow-temp", 0000)
+        Run("(echo root:*LOCK*:14600:::::: && grep -v ^root /etc/shadow ) > /etc/shadow-temp")
+        Run("mv -f /etc/shadow-temp /etc/shadow")
+    else:
+        Run("echo root:x:14870:::::: > /etc/tcb/root/shadow")
     Log("Root password deleted.")
 
 def Deprovision(force, deluser):
@@ -2238,7 +2345,10 @@ def Deprovision(force, deluser):
     # Remove SSH host keys
     regenerateKeys = Config.get("Provisioning.RegenerateSshHostKeyPair")
     if regenerateKeys == None or regenerateKeys.lower().startswith("y"):
-        Run("rm -f /etc/ssh/ssh_host_*key*")
+        if not IsALT():
+            Run("rm -f /etc/ssh/ssh_host_*key*")
+        else:
+            Run("rm -f /etc/openssh/ssh_host_*key*")
 
     # Remove root password
     if delRootPass != None and delRootPass.lower().startswith("y"):
@@ -2328,7 +2438,16 @@ try:
     if IsLinux():
         Log("Linux Distribution Detected      : " + LinuxDistro)
     WaAgent = Agent()
-    WaAgent.Run()
+    if IsALT():
+        child_pid = os.fork()
+        if child_pid == 0:
+            sys.stdout = open("/dev/null",'a')
+            sys.stderr = open("/dev/null",'a')
+            WaAgent.Run()
+        else:
+   	    sys.exit(0)
+    else:
+	WaAgent.Run()
 except Exception, e:
     Error(traceback.format_exc())
     Error("Exception: " + str(e))
