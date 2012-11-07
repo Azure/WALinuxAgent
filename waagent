@@ -1583,6 +1583,8 @@ class Agent(Util):
                 sendData = self.BuildDhcpRequest()
                 LogWithPrefixIfVerbose("DHCP request:", HexDump(sendData, len(sendData)))
                 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+                # Set timeout to handle < 1024 sock.recv responces
+                sock.settimeout(5)
                 sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
                 sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
                 if IsSuse():
