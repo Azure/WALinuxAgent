@@ -46,7 +46,7 @@ import xml.dom.minidom
 
 GuestAgentName = "WALinuxAgent"
 GuestAgentLongName = "Windows Azure Linux Agent"
-GuestAgentVersion = "rd_wala.121030-1604" # filled in by build; be careful with this line and GuestAgentVersion
+GuestAgentVersion = "WALinuxAgent-1.1"
 ProtocolVersion = "2011-12-31"
 
 Config = None
