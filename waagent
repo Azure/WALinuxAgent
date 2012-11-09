@@ -35,6 +35,7 @@ import shutil
 import socket
 import SocketServer
 import struct
+import subprocess
 import sys
 import tempfile
 import textwrap
@@ -45,7 +46,7 @@ import xml.dom.minidom
 
 GuestAgentName = "WALinuxAgent"
 GuestAgentLongName = "Windows Azure Linux Agent"
-GuestAgentVersion = "rd_wala.120504-1323"
+GuestAgentVersion = "rd_wala.121030-1604" # filled in by build; be careful with this line and GuestAgentVersion
 ProtocolVersion = "2011-12-31"
 
 Config = None
@@ -54,6 +55,7 @@ Verbose = False
 WaAgent = None
 DiskActivated = False
 Openssl = "openssl"
+Children = []
 
 PossibleEthernetInterfaces = ["seth0", "seth1", "eth0", "eth1"]
 RulesFiles = [ "/lib/udev/rules.d/75-persistent-net-generator.rules",
@@ -437,9 +439,9 @@ def DeviceForIdePort(n):
         g0 = "00000001"
         n = n - 2
     device = None
-    path="/sys/bus/vmbus/devices/"
+    path = "/sys/bus/vmbus/devices/"
     for vmbus in os.listdir(path):
-        guid=GetFileContents(path + vmbus + "/device_id").lstrip('{').split('-')
+        guid = GetFileContents(path + vmbus + "/device_id").lstrip('{').split('-')
         if guid[0] == g0 and guid[1] == "000" + str(n):
             for root, dirs, files in os.walk(path + vmbus):
                 if root.endswith("/block"):
@@ -531,9 +533,6 @@ def LoadBalancerProbeServer(port):
 
     class T(object):
         def __init__(self, port):
-            enabled = Config.get("LBProbeResponder")
-            if enabled != None and enabled.lower().startswith("n"):
-                return
             self.ProbeCounter = 0
             self.server = SocketServer.TCPServer((GetIpv4Address(), port), TCPHandler)
             self.server_thread = threading.Thread(target = self.server.serve_forever)
@@ -541,9 +540,6 @@ def LoadBalancerProbeServer(port):
             self.server_thread.start()
 
         def shutdown(self):
-            global EnableLoadBalancerProbes
-            if not EnableLoadBalancerProbes:
-                return
             self.server.shutdown()
 
     class TCPHandler(SocketServer.BaseRequestHandler):
@@ -629,6 +625,9 @@ class EnvMonitor(object):
                 Log("EnvMonitor: Detected dhcp client restart. Restoring routing table.")
                 WaAgent.RestoreRoutes()
                 dhcppid = pid
+            for child in Children:
+                if child.poll() != None:
+                    Children.remove(child)
             time.sleep(5)
 
     def SetHostName(self, name):
@@ -640,7 +639,7 @@ class EnvMonitor(object):
     def IsNamePublished(self):
         return self.published
 
-    def shutdown(self):
+    def ShutdownService(self):
         self.shutdown = True
         self.server_thread.join()
 
@@ -797,7 +796,7 @@ class SharedConfig(object):
             return None
         program = Config.get("Role.TopologyConsumer")
         if program != None:
-            os.spawnl(os.P_NOWAIT, program, program, LibDir + "/SharedConfig.xml")
+            Children.append(subprocess.Popen([program, LibDir + "/SharedConfig.xml"]))
         return self
 
 class HostingEnvironmentConfig(object):
@@ -943,7 +942,7 @@ class HostingEnvironmentConfig(object):
             if User != "root" and User != "" and Pass != "":
                 CreateAccount(User, Pass, Expiration, Thumbprint)
             else:
-                Error("Not creating user account: user=" + User + " pass=" + Pass)
+                Error("Not creating user account: " + User)
         for c in self.Certificates:
             cname = c.getAttribute("name")
             csha1 = c.getAttribute("certificateId").split(':')[1].upper()
@@ -955,7 +954,7 @@ class HostingEnvironmentConfig(object):
                 Log("Public cert with thumbprint: " + csha1 + " was retrieved.")
         program = Config.get("Role.ConfigurationConsumer")
         if program != None:
-            os.spawnl(os.P_NOWAIT, program, program, LibDir + "/HostingEnvironmentConfig.xml")
+            Children.append(subprocess.Popen([program, LibDir + "/HostingEnvironmentConfig.xml"]))
 
 class GoalState(Util):
 #
@@ -1202,7 +1201,7 @@ class OvfEnv(object):
     def NumberToBytes(self, i):
         result = []
         while i:
-            result.append(chr(i&0xFF))
+            result.append(chr(i & 0xFF))
             i >>= 8
         result.reverse()
         return ''.join(result)
@@ -1585,13 +1584,22 @@ class Agent(Util):
                 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
                 sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
                 sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-                if IsSuse():
+                missingDefaultRoute = True
+                try:
+                    for line in os.popen("route -n").read().split('\n'):
+                        if line.startswith("0.0.0.0 "):
+                            missingDefaultRoute = False
+                except:
+                    pass
+                if missingDefaultRoute:
                     # This is required because sending after binding to 0.0.0.0 fails with
                     # network unreachable when the default gateway is not set up.
                     sock.bind((GetIpv4Address(), 68))
                 else:
                     sock.bind(("0.0.0.0", 68))
                 sock.sendto(sendData, ("<broadcast>", 67))
+                sock.settimeout(30)
+                LogIfVerbose("DoDhcpWork: Setting socket.timeout=10, entering recv")
                 receiveBuffer = sock.recv(1024)
                 sock.close()
                 endpoint = self.HandleDhcpResponse(sendData, receiveBuffer)
@@ -1617,10 +1625,7 @@ class Agent(Util):
         Log("Setting host name: " + name)
         UpdateAndPublishHostNameCommon(name)
         for ethernetInterface in PossibleEthernetInterfaces:
-            if IsSuse():
-                Run("ifrenew " + ethernetInterface)
-            else:
-                Run("ifdown " + ethernetInterface + " && ifup " + ethernetInterface)
+            Run("ifdown " + ethernetInterface + " && ifup " + ethernetInterface)
         self.RestoreRoutes()
 
     def RestoreRoutes(self):
@@ -1800,7 +1805,11 @@ class Agent(Util):
         goalState = None # self.GoalState, instance of GoalState
         provisioned = os.path.exists(LibDir + "/provisioned")
         program = Config.get("Role.StateConsumer")
-        provisionError = None
+        provisionError = None        
+        lbProbeResponder = True
+        setting = Config.get("LBProbeResponder")
+        if setting != None and setting.lower().startswith("n"):
+            lbProbeResponder = False
         while True:
             if (goalState == None) or (incarnation == None) or (goalState.Incarnation != incarnation):
                 goalState = self.UpdateGoalState()
@@ -1823,18 +1832,18 @@ class Agent(Util):
                 if currentPort != goalPort:
                     self.LoadBalancerProbeServer_Shutdown()
                     currentPort = goalPort
-                    if currentPort != None:
+                    if currentPort != None and lbProbeResponder == True:
                         self.LoadBalancerProbeServer = LoadBalancerProbeServer(currentPort)
 
             if program != None and DiskActivated == True:
-                os.spawnl(os.P_NOWAIT, program, program, "Ready")
+                Children.append(subprocess.Popen([program, "Ready"]))
                 program = None
 
             if goalState.ExpectedState == "Stopped":
                 program = Config.get("Role.StateConsumer")
                 if program != None:
                     Run(program + " Shutdown")
-                self.EnvMonitor.shutdown()
+                self.EnvMonitor.ShutdownService()
                 self.LoadBalancerProbeServer_Shutdown()
                 command = ["/sbin/shutdown -hP now", "shutdown /s /t 5"][IsWindows()]
                 Run(command)
@@ -1842,13 +1851,10 @@ class Agent(Util):
 
             sleepToReduceAccessDenied = 3
             time.sleep(sleepToReduceAccessDenied)
-            i = None
             if provisionError != None:
-                i = self.ReportNotReady("ProvisioningFailed", provisionError)
+                incarnation = self.ReportNotReady("ProvisioningFailed", provisionError)
             else:
-                i = self.ReportReady()
-            if i != None:
-                incarnation = i
+                incarnation = self.ReportReady()                
             time.sleep(25 - sleepToReduceAccessDenied)
 
 Init_Suse = """\
@@ -2198,10 +2204,13 @@ def Uninstall():
     return 0
 
 def DeleteRootPassword():
-    SetFileContents("/etc/shadow-temp", "")
-    os.chmod("/etc/shadow-temp", 0000)
-    Run("(echo root:*LOCK*:14600:::::: && grep -v ^root /etc/shadow ) > /etc/shadow-temp")
-    Run("mv -f /etc/shadow-temp /etc/shadow")
+    filepath="/etc/shadow"
+    ReplaceFileContentsAtomic(filepath, "root:*LOCK*:14600::::::\n" + "\n".join(filter(lambda a: not
+        a.startswith("root:"),
+        GetFileContents(filepath).split('\n'))))
+    os.chmod(filepath, 0000)
+    if IsRedHat():
+        Run("chcon system_u:object_r:shadow_t:s0 " + filepath)
     Log("Root password deleted.")
 
 def Deprovision(force, deluser):
