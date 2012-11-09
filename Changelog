@@ -1,0 +1,12 @@
+WALinuxAgent                                                          Changelog
+|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+
+09 Nov 2012, WALinuxAgent 1.1
+   . Added sock.settimeout in DoDhcpWork() to properly timeout sock.recv
+   . Added missingDefaultRoute to handle routing issues when DHCP responses not
+     handled properly
+   . Added Children.append to avoid zombies
+   . Fixed ifrenew for compatibility
+   . Fixed shadow password file for correct SELinux context
+   . Minor cleanup work
+   . Added Changelog :)
