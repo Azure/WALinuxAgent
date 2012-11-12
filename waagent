@@ -1976,6 +1976,26 @@ esac
 exit $RETVAL
 """
 
+Init_Ubuntu = """\
+#walinuxagent - start Windows Azure agent
+
+description "walinuxagent"
+author "Ben Howard <ben.howard@canonical.com>"
+
+start on (filesystem and started rsyslog)
+
+pre-start script
+	if [ ! -x /usr/sbin/waagent ]; then
+		exit 0
+	fi
+
+	#Load the udf module
+	modprobe -b udf
+end script
+
+exec /usr/sbin/waagent -daemon
+"""
+
 Init_Debian = """\
 #!/bin/sh
 ### BEGIN INIT INFO
@@ -2141,18 +2161,30 @@ def Install():
                 os.remove(GetLastPathElement(a))
             shutil.move(a, ".")
             Warn("Moved " + a + " -> " + LibDir + "/" + GetLastPathElement(a) )
-    filename = "waagent"
-    filepath = "/etc/init.d/" + filename
-    distro = IsRedHat() + IsDebian() * 2 + IsSuse() * 3
-    if distro == 0:
-        Error("Unable to detect Linux Distribution.")
-        return 1
-    init = [[Init_RedHat, "chkconfig --add " + filename],
-            [Init_Debian, "update-rc.d " + filename + " defaults"],
-            [Init_Suse, "insserv " + filename]][distro - 1]
-    SetFileContents(filepath, init[0])
-    os.chmod(filepath, 0755)
-    Run(init[1])
+
+    if IsUbuntu():
+        # Support for Ubuntu's upstart configuration
+        filename="waagent.conf"
+        filepath = "/etc/init/" + filename
+        SetFileContents(filepath, Init_Ubuntu)
+        os.chmod(filepath, 0644)
+
+    else:
+        # Regular init.d configurations
+        filename = "waagent"
+        filepath = "/etc/init.d/" + filename
+
+        distro = IsRedHat() + IsDebian() * 2 + IsSuse()
+        if distro == 0:
+            Error("Unable to detect Linux Distribution.")
+            return 1
+        init = [[Init_RedHat, "chkconfig --add " + filename],
+                [Init_Debian, "update-rc.d " + filename + " defaults"],
+                [Init_Suse, "insserv " + filename]][distro - 1]
+        SetFileContents(filepath, init[0])
+        os.chmod(filepath, 0755)
+        Run(init[1])
+
     if os.path.isfile("/etc/waagent.conf"):
         try:
             os.remove("/etc/waagent.conf.old")
@@ -2226,7 +2258,12 @@ def Deprovision(force, deluser):
 
     print("WARNING! The waagent service will be stopped.")
     print("WARNING! All SSH host key pairs will be deleted.")
-    print("WARNING! Nameserver configuration in /etc/resolv.conf will be deleted.")
+
+    if IsUbuntu():
+        print("WARNING! Nameserver configuration in /etc/resolvconf/resolv.conf.d/{tail,originial} will be deleted.")
+    else:
+        print("WARNING! Nameserver configuration in /etc/resolv.conf will be deleted.")
+
     print("WARNING! Cached DHCP leases will be deleted.")
 
     delRootPass = Config.get("Provisioning.DeleteRootPassword")
@@ -2262,7 +2299,21 @@ def Deprovision(force, deluser):
         Run("rm -f " + a + "/*")
 
     # Clear LibDir, remove nameserver and root bash history
-    for f in os.listdir(LibDir) + ["/etc/resolv.conf", "/root/.bash_history", "/var/log/waagent.log"]:
+    fileBlackList = [ "/root/.bash_history", "/var/log/waagent.log" ]
+
+    # Ubuntu uses resolvconf, so we want to preserve the ability to use resolvconf
+    if IsUbuntu():
+        if os.path.realpath('/etc/resolv.conf') != '/run/resolvconf/resolv.conf':
+            Log("resolvconf is not configured. Removing /etc/resolv.conf")
+            fileBlackList.append('/etc/resolv.conf')
+        else:
+            Log("resolvconf is enabled; leaving /etc/resolv.conf intact")
+            resolvConfD = '/etc/resolvconf/resolv.conf.d/'
+            fileBlackList.extend([resolvConfD + 'tail', resolvConfD + 'originial' ])
+    else:
+        fileBlackList.append(os.listdir(LibDir) + '/etc/resolv.conf')
+
+    for f in os.listdir(LibDir) + fileBlackList:
         try:
             os.remove(f)
         except:
