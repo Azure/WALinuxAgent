@@ -2155,18 +2155,29 @@ def Install():
                 os.remove(GetLastPathElement(a))
             shutil.move(a, ".")
             Warn("Moved " + a + " -> " + LibDir + "/" + GetLastPathElement(a) )
-    filename = "waagent"
-    filepath = "/etc/init.d/" + filename
-    distro = IsRedHat() + IsDebian() * 2 + IsSuse() * 3
-    if distro == 0:
-        Error("Unable to detect Linux Distribution.")
-        return 1
-    init = [[Init_RedHat, "chkconfig --add " + filename],
-            [Init_Debian, "update-rc.d " + filename + " defaults"],
-            [Init_Suse, "insserv " + filename]][distro - 1]
-    SetFileContents(filepath, init[0])
-    os.chmod(filepath, 0755)
-    Run(init[1])
+
+    if IsUbuntu():
+        # Support for Ubuntu's upstart configuration
+        filename="waagent.conf"
+        filepath = "/etc/init/" + filename
+        SetFileContents(filepath, Init_Ubuntu)
+        os.chmod(filepath, 0644)
+
+    else:
+        # Regular init.d configurations
+        filename = "waagent"
+        filepath = "/etc/init.d/" + filename
+        distro = IsRedHat() + IsDebian() * 2 + IsSuse() * 3
+        if distro == 0:
+            Error("Unable to detect Linux Distribution.")
+            return 1
+        init = [[Init_RedHat, "chkconfig --add " + filename],
+                [Init_Debian, "update-rc.d " + filename + " defaults"],
+                [Init_Suse, "insserv " + filename]][distro - 1]
+        SetFileContents(filepath, init[0])
+        os.chmod(filepath, 0755)
+        Run(init[1])
+
     if os.path.isfile("/etc/waagent.conf"):
         try:
             os.remove("/etc/waagent.conf.old")
@@ -2276,12 +2287,28 @@ def Deprovision(force, deluser):
         Run("rm -f " + a + "/*")
 
     # Clear LibDir, remove nameserver and root bash history
-    for f in os.listdir(LibDir) + ["/etc/resolv.conf", "/root/.bash_history", "/var/log/waagent.log"]:
+    fileBlackList = [ "/root/.bash_history", "/var/log/waagent.log" ]
+
+    if IsUbuntu():
+        # Ubuntu uses resolv.conf by default, so removing /etc/resolv.conf will
+        # break resolvconf. Therefore, we check to see if resolvconf is in use,
+        # and if so, we remove the resolvconf artifacts.
+
+        if os.path.realpath('/etc/resolv.conf') != '/run/resolvconf/resolv.conf':
+            Log("resolvconf is not configured. Removing /etc/resolv.conf")
+            fileBlackList.append('/etc/resolv.conf')
+        else:
+            Log("resolvconf is enabled; leaving /etc/resolv.conf intact")
+            resolvConfD = '/etc/resolvconf/resolv.conf.d/'
+            fileBlackList.extend([resolvConfD + 'tail', resolvConfD + 'originial' ])
+    else:
+        fileBlackList.append(os.listdir(LibDir) + '/etc/resolv.conf')
+
+    for f in os.listdir(LibDir) + fileBlackList:
         try:
             os.remove(f)
         except:
             pass
-
     return 0
 
 def SwitchCwd():
