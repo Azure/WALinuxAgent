@@ -1568,7 +1568,7 @@ class Agent(Util):
         # And workaround incompatibility with Windows Azure DHCP servers.
         #
         ShortSleep = False # Sleep 1 second before retrying DHCP queries.
-
+        ifname=None
         if not IsWindows():
             Run("iptables -D INPUT -p udp --dport 68 -j ACCEPT")
             Run("iptables -I INPUT -p udp --dport 68 -j ACCEPT")
@@ -1596,14 +1596,18 @@ class Agent(Util):
                 if missingDefaultRoute:
                     # This is required because sending after binding to 0.0.0.0 fails with
                     # network unreachable when the default gateway is not set up.
-                    sock.bind((GetIpv4Address(), 68))
-                else:
-                    sock.bind(("0.0.0.0", 68))
+                    for i in PossibleEthernetInterfaces:
+                        try:
+                            if Linux_ioctl_GetIpv4Address(i):
+                                ifname=i
+                        except IOError, e:
+                            pass
+                    Run("route add 255.255.255.255 dev " + ifname)
+                sock.bind(("0.0.0.0", 68)) 
                 sock.sendto(sendData, ("<broadcast>", 67))
                 sock.settimeout(30)
-                LogIfVerbose("DoDhcpWork: Setting socket.timeout=10, entering recv")
+                LogIfVerbose("DoDhcpWork: Setting socket.timeout=30, entering recv")
                 receiveBuffer = sock.recv(1024)
-                sock.close()
                 endpoint = self.HandleDhcpResponse(sendData, receiveBuffer)
                 if endpoint == None:
                     LogIfVerbose("DoDhcpWork: No endpoint found")
@@ -1620,6 +1624,11 @@ class Agent(Util):
             except Exception, e:
                 ErrorWithPrefix(prefix, str(e))
                 ErrorWithPrefix(prefix, traceback.format_exc())
+            finally:
+                sock.close()
+                if missingDefaultRoute:
+                    #We added this route - delete it
+                    Run("route del 255.255.255.255 dev " + ifname) 
         return None
 
     def UpdateAndPublishHostName(self, name):
