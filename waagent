@@ -633,8 +633,9 @@ class EnvMonitor(object):
     def SetHostName(self, name):
         if socket.gethostname() == name:
             self.published = True
-        else:
-            Run("hostname " + name)
+        elif Run("hostname " + name):
+            Error("Error: SetHostName: Cannot set hostname to " + name)
+            return ("Error: SetHostName: Cannot set hostname to " + name)
 
     def IsNamePublished(self):
         return self.published
@@ -1241,7 +1242,8 @@ class OvfEnv(object):
 
     def Process(self):
         error = None
-        WaAgent.EnvMonitor.SetHostName(self.ComputerName)
+        error=WaAgent.EnvMonitor.SetHostName(self.ComputerName)
+        if error: return error
         if self.DisableSshPasswordAuthentication:
             filepath = "/etc/ssh/sshd_config"
             # Disable RFC 4252 and RFC 4256 authentication schemes.
@@ -1743,6 +1745,9 @@ class Agent(Util):
             ovfobj = OvfEnv().Parse(ovfxml)
             if ovfobj != None:
                 error = ovfobj.Process()
+                if error :
+                    Error ("Provisioninig image FAILED " + error)
+                    return ("Provisioninig image FAILED " + error)
         # This is done here because regenerated SSH host key pairs may be potentially overwritten when processing the ovfxml
         fingerprint = os.popen("ssh-keygen -lf /etc/ssh/ssh_host_" + type + "_key.pub").read().rstrip().split()[1].replace(':','')
         self.ReportRoleProperties(fingerprint)
