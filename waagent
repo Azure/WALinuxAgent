@@ -2146,8 +2146,8 @@ def Install():
         if Run("rpm --quiet -q python-pyasn1"):
             Error(GuestAgentLongName + " requires python-pyasn1.")
             return 1
-    if UsesDpkg() and Run("dpkg -l network-manager | grep -q ^un"):
-        Error(GuestAgentLongName + " is not compatible with network-manager.")
+        if UsesDpkg() and not Run("dpkg-query -s network-manager >/dev/null 2>&1"):
+            Error(GuestAgentLongName + " is not compatible with network-manager.")
         return 1
     for a in RulesFiles:
         if os.path.isfile(a):
