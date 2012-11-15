@@ -2302,7 +2302,7 @@ def Deprovision(force, deluser):
             resolvConfD = '/etc/resolvconf/resolv.conf.d/'
             fileBlackList.extend([resolvConfD + 'tail', resolvConfD + 'originial' ])
     else:
-        fileBlackList.append(os.listdir(LibDir) + '/etc/resolv.conf')
+        fileBlackList.extend(os.listdir(LibDir) + ['/etc/resolv.conf'])
 
     for f in os.listdir(LibDir) + fileBlackList:
         try:
