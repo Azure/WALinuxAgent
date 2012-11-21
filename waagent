@@ -690,9 +690,9 @@ class Certificates(object):
         output = open("temp.pem", "w")
         for line in file.readlines():
             output.write(line)
-            if line.startswith("-----END PRIVATE KEY-----") or line.startswith("-----END CERTIFICATE-----"):
+            if re.match(r'[-]+END .*?(KEY|CERTIFICATE)[-]+$',line):
                 output.close()
-                if line.startswith("-----END PRIVATE KEY-----"):
+                if re.match(r'[-]+END .*?KEY[-]+$',line):
                     os.rename("temp.pem", str(pindex) + ".prv")
                     pindex += 1
                 else:
