@@ -532,9 +532,11 @@ class Util(object):
 def LoadBalancerProbeServer(port):
 
     class T(object):
-        def __init__(self, port):
+        def __init__(self, ip, port):
+            if port == None or ip == None :
+                return
             self.ProbeCounter = 0
-            self.server = SocketServer.TCPServer((GetIpv4Address(), port), TCPHandler)
+            self.server = SocketServer.TCPServer((ip, port), TCPHandler)
             self.server_thread = threading.Thread(target = self.server.serve_forever)
             self.server_thread.setDaemon(True)
             self.server_thread.start()
@@ -556,8 +558,20 @@ def LoadBalancerProbeServer(port):
             log("Received LB probe # " + strCounter)
             self.request.recv(1024)
             self.request.send("HTTP/1.1 200 OK\r\nContent-Length: 2\r\nContent-Type: text/html\r\nDate: " + self.GetHttpDateTimeNow() + "\r\n\r\nOK")
-
-    context = T(port)
+            
+    for retry in range(1,6):
+        context=None
+        ip = GetIpv4Address()
+        if ip == None :
+            Log("LoadBalancerProbeServer: GetIpv4Address() returned None, sleeping 10 before retry " + str(retry+1) )
+            time.sleep(10)
+        else:
+            try:
+                context = T(ip,port)
+                break
+            except Exception, e:
+                Log("LoadBalancerProbeServer: Exception contructing socket server: " + str(e))
+        Log("LoadBalancerProbeServer: Retry socket server construction #" + str(retry+1) )
     return context
 
 class ConfigurationProvider(object):
@@ -1848,6 +1862,9 @@ class Agent(Util):
                     currentPort = goalPort
                     if currentPort != None and lbProbeResponder == True:
                         self.LoadBalancerProbeServer = LoadBalancerProbeServer(currentPort)
+                        if self.LoadBalancerProbeServer == None :
+                            lbProbeResponder = False
+                            Log("Unable to create LBProbeResponder.")
 
             if program != None and DiskActivated == True:
                 Children.append(subprocess.Popen([program, "Ready"]))
