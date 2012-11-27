@@ -1620,8 +1620,8 @@ class Agent(Util):
                     Run("route add 255.255.255.255 dev " + ifname)
                 sock.bind(("0.0.0.0", 68)) 
                 sock.sendto(sendData, ("<broadcast>", 67))
-                sock.settimeout(30)
-                LogIfVerbose("DoDhcpWork: Setting socket.timeout=30, entering recv")
+                sock.settimeout(10)
+                LogIfVerbose("DoDhcpWork: Setting socket.timeout=10, entering recv")
                 receiveBuffer = sock.recv(1024)
                 endpoint = self.HandleDhcpResponse(sendData, receiveBuffer)
                 if endpoint == None:
