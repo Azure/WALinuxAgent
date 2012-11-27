@@ -1617,11 +1617,12 @@ class Agent(Util):
                                 ifname=i
                         except IOError, e:
                             pass
+                    Log("DoDhcpWork: Missing default route - adding broadcast route for DHCP.")
                     Run("route add 255.255.255.255 dev " + ifname)
                 sock.bind(("0.0.0.0", 68)) 
                 sock.sendto(sendData, ("<broadcast>", 67))
                 sock.settimeout(10)
-                LogIfVerbose("DoDhcpWork: Setting socket.timeout=10, entering recv")
+                Log("DoDhcpWork: Setting socket.timeout=10, entering recv")
                 receiveBuffer = sock.recv(1024)
                 endpoint = self.HandleDhcpResponse(sendData, receiveBuffer)
                 if endpoint == None:
@@ -1644,6 +1645,7 @@ class Agent(Util):
                 if missingDefaultRoute:
                     #We added this route - delete it
                     Run("route del 255.255.255.255 dev " + ifname) 
+                    Log("DoDhcpWork: Removing broadcast route for DHCP.")
         return None
 
     def UpdateAndPublishHostName(self, name):
@@ -2180,6 +2182,7 @@ def Install():
         filepath = "/etc/init/" + filename
         SetFileContents(filepath, Init_Ubuntu)
         os.chmod(filepath, 0644)
+        Log("Install: Ubuntu Upstart configuration completed")
 
     else:
         # Regular init.d configurations
@@ -2312,6 +2315,7 @@ def Deprovision(force, deluser):
         # break resolvconf. Therefore, we check to see if resolvconf is in use,
         # and if so, we remove the resolvconf artifacts.
 
+        Log("Deprovision: Ubuntu specific resolv.conf behavior selected.")
         if os.path.realpath('/etc/resolv.conf') != '/run/resolvconf/resolv.conf':
             Log("resolvconf is not configured. Removing /etc/resolv.conf")
             fileBlackList.append('/etc/resolv.conf')
