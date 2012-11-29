@@ -2180,7 +2180,7 @@ def Install():
         # Support for Ubuntu's upstart configuration
         filename="waagent.conf"
         filepath = "/etc/init/" + filename
-        SetFileContents(filepath, Init_Ubuntu)
+        SetFileContents(filepath, Init_Debian)
         os.chmod(filepath, 0644)
         Log("Install: Ubuntu Upstart configuration completed")
 
