@@ -2010,6 +2010,33 @@ esac
 exit $RETVAL
 """
 
+Init_Ubuntu = """\
+#walinuxagent - start Windows Azure agent
+
+description "walinuxagent"
+author "Ben Howard <ben.howard@canonical.com>"
+
+start on (filesystem and started rsyslog)
+
+pre-start script
+
+    [ -r /etc/default/walinuxagent ] && . /etc/default/walinuxagent
+
+    if [ "$WALINUXAGENT_ENABLED" != "1" ]; then
+        exit 1
+    fi
+
+    if [ ! -x /usr/sbin/waagent ]; then
+        exit 1
+    fi
+
+    #Load the udf module
+    modprobe -b udf
+end script
+
+exec /usr/sbin/waagent -daemon
+"""
+
 Init_Debian = """\
 #!/bin/sh
 ### BEGIN INIT INFO
@@ -2175,18 +2202,28 @@ def Install():
                 os.remove(GetLastPathElement(a))
             shutil.move(a, ".")
             Warn("Moved " + a + " -> " + LibDir + "/" + GetLastPathElement(a) )
-    filename = "waagent"
-    filepath = "/etc/init.d/" + filename
-    distro = IsRedHat() + IsDebian() * 2 + IsSuse() * 3
-    if distro == 0:
-        Error("Unable to detect Linux Distribution.")
-        return 1
-    init = [[Init_RedHat, "chkconfig --add " + filename],
-            [Init_Debian, "update-rc.d " + filename + " defaults"],
-            [Init_Suse, "insserv " + filename]][distro - 1]
-    SetFileContents(filepath, init[0])
-    os.chmod(filepath, 0755)
-    Run(init[1])
+
+    if IsUbuntu():
+        # Support for Ubuntu's upstart configuration
+        filename="waagent.conf"
+        filepath = "/etc/init/" + filename
+        SetFileContents(filepath, Init_Ubuntu)
+        os.chmod(filepath, 0644)
+
+    else:
+        # Regular init.d configurations
+        filename = "waagent"
+        filepath = "/etc/init.d/" + filename
+        distro = IsRedHat() + IsDebian() * 2 + IsSuse() * 3
+        if distro == 0:
+            Error("Unable to detect Linux Distribution.")
+            return 1
+        init = [[Init_RedHat, "chkconfig --add " + filename],
+                [Init_Debian, "update-rc.d " + filename + " defaults"],
+                [Init_Suse, "insserv " + filename]][distro - 1]
+        SetFileContents(filepath, init[0])
+        os.chmod(filepath, 0755)
+        Run(init[1])
     if os.path.isfile("/etc/waagent.conf"):
         try:
             os.remove("/etc/waagent.conf.old")
