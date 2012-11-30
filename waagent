@@ -2297,7 +2297,10 @@ def Deprovision(force, deluser):
 
     print("WARNING! The waagent service will be stopped.")
     print("WARNING! All SSH host key pairs will be deleted.")
-    print("WARNING! Nameserver configuration in /etc/resolv.conf will be deleted.")
+    if IsUbuntu():
+        print("WARNING! Nameserver configuration in /etc/resolvconf/resolv.conf.d/{tail,originial} will be deleted.")
+    else:
+        print("WARNING! Nameserver configuration in /etc/resolv.conf will be deleted.")
     print("WARNING! Cached DHCP leases will be deleted.")
 
     delRootPass = Config.get("Provisioning.DeleteRootPassword")
