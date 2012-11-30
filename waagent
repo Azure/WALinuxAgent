@@ -2175,30 +2175,18 @@ def Install():
                 os.remove(GetLastPathElement(a))
             shutil.move(a, ".")
             Warn("Moved " + a + " -> " + LibDir + "/" + GetLastPathElement(a) )
-
-    if IsUbuntu():
-        # Support for Ubuntu's upstart configuration
-        filename="waagent.conf"
-        filepath = "/etc/init/" + filename
-        SetFileContents(filepath, Init_Debian)
-        os.chmod(filepath, 0644)
-        Log("Install: Ubuntu Upstart configuration completed")
-
-    else:
-        # Regular init.d configurations
-        filename = "waagent"
-        filepath = "/etc/init.d/" + filename
-        distro = IsRedHat() + IsDebian() * 2 + IsSuse() * 3
-        if distro == 0:
-            Error("Unable to detect Linux Distribution.")
-            return 1
-        init = [[Init_RedHat, "chkconfig --add " + filename],
-                [Init_Debian, "update-rc.d " + filename + " defaults"],
-                [Init_Suse, "insserv " + filename]][distro - 1]
-        SetFileContents(filepath, init[0])
-        os.chmod(filepath, 0755)
-        Run(init[1])
-
+    filename = "waagent"
+    filepath = "/etc/init.d/" + filename
+    distro = IsRedHat() + IsDebian() * 2 + IsSuse() * 3
+    if distro == 0:
+        Error("Unable to detect Linux Distribution.")
+        return 1
+    init = [[Init_RedHat, "chkconfig --add " + filename],
+            [Init_Debian, "update-rc.d " + filename + " defaults"],
+            [Init_Suse, "insserv " + filename]][distro - 1]
+    SetFileContents(filepath, init[0])
+    os.chmod(filepath, 0755)
+    Run(init[1])
     if os.path.isfile("/etc/waagent.conf"):
         try:
             os.remove("/etc/waagent.conf.old")
