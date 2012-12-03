@@ -2019,7 +2019,8 @@ author "Ben Howard <ben.howard@canonical.com>"
 start on (filesystem and started rsyslog)
 
 pre-start script
-WALINUXAGENT_ENABLED=1
+
+	WALINUXAGENT_ENABLED=1
     [ -r /etc/default/walinuxagent ] && . /etc/default/walinuxagent
 
     if [ "$WALINUXAGENT_ENABLED" != "1" ]; then
