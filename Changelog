@@ -1,6 +1,18 @@
 WALinuxAgent                                                          Changelog
 |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 
+?? Dec 2012, WALinuxAgent 1.2
+   . Added Init_Ubuntu upstart support and improved resolvconf support on Ubuntu
+   . Additional logging for DoDhcpWork()
+   . Update sock.recv timeout from 30 to 10 seconds
+   . Fix 572301 - Linux waagent: deprovision, user is not deleted properly
+   . Fix 578109 - Make LBProbeResponder construction more robust
+   . Fix 575725 - Agent fails to provision user with public/private key pairs
+   . Fix 573304 - DHCP broadcast response not received
+   . Fix 576901 - Linux agent fails to delete root user password
+   . Fix 577000 - Linux agent should report error messages to Fabric when
+      passed an invalid hostname.
+
 09 Nov 2012, WALinuxAgent 1.1
    . Added sock.settimeout in DoDhcpWork() to properly timeout sock.recv
    . Added missingDefaultRoute to handle routing issues when DHCP responses not
