@@ -43,6 +43,7 @@ import threading
 import time
 import traceback
 import xml.dom.minidom
+import commands
 
 GuestAgentName = "WALinuxAgent"
 GuestAgentLongName = "Windows Azure Linux Agent"
@@ -163,6 +164,20 @@ def GetLineStartingWith(prefix, filepath):
 def Run(a):
     LogIfVerbose(a)
     return os.system(a)
+
+def  RunSafe(cmd):
+    LogIfVerbose(cmd)
+    # for python2.1 double try, in order to use a finally...
+    try:                                     
+        try:
+            (exit_status,output) = commands.getstatusoutput(cmd)
+        except OSError,e : # just catch the exception and proceed
+            LogIfVerbose( ("OSError " + str(e) + " caught") )
+            return exit_status,output
+        else:
+            return exit_status,output
+    finally:
+        pass
 
 def GetNodeTextData(a):
     for b in a.childNodes:
@@ -1753,18 +1768,40 @@ class Agent(Util):
         dvd = "/dev/hdc"
         if os.path.exists("/dev/sr0"):
             dvd = "/dev/sr0"
+        modloaded=False
         if Run("fdisk -l " + dvd + " | grep Disk"):
-            return
+            # Is it possible to load a module for ata_piix?
+            retcode,krn=RunSafe('uname -r')
+            if retcode:
+                Error("Unable to provision: Failed to call uname -a")
+                return "Unable to provision: Failed to mount DVD."
+            krn_pth='/lib/modules/'+krn+'/kernel/drivers/ata/ata_piix.ko'
+            if not os.path.isfile(krn_pth):
+                Error("Unable to provision: Failed to locate ata_piix.ko")
+                return "Unable to provision: Failed to mount DVD."
+            retcode,output=RunSafe('insmod ' + krn_pth)
+            if retcode:
+                Error("Unable to provision: Failed to insmod " + krn+pth)
+                return "Failed to retrieve provisioning data (0x01)."
+            modloaded=True
+            Log("Provision: Loaded " + krn_pth + " driver for ATAPI CD-ROM")
+            # we have succeeded loading the ata_piix mod
+            for i in range(10): # we may have to wait 
+                if os.path.exists("/dev/sr0"):
+                    dvd = "/dev/sr0"
+                    break
+                Log("Waiting for DVD - sleeping 1 - "+str(i+1)+" try...")
+                time.sleep(1)
         CreateDir("/mnt/cdrom/secure", "root", 0700)
-        if Run("mount " + dvd + " /mnt/cdrom/secure"):
-            Error("Unable to provision: Failed to mount DVD.")
-            return "Failed to retrieve provisioning data (0x01)."
+        Run("mount " + dvd + " /mnt/cdrom/secure")
         if not os.path.isfile("/mnt/cdrom/secure/ovf-env.xml"):
             Error("Unable to provision: Missing ovf-env.xml on DVD.")
             return "Failed to retrieve provisioning data (0x02)."
         ovfxml = GetFileContents("/mnt/cdrom/secure/ovf-env.xml")
         SetFileContents("ovf-env.xml", re.sub("<UserPassword>.*?<", "<UserPassword>*<", ovfxml))
         Run("umount /mnt/cdrom/secure")
+        if modloaded:
+            Run('rmmod ' + krn_pth)
         error = None
         if ovfxml != None:
             Log("Provisioning image using OVF settings in the DVD.")
