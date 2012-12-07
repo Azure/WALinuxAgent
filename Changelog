@@ -1,7 +1,8 @@
 WALinuxAgent                                                          Changelog
 |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 
-?? Dec 2012, WALinuxAgent 1.2
+07 Dec 2012, WALinuxAgent 1.2
+   . Add Feature - ata_piix.ko module loaded if needed for CDROM device support
    . Added Init_Ubuntu upstart support and improved resolvconf support on Ubuntu
    . Additional logging for DoDhcpWork()
    . Update sock.recv timeout from 30 to 10 seconds
