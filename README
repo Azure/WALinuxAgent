@@ -36,6 +36,7 @@ Supported Linux Distributions
 2.Ubuntu 12.04+
 3.Suse (SLES) 11SP2+
 4.Open Suse 12.1+
+5.Debian 7.0+
 
 Requirements
 Waagent depends on some system packages in order to function properly:
