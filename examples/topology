@@ -1,0 +1,76 @@
+Sample Role Topology File
+
+<?xml version="1.0" encoding="utf-8"?>
+<SharedConfig version="1.0.0.0" goalStateIncarnation="2">
+  <Deployment name="a99549a92e38498f98cf2989330cd2f1" guid="{374ef9a2-de81-4412-ac87-e586fc869923}" incarnation="14">
+    <Service name="LinuxDemo1" guid="{00000000-0000-0000-0000-000000000000}" />
+    <ServiceInstance name="a99549a92e38498f98cf2989330cd2f1.4" guid="{250ac9df-e14c-4c5b-9cbc-f8a826ced0e7}" />
+  </Deployment>
+  <Incarnation number="1" instance="LinuxVM_IN_1" guid="{a7b94774-db5c-4007-8707-0b9e91fd808d}" />
+  <Role guid="{47a04da2-d0b7-26e2-f039-b1f1ab11337a}" name="LinuxVM" settleTimeSeconds="10" />
+  <LoadBalancerSettings timeoutSeconds="32" waitLoadBalancerProbeCount="8">
+    <Probes>
+      <Probe name="LinuxVM" />
+      <Probe name="03F7F19398C4358108B7ED059966EEBD" />
+      <Probe name="47194D0E3AB3FCAD621CAAF698EC82D8" />
+    </Probes>
+  </LoadBalancerSettings>
+  <OutputEndpoints>
+    <Endpoint name="LinuxVM:Microsoft.WindowsAzure.Plugins.RemoteAccess.Rdp" type="SFS">
+      <Target instance="LinuxVM_IN_0" endpoint="Microsoft.WindowsAzure.Plugins.RemoteAccess.Rdp" />
+      <Target instance="LinuxVM_IN_1" endpoint="Microsoft.WindowsAzure.Plugins.RemoteAccess.Rdp" />
+      <Target instance="LinuxVM_IN_2" endpoint="Microsoft.WindowsAzure.Plugins.RemoteAccess.Rdp" />
+    </Endpoint>
+  </OutputEndpoints>
+  <Instances>
+    <Instance id="LinuxVM_IN_1" address="10.115.38.202">
+      <FaultDomains randomId="1" updateId="1" updateCount="2" />
+      <InputEndpoints>
+        <Endpoint name="HTTP" address="10.115.38.202:80" protocol="tcp" isPublic="true" loadBalancedPublicAddress="70.37.56.176:80" enableDirectServerReturn="false" isDirectAddress="false" disableStealthMode="false">
+          <LocalPorts>
+            <LocalPortRange from="80" to="80" />
+          </LocalPorts>
+        </Endpoint>
+        <Endpoint name="Microsoft.WindowsAzure.Plugins.RemoteAccess.Rdp" address="10.115.38.202:3389" protocol="tcp" isPublic="false" enableDirectServerReturn="false" isDirectAddress="false" disableStealthMode="false">
+          <LocalPorts>
+            <LocalPortRange from="3389" to="3389" />
+          </LocalPorts>
+          <RemoteInstances>
+            <RemoteInstance instance="LinuxVM_IN_0" />
+            <RemoteInstance instance="LinuxVM_IN_2" />
+          </RemoteInstances>
+        </Endpoint>
+        <Endpoint name="Microsoft.WindowsAzure.Plugins.RemoteForwarder.RdpInput" address="10.115.38.202:20000" protocol="tcp" isPublic="true" loadBalancedPublicAddress="70.37.56.176:3389" enableDirectServerReturn="false" isDirectAddress="false" disableStealthMode="false">
+          <LocalPorts>
+            <LocalPortRange from="20000" to="20000" />
+          </LocalPorts>
+        </Endpoint>
+        <Endpoint name="SSH" address="10.115.38.202:22" protocol="tcp" isPublic="true" loadBalancedPublicAddress="70.37.56.176:22" enableDirectServerReturn="false" isDirectAddress="false" disableStealthMode="false">
+          <LocalPorts>
+            <LocalPortRange from="22" to="22" />
+          </LocalPorts>
+        </Endpoint>
+      </InputEndpoints>
+    </Instance>
+    <Instance id="LinuxVM_IN_0" address="10.115.58.82">
+      <FaultDomains randomId="0" updateId="0" updateCount="2" />
+      <InputEndpoints>
+        <Endpoint name="Microsoft.WindowsAzure.Plugins.RemoteAccess.Rdp" address="10.115.58.82:3389" protocol="tcp" isPublic="false" enableDirectServerReturn="false" isDirectAddress="false" disableStealthMode="false">
+          <LocalPorts>
+            <LocalPortRange from="3389" to="3389" />
+          </LocalPorts>
+        </Endpoint>
+      </InputEndpoints>
+    </Instance>
+    <Instance id="LinuxVM_IN_2" address="10.115.58.148">
+      <FaultDomains randomId="0" updateId="2" updateCount="2" />
+      <InputEndpoints>
+        <Endpoint name="Microsoft.WindowsAzure.Plugins.RemoteAccess.Rdp" address="10.115.58.148:3389" protocol="tcp" isPublic="false" enableDirectServerReturn="false" isDirectAddress="false" disableStealthMode="false">
+          <LocalPorts>
+            <LocalPortRange from="3389" to="3389" />
+          </LocalPorts>
+        </Endpoint>
+      </InputEndpoints>
+    </Instance>
+  </Instances>
+</SharedConfig>
