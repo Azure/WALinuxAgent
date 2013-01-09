@@ -2304,7 +2304,7 @@ def Uninstall():
            "update-rc.d -f " + filename + " remove",
            "insserv -r " + filename][a - 1]
     Run(cmd)
-    for f in os.listdir(LibDir) + ["/etc/init.d/" + filename, "/etc/waagent.conf", "/etc/logrotate.d/waagent", "/etc/sudoers.d/waagent"]:
+    for f in os.listdir(LibDir) + ["/etc/init/waagent.conf","/etc/init.d/" + filename, "/etc/waagent.conf", "/etc/logrotate.d/waagent", "/etc/sudoers.d/waagent"]:
         try:
             os.remove(f)
         except:
