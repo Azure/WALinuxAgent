@@ -47,7 +47,7 @@ import commands
 
 GuestAgentName = "WALinuxAgent"
 GuestAgentLongName = "Windows Azure Linux Agent"
-GuestAgentVersion = "WALinuxAgent-1.2"
+GuestAgentVersion = "WALinuxAgent-1.3-PREVIEW"
 ProtocolVersion = "2011-12-31"
 
 Config = None
@@ -166,13 +166,13 @@ def Run(a):
     return os.system(a)
 
 def  RunSafe(cmd):
-    LogIfVerbose(cmd)
+    Log(cmd)
     # for python2.1 double try, in order to use a finally...
     try:                                     
         try:
             (exit_status,output) = commands.getstatusoutput(cmd)
         except OSError,e : # just catch the exception and proceed
-            LogIfVerbose( ("OSError " + str(e) + " caught") )
+            Log( ("OSError " + str(e) + " caught") )
             return exit_status,output
         else:
             return exit_status,output
@@ -549,8 +549,6 @@ def LoadBalancerProbeServer(port):
 
     class T(object):
         def __init__(self, ip, port):
-            if port == None or ip == None :
-                return
             self.ProbeCounter = 0
             self.server = SocketServer.TCPServer((ip, port), TCPHandler)
             self.server_thread = threading.Thread(target = self.server.serve_forever)
@@ -1272,6 +1270,8 @@ class OvfEnv(object):
 
     def Process(self):
         error = None
+        if self.ComputerName == None :
+            return "Error: Hostname missing"
         error=WaAgent.EnvMonitor.SetHostName(self.ComputerName)
         if error: return error
         if self.DisableSshPasswordAuthentication:
@@ -1793,7 +1793,18 @@ class Agent(Util):
                 Log("Waiting for DVD - sleeping 1 - "+str(i+1)+" try...")
                 time.sleep(1)
         CreateDir("/mnt/cdrom/secure", "root", 0700)
-        Run("mount " + dvd + " /mnt/cdrom/secure")
+        #begin mount loop - ten tries - 5 sec wait between
+        for retry in range(1,11):
+            retcode,output=RunSafe("mount -v " + dvd + " /mnt/cdrom/secure")
+            Log(output)
+            if retcode:
+                Log("mount failed on attempt #" + str(retry) )
+            else:
+                Log("mount suceed on attempt #" + str(retry) )
+                break
+            Log("mount loop sleeping 5...")
+            time.sleep(5)
+            
         if not os.path.isfile("/mnt/cdrom/secure/ovf-env.xml"):
             Error("Unable to provision: Missing ovf-env.xml on DVD.")
             return "Failed to retrieve provisioning data (0x02)."
