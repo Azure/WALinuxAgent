@@ -1,6 +1,13 @@
 WALinuxAgent                                                          Changelog
 |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 
+18 Jan 2013, WALinuxAgent 1.3
+   . Add some error checking and robustness to DVD mounting operation during
+     provisioning
+   . Remove redundant check for IP and Port in LoadBalancerProbe
+   . Add check to self.computername to detect empty hostname in configuration
+   . Fix manual uninstall on Ubuntu
+
 07 Dec 2012, WALinuxAgent 1.2
    . Add Feature - ata_piix.ko module loaded if needed for CDROM device support
    . Added Init_Ubuntu upstart support and improved resolvconf support on Ubuntu
