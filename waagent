@@ -1800,7 +1800,7 @@ class Agent(Util):
             if retcode:
                 Log("mount failed on attempt #" + str(retry) )
             else:
-                Log("mount suceed on attempt #" + str(retry) )
+                Log("mount succeed on attempt #" + str(retry) )
                 break
             Log("mount loop sleeping 5...")
             time.sleep(5)
