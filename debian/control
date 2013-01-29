@@ -1,0 +1,35 @@
+Source: walinuxagent
+Section: python
+Priority: extra
+Maintainer: Ben Howard <ben.howard@ubuntu.com>
+XSBC-Original-Maintainer: Microsoft Corporation <walinuxagent@microsoft.com>
+Build-Depends: debhelper (>= 8), python-all
+Standards-Version: 3.9.3
+XS-Python-Version: all
+Homepage: http://go.microsoft.com/fwlink/?LinkId=250998
+
+Package: walinuxagent
+Architecture: i386 amd64
+Pre-Depends: walinuxagent-data-saver (= ${binary:Version})
+Depends: python (>= 2.4),
+         openssl (>=1.0),
+         openssh-server (>=1:5.9p1),
+         passwd (>=4.1.4.2),
+         util-linux (>=2.0),
+         linux-image-extra-virtual,
+         ${misc:Depends},
+         ${python:Depends}
+Conflicts: network-manager
+Description: Windows Azure Linux Agent
+ The Windows Azure Linux Agent supports the provisioning and running of Linux
+ VMs in the Windows Azure cloud. This package should be installed on Linux
+ disk images that are built to run in the Windows Azure environment.
+
+Package: walinuxagent-data-saver
+Architecture: i386 amd64
+Depends: ${misc:Depends}
+Description: Helper package which ensures safe upgrade for walinuxagent
+ Early versions of walinuxagent contained a bug the deleted configuration and
+ data on reconfiguration or upgrade.
+ .
+ This package is used to ensure safe upgrades.

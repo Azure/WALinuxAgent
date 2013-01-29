@@ -1,0 +1,16 @@
+#!/bin/sh
+
+set -e
+
+# If upgrading from package version
+# with unmanaged upstart configuration
+# and agent stop the agent and remove
+# the upstart configuration.
+if [ -f /etc/init/waagent.conf ]; then
+    stop waagent 2>&1 > /dev/null || true
+    rm -f /etc/init/waagent.conf
+fi
+
+#DEBHELPER#
+
+exit 0
