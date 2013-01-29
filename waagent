@@ -52,6 +52,7 @@ ProtocolVersion = "2011-12-31"
 
 Config = None
 LinuxDistro = "UNKNOWN"
+PackagedForDistro = "UNKNOWN"
 Verbose = False
 WaAgent = None
 DiskActivated = False
@@ -84,6 +85,18 @@ def DetectLinuxDistro():
         return True
     if os.path.isfile("/etc/lsb-release") and "Ubuntu" in GetFileContents("/etc/lsb-release"):
         LinuxDistro = "Ubuntu"
+
+        # Should this run as if it is packaged Ubuntu?
+        if os.path.isfile("/etc/default/walinuxagent"):
+            try:
+                with open('/etc/default/walinuxagent') as f:
+                    for line in f.readlines():
+                        if line == "WAXLINUXAGENT_PACKAGED=1":
+                            PackagedForDistro = "Ubuntu"
+
+            except IOError as e:
+               pass
+
         return True
     if os.path.isfile("/etc/debian_version"):
         LinuxDistro = "Debian"
@@ -99,11 +112,20 @@ def IsRedHat():
 def IsUbuntu():
     return "Ubuntu" in LinuxDistro
 
+def IsPackagedUbuntu():
+    return "Ubuntu" in PackagedForDistro
+
 def IsDebian():
     return IsUbuntu() or "Debian" in LinuxDistro
 
 def IsSuse():
     return "Suse" in LinuxDistro
+
+def IsPackaged():
+    if PackagedForDistro == "UNKNOWN":
+        return False
+
+    return True
 
 def UsesRpm():
     return IsRedHat() or IsSuse()
@@ -2252,14 +2274,14 @@ def Install():
             shutil.move(a, ".")
             Warn("Moved " + a + " -> " + LibDir + "/" + GetLastPathElement(a) )
 
-    if IsUbuntu():
+    if IsUbuntu() and not IsPackagedUbuntu():
         # Support for Ubuntu's upstart configuration
         filename="waagent.conf"
         filepath = "/etc/init/" + filename
         SetFileContents(filepath, Init_Ubuntu)
         os.chmod(filepath, 0644)
 
-    else:
+    elif not IsPackagedUbuntu():
         # Regular init.d configurations
         filename = "waagent"
         filepath = "/etc/init.d/" + filename
@@ -2273,6 +2295,7 @@ def Install():
         SetFileContents(filepath, init[0])
         os.chmod(filepath, 0755)
         Run(init[1])
+
     if os.path.isfile("/etc/waagent.conf"):
         try:
             os.remove("/etc/waagent.conf.old")
@@ -2310,12 +2333,30 @@ def Uninstall():
     if a == 0:
         Error("Unable to detect Linux Distribution.")
         return 1
-    Run("service " + filename + " stop")
-    cmd = ["chkconfig --del " + filename,
-           "update-rc.d -f " + filename + " remove",
-           "insserv -r " + filename][a - 1]
-    Run(cmd)
-    for f in os.listdir(LibDir) + ["/etc/init/waagent.conf","/etc/init.d/" + filename, "/etc/waagent.conf", "/etc/logrotate.d/waagent", "/etc/sudoers.d/waagent"]:
+
+    # Managed by dpkg for Packaged Ubuntu
+    if not IsPackaged():
+       Run("service " + filename + " stop")
+       cmd = ["chkconfig --del " + filename,
+              "update-rc.d -f " + filename + " remove",
+              "insserv -r " + filename][a - 1]
+       Run(cmd)
+
+    remove_f = [
+            "/etc/waagent.conf",
+            "/etc/logrotate.d/waagent",
+            "/etc/sudoers.d/waagent",
+            ]
+
+    # For packaged Ubuntu, the script should let the packaging
+    # manage the removal of these files
+    if not IsPackagedUbuntu():
+        remove_f.append([
+            "/etc/init/waagent.conf",
+            "/etc/init.d/" + filename,
+            ])
+
+    for f in os.listdir(LibDir) + remove_f:
         try:
             os.remove(f)
         except:
