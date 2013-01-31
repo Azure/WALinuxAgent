@@ -1,0 +1,26 @@
+The preferred method of installing WALinuxAgent for Ubuntu is to use Debian
+Packaging. Ubuntu supports the official Ubuntu WALinuxAgent version, which
+can be found here: https://launchpad.net/ubuntu/+source/walinuxagent . The
+Debian packaging is derived from the source here.
+
+These instructions tell you build the package with out having to install
+too many extra packages, and keep your source directory clean.
+
+Run once:
+    1. Install required packages:
+        sudo apt-get -y install ubuntu-dev-tools pbuilder
+    2. Create the pbuilder environment:
+        sudo pbuilder create --debootstrapopts --variant=buildd
+
+To compile the package:
+    From the top-most directory, (i.e. not debian), run:
+
+    1. Build the source package:
+        dpkg-buildpackage -S
+
+    2. Build the package:
+        sudo pbuilder build ../walinuxagent_1.3-0ubuntu1.dsc
+
+    3. Fetch the built package, usually from /var/cache/pbuilder/results
+
+
