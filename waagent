@@ -80,6 +80,7 @@ def IsLinux():
 
 def DetectLinuxDistro():
     global LinuxDistro
+    global PackagedForDistro
     if os.path.isfile("/etc/redhat-release"):
         LinuxDistro = "RedHat"
         return True
@@ -87,15 +88,15 @@ def DetectLinuxDistro():
         LinuxDistro = "Ubuntu"
 
         # Should this run as if it is packaged Ubuntu?
-        if os.path.isfile("/etc/default/walinuxagent"):
-            try:
-                with open('/etc/default/walinuxagent') as f:
-                    for line in f.readlines():
-                        if line == "WAXLINUXAGENT_PACKAGED=1":
-                            PackagedForDistro = "Ubuntu"
+        try:
+            cmd="dpkg -S %s" % os.path.basename(__file__)
+            retcode, krn = RunSafe(cmd)
+            if not retcode:
+               PackagedForDistro = "Ubuntu"
 
-            except IOError as e:
-               pass
+        except IOError as e:
+            pass
+
 
         return True
     if os.path.isfile("/etc/debian_version"):
