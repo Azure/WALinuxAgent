@@ -47,7 +47,7 @@ import commands
 
 GuestAgentName = "WALinuxAgent"
 GuestAgentLongName = "Windows Azure Linux Agent"
-GuestAgentVersion = "WALinuxAgent-1.3"
+GuestAgentVersion = "WALinuxAgent-1.3.1-PREVIEW"
 ProtocolVersion = "2011-12-31"
 
 Config = None
