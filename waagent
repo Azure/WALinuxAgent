@@ -372,7 +372,8 @@ def Logger():
     class T(object):
         def __init__(self):
             self.File = None
-
+            self.Con = None
+            
     self = T()
 
     def LogToFile(message):
@@ -385,6 +386,13 @@ def Logger():
         self.File.write(message + "\n")
         self.File.flush()
 
+    def LogToCon(message):
+        ConPath = '/dev/console'
+        if self.Con == None:
+            self.Con = open(ConPath, "a")
+        self.Con.write(message + "\n")
+        self.Con.flush()
+
     def Log(message):
         LogWithPrefix("", message)
 
@@ -394,9 +402,9 @@ def Logger():
         t += prefix
         for line in message.split('\n'):
             line = t + line
-            print(line)
             LogToFile(line)
-
+            LogToCon(line)
+            
     return Log, LogWithPrefix
 
 Log, LogWithPrefix = Logger()
@@ -406,7 +414,7 @@ def NoLog(message):
 
 def LogIfVerbose(message):
     if Verbose == True:
-        Log(message)
+        LogFileWithPrefix('',message)
 
 def LogWithPrefixIfVerbose(prefix, message):
     if Verbose == True:
@@ -416,10 +424,10 @@ def Warn(message):
     LogWithPrefix("WARNING:", message)
 
 def Error(message):
-    LogWithPrefix("ERROR:", message)
+    ErrorWithPrefix("", message)
 
 def ErrorWithPrefix(prefix, message):
-    LogWithPrefix("ERROR:" + prefix, message)
+    LogWithPrefix("ERROR:", message)
 
 def Linux_ioctl_GetIpv4Address(ifname):
     import fcntl
@@ -498,7 +506,7 @@ class Util(object):
             url = url[url.index("/"):]
         for retry in range(0, maxRetry + 1):
             strRetry = str(retry)
-            log = [NoLog, Log][retry > 0]
+            log = [NoLog, Error][retry > 0]
             log("retry HttpGet(" + url + "),retry=" + strRetry)
             response = None
             strStatus = "None"
@@ -510,16 +518,16 @@ class Util(object):
                     request = httpConnection.request("GET", url, None, headers)
                 response = httpConnection.getresponse()
                 strStatus = str(response.status)
-            except:
-                pass
+            except HTTPException, e:
+                Error('HTTPException ' + e.message + ' args: ' + repr(e.args))
             log("response HttpGet(" + url + "),retry=" + strRetry + ",status=" + strStatus)
             if response == None or response.status != httplib.OK:
                 Error("HttpGet(" + url + "),retry=" + strRetry + ",status=" + strStatus)
                 if retry == maxRetry:
-                    Log("return HttpGet(" + url + "),retry=" + strRetry + ",status=" + strStatus)
+                    Error("return HttpGet(" + url + "),retry=" + strRetry + ",status=" + strStatus)
                     return None
                 else:
-                    Log("sleep 10 seconds HttpGet(" + url + "),retry=" + strRetry + ",status=" + strStatus)
+                    Error("sleep 10 seconds HttpGet(" + url + "),retry=" + strRetry + ",status=" + strStatus)
                     time.sleep(10)
             else:
                 log("return HttpGet(" + url + "),retry=" + strRetry + ",status=" + strStatus)
@@ -542,7 +550,7 @@ class Util(object):
         maxRetry = 2
         for retry in range(0, maxRetry + 1):
             strRetry = str(retry)
-            log = [NoLog, Log][retry > 0]
+            log = [NoLog, Error][retry > 0]
             log("retry HttpPost(" + url + "),retry=" + strRetry)
             response = None
             strStatus = "None"
@@ -554,15 +562,15 @@ class Util(object):
                 response = httpConnection.getresponse()
                 strStatus = str(response.status)
             except:
-                pass
+                Error('HTTPException ' + e.message + ' args: ' + repr(e.args))
             log("response HttpPost(" + url + "),retry=" + strRetry + ",status=" + strStatus)
             if response == None or (response.status != httplib.OK and response.status != httplib.ACCEPTED):
                 Error("HttpPost(" + url + "),retry=" + strRetry + ",status=" + strStatus)
                 if retry == maxRetry:
-                    Log("return HttpPost(" + url + "),retry=" + strRetry + ",status=" + strStatus)
+                    Error("return HttpPost(" + url + "),retry=" + strRetry + ",status=" + strStatus)
                     return None
                 else:
-                    Log("sleep 10 seconds HttpPost(" + url + "),retry=" + strRetry + ",status=" + strStatus)
+                    Error("sleep 10 seconds HttpPost(" + url + "),retry=" + strRetry + ",status=" + strStatus)
                     time.sleep(10)
             else:
                 log("return HttpPost(" + url + "),retry=" + strRetry + ",status=" + strStatus)
@@ -1823,7 +1831,7 @@ class Agent(Util):
             if retcode:
                 Log("mount failed on attempt #" + str(retry) )
             else:
-                Log("mount succeed on attempt #" + str(retry) )
+                Log("mount succeeded on attempt #" + str(retry) )
                 break
             Log("mount loop sleeping 5...")
             time.sleep(5)
