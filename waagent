@@ -43,8 +43,7 @@ import threading
 import time
 import traceback
 import xml.dom.minidom
-import commands
-
+    
 GuestAgentName = "WALinuxAgent"
 GuestAgentLongName = "Windows Azure Linux Agent"
 GuestAgentVersion = "WALinuxAgent-1.3.1-PREVIEW"
@@ -65,6 +64,34 @@ RulesFiles = [ "/lib/udev/rules.d/75-persistent-net-generator.rules",
 VarLibDhcpDirectories = ["/var/lib/dhclient", "/var/lib/dhcpcd", "/var/lib/dhcp"]
 EtcDhcpClientConfFiles = ["/etc/dhcp/dhclient.conf", "/etc/dhcp3/dhclient.conf"]
 LibDir = "/var/lib/waagent"
+
+# backport subprocess.check_output if not defined ( for python version < 2.7)
+if not hasattr(subprocess,'check_output'):
+    def check_output(*popenargs, **kwargs):
+        r"""Backport from subprocess module from python 2.7"""
+        if 'stdout' in kwargs:
+            raise ValueError('stdout argument not allowed, it will be overridden.')
+        process = subprocess.Popen(stdout=subprocess.PIPE, *popenargs, **kwargs)
+        output, unused_err = process.communicate()
+        retcode = process.poll()
+        if retcode:
+            cmd = kwargs.get("args")
+            if cmd is None:
+                cmd = popenargs[0]
+            raise subprocess.CalledProcessError(retcode, cmd, output=output)
+        return output
+
+    # Exception classes used by this module.
+    class CalledProcessError(Exception):
+        def __init__(self, returncode, cmd, output=None):
+            self.returncode = returncode
+            self.cmd = cmd
+            self.output = output
+        def __str__(self):
+            return "Command '%s' returned non-zero exit status %d" % (self.cmd, self.returncode)
+
+    subprocess.check_output=check_output
+    subprocess.CalledProcessError=CalledProcessError
 
 # This lets us index into a string or an array of integers transparently.
 def Ord(a):
@@ -90,7 +117,7 @@ def DetectLinuxDistro():
         # Should this run as if it is packaged Ubuntu?
         try:
             cmd="dpkg -S %s" % os.path.basename(__file__)
-            retcode, krn = RunSafe(cmd)
+            retcode, krn = RunGetOutput(cmd,chk_err=False)
             if not retcode:
                PackagedForDistro = "Ubuntu"
 
@@ -184,23 +211,38 @@ def GetLineStartingWith(prefix, filepath):
             return line
     return None
 
-def Run(a):
-    LogIfVerbose(a)
-    return os.system(a)
+def Run(cmd,chk_err=True):
+    retcode,out=RunGetOutput(cmd,chk_err)
+    return retcode
 
-def  RunSafe(cmd):
-    Log(cmd)
-    # for python2.1 double try, in order to use a finally...
+def RunGetOutput(cmd,chk_err=True):
+    LogIfVerbose(cmd)
     try:                                     
-        try:
-            (exit_status,output) = commands.getstatusoutput(cmd)
-        except OSError,e : # just catch the exception and proceed
-            Log( ("OSError " + str(e) + " caught") )
-            return exit_status,output
-        else:
-            return exit_status,output
-    finally:
-        pass
+        output=subprocess.check_output(cmd,stderr=subprocess.STDOUT,shell=True)
+    except subprocess.CalledProcessError,e :
+        if chk_err :
+            Error('CalledProcessError.  Error Code: ' + str(e.returncode)  )
+            Error('CalledProcessError.  Command string: "' + e.cmd + '"')
+            Error('CalledProcessError.  Command result: "' + e.output[:-1] + '"')
+        return e.returncode,e.output
+    return 0,output
+
+def RunSendStdin(cmd,input,chk_err=True):
+    LogIfVerbose(cmd+input)
+    try:                                     
+        me=subprocess.Popen([cmd], shell=True, stdin=subprocess.PIPE,stderr=subprocess.STDOUT,stdout=subprocess.PIPE)
+        output=me.communicate(input)
+    except OSError,e :
+        if chk_err :
+            Error('CalledProcessError.  Error Code:' + str(me.returncode))
+            Error('CalledProcessError.  Command string:"' + cmd  + '"' )
+            Error('CalledProcessError.  Command result:"' + output[:-1] + '"')
+            return 1,output[0]
+    if me.returncode is not 0 and chk_err is True:
+            Error('CalledProcessError.  Error Code:' + str(me.returncode))
+            Error('CalledProcessError.  Command string:"' + cmd  + '"' )
+            Error('CalledProcessError.  Command result:"' + (output[0])[:-1] + '"')
+    return me.returncode,output[0]
 
 def GetNodeTextData(a):
     for b in a.childNodes:
@@ -262,7 +304,7 @@ def CreateAccount(user, password, expiration, thumbprint):
     else:
         Log("CreateAccount: " + user + " already exists. Will update password.")
     if password != None:
-        os.popen("chpasswd", "w").write(user + ":" + password + "\n")
+        RunSendStdin("chpasswd",(user + ":" + password + "\n"))
     try:
         if password == None:
             SetFileContents("/etc/sudoers.d/waagent", user + " ALL = (ALL) NOPASSWD: ALL\n")
@@ -464,7 +506,7 @@ def GetMacAddress():
     if IsWindows():
         # Windows:   Physical Address. . . . . . . . . : 00-15-17-79-00-7F\n
         a = "ipconfig /all | findstr /c:\"Physical Address\" | findstr /v \"00-00-00-00-00-00-00\""
-        a = os.popen(a).read()
+        a = os.popen(a).read() # not re-implementing wirh RunGetOutput - not called unless we're in windows
         a = re.sub("\s+$", "", a)
         a = re.sub(".+ ", "", a)
         a = re.sub(":", "", a)
@@ -657,7 +699,7 @@ class EnvMonitor(object):
             dhcpcmd = "pidof dhcpcd"
         if IsDebian():
             dhcpcmd = "pidof dhclient3"
-        dhcppid = os.popen(dhcpcmd).read()
+        dhcppid = RunGetOutput(dhcpcmd,chk_err=False)[1]
         while not self.shutdown:
             for a in RulesFiles:
                 if os.path.isfile(a):
@@ -671,7 +713,7 @@ class EnvMonitor(object):
                         Log("EnvMonitor: Detected host name change: " + self.HostName + " -> " + socket.gethostname())
                         self.HostName = socket.gethostname()
                         WaAgent.UpdateAndPublishHostName(self.HostName)
-                        dhcppid = os.popen(dhcpcmd).read()
+                        dhcppid = RunGetOutput(dhcpcmd,chk_err=False)[1]
                         self.published = True
                 except:
                     pass
@@ -679,7 +721,7 @@ class EnvMonitor(object):
                 self.published = True
             pid = ""
             if not os.path.isdir("/proc/" + dhcppid.strip()):
-                pid = os.popen(dhcpcmd).read()
+                pid = RunGetOutput(dhcpcmd,chk_err=False)[1]
             if pid != "" and pid != dhcppid:
                 Log("EnvMonitor: Detected dhcp client restart. Restoring routing table.")
                 WaAgent.RestoreRoutes()
@@ -764,8 +806,8 @@ class Certificates(object):
         index = 1
         filename = str(index) + ".crt"
         while os.path.isfile(filename):
-            thumbprint = os.popen(Openssl + " x509 -in " + filename + " -fingerprint -noout").read().rstrip().split('=')[1].replace(':', '').upper()
-            pubkey=os.popen(Openssl + " x509 -in " + filename + " -pubkey -noout").read()
+            thumbprint = (RunGetOutput(Openssl + " x509 -in " + filename + " -fingerprint -noout")[1]).rstrip().split('=')[1].replace(':', '').upper()
+            pubkey=RunGetOutput(Openssl + " x509 -in " + filename + " -pubkey -noout")[1]
             keys[pubkey] = thumbprint
             os.rename(filename, thumbprint + ".crt")
             os.chmod(thumbprint + ".crt", 0600)
@@ -776,7 +818,7 @@ class Certificates(object):
         index = 1
         filename = str(index) + ".prv"
         while os.path.isfile(filename):
-            pubkey = os.popen(Openssl + " rsa -in " + filename + " -pubout").read()
+            pubkey = RunGetOutput(Openssl + " rsa -in " + filename + " -pubout 2> /dev/null")[1]
             os.rename(filename, keys[pubkey] + ".prv")
             os.chmod(keys[pubkey] + ".prv", 0600)
             if IsRedHat():
@@ -928,7 +970,7 @@ class HostingEnvironmentConfig(object):
             + "Content-Type: application/x-pkcs7-mime; name=\"password.p7m\"\n"
             + "Content-Transfer-Encoding: base64\n\n"
             + textwrap.fill(e, 64))
-        return os.popen(Openssl + " cms -decrypt -in password.p7m -inkey Certificates.pem -recip Certificates.pem").read()
+        return RunGetOutput(Openssl + " cms -decrypt -in password.p7m -inkey Certificates.pem -recip Certificates.pem")[1]
 
     def ActivateResourceDisk(self):
         global DiskActivated
@@ -945,7 +987,7 @@ class HostingEnvironmentConfig(object):
             Error("ActivateResourceDisk: Unable to detect disk topology.")
             return
         device = "/dev/" + device
-        for entry in os.popen("mount").read().split():
+        for entry in RunGetOutput("mount")[1].split():
             if entry.startswith(device + "1"):
                 Log("ActivateResourceDisk: " + device + "1 is already mounted.")
                 DiskActivated = True
@@ -957,7 +999,7 @@ class HostingEnvironmentConfig(object):
         fs = Config.get("ResourceDisk.Filesystem")
         if fs == None:
             fs = "ext3"
-        if os.popen("sfdisk -q -c " + device + " 1").read().rstrip() == "7" and fs != "ntfs":
+        if RunGetOutput("sfdisk -q -c " + device + " 1")[1].rstrip() == "7" and fs != "ntfs":
             Run("sfdisk -c " + device + " 1 83")
             Run("mkfs." + fs + " " + device + "1")
         if Run("mount " + device + "1 " + mountpoint):
@@ -1313,10 +1355,10 @@ class OvfEnv(object):
                 GetFileContents(filepath).split('\n'))) + "PasswordAuthentication no\nChallengeResponseAuthentication no\n")
             Log("Disabled SSH password-based authentication methods.")
         if self.AdminPassword != None:
-            os.popen("chpasswd", "w").write("root:" + self.AdminPassword + "\n")
+            RunSendStdin("chpasswd",("root:" + self.AdminPassword + "\n"))
         if self.UserName != None:
             error = CreateAccount(self.UserName, self.UserPassword, None, None)
-        sel = os.popen("getenforce").read().startswith("Enforcing")
+        sel = RunGetOutput("getenforce",chk_err=False)[1].startswith("Enforcing")
         if sel == True and IsRedHat():
             Run("setenforce 0")
         home = GetHome()
@@ -1534,7 +1576,7 @@ class Agent(Util):
         net = self.IntegerToIpAddressV4String(net)
         mask = self.IntegerToIpAddressV4String(mask)
         gateway = self.IntegerToIpAddressV4String(gateway)
-        Run("/sbin/route add -net " + net + " netmask " + mask + " gw " + gateway)
+        Run("/sbin/route add -net " + net + " netmask " + mask + " gw " + gateway,chk_err=False)  # We supress error logging on error.
 
     def HandleDhcpResponse(self, sendData, receiveBuffer):
         LogIfVerbose("HandleDhcpResponse")
@@ -1631,8 +1673,8 @@ class Agent(Util):
         ShortSleep = False # Sleep 1 second before retrying DHCP queries.
         ifname=None
         if not IsWindows():
-            Run("iptables -D INPUT -p udp --dport 68 -j ACCEPT")
-            Run("iptables -I INPUT -p udp --dport 68 -j ACCEPT")
+            Run("iptables -D INPUT -p udp --dport 68 -j ACCEPT",chk_err=False)  # We supress error logging on error.
+            Run("iptables -I INPUT -p udp --dport 68 -j ACCEPT",chk_err=False)  # We supress error logging on error.
 
         sleepDurations = [0, 5, 10, 30, 60, 60, 60, 60]
         maxRetry = len(sleepDurations)
@@ -1649,7 +1691,7 @@ class Agent(Util):
                 sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
                 missingDefaultRoute = True
                 try:
-                    for line in os.popen("route -n").read().split('\n'):
+                    for line in RunGetOutput("route -n")[1].split('\n'):
                         if line.startswith("0.0.0.0 "):
                             missingDefaultRoute = False
                 except:
@@ -1664,7 +1706,7 @@ class Agent(Util):
                         except IOError, e:
                             pass
                     Log("DoDhcpWork: Missing default route - adding broadcast route for DHCP.")
-                    Run("route add 255.255.255.255 dev " + ifname)
+                    Run("route add 255.255.255.255 dev " + ifname,chk_err=False)   # We supress error logging on error.
                 sock.bind(("0.0.0.0", 68)) 
                 sock.sendto(sendData, ("<broadcast>", 67))
                 sock.settimeout(10)
@@ -1690,7 +1732,7 @@ class Agent(Util):
                 sock.close()
                 if missingDefaultRoute:
                     #We added this route - delete it
-                    Run("route del 255.255.255.255 dev " + ifname) 
+                    Run("route del 255.255.255.255 dev " + ifname,chk_err=False)  # We supress error logging on error.
                     Log("DoDhcpWork: Removing broadcast route for DHCP.")
         return None
 
@@ -1699,7 +1741,7 @@ class Agent(Util):
         Log("Setting host name: " + name)
         UpdateAndPublishHostNameCommon(name)
         for ethernetInterface in PossibleEthernetInterfaces:
-            Run("ifdown " + ethernetInterface + " && ifup " + ethernetInterface)
+            Run("ifdown " + ethernetInterface + " && ifup " + ethernetInterface,chk_err=False) # We supress error logging on error.
         self.RestoreRoutes()
 
     def RestoreRoutes(self):
@@ -1800,17 +1842,17 @@ class Agent(Util):
         if os.path.exists("/dev/sr0"):
             dvd = "/dev/sr0"
         modloaded=False
-        if Run("fdisk -l " + dvd + " | grep Disk"):
+        if Run("fdisk -l " + dvd + " | grep Disk",chk_err=False):
             # Is it possible to load a module for ata_piix?
-            retcode,krn=RunSafe('uname -r')
+            retcode,krn=RunGetOutput('uname -r')
             if retcode:
                 Error("Unable to provision: Failed to call uname -a")
                 return "Unable to provision: Failed to mount DVD."
-            krn_pth='/lib/modules/'+krn+'/kernel/drivers/ata/ata_piix.ko'
+            krn_pth='/lib/modules/'+krn.strip('\n')+'/kernel/drivers/ata/ata_piix.ko'
             if not os.path.isfile(krn_pth):
                 Error("Unable to provision: Failed to locate ata_piix.ko")
                 return "Unable to provision: Failed to mount DVD."
-            retcode,output=RunSafe('insmod ' + krn_pth)
+            retcode,output=RunGetOutput('insmod ' + krn_pth)
             if retcode:
                 Error("Unable to provision: Failed to insmod " + krn+pth)
                 return "Failed to retrieve provisioning data (0x01)."
@@ -1826,8 +1868,8 @@ class Agent(Util):
         CreateDir("/mnt/cdrom/secure", "root", 0700)
         #begin mount loop - ten tries - 5 sec wait between
         for retry in range(1,11):
-            retcode,output=RunSafe("mount -v " + dvd + " /mnt/cdrom/secure")
-            Log(output)
+            retcode,output=RunGetOutput("mount -v " + dvd + " /mnt/cdrom/secure")
+            Log(output[:-1])
             if retcode:
                 Log("mount failed on attempt #" + str(retry) )
             else:
@@ -1854,7 +1896,7 @@ class Agent(Util):
                     Error ("Provisioninig image FAILED " + error)
                     return ("Provisioninig image FAILED " + error)
         # This is done here because regenerated SSH host key pairs may be potentially overwritten when processing the ovfxml
-        fingerprint = os.popen("ssh-keygen -lf /etc/ssh/ssh_host_" + type + "_key.pub").read().rstrip().split()[1].replace(':','')
+        fingerprint = RunGetOutput("ssh-keygen -lf /etc/ssh/ssh_host_" + type + "_key.pub")[1].rstrip().split()[1].replace(':','')
         self.ReportRoleProperties(fingerprint)
         delRootPass = Config.get("Provisioning.DeleteRootPassword")
         if delRootPass != None and delRootPass.lower().startswith("y"):
@@ -2267,13 +2309,13 @@ def Install():
     if missing == True:
         Warn("Please resolve missing dependencies listed for full functionality.")
     if UsesRpm():
-        if not Run("rpm --quiet -q NetworkManager"):
+        if not Run("rpm --quiet -q NetworkManager",chk_err=False):  # We want this to fail - supress error logging on error.
             Error(GuestAgentLongName + " is not compatible with NetworkManager.")
             return 1
         if Run("rpm --quiet -q python-pyasn1"):
             Error(GuestAgentLongName + " requires python-pyasn1.")
             return 1
-    if UsesDpkg() and not Run("dpkg-query -s network-manager >/dev/null 2>&1"):
+    if UsesDpkg() and not Run("dpkg-query -s network-manager >/dev/null 2>&1",chk_err=False):  # We want this to fail - supress error logging on error.
         Error(GuestAgentLongName + " is not compatible with network-manager.")
         return 1
     for a in RulesFiles:
