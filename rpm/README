@@ -26,7 +26,7 @@ package on a CentOS host:
     3. Download the WALinuxAgent source code as a tar.gz compressed
        file from Github, or create it yourself:
 
-         tar -cxf WALinuxAgent-1.x.x.tar.gz WALinuxAgent-1.x.x
+         tar -czf WALinuxAgent-1.x.x.tar.gz WALinuxAgent-1.x.x
 
     4. Copy the files to the rpmbuild environment:
 
