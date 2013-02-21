@@ -560,7 +560,7 @@ class Util(object):
                     request = httpConnection.request("GET", url, None, headers)
                 response = httpConnection.getresponse()
                 strStatus = str(response.status)
-            except HTTPException, e:
+            except  httplib.HTTPException, e:
                 Error('HTTPException ' + e.message + ' args: ' + repr(e.args))
             log("response HttpGet(" + url + "),retry=" + strRetry + ",status=" + strStatus)
             if response == None or response.status != httplib.OK:
@@ -603,7 +603,7 @@ class Util(object):
                                                                      "x-ms-version": ProtocolVersion})
                 response = httpConnection.getresponse()
                 strStatus = str(response.status)
-            except:
+            except httplib.HTTPException, e:
                 Error('HTTPException ' + e.message + ' args: ' + repr(e.args))
             log("response HttpPost(" + url + "),retry=" + strRetry + ",status=" + strStatus)
             if response == None or (response.status != httplib.OK and response.status != httplib.ACCEPTED):
