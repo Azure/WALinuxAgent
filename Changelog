@@ -1,9 +1,12 @@
 WALinuxAgent                                                          Changelog
 |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 
-?? Feb 2013, WALinuxAgent 1.3.1
-   . Capture all system command output if an error has occurred.  Normalization of shell commands on python subprocess module.
-   . Duplicate non-verbose log output to /dev/console.  This to support serial logging from boot when console=/dev/ttys0 is set in the kernel boot options.
+15 Feb 2013, WALinuxAgent 1.3.1
+   . Merge RPM packaging information.
+   . Capture all system command output if an error has occurred.  Normalization
+      of shell commands on python subprocess module.
+   . Duplicate non-verbose log output to /dev/console.  This to support serial
+      logging from boot when console=/dev/ttyS0 is set in the kernel boot options.
    . Merge Ubuntu packaging.
    . Fixed typo in DVD mounting procedure, thanks Ante.
 
