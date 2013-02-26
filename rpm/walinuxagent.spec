@@ -10,12 +10,12 @@
 
 Name:           WALinuxAgent
 Summary:        The Windows Azure Linux Agent
-Version:        1.3.1
+Version:        1.3.2
 Release:        1
 License:        Apache License Version 2.0
 Group:          Applications/Internet
 Url:            http://go.microsoft.com/fwlink/?LinkId=250998
-Source0:        WALinuxAgent-1.3.1.tar.gz
+Source0:        WALinuxAgent-1.3.2.tar.gz
 Requires:       python python-pyasn1 openssh openssl util-linux sed grep sudo iptables
 Conflicts:      NetworkManager
 BuildRoot:      %{_tmppath}/%{name}-%{version}-build
@@ -69,6 +69,9 @@ fi
 %doc Changelog
 
 %changelog
+* Fri Feb 26 2013 - walinuxagent@microsoft.com
+- Updated version to 1.3.2 for release
+
 * Fri Feb 15 2013 - walinuxagent@microsoft.com
 - Updated version to 1.3.1 for release
 
