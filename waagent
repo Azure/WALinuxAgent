@@ -438,14 +438,15 @@ def Logger():
     def Log(message):
         LogWithPrefix("", message)
 
-    def LogWithPrefix(prefix, message):
+    def LogWithPrefix(prefix, message, to_console=True):
         t = time.localtime()
         t = "%04u/%02u/%02u %02u:%02u:%02u " % (t.tm_year, t.tm_mon, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec)
         t += prefix
         for line in message.split('\n'):
             line = t + line
             LogToFile(line)
-            LogToCon(line)
+            if to_console:
+                LogToCon(line)
             
     return Log, LogWithPrefix
 
@@ -456,11 +457,11 @@ def NoLog(message):
 
 def LogIfVerbose(message):
     if Verbose == True:
-        LogFileWithPrefix('',message)
+        LogWithPrefix('',message,to_console=False)
 
 def LogWithPrefixIfVerbose(prefix, message):
     if Verbose == True:
-        LogWithPrefix(prefix, message)
+        LogWithPrefix(prefix, message,to_console=False)
 
 def Warn(message):
     LogWithPrefix("WARNING:", message)
