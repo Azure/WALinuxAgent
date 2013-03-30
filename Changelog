@@ -1,5 +1,7 @@
 WALinuxAgent                                                          Changelog
 |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+?? ??? 2013, WALinuxAgent 1.3.3
+   . Agent verbose log lines are missing in log when 'verbose' option is used.
 
 26 Feb 2013, WALinuxAgent 1.3.2
    . Fix name error in _HttpGet/HttpPost exception handlers.
