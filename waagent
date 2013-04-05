@@ -1831,7 +1831,17 @@ class Agent(Util):
             if retcode:
                 Error("Unable to provision: Failed to insmod " + krn+pth)
                 return "Failed to retrieve provisioning data (0x01)."
-            modloaded=True
+            time.sleep(1)
+            # check 3 times if the mod is loaded
+            for i in range(3):
+                if Run('lsmod | grep ata_piix'):
+                    continue
+                else :
+                    modloaded=True
+                    break
+            if not modloaded:
+                Error('Unable to load '+ krn_pth + ' driver for ATAPI CD-ROM')
+                return 1
             Log("Provision: Loaded " + krn_pth + " driver for ATAPI CD-ROM")
             # we have succeeded loading the ata_piix mod
             for i in range(10): # we may have to wait 
