@@ -2308,6 +2308,10 @@ def Install():
             shutil.move(a, ".")
             Warn("Moved " + a + " -> " + LibDir + "/" + GetLastPathElement(a) )
 
+    # we need scsi to have timeout of 300 - we create a waagent.rules file.  It will run last
+    rules = """ACTION=="add", SUBSYSTEMS=="scsi", RUN+="/bin/sh -c 'echo 300 >/sys$DEVPATH/device/timeout'" """
+    SetFileContents('/etc/udev/rules.d/waagent.rules',rules)
+    
     if IsUbuntu() and not IsPackagedUbuntu():
         # Support for Ubuntu's upstart configuration
         filename="waagent.conf"
@@ -2377,6 +2381,7 @@ def Uninstall():
             "/etc/waagent.conf",
             "/etc/logrotate.d/waagent",
             "/etc/sudoers.d/waagent",
+            "/etc/udev/rules.d/waagent.rules",
             ]
 
     # For packaged Ubuntu, the script should let the packaging
