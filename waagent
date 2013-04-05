@@ -1925,8 +1925,16 @@ class Agent(Util):
         # Set SCSI timeout on root device
         try:
             timeout = Config.get("OS.RootDeviceScsiTimeout")
-            if timeout != None:
-                SetFileContents("/sys/block/" + DeviceForIdePort(0) + "/device/timeout", timeout)
+            if timeout == None:
+                timeout = 300
+            if not os.path.exists('/etc/udev/rules.d/waagent.rules'):
+                for i in range(3):
+                    device=DeviceForIdePort(i)
+                    if device:
+                        SetFileContents("/sys/block/" + device + "/device/timeout", timeout)
+                # we need scsi to have timeout of (timeout) - we create a waagent.rules file.  It will run last
+                rules = """ACTION=="add", SUBSYSTEMS=="scsi", RUN+="/bin/sh -c 'echo """ + str(timeout) + """ >/sys$DEVPATH/device/timeout'" """
+                SetFileContents('/etc/udev/rules.d/waagent.rules',rules)
         except:
             pass
 
@@ -2308,10 +2316,6 @@ def Install():
             shutil.move(a, ".")
             Warn("Moved " + a + " -> " + LibDir + "/" + GetLastPathElement(a) )
 
-    # we need scsi to have timeout of 300 - we create a waagent.rules file.  It will run last
-    rules = """ACTION=="add", SUBSYSTEMS=="scsi", RUN+="/bin/sh -c 'echo 300 >/sys$DEVPATH/device/timeout'" """
-    SetFileContents('/etc/udev/rules.d/waagent.rules',rules)
-    
     if IsUbuntu() and not IsPackagedUbuntu():
         # Support for Ubuntu's upstart configuration
         filename="waagent.conf"
