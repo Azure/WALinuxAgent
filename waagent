@@ -2337,12 +2337,18 @@ def Install():
         if not Run("rpm --quiet -q NetworkManager",chk_err=False):  # We want this to fail - supress error logging on error.
             Error(GuestAgentLongName + " is not compatible with NetworkManager.")
             return 1
-        if Run("rpm --quiet -q python-pyasn1"):
-            Error(GuestAgentLongName + " requires python-pyasn1.")
-            return 1
     if UsesDpkg() and not Run("dpkg-query -s network-manager >/dev/null 2>&1",chk_err=False):  # We want this to fail - supress error logging on error.
         Error(GuestAgentLongName + " is not compatible with network-manager.")
         return 1
+    
+    #Check for pyasn1 if we can't use 'ssh-keygen -i -m PKCS8' (Debian)
+    if not IsDebian():
+        try:
+            return __import__('pyasn1')
+        except ImportError:
+            Error(GuestAgentLongName + " requires python-pyasn1 for your Linux distribution.")
+            return 1
+        
     for a in RulesFiles:
         if os.path.isfile(a):
             if os.path.isfile(GetLastPathElement(a)):
