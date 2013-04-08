@@ -1476,9 +1476,9 @@ class Agent(Util):
                 v = GetNodeTextData(a.getElementsByTagName("Version")[0])
                 Log("Fabric preferred wire protocol version: " + v)
         if not protocolVersionSeen:
-            Error("Agent supported wire protocol version: " + ProtocolVersion + " was not advertised by Fabric.")
-            return False
-        Log("Negotiated wire protocol version: " + ProtocolVersion)
+            Warn("Agent supported wire protocol version: " + ProtocolVersion + " was not advertised by Fabric.")
+        else:
+            Log("Negotiated wire protocol version: " + ProtocolVersion)
         return True
 
     def Unpack(self, buffer, offset, range):
