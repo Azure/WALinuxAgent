@@ -300,6 +300,12 @@ def CreateAccount(user, password, expiration, thumbprint):
     if password != None:
         RunSendStdin("chpasswd",(user + ":" + password + "\n"))
     try:
+        # for older distros create sudoers.d
+        if not os.path.isdir('/etc/sudoers.d/'):
+            # create the /etc/sudoers.d/ directory
+            os.mkdir('/etc/sudoers.d/')
+            # add the include of sudoers.d to the /etc/sudoers
+            SetFileContents('/etc/sudoers',GetFileContents('/etc/sudoers')+'\n#includedir /etc/sudoers.d\n')
         if password == None:
             SetFileContents("/etc/sudoers.d/waagent", user + " ALL = (ALL) NOPASSWD: ALL\n")
         else:
@@ -519,6 +525,11 @@ def DeviceForIdePort(n):
                 if root.endswith("/block"):
                     device = dirs[0]
                     break
+                else : #older distros
+                    for d in dirs:
+                        if ':' in d and "block" == d.split(':')[0]:
+                            device = d.split(':')[1]
+                            break
             break
     return device
 
