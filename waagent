@@ -1858,6 +1858,23 @@ class Agent(Util):
         
         # we have succeeded loading the ata_piix mod if it can be done.
 
+        
+    def SetStarageDeviceTimeout(self):
+        try:
+            timeout = Config.get("OS.RootDeviceScsiTimeout")
+            if timeout == None:
+                timeout = 300
+            if not os.path.exists('/etc/udev/rules.d/waagent.rules'):
+                for i in range(3):
+                    device=DeviceForIdePort(i)
+                    if device:
+                        SetFileContents("/sys/block/" + device + "/device/timeout", timeout)
+                # we need scsi to have timeout of (timeout) - we create a waagent.rules file.  It will run last
+                rules = """ACTION=="add", SUBSYSTEMS=="scsi", RUN+="/bin/sh -c 'echo """ + str(timeout) + """ >/sys$DEVPATH/device/timeout'" """
+                SetFileContents('/etc/udev/rules.d/waagent.rules',rules)
+        except:
+            pass
+
     def Provision(self):
         enabled = Config.get("Provisioning.Enabled")
         if enabled != None and enabled.lower().startswith("n"):
@@ -1957,21 +1974,7 @@ class Agent(Util):
         self.EnvMonitor = EnvMonitor()
 
         # Set SCSI timeout on root device
-        try:
-            timeout = Config.get("OS.RootDeviceScsiTimeout")
-            if timeout == None:
-                timeout = 300
-            if not os.path.exists('/etc/udev/rules.d/waagent.rules'):
-                for i in range(3):
-                    device=DeviceForIdePort(i)
-                    if device:
-                        SetFileContents("/sys/block/" + device + "/device/timeout", timeout)
-                # we need scsi to have timeout of (timeout) - we create a waagent.rules file.  It will run last
-                rules = """ACTION=="add", SUBSYSTEMS=="scsi", RUN+="/bin/sh -c 'echo """ + str(timeout) + """ >/sys$DEVPATH/device/timeout'" """
-                SetFileContents('/etc/udev/rules.d/waagent.rules',rules)
-        except:
-            pass
-
+        self.SetStarageDeviceTimeout()
         global Openssl
         Openssl = Config.get("OS.OpensslPath")
         if Openssl == None:
