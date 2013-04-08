@@ -1810,6 +1810,54 @@ class Agent(Util):
                 cert += line.rstrip()
         return cert
 
+    def TryUnloadAtapiix(self):
+        """
+        If global modloaded is True, then we loaded the ata_piix kernel module, unload it.
+        """
+        if modloaded:
+            Run('rmmod ata_piix.ko',check_err=False)
+            Log("Unloaded " + krn_pth + " driver for ATAPI CD-ROM")
+
+    def TryLoadAtapiix(self):
+        """
+        Load the ata_piix kernel module if it exists.
+        If successful, set global modloaded to True.
+        If unable to load module leave modloaded False.
+        """
+        global modloaded
+        modloaded=False
+        if Run('lsmod | grep ata_piix') == 0 :
+            Log("Module " + krn_pth + " driver for ATAPI CD-ROM is already present.")
+            return 0
+        retcode,krn=RunGetOutput('uname -r')
+        if retcode:
+            Error("Unable to provision: Failed to call uname -r")
+            return "Unable to provision: Failed to call uname"
+        krn_pth='/lib/modules/'+krn.strip('\n')+'/kernel/drivers/ata/ata_piix.ko'
+        if os.path.isfile(krn_pth):
+            retcode,output=RunGetOutput('insmod ' + krn_pth,chk_err=False)
+        else:
+            Log("Module " + krn_pth + " driver for ATAPI CD-ROM does not exist.")
+            return 1
+        if retcode != 0:
+            Error('Error calling insmod for '+ krn_pth + ' driver for ATAPI CD-ROM')
+            return retcode
+        time.sleep(1)
+        # check 3 times if the mod is loaded
+        for i in range(3):
+            if Run('lsmod | grep ata_piix'):
+                continue
+            else :
+                modloaded=True
+                break
+        if not modloaded:
+            Error('Unable to load '+ krn_pth + ' driver for ATAPI CD-ROM')
+            return 1
+        
+        Log("Loaded " + krn_pth + " driver for ATAPI CD-ROM")
+        
+        # we have succeeded loading the ata_piix mod if it can be done.
+
     def Provision(self):
         enabled = Config.get("Provisioning.Enabled")
         if enabled != None and enabled.lower().startswith("n"):
@@ -1827,34 +1875,10 @@ class Agent(Util):
         dvd = "/dev/hdc"
         if os.path.exists("/dev/sr0"):
             dvd = "/dev/sr0"
-        modloaded=False
         if Run("fdisk -l " + dvd + " | grep Disk",chk_err=False):
             # Is it possible to load a module for ata_piix?
-            retcode,krn=RunGetOutput('uname -r')
-            if retcode:
-                Error("Unable to provision: Failed to call uname -a")
-                return "Unable to provision: Failed to mount DVD."
-            krn_pth='/lib/modules/'+krn.strip('\n')+'/kernel/drivers/ata/ata_piix.ko'
-            if not os.path.isfile(krn_pth):
-                Error("Unable to provision: Failed to locate ata_piix.ko")
-                return "Unable to provision: Failed to mount DVD."
-            retcode,output=RunGetOutput('insmod ' + krn_pth)
-            if retcode:
-                Error("Unable to provision: Failed to insmod " + krn+pth)
-                return "Failed to retrieve provisioning data (0x01)."
-            time.sleep(1)
-            # check 3 times if the mod is loaded
-            for i in range(3):
-                if Run('lsmod | grep ata_piix'):
-                    continue
-                else :
-                    modloaded=True
-                    break
-            if not modloaded:
-                Error('Unable to load '+ krn_pth + ' driver for ATAPI CD-ROM')
-                return 1
-            Log("Provision: Loaded " + krn_pth + " driver for ATAPI CD-ROM")
-            # we have succeeded loading the ata_piix mod
+            self.TryLoadAtapiix()
+            # we have succeeded loading the ata_piix mod if it can be done.
             for i in range(10): # we may have to wait 
                 if os.path.exists("/dev/sr0"):
                     dvd = "/dev/sr0"
@@ -1880,8 +1904,7 @@ class Agent(Util):
         ovfxml = GetFileContents("/mnt/cdrom/secure/ovf-env.xml")
         SetFileContents("ovf-env.xml", re.sub("<UserPassword>.*?<", "<UserPassword>*<", ovfxml))
         Run("umount /mnt/cdrom/secure")
-        if modloaded:
-            Run('rmmod ' + krn_pth)
+        self.TryUnLoadAtapiix()
         error = None
         if ovfxml != None:
             Log("Provisioning image using OVF settings in the DVD.")
