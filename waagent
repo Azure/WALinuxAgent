@@ -35,6 +35,7 @@ import shutil
 import socket
 import SocketServer
 import struct
+import subprocess
 import sys
 import tempfile
 import textwrap
@@ -42,18 +43,20 @@ import threading
 import time
 import traceback
 import xml.dom.minidom
-
+    
 GuestAgentName = "WALinuxAgent"
 GuestAgentLongName = "Windows Azure Linux Agent"
-GuestAgentVersion = "rd_wala.120504-1323"
+GuestAgentVersion = "WALinuxAgent-1.3.3-PRE"
 ProtocolVersion = "2011-12-31"
 
 Config = None
 LinuxDistro = "UNKNOWN"
+PackagedForDistro = "UNKNOWN"
 Verbose = False
 WaAgent = None
 DiskActivated = False
 Openssl = "openssl"
+Children = []
 
 PossibleEthernetInterfaces = ["seth0", "seth1", "eth0", "eth1"]
 RulesFiles = [ "/lib/udev/rules.d/75-persistent-net-generator.rules",
@@ -61,6 +64,34 @@ RulesFiles = [ "/lib/udev/rules.d/75-persistent-net-generator.rules",
 VarLibDhcpDirectories = ["/var/lib/dhclient", "/var/lib/dhcpcd", "/var/lib/dhcp"]
 EtcDhcpClientConfFiles = ["/etc/dhcp/dhclient.conf", "/etc/dhcp3/dhclient.conf"]
 LibDir = "/var/lib/waagent"
+
+# backport subprocess.check_output if not defined ( for python version < 2.7)
+if not hasattr(subprocess,'check_output'):
+    def check_output(*popenargs, **kwargs):
+        r"""Backport from subprocess module from python 2.7"""
+        if 'stdout' in kwargs:
+            raise ValueError('stdout argument not allowed, it will be overridden.')
+        process = subprocess.Popen(stdout=subprocess.PIPE, *popenargs, **kwargs)
+        output, unused_err = process.communicate()
+        retcode = process.poll()
+        if retcode:
+            cmd = kwargs.get("args")
+            if cmd is None:
+                cmd = popenargs[0]
+            raise subprocess.CalledProcessError(retcode, cmd, output=output)
+        return output
+
+    # Exception classes used by this module.
+    class CalledProcessError(Exception):
+        def __init__(self, returncode, cmd, output=None):
+            self.returncode = returncode
+            self.cmd = cmd
+            self.output = output
+        def __str__(self):
+            return "Command '%s' returned non-zero exit status %d" % (self.cmd, self.returncode)
+
+    subprocess.check_output=check_output
+    subprocess.CalledProcessError=CalledProcessError
 
 # This lets us index into a string or an array of integers transparently.
 def Ord(a):
@@ -76,11 +107,24 @@ def IsLinux():
 
 def DetectLinuxDistro():
     global LinuxDistro
+    global PackagedForDistro
     if os.path.isfile("/etc/redhat-release"):
         LinuxDistro = "RedHat"
         return True
     if os.path.isfile("/etc/lsb-release") and "Ubuntu" in GetFileContents("/etc/lsb-release"):
         LinuxDistro = "Ubuntu"
+
+        # Should this run as if it is packaged Ubuntu?
+        try:
+            cmd="dpkg -S %s" % os.path.basename(__file__)
+            retcode, krn = RunGetOutput(cmd,chk_err=False)
+            if not retcode:
+               PackagedForDistro = "Ubuntu"
+
+        except IOError as e:
+            pass
+
+
         return True
     if os.path.isfile("/etc/debian_version"):
         LinuxDistro = "Debian"
@@ -96,11 +140,20 @@ def IsRedHat():
 def IsUbuntu():
     return "Ubuntu" in LinuxDistro
 
+def IsPackagedUbuntu():
+    return "Ubuntu" in PackagedForDistro
+
 def IsDebian():
     return IsUbuntu() or "Debian" in LinuxDistro
 
 def IsSuse():
     return "Suse" in LinuxDistro
+
+def IsPackaged():
+    if PackagedForDistro == "UNKNOWN":
+        return False
+
+    return True
 
 def UsesRpm():
     return IsRedHat() or IsSuse()
@@ -158,9 +211,38 @@ def GetLineStartingWith(prefix, filepath):
             return line
     return None
 
-def Run(a):
-    LogIfVerbose(a)
-    return os.system(a)
+def Run(cmd,chk_err=True):
+    retcode,out=RunGetOutput(cmd,chk_err)
+    return retcode
+
+def RunGetOutput(cmd,chk_err=True):
+    LogIfVerbose(cmd)
+    try:                                     
+        output=subprocess.check_output(cmd,stderr=subprocess.STDOUT,shell=True)
+    except subprocess.CalledProcessError,e :
+        if chk_err :
+            Error('CalledProcessError.  Error Code: ' + str(e.returncode)  )
+            Error('CalledProcessError.  Command string: "' + e.cmd + '"')
+            Error('CalledProcessError.  Command result: "' + e.output[:-1] + '"')
+        return e.returncode,e.output
+    return 0,output
+
+def RunSendStdin(cmd,input,chk_err=True):
+    LogIfVerbose(cmd+input)
+    try:                                     
+        me=subprocess.Popen([cmd], shell=True, stdin=subprocess.PIPE,stderr=subprocess.STDOUT,stdout=subprocess.PIPE)
+        output=me.communicate(input)
+    except OSError,e :
+        if chk_err :
+            Error('CalledProcessError.  Error Code:' + str(me.returncode))
+            Error('CalledProcessError.  Command string:"' + cmd  + '"' )
+            Error('CalledProcessError.  Command result:"' + output[:-1] + '"')
+            return 1,output[0]
+    if me.returncode is not 0 and chk_err is True:
+            Error('CalledProcessError.  Error Code:' + str(me.returncode))
+            Error('CalledProcessError.  Command string:"' + cmd  + '"' )
+            Error('CalledProcessError.  Command result:"' + (output[0])[:-1] + '"')
+    return me.returncode,output[0]
 
 def GetNodeTextData(a):
     for b in a.childNodes:
@@ -222,7 +304,7 @@ def CreateAccount(user, password, expiration, thumbprint):
     else:
         Log("CreateAccount: " + user + " already exists. Will update password.")
     if password != None:
-        os.popen("chpasswd", "w").write(user + ":" + password + "\n")
+        RunSendStdin("chpasswd",(user + ":" + password + "\n"))
     try:
         if password == None:
             SetFileContents("/etc/sudoers.d/waagent", user + " ALL = (ALL) NOPASSWD: ALL\n")
@@ -270,6 +352,7 @@ def DeleteAccount(user):
     if userentry[2] < uidmin:
         Error("DeleteAccount: " + user + " is a system user. Will not delete account.")
         return
+    Run("> /var/run/utmp") #Delete utmp to prevent error if we are the 'user' deleted
     Run("userdel -f -r " + user)
     try:
         os.remove("/etc/sudoers.d/waagent")
@@ -331,7 +414,8 @@ def Logger():
     class T(object):
         def __init__(self):
             self.File = None
-
+            self.Con = None
+            
     self = T()
 
     def LogToFile(message):
@@ -344,18 +428,26 @@ def Logger():
         self.File.write(message + "\n")
         self.File.flush()
 
+    def LogToCon(message):
+        ConPath = '/dev/console'
+        if self.Con == None:
+            self.Con = open(ConPath, "a")
+        self.Con.write(message + "\n")
+        self.Con.flush()
+
     def Log(message):
         LogWithPrefix("", message)
 
-    def LogWithPrefix(prefix, message):
+    def LogWithPrefix(prefix, message, to_console=True):
         t = time.localtime()
         t = "%04u/%02u/%02u %02u:%02u:%02u " % (t.tm_year, t.tm_mon, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec)
         t += prefix
         for line in message.split('\n'):
             line = t + line
-            print(line)
             LogToFile(line)
-
+            if to_console:
+                LogToCon(line)
+            
     return Log, LogWithPrefix
 
 Log, LogWithPrefix = Logger()
@@ -365,20 +457,20 @@ def NoLog(message):
 
 def LogIfVerbose(message):
     if Verbose == True:
-        Log(message)
+        LogWithPrefix('',message,to_console=False)
 
 def LogWithPrefixIfVerbose(prefix, message):
     if Verbose == True:
-        LogWithPrefix(prefix, message)
+        LogWithPrefix(prefix, message,to_console=False)
 
 def Warn(message):
     LogWithPrefix("WARNING:", message)
 
 def Error(message):
-    LogWithPrefix("ERROR:", message)
+    ErrorWithPrefix("", message)
 
 def ErrorWithPrefix(prefix, message):
-    LogWithPrefix("ERROR:" + prefix, message)
+    LogWithPrefix("ERROR:", message)
 
 def Linux_ioctl_GetIpv4Address(ifname):
     import fcntl
@@ -415,7 +507,7 @@ def GetMacAddress():
     if IsWindows():
         # Windows:   Physical Address. . . . . . . . . : 00-15-17-79-00-7F\n
         a = "ipconfig /all | findstr /c:\"Physical Address\" | findstr /v \"00-00-00-00-00-00-00\""
-        a = os.popen(a).read()
+        a = os.popen(a).read() # not re-implementing wirh RunGetOutput - not called unless we're in windows
         a = re.sub("\s+$", "", a)
         a = re.sub(".+ ", "", a)
         a = re.sub(":", "", a)
@@ -437,9 +529,9 @@ def DeviceForIdePort(n):
         g0 = "00000001"
         n = n - 2
     device = None
-    path="/sys/bus/vmbus/devices/"
+    path = "/sys/bus/vmbus/devices/"
     for vmbus in os.listdir(path):
-        guid=GetFileContents(path + vmbus + "/device_id").lstrip('{').split('-')
+        guid = GetFileContents(path + vmbus + "/device_id").lstrip('{').split('-')
         if guid[0] == g0 and guid[1] == "000" + str(n):
             for root, dirs, files in os.walk(path + vmbus):
                 if root.endswith("/block"):
@@ -457,7 +549,7 @@ class Util(object):
             url = url[url.index("/"):]
         for retry in range(0, maxRetry + 1):
             strRetry = str(retry)
-            log = [NoLog, Log][retry > 0]
+            log = [NoLog, Error][retry > 0]
             log("retry HttpGet(" + url + "),retry=" + strRetry)
             response = None
             strStatus = "None"
@@ -469,16 +561,16 @@ class Util(object):
                     request = httpConnection.request("GET", url, None, headers)
                 response = httpConnection.getresponse()
                 strStatus = str(response.status)
-            except:
-                pass
+            except  httplib.HTTPException, e:
+                Error('HTTPException ' + e.message + ' args: ' + repr(e.args))
             log("response HttpGet(" + url + "),retry=" + strRetry + ",status=" + strStatus)
             if response == None or response.status != httplib.OK:
                 Error("HttpGet(" + url + "),retry=" + strRetry + ",status=" + strStatus)
                 if retry == maxRetry:
-                    Log("return HttpGet(" + url + "),retry=" + strRetry + ",status=" + strStatus)
+                    Error("return HttpGet(" + url + "),retry=" + strRetry + ",status=" + strStatus)
                     return None
                 else:
-                    Log("sleep 10 seconds HttpGet(" + url + "),retry=" + strRetry + ",status=" + strStatus)
+                    Error("sleep 10 seconds HttpGet(" + url + "),retry=" + strRetry + ",status=" + strStatus)
                     time.sleep(10)
             else:
                 log("return HttpGet(" + url + "),retry=" + strRetry + ",status=" + strStatus)
@@ -501,7 +593,7 @@ class Util(object):
         maxRetry = 2
         for retry in range(0, maxRetry + 1):
             strRetry = str(retry)
-            log = [NoLog, Log][retry > 0]
+            log = [NoLog, Error][retry > 0]
             log("retry HttpPost(" + url + "),retry=" + strRetry)
             response = None
             strStatus = "None"
@@ -512,16 +604,16 @@ class Util(object):
                                                                      "x-ms-version": ProtocolVersion})
                 response = httpConnection.getresponse()
                 strStatus = str(response.status)
-            except:
-                pass
+            except httplib.HTTPException, e:
+                Error('HTTPException ' + e.message + ' args: ' + repr(e.args))
             log("response HttpPost(" + url + "),retry=" + strRetry + ",status=" + strStatus)
             if response == None or (response.status != httplib.OK and response.status != httplib.ACCEPTED):
                 Error("HttpPost(" + url + "),retry=" + strRetry + ",status=" + strStatus)
                 if retry == maxRetry:
-                    Log("return HttpPost(" + url + "),retry=" + strRetry + ",status=" + strStatus)
+                    Error("return HttpPost(" + url + "),retry=" + strRetry + ",status=" + strStatus)
                     return None
                 else:
-                    Log("sleep 10 seconds HttpPost(" + url + "),retry=" + strRetry + ",status=" + strStatus)
+                    Error("sleep 10 seconds HttpPost(" + url + "),retry=" + strRetry + ",status=" + strStatus)
                     time.sleep(10)
             else:
                 log("return HttpPost(" + url + "),retry=" + strRetry + ",status=" + strStatus)
@@ -530,20 +622,14 @@ class Util(object):
 def LoadBalancerProbeServer(port):
 
     class T(object):
-        def __init__(self, port):
-            enabled = Config.get("LBProbeResponder")
-            if enabled != None and enabled.lower().startswith("n"):
-                return
+        def __init__(self, ip, port):
             self.ProbeCounter = 0
-            self.server = SocketServer.TCPServer((GetIpv4Address(), port), TCPHandler)
+            self.server = SocketServer.TCPServer((ip, port), TCPHandler)
             self.server_thread = threading.Thread(target = self.server.serve_forever)
             self.server_thread.setDaemon(True)
             self.server_thread.start()
 
         def shutdown(self):
-            global EnableLoadBalancerProbes
-            if not EnableLoadBalancerProbes:
-                return
             self.server.shutdown()
 
     class TCPHandler(SocketServer.BaseRequestHandler):
@@ -560,8 +646,20 @@ def LoadBalancerProbeServer(port):
             log("Received LB probe # " + strCounter)
             self.request.recv(1024)
             self.request.send("HTTP/1.1 200 OK\r\nContent-Length: 2\r\nContent-Type: text/html\r\nDate: " + self.GetHttpDateTimeNow() + "\r\n\r\nOK")
-
-    context = T(port)
+            
+    for retry in range(1,6):
+        context=None
+        ip = GetIpv4Address()
+        if ip == None :
+            Log("LoadBalancerProbeServer: GetIpv4Address() returned None, sleeping 10 before retry " + str(retry+1) )
+            time.sleep(10)
+        else:
+            try:
+                context = T(ip,port)
+                break
+            except Exception, e:
+                Log("LoadBalancerProbeServer: Exception contructing socket server: " + str(e))
+        Log("LoadBalancerProbeServer: Retry socket server construction #" + str(retry+1) )
     return context
 
 class ConfigurationProvider(object):
@@ -602,7 +700,7 @@ class EnvMonitor(object):
             dhcpcmd = "pidof dhcpcd"
         if IsDebian():
             dhcpcmd = "pidof dhclient3"
-        dhcppid = os.popen(dhcpcmd).read()
+        dhcppid = RunGetOutput(dhcpcmd,chk_err=False)[1]
         while not self.shutdown:
             for a in RulesFiles:
                 if os.path.isfile(a):
@@ -616,7 +714,7 @@ class EnvMonitor(object):
                         Log("EnvMonitor: Detected host name change: " + self.HostName + " -> " + socket.gethostname())
                         self.HostName = socket.gethostname()
                         WaAgent.UpdateAndPublishHostName(self.HostName)
-                        dhcppid = os.popen(dhcpcmd).read()
+                        dhcppid = RunGetOutput(dhcpcmd,chk_err=False)[1]
                         self.published = True
                 except:
                     pass
@@ -624,23 +722,27 @@ class EnvMonitor(object):
                 self.published = True
             pid = ""
             if not os.path.isdir("/proc/" + dhcppid.strip()):
-                pid = os.popen(dhcpcmd).read()
+                pid = RunGetOutput(dhcpcmd,chk_err=False)[1]
             if pid != "" and pid != dhcppid:
                 Log("EnvMonitor: Detected dhcp client restart. Restoring routing table.")
                 WaAgent.RestoreRoutes()
                 dhcppid = pid
+            for child in Children:
+                if child.poll() != None:
+                    Children.remove(child)
             time.sleep(5)
 
     def SetHostName(self, name):
         if socket.gethostname() == name:
             self.published = True
-        else:
-            Run("hostname " + name)
+        elif Run("hostname " + name):
+            Error("Error: SetHostName: Cannot set hostname to " + name)
+            return ("Error: SetHostName: Cannot set hostname to " + name)
 
     def IsNamePublished(self):
         return self.published
 
-    def shutdown(self):
+    def ShutdownService(self):
         self.shutdown = True
         self.server_thread.join()
 
@@ -690,9 +792,9 @@ class Certificates(object):
         output = open("temp.pem", "w")
         for line in file.readlines():
             output.write(line)
-            if line.startswith("-----END PRIVATE KEY-----") or line.startswith("-----END CERTIFICATE-----"):
+            if re.match(r'[-]+END .*?(KEY|CERTIFICATE)[-]+$',line):
                 output.close()
-                if line.startswith("-----END PRIVATE KEY-----"):
+                if re.match(r'[-]+END .*?KEY[-]+$',line):
                     os.rename("temp.pem", str(pindex) + ".prv")
                     pindex += 1
                 else:
@@ -705,8 +807,8 @@ class Certificates(object):
         index = 1
         filename = str(index) + ".crt"
         while os.path.isfile(filename):
-            thumbprint = os.popen(Openssl + " x509 -in " + filename + " -fingerprint -noout").read().rstrip().split('=')[1].replace(':', '').upper()
-            pubkey=os.popen(Openssl + " x509 -in " + filename + " -pubkey -noout").read()
+            thumbprint = (RunGetOutput(Openssl + " x509 -in " + filename + " -fingerprint -noout")[1]).rstrip().split('=')[1].replace(':', '').upper()
+            pubkey=RunGetOutput(Openssl + " x509 -in " + filename + " -pubkey -noout")[1]
             keys[pubkey] = thumbprint
             os.rename(filename, thumbprint + ".crt")
             os.chmod(thumbprint + ".crt", 0600)
@@ -717,7 +819,7 @@ class Certificates(object):
         index = 1
         filename = str(index) + ".prv"
         while os.path.isfile(filename):
-            pubkey = os.popen(Openssl + " rsa -in " + filename + " -pubout").read()
+            pubkey = RunGetOutput(Openssl + " rsa -in " + filename + " -pubout 2> /dev/null")[1]
             os.rename(filename, keys[pubkey] + ".prv")
             os.chmod(keys[pubkey] + ".prv", 0600)
             if IsRedHat():
@@ -797,7 +899,7 @@ class SharedConfig(object):
             return None
         program = Config.get("Role.TopologyConsumer")
         if program != None:
-            os.spawnl(os.P_NOWAIT, program, program, LibDir + "/SharedConfig.xml")
+            Children.append(subprocess.Popen([program, LibDir + "/SharedConfig.xml"]))
         return self
 
 class HostingEnvironmentConfig(object):
@@ -869,7 +971,7 @@ class HostingEnvironmentConfig(object):
             + "Content-Type: application/x-pkcs7-mime; name=\"password.p7m\"\n"
             + "Content-Transfer-Encoding: base64\n\n"
             + textwrap.fill(e, 64))
-        return os.popen(Openssl + " cms -decrypt -in password.p7m -inkey Certificates.pem -recip Certificates.pem").read()
+        return RunGetOutput(Openssl + " cms -decrypt -in password.p7m -inkey Certificates.pem -recip Certificates.pem")[1]
 
     def ActivateResourceDisk(self):
         global DiskActivated
@@ -886,7 +988,7 @@ class HostingEnvironmentConfig(object):
             Error("ActivateResourceDisk: Unable to detect disk topology.")
             return
         device = "/dev/" + device
-        for entry in os.popen("mount").read().split():
+        for entry in RunGetOutput("mount")[1].split():
             if entry.startswith(device + "1"):
                 Log("ActivateResourceDisk: " + device + "1 is already mounted.")
                 DiskActivated = True
@@ -898,7 +1000,7 @@ class HostingEnvironmentConfig(object):
         fs = Config.get("ResourceDisk.Filesystem")
         if fs == None:
             fs = "ext3"
-        if os.popen("sfdisk -q -c " + device + " 1").read().rstrip() == "7" and fs != "ntfs":
+        if RunGetOutput("sfdisk -q -c " + device + " 1")[1].rstrip() == "7" and fs != "ntfs":
             Run("sfdisk -c " + device + " 1 83")
             Run("mkfs." + fs + " " + device + "1")
         if Run("mount " + device + "1 " + mountpoint):
@@ -943,7 +1045,7 @@ class HostingEnvironmentConfig(object):
             if User != "root" and User != "" and Pass != "":
                 CreateAccount(User, Pass, Expiration, Thumbprint)
             else:
-                Error("Not creating user account: user=" + User + " pass=" + Pass)
+                Error("Not creating user account: " + User)
         for c in self.Certificates:
             cname = c.getAttribute("name")
             csha1 = c.getAttribute("certificateId").split(':')[1].upper()
@@ -955,7 +1057,7 @@ class HostingEnvironmentConfig(object):
                 Log("Public cert with thumbprint: " + csha1 + " was retrieved.")
         program = Config.get("Role.ConfigurationConsumer")
         if program != None:
-            os.spawnl(os.P_NOWAIT, program, program, LibDir + "/HostingEnvironmentConfig.xml")
+            Children.append(subprocess.Popen([program, LibDir + "/HostingEnvironmentConfig.xml"]))
 
 class GoalState(Util):
 #
@@ -1202,7 +1304,7 @@ class OvfEnv(object):
     def NumberToBytes(self, i):
         result = []
         while i:
-            result.append(chr(i&0xFF))
+            result.append(chr(i & 0xFF))
             i >>= 8
         result.reverse()
         return ''.join(result)
@@ -1242,7 +1344,10 @@ class OvfEnv(object):
 
     def Process(self):
         error = None
-        WaAgent.EnvMonitor.SetHostName(self.ComputerName)
+        if self.ComputerName == None :
+            return "Error: Hostname missing"
+        error=WaAgent.EnvMonitor.SetHostName(self.ComputerName)
+        if error: return error
         if self.DisableSshPasswordAuthentication:
             filepath = "/etc/ssh/sshd_config"
             # Disable RFC 4252 and RFC 4256 authentication schemes.
@@ -1251,10 +1356,10 @@ class OvfEnv(object):
                 GetFileContents(filepath).split('\n'))) + "PasswordAuthentication no\nChallengeResponseAuthentication no\n")
             Log("Disabled SSH password-based authentication methods.")
         if self.AdminPassword != None:
-            os.popen("chpasswd", "w").write("root:" + self.AdminPassword + "\n")
+            RunSendStdin("chpasswd",("root:" + self.AdminPassword + "\n"))
         if self.UserName != None:
             error = CreateAccount(self.UserName, self.UserPassword, None, None)
-        sel = os.popen("getenforce").read().startswith("Enforcing")
+        sel = RunGetOutput("getenforce",chk_err=False)[1].startswith("Enforcing")
         if sel == True and IsRedHat():
             Run("setenforce 0")
         home = GetHome()
@@ -1472,7 +1577,7 @@ class Agent(Util):
         net = self.IntegerToIpAddressV4String(net)
         mask = self.IntegerToIpAddressV4String(mask)
         gateway = self.IntegerToIpAddressV4String(gateway)
-        Run("/sbin/route add -net " + net + " netmask " + mask + " gw " + gateway)
+        Run("/sbin/route add -net " + net + " netmask " + mask + " gw " + gateway,chk_err=False)  # We supress error logging on error.
 
     def HandleDhcpResponse(self, sendData, receiveBuffer):
         LogIfVerbose("HandleDhcpResponse")
@@ -1567,10 +1672,10 @@ class Agent(Util):
         # And workaround incompatibility with Windows Azure DHCP servers.
         #
         ShortSleep = False # Sleep 1 second before retrying DHCP queries.
-
+        ifname=None
         if not IsWindows():
-            Run("iptables -D INPUT -p udp --dport 68 -j ACCEPT")
-            Run("iptables -I INPUT -p udp --dport 68 -j ACCEPT")
+            Run("iptables -D INPUT -p udp --dport 68 -j ACCEPT",chk_err=False)  # We supress error logging on error.
+            Run("iptables -I INPUT -p udp --dport 68 -j ACCEPT",chk_err=False)  # We supress error logging on error.
 
         sleepDurations = [0, 5, 10, 30, 60, 60, 60, 60]
         maxRetry = len(sleepDurations)
@@ -1585,15 +1690,29 @@ class Agent(Util):
                 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
                 sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
                 sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-                if IsSuse():
+                missingDefaultRoute = True
+                try:
+                    for line in RunGetOutput("route -n")[1].split('\n'):
+                        if line.startswith("0.0.0.0 "):
+                            missingDefaultRoute = False
+                except:
+                    pass
+                if missingDefaultRoute:
                     # This is required because sending after binding to 0.0.0.0 fails with
                     # network unreachable when the default gateway is not set up.
-                    sock.bind((GetIpv4Address(), 68))
-                else:
-                    sock.bind(("0.0.0.0", 68))
+                    for i in PossibleEthernetInterfaces:
+                        try:
+                            if Linux_ioctl_GetIpv4Address(i):
+                                ifname=i
+                        except IOError, e:
+                            pass
+                    Log("DoDhcpWork: Missing default route - adding broadcast route for DHCP.")
+                    Run("route add 255.255.255.255 dev " + ifname,chk_err=False)   # We supress error logging on error.
+                sock.bind(("0.0.0.0", 68)) 
                 sock.sendto(sendData, ("<broadcast>", 67))
+                sock.settimeout(10)
+                Log("DoDhcpWork: Setting socket.timeout=10, entering recv")
                 receiveBuffer = sock.recv(1024)
-                sock.close()
                 endpoint = self.HandleDhcpResponse(sendData, receiveBuffer)
                 if endpoint == None:
                     LogIfVerbose("DoDhcpWork: No endpoint found")
@@ -1610,6 +1729,12 @@ class Agent(Util):
             except Exception, e:
                 ErrorWithPrefix(prefix, str(e))
                 ErrorWithPrefix(prefix, traceback.format_exc())
+            finally:
+                sock.close()
+                if missingDefaultRoute:
+                    #We added this route - delete it
+                    Run("route del 255.255.255.255 dev " + ifname,chk_err=False)  # We supress error logging on error.
+                    Log("DoDhcpWork: Removing broadcast route for DHCP.")
         return None
 
     def UpdateAndPublishHostName(self, name):
@@ -1617,10 +1742,7 @@ class Agent(Util):
         Log("Setting host name: " + name)
         UpdateAndPublishHostNameCommon(name)
         for ethernetInterface in PossibleEthernetInterfaces:
-            if IsSuse():
-                Run("ifrenew " + ethernetInterface)
-            else:
-                Run("ifdown " + ethernetInterface + " && ifup " + ethernetInterface)
+            Run("ifdown " + ethernetInterface + " && ifup " + ethernetInterface,chk_err=False) # We supress error logging on error.
         self.RestoreRoutes()
 
     def RestoreRoutes(self):
@@ -1720,26 +1842,62 @@ class Agent(Util):
         dvd = "/dev/hdc"
         if os.path.exists("/dev/sr0"):
             dvd = "/dev/sr0"
-        if Run("fdisk -l " + dvd + " | grep Disk"):
-            return
+        modloaded=False
+        if Run("fdisk -l " + dvd + " | grep Disk",chk_err=False):
+            # Is it possible to load a module for ata_piix?
+            retcode,krn=RunGetOutput('uname -r')
+            if retcode:
+                Error("Unable to provision: Failed to call uname -a")
+                return "Unable to provision: Failed to mount DVD."
+            krn_pth='/lib/modules/'+krn.strip('\n')+'/kernel/drivers/ata/ata_piix.ko'
+            if not os.path.isfile(krn_pth):
+                Error("Unable to provision: Failed to locate ata_piix.ko")
+                return "Unable to provision: Failed to mount DVD."
+            retcode,output=RunGetOutput('insmod ' + krn_pth)
+            if retcode:
+                Error("Unable to provision: Failed to insmod " + krn+pth)
+                return "Failed to retrieve provisioning data (0x01)."
+            modloaded=True
+            Log("Provision: Loaded " + krn_pth + " driver for ATAPI CD-ROM")
+            # we have succeeded loading the ata_piix mod
+            for i in range(10): # we may have to wait 
+                if os.path.exists("/dev/sr0"):
+                    dvd = "/dev/sr0"
+                    break
+                Log("Waiting for DVD - sleeping 1 - "+str(i+1)+" try...")
+                time.sleep(1)
         CreateDir("/mnt/cdrom/secure", "root", 0700)
-        if Run("mount " + dvd + " /mnt/cdrom/secure"):
-            Error("Unable to provision: Failed to mount DVD.")
-            return "Failed to retrieve provisioning data (0x01)."
+        #begin mount loop - ten tries - 5 sec wait between
+        for retry in range(1,11):
+            retcode,output=RunGetOutput("mount -v " + dvd + " /mnt/cdrom/secure")
+            Log(output[:-1])
+            if retcode:
+                Log("mount failed on attempt #" + str(retry) )
+            else:
+                Log("mount succeeded on attempt #" + str(retry) )
+                break
+            Log("mount loop sleeping 5...")
+            time.sleep(5)
+            
         if not os.path.isfile("/mnt/cdrom/secure/ovf-env.xml"):
             Error("Unable to provision: Missing ovf-env.xml on DVD.")
             return "Failed to retrieve provisioning data (0x02)."
         ovfxml = GetFileContents("/mnt/cdrom/secure/ovf-env.xml")
         SetFileContents("ovf-env.xml", re.sub("<UserPassword>.*?<", "<UserPassword>*<", ovfxml))
         Run("umount /mnt/cdrom/secure")
+        if modloaded:
+            Run('rmmod ' + krn_pth)
         error = None
         if ovfxml != None:
             Log("Provisioning image using OVF settings in the DVD.")
             ovfobj = OvfEnv().Parse(ovfxml)
             if ovfobj != None:
                 error = ovfobj.Process()
+                if error :
+                    Error ("Provisioninig image FAILED " + error)
+                    return ("Provisioninig image FAILED " + error)
         # This is done here because regenerated SSH host key pairs may be potentially overwritten when processing the ovfxml
-        fingerprint = os.popen("ssh-keygen -lf /etc/ssh/ssh_host_" + type + "_key.pub").read().rstrip().split()[1].replace(':','')
+        fingerprint = RunGetOutput("ssh-keygen -lf /etc/ssh/ssh_host_" + type + "_key.pub")[1].rstrip().split()[1].replace(':','')
         self.ReportRoleProperties(fingerprint)
         delRootPass = Config.get("Provisioning.DeleteRootPassword")
         if delRootPass != None and delRootPass.lower().startswith("y"):
@@ -1800,7 +1958,11 @@ class Agent(Util):
         goalState = None # self.GoalState, instance of GoalState
         provisioned = os.path.exists(LibDir + "/provisioned")
         program = Config.get("Role.StateConsumer")
-        provisionError = None
+        provisionError = None        
+        lbProbeResponder = True
+        setting = Config.get("LBProbeResponder")
+        if setting != None and setting.lower().startswith("n"):
+            lbProbeResponder = False
         while True:
             if (goalState == None) or (incarnation == None) or (goalState.Incarnation != incarnation):
                 goalState = self.UpdateGoalState()
@@ -1823,18 +1985,21 @@ class Agent(Util):
                 if currentPort != goalPort:
                     self.LoadBalancerProbeServer_Shutdown()
                     currentPort = goalPort
-                    if currentPort != None:
+                    if currentPort != None and lbProbeResponder == True:
                         self.LoadBalancerProbeServer = LoadBalancerProbeServer(currentPort)
+                        if self.LoadBalancerProbeServer == None :
+                            lbProbeResponder = False
+                            Log("Unable to create LBProbeResponder.")
 
             if program != None and DiskActivated == True:
-                os.spawnl(os.P_NOWAIT, program, program, "Ready")
+                Children.append(subprocess.Popen([program, "Ready"]))
                 program = None
 
             if goalState.ExpectedState == "Stopped":
                 program = Config.get("Role.StateConsumer")
                 if program != None:
                     Run(program + " Shutdown")
-                self.EnvMonitor.shutdown()
+                self.EnvMonitor.ShutdownService()
                 self.LoadBalancerProbeServer_Shutdown()
                 command = ["/sbin/shutdown -hP now", "shutdown /s /t 5"][IsWindows()]
                 Run(command)
@@ -1842,13 +2007,10 @@ class Agent(Util):
 
             sleepToReduceAccessDenied = 3
             time.sleep(sleepToReduceAccessDenied)
-            i = None
             if provisionError != None:
-                i = self.ReportNotReady("ProvisioningFailed", provisionError)
+                incarnation = self.ReportNotReady("ProvisioningFailed", provisionError)
             else:
-                i = self.ReportReady()
-            if i != None:
-                incarnation = i
+                incarnation = self.ReportReady()                
             time.sleep(25 - sleepToReduceAccessDenied)
 
 Init_Suse = """\
@@ -1968,6 +2130,34 @@ case "$1" in
         RETVAL=1
 esac
 exit $RETVAL
+"""
+
+Init_Ubuntu = """\
+#walinuxagent - start Windows Azure agent
+
+description "walinuxagent"
+author "Ben Howard <ben.howard@canonical.com>"
+
+start on (filesystem and started rsyslog)
+
+pre-start script
+
+	WALINUXAGENT_ENABLED=1
+    [ -r /etc/default/walinuxagent ] && . /etc/default/walinuxagent
+
+    if [ "$WALINUXAGENT_ENABLED" != "1" ]; then
+        exit 1
+    fi
+
+    if [ ! -x /usr/sbin/waagent ]; then
+        exit 1
+    fi
+
+    #Load the udf module
+    modprobe -b udf
+end script
+
+exec /usr/sbin/waagent -daemon
 """
 
 Init_Debian = """\
@@ -2120,13 +2310,13 @@ def Install():
     if missing == True:
         Warn("Please resolve missing dependencies listed for full functionality.")
     if UsesRpm():
-        if not Run("rpm --quiet -q NetworkManager"):
+        if not Run("rpm --quiet -q NetworkManager",chk_err=False):  # We want this to fail - supress error logging on error.
             Error(GuestAgentLongName + " is not compatible with NetworkManager.")
             return 1
         if Run("rpm --quiet -q python-pyasn1"):
             Error(GuestAgentLongName + " requires python-pyasn1.")
             return 1
-    if UsesDpkg() and not Run("dpkg-query -s network-manager >/dev/null 2>&1"):
+    if UsesDpkg() and not Run("dpkg-query -s network-manager >/dev/null 2>&1",chk_err=False):  # We want this to fail - supress error logging on error.
         Error(GuestAgentLongName + " is not compatible with network-manager.")
         return 1
     for a in RulesFiles:
@@ -2135,18 +2325,29 @@ def Install():
                 os.remove(GetLastPathElement(a))
             shutil.move(a, ".")
             Warn("Moved " + a + " -> " + LibDir + "/" + GetLastPathElement(a) )
-    filename = "waagent"
-    filepath = "/etc/init.d/" + filename
-    distro = IsRedHat() + IsDebian() * 2 + IsSuse() * 3
-    if distro == 0:
-        Error("Unable to detect Linux Distribution.")
-        return 1
-    init = [[Init_RedHat, "chkconfig --add " + filename],
-            [Init_Debian, "update-rc.d " + filename + " defaults"],
-            [Init_Suse, "insserv " + filename]][distro - 1]
-    SetFileContents(filepath, init[0])
-    os.chmod(filepath, 0755)
-    Run(init[1])
+
+    if IsUbuntu() and not IsPackagedUbuntu():
+        # Support for Ubuntu's upstart configuration
+        filename="waagent.conf"
+        filepath = "/etc/init/" + filename
+        SetFileContents(filepath, Init_Ubuntu)
+        os.chmod(filepath, 0644)
+
+    elif not IsPackagedUbuntu():
+        # Regular init.d configurations
+        filename = "waagent"
+        filepath = "/etc/init.d/" + filename
+        distro = IsRedHat() + IsDebian() * 2 + IsSuse() * 3
+        if distro == 0:
+            Error("Unable to detect Linux Distribution.")
+            return 1
+        init = [[Init_RedHat, "chkconfig --add " + filename],
+                [Init_Debian, "update-rc.d " + filename + " defaults"],
+                [Init_Suse, "insserv " + filename]][distro - 1]
+        SetFileContents(filepath, init[0])
+        os.chmod(filepath, 0755)
+        Run(init[1])
+
     if os.path.isfile("/etc/waagent.conf"):
         try:
             os.remove("/etc/waagent.conf.old")
@@ -2184,12 +2385,30 @@ def Uninstall():
     if a == 0:
         Error("Unable to detect Linux Distribution.")
         return 1
-    Run("service " + filename + " stop")
-    cmd = ["chkconfig --del " + filename,
-           "update-rc.d -f " + filename + " remove",
-           "insserv -r " + filename][a - 1]
-    Run(cmd)
-    for f in os.listdir(LibDir) + ["/etc/init.d/" + filename, "/etc/waagent.conf", "/etc/logrotate.d/waagent", "/etc/sudoers.d/waagent"]:
+
+    # Managed by dpkg for Packaged Ubuntu
+    if not IsPackaged():
+       Run("service " + filename + " stop")
+       cmd = ["chkconfig --del " + filename,
+              "update-rc.d -f " + filename + " remove",
+              "insserv -r " + filename][a - 1]
+       Run(cmd)
+
+    remove_f = [
+            "/etc/waagent.conf",
+            "/etc/logrotate.d/waagent",
+            "/etc/sudoers.d/waagent",
+            ]
+
+    # For packaged Ubuntu, the script should let the packaging
+    # manage the removal of these files
+    if not IsPackagedUbuntu():
+        remove_f.append([
+            "/etc/init/waagent.conf",
+            "/etc/init.d/" + filename,
+            ])
+
+    for f in os.listdir(LibDir) + remove_f:
         try:
             os.remove(f)
         except:
@@ -2198,10 +2417,13 @@ def Uninstall():
     return 0
 
 def DeleteRootPassword():
-    SetFileContents("/etc/shadow-temp", "")
-    os.chmod("/etc/shadow-temp", 0000)
-    Run("(echo root:*LOCK*:14600:::::: && grep -v ^root /etc/shadow ) > /etc/shadow-temp")
-    Run("mv -f /etc/shadow-temp /etc/shadow")
+    filepath="/etc/shadow"
+    ReplaceFileContentsAtomic(filepath, "root:*LOCK*:14600::::::\n" + "\n".join(filter(lambda a: not
+        a.startswith("root:"),
+        GetFileContents(filepath).split('\n'))))
+    os.chmod(filepath, 0000)
+    if IsRedHat():
+        Run("chcon system_u:object_r:shadow_t:s0 " + filepath)
     Log("Root password deleted.")
 
 def Deprovision(force, deluser):
@@ -2217,7 +2439,10 @@ def Deprovision(force, deluser):
 
     print("WARNING! The waagent service will be stopped.")
     print("WARNING! All SSH host key pairs will be deleted.")
-    print("WARNING! Nameserver configuration in /etc/resolv.conf will be deleted.")
+    if IsUbuntu():
+        print("WARNING! Nameserver configuration in /etc/resolvconf/resolv.conf.d/{tail,originial} will be deleted.")
+    else:
+        print("WARNING! Nameserver configuration in /etc/resolv.conf will be deleted.")
     print("WARNING! Cached DHCP leases will be deleted.")
 
     delRootPass = Config.get("Provisioning.DeleteRootPassword")
@@ -2253,12 +2478,29 @@ def Deprovision(force, deluser):
         Run("rm -f " + a + "/*")
 
     # Clear LibDir, remove nameserver and root bash history
-    for f in os.listdir(LibDir) + ["/etc/resolv.conf", "/root/.bash_history", "/var/log/waagent.log"]:
+    fileBlackList = [ "/root/.bash_history", "/var/log/waagent.log" ]
+
+    if IsUbuntu():
+        # Ubuntu uses resolv.conf by default, so removing /etc/resolv.conf will
+        # break resolvconf. Therefore, we check to see if resolvconf is in use,
+        # and if so, we remove the resolvconf artifacts.
+
+        Log("Deprovision: Ubuntu specific resolv.conf behavior selected.")
+        if os.path.realpath('/etc/resolv.conf') != '/run/resolvconf/resolv.conf':
+            Log("resolvconf is not configured. Removing /etc/resolv.conf")
+            fileBlackList.append('/etc/resolv.conf')
+        else:
+            Log("resolvconf is enabled; leaving /etc/resolv.conf intact")
+            resolvConfD = '/etc/resolvconf/resolv.conf.d/'
+            fileBlackList.extend([resolvConfD + 'tail', resolvConfD + 'originial' ])
+    else:
+        fileBlackList.extend(os.listdir(LibDir) + ['/etc/resolv.conf'])
+
+    for f in os.listdir(LibDir) + fileBlackList:
         try:
             os.remove(f)
         except:
             pass
-
     return 0
 
 def SwitchCwd():

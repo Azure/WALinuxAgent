@@ -1,0 +1,45 @@
+The preferred method of installing the Windows Azure Linux Agent for
+CentOS and other RPM-based distributions is to use the RPM packaging.
+Platform images in the Azure Gallery will already include the agent
+package. This guide is primarily for individuals who would like to
+build their own custom packages.
+
+OpenLogic provides supported RPM packages for CentOS in their package
+repositories, for example
+http://olcentgbl.trafficmanager.net/openlogic/6/openlogic/x86_64/RPMS/
+
+Note: Official packaging and other patches for SLES and OpenSUSE can be
+found on the OpenSUSE Build Service:  
+https://build.opensuse.org/package/show?package=WALinuxAgent&project=Cloud%3ATools
+
+The instructions below will describe how you can build your own RPM
+package on a CentOS host:
+
+    1. Install required rpmbuild package:
+
+         yum -y install rpm-build
+
+    2. Set up the rpmbuild environment:
+
+         mkdir -p ~/rpmbuild/{SPECS,SOURCES}
+
+    3. Download the WALinuxAgent source code as a tar.gz compressed
+       file from Github, or create it yourself:
+
+         tar -czf WALinuxAgent-1.x.x.tar.gz WALinuxAgent-1.x.x
+
+    4. Copy the files to the rpmbuild environment:
+
+         cp walinuxagent.spec ~/rpmbuild/SPECS
+         cp WALinuxAgent-1.x.x.tar.gz ~/rpmbuild/SOURCES
+
+    5. If necessary, edit the ~/rpmbuild/SPECS/walinuxagent.spec file
+       and ensure that the 'Version', 'Source0' and other information
+       is accurate.
+
+    6. The following command will build the binary and source RPMs:
+
+         rpmbuild -ba ~/rpmbuild/SPECS/walinuxagent.spec
+
+
+Enjoy!

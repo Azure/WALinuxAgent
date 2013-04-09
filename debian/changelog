@@ -1,0 +1,80 @@
+walinuxagent (1.3-0ubuntu1) raring; urgency=low
+
+  * New upstream version (LP: #1101371)
+    - Add some error checking and robustness to DVD mounting operation during
+         provisioning
+    - Remove redundant check for IP and Port in LoadBalancerProbe
+    - Add check to self.computername to detect empty hostname in configuration
+    - Fix manual uninstall on Ubuntu
+  * Modified walinuxagent to recognize when its been packaged.
+
+ -- Ben Howard <ben.howard@ubuntu.com>  Fri, 18 Jan 2013 15:43:08 -0700
+
+walinuxagent (1.2-0ubuntu1) raring; urgency=low
+
+  * New upstream version (LP: #1077148)
+  * Upstream features:
+    - Added - load ata_piix.ko module loaded if needed for CDROM device support
+    - Additional logging for DoDhcpWork()
+    - Update sock.recv timeout from 30 to 10 seconds
+    - Fix: Linux waagent deprovision, user is not deleted properly
+    - Fix: Make LBProbeResponder construction more robust
+    - Fix: Agent fails to provision user with public/private key pairs
+    - Fix: DHCP broadcast response not received
+    - Fix: Linux agent fails to delete root user password
+    - Fix: Linux agent should report error messages to Fabric when
+           passed an invalid hostname.
+  * Dropped Ubuntu specific patches
+    - Removed debian/patches/000_resolv-conf.patch as upstream now supports
+      resolvconf properly.
+    - Removed debian/patches/001-strip-init-d.patch as redundant now that
+      upstream understands Ubuntu upstart. Upstream script does not
+      handle the removal of the upstart job anyway.
+  * Added debian/patches/000_use_package_upstart.patch to use packaged
+    upstart job over in-script upstart.
+
+ -- Ben Howard <ben.howard@ubuntu.com>  Fri, 07 Dec 2012 16:52:42 -0700
+
+walinuxagent (1.1-0ubuntu2) raring; urgency=low
+
+  * Stop upgrades purging walinuxagent meta-data and configuration files
+    (LP: #1079897):
+    - d/{control,walinuxagent-data-saver.preinst}: Added
+      walinuxagent-data-saver package to ensure that agent generated data is
+      not lost on upgrade by diverting /usr/sbin/waagent during the upgrade
+      process.
+    - d/walinuxagent-data-saver.lintian-overrides: Override errors about use
+      of dpkg-divert in this package.
+    - d/control: Added Pre-Depends to walinuxagent on walinuxagent-data-saver.
+    - d/prerm: Stop calling waagent --uninstall during reconfiguration
+      and upgrade, specify files to remove manually for purge.
+    - d/postinst: Remove divert of /usr/sbin/waagent prior to completion of
+      package install.
+  * d/preinst: If upgrading from package version with unmanaged waagent upstart
+    configuration stop the agent and remove the upstart configuration.
+  * d/upstart: Tidied description in upstart job.
+
+ -- James Page <james.page@ubuntu.com>  Fri, 23 Nov 2012 16:07:41 +0000
+
+walinuxagent (1.1-0ubuntu1) raring; urgency=low
+
+  * New upstream version (LP: #1078074, #1077147).
+  * Moved upstart job to be managed by packaging.
+
+ -- Ben Howard <ben.howard@ubuntu.com>  Wed, 14 Nov 2012 10:59:37 -0700
+
+walinuxagent (1.0~git20120606.c16f5e9-0ubuntu2) quantal; urgency=low
+
+  * Restrict target architectures to i386 and amd64.
+
+ -- James Page <james.page@ubuntu.com>  Mon, 06 Aug 2012 10:24:07 +0100
+
+walinuxagent (1.0~git20120606.c16f5e9-0ubuntu1) quantal; urgency=low
+
+  * Initial package import (LP: #1014864).
+  * Ubuntu specific modifications:
+    - Made resolvconf aware during deprovisioning
+    - Added Ubuntu upstart job
+    - Added ability to prevent agent startup.
+
+ -- Ben Howard <ben.howard@ubuntu.com>  Fri, 22 Jun 2012 09:10:22 -0600
