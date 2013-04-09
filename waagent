@@ -1875,7 +1875,7 @@ class Agent(Util):
         dvd = "/dev/hdc"
         if os.path.exists("/dev/sr0"):
             dvd = "/dev/sr0"
-        if Run("fdisk -l " + dvd + " | grep Disk",chk_err=False):
+        if Run("LC_ALL=C fdisk -l " + dvd + " | grep Disk",chk_err=False):
             # Is it possible to load a module for ata_piix?
             self.TryLoadAtapiix()
             # we have succeeded loading the ata_piix mod if it can be done.
