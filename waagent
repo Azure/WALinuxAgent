@@ -1816,7 +1816,7 @@ class Agent(Util):
         """
         if modloaded:
             Run('rmmod ata_piix.ko',check_err=False)
-            Log("Unloaded " + krn_pth + " driver for ATAPI CD-ROM")
+            Log("Unloaded ata_piix.ko driver for ATAPI CD-ROM")
 
     def TryLoadAtapiix(self):
         """
@@ -1826,14 +1826,14 @@ class Agent(Util):
         """
         global modloaded
         modloaded=False
+        retcode,krn=RunGetOutput('uname -r')
+        krn_pth='/lib/modules/'+krn.strip('\n')+'/kernel/drivers/ata/ata_piix.ko'
         if Run('lsmod | grep ata_piix') == 0 :
             Log("Module " + krn_pth + " driver for ATAPI CD-ROM is already present.")
             return 0
-        retcode,krn=RunGetOutput('uname -r')
         if retcode:
             Error("Unable to provision: Failed to call uname -r")
             return "Unable to provision: Failed to call uname"
-        krn_pth='/lib/modules/'+krn.strip('\n')+'/kernel/drivers/ata/ata_piix.ko'
         if os.path.isfile(krn_pth):
             retcode,output=RunGetOutput('insmod ' + krn_pth,chk_err=False)
         else:
