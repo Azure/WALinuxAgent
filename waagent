@@ -1970,7 +1970,8 @@ class Agent(Util):
         while True:
             if (goalState == None) or (incarnation == None) or (goalState.Incarnation != incarnation):
                 goalState = self.UpdateGoalState()
-
+                if goalState == None :
+                    continue
                 if provisioned == False:
                     self.ReportNotReady("Provisioning", "Starting")
 
