@@ -563,6 +563,8 @@ class Util(object):
                 strStatus = str(response.status)
             except  httplib.HTTPException, e:
                 Error('HTTPException ' + e.message + ' args: ' + repr(e.args))
+            except IOError, e:
+                Error('socket IOError ' + e.message + ' args: ' + repr(e.args))
             log("response HttpGet(" + url + "),retry=" + strRetry + ",status=" + strStatus)
             if response == None or response.status != httplib.OK:
                 Error("HttpGet(" + url + "),retry=" + strRetry + ",status=" + strStatus)
@@ -606,6 +608,8 @@ class Util(object):
                 strStatus = str(response.status)
             except httplib.HTTPException, e:
                 Error('HTTPException ' + e.message + ' args: ' + repr(e.args))
+            except IOError, e:
+                Error('socket IOError ' + e.message + ' args: ' + repr(e.args))
             log("response HttpPost(" + url + "),retry=" + strRetry + ",status=" + strStatus)
             if response == None or (response.status != httplib.OK and response.status != httplib.ACCEPTED):
                 Error("HttpPost(" + url + "),retry=" + strRetry + ",status=" + strStatus)
