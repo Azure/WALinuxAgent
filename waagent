@@ -1835,7 +1835,7 @@ class Agent(Util):
             Error("Unable to provision: Failed to call uname -r")
             return "Unable to provision: Failed to call uname"
         if os.path.isfile(krn_pth):
-            retcode,output=RunGetOutput('insmod ' + krn_pth,chk_err=False)
+            retcode,output=RunGetOutput("insmod " + krn_pth,chk_err=False)
         else:
             Log("Module " + krn_pth + " driver for ATAPI CD-ROM does not exist.")
             return 1
