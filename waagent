@@ -1904,7 +1904,7 @@ class Agent(Util):
         ovfxml = GetFileContents("/mnt/cdrom/secure/ovf-env.xml")
         SetFileContents("ovf-env.xml", re.sub("<UserPassword>.*?<", "<UserPassword>*<", ovfxml))
         Run("umount /mnt/cdrom/secure")
-        self.TryUnLoadAtapiix()
+        self.TryUnloadAtapiix()
         error = None
         if ovfxml != None:
             Log("Provisioning image using OVF settings in the DVD.")
@@ -2336,7 +2336,7 @@ def Install():
     #Check for pyasn1 if we can't use 'ssh-keygen -i -m PKCS8' (Debian)
     if not IsDebian():
         try:
-            return __import__('pyasn1')
+            m = __import__('pyasn1')
         except ImportError:
             Error(GuestAgentLongName + " requires python-pyasn1 for your Linux distribution.")
             return 1
@@ -2586,6 +2586,8 @@ try:
     if IsLinux():
         Log("Linux Distribution Detected      : " + LinuxDistro)
     WaAgent = Agent()
+    global modloaded
+    modloaded = False
     WaAgent.Run()
 except Exception, e:
     Error(traceback.format_exc())
