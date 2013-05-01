@@ -1815,7 +1815,7 @@ class Agent(Util):
         If global modloaded is True, then we loaded the ata_piix kernel module, unload it.
         """
         if modloaded:
-            Run('rmmod ata_piix.ko',check_err=False)
+            Run("rmmod ata_piix.ko",chk_err=False)
             Log("Unloaded ata_piix.ko driver for ATAPI CD-ROM")
 
     def TryLoadAtapiix(self):
