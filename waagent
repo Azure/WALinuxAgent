@@ -1369,7 +1369,7 @@ class OvfEnv(object):
             Run(Openssl + " x509 -in " + pkey[0] + ".crt -noout -pubkey > " + pkey[0] + ".pub")
             if IsRedHat():
                 Run("chcon unconfined_u:object_r:ssh_home_t:s0 " + pkey[0] + ".pub")
-            if IsUbuntu():
+            if IsDebian():
                 # Only supported in new SSH releases
                 Run("ssh-keygen -i -m PKCS8 -f " + pkey[0] + ".pub >> " + path)
             else:
