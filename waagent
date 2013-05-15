@@ -350,7 +350,7 @@ def DeleteAccount(user):
         Error("DeleteAccount: " + user + " is a system user. Will not delete account.")
         return
     Run("> /var/run/utmp") #Delete utmp to prevent error if we are the 'user' deleted
-    Run("userdel -f -r " + user)
+    Run("userdel -f -r " + user,chk_err=False)
     try:
         os.remove("/etc/sudoers.d/waagent")
     except:
