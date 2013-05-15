@@ -99,9 +99,6 @@ def Ord(a):
         a = ord(a)
     return a
 
-def IsWindows():
-    return (platform.uname()[0] == "Windows")
-
 def IsLinux():
     return (platform.uname()[0] == "Linux")
 
@@ -276,9 +273,6 @@ def CreateDir(dirpath, user, mode):
     ChangeOwner(dirpath, user)
 
 def CreateAccount(user, password, expiration, thumbprint):
-    if IsWindows():
-        Log("Skipping CreateAccount on Windows")
-        return None
     userentry = None
     try:
         userentry = pwd.getpwnam(user)
@@ -331,9 +325,6 @@ def CreateAccount(user, password, expiration, thumbprint):
     return None
 
 def DeleteAccount(user):
-    if IsWindows():
-        Log("Skipping DeleteAccount on Windows")
-        return
     userentry = None
     try:
         userentry = pwd.getpwnam(user)
@@ -419,7 +410,7 @@ def Logger():
     self = T()
 
     def LogToFile(message):
-        FilePath = ["/var/log/waagent.log", "waagent.log"][IsWindows()]
+        FilePath = '/var/log/waagent.log'
         if not os.path.isfile(FilePath) and self.File != None:
             self.File.close()
             self.File = None
@@ -504,21 +495,12 @@ def HexStringToByteArray(a):
     return b
 
 def GetMacAddress():
-    if IsWindows():
-        # Windows:   Physical Address. . . . . . . . . : 00-15-17-79-00-7F\n
-        a = "ipconfig /all | findstr /c:\"Physical Address\" | findstr /v \"00-00-00-00-00-00-00\""
-        a = os.popen(a).read() # not re-implementing wirh RunGetOutput - not called unless we're in windows
-        a = re.sub("\s+$", "", a)
-        a = re.sub(".+ ", "", a)
-        a = re.sub(":", "", a)
-        a = re.sub("-", "", a)
-    else:
-        for ifname in PossibleEthernetInterfaces:
-            try:
-                a = Linux_ioctl_GetInterfaceMac(ifname)
-                break
-            except IOError, e:
-                pass
+    for ifname in PossibleEthernetInterfaces:
+        try:
+            a = Linux_ioctl_GetInterfaceMac(ifname)
+            break
+        except IOError, e:
+            pass
     return HexStringToByteArray(a)
 
 def DeviceForIdePort(n):
@@ -979,10 +961,6 @@ class HostingEnvironmentConfig(object):
 
     def ActivateResourceDisk(self):
         global DiskActivated
-        if IsWindows():
-            DiskActivated = True
-            Log("Skipping ActivateResourceDisk on Windows")
-            return
         format = Config.get("ResourceDisk.Format")
         if format == None or format.lower().startswith("n"):
             DiskActivated = True
@@ -1485,12 +1463,10 @@ class Agent(Util):
                             protocolVersionSeen = True
             if a.nodeType == node.ELEMENT_NODE and a.localName == "Preferred":
                 v = GetNodeTextData(a.getElementsByTagName("Version")[0])
-                LogIfVerbose("Fabric preferred wire protocol version: " + v)
-                if ProtocolVersion < v:
-                    Warn("Newer wire protocol version detected. Please consider updating waagent.")
+                Log("Fabric preferred wire protocol version: " + v)
         if not protocolVersionSeen:
-            Warn("Agent supported wire protocol version: " + ProtocolVersion + " was not advertised by Fabric.")
-            ProtocolVersion = "2011-08-31"
+            Error("Agent supported wire protocol version: " + ProtocolVersion + " was not advertised by Fabric.")
+            return False
         Log("Negotiated wire protocol version: " + ProtocolVersion)
         return True
 
@@ -1576,8 +1552,6 @@ class Agent(Util):
         return "%u.%u.%u.%u" % ((a >> 24) & 0xFF, (a >> 16) & 0xFF, (a >> 8) & 0xFF, a & 0xFF)
 
     def RouteAdd(self, net, mask, gateway):
-        if IsWindows():
-            return
         net = self.IntegerToIpAddressV4String(net)
         mask = self.IntegerToIpAddressV4String(mask)
         gateway = self.IntegerToIpAddressV4String(gateway)
@@ -1677,11 +1651,10 @@ class Agent(Util):
         #
         ShortSleep = False # Sleep 1 second before retrying DHCP queries.
         ifname=None
-        if not IsWindows():
-            Run("iptables -D INPUT -p udp --dport 68 -j ACCEPT",chk_err=False)  # We supress error logging on error.
-            Run("iptables -I INPUT -p udp --dport 68 -j ACCEPT",chk_err=False)  # We supress error logging on error.
+        Run("iptables -D INPUT -p udp --dport 68 -j ACCEPT",chk_err=False)  # We supress error logging on error.
+        Run("iptables -I INPUT -p udp --dport 68 -j ACCEPT",chk_err=False)  # We supress error logging on error.
 
-        sleepDurations = [0, 5, 10, 30, 60, 60, 60, 60]
+        sleepDurations = [0, 10, 30, 60, 60]
         maxRetry = len(sleepDurations)
         lastTry = (maxRetry - 1)
         for retry in range(0, maxRetry):
@@ -1827,9 +1800,6 @@ class Agent(Util):
         return cert
 
     def Provision(self):
-        if IsWindows():
-            Log("Skipping Provision on Windows")
-            return
         enabled = Config.get("Provisioning.Enabled")
         if enabled != None and enabled.lower().startswith("n"):
             return
@@ -2006,7 +1976,7 @@ class Agent(Util):
                     Run(program + " Shutdown")
                 self.EnvMonitor.ShutdownService()
                 self.LoadBalancerProbeServer_Shutdown()
-                command = ["/sbin/shutdown -hP now", "shutdown /s /t 5"][IsWindows()]
+                command = '/sbin/shutdown -hP now'
                 Run(command)
                 return
 
@@ -2292,9 +2262,6 @@ def RevertVNUMAWorkaround():
     print("Automatic reverting of GRUB configuration is not yet supported. Please edit by hand.")
 
 def Install():
-    if IsWindows():
-        print("ERROR: -install invalid for Windows.")
-        return 1
     os.chmod(sys.argv[0], 0755)
     SwitchCwd()
     requiredDeps = [ "/sbin/route", "/sbin/shutdown" ]
@@ -2374,9 +2341,6 @@ def Install():
     return 0
 
 def Uninstall():
-    if IsWindows():
-        print("ERROR: -uninstall invalid for windows, see waagent_service.exe")
-        return 1
     SwitchCwd()
     for a in RulesFiles:
         if os.path.isfile(GetLastPathElement(a)):
@@ -2432,10 +2396,6 @@ def DeleteRootPassword():
     Log("Root password deleted.")
 
 def Deprovision(force, deluser):
-    if IsWindows():
-        Run(os.environ["windir"] + "\\system32\\sysprep\\sysprep.exe /generalize")
-        return 0
-
     SwitchCwd()
     ovfxml = GetFileContents("ovf-env.xml")
     ovfobj = None
@@ -2460,7 +2420,9 @@ def Deprovision(force, deluser):
     if force == False and not raw_input('Do you want to proceed (y/n)? ').startswith('y'):
         return 1
 
-    Run("service waagent stop")
+    # we don't need to stop the service if the service IsPackagedUbuntu(). 
+    if not IsPackagedUbuntu():
+        Run("service waagent stop")
 
     if deluser == True:
         DeleteAccount(ovfobj.UserName)
@@ -2509,9 +2471,8 @@ def Deprovision(force, deluser):
     return 0
 
 def SwitchCwd():
-    if not IsWindows():
-        CreateDir(LibDir, "root", 0700)
-        os.chdir(LibDir)
+    CreateDir(LibDir, "root", 0700)
+    os.chdir(LibDir)
 
 def Usage():
     print("usage: " + sys.argv[0] + " [-verbose] [-force] [-help|-install|-uninstall|-deprovision[+user]|-version|-serialconsole|-daemon]")
