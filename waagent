@@ -118,7 +118,7 @@ def DetectLinuxDistro():
             if not retcode:
                PackagedForDistro = "Ubuntu"
 
-        except IOError as e:
+        except IOError,e:
             pass
 
 
