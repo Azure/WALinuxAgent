@@ -1,7 +1,14 @@
 WALinuxAgent                                                          Changelog
 |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 ?? ??? 2013, WALinuxAgent 1.3.3
-   . Agent verbose log lines are missing in log when 'verbose' option is used.
+   . Improve pyasn1 python module import
+   . Improve wire protocol version checking, remove superfluous warning
+   . Include support for walking /sys/bus/vmbus/devices for older distributions
+   . Include support for creation of sudoers.d for older distributions
+   . Remove old references to IsWindows() (used for testing)
+   . Fix agent exit if GoalState=None
+   . Fix unhandled socket exception (Util.HttpPost/Util._HttpGet)
+   . Agent verbose log lines are missing in log when 'verbose' option is used
 
 26 Feb 2013, WALinuxAgent 1.3.2
    . Fix name error in _HttpGet/HttpPost exception handlers.
