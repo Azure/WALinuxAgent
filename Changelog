@@ -1,6 +1,6 @@
 WALinuxAgent                                                          Changelog
 |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
-?? ??? 2013, WALinuxAgent 1.3.3
+30 May 2013, WALinuxAgent 1.3.3
    . Improve pyasn1 python module import
    . Improve wire protocol version checking, remove superfluous warning
    . Include support for walking /sys/bus/vmbus/devices for older distributions
