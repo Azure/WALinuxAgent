@@ -43,29 +43,8 @@ import threading
 import time
 import traceback
 import xml.dom.minidom
-    
-GuestAgentName = "WALinuxAgent"
-GuestAgentLongName = "Windows Azure Linux Agent"
-GuestAgentVersion = "WALinuxAgent-1.3.4-PRE"
-ProtocolVersion = "2011-12-31" #WARNING this value is used to confirm the correct fabric protocol.
+import fcntl
 
-Config = None
-LinuxDistro = "UNKNOWN"
-PackagedForDistro = "UNKNOWN"
-Verbose = False
-WaAgent = None
-DiskActivated = False
-Openssl = "openssl"
-Children = []
-
-PossibleEthernetInterfaces = ["seth0", "seth1", "eth0", "eth1"]
-RulesFiles = [ "/lib/udev/rules.d/75-persistent-net-generator.rules",
-               "/etc/udev/rules.d/70-persistent-net.rules" ]
-VarLibDhcpDirectories = ["/var/lib/dhclient", "/var/lib/dhcpcd", "/var/lib/dhcp"]
-EtcDhcpClientConfFiles = ["/etc/dhcp/dhclient.conf", "/etc/dhcp3/dhclient.conf"]
-LibDir = "/var/lib/waagent"
-
-# backport subprocess.check_output if not defined ( for python version < 2.7)
 if not hasattr(subprocess,'check_output'):
     def check_output(*popenargs, **kwargs):
         r"""Backport from subprocess module from python 2.7"""
@@ -92,161 +71,945 @@ if not hasattr(subprocess,'check_output'):
 
     subprocess.check_output=check_output
     subprocess.CalledProcessError=CalledProcessError
+    
+GuestAgentName = "WALinuxAgent"
+GuestAgentLongName = "Windows Azure Linux Agent"
+GuestAgentVersion = "WALinuxAgent-1.4.0-ALPHA"
+ProtocolVersion = "2011-12-31" #WARNING this value is used to confirm the correct fabric protocol.
+
+Config = None
+Verbose = False
+WaAgent = None
+DiskActivated = False
+Openssl = "openssl"
+Children = []
+
+VMM_STARTUP_SCRIPT_NAME='INSTALL'
+VMM_CONFIG_FILE_NAME='linuxosconfiguration.xml'
+
+RulesFiles = [ "/lib/udev/rules.d/75-persistent-net-generator.rules",
+               "/etc/udev/rules.d/70-persistent-net.rules" ]
+VarLibDhcpDirectories = ["/var/lib/dhclient", "/var/lib/dhcpcd", "/var/lib/dhcp"]
+EtcDhcpClientConfFiles = ["/etc/dhcp/dhclient.conf", "/etc/dhcp3/dhclient.conf"]
+LibDir = "/var/lib/waagent"
+
+############################################################
+# BEGIN DISTRO CLASS DEFS
+############################################################
+############################################################    
+#	AbstractDistro
+############################################################    
+class AbstractDistro(object):
+    """
+    AbstractDistro defines a skeleton neccesary for a concrete Distro class.
+
+    Generic methods and attributes are kept here, distribution specific attributes
+    and behavior are to be placed in the concrete child named distroDistro, where
+    distro is the string returned by calling python platform.dist()[0].  So for CentOS
+    the derived class is called 'centosDistro'.
+    """
+
+    def __init__(self):
+        """
+        Generic Attributes go here.  These are based on 'majority rules'.
+        This __init__() may be called or overriden by the child.
+        """
+        self.agent_service_name='waagent'
+        self.selinux=False
+        self.ssh_service_name='ssh'
+        self.ssh_config_file='/etc/ssh/sshd_config'
+        self.hostname_file_path='/etc/hostname'
+        self.dhcp_client_name='dhclient'
+        self.requiredDeps = [ 'route', 'shutdown', 'ssh-keygen', 'useradd'
+                              , 'openssl', 'sfdisk', 'fdisk', 'mkfs', 'chpasswd', 'sed', 'grep', 'sudo' ]
+        self.init_script_file='/etc/init.d/waagent'
+        self.agent_package_name='WALinuxAgent'
+        self.fileBlackList = [ "/root/.bash_history", "/var/log/waagent.log",'/etc/resolv.conf' ]        
+        self.agent_files_to_uninstall = ["/etc/waagent.conf", "/etc/logrotate.d/waagent", "/etc/sudoers.d/waagent"]
+        self.grubKernelBootOptionsFile = '/etc/default/grub'
+        self.grubKernelBootOptionsLine = 'GRUB_CMDLINE_LINUX_DEFAULT='
+    
+    def isSelinuxSystem(self):
+        """
+        Checks and sets self.selinux = True if SELinux is available on system.
+        """
+        if self.selinux == None:
+            if Run("which getenforce",chk_err=False):
+                self.selinux = False
+            else:
+                self.selinux = True
+        return self.selinux
+    
+    def isSelinuxRunning(self):
+        """
+        Calls shell command 'getenforce' and returns True if 'Enforcing'.
+        """
+        if self.isSelinuxSystem():
+            return RunGetOutput("getenforce")[0].startswith("Enforcing")
+        else:
+            return False
+        
+    def setSelinuxEnforce(self,state):
+        """
+        Calls shell command 'setenforce' with 'state' and returns resulting exit code.
+        """
+        if self.isSelinuxSystem():
+            if state: s = '1'
+            else: s='0'
+            return Run("setenforce "+s)
+
+    def setSelinuxContext(self,path,cn):
+        """
+        Calls shell 'chcon' with 'path' and 'cn' context.
+        Returns exit result.
+        """
+        if self.isSelinuxSystem():
+            return Run('chcon ' + cn + ' ' + path)
+        
+    def setHostname(self,name):
+        """
+        Shell call to hostname.
+        Returns resulting exit code.
+        """
+        return Run('hostname ' + name)
+        
+    def publishHostname(self,name):
+        """
+        Set the contents of the hostname file to 'name'.
+        Return 1 on failure.
+        """
+        try:
+            SetFileContents("/etc/hostname", name)
+            return 0
+        except:
+            return 1
+        
+    def installAgentServiceScriptFiles(self):
+        """
+        Create the waagent support files for service intasllation.
+        Called by registerAgentService()
+        Abstract Virtual Function.  Over-ridden in concrete Distro classes.
+        """
+        pass
+
+    def registerAgentService(self):
+        """
+        Calls installAgentService to create service files.
+        Shell exec service registration commands. (e.g. chkconfig --add waagent)
+        Abstract Virtual Function.  Over-ridden in concrete Distro classes.
+        """
+        pass
+    
+    def uninstallAgentService(self):
+        """
+        Call service subsystem to remove waagent script.
+        Abstract Virtual Function.  Over-ridden in concrete Distro classes.
+        """
+        pass
+
+    def unregisterAgentService(self):
+        """
+        Calls self.stopAgentService and call self.uninstallAgentService()
+        """
+        self.stopAgentService()
+        self.uninstallAgentService()
+    
+    def startAgentService(self):
+        """
+        Service call to start the Agent service
+        """
+        return Run('service ' + self.agent_service_name + ' start')
+        
+    def stopAgentService(self):
+        """
+        Service call to stop the Agent service
+        """
+        return Run('service ' + self.agent_service_name + ' stop',False)
+    
+    def restartSshService(self):
+        """
+        Service call to re(start) the SSH service
+        """
+        if not Run("service " + self.ssh_service_name + " status | grep running"):
+            return Run("service " + self.ssh_service_name + " reload")
+        else:
+            return 0
+        
+    def sshDeployPublicKey(self,fprint,path):
+        """
+        Generic sshDeployPublicKey - over-ridden in some concrete Distro classes due to minor differences in openssl packages deployed
+        """
+        error=0
+        SshPubKey = OvfEnv().OpensslToSsh(fprint)
+        if SshPubKey != None:
+            AppendFileContents(path, SshPubKey)
+        else:
+            Error("Failed: " + fprint + ".crt -> " + path)
+            error = 1
+        return error
+    
+    def checkPackageInstalled(self,p):
+        """
+        Query package database for prescence of an installed package.
+        Abstract Virtual Function.  Over-ridden in concrete Distro classes.
+        """
+        pass
+
+    def checkPackageUpdateable(self,p):
+        """
+        Online check if updated package of walinuxagent is available.
+        Abstract Virtual Function.  Over-ridden in concrete Distro classes.
+        """
+        pass
+
+    def deleteRootPassword(self):
+        """
+        Generic root password removal.
+        """
+        filepath="/etc/shadow"
+        ReplaceFileContentsAtomic(filepath,"root:*LOCK*:14600::::::\n"
+                                  + "\n".join(filter(lambda a: not a.startswith("root:"),GetFileContents(filepath).split('\n'))))
+        os.chmod(filepath, 0000)
+        if self.isSelinuxSystem():
+            self.setSelinuxContext(filepath,'chcon system_u:object_r:shadow_t:s0')
+            Log("Root password deleted.")
+        return 0
+    
+    def load_ata_piix(self):
+        """
+        Generic function to load ata_piix.ko for use with ATAPI CDROM
+        used during priovisioning.
+        """
+        retcode,krn=RunGetOutput('uname -r')
+        if retcode:
+            Error("Unable to provision: Failed to call uname -a")
+            return 1
+        krn_pth='/lib/modules/'+krn.strip('\n')+'/kernel/drivers/ata/ata_piix.ko'
+        if not os.path.isfile(krn_pth):
+            Error("Unable to provision: Failed to locate ata_piix.ko")
+            return 1
+        retcode,output=RunGetOutput('insmod ' + krn_pth)
+        if retcode is not 0:
+            if retcode == 1 and 'File Exists' in output:
+                Error('ata_piix module is already loaded')
+                return 0
+            else:
+                Error("Unable to provision: Failed to insmod " + krn_pth)
+                return 1
+        Log("Provision: Loaded " + krn_pth + " driver for ATAPI CD-ROM")
+        return 0
+    
+    def unload_ata_piix(self):
+        """
+        Generic function to remove ata_piix.ko.
+        """
+        return Run('rmmod ata_piix.ko')
+        
+    def deprovisionWarnUser(self):
+        """
+        Generic user warnings used at deprovision.
+        """
+        print("WARNING! Nameserver configuration in /etc/resolv.conf will be deleted.")
+
+    def deprovisionDeleteFiles(self):
+        """
+        Files to delete when VM is deprovisioned
+        """
+        for a in VarLibDhcpDirectories:
+            Run("rm -f " + a + "/*")
+
+        # Clear LibDir, remove nameserver and root bash history
+        
+        for f in os.listdir(LibDir) + self.fileBlackList:
+            try:
+                os.remove(f)
+            except:
+                pass
+        return 0
+    
+    def uninstallDeleteFiles(self):
+        """
+        Files to delete when agent is uninstalled.
+        """
+        for f in self.agent_files_to_uninstall:
+            try:
+                os.remove(f)
+            except:
+                pass
+        return 0
+    
+    def checkDependencies(self):
+        """
+        Generic dependency check.
+        Return 1 unless all dependencies are satisfied.
+        """
+        if self.checkPackageInstalled('NetworkManager'):
+            Error(GuestAgentLongName + " is not compatible with network-manager.")
+            return 1
+        try:
+            m= __import__('pyasn1')
+        except ImportError:
+            Error(GuestAgentLongName + " requires python-pyasn1 for your Linux distribution.")
+            return 1
+        for a in self.requiredDeps:
+            if Run("which " + a + " > /dev/null 2>&1",chk_err=False):
+                Error("Missing required dependency: " + a)
+                return 1
+        return 0
+            
+############################################################    
+#	SuSEDistro
+############################################################    
+suse_init_file = """\
+#! /bin/sh
+
+### BEGIN INIT INFO
+# Provides: WindowsAzureLinuxAgent
+# Required-Start: $network sshd
+# Required-Stop: $network sshd
+# Default-Start: 3 5
+# Default-Stop: 0 1 2 6
+# Description: Start the WindowsAzureLinuxAgent
+### END INIT INFO
+
+WAZD_BIN=/usr/sbin/waagent
+test -x $WAZD_BIN || exit 5
+
+case "$1" in
+    start)
+        echo "Starting WindowsAzureLinuxAgent"
+        ## Start daemon with startproc(8). If this fails
+        ## the echo return value is set appropriate.
+
+        startproc -f $WAZD_BIN -daemon
+        exit $?
+        ;;
+    stop)
+        echo "Shutting down WindowsAzureLinuxAgent"
+        ## Stop daemon with killproc(8) and if this fails
+        ## set echo the echo return value.
+
+        killproc -p /var/run/waagent.pid $WAZD_BIN
+        exit $?
+        ;;
+    try-restart)
+        ## Stop the service and if this succeeds (i.e. the
+        ## service was running before), start it again.
+        $0 status >/dev/null &&  $0 restart
+        ;;
+    restart)
+        ## Stop the service and regardless of whether it was
+        ## running or not, start it again.
+        $0 stop
+        $0 start
+        ;;
+    force-reload|reload)
+        ;;
+    status)
+        echo -n "Checking for service WindowsAzureLinuxAgent "
+        ## Check status with checkproc(8), if process is running
+        ## checkproc will return with exit status 0.
+
+        checkproc -p $WAZD_PIDFILE $WAZD_BIN
+        exit $?
+        ;;
+    probe)
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|status|try-restart|restart|force-reload|reload}"
+        exit 1
+        ;;
+esac
+"""
+class SuSEDistro(AbstractDistro):
+    """
+    SuSE Distro concrete class
+    Put SuSE specific behavior here...
+    """
+    def __init__(self):
+        super(SuSEDistro,self).__init__()
+        self.ssh_service_name='sshd'
+        self.kernel_boot_options_file='/boot/grub/menu.lst'
+        self.hostname_file_path='/etc/HOSTNAME'
+        self.requiredDeps += [ "/sbin/insserv" ]
+        self.init_file=suse_init_file
+        self.dhcp_client_name='dhcpd'
+        self.grubKernelBootOptionsFile = '/boot/grub/menu.lst'
+        self.grubKernelBootOptionsLine = 'kernel'
+
+    def checkPackageInstalled(self,p):
+        if Run("zypper se " + p,chk_err=False):
+            return 1
+        else:
+            return 0
+
+    def checkPackageUpdateable(self,p):
+        if Run("zypper list-updates | grep " + p,chk_err=False):
+            return 1
+        else:
+            return 0
+        
+
+    def installAgentServiceScriptFiles(self):
+        try:
+            SetFileContents(self.init_script_file, self.init_file)
+            os.chmod(self.init_script_file, 0755)
+        except:
+            pass
+        
+    def registerAgentService(self):
+        self.installAgentServiceScriptFiles()
+        return Run('insserv ' + self.agent_service_name)
+
+    def uninstallAgentService(self):
+        return Run('insserv -r ' + self.agent_service_name)
+
+    def unregisterAgentService(self):
+        self.stopAgentService()
+        return self.uninstallAgentService()
+    
+   
+############################################################    
+#	centosDistro
+############################################################    
+
+centos_init_file= """\
+#!/bin/bash
+#
+# Init file for WindowsAzureLinuxAgent.
+#
+# chkconfig: 2345 60 80
+# description: WindowsAzureLinuxAgent
+#
+
+# source function library
+. /etc/rc.d/init.d/functions
+
+RETVAL=0
+FriendlyName="WindowsAzureLinuxAgent"
+WAZD_BIN=/usr/sbin/waagent
+
+start()
+{
+    echo -n $"Starting $FriendlyName: "
+    $WAZD_BIN -daemon &
+}
+
+stop()
+{
+    echo -n $"Stopping $FriendlyName: "
+    killproc -p /var/run/waagent.pid $WAZD_BIN
+    RETVAL=$?
+    echo
+    return $RETVAL
+}
+
+case "$1" in
+    start)
+        start
+        ;;
+    stop)
+        stop
+        ;;
+    restart)
+        stop
+        start
+        ;;
+    reload)
+        ;;
+    report)
+        ;;
+    status)
+        status $WAZD_BIN
+        RETVAL=$?
+        ;;
+    *)
+        echo $"Usage: $0 {start|stop|restart|status}"
+        RETVAL=1
+esac
+exit $RETVAL
+"""
+
+class centosDistro(AbstractDistro):
+    """
+    CentOS Distro concrete class
+    Put CentOS specific behavior here...
+    """
+    def __init__(self):
+        super(centosDistro,self).__init__()
+        self.ssh_service_name='sshd'
+        self.hostname_file_path=None
+        self.init_file=centos_init_file
+        self.grubKernelBootOptionsFile = '/boot/grub/menu.lst'
+        self.grubKernelBootOptionsLine = 'kernel'
+
+    def setHostname(self,name):
+        return Run('hostname ' + name)
+
+    def publishHostname(self,name):
+        filepath = "/etc/sysconfig/network"
+        if os.path.isfile(filepath):
+            ReplaceFileContentsAtomic(filepath, "HOSTNAME=" + name + "\n"
+                + "\n".join(filter(lambda a: not a.startswith("HOSTNAME"), GetFileContents(filepath).split('\n'))))
+
+        for ethernetInterface in GetFirstActiveNetworkInterfaceNonLoopback()[0]:
+            filepath = "/etc/sysconfig/network-scripts/ifcfg-" + ethernetInterface
+            if os.path.isfile(filepath):
+                ReplaceFileContentsAtomic(filepath, "DHCP_HOSTNAME=" + name + "\n"
+                    + "\n".join(filter(lambda a: not a.startswith("DHCP_HOSTNAME"), GetFileContents(filepath).split('\n'))))
+        return 0
+
+    def installAgentServiceScriptFiles(self):
+        SetFileContents(self.init_script_file, self.init_file)
+        os.chmod(self.init_script_file, 0644)
+        return 0
+
+    def registerAgentService(self):
+        self.installAgentServiceScriptFiles()
+        return Run('chkconfig --add waagent')
+   
+    def uninstallAgentService(self):
+        return Run('chkconfig --del ' + self.agent_service_name)
+
+    def unregisterAgentService(self):
+        self.stopAgentService()
+        return self.uninstallAgentService()
+    
+    def checkPackageInstalled(self,p):
+        if Run("yum list installed " + p,chk_err=False):
+            return 0
+        else:
+            return 1
+
+    def checkPackageUpdateable(self,p):
+        if Run("yum check-update | grep "+ p,chk_err=False):
+            return 1
+        else:
+            return 0
+
+############################################################    
+#	debianDistro
+############################################################    
+debian_init_file = """\
+#!/bin/sh
+### BEGIN INIT INFO
+# Provides:          WindowsAzureLinuxAgent
+# Required-Start:    $network $syslog
+# Required-Stop:     $network $syslog
+# Should-Start:      $network $syslog
+# Should-Stop:       $network $syslog
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: WindowsAzureLinuxAgent
+# Description:       WindowsAzureLinuxAgent
+### END INIT INFO
+
+. /lib/lsb/init-functions
+
+OPTIONS="-daemon"
+WAZD_BIN=/usr/sbin/waagent
+WAZD_PID=/var/run/waagent.pid
+
+case "$1" in
+    start)
+        log_begin_msg "Starting WindowsAzureLinuxAgent..."
+        pid=$( pidofproc $WAZD_BIN )
+        if [ -n "$pid" ] ; then
+              log_begin_msg "Already running."
+              log_end_msg 0
+              exit 0
+        fi
+        start-stop-daemon --start --quiet --oknodo --background --exec $WAZD_BIN -- $OPTIONS
+        log_end_msg $?
+        ;;
+
+    stop)
+        log_begin_msg "Stopping WindowsAzureLinuxAgent..."
+        start-stop-daemon --stop --quiet --oknodo --pidfile $WAZD_PID
+        ret=$?
+        rm -f $WAZD_PID
+        log_end_msg $ret
+        ;;
+    force-reload)
+        $0 restart
+        ;;
+    restart)
+        $0 stop
+        $0 start
+        ;;
+    status)
+        status_of_proc $WAZD_BIN && exit 0 || exit $?
+        ;;
+    *)
+        log_success_msg "Usage: /etc/init.d/waagent {start|stop|force-reload|restart|status}"
+        exit 1
+        ;;
+esac
+
+exit 0
+"""
+
+class debianDistro(AbstractDistro):
+    """
+    debian Distro concrete class
+    Put debian specific behavior here...
+    """
+    def __init__(self):
+        super(debianDistro,self).__init__()
+        self.requiredDeps += [ "/usr/sbin/update-rc.d" ]
+        self.init_file=debian_init_file
+        self.agent_package_name='walinuxagent'
+        self.dhcp_client_name='dhclient3'
+        if self.checkPackageInstalled('walinuxagent'):
+            self.agent_service_name='walinuxagent'
+
+    def setHostname(self,name):
+        return Run('hostname ' + name)
+
+    def publishHostname(self,name):
+        r=super(debianDistro,self).publishHostname(name)
+        if r == 0:
+            try:
+                r=ReplaceFileContentsAtomic('/etc/dhcp/dhclient.conf', "send host-name \"" + name + "\";\n"
+                                          + "\n".join(filter(lambda a: not a.startswith("send host-name"), GetFileContents('/etc/dhcp/dhclient.conf').split('\n'))))
+            except:
+                return 1
+        return r
+        
+    def checkPackageInstalled(self,p):
+        """
+        Check that the package is installed.
+        Return 1 if installed, 0 if not installed.
+        This method of using dpkg-query
+        allows wildcards to be present in the
+        package name.
+        """
+        if not Run("dpkg-query -W -f='${Status}\n' '" + p + "' | grep installed 2>&1",chk_err=False):
+            return 1
+        else:
+            return 0
+        
+    def checkDependencies(self):
+        """
+        Debian dependency check.  python-pyasn1 is NOT needed.
+        Return 1 unless all dependencies are satisfied.
+        NOTE: using network*manager will catch either package name in Ubuntu or debian.
+        """
+        if self.checkPackageInstalled('network*manager'):
+            Error(GuestAgentLongName + " is not compatible with network-manager.")
+            return 1
+        for a in self.requiredDeps:
+            if Run("which " + a + " > /dev/null 2>&1",chk_err=False):
+                Error("Missing required dependency: " + a)
+                return 1
+        return 0
+
+    def checkPackageUpdateable(self,p):
+        if Run("apt-get update ; apt-get upgrade -us | grep " + p,chk_err=False):
+            return 1
+        else:
+            return 0
+            
+    def installAgentServiceScriptFiles(self):
+        """
+        If we are packaged - the service name is walinuxagent, do nothing.
+        """
+        if self.agent_service_name == 'walinuxagent':
+            return 0
+        try:
+            SetFileContents(self.init_script_file, self.init_file)
+            os.chmod(self.init_script_file, 0644)
+        except OSError, e:
+            ErrorWithPrefix('installAgentServiceScriptFiles','Exception: '+str(e)+' occured creating ' + self.init_script_file)
+            return 1
+        return 0
+    
+    def registerAgentService(self):
+        return self.installAgentServiceScriptFiles()
+
+    def uninstallAgentService(self):
+        return Run('update-rc.d -f ' + self.agent_service_name + ' remove')
+
+    def unregisterAgentService(self):
+        self.stopAgentService()
+        return self.uninstallAgentService()
+    
+    def sshDeployPublicKey(self,fprint,path):
+        """
+        This is Ubuntu specific from Class OvfEnv.Provision in the original agent.
+        """
+        if Run("ssh-keygen -i -m PKCS8 -f " + fprint + " >> " + path):
+            return 1
+        else :
+            return 0
+        
+############################################################    
+#	UbuntuDistro
+############################################################    
+ubuntu_upstart_file = """\
+#walinuxagent - start Windows Azure agent
+
+description "walinuxagent"
+author "Ben Howard <ben.howard@canonical.com>"
+
+start on (filesystem and started rsyslog)
+
+pre-start script
+
+	WALINUXAGENT_ENABLED=1
+    [ -r /etc/default/walinuxagent ] && . /etc/default/walinuxagent
+
+    if [ "$WALINUXAGENT_ENABLED" != "1" ]; then
+        exit 1
+    fi
+
+    if [ ! -x /usr/sbin/waagent ]; then
+        exit 1
+    fi
+
+    #Load the udf module
+    modprobe -b udf
+end script
+
+exec /usr/sbin/waagent -daemon
+"""
+
+class UbuntuDistro(debianDistro):
+    """
+    Ubuntu Distro concrete class
+    Put Ubuntu specific behavior here...
+    """
+    def __init__(self):
+        super(UbuntuDistro,self).__init__()
+        self.init_script_file='/etc/init/waagent.conf'
+        self.init_file=ubuntu_upstart_file
+        self.fileBlackList = [ "/root/.bash_history", "/var/log/waagent.log"]
+        self.dhcp_client_name='dhclient'
+        if self.checkPackageInstalled('walinuxagent'):
+            self.agent_service_name='walinuxagent'
+        
+    def registerAgentService(self):
+        return self.installAgentServiceScriptFiles()
+
+    def startAgentService(self):
+        """
+        Use upstart syntax.
+        """
+        return Run('start ' + self.agent_service_name)
+        
+    def stopAgentService(self):
+        """
+        Use upstart syntax.
+        """
+        return Run('stop ' + self.agent_service_name)
+    
+    def uninstallAgentService(self):
+        """
+        If we are packaged - the service name is walinuxagent, do nothing.
+        """
+        if self.agent_service_name == 'walinuxagent':
+            return 0
+        os.remove('/etc/init/' + self.agent_service_name + '.conf')
+
+    def unregisterAgentService(self):
+        """
+        If we are packaged - the service name is walinuxagent, do nothing.
+        """
+        if self.agent_service_name == 'walinuxagent':
+            return
+        self.stopAgentService()
+        return self.uninstallAgentService()
+    
+    def deprovisionWarnUser(self):
+        """
+        Ubuntu specific warning string from Deprovision.
+        """
+        print("WARNING! Nameserver configuration in /etc/resolvconf/resolv.conf.d/{tail,originial} will be deleted.")
+
+    def deprovisionDeleteFiles(self):
+        """
+        Ubuntu uses resolv.conf by default, so removing /etc/resolv.conf will
+        break resolvconf. Therefore, we check to see if resolvconf is in use,
+        and if so, we remove the resolvconf artifacts.
+        """
+        if os.path.realpath('/etc/resolv.conf') != '/run/resolvconf/resolv.conf':
+            Log("resolvconf is not configured. Removing /etc/resolv.conf")
+            self.fileBlackList.append('/etc/resolv.conf')
+        else:
+            Log("resolvconf is enabled; leaving /etc/resolv.conf intact")
+            resolvConfD = '/etc/resolvconf/resolv.conf.d/'
+            self.fileBlackList.extend([resolvConfD + 'tail', resolvConfD + 'originial'])
+        for f in os.listdir(LibDir)+self.fileBlackList:
+            try:
+                os.remove(f)
+            except:
+                pass
+        return 0
+
+
+############################################################    
+#	LinuxMintDistro
+############################################################    
+
+class LinuxMintDistro(UbuntuDistro):
+    """
+    LinuxMint Distro concrete class
+    Put LinuxMint specific behavior here...
+    """
+    def __init__(self):
+        super(LinuxMintDistro,self).__init__()
+
+############################################################
+# END DISTRO CLASS DEFS
+############################################################  
 
 # This lets us index into a string or an array of integers transparently.
 def Ord(a):
+    """
+    Allows indexing into a string or an array of integers transparently.
+    Generic utility function.
+    """
     if type(a) == type("a"):
         a = ord(a)
     return a
 
 def IsLinux():
+    """
+    Returns True if platform is Linux.
+    Generic utility function.
+    """
     return (platform.uname()[0] == "Linux")
 
-def DetectLinuxDistro():
-    global LinuxDistro
-    global PackagedForDistro
-    if os.path.isfile("/etc/redhat-release"):
-        LinuxDistro = "RedHat"
-        return True
-    if os.path.isfile("/etc/lsb-release") and "Ubuntu" in GetFileContents("/etc/lsb-release"):
-        LinuxDistro = "Ubuntu"
-
-        # Should this run as if it is packaged Ubuntu?
-        try:
-            cmd="dpkg -S %s" % os.path.basename(__file__)
-            retcode, krn = RunGetOutput(cmd,chk_err=False)
-            if not retcode:
-               PackagedForDistro = "Ubuntu"
-
-        except IOError,e:
-            pass
-
-
-        return True
-    if os.path.isfile("/etc/debian_version"):
-        LinuxDistro = "Debian"
-        return True
-    if os.path.isfile("/etc/SuSE-release"):
-        LinuxDistro = "Suse"
-        return True
-    return False
-
-def IsRedHat():
-    return "RedHat" in LinuxDistro
-
-def IsUbuntu():
-    return "Ubuntu" in LinuxDistro
-
-def IsPackagedUbuntu():
-    return "Ubuntu" in PackagedForDistro
-
-def IsDebian():
-    return IsUbuntu() or "Debian" in LinuxDistro
-
-def IsSuse():
-    return "Suse" in LinuxDistro
-
-def IsPackaged():
-    if PackagedForDistro == "UNKNOWN":
-        return False
-
-    return True
-
-def UsesRpm():
-    return IsRedHat() or IsSuse()
-
-def UsesDpkg():
-    return IsDebian()
-
 def GetLastPathElement(path):
+    """
+    Similar to basename.
+    Generic utility function.
+    """
     return path.rsplit('/', 1)[1]
 
 def GetFileContents(filepath):
-    file = None
-    try:
-        file = open(filepath)
-    except:
-        return None
-    if file == None:
-        return None
-    try:
-        return file.read()
-    finally:
-        file.close()
+    """
+    Read and return contents of 'filepath'.
+    """
+    with open(filepath, "r") as F :
+        c=F.read()
+    return c
 
 def SetFileContents(filepath, contents):
-    file = open(filepath, "w")
-    try:
-        file.write(contents)
-    finally:
-        file.close()
+    """
+    Write 'contents' to 'filepath'.
+    """
+    with open(filepath, "w") as F :
+        F.write(contents)
+    return 0
 
 def AppendFileContents(filepath, contents):
-    file = open(filepath, "a")
-    try:
-        file.write(contents)
-    finally:
-        file.close()
+    """
+    Append 'contents' to 'filepath'.
+    """
+    with open(filepath, "a") as F :
+        F.write(contents)
+    return 0
 
 def ReplaceFileContentsAtomic(filepath, contents):
+    """
+    Write 'contents' to 'filepath' by creating a temp file, and replacing origina.
+    """
     handle, temp = tempfile.mkstemp(dir = os.path.dirname(filepath))
     try:
         os.write(handle, contents)
+    except IOError, e:
+        ErrorWithPrefix('ReplaceFileContentsAtomic','Writing to file ' + filepath + ' Exception is ' + str(e))
+        return 1
     finally:
         os.close(handle)
     try:
         os.rename(temp, filepath)
-        return
-    except:
-        pass
-    os.remove(filepath)
-    os.rename(temp, filepath)
+        return 0
+    except IOError, e:
+        ErrorWithPrefix('ReplaceFileContentsAtomic','Renaming ' + temp+ ' to ' + filepath + ' Exception is ' + str(e))
+    try:
+        os.remove(filepath)
+    except IOError, e:
+        ErrorWithPrefix('ReplaceFileContentsAtomic','Removing '+ filepath + ' Exception is ' + str(e))
+    try:
+        os.rename(temp,filepath)
+    except IOError, e:
+        ErrorWithPrefix('ReplaceFileContentsAtomic','Removing '+ filepath + ' Exception is ' + str(e))
+        return 1
+    return 0
 
 def GetLineStartingWith(prefix, filepath):
+    """
+    Return line from 'filepath' if the line startswith 'prefix'
+    """
     for line in GetFileContents(filepath).split('\n'):
         if line.startswith(prefix):
             return line
     return None
 
 def Run(cmd,chk_err=True):
+    """
+    Calls RunGetOutput on 'cmd', returning only the return code.
+    If chk_err=True then errors will be reported in the log.
+    If chk_err=False then errors will be suppressed from the log.
+    """
     retcode,out=RunGetOutput(cmd,chk_err)
     return retcode
 
 def RunGetOutput(cmd,chk_err=True):
+    """
+    Wrapper for subprocess.check_output.
+    Execute 'cmd'.  Returns return code and STDOUT, trapping expected exceptions.
+    Reports exceptions to Error if chk_err parameter is True
+    """
     LogIfVerbose(cmd)
     try:                                     
         output=subprocess.check_output(cmd,stderr=subprocess.STDOUT,shell=True)
     except subprocess.CalledProcessError,e :
         if chk_err :
-            Error('CalledProcessError.  Error Code: ' + str(e.returncode)  )
-            Error('CalledProcessError.  Command string: "' + e.cmd + '"')
-            Error('CalledProcessError.  Command result: "' + e.output[:-1] + '"')
+            Error('CalledProcessError.  Error Code is ' + str(e.returncode)  )
+            Error('CalledProcessError.  Command string was ' + e.cmd  )
+            Error('CalledProcessError.  Command result was ' + e.output[:-1])
         return e.returncode,e.output
     return 0,output
 
 def RunSendStdin(cmd,input,chk_err=True):
+    """
+    Wrapper for subprocess.Popen.
+    Execute 'cmd', sending 'input' to STDIN of 'cmd'.
+    Returns return code and STDOUT, trapping expected exceptions.
+    Reports exceptions to Error if chk_err parameter is True
+    """
     LogIfVerbose(cmd+input)
     try:                                     
         me=subprocess.Popen([cmd], shell=True, stdin=subprocess.PIPE,stderr=subprocess.STDOUT,stdout=subprocess.PIPE)
         output=me.communicate(input)
     except OSError,e :
         if chk_err :
-            Error('CalledProcessError.  Error Code:' + str(me.returncode))
-            Error('CalledProcessError.  Command string:"' + cmd  + '"' )
-            Error('CalledProcessError.  Command result:"' + output[:-1] + '"')
+            Error('CalledProcessError.  Error Code is ' + str(me.returncode)  )
+            Error('CalledProcessError.  Command string was ' + cmd  )
+            Error('CalledProcessError.  Command result was ' + output[:-1])
             return 1,output[0]
     if me.returncode is not 0 and chk_err is True:
-            Error('CalledProcessError.  Error Code:' + str(me.returncode))
-            Error('CalledProcessError.  Command string:"' + cmd  + '"' )
-            Error('CalledProcessError.  Command result:"' + (output[0])[:-1] + '"')
+            Error('CalledProcessError.  Error Code is ' + str(me.returncode)  )
+            Error('CalledProcessError.  Command string was ' + cmd  )
+            Error('CalledProcessError.  Command result was ' + (output[0])[:-1])
     return me.returncode,output[0]
 
 def GetNodeTextData(a):
+    """
+    Filter non-text nodes from DOM tree
+    """
     for b in a.childNodes:
         if b.nodeType == b.TEXT_NODE:
             return b.data
 
 def GetHome():
+    """
+    Attempt to guess the $HOME location.
+    Return the path string.
+    """
     home = None
     try:
         home = GetLineStartingWith("HOME", "/etc/default/useradd").split('=')[1].strip()
@@ -257,6 +1020,9 @@ def GetHome():
     return home
 
 def ChangeOwner(filepath, user):
+    """
+    Lookup user.  Attempt chown 'filepath' to 'user'.
+    """
     p = None
     try:
         p = pwd.getpwnam(user)
@@ -266,6 +1032,10 @@ def ChangeOwner(filepath, user):
         os.chown(filepath, p[2], p[3])
 
 def CreateDir(dirpath, user, mode):
+    """
+    Attempt os.makedirs, catch all exceptions.
+    Call ChangeOwner afterwards.
+    """
     try:
         os.makedirs(dirpath, mode)
     except:
@@ -273,6 +1043,11 @@ def CreateDir(dirpath, user, mode):
     ChangeOwner(dirpath, user)
 
 def CreateAccount(user, password, expiration, thumbprint):
+    """
+    Create a user account, with 'user', 'password', 'expiration', ssh keys
+    and sudo permissions.
+    Returns None if successful, error string on failure.
+    """
     userentry = None
     try:
         userentry = pwd.getpwnam(user)
@@ -331,6 +1106,11 @@ def CreateAccount(user, password, expiration, thumbprint):
     return None
 
 def DeleteAccount(user):
+    """
+    Delete the 'user'.
+    Clear utmp first, to avoid error.
+    Removes the /etc/sudoers.d/waagent file.
+    """
     userentry = None
     try:
         userentry = pwd.getpwnam(user)
@@ -350,31 +1130,29 @@ def DeleteAccount(user):
         Error("DeleteAccount: " + user + " is a system user. Will not delete account.")
         return
     Run("> /var/run/utmp") #Delete utmp to prevent error if we are the 'user' deleted
-    Run("userdel -f -r " + user,chk_err=False)
+    Run("userdel -f -r " + user)
     try:
         os.remove("/etc/sudoers.d/waagent")
     except:
         pass
     return
 
-def ReloadSshd():
-    name = None
-    if IsRedHat() or IsSuse():
-        name = "sshd"
-    if IsDebian():
-        name = "ssh"
-    if name == None:
-        return
-    if not Run("service " + name + " status | grep running"):
-        Run("service " + name + " reload")
-
 def IsInRangeInclusive(a, low, high):
+    """
+    Return True if 'a' in 'low' <= a >= 'high'
+    """
     return (a >= low and a <= high)
 
 def IsPrintable(ch):
+    """
+    Return True if character is displayable.
+    """
     return IsInRangeInclusive(ch, Ord('A'), Ord('Z')) or IsInRangeInclusive(ch, Ord('a'), Ord('z')) or IsInRangeInclusive(ch, Ord('0'), Ord('9'))
 
 def HexDump(buffer, size):
+    """
+    Return Hex formated dump of a 'buffer' of 'size'.
+    """
     if size < 0:
         size = len(buffer)
     result = ""
@@ -404,112 +1182,153 @@ def HexDump(buffer, size):
     return result
 
 def ThrottleLog(counter):
-    # Log everything up to 10, every 10 up to 100, then every 100.
+    """
+    Log everything up to 10, every 10 up to 100, then every 100.
+    """
     return (counter < 10) or ((counter < 100) and ((counter % 10) == 0)) or ((counter % 100) == 0)
 
-def Logger():
-    class T(object):
-        def __init__(self):
-            self.File = None
-            self.Con = None
-            
-    self = T()
+def LogToFile(message,file_path='/var/log/waagent.log'):
+    """
+    Write 'message' to logfile.
+    """
+    with open(file_path, "a") as F :
+        F.write(message + "\n")
+        F.close()
+        
+def LogToCon(message,con_path='/dev/console'):
+    """
+    Write 'message' to /dev/console.
+    This supports serial port logging if the /dev/console
+    is redirected to ttys0 in kernel boot options.
+    """
+    with open(con_path, "a") as C :
+        C.write(message + "\n")
+        C.close()
+        
+def Log(message,file_path=''):
+    """
+    Standard Log function.
+    Logs to logfile, and /dev/console.
+    """
+    LogWithPrefix("", message,file_path)
 
-    def LogToFile(message):
-        FilePath = '/var/log/waagent.log'
-        if not os.path.isfile(FilePath) and self.File != None:
-            self.File.close()
-            self.File = None
-        if self.File == None:
-            self.File = open(FilePath, "a")
-        self.File.write(message + "\n")
-        self.File.flush()
-
-    def LogToCon(message):
-        ConPath = '/dev/console'
-        if self.Con == None:
-            self.Con = open(ConPath, "a")
-        self.Con.write(message + "\n")
-        self.Con.flush()
-
-    def Log(message):
-        LogWithPrefix("", message)
-
-    def LogWithPrefix(prefix, message, to_console=True):
-        t = time.localtime()
-        t = "%04u/%02u/%02u %02u:%02u:%02u " % (t.tm_year, t.tm_mon, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec)
-        t += prefix
-        for line in message.split('\n'):
-            line = t + line
-            LogToFile(line)
-            if to_console:
-                LogToCon(line)
-            
-    return Log, LogWithPrefix
-
-Log, LogWithPrefix = Logger()
-
+def LogWithPrefix(prefix, message, file_path, to_console=True):
+    """
+    Log to logfile.  if to_console = True then log to conosle.
+    Prefix each line of 'message' with current time+'prefix'.
+    """
+    t = time.localtime()
+    t = "%04u/%02u/%02u %02u:%02u:%02u " % (t.tm_year, t.tm_mon, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec)
+    t += prefix
+    for line in message.split('\n'):
+        line = t + line
+        LogToFile(line,file_path)
+        if to_console:
+            LogToCon(line)
+        
 def NoLog(message):
+    """
+    Don't Log.
+    """
     pass
 
-def LogIfVerbose(message):
+def LogIfVerbose(message,file_path=''):
+    """
+    Only log 'message' if global Verbose is True.
+    Verbose messages are assumed to be undesiarable in the
+    serial logs, so do not send the verbose logging to /dev/console
+    """
     if Verbose == True:
-        LogWithPrefix('',message,to_console=False)
+        LogWithPrefix('',message,file_path,to_console=False)
 
-def LogWithPrefixIfVerbose(prefix, message):
+def LogWithPrefixIfVerbose(prefix, message,file_path=''):
+    """
+    Only log 'message' if global Verbose is True.
+    Log to logfile, ignoring /dev/console
+    Prefix each line of 'message' with current time+'prefix'.
+    """
     if Verbose == True:
-        LogWithPrefix(prefix, message,to_console=False)
+        LogWithPrefix(prefix, message,file_path,to_console=False)
 
-def Warn(message):
-    LogWithPrefix("WARNING:", message)
+def Warn(message,file_path=''):
+    """
+    Prepend the text "WARNING:" to the prefix for each line in 'message'.
+    """
+    LogWithPrefix("WARNING:", message,file_path)
 
-def Error(message):
-    ErrorWithPrefix("", message)
+def Error(message,file_path=''):
+    """
+    Call ErrorWithPrefix(message).
+    """
+    ErrorWithPrefix("", message,file_path)
 
-def ErrorWithPrefix(prefix, message):
-    LogWithPrefix("ERROR:", message)
-
-def Linux_ioctl_GetIpv4Address(ifname):
-    import fcntl
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    return socket.inet_ntoa(fcntl.ioctl(s.fileno(), 0x8915, struct.pack('256s', ifname[:15]))[20:24])
+def ErrorWithPrefix(prefix, message,file_path):
+    """
+    Prepend the text "ERROR:" to the prefix for each line in 'message'.
+    Errors written to logfile, and /dev/console
+    """
+    LogWithPrefix("ERROR:", message,file_path)
 
 def Linux_ioctl_GetInterfaceMac(ifname):
-    import fcntl
+    """
+    Return the mac-address bound to the socket.
+    """
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     info = fcntl.ioctl(s.fileno(), 0x8927,  struct.pack('256s', ifname[:15]))
     return ''.join(['%02X' % Ord(char) for char in info[18:24]])
 
+def GetFirstActiveNetworkInterfaceNonLoopback():
+    """
+    Return the interface name, and ip addr of the
+    first active non-loopback interface.
+    """
+    expected=16 # how many devices should I expect...
+    struct_size=40 # for 64bit the size is 40 bytes
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    buff=array.array('B', '\0' * (expected*struct_size))
+    retsize=(struct.unpack('iL', fcntl.ioctl(s.fileno(), 0x8912, struct.pack('iL',expected*struct_size,buff.buffer_info()[0]))))[0]
+    if retsize == (expected*struct_size) :
+        Warn('SIOCGIFCONF returned more than ' + str(expected) + ' up network interfaces.')
+    s=buff.tostring()
+    for i in range(0,struct_size*expected,struct_size):
+        iface=s[i:i+16].split('\0', 1)[0]
+        if iface == 'lo':
+            continue
+        else :
+            break
+    return ( iface, socket.inet_ntoa(s[i+20:i+24]))
+
+
 def GetIpv4Address():
-    if IsLinux():
-        for ifname in PossibleEthernetInterfaces:
-            try:
-                return Linux_ioctl_GetIpv4Address(ifname)
-            except IOError, e:
-                pass
-    else:
-        try:
-            return socket.gethostbyname(socket.gethostname())
-        except Exception, e:
-            ErrorWithPrefix("GetIpv4Address:", str(e))
-            ErrorWithPrefix("GetIpv4Address:", traceback.format_exc())
+    """
+    Return the ip of the 
+    first active non-loopback interface.
+    """
+    iface,addr=GetFirstActiveNetworkInterfaceNonLoopback()
+    return addr
 
 def HexStringToByteArray(a):
+    """
+    Return hex string packed into a binary struct.
+    """
     b = ""
     for c in range(0, len(a) / 2):
         b += struct.pack("B", int(a[c * 2:c * 2 + 2], 16))
     return b
 
 def GetMacAddress():
-    for ifname in PossibleEthernetInterfaces:
-        try:
-            a = Linux_ioctl_GetInterfaceMac(ifname)
-            break
-        except IOError, e:
-            pass
+    """
+    Convienience function, returns mac addr bound to
+    first non-loobback interface.
+    """
+    ifname=GetFirstActiveNetworkInterfaceNonLoopback()[0]
+    a = Linux_ioctl_GetInterfaceMac(ifname)
     return HexStringToByteArray(a)
 
 def DeviceForIdePort(n):
+    """
+    Return device name attached to ide port 'n'.
+    """
     if n > 3:
         return None
     g0 = "00000000"
@@ -534,7 +1353,16 @@ def DeviceForIdePort(n):
     return device
 
 class Util(object):
+    """
+    Http communication class.
+    Base of GoalState, and Agent classes.
+    """
     def _HttpGet(self, url, headers):
+        """
+        Do HTTP get on 'url' with 'headers'.
+        On error, sleep 10 and maxRetry times.
+        Return the output buffer or None.
+        """
         LogIfVerbose("HttpGet(" + url + ")")
         maxRetry = 2
         if url.startswith("http://"):
@@ -554,7 +1382,7 @@ class Util(object):
                     request = httpConnection.request("GET", url, None, headers)
                 response = httpConnection.getresponse()
                 strStatus = str(response.status)
-            except  httplib.HTTPException, e:
+            except httplib.HTTPException, e:
                 Error('HTTPException ' + e.message + ' args: ' + repr(e.args))
             except IOError, e:
                 Error('socket IOError ' + e.message + ' args: ' + repr(e.args))
@@ -572,18 +1400,32 @@ class Util(object):
                 return response.read()
 
     def HttpGetWithoutHeaders(self, url):
+        """
+        Return data from an HTTP get on 'url'.
+        """
         return self._HttpGet(url, None)
 
     def HttpGetWithHeaders(self, url):
+        """
+        Return data from an HTTP get on 'url' with
+        x-ms-agent-name and x-ms-version
+        headers.
+        """
         return self._HttpGet(url, {"x-ms-agent-name": GuestAgentName, "x-ms-version": ProtocolVersion})
 
     def HttpSecureGetWithHeaders(self, url, transportCert):
+        """
+        Return output of get using ssl cert.
+        """
         return self._HttpGet(url, {"x-ms-agent-name": GuestAgentName,
                                    "x-ms-version": ProtocolVersion,
                                    "x-ms-cipher-name": "DES_EDE3_CBC",
                                    "x-ms-guest-agent-public-x509-cert": transportCert})
 
     def HttpPost(self, url, data):
+        """
+        Send http POST to server, sleeping 10 retrying maxRetry times upon error.
+        """
         LogIfVerbose("HttpPost(" + url + ")")
         maxRetry = 2
         for retry in range(0, maxRetry + 1):
@@ -616,50 +1458,64 @@ class Util(object):
                 log("return HttpPost(" + url + "),retry=" + strRetry + ",status=" + strStatus)
                 return response
 
-def LoadBalancerProbeServer(port):
+class TCPHandler(SocketServer.BaseRequestHandler):
+    """
+    Callback object for LoadBalancerProbeServer.
+    Recv and send LB probe messages.
+    """
+    def __init__(self,lb_probe):
+        super(TCPHandler,self).__init__()
+        self.lb_probe=lb_probe
+        
+    def GetHttpDateTimeNow(self):
+        """
+        Return formatted gmtime "Date: Fri, 25 Mar 2011 04:53:10 GMT"
+        """
+        return time.strftime("%a, %d %b %Y %H:%M:%S GMT", time.gmtime())
 
-    class T(object):
-        def __init__(self, ip, port):
-            self.ProbeCounter = 0
-            self.server = SocketServer.TCPServer((ip, port), TCPHandler)
-            self.server_thread = threading.Thread(target = self.server.serve_forever)
-            self.server_thread.setDaemon(True)
-            self.server_thread.start()
-
-        def shutdown(self):
-            self.server.shutdown()
-
-    class TCPHandler(SocketServer.BaseRequestHandler):
-        def GetHttpDateTimeNow(self):
-            # Date: Fri, 25 Mar 2011 04:53:10 GMT
-            return time.strftime("%a, %d %b %Y %H:%M:%S GMT", time.gmtime())
-
-        def handle(self):
-            context.ProbeCounter = (context.ProbeCounter + 1) % 1000000
-            log = [NoLog, LogIfVerbose][ThrottleLog(context.ProbeCounter)]
-            strCounter = str(context.ProbeCounter)
-            if context.ProbeCounter == 1:
-                Log("Receiving LB probes.")
-            log("Received LB probe # " + strCounter)
-            self.request.recv(1024)
-            self.request.send("HTTP/1.1 200 OK\r\nContent-Length: 2\r\nContent-Type: text/html\r\nDate: " + self.GetHttpDateTimeNow() + "\r\n\r\nOK")
+    def handle(self):
+        """
+        Log LB probe messages, read the socket buffer,
+        send LB probe response back to server.
+        """
+        self.lb_probe.ProbeCounter = (self.lb_probe.ProbeCounter + 1) % 1000000
+        log = [NoLog, LogIfVerbose][ThrottleLog(self.lb_probe.ProbeCounter)]
+        strCounter = str(self.lb_probe.ProbeCounter)
+        if self.lb_probe.ProbeCounter == 1:
+            Log("Receiving LB probes.")
+        log("Received LB probe # " + strCounter)
+        self.request.recv(1024)
+        self.request.send("HTTP/1.1 200 OK\r\nContent-Length: 2\r\nContent-Type: text/html\r\nDate: " + self.GetHttpDateTimeNow() + "\r\n\r\nOK")
             
-    for retry in range(1,6):
-        context=None
-        ip = GetIpv4Address()
-        if ip == None :
-            Log("LoadBalancerProbeServer: GetIpv4Address() returned None, sleeping 10 before retry " + str(retry+1) )
-            time.sleep(10)
-        else:
-            try:
-                context = T(ip,port)
-                break
-            except Exception, e:
-                Log("LoadBalancerProbeServer: Exception contructing socket server: " + str(e))
-        Log("LoadBalancerProbeServer: Retry socket server construction #" + str(retry+1) )
-    return context
+class LoadBalancerProbeServer(object):
+    """
+    Threaded object to receive and send LB probe messages.
+    Load Balancer messages but be recv'd by
+    the load balancing server, or this node may be shut-down.
+    """
+    def __init__(self, port):
+        self.ProbeCounter = 0
+        self.server = SocketServer.TCPServer((self.get_ip(), port), TCPHandler)
+        self.server_thread = threading.Thread(target = self.server.serve_forever)
+        self.server_thread.setDaemon(True)
+        self.server_thread.start()
+        
+    def shutdown(self):
+        self.server.shutdown()
+
+    def get_ip(self):
+        for retry in range(1,6):
+            ip = GetIpv4Address()
+            if ip == None :
+                Log("LoadBalancerProbeServer: GetIpv4Address() returned None, sleeping 10 before retry " + str(retry+1) )
+                time.sleep(10)
+            else:
+                return ip
 
 class ConfigurationProvider(object):
+    """
+    Parse amd store key:values in /etc/waagent.conf.
+    """
     def __init__(self):
         self.values = dict()
         if os.path.isfile("/etc/waagent.conf") == False:
@@ -682,6 +1538,10 @@ class ConfigurationProvider(object):
         return self.values.get(key)
 
 class EnvMonitor(object):
+    """
+    Montor changes to dhcp and hostname.
+    If dchp clinet process re-start has occurred, reset routes, dhcp with fabric.
+    """
     def __init__(self):
         self.shutdown = False
         self.HostName = socket.gethostname()
@@ -691,13 +1551,13 @@ class EnvMonitor(object):
         self.published = False
 
     def monitor(self):
-        publish = Config.get("Provisioning.MonitorHostName")
-        dhcpcmd = "pidof dhclient"
-        if IsSuse():
-            dhcpcmd = "pidof dhcpcd"
-        if IsDebian():
-            dhcpcmd = "pidof dhclient3"
-        dhcppid = RunGetOutput(dhcpcmd,chk_err=False)[1]
+        """
+        Monitor dhcp client pid and hostname.
+        If dchp clinet process re-start has occurred, reset routes, dhcp with fabric.
+        """
+        publish = ConfigurationProvider().get("Provisioning.MonitorHostName")
+        dhcpcmd = "pidof " + MyDistro.dhcp_client_name
+        dhcppid = RunGetOutput(dhcpcmd)[1]
         while not self.shutdown:
             for a in RulesFiles:
                 if os.path.isfile(a):
@@ -710,8 +1570,8 @@ class EnvMonitor(object):
                     if socket.gethostname() != self.HostName:
                         Log("EnvMonitor: Detected host name change: " + self.HostName + " -> " + socket.gethostname())
                         self.HostName = socket.gethostname()
-                        WaAgent.UpdateAndPublishHostName(self.HostName)
-                        dhcppid = RunGetOutput(dhcpcmd,chk_err=False)[1]
+                        MyDistro.publishHostname(self.HostName)
+                        dhcppid = RunGetOutput(dhcpcmd)[1]
                         self.published = True
                 except:
                     pass
@@ -719,7 +1579,7 @@ class EnvMonitor(object):
                 self.published = True
             pid = ""
             if not os.path.isdir("/proc/" + dhcppid.strip()):
-                pid = RunGetOutput(dhcpcmd,chk_err=False)[1]
+                pid = RunGetOutput(dhcpcmd)[1]
             if pid != "" and pid != dhcppid:
                 Log("EnvMonitor: Detected dhcp client restart. Restoring routing table.")
                 WaAgent.RestoreRoutes()
@@ -730,37 +1590,56 @@ class EnvMonitor(object):
             time.sleep(5)
 
     def SetHostName(self, name):
+        """
+        Generic call to MyDistro.setHostname(name).
+        Complian to Log on error.
+        """
         if socket.gethostname() == name:
             self.published = True
-        elif Run("hostname " + name):
+        elif MyDistro.setHostname(name):
             Error("Error: SetHostName: Cannot set hostname to " + name)
             return ("Error: SetHostName: Cannot set hostname to " + name)
 
-    def IsNamePublished(self):
+    def IsHostnamePublished(self):
+        """
+        Return self.published  
+        """
         return self.published
 
     def ShutdownService(self):
+        """
+        Stop server comminucation and join the thread to main thread.
+        """
         self.shutdown = True
         self.server_thread.join()
 
 class Certificates(object):
-#
-# <CertificateFile xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="certificates10.xsd">
-#  <Version>2010-12-15</Version>
-#  <Incarnation>2</Incarnation>
-#  <Format>Pkcs7BlobWithPfxContents</Format>
-#  <Data>MIILTAY...
-#  </Data>
-# </CertificateFile>
-#
+    """
+    Object containing certificates of host and provisioned user.
+    Parses and splits certificates into files.
+    """
+    #     <CertificateFile xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="certificates10.xsd">
+    #     <Version>2010-12-15</Version>
+    #     <Incarnation>2</Incarnation>
+    #     <Format>Pkcs7BlobWithPfxContents</Format>
+    #     <Data>MIILTAY...
+    #     </Data>
+    #     </CertificateFile>
+
     def __init__(self):
         self.reinitialize()
 
     def reinitialize(self):
+        """
+        Reset the Role, Incarnation
+        """
         self.Incarnation = None
         self.Role = None
 
     def Parse(self, xmlText):
+        """
+        Parse multiple certificates into seperate files.
+        """
         self.reinitialize()
         SetFileContents("Certificates.xml", xmlText)
         dom = xml.dom.minidom.parseString(xmlText)
@@ -809,71 +1688,75 @@ class Certificates(object):
             keys[pubkey] = thumbprint
             os.rename(filename, thumbprint + ".crt")
             os.chmod(thumbprint + ".crt", 0600)
-            if IsRedHat():
-                Run("chcon unconfined_u:object_r:ssh_home_t:s0 " + thumbprint + ".crt")
+            MyDistro.setSelinuxContext(thumbprint + '.crt','unconfined_u:object_r:ssh_home_t:s0')
             index += 1
             filename = str(index) + ".crt"
         index = 1
         filename = str(index) + ".prv"
         while os.path.isfile(filename):
-            pubkey = RunGetOutput(Openssl + " rsa -in " + filename + " -pubout 2> /dev/null")[1]
+            pubkey = RunGetOutput(Openssl + " rsa -in " + filename + " -pubout 2> /dev/null ")[1]
             os.rename(filename, keys[pubkey] + ".prv")
             os.chmod(keys[pubkey] + ".prv", 0600)
-            if IsRedHat():
-                Run("chcon unconfined_u:object_r:ssh_home_t:s0 " + keys[pubkey] + ".prv")
+            MyDistro.setSelinuxContext( keys[pubkey] + '.prv','unconfined_u:object_r:ssh_home_t:s0')
             index += 1
             filename = str(index) + ".prv"
         return self
 
 class SharedConfig(object):
-#
-# <SharedConfig version="1.0.0.0" goalStateIncarnation="1">
-#   <Deployment name="db00a7755a5e4e8a8fe4b19bc3b330c3" guid="{ce5a036f-5c93-40e7-8adf-2613631008ab}" incarnation="2">
-#     <Service name="MyVMRoleService" guid="{00000000-0000-0000-0000-000000000000}" />
-#     <ServiceInstance name="db00a7755a5e4e8a8fe4b19bc3b330c3.1" guid="{d113f4d7-9ead-4e73-b715-b724b5b7842c}" />
-#   </Deployment>
-#   <Incarnation number="1" instance="MachineRole_IN_0" guid="{a0faca35-52e5-4ec7-8fd1-63d2bc107d9b}" />
-#   <Role guid="{73d95f1c-6472-e58e-7a1a-523554e11d46}" name="MachineRole" settleTimeSeconds="10" />
-#   <LoadBalancerSettings timeoutSeconds="0" waitLoadBalancerProbeCount="8">
-#     <Probes>
-#       <Probe name="MachineRole" />
-#       <Probe name="55B17C5E41A1E1E8FA991CF80FAC8E55" />
-#       <Probe name="3EA4DBC19418F0A766A4C19D431FA45F" />
-#     </Probes>
-#   </LoadBalancerSettings>
-#   <OutputEndpoints>
-#     <Endpoint name="MachineRole:Microsoft.WindowsAzure.Plugins.RemoteAccess.Rdp" type="SFS">
-#       <Target instance="MachineRole_IN_0" endpoint="Microsoft.WindowsAzure.Plugins.RemoteAccess.Rdp" />
-#     </Endpoint>
-#   </OutputEndpoints>
-#   <Instances>
-#     <Instance id="MachineRole_IN_0" address="10.115.153.75">
-#       <FaultDomains randomId="0" updateId="0" updateCount="0" />
-#       <InputEndpoints>
-#         <Endpoint name="a" address="10.115.153.75:80" protocol="http" isPublic="true" loadBalancedPublicAddress="70.37.106.197:80" enableDirectServerReturn="false" isDirectAddress="false" disableStealthMode="false">
-#           <LocalPorts>
-#             <LocalPortRange from="80" to="80" />
-#           </LocalPorts>
-#         </Endpoint>
-#         <Endpoint name="Microsoft.WindowsAzure.Plugins.RemoteAccess.Rdp" address="10.115.153.75:3389" protocol="tcp" isPublic="false" enableDirectServerReturn="false" isDirectAddress="false" disableStealthMode="false">
-#           <LocalPorts>
-#             <LocalPortRange from="3389" to="3389" />
-#           </LocalPorts>
-#         </Endpoint>
-#         <Endpoint name="Microsoft.WindowsAzure.Plugins.RemoteForwarder.RdpInput" address="10.115.153.75:20000" protocol="tcp" isPublic="true" loadBalancedPublicAddress="70.37.106.197:3389" enableDirectServerReturn="false" isDirectAddress="false" disableStealthMode="false">
-#           <LocalPorts>
-#             <LocalPortRange from="20000" to="20000" />
-#           </LocalPorts>
-#         </Endpoint>
-#       </InputEndpoints>
-#     </Instance>
-#   </Instances>
-# </SharedConfig>
-#
+    """
+    Parse role endpoint server and goal state config.
+    """
+    #
+    # <SharedConfig version="1.0.0.0" goalStateIncarnation="1">
+    #   <Deployment name="db00a7755a5e4e8a8fe4b19bc3b330c3" guid="{ce5a036f-5c93-40e7-8adf-2613631008ab}" incarnation="2">
+    #     <Service name="MyVMRoleService" guid="{00000000-0000-0000-0000-000000000000}" />
+    #     <ServiceInstance name="db00a7755a5e4e8a8fe4b19bc3b330c3.1" guid="{d113f4d7-9ead-4e73-b715-b724b5b7842c}" />
+    #   </Deployment>
+    #   <Incarnation number="1" instance="MachineRole_IN_0" guid="{a0faca35-52e5-4ec7-8fd1-63d2bc107d9b}" />
+    #   <Role guid="{73d95f1c-6472-e58e-7a1a-523554e11d46}" name="MachineRole" settleTimeSeconds="10" />
+    #   <LoadBalancerSettings timeoutSeconds="0" waitLoadBalancerProbeCount="8">
+    #     <Probes>
+    #       <Probe name="MachineRole" />
+    #       <Probe name="55B17C5E41A1E1E8FA991CF80FAC8E55" />
+    #       <Probe name="3EA4DBC19418F0A766A4C19D431FA45F" />
+    #     </Probes>
+    #   </LoadBalancerSettings>
+    #   <OutputEndpoints>
+    #     <Endpoint name="MachineRole:Microsoft.WindowsAzure.Plugins.RemoteAccess.Rdp" type="SFS">
+    #       <Target instance="MachineRole_IN_0" endpoint="Microsoft.WindowsAzure.Plugins.RemoteAccess.Rdp" />
+    #     </Endpoint>
+    #   </OutputEndpoints>
+    #   <Instances>
+    #     <Instance id="MachineRole_IN_0" address="10.115.153.75">
+    #       <FaultDomains randomId="0" updateId="0" updateCount="0" />
+    #       <InputEndpoints>
+    #         <Endpoint name="a" address="10.115.153.75:80" protocol="http" isPublic="true" loadBalancedPublicAddress="70.37.106.197:80" enableDirectServerReturn="false" isDirectAddress="false" disableStealthMode="false">
+    #           <LocalPorts>
+    #             <LocalPortRange from="80" to="80" />
+    #           </LocalPorts>
+    #         </Endpoint>
+    #         <Endpoint name="Microsoft.WindowsAzure.Plugins.RemoteAccess.Rdp" address="10.115.153.75:3389" protocol="tcp" isPublic="false" enableDirectServerReturn="false" isDirectAddress="false" disableStealthMode="false">
+    #           <LocalPorts>
+    #             <LocalPortRange from="3389" to="3389" />
+    #           </LocalPorts>
+    #         </Endpoint>
+    #         <Endpoint name="Microsoft.WindowsAzure.Plugins.RemoteForwarder.RdpInput" address="10.115.153.75:20000" protocol="tcp" isPublic="true" loadBalancedPublicAddress="70.37.106.197:3389" enableDirectServerReturn="false" isDirectAddress="false" disableStealthMode="false">
+    #           <LocalPorts>
+    #             <LocalPortRange from="20000" to="20000" />
+    #           </LocalPorts>
+    #         </Endpoint>
+    #       </InputEndpoints>
+    #     </Instance>
+    #   </Instances>
+    # </SharedConfig>
+    #
     def __init__(self):
         self.reinitialize()
 
     def reinitialize(self):
+        """
+        Reset members.
+        """
         self.Deployment = None
         self.Incarnation = None
         self.Role = None
@@ -882,6 +1765,9 @@ class SharedConfig(object):
         self.Instances = None
 
     def Parse(self, xmlText):
+        """
+        Parse and write configuration to file SharedConfig.xml.
+        """
         self.reinitialize()
         SetFileContents("SharedConfig.xml", xmlText)
         dom = xml.dom.minidom.parseString(xmlText)
@@ -894,47 +1780,63 @@ class SharedConfig(object):
         if node.localName != "SharedConfig":
             Error("SharedConfig.Parse: root not SharedConfig")
             return None
+        return self
+
+    def CheckLaunchRoleTopologyConsumer(self):
+        """
+        If Role.TopologyConsumer = y then launch the RoleTopologyConsumer with path to SharedConfig.xml
+        """
         program = Config.get("Role.TopologyConsumer")
         if program != None:
             Children.append(subprocess.Popen([program, LibDir + "/SharedConfig.xml"]))
-        return self
 
+    def Process(self):
+        self.CheckLaunchRoleTopologyConsumer()
+
+        
 class HostingEnvironmentConfig(object):
-#
-# <HostingEnvironmentConfig version="1.0.0.0" goalStateIncarnation="1">
-#   <StoredCertificates>
-#     <StoredCertificate name="Stored0Microsoft.WindowsAzure.Plugins.RemoteAccess.PasswordEncryption" certificateId="sha1:C093FA5CD3AAE057CB7C4E04532B2E16E07C26CA" storeName="My" configurationLevel="System" />
-#   </StoredCertificates>
-#   <Deployment name="db00a7755a5e4e8a8fe4b19bc3b330c3" guid="{ce5a036f-5c93-40e7-8adf-2613631008ab}" incarnation="2">
-#     <Service name="MyVMRoleService" guid="{00000000-0000-0000-0000-000000000000}" />
-#     <ServiceInstance name="db00a7755a5e4e8a8fe4b19bc3b330c3.1" guid="{d113f4d7-9ead-4e73-b715-b724b5b7842c}" />
-#   </Deployment>
-#   <Incarnation number="1" instance="MachineRole_IN_0" guid="{a0faca35-52e5-4ec7-8fd1-63d2bc107d9b}" />
-#   <Role guid="{73d95f1c-6472-e58e-7a1a-523554e11d46}" name="MachineRole" hostingEnvironmentVersion="1" software="" softwareType="ApplicationPackage" entryPoint="" parameters="" settleTimeSeconds="10" />
-#   <HostingEnvironmentSettings name="full" Runtime="rd_fabric_stable.110217-1402.RuntimePackage_1.0.0.8.zip">
-#     <CAS mode="full" />
-#     <PrivilegeLevel mode="max" />
-#     <AdditionalProperties><CgiHandlers></CgiHandlers></AdditionalProperties>
-#   </HostingEnvironmentSettings>
-#   <ApplicationSettings>
-#     <Setting name="__ModelData" value="&lt;m role=&quot;MachineRole&quot; xmlns=&quot;urn:azure:m:v1&quot;>&lt;r name=&quot;MachineRole&quot;>&lt;e name=&quot;a&quot; />&lt;e name=&quot;b&quot; />&lt;e name=&quot;Microsoft.WindowsAzure.Plugins.RemoteAccess.Rdp&quot; />&lt;e name=&quot;Microsoft.WindowsAzure.Plugins.RemoteForwarder.RdpInput&quot; />&lt;/r>&lt;/m>" />
-#     <Setting name="Microsoft.WindowsAzure.Plugins.Diagnostics.ConnectionString" value="DefaultEndpointsProtocol=http;AccountName=osimages;AccountKey=DNZQ..." />
-#     <Setting name="Microsoft.WindowsAzure.Plugins.RemoteAccess.AccountEncryptedPassword" value="MIIBnQYJKoZIhvcN..." />
-#     <Setting name="Microsoft.WindowsAzure.Plugins.RemoteAccess.AccountExpiration" value="2022-07-23T23:59:59.0000000-07:00" />
-#     <Setting name="Microsoft.WindowsAzure.Plugins.RemoteAccess.AccountUsername" value="test" />
-#     <Setting name="Microsoft.WindowsAzure.Plugins.RemoteAccess.Enabled" value="true" />
-#     <Setting name="Microsoft.WindowsAzure.Plugins.RemoteForwarder.Enabled" value="true" />
-#     <Setting name="Certificate|Microsoft.WindowsAzure.Plugins.RemoteAccess.PasswordEncryption" value="sha1:C093FA5CD3AAE057CB7C4E04532B2E16E07C26CA" />
-#   </ApplicationSettings>
-#   <ResourceReferences>
-#     <Resource name="DiagnosticStore" type="directory" request="Microsoft.Cis.Fabric.Controller.Descriptions.ServiceDescription.Data.Policy" sticky="true" size="1" path="db00a7755a5e4e8a8fe4b19bc3b330c3.MachineRole.DiagnosticStore\" disableQuota="false" />
-#   </ResourceReferences>
-# </HostingEnvironmentConfig>
-#
+    """
+    Parse Hosting enviromnet config and store in
+    HostingEnvironmentConfig.xml
+    """
+    #
+    # <HostingEnvironmentConfig version="1.0.0.0" goalStateIncarnation="1">
+    #   <StoredCertificates>
+    #     <StoredCertificate name="Stored0Microsoft.WindowsAzure.Plugins.RemoteAccess.PasswordEncryption" certificateId="sha1:C093FA5CD3AAE057CB7C4E04532B2E16E07C26CA" storeName="My" configurationLevel="System" />
+    #   </StoredCertificates>
+    #   <Deployment name="db00a7755a5e4e8a8fe4b19bc3b330c3" guid="{ce5a036f-5c93-40e7-8adf-2613631008ab}" incarnation="2">
+    #     <Service name="MyVMRoleService" guid="{00000000-0000-0000-0000-000000000000}" />
+    #     <ServiceInstance name="db00a7755a5e4e8a8fe4b19bc3b330c3.1" guid="{d113f4d7-9ead-4e73-b715-b724b5b7842c}" />
+    #   </Deployment>
+    #   <Incarnation number="1" instance="MachineRole_IN_0" guid="{a0faca35-52e5-4ec7-8fd1-63d2bc107d9b}" />
+    #   <Role guid="{73d95f1c-6472-e58e-7a1a-523554e11d46}" name="MachineRole" hostingEnvironmentVersion="1" software="" softwareType="ApplicationPackage" entryPoint="" parameters="" settleTimeSeconds="10" />
+    #   <HostingEnvironmentSettings name="full" Runtime="rd_fabric_stable.110217-1402.RuntimePackage_1.0.0.8.zip">
+    #     <CAS mode="full" />
+    #     <PrivilegeLevel mode="max" />
+    #     <AdditionalProperties><CgiHandlers></CgiHandlers></AdditionalProperties>
+    #   </HostingEnvironmentSettings>
+    #   <ApplicationSettings>
+    #     <Setting name="__ModelData" value="&lt;m role=&quot;MachineRole&quot; xmlns=&quot;urn:azure:m:v1&quot;>&lt;r name=&quot;MachineRole&quot;>&lt;e name=&quot;a&quot; />&lt;e name=&quot;b&quot; />&lt;e name=&quot;Microsoft.WindowsAzure.Plugins.RemoteAccess.Rdp&quot; />&lt;e name=&quot;Microsoft.WindowsAzure.Plugins.RemoteForwarder.RdpInput&quot; />&lt;/r>&lt;/m>" />
+    #     <Setting name="Microsoft.WindowsAzure.Plugins.Diagnostics.ConnectionString" value="DefaultEndpointsProtocol=http;AccountName=osimages;AccountKey=DNZQ..." />
+    #     <Setting name="Microsoft.WindowsAzure.Plugins.RemoteAccess.AccountEncryptedPassword" value="MIIBnQYJKoZIhvcN..." />
+    #     <Setting name="Microsoft.WindowsAzure.Plugins.RemoteAccess.AccountExpiration" value="2022-07-23T23:59:59.0000000-07:00" />
+    #     <Setting name="Microsoft.WindowsAzure.Plugins.RemoteAccess.AccountUsername" value="test" />
+    #     <Setting name="Microsoft.WindowsAzure.Plugins.RemoteAccess.Enabled" value="true" />
+    #     <Setting name="Microsoft.WindowsAzure.Plugins.RemoteForwarder.Enabled" value="true" />
+    #     <Setting name="Certificate|Microsoft.WindowsAzure.Plugins.RemoteAccess.PasswordEncryption" value="sha1:C093FA5CD3AAE057CB7C4E04532B2E16E07C26CA" />
+    #   </ApplicationSettings>
+    #   <ResourceReferences>
+    #     <Resource name="DiagnosticStore" type="directory" request="Microsoft.Cis.Fabric.Controller.Descriptions.ServiceDescription.Data.Policy" sticky="true" size="1" path="db00a7755a5e4e8a8fe4b19bc3b330c3.MachineRole.DiagnosticStore\" disableQuota="false" />
+    #   </ResourceReferences>
+    # </HostingEnvironmentConfig>
+    #
     def __init__(self):
         self.reinitialize()
 
     def reinitialize(self):
+        """
+        Reset Members.
+        """
         self.StoredCertificates = None
         self.Deployment = None
         self.Incarnation = None
@@ -945,6 +1847,9 @@ class HostingEnvironmentConfig(object):
         self.ResourceReferences = None
 
     def Parse(self, xmlText):
+        """
+        Parse and create HostingEnvironmentConfig.xml.
+        """
         self.reinitialize()
         SetFileContents("HostingEnvironmentConfig.xml", xmlText)
         dom = xml.dom.minidom.parseString(xmlText)
@@ -962,6 +1867,9 @@ class HostingEnvironmentConfig(object):
         return self
 
     def DecryptPassword(self, e):
+        """
+        Return decrypted password.
+        """
         SetFileContents("password.p7m",
             "MIME-Version: 1.0\n"
             + "Content-Disposition: attachment; filename=\"password.p7m\"\n"
@@ -971,6 +1879,10 @@ class HostingEnvironmentConfig(object):
         return RunGetOutput(Openssl + " cms -decrypt -in password.p7m -inkey Certificates.pem -recip Certificates.pem")[1]
 
     def ActivateResourceDisk(self):
+        """
+        Format, mount, and if specified in the configuration
+        set resource disk as swap.
+        """
         global DiskActivated
         format = Config.get("ResourceDisk.Format")
         if format == None or format.lower().startswith("n"):
@@ -1016,6 +1928,11 @@ class HostingEnvironmentConfig(object):
             Error("ActivateResourceDisk: Failed to activate swap at " + mountpoint + "/swapfile")
 
     def Process(self):
+        """
+        Execute ActivateResourceDisk in separate thread.
+        Create the user account.
+        Launch ConfigurationConsumer if specified in the config.
+        """
         if DiskActivated == False:
             diskThread = threading.Thread(target = self.ActivateResourceDisk)
             diskThread.start()
@@ -1040,10 +1957,10 @@ class HostingEnvironmentConfig(object):
             else:
                 Error("Not creating user account: " + User)
         for c in self.Certificates:
-            cname = c.getAttribute("name")
+            #cname = c.getAttribute("name")
             csha1 = c.getAttribute("certificateId").split(':')[1].upper()
-            cpath = c.getAttribute("storeName")
-            clevel = c.getAttribute("configurationLevel")
+            #cpath = c.getAttribute("storeName")
+            #clevel = c.getAttribute("configurationLevel")
             if os.path.isfile(csha1 + ".prv"):
                 Log("Private key with thumbprint: " + csha1 + " was retrieved.")
             if os.path.isfile(csha1 + ".crt"):
@@ -1053,40 +1970,48 @@ class HostingEnvironmentConfig(object):
             Children.append(subprocess.Popen([program, LibDir + "/HostingEnvironmentConfig.xml"]))
 
 class GoalState(Util):
-#
-# <GoalState xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="goalstate10.xsd">
-#   <Version>2010-12-15</Version>
-#   <Incarnation>1</Incarnation>
-#   <Machine>
-#     <ExpectedState>Started</ExpectedState>
-#     <LBProbePorts>
-#       <Port>16001</Port>
-#     </LBProbePorts>
-#   </Machine>
-#   <Container>
-#     <ContainerId>c6d5526c-5ac2-4200-b6e2-56f2b70c5ab2</ContainerId>
-#     <RoleInstanceList>
-#       <RoleInstance>
-#         <InstanceId>MachineRole_IN_0</InstanceId>
-#         <State>Started</State>
-#         <Configuration>
-#           <HostingEnvironmentConfig>http://10.115.153.40:80/machine/c6d5526c-5ac2-4200-b6e2-56f2b70c5ab2/MachineRole%5FIN%5F0?comp=config&amp;type=hostingEnvironmentConfig&amp;incarnation=1</HostingEnvironmentConfig>
-#           <SharedConfig>http://10.115.153.40:80/machine/c6d5526c-5ac2-4200-b6e2-56f2b70c5ab2/MachineRole%5FIN%5F0?comp=config&amp;type=sharedConfig&amp;incarnation=1</SharedConfig>
-#           <Certificates>http://10.115.153.40:80/machine/c6d5526c-5ac2-4200-b6e2-56f2b70c5ab2/MachineRole%5FIN%5F0?comp=certificates&amp;incarnation=1</Certificates>
-#         </Configuration>
-#       </RoleInstance>
-#     </RoleInstanceList>
-#   </Container>
-# </GoalState>
-#
-# There is only one Role for VM images.
-#
-# Of primary interest is:
-#  Machine/ExpectedState -- this is how shutdown is requested
-#  LBProbePorts -- an http server needs to run here
-#  We also note Container/ContainerID and RoleInstance/InstanceId to form the health report.
-#  And of course, Incarnation
-#
+    """
+    Primary container for all configuration except OvfXml.
+    Encapsulates http communication with endpoint server.
+    Initializes and populates:
+    self.HostingEnvironmentConfig
+    self.SharedConfig
+    self.Certificates
+    """
+    #
+    # <GoalState xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="goalstate10.xsd">
+    #   <Version>2010-12-15</Version>
+    #   <Incarnation>1</Incarnation>
+    #   <Machine>
+    #     <ExpectedState>Started</ExpectedState>
+    #     <LBProbePorts>
+    #       <Port>16001</Port>
+    #     </LBProbePorts>
+    #   </Machine>
+    #   <Container>
+    #     <ContainerId>c6d5526c-5ac2-4200-b6e2-56f2b70c5ab2</ContainerId>
+    #     <RoleInstanceList>
+    #       <RoleInstance>
+    #         <InstanceId>MachineRole_IN_0</InstanceId>
+    #         <State>Started</State>
+    #         <Configuration>
+    #           <HostingEnvironmentConfig>http://10.115.153.40:80/machine/c6d5526c-5ac2-4200-b6e2-56f2b70c5ab2/MachineRole%5FIN%5F0?comp=config&amp;type=hostingEnvironmentConfig&amp;incarnation=1</HostingEnvironmentConfig>
+    #           <SharedConfig>http://10.115.153.40:80/machine/c6d5526c-5ac2-4200-b6e2-56f2b70c5ab2/MachineRole%5FIN%5F0?comp=config&amp;type=sharedConfig&amp;incarnation=1</SharedConfig>
+    #           <Certificates>http://10.115.153.40:80/machine/c6d5526c-5ac2-4200-b6e2-56f2b70c5ab2/MachineRole%5FIN%5F0?comp=certificates&amp;incarnation=1</Certificates>
+    #         </Configuration>
+    #       </RoleInstance>
+    #     </RoleInstanceList>
+    #   </Container>
+    # </GoalState>
+    #
+    # There is only one Role for VM images.
+    #
+    # Of primary interest is:
+    #  Machine/ExpectedState -- this is how shutdown is requested
+    #  LBProbePorts -- an http server needs to run here
+    #  We also note Container/ContainerID and RoleInstance/InstanceId to form the health report.
+    #  And of course, Incarnation
+    #
     def __init__(self, Agent):
         self.Agent = Agent
         self.Endpoint = Agent.Endpoint
@@ -1110,6 +2035,13 @@ class GoalState(Util):
         self.LoadBalancerProbePort = None # integer, ?list of integers
 
     def Parse(self, xmlText):
+        """
+        Request configuration data from endpoint server.
+        Parse and populate contained configuration objects.
+        Calls Certificates().Parse()
+        Calls SharedConfig().Parse
+        Calls HostingEnvironmentConfig().Parse
+        """
         self.reinitialize()
         node = xml.dom.minidom.parseString(xmlText).childNodes[0]
         if node.localName != "GoalState":
@@ -1179,42 +2111,53 @@ class GoalState(Util):
         return self
 
     def Process(self):
+        """
+        Calls HostingEnvironmentConfig.Process()
+        Calls SharedConfig.Process()
+        """
         self.HostingEnvironmentConfig.Process()
-
+        self.SharedConfig.Process()
+        
 class OvfEnv(object):
-#
-# <?xml version="1.0" encoding="utf-8"?>
-# <Environment xmlns="http://schemas.dmtf.org/ovf/environment/1" xmlns:oe="http://schemas.dmtf.org/ovf/environment/1" xmlns:wa="http://schemas.microsoft.com/windowsazure" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
-#    <wa:ProvisioningSection>
-#      <wa:Version>1.0</wa:Version>
-#      <LinuxProvisioningConfigurationSet xmlns="http://schemas.microsoft.com/windowsazure" xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
-#        <ConfigurationSetType>LinuxProvisioningConfiguration</ConfigurationSetType>
-#        <HostName>HostName</HostName>
-#        <UserName>UserName</UserName>
-#        <UserPassword>UserPassword</UserPassword>
-#        <DisableSshPasswordAuthentication>false</DisableSshPasswordAuthentication>
-#        <SSH>
-#          <PublicKeys>
-#            <PublicKey>
-#              <Fingerprint>EB0C0AB4B2D5FC35F2F0658D19F44C8283E2DD62</Fingerprint>
-#              <Path>$HOME/UserName/.ssh/authorized_keys</Path>
-#            </PublicKey>
-#          </PublicKeys>
-#          <KeyPairs>
-#            <KeyPair>
-#              <Fingerprint>EB0C0AB4B2D5FC35F2F0658D19F44C8283E2DD62</Fingerprint>
-#              <Path>$HOME/UserName/.ssh/id_rsa</Path>
-#            </KeyPair>
-#          </KeyPairs>
-#        </SSH>
-#      </LinuxProvisioningConfigurationSet>
-#    </wa:ProvisioningSection>
-# </Environment>
-#
+    """
+    Read, and process provisioning info from provisioning file OvfEnv.xml
+    """
+    #
+    # <?xml version="1.0" encoding="utf-8"?>
+    # <Environment xmlns="http://schemas.dmtf.org/ovf/environment/1" xmlns:oe="http://schemas.dmtf.org/ovf/environment/1" xmlns:wa="http://schemas.microsoft.com/windowsazure" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+    #    <wa:ProvisioningSection>
+    #      <wa:Version>1.0</wa:Version>
+    #      <LinuxProvisioningConfigurationSet xmlns="http://schemas.microsoft.com/windowsazure" xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
+    #        <ConfigurationSetType>LinuxProvisioningConfiguration</ConfigurationSetType>
+    #        <HostName>HostName</HostName>
+    #        <UserName>UserName</UserName>
+    #        <UserPassword>UserPassword</UserPassword>
+    #        <DisableSshPasswordAuthentication>false</DisableSshPasswordAuthentication>
+    #        <SSH>
+    #          <PublicKeys>
+    #            <PublicKey>
+    #              <Fingerprint>EB0C0AB4B2D5FC35F2F0658D19F44C8283E2DD62</Fingerprint>
+    #              <Path>$HOME/UserName/.ssh/authorized_keys</Path>
+    #            </PublicKey>
+    #          </PublicKeys>
+    #          <KeyPairs>
+    #            <KeyPair>
+    #              <Fingerprint>EB0C0AB4B2D5FC35F2F0658D19F44C8283E2DD62</Fingerprint>
+    #              <Path>$HOME/UserName/.ssh/id_rsa</Path>
+    #            </KeyPair>
+    #          </KeyPairs>
+    #        </SSH>
+    #      </LinuxProvisioningConfigurationSet>
+    #    </wa:ProvisioningSection>
+    # </Environment>
+    #
     def __init__(self):
         self.reinitialize()
 
     def reinitialize(self):
+        """
+        Reset members.
+        """
         self.WaNs = "http://schemas.microsoft.com/windowsazure"
         self.OvfNs = "http://schemas.dmtf.org/ovf/environment/1"
         self.MajorVersion = 1
@@ -1228,6 +2171,10 @@ class OvfEnv(object):
         self.SshKeyPairs = []
 
     def Parse(self, xmlText):
+        """
+        Parse xml tree, retreiving user and ssh key information.
+        Return self.
+        """
         self.reinitialize()
         dom = xml.dom.minidom.parseString(xmlText)
         if len(dom.getElementsByTagNameNS(self.OvfNs, "Environment")) != 1:
@@ -1282,6 +2229,10 @@ class OvfEnv(object):
         return self
 
     def PrepareDir(self, filepath):
+        """
+        Create home dir for self.UserName
+        Change owner and return path.
+        """
         home = GetHome()
         # Expand HOME variable if present in path
         path = os.path.normpath(filepath.replace("$HOME", home))
@@ -1295,6 +2246,9 @@ class OvfEnv(object):
         return path
 
     def NumberToBytes(self, i):
+        """
+        Pack number into bytes.  Retun as string.
+        """
         result = []
         while i:
             result.append(chr(i & 0xFF))
@@ -1303,6 +2257,9 @@ class OvfEnv(object):
         return ''.join(result)
 
     def BitsToString(self, a):
+        """
+        Return string representation of bits in a.
+        """
         index=7
         s = ""
         c = 0
@@ -1316,6 +2273,9 @@ class OvfEnv(object):
         return s
 
     def OpensslToSsh(self, file):
+        """
+        Return base-64 encoded key appropriate for ssh.
+        """
         from pyasn1.codec.der import decoder as der_decoder
         try:
             f = open(file).read().replace('\n','').split("KEY-----")[1].split('-')[0]
@@ -1336,6 +2296,13 @@ class OvfEnv(object):
         return "ssh-rsa " + base64.b64encode(keydata) + "\n"
 
     def Process(self):
+        """
+        Process all certificate and key info.
+        DisableSshPasswordAuthentication if configured.
+        CreateAccount(user)
+        Wait for WaAgent.EnvMonitor.IsHostnamePublished().
+        Restart ssh service.
+        """
         error = None
         if self.ComputerName == None :
             return "Error: Hostname missing"
@@ -1352,9 +2319,7 @@ class OvfEnv(object):
             RunSendStdin("chpasswd",("root:" + self.AdminPassword + "\n"))
         if self.UserName != None:
             error = CreateAccount(self.UserName, self.UserPassword, None, None)
-        sel = RunGetOutput("getenforce",chk_err=False)[1].startswith("Enforcing")
-        if sel == True and IsRedHat():
-            Run("setenforce 0")
+        MyDistro.setSelinuxEnforce(0)
         home = GetHome()
         for pkey in self.SshPublicKeys:
             if not os.path.isfile(pkey[0] + ".crt"):
@@ -1367,20 +2332,9 @@ class OvfEnv(object):
                 error = "Invalid path for public key (0x03)."
                 continue
             Run(Openssl + " x509 -in " + pkey[0] + ".crt -noout -pubkey > " + pkey[0] + ".pub")
-            if IsRedHat():
-                Run("chcon unconfined_u:object_r:ssh_home_t:s0 " + pkey[0] + ".pub")
-            if IsDebian():
-                # Only supported in new SSH releases
-                Run("ssh-keygen -i -m PKCS8 -f " + pkey[0] + ".pub >> " + path)
-            else:
-                SshPubKey = self.OpensslToSsh(pkey[0] + ".pub")
-                if SshPubKey != None:
-                    AppendFileContents(path, SshPubKey)
-                else:
-                    Error("Failed: " + pkey[0] + ".crt -> " + path)
-                    error = "Failed to deploy public key (0x04)."
-            if IsRedHat():
-                Run("chcon unconfined_u:object_r:ssh_home_t:s0 " + path)
+            MyDistro.setSelinuxContext(pkey[0] + '.pub','unconfined_u:object_r:ssh_home_t:s0')
+            MyDistro.sshDeployPublicKey(pkey[0] + '.pub',path)
+            MyDistro.setSelinuxContext(path,'unconfined_u:object_r:ssh_home_t:s0')
             if path.startswith(os.path.normpath(home + "/" + self.UserName + "/")):
                 ChangeOwner(path, self.UserName)
         for keyp in self.SshKeyPairs:
@@ -1396,47 +2350,22 @@ class OvfEnv(object):
             SetFileContents(path, GetFileContents(keyp[0] + ".prv"))
             os.chmod(path, 0600)
             Run("ssh-keygen -y -f " + keyp[0] + ".prv > " + path + ".pub")
-            if IsRedHat():
-                Run("chcon unconfined_u:object_r:ssh_home_t:s0 " + path)
-                Run("chcon unconfined_u:object_r:ssh_home_t:s0 " + path + ".pub")
+            MyDistro.setSelinuxContext(path,'unconfined_u:object_r:ssh_home_t:s0')
+            MyDistro.setSelinuxContext(path + '.pub','unconfined_u:object_r:ssh_home_t:s0')
             if path.startswith(os.path.normpath(home + "/" + self.UserName + "/")):
                 ChangeOwner(path, self.UserName)
                 ChangeOwner(path + ".pub", self.UserName)
-        if sel == True and IsRedHat():
-            Run("setenforce 1")
-        while not WaAgent.EnvMonitor.IsNamePublished():
+        MyDistro.setSelinuxEnforce(0)
+        while not WaAgent.EnvMonitor.IsHostnamePublished():
             time.sleep(1)
-        ReloadSshd()
+        MyDistro.restartSshService()
         return error
 
-def UpdateAndPublishHostNameCommon(name):
-    # RedHat
-    if IsRedHat():
-        filepath = "/etc/sysconfig/network"
-        if os.path.isfile(filepath):
-            ReplaceFileContentsAtomic(filepath, "HOSTNAME=" + name + "\n"
-                + "\n".join(filter(lambda a: not a.startswith("HOSTNAME"), GetFileContents(filepath).split('\n'))))
-
-        for ethernetInterface in PossibleEthernetInterfaces:
-            filepath = "/etc/sysconfig/network-scripts/ifcfg-" + ethernetInterface
-            if os.path.isfile(filepath):
-                ReplaceFileContentsAtomic(filepath, "DHCP_HOSTNAME=" + name + "\n"
-                    + "\n".join(filter(lambda a: not a.startswith("DHCP_HOSTNAME"), GetFileContents(filepath).split('\n'))))
-
-    # Debian
-    if IsDebian():
-        SetFileContents("/etc/hostname", name)
-
-    for filepath in EtcDhcpClientConfFiles:
-        if os.path.isfile(filepath):
-            ReplaceFileContentsAtomic(filepath, "send host-name \"" + name + "\";\n"
-                + "\n".join(filter(lambda a: not a.startswith("send host-name"), GetFileContents(filepath).split('\n'))))
-
-    # Suse
-    if IsSuse():
-        SetFileContents("/etc/HOSTNAME", name)
-
 class Agent(Util):
+    """
+    Primary object container for the provisioning process.
+    
+    """
     def __init__(self):
         self.GoalState = None
         self.Endpoint = None
@@ -1448,6 +2377,10 @@ class Agent(Util):
         self.DhcpResponse = None
 
     def CheckVersions(self):
+        """
+        Query endpoint server for wire protocol version.
+        Fail if our desired protocol version is not seen.
+        """
         #<?xml version="1.0" encoding="utf-8"?>
         #<Versions>
         #  <Preferred>
@@ -1482,24 +2415,42 @@ class Agent(Util):
         return True
 
     def Unpack(self, buffer, offset, range):
+        """
+        Unpack bytes into python values.
+        """
         result = 0
         for i in range:
             result = (result << 8) | Ord(buffer[offset + i])
         return result
 
     def UnpackLittleEndian(self, buffer, offset, length):
+        """
+        Unpack little endian bytes into python values.
+        """
         return self.Unpack(buffer, offset, range(length - 1, -1, -1))
 
     def UnpackBigEndian(self, buffer, offset, length):
+        """
+        Unpack big endian bytes into python values.
+        """
         return self.Unpack(buffer, offset, range(0, length))
 
     def HexDump3(self, buffer, offset, length):
+        """
+        Dump range of buffer in formatted hex.
+        """
         return ''.join(['%02X' % Ord(char) for char in buffer[offset:offset + length]])
 
     def HexDump2(self, buffer):
+        """
+        Dump buffer in formatted hex.
+        """
         return self.HexDump3(buffer, 0, len(buffer))
 
     def BuildDhcpRequest(self):
+        """
+        Build DHCP request string.
+        """
         #
         # typedef struct _DHCP {
         #     UINT8   Opcode;                     /* op:     BOOTREQUEST or BOOTREPLY */
@@ -1560,15 +2511,28 @@ class Agent(Util):
         return array.array("c", map(chr, sendData))
 
     def IntegerToIpAddressV4String(self, a):
+        """
+        Build DHCP request string.
+        """
         return "%u.%u.%u.%u" % ((a >> 24) & 0xFF, (a >> 16) & 0xFF, (a >> 8) & 0xFF, a & 0xFF)
 
     def RouteAdd(self, net, mask, gateway):
+        """
+        Add specified route using /sbin/route add -net.
+        """
         net = self.IntegerToIpAddressV4String(net)
         mask = self.IntegerToIpAddressV4String(mask)
         gateway = self.IntegerToIpAddressV4String(gateway)
-        Run("/sbin/route add -net " + net + " netmask " + mask + " gw " + gateway,chk_err=False)  # We supress error logging on error.
+        Run("/sbin/route add -net " + net + " netmask " + mask + " gw " + gateway)
 
     def HandleDhcpResponse(self, sendData, receiveBuffer):
+        """
+        Parse DHCP response:
+        Set default gateway.
+        Set default routes.
+        Retrieve endpoint server.
+        Returns endpoint server or None on error.
+        """
         LogIfVerbose("HandleDhcpResponse")
         bytesReceived = len(receiveBuffer)
         if bytesReceived < 0xF6:
@@ -1656,10 +2620,10 @@ class Agent(Util):
         return endpoint
 
     def DoDhcpWork(self):
-        #
-        # Discover the wire server via DHCP option 245.
-        # And workaround incompatibility with Windows Azure DHCP servers.
-        #
+        """
+        Discover the wire server via DHCP option 245.
+        And workaround incompatibility with Windows Azure DHCP servers.
+        """
         ShortSleep = False # Sleep 1 second before retrying DHCP queries.
         ifname=None
         Run("iptables -D INPUT -p udp --dport 68 -j ACCEPT",chk_err=False)  # We supress error logging on error.
@@ -1688,12 +2652,7 @@ class Agent(Util):
                 if missingDefaultRoute:
                     # This is required because sending after binding to 0.0.0.0 fails with
                     # network unreachable when the default gateway is not set up.
-                    for i in PossibleEthernetInterfaces:
-                        try:
-                            if Linux_ioctl_GetIpv4Address(i):
-                                ifname=i
-                        except IOError, e:
-                            pass
+                    ifname=GetFirstActiveNetworkInterfaceNonLoopback()[0]
                     Log("DoDhcpWork: Missing default route - adding broadcast route for DHCP.")
                     Run("route add 255.255.255.255 dev " + ifname,chk_err=False)   # We supress error logging on error.
                 sock.bind(("0.0.0.0", 68)) 
@@ -1726,18 +2685,28 @@ class Agent(Util):
         return None
 
     def UpdateAndPublishHostName(self, name):
-        # Set hostname locally and publish to iDNS
+        """
+        Set hostname locally and publish to iDNS
+        """
         Log("Setting host name: " + name)
-        UpdateAndPublishHostNameCommon(name)
-        for ethernetInterface in PossibleEthernetInterfaces:
-            Run("ifdown " + ethernetInterface + " && ifup " + ethernetInterface,chk_err=False) # We supress error logging on error.
+        MyDistro.publishHostname(name)
+        for ethernetInterface in GetFirstActiveNetworkInterfaceNonLoopback()[0]:
+            Run("ifdown " + ethernetInterface + " && ifup " + ethernetInterface)
         self.RestoreRoutes()
 
     def RestoreRoutes(self):
+        """
+        If there is a DHCP response, then call HandleDhcpResponse.
+        """
         if self.SendData != None and self.DhcpResponse != None:
             self.HandleDhcpResponse(self.SendData, self.DhcpResponse)
 
     def UpdateGoalState(self):
+        """
+        Retreive goal state information from endpoint server.
+        Parse xml and initialize Agent.GoalState object.
+        Return object or None on error.
+        """
         goalStateXml = None
         maxRetry = 9
         log = NoLog
@@ -1757,6 +2726,11 @@ class Agent(Util):
         return self.GoalState
 
     def ReportReady(self):
+        """
+        Send health report 'Ready' to server.
+        This signals the fabric that our provosion is completed,
+        and the host is ready for operation.
+        """
         counter = (self.HealthReportCounter + 1) % 1000000
         self.HealthReportCounter = counter
         healthReport = ("<?xml version=\"1.0\" encoding=\"utf-8\"?><Health xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\"><GoalStateIncarnation>"
@@ -1772,6 +2746,10 @@ class Agent(Util):
         return None
 
     def ReportNotReady(self, status, desc):
+        """
+        Send health report 'Provisioning' to server.
+        This signals the fabric that our provosion is starting.
+        """
         healthReport = ("<?xml version=\"1.0\" encoding=\"utf-8\"?><Health xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\"><GoalStateIncarnation>"
                         + self.GoalState.Incarnation
                         + "</GoalStateIncarnation><Container><ContainerId>"
@@ -1787,6 +2765,9 @@ class Agent(Util):
         return None
 
     def ReportRoleProperties(self, thumbprint):
+        """
+        Send roleProperties and thumbprint to server. 
+        """
         roleProperties = ("<?xml version=\"1.0\" encoding=\"utf-8\"?><RoleProperties><Container>"
                         + "<ContainerId>" + self.GoalState.ContainerId + "</ContainerId>"
                         + "<RoleInstances><RoleInstance>"
@@ -1798,11 +2779,17 @@ class Agent(Util):
         return a
 
     def LoadBalancerProbeServer_Shutdown(self):
+        """
+        Shutdown the LoadBalancerProbeServer.
+        """
         if self.LoadBalancerProbeServer != None:
             self.LoadBalancerProbeServer.shutdown()
             self.LoadBalancerProbeServer = None
 
     def GenerateTransportCert(self):
+        """
+        Create ssl certificate for https communication with endpoint server.
+        """
         Run(Openssl + " req -x509 -nodes -subj /CN=LinuxTransport -days 32768 -newkey rsa:2048 -keyout TransportPrivate.pem -out TransportCert.pem")
         cert = ""
         for line in GetFileContents("TransportCert.pem").split('\n'):
@@ -1810,12 +2797,21 @@ class Agent(Util):
                 cert += line.rstrip()
         return cert
 
+    def DoVmmStartup(self):
+        """
+        Spawn the VMM startup script.
+        """
+        Log("Starting Microsoft System Center VMM Initialization Process")
+        pid = subprocess.Popen(["/bin/sh","/mnt/cdrom/secure/"+VMM_STARTUP_SCRIPT_NAME,"-p /mnt/cdrom/secure/ "]).pid
+        time.sleep(5)
+        sys.exit(0)
+        
     def TryUnloadAtapiix(self):
         """
         If global modloaded is True, then we loaded the ata_piix kernel module, unload it.
         """
         if modloaded:
-            Run("rmmod ata_piix.ko",chk_err=False)
+            Run('rmmod ata_piix.ko',check_err=False)
             Log("Unloaded ata_piix.ko driver for ATAPI CD-ROM")
 
     def TryLoadAtapiix(self):
@@ -1828,7 +2824,7 @@ class Agent(Util):
         modloaded=False
         retcode,krn=RunGetOutput('uname -r')
         krn_pth='/lib/modules/'+krn.strip('\n')+'/kernel/drivers/ata/ata_piix.ko'
-        if Run("lsmod | grep ata_piix",chk_err=False) == 0 :
+        if Run('lsmod | grep ata_piix') == 0 :
             Log("Module " + krn_pth + " driver for ATAPI CD-ROM is already present.")
             return 0
         if retcode:
@@ -1845,7 +2841,7 @@ class Agent(Util):
         time.sleep(1)
         # check 3 times if the mod is loaded
         for i in range(3):
-            if Run("lsmod | grep ata_piix", chk_err=False):
+            if Run('lsmod | grep ata_piix'):
                 continue
             else :
                 modloaded=True
@@ -1858,7 +2854,64 @@ class Agent(Util):
         
         # we have succeeded loading the ata_piix mod if it can be done.
 
+    def SearchForVMMStartup(self):
+        """
+        Search for a DVD/CDROM containing VMM's VMM_STARTUP_SCRIPT_NAME.
+        Call TryLoadAtapiix in case we must load the ata_piix module first.
+
+        If VMM_CONFIG_FILE_NAME is found, call DoVmmStartup.
+        Else, return to Azure Provisioning process.
+        """
+        self.TryLoadAtapiix()
+        if os.path.exists('/mnt/cdrom/secure') == False:
+            CreateDir("/mnt/cdrom/secure", "root", 0700)
+        mounted=False
+        for dvds in [re.match(r'(sr[0-9]|hd[c-z])',x) for x in os.listdir('/dev/')]:
+            if dvds == None:
+                continue
+            dvd = '/dev/'+dvds.group(0)
+            if Run("LC_ALL=C fdisk -l " + dvd + " | grep Disk",chk_err=False):
+                continue  # Not mountable
+            else:
+                for retry in range(1,11):
+                    retcode,output=RunGetOutput("mount -v " + dvd + " /mnt/cdrom/secure")
+                    Log(output[:-1])
+                    #vmm testing only TODO REMOVE
+                    if retcode == 32 :
+                        retcode,output=RunGetOutput("mount -v " + dvd + " /mnt/cdrom/secure -o loop")
+                    if retcode:
+                        Log("mount failed on attempt #" + str(retry) )
+                    else:
+                        Log("mount succeeded on attempt #" + str(retry) )
+                        mounted=True
+                        break
+                    Log("mount loop sleeping 5...")
+                    time.sleep(5)
+                if not mounted:
+                    # unable to mount
+                    continue
+                if not os.path.isfile("/mnt/cdrom/secure/"+VMM_CONFIG_FILE_NAME):
+                    #nope - mount the next drive
+                    if mounted:
+                        Run("unmount "+dvd,chk_err=False)
+                        mounted=False
+                        continue
+                else : # it is the vmm startup
+                    self.DoVmmStartup()
+
+        Log("VMM Init script not found.  Provisioning for Azure")
+        return 
+        
     def Provision(self):
+        """
+        Responible for:
+        Regenerate ssh keys,
+        Mount, read, and parse ovfenv.xml from provisioning dvd rom
+        Process the ovfenv.xml info
+        Call ReportRoleProperties
+        If configured, delete root password.
+        Return None on success, error string on error.
+        """
         enabled = Config.get("Provisioning.Enabled")
         if enabled != None and enabled.lower().startswith("n"):
             return
@@ -1870,22 +2923,23 @@ class Agent(Util):
         if regenerateKeys == None or regenerateKeys.lower().startswith("y"):
             Run("rm -f /etc/ssh/ssh_host_*key*")
             Run("ssh-keygen -N '' -t " + type + " -f /etc/ssh/ssh_host_" + type + "_key")
-            ReloadSshd()
+            MyDistro.restartSshService()
         SetFileContents(LibDir + "/provisioned", "")
         dvd = "/dev/hdc"
         if os.path.exists("/dev/sr0"):
             dvd = "/dev/sr0"
-        if Run("LC_ALL=C fdisk -l " + dvd + " | grep Disk",chk_err=False):
-            # Is it possible to load a module for ata_piix?
-            self.TryLoadAtapiix()
-            # we have succeeded loading the ata_piix mod if it can be done.
+        if Run("fdisk -l " + dvd + " | grep Disk"):
+            out=MyDistro.load_ata_piix()
+            if out:
+                return out
             for i in range(10): # we may have to wait 
                 if os.path.exists("/dev/sr0"):
                     dvd = "/dev/sr0"
                     break
                 Log("Waiting for DVD - sleeping 1 - "+str(i+1)+" try...")
                 time.sleep(1)
-        CreateDir("/mnt/cdrom/secure", "root", 0700)
+        if os.path.exists('/mnt/cdrom/secure') == False:
+            CreateDir("/mnt/cdrom/secure", "root", 0700)
         #begin mount loop - ten tries - 5 sec wait between
         for retry in range(1,11):
             retcode,output=RunGetOutput("mount -v " + dvd + " /mnt/cdrom/secure")
@@ -1904,7 +2958,7 @@ class Agent(Util):
         ovfxml = GetFileContents("/mnt/cdrom/secure/ovf-env.xml")
         SetFileContents("ovf-env.xml", re.sub("<UserPassword>.*?<", "<UserPassword>*<", ovfxml))
         Run("umount /mnt/cdrom/secure")
-        self.TryUnloadAtapiix()
+        MyDistro.unload_ata_piix()
         error = None
         if ovfxml != None:
             Log("Provisioning image using OVF settings in the DVD.")
@@ -1912,20 +2966,44 @@ class Agent(Util):
             if ovfobj != None:
                 error = ovfobj.Process()
                 if error :
-                    Error ("Provisioning image FAILED " + error)
-                    return ("Provisioning image FAILED " + error)
+                    Error ("Provisioninig image FAILED " + error)
+                    return ("Provisioninig image FAILED " + error)
         # This is done here because regenerated SSH host key pairs may be potentially overwritten when processing the ovfxml
         fingerprint = RunGetOutput("ssh-keygen -lf /etc/ssh/ssh_host_" + type + "_key.pub")[1].rstrip().split()[1].replace(':','')
         self.ReportRoleProperties(fingerprint)
         delRootPass = Config.get("Provisioning.DeleteRootPassword")
         if delRootPass != None and delRootPass.lower().startswith("y"):
-            DeleteRootPassword()
+            MyDistro.deleteRootPassword()
         Log("Provisioning image completed.")
         return error
 
     def Run(self):
+        """
+        Called by 'waagent -daemon.'
+        Main loop to process the goal state.  State is posted every 25 seconds
+        when provisioning has been completed.
+        
+        Search for VMM enviroment, start VMM script if found.
+        Perform DCHP and endpoint server discovery by calling DoDhcpWork().
+        Check wire protocol versions.
+        Set SCSI timeout on root device.
+        Call GenerateTransportCert() to create ssl certs for server communication.
+        Call UpdateGoalState().
+        If not provisioned, call ReportNotReady("Provisioning", "Starting")
+        Call Provision(), set global provisioned = True if successful.
+        Call goalState.Process()
+        Start LBProbeServer if indicated in waagent.conf.
+        Start the StateConsumer if indicated in waagent.conf.
+        Check if the goalState.ExpectedState == "Stopped",
+        stop all children and isssue 'shutdown'.
+        ReportReady if provisioning is complete.
+        If provisioning failed, call ReportNotReady("ProvisioningFailed", provisionError)
+        """
         if IsLinux():
             SetFileContents("/var/run/waagent.pid", str(os.getpid()) + "\n")
+
+        # Determine if we are in VMM.  Spawn VMM_STARTUP_SCRIPT_NAME if found.
+        self.SearchForVMMStartup()
 
         if GetIpv4Address() == None:
             Log("Waiting for network.")
@@ -2032,212 +3110,6 @@ class Agent(Util):
                 incarnation = self.ReportReady()                
             time.sleep(25 - sleepToReduceAccessDenied)
 
-Init_Suse = """\
-#! /bin/sh
-
-### BEGIN INIT INFO
-# Provides: WindowsAzureLinuxAgent
-# Required-Start: $network sshd
-# Required-Stop: $network sshd
-# Default-Start: 3 5
-# Default-Stop: 0 1 2 6
-# Description: Start the WindowsAzureLinuxAgent
-### END INIT INFO
-
-WAZD_BIN=/usr/sbin/waagent
-test -x $WAZD_BIN || exit 5
-
-case "$1" in
-    start)
-        echo "Starting WindowsAzureLinuxAgent"
-        ## Start daemon with startproc(8). If this fails
-        ## the echo return value is set appropriate.
-
-        startproc -f $WAZD_BIN -daemon
-        exit $?
-        ;;
-    stop)
-        echo "Shutting down WindowsAzureLinuxAgent"
-        ## Stop daemon with killproc(8) and if this fails
-        ## set echo the echo return value.
-
-        killproc -p /var/run/waagent.pid $WAZD_BIN
-        exit $?
-        ;;
-    try-restart)
-        ## Stop the service and if this succeeds (i.e. the
-        ## service was running before), start it again.
-        $0 status >/dev/null &&  $0 restart
-        ;;
-    restart)
-        ## Stop the service and regardless of whether it was
-        ## running or not, start it again.
-        $0 stop
-        $0 start
-        ;;
-    force-reload|reload)
-        ;;
-    status)
-        echo -n "Checking for service WindowsAzureLinuxAgent "
-        ## Check status with checkproc(8), if process is running
-        ## checkproc will return with exit status 0.
-
-        checkproc -p $WAZD_PIDFILE $WAZD_BIN
-        exit $?
-        ;;
-    probe)
-        ;;
-    *)
-        echo "Usage: $0 {start|stop|status|try-restart|restart|force-reload|reload}"
-        exit 1
-        ;;
-esac
-"""
-
-Init_RedHat = """\
-#!/bin/bash
-#
-# Init file for WindowsAzureLinuxAgent.
-#
-# chkconfig: 2345 60 80
-# description: WindowsAzureLinuxAgent
-#
-
-# source function library
-. /etc/rc.d/init.d/functions
-
-RETVAL=0
-FriendlyName="WindowsAzureLinuxAgent"
-WAZD_BIN=/usr/sbin/waagent
-
-start()
-{
-    echo -n $"Starting $FriendlyName: "
-    $WAZD_BIN -daemon &
-}
-
-stop()
-{
-    echo -n $"Stopping $FriendlyName: "
-    killproc -p /var/run/waagent.pid $WAZD_BIN
-    RETVAL=$?
-    echo
-    return $RETVAL
-}
-
-case "$1" in
-    start)
-        start
-        ;;
-    stop)
-        stop
-        ;;
-    restart)
-        stop
-        start
-        ;;
-    reload)
-        ;;
-    report)
-        ;;
-    status)
-        status $WAZD_BIN
-        RETVAL=$?
-        ;;
-    *)
-        echo $"Usage: $0 {start|stop|restart|status}"
-        RETVAL=1
-esac
-exit $RETVAL
-"""
-
-Init_Ubuntu = """\
-#walinuxagent - start Windows Azure agent
-
-description "walinuxagent"
-author "Ben Howard <ben.howard@canonical.com>"
-
-start on (filesystem and started rsyslog)
-
-pre-start script
-
-	WALINUXAGENT_ENABLED=1
-    [ -r /etc/default/walinuxagent ] && . /etc/default/walinuxagent
-
-    if [ "$WALINUXAGENT_ENABLED" != "1" ]; then
-        exit 1
-    fi
-
-    if [ ! -x /usr/sbin/waagent ]; then
-        exit 1
-    fi
-
-    #Load the udf module
-    modprobe -b udf
-end script
-
-exec /usr/sbin/waagent -daemon
-"""
-
-Init_Debian = """\
-#!/bin/sh
-### BEGIN INIT INFO
-# Provides:          WindowsAzureLinuxAgent
-# Required-Start:    $network $syslog
-# Required-Stop:     $network $syslog
-# Should-Start:      $network $syslog
-# Should-Stop:       $network $syslog
-# Default-Start:     2 3 4 5
-# Default-Stop:      0 1 6
-# Short-Description: WindowsAzureLinuxAgent
-# Description:       WindowsAzureLinuxAgent
-### END INIT INFO
-
-. /lib/lsb/init-functions
-
-OPTIONS="-daemon"
-WAZD_BIN=/usr/sbin/waagent
-WAZD_PID=/var/run/waagent.pid
-
-case "$1" in
-    start)
-        log_begin_msg "Starting WindowsAzureLinuxAgent..."
-        pid=$( pidofproc $WAZD_BIN )
-        if [ -n "$pid" ] ; then
-              log_begin_msg "Already running."
-              log_end_msg 0
-              exit 0
-        fi
-        start-stop-daemon --start --quiet --oknodo --background --exec $WAZD_BIN -- $OPTIONS
-        log_end_msg $?
-        ;;
-
-    stop)
-        log_begin_msg "Stopping WindowsAzureLinuxAgent..."
-        start-stop-daemon --stop --quiet --oknodo --pidfile $WAZD_PID
-        ret=$?
-        rm -f $WAZD_PID
-        log_end_msg $ret
-        ;;
-    force-reload)
-        $0 restart
-        ;;
-    restart)
-        $0 stop
-        $0 start
-        ;;
-    status)
-        status_of_proc $WAZD_BIN && exit 0 || exit $?
-        ;;
-    *)
-        log_success_msg "Usage: /etc/init.d/waagent {start|stop|force-reload|restart|status}"
-        exit 1
-        ;;
-esac
-
-exit 0
-"""
-
 WaagentConf = """\
 #
 # Windows Azure Linux Agent Configuration
@@ -2278,19 +3150,66 @@ WaagentLogrotate = """\
 }
 """
 
-def AddToLinuxKernelCmdline(options):
-    if os.path.isfile("/boot/grub/menu.lst"):
-        Run("sed -i --follow-symlinks '/kernel/s|$| " + options + " |' /boot/grub/menu.lst")
-    filepath = "/etc/default/grub"
-    if os.path.isfile(filepath):
-        filecontents = GetFileContents(filepath).split('\n')
-        current = filter(lambda a: a.startswith("GRUB_CMDLINE_LINUX"), filecontents)
-        ReplaceFileContentsAtomic(filepath,
-            "\n".join(filter(lambda a: not a.startswith("GRUB_CMDLINE_LINUX"), filecontents))
-            + current[0][:-1] + " " + options + "\"\n")
-        Run("update-grub")
+def FindInLinuxKernelCmdline(option):
+    """
+    Return match object if 'option' is present in the kernel boot options
+    of the grub configuration.
+    """
+    matchs=r'^.*?'+MyDistro.grubKernelBootOptionsLine+r'.*?'+option+r'.*$'
+    return FindStringInFile(MyDistro.grubKernelBootOptionsFile,matchs)
+
+def AppendToLinuxKernelCmdline(option):
+    """
+    Add 'option' to the kernel boot options of the grub configuration.
+    """
+    if not FindInLinuxKernelCmdline(option):
+        src=r'^(.*?'+MyDistro.grubKernelBootOptionsLine+r')(.*?)("?)$'
+        rep=r'\1\2 '+ option + r'\3'
+        ReplaceStringInFile(MyDistro.grubKernelBootOptionsFile,src,rep)
+        Run("update-grub",chk_err=False)    
+    return
+
+def RemoveFromLinuxKernelCmdline(option):
+    """
+    Remove 'option' to the kernel boot options of the grub configuration.
+    """
+    if FindInLinuxKernelCmdline(option):
+        src=r'^(.*?'+MyDistro.grubKernelBootOptionsLine+r'.*?)('+option+r')(.*?)("?)$'
+        rep=r'\1\3\4'
+        ReplaceStringInFile(MyDistro.grubKernelBootOptionsFile,src,rep)
+        Run("update-grub",chk_err=False)    
+    return
+
+def FindStringInFile(fname,matchs):
+    """
+    Return match object if found in file.
+    """
+    ms=re.compile(matchs)
+    for l in (open(fname,'rb')).readlines():
+        m=re.search(ms,l)
+        if m:
+            return m
+    return None
+
+def ReplaceStringInFile(fname,src,repl):
+    """
+    Replace 'src' with 'repl' in file.
+    """
+    updated=''
+    sr=re.compile(src)
+    if FindStringInFile(fname,src):
+        for l in (open(fname,'rb')).readlines():
+            n=re.sub(sr,repl,l)
+            updated+=n
+            pass
+        ReplaceFileContentsAtomic(fname,updated)
+    return
 
 def ApplyVNUMAWorkaround():
+    """
+    If kernel version has NUMA bug, add 'numa=off' to
+    kernel boot options.
+    """
     VersionParts = platform.release().replace('-', '.').split('.')
     if int(VersionParts[0]) > 2:
         return
@@ -2298,78 +3217,39 @@ def ApplyVNUMAWorkaround():
         return
     if int(VersionParts[2]) > 37:
         return
-    AddToLinuxKernelCmdline("numa=off")
+    AppendToLinuxKernelCmdline("numa=off")
     # TODO: This is not ideal for offline installation.
-    print("Your kernel version " + platform.release() + " has a NUMA-related bug: NUMA has been disabled.")
+    Log("Your kernel version " + platform.release() + " has a NUMA-related bug: NUMA has been disabled.")
 
 def RevertVNUMAWorkaround():
-    print("Automatic reverting of GRUB configuration is not yet supported. Please edit by hand.")
+    """
+    Remove 'numa=off' from kernel boot options.
+    """
+    RemoveFromLinuxKernelCmdline("numa=off")
+    Log('NUMA has been re-enabled')
 
 def Install():
+    """
+    Install the agent service.
+    Check dependencies.
+    Create /etc/waagent.conf and move old version to
+    /etc/waagent.conf.old
+    Copy RulesFiles to /var/lib/waagent
+    Create /etc/logrotate.d/waagent
+    Set /etc/ssh/sshd_config ClientAliveInterval to 180
+    Call ApplyVNUMAWorkaround()
+    """
+    if MyDistro.checkDependencies():
+        return 1
     os.chmod(sys.argv[0], 0755)
     SwitchCwd()
-    requiredDeps = [ "/sbin/route", "/sbin/shutdown" ]
-    if IsDebian():
-        requiredDeps += [ "/usr/sbin/update-rc.d" ]
-    if IsSuse():
-        requiredDeps += [ "/sbin/insserv" ]
-    for a in requiredDeps:
-        if not os.path.isfile(a):
-            Error("Missing required dependency: " + a)
-            return 1
-    missing = False
-    for a in [ "ssh-keygen", "useradd", "openssl", "sfdisk",
-               "fdisk", "mkfs", "chpasswd", "sed", "grep", "sudo" ]:
-        if Run("which " + a + " > /dev/null 2>&1"):
-            Warn("Missing dependency: " + a)
-            missing = True
-    if missing == True:
-        Warn("Please resolve missing dependencies listed for full functionality.")
-    if UsesRpm():
-        if not Run("rpm --quiet -q NetworkManager",chk_err=False):  # We want this to fail - supress error logging on error.
-            Error(GuestAgentLongName + " is not compatible with NetworkManager.")
-            return 1
-    if UsesDpkg() and not Run("dpkg-query -s network-manager >/dev/null 2>&1",chk_err=False):  # We want this to fail - supress error logging on error.
-        Error(GuestAgentLongName + " is not compatible with network-manager.")
-        return 1
-    
-    #Check for pyasn1 if we can't use 'ssh-keygen -i -m PKCS8' (Debian)
-    if not IsDebian():
-        try:
-            m = __import__('pyasn1')
-        except ImportError:
-            Error(GuestAgentLongName + " requires python-pyasn1 for your Linux distribution.")
-            return 1
-        
     for a in RulesFiles:
         if os.path.isfile(a):
             if os.path.isfile(GetLastPathElement(a)):
                 os.remove(GetLastPathElement(a))
             shutil.move(a, ".")
             Warn("Moved " + a + " -> " + LibDir + "/" + GetLastPathElement(a) )
-
-    if IsUbuntu() and not IsPackagedUbuntu():
-        # Support for Ubuntu's upstart configuration
-        filename="waagent.conf"
-        filepath = "/etc/init/" + filename
-        SetFileContents(filepath, Init_Ubuntu)
-        os.chmod(filepath, 0644)
-
-    elif not IsPackagedUbuntu():
-        # Regular init.d configurations
-        filename = "waagent"
-        filepath = "/etc/init.d/" + filename
-        distro = IsRedHat() + IsDebian() * 2 + IsSuse() * 3
-        if distro == 0:
-            Error("Unable to detect Linux Distribution.")
-            return 1
-        init = [[Init_RedHat, "chkconfig --add " + filename],
-                [Init_Debian, "update-rc.d " + filename + " defaults"],
-                [Init_Suse, "insserv " + filename]][distro - 1]
-        SetFileContents(filepath, init[0])
-        os.chmod(filepath, 0755)
-        Run(init[1])
-
+    MyDistro.registerAgentService()
     if os.path.isfile("/etc/waagent.conf"):
         try:
             os.remove("/etc/waagent.conf.old")
@@ -2391,6 +3271,12 @@ def Install():
     return 0
 
 def Uninstall():
+    """
+    Uninstall the agent service.
+    Copy RulesFiles back to original locations.
+    Delete agent-related files.
+    Call RevertVNUMAWorkaround().
+    """
     SwitchCwd()
     for a in RulesFiles:
         if os.path.isfile(GetLastPathElement(a)):
@@ -2399,67 +3285,30 @@ def Uninstall():
                 Warn("Moved " + LibDir + "/" + GetLastPathElement(a) + " -> " + a )
             except:
                 pass
-    filename = "waagent"
-    a = IsRedHat() + IsDebian() * 2 + IsSuse() * 3
-    if a == 0:
-        Error("Unable to detect Linux Distribution.")
-        return 1
-
-    # Managed by dpkg for Packaged Ubuntu
-    if not IsPackaged():
-       Run("service " + filename + " stop")
-       cmd = ["chkconfig --del " + filename,
-              "update-rc.d -f " + filename + " remove",
-              "insserv -r " + filename][a - 1]
-       Run(cmd)
-
-    remove_f = [
-            "/etc/waagent.conf",
-            "/etc/logrotate.d/waagent",
-            "/etc/sudoers.d/waagent",
-            ]
-
-    # For packaged Ubuntu, the script should let the packaging
-    # manage the removal of these files
-    if not IsPackagedUbuntu():
-        remove_f.append([
-            "/etc/init/waagent.conf",
-            "/etc/init.d/" + filename,
-            ])
-
-    for f in os.listdir(LibDir) + remove_f:
-        try:
-            os.remove(f)
-        except:
-            pass
+    MyDistro.unregisterAgentService()
+    MyDistro.uninstallDeleteFiles()
     RevertVNUMAWorkaround()
     return 0
 
-def DeleteRootPassword():
-    filepath="/etc/shadow"
-    ReplaceFileContentsAtomic(filepath, "root:*LOCK*:14600::::::\n" + "\n".join(filter(lambda a: not
-        a.startswith("root:"),
-        GetFileContents(filepath).split('\n'))))
-    os.chmod(filepath, 0000)
-    if IsRedHat():
-        Run("chcon system_u:object_r:shadow_t:s0 " + filepath)
-    Log("Root password deleted.")
-
 def Deprovision(force, deluser):
+    """
+    Remove user accounts created by provisioning.
+    Disables root password if Provisioning.DeleteRootPassword = 'y'
+    Stop agent service.
+    Remove SSH host keys if they were generated by the provision.
+    Set hostname to 'localhost.localdomain'.
+    Delete cached system configuration files in /var/lib and /var/lib/waagent.
+    """
     SwitchCwd()
-    ovfxml = GetFileContents("ovf-env.xml")
+    ovfxml = GetFileContents(LibDir+"/ovf-env.xml")
     ovfobj = None
     if ovfxml != None:
         ovfobj = OvfEnv().Parse(ovfxml)
 
     print("WARNING! The waagent service will be stopped.")
     print("WARNING! All SSH host key pairs will be deleted.")
-    if IsUbuntu():
-        print("WARNING! Nameserver configuration in /etc/resolvconf/resolv.conf.d/{tail,originial} will be deleted.")
-    else:
-        print("WARNING! Nameserver configuration in /etc/resolv.conf will be deleted.")
     print("WARNING! Cached DHCP leases will be deleted.")
-
+    MyDistro.deprovisionWarnUser()
     delRootPass = Config.get("Provisioning.DeleteRootPassword")
     if delRootPass != None and delRootPass.lower().startswith("y"):
         print("WARNING! root password will be disabled. You will not be able to login as root.")
@@ -2470,10 +3319,7 @@ def Deprovision(force, deluser):
     if force == False and not raw_input('Do you want to proceed (y/n)? ').startswith('y'):
         return 1
 
-    # we don't need to stop the service if the service IsPackagedUbuntu(). 
-    if not IsPackagedUbuntu():
-        Run("service waagent stop")
-
+    MyDistro.stopAgentService()
     if deluser == True:
         DeleteAccount(ovfobj.UserName)
 
@@ -2484,112 +3330,110 @@ def Deprovision(force, deluser):
 
     # Remove root password
     if delRootPass != None and delRootPass.lower().startswith("y"):
-        DeleteRootPassword()
-
+        MyDistro.deleteRootPassword()
     # Remove distribution specific networking configuration
 
-    UpdateAndPublishHostNameCommon("localhost.localdomain")
-
-    # RedHat, Suse, Debian
-    for a in VarLibDhcpDirectories:
-        Run("rm -f " + a + "/*")
-
-    # Clear LibDir, remove nameserver and root bash history
-    fileBlackList = [ "/root/.bash_history", "/var/log/waagent.log" ]
-
-    if IsUbuntu():
-        # Ubuntu uses resolv.conf by default, so removing /etc/resolv.conf will
-        # break resolvconf. Therefore, we check to see if resolvconf is in use,
-        # and if so, we remove the resolvconf artifacts.
-
-        Log("Deprovision: Ubuntu specific resolv.conf behavior selected.")
-        if os.path.realpath('/etc/resolv.conf') != '/run/resolvconf/resolv.conf':
-            Log("resolvconf is not configured. Removing /etc/resolv.conf")
-            fileBlackList.append('/etc/resolv.conf')
-        else:
-            Log("resolvconf is enabled; leaving /etc/resolv.conf intact")
-            resolvConfD = '/etc/resolvconf/resolv.conf.d/'
-            fileBlackList.extend([resolvConfD + 'tail', resolvConfD + 'originial' ])
-    else:
-        fileBlackList.extend(os.listdir(LibDir) + ['/etc/resolv.conf'])
-
-    for f in os.listdir(LibDir) + fileBlackList:
-        try:
-            os.remove(f)
-        except:
-            pass
+    MyDistro.publishHostname('localhost.localdomain')
+    MyDistro.deprovisionDeleteFiles()
     return 0
 
 def SwitchCwd():
+    """
+    Switch to cwd to /var/lib/waagent.
+    Create if not present.
+    """
     CreateDir(LibDir, "root", 0700)
     os.chdir(LibDir)
 
 def Usage():
+    """
+    Print the arguments to waagent.
+    """
     print("usage: " + sys.argv[0] + " [-verbose] [-force] [-help|-install|-uninstall|-deprovision[+user]|-version|-serialconsole|-daemon]")
     return 0
 
-if GuestAgentVersion == "":
-    print("WARNING! This is a non-standard agent that does not include a valid version string.")
-if IsLinux() and not DetectLinuxDistro():
-    print("WARNING! Unable to detect Linux distribution. Some functionality may be broken.")
-
-if len(sys.argv) == 1:
-    sys.exit(Usage())
-
-args = []
-force = False
-for a in sys.argv[1:]:
-    if re.match("^([-/]*)(help|usage|\?)", a):
+def main():
+    """
+    Instantiate MyDistro, exit if distro class is not defined.
+    Parse command-line arguments, exit with usage() on error.
+    Instantiate ConfigurationProvider.
+    Call appropriate non-daemon methods and exit.
+    If daemon mode, enter Agent.Run() loop.
+    """
+    if GuestAgentVersion == "":
+        print("WARNING! This is a non-standard agent that does not include a valid version string.")
+    
+    if len(sys.argv) == 1:
         sys.exit(Usage())
-    elif re.match("^([-/]*)verbose", a):
-        Verbose = True
-    elif re.match("^([-/]*)force", a):
-        force = True
-    elif re.match("^([-/]*)(setup|install)", a):
-        sys.exit(Install())
-    elif re.match("^([-/]*)(uninstall)", a):
-        sys.exit(Uninstall())
-    else:
-        args.append(a)
 
-Config = ConfigurationProvider()
-
-verbose = Config.get("Logs.Verbose")
-if verbose != None and verbose.lower().startswith("y"):
-    Verbose = True
-
-daemon = False
-for a in args:
-    if re.match("^([-/]*)deprovision\+user", a):
-        sys.exit(Deprovision(force, True))
-    elif re.match("^([-/]*)deprovision", a):
-        sys.exit(Deprovision(force, False))
-    elif re.match("^([-/]*)daemon", a):
-        daemon = True
-    elif re.match("^([-/]*)version", a):
-        print(GuestAgentVersion + " running on " + LinuxDistro)
-        sys.exit(0)
-    elif re.match("^([-/]*)serialconsole", a):
-        AddToLinuxKernelCmdline("console=ttyS0 earlyprintk=ttyS0")
-        Log("Configured kernel to use ttyS0 as the boot console.")
-        sys.exit(0)
-    else:
-        print("Invalid command line parameter:" + a)
+    global LinuxDistro
+    LinuxDistro=platform.dist()[0]
+    dist_class_name=LinuxDistro+'Distro'
+    if not globals().has_key(dist_class_name):
+        Error(dist_class_name + ' is not supported.')
         sys.exit(1)
+    global MyDistro
+    MyDistro=globals()[platform.dist()[0]+'Distro']() # the distro class is inside this module
 
-if daemon == False:
-    sys.exit(Usage())
-
-try:
-    SwitchCwd()
-    Log(GuestAgentLongName + " Version: " + GuestAgentVersion)
-    if IsLinux():
-        Log("Linux Distribution Detected      : " + LinuxDistro)
-    WaAgent = Agent()
+    args = []
+    global force
+    global Verbose
+    force = False
+    for a in sys.argv[1:]:
+        if re.match("^([-/]*)(help|usage|\?)", a):
+            sys.exit(Usage())
+        elif re.match("^([-/]*)verbose", a):
+            Verbose = True
+        elif re.match("^([-/]*)force", a):
+            force = True
+        elif re.match("^([-/]*)(setup|install)", a):
+            sys.exit(Install())
+        elif re.match("^([-/]*)(uninstall)", a):
+            sys.exit(Uninstall())
+        else:
+            args.append(a)
+    global Config
+    Config = ConfigurationProvider()
+    
+    verbose = Config.get("Logs.Verbose")
+    if verbose != None and verbose.lower().startswith("y"):
+        Verbose = True
+    global daemon
+    daemon = False
+    for a in args:
+        if re.match("^([-/]*)deprovision\+user", a):
+            sys.exit(Deprovision(force, True))
+        elif re.match("^([-/]*)deprovision", a):
+            sys.exit(Deprovision(force, False))
+        elif re.match("^([-/]*)daemon", a):
+            daemon = True
+        elif re.match("^([-/]*)version", a):
+            print(GuestAgentVersion + " running on " + LinuxDistro)
+            sys.exit(0)
+        elif re.match("^([-/]*)serialconsole", a):
+            AppendToLinuxKernelCmdline("console=ttyS0 earlyprintk=ttyS0")
+            Log("Configured kernel to use ttyS0 as the boot console.")
+            sys.exit(0)
+        else:
+            print("Invalid command line parameter:" + a)
+            sys.exit(1)
+    
+    if daemon == False:
+        sys.exit(Usage())
     global modloaded
     modloaded = False
-    WaAgent.Run()
-except Exception, e:
-    Error(traceback.format_exc())
-    Error("Exception: " + str(e))
-    sys.exit(1)
+    try:
+        SwitchCwd()
+        Log(GuestAgentLongName + " Version: " + GuestAgentVersion)
+        if IsLinux():
+            Log("Linux Distribution Detected      : " + LinuxDistro)
+        global WaAgent
+        WaAgent = Agent()
+        WaAgent.Run()
+    except Exception, e:
+        Error(traceback.format_exc())
+        Error("Exception: " + str(e))
+        sys.exit(1)
+    
+if __name__ == '__main__' :
+    main()
