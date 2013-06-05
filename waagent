@@ -1181,93 +1181,124 @@ def HexDump(buffer, size):
                 result += "\n"
     return result
 
-def ThrottleLog(counter):
+class Logger(object):
     """
-    Log everything up to 10, every 10 up to 100, then every 100.
+    The Agent's logging assumptions are:
+    For Log, and LogWithPrefix all messages are logged to the
+    self.file_path and to the self.con_path.  Setting either path
+    parameter to None skips that log.  If Verbose is enabled, messages
+    calling the LogIfVerbose method will be logged to file_path yet
+    not to con_path.  Error and Warn messages are normal log messages
+    with the 'ERROR:' or 'WARNING:' prefix added.
     """
-    return (counter < 10) or ((counter < 100) and ((counter % 10) == 0)) or ((counter % 100) == 0)
 
-def LogToFile(message,file_path='/var/log/waagent.log'):
-    """
-    Write 'message' to logfile.
-    """
-    with open(file_path, "a") as F :
-        F.write(message + "\n")
-        F.close()
+    def __init__(self,filepath,conpath,verbose=False):
+        """
+        Construct an instance of Logger.
+        """
+        self.file_path=filepath
+        self.con_path=conpath
+        self.Verbose=verbose
         
-def LogToCon(message,con_path='/dev/console'):
-    """
-    Write 'message' to /dev/console.
-    This supports serial port logging if the /dev/console
-    is redirected to ttys0 in kernel boot options.
-    """
-    with open(con_path, "a") as C :
-        C.write(message + "\n")
-        C.close()
+    def ThrottleLog(self,counter):
+        """
+        Log everything up to 10, every 10 up to 100, then every 100.
+        """
+        return (counter < 10) or ((counter < 100) and ((counter % 10) == 0)) or ((counter % 100) == 0)
+    
+    def LogToFile(self,message):
+        """
+        Write 'message' to logfile.
+        """
+        if self.file_path:
+            with open(self.file_path, "a") as F :
+                F.write(message + "\n")
+                F.close()
+            
+    def LogToCon(self,message):
+         """
+        Write 'message' to /dev/console.
+        This supports serial port logging if the /dev/console
+        is redirected to ttys0 in kernel boot options.
+        """
+         if self.con_path:
+             with open(self.con_path, "a") as C :
+                 C.write(message + "\n")
+                 C.close()
+            
+    def Log(self,message):
+        """
+        Standard Log function.
+        Logs to self.file_path, and con_path
+        """
+        self.LogWithPrefix("", message)
+    
+    def LogWithPrefix(self,prefix, message):
+        """
+        Prefix each line of 'message' with current time+'prefix'.
+        """
+        t = time.localtime()
+        t = "%04u/%02u/%02u %02u:%02u:%02u " % (t.tm_year, t.tm_mon, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec)
+        t += prefix
+        for line in message.split('\n'):
+            line = t + line
+            self.LogToFile(line)
+            self.LogToCon(line)
+            
+    def NoLog(self,message):
+        """
+        Don't Log.
+        """
+        pass
+    
+    def LogIfVerbose(self,message):
+        """
+        Only log 'message' if global Verbose is True.
+        Verbose messages are assumed to be undesiarable in the
+        serial logs, so do not send the verbose logging to /dev/console
+        """
+        self.LogWithPrefixIfVerbose('',message)
+    
+    def LogWithPrefixIfVerbose(self,prefix, message):
+        """
+        Only log 'message' if global Verbose is True.
+        Log to logfile, ignoring /dev/console
+        Prefix each line of 'message' with current time+'prefix'.
+        """
+        if self.Verbose == True:
+            t = time.localtime()
+            t = "%04u/%02u/%02u %02u:%02u:%02u " % (t.tm_year, t.tm_mon, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec)
+            t += prefix
+            for line in message.split('\n'):
+                line = t + line
+                self.LogToFile(line)
         
-def Log(message,file_path=''):
+    def Warn(self,message):
+        """
+        Prepend the text "WARNING:" to the prefix for each line in 'message'.
+        """
+        self.LogWithPrefix("WARNING:", message)
+    
+    def Error(self,message):
+        """
+        Call ErrorWithPrefix(message).
+        """
+        ErrorWithPrefix("", message)
+    
+    def ErrorWithPrefix(self,prefix, message):
+        """
+        Prepend the text "ERROR:" to the prefix for each line in 'message'.
+        Errors written to logfile, and /dev/console
+        """
+        self.LogWithPrefix("ERROR:", message)
+    
+def LoggerInit(log_file_path,log_con_path):
     """
-    Standard Log function.
-    Logs to logfile, and /dev/console.
+    Create log object and export its methods to global scope.
     """
-    LogWithPrefix("", message,file_path)
-
-def LogWithPrefix(prefix, message, file_path, to_console=True):
-    """
-    Log to logfile.  if to_console = True then log to conosle.
-    Prefix each line of 'message' with current time+'prefix'.
-    """
-    t = time.localtime()
-    t = "%04u/%02u/%02u %02u:%02u:%02u " % (t.tm_year, t.tm_mon, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec)
-    t += prefix
-    for line in message.split('\n'):
-        line = t + line
-        LogToFile(line,file_path)
-        if to_console:
-            LogToCon(line)
-        
-def NoLog(message):
-    """
-    Don't Log.
-    """
-    pass
-
-def LogIfVerbose(message,file_path=''):
-    """
-    Only log 'message' if global Verbose is True.
-    Verbose messages are assumed to be undesiarable in the
-    serial logs, so do not send the verbose logging to /dev/console
-    """
-    if Verbose == True:
-        LogWithPrefix('',message,file_path,to_console=False)
-
-def LogWithPrefixIfVerbose(prefix, message,file_path=''):
-    """
-    Only log 'message' if global Verbose is True.
-    Log to logfile, ignoring /dev/console
-    Prefix each line of 'message' with current time+'prefix'.
-    """
-    if Verbose == True:
-        LogWithPrefix(prefix, message,file_path,to_console=False)
-
-def Warn(message,file_path=''):
-    """
-    Prepend the text "WARNING:" to the prefix for each line in 'message'.
-    """
-    LogWithPrefix("WARNING:", message,file_path)
-
-def Error(message,file_path=''):
-    """
-    Call ErrorWithPrefix(message).
-    """
-    ErrorWithPrefix("", message,file_path)
-
-def ErrorWithPrefix(prefix, message,file_path):
-    """
-    Prepend the text "ERROR:" to the prefix for each line in 'message'.
-    Errors written to logfile, and /dev/console
-    """
-    LogWithPrefix("ERROR:", message,file_path)
+    global Log,LogWithPrefix,LogIfVerbose,LogWithPrefixIfVerbose,Error,ErrorWithPrefix,Warn,NoLog,ThrottleLog
+    l=Logger(log_file_path,log_con_path)
+    Log,LogWithPrefix,LogIfVerbose,LogWithPrefixIfVerbose,Error,ErrorWithPrefix,Warn,NoLog,ThrottleLog = l.Log,l.LogWithPrefix,l.LogIfVerbose,l.LogWithPrefixIfVerbose,l.Error,l.ErrorWithPrefix,l.Warn,l.NoLog,l.ThrottleLog
 
 def Linux_ioctl_GetInterfaceMac(ifname):
     """
@@ -3363,6 +3394,7 @@ def main():
     if len(sys.argv) == 1:
         sys.exit(Usage())
 
+    LoggerInit('/var/log/waagent.log','/dev/console')
     global LinuxDistro
     LinuxDistro=platform.dist()[0]
     dist_class_name=LinuxDistro+'Distro'
