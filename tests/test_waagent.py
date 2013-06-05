@@ -17,7 +17,7 @@ from time import ctime, sleep
 import imp
 
 # waagent has no '.py' therefore create waagent module import manually.
-waagent=imp.load_source('waagent','waagent')
+waagent=imp.load_source('waagent','../waagent')
 
 TestingVersion = "$CommitBranch:future$|$LastCommitDate:2013-04-16 15:52:17 -0700$|$LastCommitHash:7ad7c643b2adbac40b1ea4a5b6eb19f0fe971623$"
 
