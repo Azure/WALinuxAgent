@@ -32,6 +32,7 @@ class WaagentTestCases(unittest.TestCase):
         Check Distro is supported.
         Create a waagent.conf file.
         """
+        waagent.LoggerInit('/var/log/waagent.log','/dev/console')
         if not self.AmIRoot():
             raise Exception('I need to run as root')
         DistroName=platform.dist()[0]
