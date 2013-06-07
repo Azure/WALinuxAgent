@@ -84,7 +84,7 @@ DiskActivated = False
 Openssl = "openssl"
 Children = []
 
-VMM_STARTUP_SCRIPT_NAME='INSTALL'
+VMM_STARTUP_SCRIPT_NAME='install'
 VMM_CONFIG_FILE_NAME='linuxosconfiguration.xml'
 
 RulesFiles = [ "/lib/udev/rules.d/75-persistent-net-generator.rules",
@@ -2802,7 +2802,7 @@ class Agent(Util):
         Spawn the VMM startup script.
         """
         Log("Starting Microsoft System Center VMM Initialization Process")
-        pid = subprocess.Popen(["/bin/sh","/mnt/cdrom/secure/"+VMM_STARTUP_SCRIPT_NAME,"-p /mnt/cdrom/secure/ "]).pid
+        pid = subprocess.Popen(["/bin/bash","/mnt/cdrom/secure/"+VMM_STARTUP_SCRIPT_NAME,"-p /mnt/cdrom/secure/ "]).pid
         time.sleep(5)
         sys.exit(0)
         
@@ -2856,7 +2856,7 @@ class Agent(Util):
 
     def SearchForVMMStartup(self):
         """
-        Search for a DVD/CDROM containing VMM's VMM_STARTUP_SCRIPT_NAME.
+        Search for a DVD/CDROM containing VMM's VMM_CONFIG_FILE_NAME.
         Call TryLoadAtapiix in case we must load the ata_piix module first.
 
         If VMM_CONFIG_FILE_NAME is found, call DoVmmStartup.
@@ -2866,7 +2866,7 @@ class Agent(Util):
         if os.path.exists('/mnt/cdrom/secure') == False:
             CreateDir("/mnt/cdrom/secure", "root", 0700)
         mounted=False
-        for dvds in [re.match(r'(sr[0-9]|hd[c-z])',x) for x in os.listdir('/dev/')]:
+        for dvds in [re.match(r'(sr[0-9]|hd[c-z]|cdrom[0-9]?)',x) for x in os.listdir('/dev/')]:
             if dvds == None:
                 continue
             dvd = '/dev/'+dvds.group(0)
@@ -2876,9 +2876,6 @@ class Agent(Util):
                 for retry in range(1,11):
                     retcode,output=RunGetOutput("mount -v " + dvd + " /mnt/cdrom/secure")
                     Log(output[:-1])
-                    #vmm testing only TODO REMOVE
-                    if retcode == 32 :
-                        retcode,output=RunGetOutput("mount -v " + dvd + " /mnt/cdrom/secure -o loop")
                     if retcode:
                         Log("mount failed on attempt #" + str(retry) )
                     else:
