@@ -41,6 +41,7 @@ fi
 
 %install
 mkdir -p %{buildroot}/usr/sbin
+./setup.py --buildroot "%{buildroot}"
 install -m 0755 waagent %{buildroot}%{_sbindir}/
 
 %post
@@ -67,6 +68,10 @@ fi
 %doc NOTICE
 %doc README
 %doc Changelog
+%{_sysconfdir}/waagent.conf
+%{_sysconfdir}/init.d/waagent
+%{_sysconfdir}/logrotate.d/waagent
+
 
 %changelog
 * Thu May 30 2013 - walinuxagent@microsoft.com
