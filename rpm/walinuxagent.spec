@@ -1,8 +1,8 @@
 #===============================================================================
-# Name: WAAgent.spec
+# Name: walinuxagent.spec
 #-------------------------------------------------------------------------------
 # Purpose : RPM Spec file for Python script packaging
-# Version : 1.3.3
+# Version : 1.4.0
 # Created : April 20 2012
 #===============================================================================
 
@@ -10,12 +10,12 @@
 
 Name:           WALinuxAgent
 Summary:        The Windows Azure Linux Agent
-Version:        1.3.3
+Version:        1.4.0
 Release:        1
 License:        Apache License Version 2.0
 Group:          Applications/Internet
 Url:            http://go.microsoft.com/fwlink/?LinkId=250998
-Source0:        WALinuxAgent-1.3.3.tar.gz
+Source0:        WALinuxAgent-1.4.0.tar.gz
 Requires:       python python-pyasn1 openssh openssl util-linux sed grep sudo iptables
 Conflicts:      NetworkManager
 BuildRoot:      %{_tmppath}/%{name}-%{version}-build
@@ -68,12 +68,15 @@ fi
 %doc NOTICE
 %doc README
 %doc Changelog
-%{_sysconfdir}/waagent.conf
+%config %{_sysconfdir}/waagent.conf
 %{_sysconfdir}/init.d/waagent
 %{_sysconfdir}/logrotate.d/waagent
 
 
 %changelog
+* Thu Jun XX 2013 - walinuxagent@microsoft.com
+- Updated version to 1.4.0 for release
+
 * Thu May 30 2013 - walinuxagent@microsoft.com
 - Updated version to 1.3.3 for release
 
