@@ -58,6 +58,9 @@ DiskActivated = False
 Openssl = "openssl"
 Children = []
 
+VMM_STARTUP_SCRIPT_NAME='install'
+VMM_CONFIG_FILE_NAME='linuxosconfiguration.xml'
+
 PossibleEthernetInterfaces = ["seth0", "seth1", "eth0", "eth1"]
 RulesFiles = [ "/lib/udev/rules.d/75-persistent-net-generator.rules",
                "/etc/udev/rules.d/70-persistent-net.rules" ]
@@ -1858,6 +1861,63 @@ class Agent(Util):
         
         # we have succeeded loading the ata_piix mod if it can be done.
 
+    def DoVmmStartup(self):
+        """
+        Spawn the VMM startup script.
+        """
+        Log("Starting Microsoft System Center VMM Initialization Process")
+        pid = subprocess.Popen(["/bin/bash","/mnt/cdrom/secure/"+VMM_STARTUP_SCRIPT_NAME,"-p /mnt/cdrom/secure/ "]).pid
+        time.sleep(5)
+        sys.exit(0)
+        
+    def SearchForVMMStartup(self):
+        """
+        Search for a DVD/CDROM containing VMM's VMM_CONFIG_FILE_NAME.
+        Call TryLoadAtapiix in case we must load the ata_piix module first.
+
+        If VMM_CONFIG_FILE_NAME is found, call DoVmmStartup.
+        Else, return to Azure Provisioning process.
+        """
+        self.TryLoadAtapiix()
+        if os.path.exists('/mnt/cdrom/secure') == False:
+            CreateDir("/mnt/cdrom/secure", "root", 0700)
+        mounted=False
+        for dvds in [re.match(r'(sr[0-9]|hd[c-z]|cdrom[0-9]?)',x) for x in os.listdir('/dev/')]:
+            if dvds == None:
+                continue
+            dvd = '/dev/'+dvds.group(0)
+            if Run("LC_ALL=C fdisk -l " + dvd + " | grep Disk",chk_err=False):
+                continue  # Not mountable
+            else:
+                for retry in range(1,6):
+                    retcode,output=RunGetOutput("mount -v " + dvd + " /mnt/cdrom/secure")
+                    Log(output[:-1])
+                    if retcode == 0:
+                        Log("mount succeeded on attempt #" + str(retry) )
+                        mounted=True
+                        break
+                    if 'is already mounted on /mnt/cdrom/secure' in output:
+                        Log("Device " + dvd + " is already mounted on /mnt/cdrom/secure." + str(retry) )
+                        mounted=True
+                        break
+                    Log("mount failed on attempt #" + str(retry) )
+                    Log("mount loop sleeping 5...")
+                    time.sleep(5)
+                if not mounted:
+                    # unable to mount
+                    continue
+                if not os.path.isfile("/mnt/cdrom/secure/"+VMM_CONFIG_FILE_NAME):
+                    #nope - mount the next drive
+                    if mounted:
+                        Run("unmount "+dvd,chk_err=False)
+                        mounted=False
+                        continue
+                else : # it is the vmm startup
+                    self.DoVmmStartup()
+
+        Log("VMM Init script not found.  Provisioning for Azure")
+        return 
+        
     def Provision(self):
         enabled = Config.get("Provisioning.Enabled")
         if enabled != None and enabled.lower().startswith("n"):
@@ -1886,18 +1946,20 @@ class Agent(Util):
                 Log("Waiting for DVD - sleeping 1 - "+str(i+1)+" try...")
                 time.sleep(1)
         CreateDir("/mnt/cdrom/secure", "root", 0700)
-        #begin mount loop - ten tries - 5 sec wait between
-        for retry in range(1,11):
+        #begin mount loop - 5 tries - 5 sec wait between
+        for retry in range(1,6):
             retcode,output=RunGetOutput("mount -v " + dvd + " /mnt/cdrom/secure")
             Log(output[:-1])
-            if retcode:
-                Log("mount failed on attempt #" + str(retry) )
-            else:
+            if retcode == 0:
                 Log("mount succeeded on attempt #" + str(retry) )
                 break
+            if 'is already mounted on /mnt/cdrom/secure' in output:
+                Log("Device " + dvd + " is already mounted on /mnt/cdrom/secure." + str(retry) )
+                break
+            Log("mount failed on attempt #" + str(retry) )
             Log("mount loop sleeping 5...")
             time.sleep(5)
-            
+
         if not os.path.isfile("/mnt/cdrom/secure/ovf-env.xml"):
             Error("Unable to provision: Missing ovf-env.xml on DVD.")
             return "Failed to retrieve provisioning data (0x02)."
