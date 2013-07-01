@@ -1989,6 +1989,9 @@ class Agent(Util):
         if IsLinux():
             SetFileContents("/var/run/waagent.pid", str(os.getpid()) + "\n")
 
+        # Determine if we are in VMM.  Spawn VMM_STARTUP_SCRIPT_NAME if found.
+        self.SearchForVMMStartup()
+
         if GetIpv4Address() == None:
             Log("Waiting for network.")
             while(GetIpv4Address() == None):
