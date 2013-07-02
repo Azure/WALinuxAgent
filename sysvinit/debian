@@ -1,0 +1,56 @@
+#!/bin/sh
+### BEGIN INIT INFO
+# Provides:          WindowsAzureLinuxAgent
+# Required-Start:    $network $syslog
+# Required-Stop:     $network $syslog
+# Should-Start:      $network $syslog
+# Should-Stop:       $network $syslog
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: WindowsAzureLinuxAgent
+# Description:       WindowsAzureLinuxAgent
+### END INIT INFO
+
+. /lib/lsb/init-functions
+
+OPTIONS="-daemon"
+WAZD_BIN=/usr/sbin/waagent
+WAZD_PID=/var/run/waagent.pid
+
+case "$1" in
+    start)
+        log_begin_msg "Starting WindowsAzureLinuxAgent..."
+        pid=$( pidofproc $WAZD_BIN )
+        if [ -n "$pid" ] ; then
+              log_begin_msg "Already running."
+              log_end_msg 0
+              exit 0
+        fi
+        start-stop-daemon --start --quiet --oknodo --background --exec $WAZD_BIN -- $OPTIONS
+        log_end_msg $?
+        ;;
+
+    stop)
+        log_begin_msg "Stopping WindowsAzureLinuxAgent..."
+        start-stop-daemon --stop --quiet --oknodo --pidfile $WAZD_PID
+        ret=$?
+        rm -f $WAZD_PID
+        log_end_msg $ret
+        ;;
+    force-reload)
+        $0 restart
+        ;;
+    restart)
+        $0 stop
+        $0 start
+        ;;
+    status)
+        status_of_proc $WAZD_BIN && exit 0 || exit $?
+        ;;
+    *)
+        log_success_msg "Usage: /etc/init.d/waagent {start|stop|force-reload|restart|status}"
+        exit 1
+        ;;
+esac
+
+exit 0
