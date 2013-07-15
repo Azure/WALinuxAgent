@@ -1,0 +1,54 @@
+#!/bin/bash
+#
+# Init file for WindowsAzureLinuxAgent.
+#
+# chkconfig: 2345 60 80
+# description: WindowsAzureLinuxAgent
+#
+
+# source function library
+. /etc/rc.d/init.d/functions
+
+RETVAL=0
+FriendlyName="WindowsAzureLinuxAgent"
+WAZD_BIN=/usr/sbin/waagent
+
+start()
+{
+    echo -n $"Starting $FriendlyName: "
+    $WAZD_BIN -daemon &
+}
+
+stop()
+{
+    echo -n $"Stopping $FriendlyName: "
+    killproc -p /var/run/waagent.pid $WAZD_BIN
+    RETVAL=$?
+    echo
+    return $RETVAL
+}
+
+case "$1" in
+    start)
+        start
+        ;;
+    stop)
+        stop
+        ;;
+    restart)
+        stop
+        start
+        ;;
+    reload)
+        ;;
+    report)
+        ;;
+    status)
+        status $WAZD_BIN
+        RETVAL=$?
+        ;;
+    *)
+        echo $"Usage: $0 {start|stop|restart|status}"
+        RETVAL=1
+esac
+exit $RETVAL

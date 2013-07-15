@@ -16,212 +16,176 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+import glob
 import os
 import sys
 import platform
-from distutils.core import setup
+import setuptools
+from setuptools.command.install import install
 
-Init_Suse = """\
-#! /bin/sh
+from distutils.errors import DistutilsArgError
 
-### BEGIN INIT INFO
-# Provides: WindowsAzureLinuxAgent
-# Required-Start: $network sshd
-# Required-Stop: $network sshd
-# Default-Start: 3 5
-# Default-Stop: 0 1 2 6
-# Description: Start the WindowsAzureLinuxAgent
-### END INIT INFO
-
-WAZD_BIN=/usr/sbin/waagent
-test -x $WAZD_BIN || exit 5
-
-case "$1" in
-    start)
-        echo "Starting WindowsAzureLinuxAgent"
-        ## Start daemon with startproc(8). If this fails
-        ## the echo return value is set appropriate.
-
-        startproc -f $WAZD_BIN -daemon
-        exit $?
-        ;;
-    stop)
-        echo "Shutting down WindowsAzureLinuxAgent"
-        ## Stop daemon with killproc(8) and if this fails
-        ## set echo the echo return value.
-
-        killproc -p /var/run/waagent.pid $WAZD_BIN
-        exit $?
-        ;;
-    try-restart)
-        ## Stop the service and if this succeeds (i.e. the
-        ## service was running before), start it again.
-        $0 status >/dev/null &&  $0 restart
-        ;;
-    restart)
-        ## Stop the service and regardless of whether it was
-        ## running or not, start it again.
-        $0 stop
-        $0 start
-        ;;
-    force-reload|reload)
-        ;;
-    status)
-        echo -n "Checking for service WindowsAzureLinuxAgent "
-        ## Check status with checkproc(8), if process is running
-        ## checkproc will return with exit status 0.
-
-        checkproc -p $WAZD_PIDFILE $WAZD_BIN
-        exit $?
-        ;;
-    probe)
-        ;;
-    *)
-        echo "Usage: $0 {start|stop|status|try-restart|restart|force-reload|reload}"
-        exit 1
-        ;;
-esac
-"""
-
-Init_RedHat = """\
-#!/bin/bash
-#
-# Init file for WindowsAzureLinuxAgent.
-#
-# chkconfig: 2345 60 80
-# description: WindowsAzureLinuxAgent
-#
-
-# source function library
-. /etc/rc.d/init.d/functions
-
-RETVAL=0
-FriendlyName="WindowsAzureLinuxAgent"
-WAZD_BIN=/usr/sbin/waagent
-
-start()
-{
-    echo -n $"Starting $FriendlyName: "
-    $WAZD_BIN -daemon &
-}
-
-stop()
-{
-    echo -n $"Stopping $FriendlyName: "
-    killproc -p /var/run/waagent.pid $WAZD_BIN
-    RETVAL=$?
-    echo
-    return $RETVAL
-}
-
-case "$1" in
-    start)
-        start
-        ;;
-    stop)
-        stop
-        ;;
-    restart)
-        stop
-        start
-        ;;
-    reload)
-        ;;
-    report)
-        ;;
-    status)
-        status $WAZD_BIN
-        RETVAL=$?
-        ;;
-    *)
-        echo $"Usage: $0 {start|stop|restart|status}"
-        RETVAL=1
-esac
-exit $RETVAL
-"""
-
-WaagentConf = """\
-#
-# Windows Azure Linux Agent Configuration
-#
-
-Role.StateConsumer=None                 # Specified program is invoked with "Ready" or "Shutdown".
-                                        # Shutdown will be initiated only after the program returns. Windows Azure will
-                                        # power off the VM if shutdown is not completed within ?? minutes.
-Role.ConfigurationConsumer=None         # Specified program is invoked with XML file argument specifying role configuration.
-Role.TopologyConsumer=None              # Specified program is invoked with XML file argument specifying role topology.
-
-Provisioning.Enabled=y                  #
-Provisioning.DeleteRootPassword=y       # Password authentication for root account will be unavailable.
-Provisioning.RegenerateSshHostKeyPair=y # Generate fresh host key pair.
-Provisioning.SshHostKeyPairType=rsa     # Supported values are "rsa", "dsa" and "ecdsa".
-Provisioning.MonitorHostName=y          # Monitor host name changes and publish changes via DHCP requests.
-
-ResourceDisk.Format=y                   # Format if unformatted. If 'n', resource disk will not be mounted.
-ResourceDisk.Filesystem=ext4            #
-ResourceDisk.MountPoint=/mnt/resource   #
-ResourceDisk.EnableSwap=n               # Create and use swapfile on resource disk.
-ResourceDisk.SwapSizeMB=0               # Size of the swapfile.
-
-LBProbeResponder=y                      # Respond to load balancer probes if requested by Windows Azure.
-
-Logs.Verbose=n                          #
-
-OS.RootDeviceScsiTimeout=300            # Root device timeout in seconds.
-OS.OpensslPath=None                     # If "None", the system default version is used.
-"""
-
-WaagentLogrotate = """\
-/var/log/waagent.log {
-    monthly
-    rotate 6
-    notifempty
-    missingok
-}
-"""
-
-def SetFileContents(filepath, contents):
+def getDistro():
     """
-    Write 'contents' to 'filepath'.
+    Try to figure out the distribution we are running on
     """
-    with open(filepath, "w+") as F :
-        F.write(contents)
-    return 0
+    distro = platform.linux_distribution()[0].lower()
+    # Manipulate the distribution to meet our needs we treat
+    # Fedora, RHEL, and CentOS the same
+    # openSUSE and SLE the same
+    if distro.find('suse') != -1:
+        distro = 'suse'
+    if (distro.find('fedora') != -1
+    or distro.find('red hat') != -1
+    or distro.find('centos') != -1):
+        distro = 'redhat'
 
-def PackagedInstall(buildroot):
-    """
-    Called from setup.py for use by RPM.
-    Generic implementation Creates directories and
-    files /etc/waagent.conf, /etc/init.d/waagent, /usr/sbin/waagent,
-    /etc/logrotate.d/waagent, /etc/sudoers.d/waagent under buildroot.
-    """
-    if not os.path.exists(buildroot+'/etc'):
-        os.mkdir(buildroot+'/etc')
-    SetFileContents(buildroot+'/etc/waagent.conf', WaagentConf)
-        
-    if not os.path.exists(buildroot+'/etc/logrotate.d'):
-        os.mkdir(buildroot+'/etc/logrotate.d')
-    SetFileContents(buildroot+'/etc/logrotate.d/waagent', WaagentLogrotate)
+    return distro
     
-    # Regular init.d configurations
-    filename = "waagent"
-    filepath = buildroot+ "/etc/init.d/" + filename
-    if 'SuSE' in platform.dist()[0]:
-        init_file=Init_Suse
-    else :
-        init_file=Init_RedHat
-    if not os.path.exists(buildroot+'/etc/init.d'):
-        os.mkdir(buildroot+'/etc/init.d')
-    SetFileContents(filepath, init_file)
-    os.chmod(filepath, 0755)
+
+class InstallData(install):
+    user_options = install.user_options + [
+        # This will magically show up in member variable 'init_system'
+        ('init-system=', None, 'init system to configure [default: sysV]'),
+        ('lnx-distro=', None, 'target Linux distribution'),
+    ]
+
+    def initialize_options(self):
+        install.initialize_options(self)
+        self.init_system = 'sysV'
+        self.lnx_distro = None
+
+    def finalize_options(self):
+        install.finalize_options(self)
+        if not self.lnx_distro:
+            self.lnx_distro = getDistro()
+        if self.init_system not in ['sysV', 'systemd', 'upstart']:
+            print 'Do not know how to handle %s init system' %self.init_system
+            system.exit(1)
+        if self.init_system == 'sysV':
+            if not os.path.exists('distro/%s' %self.lnx_distro):
+                msg = 'Unknown distribution "%s"' %self.lnx_distro
+                msg += ', no entry in distro directory'
+                sys.exit(1)
+
+    def run(self):
+        """
+        Install the files for the Windows Azure Linux Agent
+        """
+        distro = self.lnx_distro
+        init = self.init_system
+        tgtDir = self.prefix
+        if tgtDir[-1] != '/':
+            tgtDir += '/'
+        # Handle the different init systems
+        if init == 'sysV':
+            if not os.path.exists(tgtDir + 'etc/init.d'):
+                try:
+                    self.mkpath(tgtDir + 'etc/init.d', 0755)
+                except:
+                    msg = 'Could not create init script directory '
+                    msg += tgtDir
+                    msg += 'etc/init.d'
+                    print msg
+                    print sys.exc_info()[0]
+                    sys.exit(1)
+            initScripts = glob.glob('distro/%s/*.sysV' %distro)
+            try:
+                for f in initScripts:
+                    newName = f.split('/')[-1].split('.')[0]
+                    self.copy_file(f, tgtDir + 'etc/init.d/' + newName)
+            except:
+                print 'Could not install systemV init script', 
+                sys.exit(1)
+        elif init == 'systemd':
+            if not os.path.exists(tgtDir + 'usr/lib/systemd/system'):
+                try:
+                    self.mkpath(tgtDir + 'usr/lib/systemd/system', 0755)
+                except:
+                    msg = 'Could not create systemd service directory '
+                    msg += tgtDir
+                    msg += 'etc/init.d'
+                    print msg
+                    sys.exit(1)
+            services = glob.glob('distro/systemd/*')
+            for f in services:
+                try:
+                    baseName = f.split('/')[-1]
+                    self.copy_file(f,
+                                tgtDir + 'usr/lib/systemd/system/' + baseName)
+                except:
+                    print 'Could not install systemd service files'
+                    sys.exit(1)
+        elif init == 'upstart':
+            print 'Upstart init files installation not supported at this time.'
+            print 'Need an implementtaion, please submit a patch ;) '
+    
+        # Configuration file
+        if not os.path.exists(tgtDir + 'etc'):
+                try:
+                    self.mkpath(tgtDir + 'etc', 0755)
+                except:
+                    msg = 'Could not create config dir '
+                    msg += tgtDir
+                    msg += 'etc'
+                    print msg
+                    sys.exit(1)
+        try:
+            self.copy_file('config/waagent.conf', tgtDir + 'etc/waagent.conf')
+        except:
+            print 'Could not install configuration file %etc' %tgtDir
+            sys.exit(1)
+        if not os.path.exists(tgtDir + 'etc/logrotate.d'):
+            try:
+                self.mkpath(tgtDir + 'etc/logrotate.d', 0755)
+            except:
+                msg = 'Could not create ' + tgtDir + 'etc/logrotate.d'
+                print msg
+                sys.exit(1)
+        try:
+            self.copy_file('config/waagent.logrotate',
+                      tgtDir + 'etc/logrotate.d/waagent')
+        except:
+            msg = 'Could not install logrotate file in '
+            msg += tgtDir + 'etc/logrotate.d'
+            print  msg
+            sys.exit(1)
+    
+        # Daemon
+        if not os.path.exists(tgtDir + 'usr/sbin'):
+            try:
+                self.mkpath(tgtDir + 'usr/sbin', 0755)
+            except:
+                msg = 'Could not create target daemon dir '
+                msg+= tgtDir + 'usr/sbin'
+                print msg
+                sys.exit(1)
+        try:
+            self.copy_file('waagent', tgtDir + 'usr/sbin/waagent')
+        except:
+            print 'Could not install daemon %susr/sbin/waagent' %tgtDir
+            sys.exit(1)
+        os.chmod('%susr/sbin/waagent' %tgtDir, 0755)
+
+def readme():
+    with open('README') as f:
+        return f.read()
+    
+setuptools.setup(name = 'waagent',
+      version = '1.3.4-PRE',
+      description = 'Windows Azure Linux Agent',
+      long_description = readme(),
+      author = 'Stephen Zarkos, Eric Gable',
+      author_email = 'walinuxagent@microsoft.com',
+      platforms = 'Linux',
+      url = 'https://github.com/Windows-Azure/',
+      license = 'Apache License Version 2.0',
+      cmdclass = {
+          # Use a subclass for install that handles
+          # install, we do not have a "true" python package
+          'install': InstallData,
+      },
+)
 
 
-BUILDROOT=None
-
-for a in range(len(sys.argv)):
-    if sys.argv[a] == '--buildroot':
-        BUILDROOT=sys.argv[a+1]
-
-if BUILDROOT : # called by rpm-build
-    PackagedInstall(BUILDROOT)
 
