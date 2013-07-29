@@ -266,7 +266,10 @@ def ChangeOwner(filepath, user):
     except:
         pass
     if p != None:
-        os.chown(filepath, p[2], p[3])
+        try:
+            os.chown(filepath, p[2], p[3])
+        except:
+            return 1
 
 def CreateDir(dirpath, user, mode):
     try:
