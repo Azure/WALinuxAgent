@@ -1912,7 +1912,7 @@ class Agent(Util):
                 if not os.path.isfile("/mnt/cdrom/secure/"+VMM_CONFIG_FILE_NAME):
                     #nope - mount the next drive
                     if mounted:
-                        Run("unmount "+dvd,chk_err=False)
+                        Run("umount "+dvd,chk_err=False)
                         mounted=False
                         continue
                 else : # it is the vmm startup
