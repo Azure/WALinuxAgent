@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 #
 # Windows Azure Linux Agent
 #
@@ -35,6 +35,7 @@ import shutil
 import socket
 import SocketServer
 import struct
+import string
 import subprocess
 import sys
 import tempfile
@@ -85,12 +86,44 @@ Children = []
 
 VMM_STARTUP_SCRIPT_NAME='install'
 VMM_CONFIG_FILE_NAME='linuxosconfiguration.xml'
-
+global RulesFiles
 RulesFiles = [ "/lib/udev/rules.d/75-persistent-net-generator.rules",
                "/etc/udev/rules.d/70-persistent-net.rules" ]
 VarLibDhcpDirectories = ["/var/lib/dhclient", "/var/lib/dhcpcd", "/var/lib/dhcp"]
 EtcDhcpClientConfFiles = ["/etc/dhcp/dhclient.conf", "/etc/dhcp3/dhclient.conf"]
+global LibDir
 LibDir = "/var/lib/waagent"
+
+WaagentConf = """\
+#
+# Windows Azure Linux Agent Configuration
+#
+
+Role.StateConsumer=None                 # Specified program is invoked with "Ready" or "Shutdown".
+                                        # Shutdown will be initiated only after the program returns. Windows Azure will
+                                        # power off the VM if shutdown is not completed within ?? minutes.
+Role.ConfigurationConsumer=None         # Specified program is invoked with XML file argument specifying role configuration.
+Role.TopologyConsumer=None              # Specified program is invoked with XML file argument specifying role topology.
+
+Provisioning.Enabled=y                  #
+Provisioning.DeleteRootPassword=y       # Password authentication for root account will be unavailable.
+Provisioning.RegenerateSshHostKeyPair=y # Generate fresh host key pair.
+Provisioning.SshHostKeyPairType=rsa     # Supported values are "rsa", "dsa" and "ecdsa".
+Provisioning.MonitorHostName=y          # Monitor host name changes and publish changes via DHCP requests.
+
+ResourceDisk.Format=n                   # Format if unformatted. If 'n', resource disk will not be mounted.
+ResourceDisk.Filesystem=ext4            #
+ResourceDisk.MountPoint=/mnt/resource   #
+ResourceDisk.EnableSwap=n               # Create and use swapfile on resource disk.
+ResourceDisk.SwapSizeMB=0               # Size of the swapfile.
+
+LBProbeResponder=y                      # Respond to load balancer probes if requested by Windows Azure.
+
+Logs.Verbose=y                          #
+
+OS.RootDeviceScsiTimeout=300            # Root device timeout in seconds.
+OS.OpensslPath=None                     # If "None", the system default version is used.
+"""
 
 ############################################################
 # BEGIN DISTRO CLASS DEFS
@@ -127,7 +160,11 @@ class AbstractDistro(object):
         self.agent_files_to_uninstall = ["/etc/waagent.conf", "/etc/logrotate.d/waagent", "/etc/sudoers.d/waagent"]
         self.grubKernelBootOptionsFile = '/etc/default/grub'
         self.grubKernelBootOptionsLine = 'GRUB_CMDLINE_LINUX_DEFAULT='
-    
+        self.getpidcmd = 'pidof'
+        self.mount_dvd_cmd = 'mount'
+        self.sudoers_dir_base = '/etc'
+        self.waagent_conf_file = WaagentConf
+
     def isSelinuxSystem(self):
         """
         Checks and sets self.selinux = True if SELinux is available on system.
@@ -274,6 +311,9 @@ class AbstractDistro(object):
             Log("Root password deleted.")
         return 0
     
+    def changePass(self,user,password):
+        return RunSendStdin("chpasswd",(user + ":" + password + "\n"))
+    
     def load_ata_piix(self):
         """
         Generic function to load ata_piix.ko for use with ATAPI CDROM
@@ -363,7 +403,7 @@ class AbstractDistro(object):
         """
         if not os.path.exists(buildroot+'/etc'):
             os.mkdir(buildroot+'/etc')
-        SetFileContents(buildroot+'/etc/waagent.conf', WaagentConf)
+        SetFileContents(buildroot+'/etc/waagent.conf', MyDistro.waagent_conf_file)
         
         if not os.path.exists(buildroot+'/etc/logrotate.d'):
             os.mkdir(buildroot+'/etc/logrotate.d')
@@ -396,10 +436,67 @@ class AbstractDistro(object):
         return DeleteAccount(user)
 
     def ActivateResourceDisk(self):
-        WaAgent.ActivateResourceDisk()
+        """
+        Format, mount, and if specified in the configuration
+        set resource disk as swap.
+        """
+        global DiskActivated
+        format = Config.get("ResourceDisk.Format")
+        if format == None or format.lower().startswith("n"):
+            DiskActivated = True
+            return
+        device = DeviceForIdePort(1)
+        if device == None:
+            Error("ActivateResourceDisk: Unable to detect disk topology.")
+            return
+        device = "/dev/" + device
+        for entry in RunGetOutput("mount")[1].split():
+            if entry.startswith(device + "1"):
+                Log("ActivateResourceDisk: " + device + "1 is already mounted.")
+                DiskActivated = True
+                return
+        mountpoint = Config.get("ResourceDisk.MountPoint")
+        if mountpoint == None:
+            mountpoint = "/mnt/resource"
+        CreateDir(mountpoint, "root", 0755)
+        fs = Config.get("ResourceDisk.Filesystem")
+        if fs == None:
+            fs = "ext3"
+        if RunGetOutput("sfdisk -q -c " + device + " 1")[1].rstrip() == "7" and fs != "ntfs":
+            Run("sfdisk -c " + device + " 1 83")
+            Run("mkfs." + fs + " " + device + "1")
+        if Run("mount " + device + "1 " + mountpoint):
+            Error("ActivateResourceDisk: Failed to mount resource disk (" + device + "1).")
+            return
+        Log("Resource disk (" + device + "1) is mounted at " + mountpoint + " with fstype " + fs)
+        DiskActivated = True
+        swap = Config.get("ResourceDisk.EnableSwap")
+        if swap == None or swap.lower().startswith("n"):
+            return
+        sizeKB = int(Config.get("ResourceDisk.SwapSizeMB")) * 1024
+        if os.path.isfile(mountpoint + "/swapfile") and os.path.getsize(mountpoint + "/swapfile") != (sizeKB * 1024):
+            os.remove(mountpoint + "/swapfile")
+        if not os.path.isfile(mountpoint + "/swapfile"):
+            Run("dd if=/dev/zero of=" + mountpoint + "/swapfile bs=1024 count=" + str(sizeKB))
+            Run("mkswap " + mountpoint + "/swapfile")
+        if not Run("swapon " + mountpoint + "/swapfile"):
+            Log("Enabled " + str(sizeKB) + " KB of swap at " + mountpoint + "/swapfile")
+        else:
+            Error("ActivateResourceDisk: Failed to activate swap at " + mountpoint + "/swapfile")
 
     def Install(self):
-        return Install
+        return Install()
+
+    def dvdHasMedia(self,dvd):
+        if Run("LC_ALL=C fdisk -l " + dvd + " | grep Disk"):
+            return False
+        return True
+    
+    def mountDVD(self,dvd,location):
+        return RunGetOutput(self.mount_dvd_cmd + ' ' + dvd + ' ' + location)
+
+    def GetHome(self):
+        return GetHome()
 
 ############################################################    
 #	SuSEDistro
@@ -902,6 +999,59 @@ class LinuxMintDistro(UbuntuDistro):
 ############################################################    
 #	FreeBSD
 ############################################################    
+FreeBSDWaagentConf = """\
+#
+# Windows Azure Linux Agent Configuration
+#
+
+Role.StateConsumer=None                 # Specified program is invoked with "Ready" or "Shutdown".
+                                        # Shutdown will be initiated only after the program returns. Windows Azure will
+                                        # power off the VM if shutdown is not completed within ?? minutes.
+Role.ConfigurationConsumer=None         # Specified program is invoked with XML file argument specifying role configuration.
+Role.TopologyConsumer=None              # Specified program is invoked with XML file argument specifying role topology.
+
+Provisioning.Enabled=y                  #
+Provisioning.DeleteRootPassword=y       # Password authentication for root account will be unavailable.
+Provisioning.RegenerateSshHostKeyPair=y # Generate fresh host key pair.
+Provisioning.SshHostKeyPairType=rsa     # Supported values are "rsa", "dsa" and "ecdsa".
+Provisioning.MonitorHostName=y          # Monitor host name changes and publish changes via DHCP requests.
+
+ResourceDisk.Format=y                   # Format if unformatted. If 'n', resource disk will not be mounted.
+ResourceDisk.Filesystem=ufs2            #
+ResourceDisk.MountPoint=/mnt/resource   #
+ResourceDisk.EnableSwap=y               # Create and use swapfile on resource disk.
+ResourceDisk.SwapSizeMB=1024               # Size of the swapfile.
+
+LBProbeResponder=y                      # Respond to load balancer probes if requested by Windows Azure.
+
+Logs.Verbose=y                          #
+
+OS.RootDeviceScsiTimeout=300            # Root device timeout in seconds.
+OS.OpensslPath=None                     # If "None", the system default version is used.
+"""
+
+bsd_init_file="""\
+#! /bin/sh
+
+# PROVIDE: waagent
+# REQUIRE: DAEMON cleanvar sshd
+# BEFORE: LOGIN
+# KEYWORD: nojail
+
+. /etc/rc.subr
+
+name="waagent"
+rcvar="waagent_enable"
+command="/usr/sbin/${name}"
+command_interpreter="/usr/local/bin/python"
+waagent_flags=" daemon verbose &"
+
+pidfile="/var/run/waagent.pid"
+
+load_rc_config $name
+run_rc_command "$1"
+
+"""
 
 class FreeBSDDistro(AbstractDistro):
     """
@@ -913,27 +1063,33 @@ class FreeBSDDistro(AbstractDistro):
         """
         self.agent_service_name = os.path.basename(sys.argv[0]) 
         self.selinux=False
-        self.ssh_service_name='ssh'
+        self.ssh_service_name='sshd'
         self.ssh_config_file='/etc/ssh/sshd_config'
         self.hostname_file_path='/etc/hostname'
         self.dhcp_client_name='dhclient'
-        self.requiredDeps = [ 'route', 'shutdown', 'ssh-keygen', 'pw', 'chpass'
-                              , 'openssl', 'fdisk', 'sed', 'grep', 'sudo' ]
+        self.requiredDeps = [ 'route', 'shutdown', 'ssh-keygen', 'pw'
+                              , 'openssl', 'fdisk', 'sed', 'grep' , 'sudo']
         self.init_script_file='/etc/rc.d/waagent'
+        self.init_file=bsd_init_file
         self.agent_package_name='WALinuxAgent'
         self.fileBlackList = [ "/root/.bash_history", "/var/log/waagent.log",'/etc/resolv.conf' ]        
-        self.agent_files_to_uninstall = ["/etc/waagent.conf", "/etc/sudoers.d/waagent"]
+        self.agent_files_to_uninstall = ["/etc/waagent.conf", "/usr/local/etc/sudoers.d/waagent"]
         self.grubKernelBootOptionsFile = '/boot/loader.conf'
         self.grubKernelBootOptionsLine = ''
+        self.getpidcmd = 'pgrep -n'
+        self.mount_dvd_cmd = 'dd bs=2048 count=1 skip=295 if='
+        self.sudoers_dir_base = '/usr/local/etc'
+        self.waagent_conf_file = FreeBSDWaagentConf
+        
+    def installAgentServiceScriptFiles(self):
+        SetFileContents(self.init_script_file, self.init_file)
+        os.chmod(self.init_script_file, 0777)
+        AppendFileContents("/etc/rc.conf","waagent_enable='YES'\n")
+        return 0
 
-#     def installAgentServiceScriptFiles(self):
-#         SetFileContents(self.init_script_file, self.init_file)
-#         os.chmod(self.init_script_file, 0744)
-#         return 0
-
-#     def registerAgentService(self):
-#         self.installAgentServiceScriptFiles()
-#         return Run('chkconfig --add waagent')
+    def registerAgentService(self):
+        self.installAgentServiceScriptFiles()
+        return Run("services_mkdb " + self.init_script_file)
    
 #     def uninstallAgentService(self):
 #         return Run('chkconfig --del ' + self.agent_service_name)
@@ -942,6 +1098,12 @@ class FreeBSDDistro(AbstractDistro):
 #         self.stopAgentService()
 #         return self.uninstallAgentService()
     
+    def restartSshService(self):
+        """
+        Service call to re(start) the SSH service
+        """
+        return Run("service " + self.ssh_service_name + " restart")
+        
     def sshDeployPublicKey(self,fprint,path):
         """
         We support PKCS8.
@@ -953,17 +1115,22 @@ class FreeBSDDistro(AbstractDistro):
 
     def deleteRootPassword(self):
         """
-        Generic root password removal.
+        BSD root password removal.
         """
-        filepath="/etc/passwd"
-        ReplaceFileContentsAtomic(filepath,"root:*LOCK*:14600::::::\n"
-                                  + "\n".join(filter(lambda a: not a.startswith("root:"),GetFileContents(filepath).split('\n'))))
+        filepath="/etc/master.passwd"
+        ReplaceStringInFile(filepath,r'root:.*?:','root::')
+        #ReplaceFileContentsAtomic(filepath,"root:*LOCK*:14600::::::\n"
+        #                          + "\n".join(filter(lambda a: not a.startswith("root:"),GetFileContents(filepath).split('\n'))))
         os.chmod(filepath, 0000)
         if self.isSelinuxSystem():
             self.setSelinuxContext(filepath,'chcon system_u:object_r:shadow_t:s0')
-            Log("Root password deleted.")
+        RunGetOutput("pwd_mkdb -u root /etc/master.passwd")
+        Log("Root password deleted.")
         return 0
 
+    def changePass(self,user,password):
+        return RunSendStdin("pw usermod " + user + " -h 0 ",password)
+    
     def load_ata_piix(self):
         return 0
 
@@ -1006,7 +1173,11 @@ class FreeBSDDistro(AbstractDistro):
         active ethernet interface.
         """
         iface,inet,mac=self.GetFreeBSDEthernetInfo()
-        return mac
+        l=mac.split(':')
+        r=[]
+        for i in l:
+            r.append(string.atoi(i,16))
+        return r
 
     def GetFreeBSDEthernetInfo(self):
         """
@@ -1014,15 +1185,34 @@ class FreeBSDDistro(AbstractDistro):
         on freeBSD - just parse ifconfig.
         Returns strings: iface, inet4_addr, and mac
         or 'None,None,None' if unable to parse.
-        """        
-        cmd='ifconfig | grep -A1 -B2 "ether" | tr "\n" " "'
-        code,output=RunGetOutput(cmd)
-        if code:
-            return None, None, None
-        j=output.split()
+        We will sleep and retry as the network must be up.
+        """
+        code,output=RunGetOutput("ifconfig",chk_err=False)
+        Log(output)
+        retries=10
+        cmd='ifconfig | grep -A1 -B2 ether | grep -B3 inet | grep -A3 UP '
+        code=1
+
+        while code > 0 :
+            if code > 0 and retries == 0:
+                Error("GetFreeBSDEthernetInfo - Failed to detect ethernet interface")
+                return None, None, None
+            code,output=RunGetOutput(cmd,chk_err=False)
+            retries-=1
+            if code > 0 and retries > 0 :
+                Log("GetFreeBSDEthernetInfo - Error: retry ethernet detection " + str(retries))
+                time.sleep(10)
+
+        j=output.replace('\n',' ')
+        j=j.split()
         iface=j[0][:-1]
-        inet=j[10]
-        mac=j[8] 
+
+        for i in range(len(j)):
+            if j[i] == 'inet' :
+                inet=j[i+1]
+            elif j[i] == 'ether' :
+                mac=j[i+1]
+
         return iface, inet, mac
 
     def CreateAccount(self,user, password, expiration, thumbprint):
@@ -1047,36 +1237,33 @@ class FreeBSDDistro(AbstractDistro):
             Error("CreateAccount: " + user + " is a system user. Will not set password.")
             return "Failed to set password for system user: " + user + " (0x06)."
         if userentry == None:
-            command = "pw useradd -d /home/" + user 
+            command = "pw useradd " + user + " -m"
             if expiration != None:
                 command += " -e " + expiration.split('.')[0]
-                command += ' ' + user
             if Run(command):
                 Error("Failed to create user account: " + user)
                 return "Failed to create user account: " + user + " (0x07)."
             else:
                 Log("CreateAccount: " + user + " already exists. Will update password.")
-        # make the directory
-        CreateDir('/home/'+user,user,744)
         
         if password != None:
-            RunSendStdin("chpass ",(user + ":" + password + "\n"))
+            self.changePass(user,password)
         try:
             # for older distros create sudoers.d
-            if not os.path.isdir('/etc/sudoers.d/'):
+            if not os.path.isdir(MyDistro.sudoers_dir_base+'/sudoers.d/'):
                 # create the /etc/sudoers.d/ directory
-                os.mkdir('/etc/sudoers.d/')
+                os.mkdir(MyDistro.sudoers_dir_base+'/sudoers.d')
                 # add the include of sudoers.d to the /etc/sudoers
-                SetFileContents('/etc/sudoers',GetFileContents('/etc/sudoers')+'\n#includedir /etc/sudoers.d\n')
+                SetFileContents(MyDistro.sudoers_dir_base+'/sudoers',GetFileContents(MyDistro.sudoers_dir_base+'/sudoers')+'\n#includedir ' + MyDistro.sudoers_dir_base + '/sudoers.d\n')
             if password == None:
-                SetFileContents("/etc/sudoers.d/waagent", user + " ALL = (ALL) NOPASSWD: ALL\n")
+                SetFileContents(MyDistro.sudoers_dir_base+"/sudoers.d/waagent", user + " ALL = (ALL) NOPASSWD: ALL\n")
             else:
-                SetFileContents("/etc/sudoers.d/waagent", user + " ALL = (ALL) ALL\n")
-            os.chmod("/etc/sudoers.d/waagent", 0440)
+                SetFileContents(MyDistro.sudoers_dir_base+"/sudoers.d/waagent", user + " ALL = (ALL) ALL\n")
+            os.chmod(MyDistro.sudoers_dir_base+"/sudoers.d/waagent", 0440)
         except:
             Error("CreateAccount: Failed to configure sudo access for user.")
             return "Failed to configure sudo privileges (0x08)."
-        home = GetHome()
+        home = MyDistro.GetHome()
         if thumbprint != None:
             dir = home + "/" + user + "/.ssh"
             CreateDir(dir, user, 0700)
@@ -1117,9 +1304,9 @@ class FreeBSDDistro(AbstractDistro):
             Error("DeleteAccount: " + user + " is a system user. Will not delete account.")
             return
         Run("> /var/run/utmp") #Delete utmp to prevent error if we are the 'user' deleted
-        Run("userdel -f -r " + user)
+        Run("rmuser -y " + user)
         try:
-            os.remove("/etc/sudoers.d/waagent")
+            os.remove(MyDistro.sudoers_dir_base+"/sudoers.d/waagent")
         except:
             pass
         return
@@ -1135,45 +1322,41 @@ class FreeBSDDistro(AbstractDistro):
             DiskActivated = True
             return
         #device = DeviceForIdePort(1)
-        device_base = 'adb0'
+        device_base = 'ada1'
 #         if device == None:
 #             Error("ActivateResourceDisk: Unable to detect disk topology.")
 #            return
         device = "/dev/" + device_base
         for entry in RunGetOutput("mount")[1].split():
-            if entry.startswith(device + "1"):
-                Log("ActivateResourceDisk: " + device + "1 is already mounted.")
+            if entry.startswith(device + "s1"):
+                Log("ActivateResourceDisk: " + device + "s1 is already mounted.")
                 DiskActivated = True
                 return
         mountpoint = Config.get("ResourceDisk.MountPoint")
         if mountpoint == None:
             mountpoint = "/mnt/resource"
         CreateDir(mountpoint, "root", 0755)
-        #TODO change default config file...
-        #fs = Config.get("ResourceDisk.Filesystem")
-        fs='freebsd-ufs'
-        if fs == None:
-            fs = "freebsd"
-            Run("gpart -i  " + device + " 1 -t " + fs + ' -l resource')
-            Run("newfs -U /dev/gpt/resource")
-        if Run("mount " + device + "1 " + mountpoint):
+        fs = Config.get("ResourceDisk.Filesystem")
+        Run("newfs " + device + "s1")
+        if Run("mount " + device + "s1 " + mountpoint):
             Error("ActivateResourceDisk: Failed to mount resource disk (" + device + "1).")
             return
         Log("Resource disk (" + device + "1) is mounted at " + mountpoint + " with fstype " + fs)
         DiskActivated = True
-#         swap = Config.get("ResourceDisk.EnableSwap")
-#         if swap == None or swap.lower().startswith("n"):
-#             return
-#         sizeKB = int(Config.get("ResourceDisk.SwapSizeMB")) * 1024
-#         if os.path.isfile(mountpoint + "/swapfile") and os.path.getsize(mountpoint + "/swapfile") != (sizeKB * 1024):
-#             os.remove(mountpoint + "/swapfile")
-#         if not os.path.isfile(mountpoint + "/swapfile"):
-#             Run("dd if=/dev/zero of=" + mountpoint + "/swapfile bs=1024 count=" + str(sizeKB))
-#             Run("mkswap " + mountpoint + "/swapfile")
-#         if not Run("swapon " + mountpoint + "/swapfile"):
-#             Log("Enabled " + str(sizeKB) + " KB of swap at " + mountpoint + "/swapfile")
-#         else:
-#             Error("ActivateResourceDisk: Failed to activate swap at " + mountpoint + "/swapfile")
+        swap = Config.get("ResourceDisk.EnableSwap")
+        if swap == None or swap.lower().startswith("n"):
+            return
+        sizeKB = int(Config.get("ResourceDisk.SwapSizeMB")) * 1024
+        if os.path.isfile(mountpoint + "/swapfile") and os.path.getsize(mountpoint + "/swapfile") != (sizeKB * 1024):
+            os.remove(mountpoint + "/swapfile")
+        if not os.path.isfile(mountpoint + "/swapfile"):
+            Run("dd if=/dev/zero of=" + mountpoint + "/swapfile bs=1024 count=" + str(sizeKB))
+        if Run("mdconfig -a -t vnode -f " + mountpoint + "/swapfile -u 0"):
+            Error("ActivateResourceDisk: Configuring swap - Failed to create md0")
+        if not Run("swapon /dev/md0"):
+            Log("Enabled " + str(sizeKB) + " KB of swap at " + mountpoint + "/swapfile")
+        else:
+            Error("ActivateResourceDisk: Failed to activate swap at " + mountpoint + "/swapfile")
 
     def Install(self):
         """
@@ -1207,7 +1390,7 @@ class FreeBSDDistro(AbstractDistro):
                 Warn("Existing /etc/waagent.conf has been renamed to /etc/waagent.conf.old")
             except:
                 pass
-        SetFileContents("/etc/waagent.conf", WaagentConf)
+        SetFileContents("/etc/waagent.conf", self.waagent_conf_file)
         if os.path.exists('/usr/local/etc/logrotate.d/'):
             SetFileContents("/usr/local/etc/logrotate.d/waagent", WaagentLogrotate)
         filepath = "/etc/ssh/sshd_config"
@@ -1218,7 +1401,18 @@ class FreeBSDDistro(AbstractDistro):
         #ApplyVNUMAWorkaround()
         return 0
     
+    def dvdHasMedia(self,dvd):
+        if Run('LC_ALL=C fdisk -p ' + dvd + ' | grep "invalid fdisk partition table found" '):
+            return False
+        return True
     
+    def mountDVD(self,dvd,location):
+        #At this point we cannot read a joliet option udf DVD in freebsd10 - so we 'dd' it into our location
+        return RunGetOutput(self.mount_dvd_cmd + dvd + ' of=' + location + '/ovf-env.xml')
+
+    def GetHome(self):
+        return '/home'
+
 ############################################################
 # END DISTRO CLASS DEFS
 ############################################################  
@@ -1449,7 +1643,7 @@ def CreateAccount(user, password, expiration, thumbprint):
     except:
         Error("CreateAccount: Failed to configure sudo access for user.")
         return "Failed to configure sudo privileges (0x08)."
-    home = GetHome()
+    home = MyDistro.GetHome()
     if thumbprint != None:
         dir = home + "/" + user + "/.ssh"
         CreateDir(dir, user, 0700)
@@ -1947,7 +2141,7 @@ class EnvMonitor(object):
         If dchp clinet process re-start has occurred, reset routes, dhcp with fabric.
         """
         publish = ConfigurationProvider().get("Provisioning.MonitorHostName")
-        dhcpcmd = "pidof " + MyDistro.dhcp_client_name
+        dhcpcmd = MyDistro.getpidcmd+ ' ' + MyDistro.dhcp_client_name
         dhcppid = RunGetOutput(dhcpcmd)[1]
         while not self.shutdown:
             for a in RulesFiles:
@@ -2171,19 +2365,10 @@ class SharedConfig(object):
         if node.localName != "SharedConfig":
             Error("SharedConfig.Parse: root not SharedConfig")
             return None
-        return self
-
-    def CheckLaunchRoleTopologyConsumer(self):
-        """
-        If Role.TopologyConsumer = y then launch the RoleTopologyConsumer with path to SharedConfig.xml
-        """
         program = Config.get("Role.TopologyConsumer")
         if program != None:
             Children.append(subprocess.Popen([program, LibDir + "/SharedConfig.xml"]))
-
-    def Process(self):
-        self.CheckLaunchRoleTopologyConsumer()
-
+        return self
         
 class HostingEnvironmentConfig(object):
     """
@@ -2270,53 +2455,7 @@ class HostingEnvironmentConfig(object):
         return RunGetOutput(Openssl + " cms -decrypt -in password.p7m -inkey Certificates.pem -recip Certificates.pem")[1]
 
     def ActivateResourceDisk(self):
-        """
-        Format, mount, and if specified in the configuration
-        set resource disk as swap.
-        """
-        global DiskActivated
-        format = Config.get("ResourceDisk.Format")
-        if format == None or format.lower().startswith("n"):
-            DiskActivated = True
-            return
-        device = DeviceForIdePort(1)
-        if device == None:
-            Error("ActivateResourceDisk: Unable to detect disk topology.")
-            return
-        device = "/dev/" + device
-        for entry in RunGetOutput("mount")[1].split():
-            if entry.startswith(device + "1"):
-                Log("ActivateResourceDisk: " + device + "1 is already mounted.")
-                DiskActivated = True
-                return
-        mountpoint = Config.get("ResourceDisk.MountPoint")
-        if mountpoint == None:
-            mountpoint = "/mnt/resource"
-        CreateDir(mountpoint, "root", 0755)
-        fs = Config.get("ResourceDisk.Filesystem")
-        if fs == None:
-            fs = "ext3"
-        if RunGetOutput("sfdisk -q -c " + device + " 1")[1].rstrip() == "7" and fs != "ntfs":
-            Run("sfdisk -c " + device + " 1 83")
-            Run("mkfs." + fs + " " + device + "1")
-        if Run("mount " + device + "1 " + mountpoint):
-            Error("ActivateResourceDisk: Failed to mount resource disk (" + device + "1).")
-            return
-        Log("Resource disk (" + device + "1) is mounted at " + mountpoint + " with fstype " + fs)
-        DiskActivated = True
-        swap = Config.get("ResourceDisk.EnableSwap")
-        if swap == None or swap.lower().startswith("n"):
-            return
-        sizeKB = int(Config.get("ResourceDisk.SwapSizeMB")) * 1024
-        if os.path.isfile(mountpoint + "/swapfile") and os.path.getsize(mountpoint + "/swapfile") != (sizeKB * 1024):
-            os.remove(mountpoint + "/swapfile")
-        if not os.path.isfile(mountpoint + "/swapfile"):
-            Run("dd if=/dev/zero of=" + mountpoint + "/swapfile bs=1024 count=" + str(sizeKB))
-            Run("mkswap " + mountpoint + "/swapfile")
-        if not Run("swapon " + mountpoint + "/swapfile"):
-            Log("Enabled " + str(sizeKB) + " KB of swap at " + mountpoint + "/swapfile")
-        else:
-            Error("ActivateResourceDisk: Failed to activate swap at " + mountpoint + "/swapfile")
+        return MyDistro.ActivateResourceDisk()
 
     def Process(self):
         """
@@ -2325,7 +2464,7 @@ class HostingEnvironmentConfig(object):
         Launch ConfigurationConsumer if specified in the config.
         """
         if DiskActivated == False:
-            diskThread = threading.Thread(target = self.MyDistro.ActivateResourceDisk)
+            diskThread = threading.Thread(target = self.ActivateResourceDisk)
             diskThread.start()
         User = None
         Pass = None
@@ -2348,10 +2487,7 @@ class HostingEnvironmentConfig(object):
             else:
                 Error("Not creating user account: " + User)
         for c in self.Certificates:
-            #cname = c.getAttribute("name")
             csha1 = c.getAttribute("certificateId").split(':')[1].upper()
-            #cpath = c.getAttribute("storeName")
-            #clevel = c.getAttribute("configurationLevel")
             if os.path.isfile(csha1 + ".prv"):
                 Log("Private key with thumbprint: " + csha1 + " was retrieved.")
             if os.path.isfile(csha1 + ".crt"):
@@ -2504,10 +2640,8 @@ class GoalState(Util):
     def Process(self):
         """
         Calls HostingEnvironmentConfig.Process()
-        Calls SharedConfig.Process()
         """
         self.HostingEnvironmentConfig.Process()
-        self.SharedConfig.Process()
         
 class OvfEnv(object):
     """
@@ -2624,7 +2758,7 @@ class OvfEnv(object):
         Create home dir for self.UserName
         Change owner and return path.
         """
-        home = GetHome()
+        home = MyDistro.GetHome()
         # Expand HOME variable if present in path
         path = os.path.normpath(filepath.replace("$HOME", home))
         if (path.startswith("/") == False) or (path.endswith("/") == True):
@@ -2707,11 +2841,11 @@ class OvfEnv(object):
                 GetFileContents(filepath).split('\n'))) + "PasswordAuthentication no\nChallengeResponseAuthentication no\n")
             Log("Disabled SSH password-based authentication methods.")
         if self.AdminPassword != None:
-            RunSendStdin("chpasswd",("root:" + self.AdminPassword + "\n"))
+            MyDistro.changePass('root',self.AdminPassword)
         if self.UserName != None:
             error = MyDistro.CreateAccount(self.UserName, self.UserPassword, None, None)
         MyDistro.setSelinuxEnforce(0)
-        home = GetHome()
+        home = MyDistro.GetHome()
         for pkey in self.SshPublicKeys:
             if not os.path.isfile(pkey[0] + ".crt"):
                 Error("PublicKey not found: " + pkey[0])
@@ -3257,7 +3391,7 @@ class Agent(Util):
         if os.path.exists('/mnt/cdrom/secure') == False:
             CreateDir("/mnt/cdrom/secure", "root", 0700)
         mounted=False
-        for dvds in [re.match(r'(sr[0-9]|hd[c-z]|cdrom[0-9]?)',x) for x in os.listdir('/dev/')]:
+        for dvds in [re.match(r'(sr[0-9]|hd[c-z]|cdrom[0-9]|cd[0-9]?)',x) for x in os.listdir('/dev/')]:
             if dvds == None:
                 continue
             dvd = '/dev/'+dvds.group(0)
@@ -3316,16 +3450,16 @@ class Agent(Util):
             Run("ssh-keygen -N '' -t " + type + " -f /etc/ssh/ssh_host_" + type + "_key")
             MyDistro.restartSshService()
         SetFileContents(LibDir + "/provisioned", "")
-        dvd = "/dev/hdc"
-        if os.path.exists("/dev/sr0"):
-            dvd = "/dev/sr0"
-        if Run("LC_ALL=C fdisk -l " + dvd + " | grep Disk"):
+        for dvds in [re.match(r'(sr[0-9]|hd[c-z]|cdrom[0-9]|cd[0-9]?)',x) for x in os.listdir('/dev/')]:
+            if dvds == None:
+                continue
+            dvd = '/dev/'+dvds.group(0)
+        if MyDistro.dvdHasMedia(dvd) is False :
             out=MyDistro.load_ata_piix()
             if out:
                 return out
             for i in range(10): # we may have to wait 
-                if os.path.exists("/dev/sr0"):
-                    dvd = "/dev/sr0"
+                if os.path.exists(dvd):
                     break
                 Log("Waiting for DVD - sleeping 1 - "+str(i+1)+" try...")
                 time.sleep(1)
@@ -3333,7 +3467,8 @@ class Agent(Util):
             CreateDir("/mnt/cdrom/secure", "root", 0700)
         #begin mount loop - 5 tries - 5 sec wait between
         for retry in range(1,6):
-            retcode,output=RunGetOutput("mount -v " + dvd + " /mnt/cdrom/secure")
+            location='/mnt/cdrom/secure'
+            retcode,output=MyDistro.mountDVD(dvd,location)
             Log(output[:-1])
             if retcode == 0:
                 Log("mount succeeded on attempt #" + str(retry) )
@@ -3348,6 +3483,10 @@ class Agent(Util):
             Error("Unable to provision: Missing ovf-env.xml on DVD.")
             return "Failed to retrieve provisioning data (0x02)."
         ovfxml = GetFileContents("/mnt/cdrom/secure/ovf-env.xml")
+        ovfxml=ovfxml.strip(chr(0))
+        ovfxml=ovfxml.strip(chr(0xef))
+        ovfxml=ovfxml.strip(chr(0xbb))
+        ovfxml=ovfxml.strip(chr(0xbf))
         SetFileContents("ovf-env.xml", re.sub("<UserPassword>.*?<", "<UserPassword>*<", ovfxml))
         Run("umount " + dvd,chk_err=False)
         MyDistro.unload_ata_piix()
@@ -3391,8 +3530,7 @@ class Agent(Util):
         ReportReady if provisioning is complete.
         If provisioning failed, call ReportNotReady("ProvisioningFailed", provisionError)
         """
-        if IsLinux():
-            SetFileContents("/var/run/waagent.pid", str(os.getpid()) + "\n")
+        SetFileContents("/var/run/waagent.pid", str(os.getpid()) + "\n")
 
         # Determine if we are in VMM.  Spawn VMM_STARTUP_SCRIPT_NAME if found.
         self.SearchForVMMStartup()
@@ -3501,38 +3639,7 @@ class Agent(Util):
             else:
                 incarnation = self.ReportReady()                
             time.sleep(25 - sleepToReduceAccessDenied)
-
-WaagentConf = """\
-#
-# Windows Azure Linux Agent Configuration
-#
-
-Role.StateConsumer=None                 # Specified program is invoked with "Ready" or "Shutdown".
-                                        # Shutdown will be initiated only after the program returns. Windows Azure will
-                                        # power off the VM if shutdown is not completed within ?? minutes.
-Role.ConfigurationConsumer=None         # Specified program is invoked with XML file argument specifying role configuration.
-Role.TopologyConsumer=None              # Specified program is invoked with XML file argument specifying role topology.
-
-Provisioning.Enabled=y                  #
-Provisioning.DeleteRootPassword=y       # Password authentication for root account will be unavailable.
-Provisioning.RegenerateSshHostKeyPair=y # Generate fresh host key pair.
-Provisioning.SshHostKeyPairType=rsa     # Supported values are "rsa", "dsa" and "ecdsa".
-Provisioning.MonitorHostName=y          # Monitor host name changes and publish changes via DHCP requests.
-
-ResourceDisk.Format=y                   # Format if unformatted. If 'n', resource disk will not be mounted.
-ResourceDisk.Filesystem=ext4            #
-ResourceDisk.MountPoint=/mnt/resource   #
-ResourceDisk.EnableSwap=n               # Create and use swapfile on resource disk.
-ResourceDisk.SwapSizeMB=0               # Size of the swapfile.
-
-LBProbeResponder=y                      # Respond to load balancer probes if requested by Windows Azure.
-
-Logs.Verbose=n                          #
-
-OS.RootDeviceScsiTimeout=300            # Root device timeout in seconds.
-OS.OpensslPath=None                     # If "None", the system default version is used.
-"""
-
+            
 WaagentLogrotate = """\
 /var/log/waagent.log {
     monthly
@@ -3652,7 +3759,7 @@ def Install():
             Warn("Existing /etc/waagent.conf has been renamed to /etc/waagent.conf.old")
         except:
             pass
-    SetFileContents("/etc/waagent.conf", WaagentConf)
+    SetFileContents("/etc/waagent.conf", MyDistro.waagent_conf_file)
     SetFileContents("/etc/logrotate.d/waagent", WaagentLogrotate)
     filepath = "/etc/ssh/sshd_config"
     ReplaceFileContentsAtomic(filepath, "\n".join(filter(lambda a: not
