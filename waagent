@@ -1441,11 +1441,14 @@ def GetLastPathElement(path):
     """
     return path.rsplit('/', 1)[1]
 
-def GetFileContents(filepath):
+def GetFileContents(filepath,asbin=False):
     """
     Read and return contents of 'filepath'.
     """
-    with open(filepath, "r") as F :
+    mode='r'
+    if asbin:
+        mode+='b'
+    with open(filepath, mode) as F :
         c=F.read()
     return c
 
@@ -1453,7 +1456,9 @@ def SetFileContents(filepath, contents):
     """
     Write 'contents' to 'filepath'.
     """
-    with open(filepath, "w+") as F :
+    if type(contents) == str :
+        contents=contents.encode('latin-1')
+    with open(filepath, "wb+") as F :
         F.write(contents)
     return 0
 
@@ -1461,6 +1466,8 @@ def AppendFileContents(filepath, contents):
     """
     Append 'contents' to 'filepath'.
     """
+    if type(contents) == str :
+        contents=contents.encode('latin-1')
     with open(filepath, "a+") as F :
         F.write(contents)
     return 0
@@ -1470,6 +1477,8 @@ def ReplaceFileContentsAtomic(filepath, contents):
     Write 'contents' to 'filepath' by creating a temp file, and replacing origina.
     """
     handle, temp = tempfile.mkstemp(dir = os.path.dirname(filepath))
+    if type(contents) == str :
+        contents=contents.encode('latin-1')
     try:
         os.write(handle, contents)
     except IOError, e:
@@ -1524,8 +1533,8 @@ def RunGetOutput(cmd,chk_err=True):
         if chk_err :
             Error('CalledProcessError.  Error Code is ' + str(e.returncode)  )
             Error('CalledProcessError.  Command string was ' + e.cmd  )
-            Error('CalledProcessError.  Command result was ' + e.output[:-1])
-        return e.returncode,e.output
+            Error('CalledProcessError.  Command result was ' + (e.output[:-1]).decode('latin-1'))
+        return e.returncode,e.output.decode('latin-1')
     return 0,output
 
 def RunSendStdin(cmd,input,chk_err=True):
@@ -1538,17 +1547,17 @@ def RunSendStdin(cmd,input,chk_err=True):
     LogIfVerbose(cmd+input)
     try:                                     
         me=subprocess.Popen([cmd], shell=True, stdin=subprocess.PIPE,stderr=subprocess.STDOUT,stdout=subprocess.PIPE)
-        output=me.communicate(input)
-    except OSError,e :
+        output=(me.communicate(input)).decode('latin-1')
+    except OSError , e :
         if chk_err :
-            Error('CalledProcessError.  Error Code is ' + str(me.returncode)  )
+            Error('CalledProcessError.  Error Code is ' + (me.returncode).decode('latin-1')  )
             Error('CalledProcessError.  Command string was ' + cmd  )
-            Error('CalledProcessError.  Command result was ' + output[:-1])
+            Error('CalledProcessError.  Command result was ' + (output[:-1]).decode('latin-1'))
             return 1,output[0]
     if me.returncode is not 0 and chk_err is True:
-            Error('CalledProcessError.  Error Code is ' + str(me.returncode)  )
+            Error('CalledProcessError.  Error Code is ' + (me.returncode).decode('latin-1')  )
             Error('CalledProcessError.  Command string was ' + cmd  )
-            Error('CalledProcessError.  Command result was ' + (output[0])[:-1])
+            Error('CalledProcessError.  Command result was ' + (output[:-1]).decode('latin-1'))
     return me.returncode,output[0]
 
 def GetNodeTextData(a):
@@ -1713,7 +1722,7 @@ def HexDump(buffer, size):
     for i in range(0, size):
         if (i % 16) == 0:
             result += "%06X: " % i
-        byte = struct.unpack("B", buffer[i])[0]
+        byte = buffer[i]
         result += "%02X " % byte
         if (i & 15) == 7:
             result += " "
@@ -1726,7 +1735,7 @@ def HexDump(buffer, size):
                 j += 1
             result += " "
             for j in range(i - (i % 16), i + 1):
-                byte = struct.unpack("B", buffer[j])[0]
+                byte = buffer[j]
                 k = '.'
                 if IsPrintable(byte):
                     k = chr(byte)
@@ -1776,7 +1785,9 @@ class Logger(object):
         is redirected to ttys0 in kernel boot options.
         """
          if self.con_path:
-             with open(self.con_path, "a") as C :
+             with open(self.con_path, "w") as C :
+#                  if isinstance(message,str):
+#                      message=message.encode('latin-1'))
                  C.write(message + "\n")
                  C.close()
             
@@ -1859,7 +1870,7 @@ def Linux_ioctl_GetInterfaceMac(ifname):
     Return the mac-address bound to the socket.
     """
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    info = fcntl.ioctl(s.fileno(), 0x8927,  struct.pack('256s', ifname[:15]))
+    info = fcntl.ioctl(s.fileno(), 0x8927,  struct.pack('256s', (ifname[:15]+('\0'*241)).encode('latin-1')))
     return ''.join(['%02X' % Ord(char) for char in info[18:24]])
 
 def GetFirstActiveNetworkInterfaceNonLoopback():
@@ -1870,18 +1881,19 @@ def GetFirstActiveNetworkInterfaceNonLoopback():
     expected=16 # how many devices should I expect...
     struct_size=40 # for 64bit the size is 40 bytes
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    buff=array.array('B', '\0' * (expected*struct_size))
+    buff=array.array('B', b'\0' * (expected*struct_size))
+#    retsize=(struct.unpack('iL', fcntl.ioctl(s.fileno().to_bytes(1,'little'), 0x8912, struct.pack('iL',expected*struct_size,buff.buffer_info()[0]))))[0]
     retsize=(struct.unpack('iL', fcntl.ioctl(s.fileno(), 0x8912, struct.pack('iL',expected*struct_size,buff.buffer_info()[0]))))[0]
     if retsize == (expected*struct_size) :
         Warn('SIOCGIFCONF returned more than ' + str(expected) + ' up network interfaces.')
     s=buff.tostring()
     for i in range(0,struct_size*expected,struct_size):
-        iface=s[i:i+16].split('\0', 1)[0]
-        if iface == 'lo':
+        iface=s[i:i+16].split(b'\0', 1)[0]
+        if iface == b'lo':
             continue
         else :
             break
-    return ( iface, socket.inet_ntoa(s[i+20:i+24]))
+    return iface.decode('latin-1'), socket.inet_ntoa(s[i+20:i+24])
 
 
 def GetIpv4Address():
@@ -1896,8 +1908,8 @@ def HexStringToByteArray(a):
     """
     Return hex string packed into a binary struct.
     """
-    b = ""
-    for c in range(0, len(a) / 2):
+    b = b""
+    for c in range(0, len(a) // 2):
         b += struct.pack("B", int(a[c * 2:c * 2 + 2], 16))
     return b
 
@@ -2952,13 +2964,13 @@ class Agent(Util):
         """
         Unpack little endian bytes into python values.
         """
-        return self.Unpack(buffer, offset, range(length - 1, -1, -1))
+        return self.Unpack(buffer, offset, list(range(length - 1, -1, -1)))
 
     def UnpackBigEndian(self, buffer, offset, length):
         """
         Unpack big endian bytes into python values.
         """
-        return self.Unpack(buffer, offset, range(0, length))
+        return self.Unpack(buffer, offset, list(range(0, length)))
 
     def HexDump3(self, buffer, offset, length):
         """
@@ -3033,7 +3045,7 @@ class Agent(Util):
         # End = 255 DHCP_END
         for a in range(0, 8):
             sendData[0xEC + a] = [99, 130, 83, 99, 53, 1, 1, 255][a]
-        return array.array("c", map(chr, sendData))
+        return array.array("B", sendData)
 
     def IntegerToIpAddressV4String(self, a):
         """
@@ -3071,7 +3083,7 @@ class Agent(Util):
         # cookie should never mismatch
         # transactionId and MAC address may mismatch if we see a response meant from another machine
 
-        for offsets in [range(4, 4 + 4), range(0x1C, 0x1C + 6), range(0xEC, 0xEC + 4)]:
+        for offsets in [list(range(4, 4 + 4)), list(range(0x1C, 0x1C + 6)), list(range(0xEC, 0xEC + 4))]:
             for offset in offsets:
                 sentByte = Ord(sendData[offset])
                 receivedByte = Ord(receiveBuffer[offset])
@@ -3482,8 +3494,8 @@ class Agent(Util):
         if not os.path.isfile("/mnt/cdrom/secure/ovf-env.xml"):
             Error("Unable to provision: Missing ovf-env.xml on DVD.")
             return "Failed to retrieve provisioning data (0x02)."
-        ovfxml = GetFileContents("/mnt/cdrom/secure/ovf-env.xml")
-        ovfxml=ovfxml.strip(chr(0))
+        ovfxml = (GetFileContents("/mnt/cdrom/secure/ovf-env.xml",asbin=True)).decode('latin-1')
+        ovfxml=ovfxml.strip(chr(0x00))
         ovfxml=ovfxml.strip(chr(0xef))
         ovfxml=ovfxml.strip(chr(0xbb))
         ovfxml=ovfxml.strip(chr(0xbf))
@@ -3684,7 +3696,7 @@ def FindStringInFile(fname,matchs):
     Return match object if found in file.
     """
     ms=re.compile(matchs)
-    for l in (open(fname,'rb')).readlines():
+    for l in (open(fname,'r')).readlines():
         m=re.search(ms,l)
         if m:
             return m
@@ -3697,7 +3709,7 @@ def ReplaceStringInFile(fname,src,repl):
     updated=''
     sr=re.compile(src)
     if FindStringInFile(fname,src):
-        for l in (open(fname,'rb')).readlines():
+        for l in (open(fname,'r')).readlines():
             n=re.sub(sr,repl,l)
             updated+=n
             pass
@@ -3847,7 +3859,7 @@ def Deprovision(force, deluser):
     if ovfobj != None and deluser == True:
         print("WARNING! " + ovfobj.UserName + " account and entire home directory will be deleted.")
 
-    if force == False and not raw_input('Do you want to proceed (y/n)? ').startswith('y'):
+    if force == False and not input('Do you want to proceed (y/n)? ').startswith('y'):
         return 1
 
     MyDistro.stopAgentService()
