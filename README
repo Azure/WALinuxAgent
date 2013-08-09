@@ -2,9 +2,9 @@ Windows Azure Linux Agent README
 
 INTRODUCTION
 
-The Windows Azure Linux Agent (waagent) manages VM interaction with the Windows
-Azure Fabric Controller. It provides the following functionality for Linux IaaS
-deployments:
+The Windows Azure Linux Agent (waagent) manages Linux provisioning and VM
+interaction with the Windows Azure Fabric Controller. It provides the following
+functionality for Linux IaaS deployments:
 
   * Image Provisioning
     - Creation of a user account
@@ -28,6 +28,10 @@ deployments:
 
   * Diagnostics
     - Console redirection to the serial port
+
+  * SCVMM Deployments
+    - Detect and bootstrap the VMM agent for Linux when running in a System
+	  Center Virtual Machine Manager 2012R2 environment
 
 
 COMMUNICATION
