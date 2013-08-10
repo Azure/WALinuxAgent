@@ -23,6 +23,7 @@ import platform
 import setuptools
 from setuptools.command.install import install
 
+
 from distutils.errors import DistutilsArgError
 
 def getDistro():
@@ -61,7 +62,7 @@ class InstallData(install):
             self.lnx_distro = getDistro()
         if self.init_system not in ['sysV', 'systemd', 'upstart']:
             print 'Do not know how to handle %s init system' %self.init_system
-            system.exit(1)
+            sys.exit(1)
         if self.init_system == 'sysV':
             if not os.path.exists('distro/%s' %self.lnx_distro):
                 msg = 'Unknown distribution "%s"' %self.lnx_distro
@@ -74,9 +75,16 @@ class InstallData(install):
         """
         distro = self.lnx_distro
         init = self.init_system
-        tgtDir = self.prefix
-        if tgtDir[-1] != '/':
+        prefix = self.prefix
+        tgtDir = self.root
+        if prefix and prefix[-1] != '/':
+            prefix += '/'
+        else:
+            prefix = '/'
+        if tgtDir and tgtDir[-1] != '/':
             tgtDir += '/'
+        else:
+            tgtDir = '/'
         # Handle the different init systems
         if init == 'sysV':
             if not os.path.exists(tgtDir + 'etc/init.d'):
@@ -98,13 +106,13 @@ class InstallData(install):
                 print 'Could not install systemV init script', 
                 sys.exit(1)
         elif init == 'systemd':
-            if not os.path.exists(tgtDir + 'usr/lib/systemd/system'):
+            if not os.path.exists(tgtDir + prefix +'lib/systemd/system'):
                 try:
-                    self.mkpath(tgtDir + 'usr/lib/systemd/system', 0755)
+                    self.mkpath(tgtDir + prefix + 'lib/systemd/system', 0755)
                 except:
                     msg = 'Could not create systemd service directory '
-                    msg += tgtDir
-                    msg += 'etc/init.d'
+                    msg += tgtDir + prefix
+                    msg += 'lib/systemd/system'
                     print msg
                     sys.exit(1)
             services = glob.glob('distro/systemd/*')
@@ -112,7 +120,7 @@ class InstallData(install):
                 try:
                     baseName = f.split('/')[-1]
                     self.copy_file(f,
-                                tgtDir + 'usr/lib/systemd/system/' + baseName)
+                            tgtDir + prefix +'lib/systemd/system/' + baseName)
                 except:
                     print 'Could not install systemd service files'
                     sys.exit(1)
@@ -152,27 +160,27 @@ class InstallData(install):
             sys.exit(1)
     
         # Daemon
-        if not os.path.exists(tgtDir + 'usr/sbin'):
+        if not os.path.exists(tgtDir + prefix + 'sbin'):
             try:
-                self.mkpath(tgtDir + 'usr/sbin', 0755)
+                self.mkpath(tgtDir + prefix + 'sbin', 0755)
             except:
                 msg = 'Could not create target daemon dir '
-                msg+= tgtDir + 'usr/sbin'
+                msg+= tgtDir + prefix + 'sbin'
                 print msg
                 sys.exit(1)
         try:
-            self.copy_file('waagent', tgtDir + 'usr/sbin/waagent')
+            self.copy_file('waagent', tgtDir + prefix + 'sbin/waagent')
         except:
-            print 'Could not install daemon %susr/sbin/waagent' %tgtDir
+            print 'Could not install daemon %s%ssbin/waagent' %(tgtDir,prefix)
             sys.exit(1)
-        os.chmod('%susr/sbin/waagent' %tgtDir, 0755)
+        os.chmod('%s%ssbin/waagent' %(tgtDir,prefix), 0755)
 
 def readme():
     with open('README') as f:
         return f.read()
     
 setuptools.setup(name = 'waagent',
-      version = '1.3.4-PRE',
+      version = '1.3.4_PRE',
       description = 'Windows Azure Linux Agent',
       long_description = readme(),
       author = 'Stephen Zarkos, Eric Gable',
