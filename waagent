@@ -185,7 +185,7 @@ class AbstractDistro(object):
         
     def installAgentServiceScriptFiles(self):
         """
-        Create the waagent support files for service intasllation.
+        Create the waagent support files for service installation.
         Called by registerAgentService()
         Abstract Virtual Function.  Over-ridden in concrete Distro classes.
         """
@@ -375,8 +375,32 @@ class AbstractDistro(object):
             os.mkdir(os.path.dirname(self.init_script_file))
         self.installAgentServiceScriptFiles()
 
+    def GetIpv4Address(self):
+        """
+        Return the ip of the 
+        first active non-loopback interface.
+        """
+        iface,addr=GetFirstActiveNetworkInterfaceNonLoopback()
+        return addr
 
-        
+    def GetMacAddress(self):
+        return GetMacAddress()
+
+    def GetInterfaceName(self):
+        return GetFirstActiveNetworkInterfaceNonLoopback()[0]
+
+    def CreateAccount(self,user, password, expiration, thumbprint):
+        return CreateAccount(user, password, expiration, thumbprint)
+    
+    def DeleteAccount(user):
+        return DeleteAccount(user)
+
+    def ActivateResourceDisk(self):
+        WaAgent.ActivateResourceDisk()
+
+    def Install(self):
+        return Install
+
 ############################################################    
 #	SuSEDistro
 ############################################################    
@@ -572,7 +596,7 @@ class centosDistro(AbstractDistro):
             ReplaceFileContentsAtomic(filepath, "HOSTNAME=" + name + "\n"
                 + "\n".join(filter(lambda a: not a.startswith("HOSTNAME"), GetFileContents(filepath).split('\n'))))
 
-        for ethernetInterface in GetFirstActiveNetworkInterfaceNonLoopback()[0]:
+        for ethernetInterface in MyDistro.GetInterfaceName():
             filepath = "/etc/sysconfig/network-scripts/ifcfg-" + ethernetInterface
             if os.path.isfile(filepath):
                 ReplaceFileContentsAtomic(filepath, "DHCP_HOSTNAME=" + name + "\n"
@@ -754,7 +778,7 @@ class debianDistro(AbstractDistro):
     
     def sshDeployPublicKey(self,fprint,path):
         """
-        This is Ubuntu specific from Class OvfEnv.Provision in the original agent.
+        We support PKCS8.
         """
         if Run("ssh-keygen -i -m PKCS8 -f " + fprint + " >> " + path):
             return 1
@@ -875,6 +899,326 @@ class LinuxMintDistro(UbuntuDistro):
     def __init__(self):
         super(LinuxMintDistro,self).__init__()
 
+############################################################    
+#	FreeBSD
+############################################################    
+
+class FreeBSDDistro(AbstractDistro):
+    """
+    """
+    def __init__(self):
+        """
+        Generic Attributes go here.  These are based on 'majority rules'.
+        This __init__() may be called or overriden by the child.
+        """
+        self.agent_service_name = os.path.basename(sys.argv[0]) 
+        self.selinux=False
+        self.ssh_service_name='ssh'
+        self.ssh_config_file='/etc/ssh/sshd_config'
+        self.hostname_file_path='/etc/hostname'
+        self.dhcp_client_name='dhclient'
+        self.requiredDeps = [ 'route', 'shutdown', 'ssh-keygen', 'pw', 'chpass'
+                              , 'openssl', 'fdisk', 'sed', 'grep', 'sudo' ]
+        self.init_script_file='/etc/rc.d/waagent'
+        self.agent_package_name='WALinuxAgent'
+        self.fileBlackList = [ "/root/.bash_history", "/var/log/waagent.log",'/etc/resolv.conf' ]        
+        self.agent_files_to_uninstall = ["/etc/waagent.conf", "/etc/sudoers.d/waagent"]
+        self.grubKernelBootOptionsFile = '/boot/loader.conf'
+        self.grubKernelBootOptionsLine = ''
+
+#     def installAgentServiceScriptFiles(self):
+#         SetFileContents(self.init_script_file, self.init_file)
+#         os.chmod(self.init_script_file, 0744)
+#         return 0
+
+#     def registerAgentService(self):
+#         self.installAgentServiceScriptFiles()
+#         return Run('chkconfig --add waagent')
+   
+#     def uninstallAgentService(self):
+#         return Run('chkconfig --del ' + self.agent_service_name)
+
+#     def unregisterAgentService(self):
+#         self.stopAgentService()
+#         return self.uninstallAgentService()
+    
+    def sshDeployPublicKey(self,fprint,path):
+        """
+        We support PKCS8.
+        """
+        if Run("ssh-keygen -i -m PKCS8 -f " + fprint + " >> " + path):
+            return 1
+        else :
+            return 0
+
+    def deleteRootPassword(self):
+        """
+        Generic root password removal.
+        """
+        filepath="/etc/passwd"
+        ReplaceFileContentsAtomic(filepath,"root:*LOCK*:14600::::::\n"
+                                  + "\n".join(filter(lambda a: not a.startswith("root:"),GetFileContents(filepath).split('\n'))))
+        os.chmod(filepath, 0000)
+        if self.isSelinuxSystem():
+            self.setSelinuxContext(filepath,'chcon system_u:object_r:shadow_t:s0')
+            Log("Root password deleted.")
+        return 0
+
+    def load_ata_piix(self):
+        return 0
+
+    def unload_ata_piix(self):
+        return 0
+
+    def checkDependencies(self):
+        """
+        FreeBSD dependency check.
+        Return 1 unless all dependencies are satisfied.
+        """
+        for a in self.requiredDeps:
+            if Run("which " + a + " > /dev/null 2>&1",chk_err=False):
+                Error("Missing required dependency: " + a)
+                return 1
+        return 0
+
+    def packagedInstall(self,buildroot):
+        pass
+
+    def GetInterfaceName(self):
+        """
+        Return the ip of the 
+        active ethernet interface.
+        """
+        iface,inet,mac=self.GetFreeBSDEthernetInfo()
+        return iface
+
+    def GetIpv4Address(self):
+        """
+        Return the ip of the 
+        active ethernet interface.
+        """
+        iface,inet,mac=self.GetFreeBSDEthernetInfo()
+        return inet
+
+    def GetMacAddress(self):
+        """
+        Return the ip of the 
+        active ethernet interface.
+        """
+        iface,inet,mac=self.GetFreeBSDEthernetInfo()
+        return mac
+
+    def GetFreeBSDEthernetInfo(self):
+        """
+        There is no SIOCGIFCONF
+        on freeBSD - just parse ifconfig.
+        Returns strings: iface, inet4_addr, and mac
+        or 'None,None,None' if unable to parse.
+        """        
+        cmd='ifconfig | grep -A1 -B2 "ether" | tr "\n" " "'
+        code,output=RunGetOutput(cmd)
+        if code:
+            return None, None, None
+        j=output.split()
+        iface=j[0][:-1]
+        inet=j[10]
+        mac=j[8] 
+        return iface, inet, mac
+
+    def CreateAccount(self,user, password, expiration, thumbprint):
+        """
+        Create a user account, with 'user', 'password', 'expiration', ssh keys
+        and sudo permissions.
+        Returns None if successful, error string on failure.
+        """
+        userentry = None
+        try:
+            userentry = pwd.getpwnam(user)
+        except:
+            pass
+        uidmin = None
+        try:
+            uidmin = int(GetLineStartingWith("UID_MIN", "/etc/login.defs").split()[1])
+        except:
+            pass
+        if uidmin == None:
+            uidmin = 100
+        if userentry != None and userentry[2] < uidmin:
+            Error("CreateAccount: " + user + " is a system user. Will not set password.")
+            return "Failed to set password for system user: " + user + " (0x06)."
+        if userentry == None:
+            command = "pw useradd -d /home/" + user 
+            if expiration != None:
+                command += " -e " + expiration.split('.')[0]
+                command += ' ' + user
+            if Run(command):
+                Error("Failed to create user account: " + user)
+                return "Failed to create user account: " + user + " (0x07)."
+            else:
+                Log("CreateAccount: " + user + " already exists. Will update password.")
+        # make the directory
+        CreateDir('/home/'+user,user,744)
+        
+        if password != None:
+            RunSendStdin("chpass ",(user + ":" + password + "\n"))
+        try:
+            # for older distros create sudoers.d
+            if not os.path.isdir('/etc/sudoers.d/'):
+                # create the /etc/sudoers.d/ directory
+                os.mkdir('/etc/sudoers.d/')
+                # add the include of sudoers.d to the /etc/sudoers
+                SetFileContents('/etc/sudoers',GetFileContents('/etc/sudoers')+'\n#includedir /etc/sudoers.d\n')
+            if password == None:
+                SetFileContents("/etc/sudoers.d/waagent", user + " ALL = (ALL) NOPASSWD: ALL\n")
+            else:
+                SetFileContents("/etc/sudoers.d/waagent", user + " ALL = (ALL) ALL\n")
+            os.chmod("/etc/sudoers.d/waagent", 0440)
+        except:
+            Error("CreateAccount: Failed to configure sudo access for user.")
+            return "Failed to configure sudo privileges (0x08)."
+        home = GetHome()
+        if thumbprint != None:
+            dir = home + "/" + user + "/.ssh"
+            CreateDir(dir, user, 0700)
+            pub = dir + "/id_rsa.pub"
+            prv = dir + "/id_rsa"
+            Run("ssh-keygen -y -f " + thumbprint + ".prv > " + pub)
+            SetFileContents(prv, GetFileContents(thumbprint + ".prv"))
+            for f in [pub, prv]:
+                os.chmod(f, 0600)
+                ChangeOwner(f, user)
+            SetFileContents(dir + "/authorized_keys", GetFileContents(pub))
+            ChangeOwner(dir + "/authorized_keys", user)
+        Log("Created user account: " + user)
+        return None
+    
+    def DeleteAccount(self,user):
+        """
+        Delete the 'user'.
+        Clear utmp first, to avoid error.
+        Removes the /etc/sudoers.d/waagent file.
+        """
+        userentry = None
+        try:
+            userentry = pwd.getpwnam(user)
+        except:
+            pass
+        if userentry == None:
+            Error("DeleteAccount: " + user + " not found.")
+            return
+        uidmin = None
+        try:
+            uidmin = int(GetLineStartingWith("UID_MIN", "/etc/login.defs").split()[1])
+        except:
+            pass
+        if uidmin == None:
+            uidmin = 100
+        if userentry[2] < uidmin:
+            Error("DeleteAccount: " + user + " is a system user. Will not delete account.")
+            return
+        Run("> /var/run/utmp") #Delete utmp to prevent error if we are the 'user' deleted
+        Run("userdel -f -r " + user)
+        try:
+            os.remove("/etc/sudoers.d/waagent")
+        except:
+            pass
+        return
+
+    def ActivateResourceDisk(self):
+        """
+        Format, mount, and if specified in the configuration
+        set resource disk as swap.
+        """
+        global DiskActivated
+        format = Config.get("ResourceDisk.Format")
+        if format == None or format.lower().startswith("n"):
+            DiskActivated = True
+            return
+        #device = DeviceForIdePort(1)
+        device_base = 'adb0'
+#         if device == None:
+#             Error("ActivateResourceDisk: Unable to detect disk topology.")
+#            return
+        device = "/dev/" + device_base
+        for entry in RunGetOutput("mount")[1].split():
+            if entry.startswith(device + "1"):
+                Log("ActivateResourceDisk: " + device + "1 is already mounted.")
+                DiskActivated = True
+                return
+        mountpoint = Config.get("ResourceDisk.MountPoint")
+        if mountpoint == None:
+            mountpoint = "/mnt/resource"
+        CreateDir(mountpoint, "root", 0755)
+        #TODO change default config file...
+        #fs = Config.get("ResourceDisk.Filesystem")
+        fs='freebsd-ufs'
+        if fs == None:
+            fs = "freebsd"
+            Run("gpart -i  " + device + " 1 -t " + fs + ' -l resource')
+            Run("newfs -U /dev/gpt/resource")
+        if Run("mount " + device + "1 " + mountpoint):
+            Error("ActivateResourceDisk: Failed to mount resource disk (" + device + "1).")
+            return
+        Log("Resource disk (" + device + "1) is mounted at " + mountpoint + " with fstype " + fs)
+        DiskActivated = True
+#         swap = Config.get("ResourceDisk.EnableSwap")
+#         if swap == None or swap.lower().startswith("n"):
+#             return
+#         sizeKB = int(Config.get("ResourceDisk.SwapSizeMB")) * 1024
+#         if os.path.isfile(mountpoint + "/swapfile") and os.path.getsize(mountpoint + "/swapfile") != (sizeKB * 1024):
+#             os.remove(mountpoint + "/swapfile")
+#         if not os.path.isfile(mountpoint + "/swapfile"):
+#             Run("dd if=/dev/zero of=" + mountpoint + "/swapfile bs=1024 count=" + str(sizeKB))
+#             Run("mkswap " + mountpoint + "/swapfile")
+#         if not Run("swapon " + mountpoint + "/swapfile"):
+#             Log("Enabled " + str(sizeKB) + " KB of swap at " + mountpoint + "/swapfile")
+#         else:
+#             Error("ActivateResourceDisk: Failed to activate swap at " + mountpoint + "/swapfile")
+
+    def Install(self):
+        """
+        Install the agent service.
+        Check dependencies.
+        Create /etc/waagent.conf and move old version to
+        /etc/waagent.conf.old
+        Copy RulesFiles to /var/lib/waagent
+        Create /etc/logrotate.d/waagent
+        Set /etc/ssh/sshd_config ClientAliveInterval to 180
+        Call ApplyVNUMAWorkaround()
+        """
+        if MyDistro.checkDependencies():
+            return 1
+        os.chmod(sys.argv[0], 0755)
+        SwitchCwd()
+        for a in RulesFiles:
+            if os.path.isfile(a):
+                if os.path.isfile(GetLastPathElement(a)):
+                    os.remove(GetLastPathElement(a))
+                shutil.move(a, ".")
+                Warn("Moved " + a + " -> " + LibDir + "/" + GetLastPathElement(a) )
+        MyDistro.registerAgentService()
+        if os.path.isfile("/etc/waagent.conf"):
+            try:
+                os.remove("/etc/waagent.conf.old")
+            except:
+                pass
+            try:
+                os.rename("/etc/waagent.conf", "/etc/waagent.conf.old")
+                Warn("Existing /etc/waagent.conf has been renamed to /etc/waagent.conf.old")
+            except:
+                pass
+        SetFileContents("/etc/waagent.conf", WaagentConf)
+        if os.path.exists('/usr/local/etc/logrotate.d/'):
+            SetFileContents("/usr/local/etc/logrotate.d/waagent", WaagentLogrotate)
+        filepath = "/etc/ssh/sshd_config"
+        ReplaceFileContentsAtomic(filepath, "\n".join(filter(lambda a: not
+            a.startswith("ClientAliveInterval"),
+            GetFileContents(filepath).split('\n'))) + "ClientAliveInterval 180\n")
+        Log("Configured SSH client probing to keep connections alive.")
+        #ApplyVNUMAWorkaround()
+        return 0
+    
+    
 ############################################################
 # END DISTRO CLASS DEFS
 ############################################################  
@@ -1552,7 +1896,7 @@ class LoadBalancerProbeServer(object):
 
     def get_ip(self):
         for retry in range(1,6):
-            ip = GetIpv4Address()
+            ip = MyDistro.GetIpv4Address()
             if ip == None :
                 Log("LoadBalancerProbeServer: GetIpv4Address() returned None, sleeping 10 before retry " + str(retry+1) )
                 time.sleep(10)
@@ -1981,7 +2325,7 @@ class HostingEnvironmentConfig(object):
         Launch ConfigurationConsumer if specified in the config.
         """
         if DiskActivated == False:
-            diskThread = threading.Thread(target = self.ActivateResourceDisk)
+            diskThread = threading.Thread(target = self.MyDistro.ActivateResourceDisk)
             diskThread.start()
         User = None
         Pass = None
@@ -2365,7 +2709,7 @@ class OvfEnv(object):
         if self.AdminPassword != None:
             RunSendStdin("chpasswd",("root:" + self.AdminPassword + "\n"))
         if self.UserName != None:
-            error = CreateAccount(self.UserName, self.UserPassword, None, None)
+            error = MyDistro.CreateAccount(self.UserName, self.UserPassword, None, None)
         MyDistro.setSelinuxEnforce(0)
         home = GetHome()
         for pkey in self.SshPublicKeys:
@@ -2530,7 +2874,7 @@ class Agent(Util):
         sendData = [0] * 244
 
         transactionID = os.urandom(4)
-        macAddress = GetMacAddress()
+        macAddress = MyDistro.GetMacAddress()
 
         # Opcode = 1
         # HardwareAddressType = 1 (ethernet/MAC)
@@ -2699,7 +3043,7 @@ class Agent(Util):
                 if missingDefaultRoute:
                     # This is required because sending after binding to 0.0.0.0 fails with
                     # network unreachable when the default gateway is not set up.
-                    ifname=GetFirstActiveNetworkInterfaceNonLoopback()[0]
+                    ifname=MyDistro.GetInterfaceName()
                     Log("DoDhcpWork: Missing default route - adding broadcast route for DHCP.")
                     Run("route add 255.255.255.255 dev " + ifname,chk_err=False)   # We supress error logging on error.
                 sock.bind(("0.0.0.0", 68)) 
@@ -2737,7 +3081,7 @@ class Agent(Util):
         """
         Log("Setting host name: " + name)
         MyDistro.publishHostname(name)
-        for ethernetInterface in GetFirstActiveNetworkInterfaceNonLoopback()[0]:
+        for ethernetInterface in MyDistro.GetInterfaceName():
             Run("ifdown " + ethernetInterface + " && ifup " + ethernetInterface)
         self.RestoreRoutes()
 
@@ -3053,13 +3397,13 @@ class Agent(Util):
         # Determine if we are in VMM.  Spawn VMM_STARTUP_SCRIPT_NAME if found.
         self.SearchForVMMStartup()
 
-        if GetIpv4Address() == None:
+        if MyDistro.GetIpv4Address() == None:
             Log("Waiting for network.")
-            while(GetIpv4Address() == None):
+            while(MyDistro.GetIpv4Address() == None):
                 time.sleep(10)
 
-        Log("IPv4 address: " + GetIpv4Address())
-        Log("MAC  address: " + ":".join(["%02X" % Ord(a) for a in GetMacAddress()]))
+        Log("IPv4 address: " + MyDistro.GetIpv4Address())
+        Log("MAC  address: " + ":".join(["%02X" % Ord(a) for a in MyDistro.GetMacAddress()]))
 
         # Consume Entropy in ACPI table provided by Hyper-V
         try:
@@ -3323,11 +3667,15 @@ def GetMyDistro():
     Return MyDistro object.
     NOTE: Logging is not initialized at this point.
     """
-    LinuxDistro=platform.dist()[0]
-    dist_class_name=LinuxDistro+'Distro'
+    if 'Linux' in platform.system():
+        Distro=platform.dist()[0]
+    else : # I know this is not Linux!
+        if 'FreeBSD' in platform.system():
+             Distro=platform.system()
+    dist_class_name=Distro+'Distro'
     if not globals().has_key(dist_class_name):
-            print DistroName+' is not a supported linux distribution!'
-            return none
+        print DistroName+' is not a supported distribution!'
+        return none
     return globals()[dist_class_name]() # the distro class inside this module.
 
 def PackagedInstall(buildroot):
@@ -3397,7 +3745,7 @@ def Deprovision(force, deluser):
 
     MyDistro.stopAgentService()
     if deluser == True:
-        DeleteAccount(ovfobj.UserName)
+        MyDistro.DeleteAccount(ovfobj.UserName)
 
     # Remove SSH host keys
     regenerateKeys = Config.get("Provisioning.RegenerateSshHostKeyPair")
@@ -3460,7 +3808,7 @@ def main():
         elif re.match("^([-/]*)force", a):
             force = True
         elif re.match("^([-/]*)(setup|install)", a):
-            sys.exit(Install())
+            sys.exit(MyDistro.Install())
         elif re.match("^([-/]*)(uninstall)", a):
             sys.exit(Uninstall())
         else:
