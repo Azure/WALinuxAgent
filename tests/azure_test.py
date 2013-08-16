@@ -7,7 +7,7 @@ import json
 import time
 
 # waagent has no '.py' therefore create waagent module import manually.
-waagent=imp.load_source('waagent','../waagent')
+waagent=imp.load_source('waagent','waagent')
 
 from waagent import RunGetOutput, RunSendStdin, Run
 
@@ -269,8 +269,14 @@ def updateAgent(agent_path,vm_name,account,cert,disk_mountpoint,mnt_opts,lun,par
         time.sleep(2)
         retry+=1
     # Fix the password file
-    cmd='cp /etc/master.passwd ' + disk_mountpoint + '/etc/master.passwd'
-    ssh_command(vm_name,account,cmd)
+    if 'bsd' in fstype:
+        cmd='cp /etc/master.passwd ' + disk_mountpoint + '/etc/master.passwd'
+        ssh_command(vm_name,account,cmd)
+    else :
+        cmd='cp /etc/passwd ' + disk_mountpoint + '/etc/passwd'
+        ssh_command(vm_name,account,cmd)
+        cmd='cp /etc/shadow ' + disk_mountpoint + '/etc/shadow'
+        ssh_command(vm_name,account,cmd)
     #remove /var/lib/waagent
     cmd='rm -rf ' + disk_mountpoint + '/var/lib/waagent'
     ssh_command(vm_name,account,cmd)
@@ -278,17 +284,19 @@ def updateAgent(agent_path,vm_name,account,cert,disk_mountpoint,mnt_opts,lun,par
     cmd='rm -rf ' + disk_mountpoint + '/var/log/waagent*'
     ssh_command(vm_name,account,cmd)
     #delete the provisioning user
-    cmd='chroot /mnt/disk rmuser -y ' + provisionedVMaccount
-    ssh_command(vm_name,account,cmd)
-    cmd='rm -rf ' + disk_mountpoint + '/home/' + provisionedVMaccount 
-    ssh_command(vm_name,account,cmd)
+    if 'bsd' in fstype:
+        cmd='chroot /mnt/disk rmuser -y ' + provisionedVMaccount
+        ssh_command(vm_name,account,cmd)
+    else :
+        cmd='chroot /mnt/disk userdel -f ' + provisionedVMaccount
+        ssh_command(vm_name,account,cmd)
+        cmd='rm -rf ' + disk_mountpoint + '/home/' + provisionedVMaccount 
+        ssh_command(vm_name,account,cmd)
     # install agent
     cmd='chroot  /mnt/disk  /usr/sbin/waagent verbose install '
     ssh_command(vm_name,account,cmd)
     #umount
     cmd='umount ' + lunToDiskName(lun,partnum)
-    print cmd
-    waagent.Log( cmd)
     ssh_command(vm_name,account,cmd)
     
 def gatherAgentInfo(localpath,vm_name,account,cert,disk_mountpoint,mnt_opts,lun,partnum):
