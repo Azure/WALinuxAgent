@@ -1535,7 +1535,7 @@ def RunGetOutput(cmd,chk_err=True):
             Error('CalledProcessError.  Command string was ' + e.cmd  )
             Error('CalledProcessError.  Command result was ' + (e.output[:-1]).decode('latin-1'))
         return e.returncode,e.output.decode('latin-1')
-    return 0,output
+    return 0,output.decode('latin-1')
 
 def RunSendStdin(cmd,input,chk_err=True):
     """
@@ -1547,18 +1547,18 @@ def RunSendStdin(cmd,input,chk_err=True):
     LogIfVerbose(cmd+input)
     try:                                     
         me=subprocess.Popen([cmd], shell=True, stdin=subprocess.PIPE,stderr=subprocess.STDOUT,stdout=subprocess.PIPE)
-        output=(me.communicate(input)).decode('latin-1')
+        output=me.communicate(input)
     except OSError , e :
         if chk_err :
-            Error('CalledProcessError.  Error Code is ' + (me.returncode).decode('latin-1')  )
+            Error('CalledProcessError.  Error Code is ' + str(me.returncode)  )
             Error('CalledProcessError.  Command string was ' + cmd  )
-            Error('CalledProcessError.  Command result was ' + (output[:-1]).decode('latin-1'))
-            return 1,output[0]
+            Error('CalledProcessError.  Command result was ' + output[0].decode('latin-1'))
+            return 1,output[0].decode('latin-1')
     if me.returncode is not 0 and chk_err is True:
-            Error('CalledProcessError.  Error Code is ' + (me.returncode).decode('latin-1')  )
+            Error('CalledProcessError.  Error Code is ' + str(me.returncode)  )
             Error('CalledProcessError.  Command string was ' + cmd  )
-            Error('CalledProcessError.  Command result was ' + (output[:-1]).decode('latin-1'))
-    return me.returncode,output[0]
+            Error('CalledProcessError.  Command result was ' + output[0].decode('latin-1'))
+    return me.returncode,output[0].decode('latin-1')
 
 def GetNodeTextData(a):
     """
@@ -1723,6 +1723,8 @@ def HexDump(buffer, size):
         if (i % 16) == 0:
             result += "%06X: " % i
         byte = buffer[i]
+        if type(byte) == str:
+            byte = ord(byte.decode('latin1'))
         result += "%02X " % byte
         if (i & 15) == 7:
             result += " "
@@ -1735,7 +1737,9 @@ def HexDump(buffer, size):
                 j += 1
             result += " "
             for j in range(i - (i % 16), i + 1):
-                byte = buffer[j]
+                byte=buffer[j]
+                if type(byte) == str:
+                    byte = ord(byte.decode('latin1'))
                 k = '.'
                 if IsPrintable(byte):
                     k = chr(byte)
@@ -3494,11 +3498,9 @@ class Agent(Util):
         if not os.path.isfile("/mnt/cdrom/secure/ovf-env.xml"):
             Error("Unable to provision: Missing ovf-env.xml on DVD.")
             return "Failed to retrieve provisioning data (0x02)."
-        ovfxml = (GetFileContents("/mnt/cdrom/secure/ovf-env.xml",asbin=True)).decode('latin-1')
+        ovfxml = (GetFileContents("/mnt/cdrom/secure/ovf-env.xml",asbin=True))
+        ovfxml = ovfxml[3:] # First three bytes are > 128 so we ignore them.
         ovfxml=ovfxml.strip(chr(0x00))
-        ovfxml=ovfxml.strip(chr(0xef))
-        ovfxml=ovfxml.strip(chr(0xbb))
-        ovfxml=ovfxml.strip(chr(0xbf))
         SetFileContents("ovf-env.xml", re.sub("<UserPassword>.*?<", "<UserPassword>*<", ovfxml))
         Run("umount " + dvd,chk_err=False)
         MyDistro.unload_ata_piix()
