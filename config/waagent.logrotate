@@ -1,0 +1,7 @@
+/var/log/waagent.log {
+    compress
+    monthly
+    rotate 6
+    notifempty
+    missingok
+}
