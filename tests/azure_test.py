@@ -290,6 +290,8 @@ def updateAgent(agent_path,vm_name,account,cert,disk_mountpoint,mnt_opts,lun,par
     else :
         cmd='chroot /mnt/disk userdel -f ' + provisionedVMaccount
         ssh_command(vm_name,account,cmd)
+        cmd='chroot /mnt/disk groupdel ' + provisionedVMaccount
+        ssh_command(vm_name,account,cmd)
         cmd='rm -rf ' + disk_mountpoint + '/home/' + provisionedVMaccount 
         ssh_command(vm_name,account,cmd)
     # install agent
