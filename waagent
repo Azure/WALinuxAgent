@@ -3465,7 +3465,7 @@ class Agent(Util):
             Run("rm -f /etc/ssh/ssh_host_*key*")
             Run("ssh-keygen -N '' -t " + type + " -f /etc/ssh/ssh_host_" + type + "_key")
             MyDistro.restartSshService()
-        SetFileContents(LibDir + "/provisioned", "")
+        #SetFileContents(LibDir + "/provisioned", "")
         for dvds in [re.match(r'(sr[0-9]|hd[c-z]|cdrom[0-9]|cd[0-9]?)',x) for x in os.listdir('/dev/')]:
             if dvds == None:
                 continue
@@ -3615,7 +3615,9 @@ class Agent(Util):
 
                 if provisioned == False:
                     provisionError = self.Provision()
-                    provisioned = True
+                    if provisionError == None :
+                        provisioned = True
+                        SetFileContents(LibDir + "/provisioned", "")
 
                 #
                 # only one port supported
