@@ -86,13 +86,16 @@ class InstallData(install):
             tgtDir = '/'
         # Handle the different init systems
         if init == 'sysV':
-            if not os.path.exists(tgtDir + 'etc/init.d'):
+            initdir = 'etc/init.d'
+            if self.lnx_distro == 'redhat':
+                initdir = 'etc/rc.d/init.d'
+            if not os.path.exists(tgtDir + initdir):
                 try:
-                    self.mkpath(tgtDir + 'etc/init.d', 0755)
+                    self.mkpath(tgtDir + initdir, 0755)
                 except:
                     msg = 'Could not create init script directory '
                     msg += tgtDir
-                    msg += 'etc/init.d'
+                    msg += initdir
                     print msg
                     print sys.exc_info()[0]
                     sys.exit(1)
@@ -100,7 +103,7 @@ class InstallData(install):
             try:
                 for f in initScripts:
                     newName = f.split('/')[-1].split('.')[0]
-                    self.copy_file(f, tgtDir + 'etc/init.d/' + newName)
+                    self.copy_file(f, tgtDir + initdir + '/' + newName)
             except:
                 print 'Could not install systemV init script', 
                 sys.exit(1)
@@ -125,7 +128,8 @@ class InstallData(install):
                     sys.exit(1)
         elif init == 'upstart':
             print 'Upstart init files installation not supported at this time.'
-            print 'Need an implementtaion, please submit a patch ;) '
+            print 'Need an implementation, please submit a patch ;)'
+            print 'See WALinuxAgent/debian directory for Debian/Ubuntu packaging'
     
         # Configuration file
         if not os.path.exists(tgtDir + 'etc'):
