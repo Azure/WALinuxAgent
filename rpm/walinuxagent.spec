@@ -6,14 +6,12 @@
 # Created : April 20 2012
 #===============================================================================
 
-#%define my_release 1
-
 Name:           WALinuxAgent
 Summary:        The Windows Azure Linux Agent
 Version:        1.4.0
 Release:        1
 License:        Apache License Version 2.0
-Group:          Applications/Internet
+Group:          System/Daemons
 Url:            http://go.microsoft.com/fwlink/?LinkId=250998
 Source0:        WALinuxAgent-1.4.0.tar.gz
 Requires:       python python-pyasn1 openssh openssl util-linux sed grep sudo iptables
@@ -24,57 +22,53 @@ Vendor:         Microsoft Corporation
 Packager:       Microsoft Corporation <walinuxagent@microsoft.com>
 
 %description
-The Windows Azure Linux Agent supports the provisioning and running of Linux VMs in the Windows Azure cloud. This package should be installed on Linux disk images that are built to run in the Windows Azure environment.
+The Windows Azure Linux Agent supports the provisioning and running of Linux
+VMs in the Windows Azure cloud. This package should be installed on Linux disk
+images that are built to run in the Windows Azure environment.
 
 %prep
-%setup
-find . -type f -exec sed -i 's/\r//' {} \;
+%setup -q
+find . -type f -exec sed -i 's/\r//' {} +
+find . -type f -exec chmod 0644 {} +
 
 %pre -p /bin/sh
-if [ $1 = "1" ]
-then
-echo " Fresh installation of WALinuxAgent"
-elif [ $1 = "2" ]
-then
-echo " Upgrading to higher version of WALinuxAgent"
-fi
+
+%build
+# Nothing to do
 
 %install
-mkdir -p %{buildroot}/usr/sbin
-./setup.py --buildroot "%{buildroot}"
-install -m 0755 waagent %{buildroot}%{_sbindir}/
+python setup.py install --prefix=%{_prefix} --lnx-distro='redhat' --init-system='sysV' --root=%{buildroot}
+mkdir -p  %{buildroot}/%{_localstatedir}/log
+touch %{buildroot}/%{_localstatedir}/log/waagent.log
 
 %post
-chmod 755 /usr/sbin/waagent
-/usr/sbin/waagent -setup
+/sbin/chkconfig --add waagent
 
 %preun -p /bin/sh
-if [ $1 = "0" ]
-then
-echo " Un-installation of WALinuxAgent"
-%{_sbindir}/waagent -uninstall
+if [ $1 = 0 ]; then
+	/sbin/service waagent stop >/dev/null 2>&1
+	/sbin/chkconfig --del waagent
 fi
 
-%postun
-if [ $1 = "0" ]
-then
-rm -f %{_sbindir}/waagent
+%postun -p /bin/sh
+if [ "$1" -ge "1" ]; then
+	/sbin/service waagent restart >/dev/null 2>&1 || :
 fi
+
 
 %files
-%defattr(-,root,root)
-%{_sbindir}/waagent
-%doc LICENSE-2.0.txt 
-%doc NOTICE
-%doc README
-%doc Changelog
+%{_initddir}/waagent
+%defattr(0644,root,root,0755)
+%doc Changelog LICENSE-2.0.txt NOTICE README
+%attr(0755,root,root) %{_sbindir}/waagent
+%config(noreplace) %{_sysconfdir}/logrotate.d/waagent
 %config %{_sysconfdir}/waagent.conf
-%{_sysconfdir}/init.d/waagent
-%{_sysconfdir}/logrotate.d/waagent
+%ghost %{_localstatedir}/log/waagent.log
+%attr(0755,root,root) %{_initddir}/waagent
 
 
 %changelog
-* Thu Jun XX 2013 - walinuxagent@microsoft.com
+* Thu Aug 23 2013 - walinuxagent@microsoft.com
 - Updated version to 1.4.0 for release
 
 * Thu May 30 2013 - walinuxagent@microsoft.com
