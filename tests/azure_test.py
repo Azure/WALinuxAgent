@@ -10,7 +10,7 @@ import pwd
 # waagent has no '.py' therefore create waagent module import manually.
 waagent=imp.load_source('waagent','waagent')
 
-from waagent import RunGetOutput, RunSendStdin, Run, LoggerInit
+from waagent import RunGetOutput,  Run, LoggerInit
 
 
 """
@@ -36,26 +36,23 @@ If Provosioned:
     
 EXAMPLE:
 
-sudo ./azure_test.py --vm my-stable-vm-name --disk "http://mystorageaccount.blob.core.windows.net/myvhds/my-new-os.vhd" --acct mylong-unquoted-starage-account-id --testname my-vm-test --mount_point /my-stablevm-mountpoint --agent_path ../waagent --vm_acct_name root --testvm_acct_name azureuser --testvm_acct_pass 'azureuserpassword' --location "East US" --part_num 2 --retry 20 --fstype bsd --testvm_acct_cert /home/azureuser/.ssh/myCert.pem --create "once" --teardown "always" --prompt "no"   
+sudo ./azure_test.py --vm my-stable-vm-name --disk "http://mystorageaccount.blob.core.windows.net/myvhds/my-new-os.vhd" --acct mylong-unquoted-starage-account-id --testname my-vm-test --mount_point /my-stablevm-mountpoint --agent_path ../waagent --vm_acct_name root --testvm_acct_name azureuser --testvm_acct_pass 'azureuserpassword' --location "East US" --part_num 2 --retry 20 --fstype bsd --testvm_acct_cert /home/azureuser/.ssh/myCert.pem --keep_vhd "once" --teardown "always" --prompt "no"   
 """
 
 def makeDiskImage(di_name,vhd_url,location,copy=False):
     """
-    Create new data disk image lease attached to the VHD.  If 'create'
+    Create new data disk image of the VHD.  If 'copy'
     is set to True, then create a new VHD in the form of myvhd-di.vhd
-    based on the VHD source name.  Determine storage path by dirname
-    of vhd_url.  Returns code and diskimageVHD path.
-    Returns 0 on success or error code upon error.
+    based on the VHD source name.  If 'copy is set to False, re-use the
+    vhd.  Returns return code and diskimageVHD path.  Code is 0 on
+    success or the azure-cli error code upon error.
     """
-    target = os.path.dirname(vhd_url)
-    target = target+ '/' + di_name +  '.vhd'
-    cmd='azure vm disk create --json ' + di_name
     if copy :
-        cmd += ' --blob-url ' + target
+        target = os.path.dirname(vhd_url)
+        target = target+ '/' + di_name +  '.vhd'
     else :
-        cmd += ' --location "' + location + '"'
-        target=vhd_url
-    cmd +=  ' ' + vhd_url
+        target = vhd_url
+    cmd='azure vm disk create --json ' + di_name + ' --blob-url ' + target +  ' ' + vhd_url
     print cmd
     waagent.Log( cmd)
     code,output=RunGetOutput(cmd,False)
@@ -69,16 +66,12 @@ def makeVMImage(vmi_name,vhd_url,copy=False):
     Create new VM Image based on Disk Image.
     Returns 0 on success or error code upon error.
     """
-    target = os.path.dirname(vhd_url)
-    target = target + '/'+ vmi_name +  '.vhd'
-    cmd='azure vm image create --json ' + vmi_name
     if copy :
-        cmd += ' --base-vhd '  + target
-    #else :
-    #    cmd += ' --location ' +  vhd_url
-        
-    cmd += ' --os Linux --blob-url ' + vhd_url
-
+        target = os.path.dirname(vhd_url)
+        target = target+ '/' + di_name +  '.vhd'
+    else :
+        target = vhd_url
+    cmd='azure vm image create --json ' + vmi_name + ' --base-vhd '  + target + ' --os Linux --blob-url ' + vhd_url
     print cmd
     waagent.Log( cmd)
     code,output=RunGetOutput(cmd,False)
@@ -116,7 +109,7 @@ def makeVM(vm_name,vmi_name,vhd_url,test_name,location,vmuser_name,vmuser_pass,v
         retry -=1
     return target
 
-def flushDiskImage(di_name):
+def flushDiskImage(di_name,delete=True):
     """
     Delete the VM Image.
     On error we asume the VM disk image is deleted
@@ -130,12 +123,13 @@ def flushDiskImage(di_name):
     waagent.Log(output)
     return output,code
 
-def flushVMImage(vmi_name,):
+def flushVMImage(vmi_name):
     """
     Delete the VM Image.
-    On error we asume the VM image is deleted
+    Always delete the underlying blob.
+    On error we asume the VM image is deleted.
     """
-    cmd='azure vm image delete --json ' + vmi_name
+    cmd='azure vm image delete --blob-delete --json ' + vmi_name
     print cmd
     waagent.Log( cmd)
     code,output=RunGetOutput(cmd,False)
@@ -158,6 +152,22 @@ def flushVM(vm_name):
     waagent.Log(output)
     return output,code
 
+
+def createStableVMFromVMImage(vm_image,vhd_url):
+    """
+    Create a new stable vm, provisioned with acct and certificate from
+    the VMImage, using the basepath of vhd_url for the new VM's vhd.
+    """
+    stableVM=testname+'-stable-vm'
+    return makeVM(stableVM,vm_image,vhd_url,testname,location,stableVMaccount,'Aksdf221223',provisionedVMCert,copy=True)
+    
+def createStableVMFromVHD(vmi_name,vhd_url):
+    """
+    Create a new stable vm, provisioned with acct and certificate from
+    the VHD, using the basepath of vhd_url for the new VM's vhd.
+    """
+    makeVMImage(vmi_name,vhd_url,False)
+    return createStableVMFromVMImage(vmi_name,vhd_url)
 
 def createDiskImageFromStableVMDisk(vm_name):
     """
@@ -269,6 +279,8 @@ def updateAgent(agent_path,vm_name,account,cert,disk_mountpoint,mnt_opts,lun,par
     Copy the agent specified in 'agent' to the Disk
     using the 'stableVM'.
     """
+    cmd='mkdir -p ' + disk_mountpoint
+    ssh_command(vm_name,account,cmd)
     retries=3
     # TODO retires here for the mount
     #mount
@@ -407,18 +419,25 @@ def scp_from_host_command(account,host,remote_path,local_path):
     waagent.Log(output)
     return output,code
 
-def teardown(name):
+def teardown(name,delete=True):
     flushVM(vmName)
     flushVMImage(vmImageName)
     diskImageName=os.path.splitext(os.path.basename(sourceVHD))[0]+'-di'
-    makeDiskImage(diskImageName,sourceVHD,location,(create in 'always'))
+    makeDiskImage(diskImageName,sourceVHD,location,False)
     lun=addDiskImageToVM(stableVM,diskImageName)
     gatherAgentInfo(localInfo+'/'+name,stableVM,stableVMaccount,stableVMCert,stableVMMountpoint,mountOptions,lun,partNum)
     print 'Logs for ' + stableVM + ' copied to ' + localInfo + '/' + name
     waagent.Log( 'Logs for ' + stableVM + ' copied to ' + localInfo + '/' + name)
-    print 'Data disk ' + diskImageName + ' is attached to ' + stableVM
-    waagent.Log( ' disk ' + diskImageName + ' is attached to ' + stableVM)
-
+    if delete == False :
+        print 'Data disk ' + diskImageName + ' is attached to ' + stableVM
+        waagent.Log( ' disk ' + diskImageName + ' is attached to ' + stableVM)
+        return
+    # detach and delete the disk image
+    while dropDiskImageFromVM(stableVM,lun)[1] != 0 :
+        time.sleep(2)
+    while flushDiskImage(diskImageName,True)[1] != 0 :
+        time.sleep(2)
+        
 def doPrompt() :
     if prompt in ('yes','on'):
         k=raw_input('Press enter to continue:')
@@ -456,9 +475,11 @@ if __name__ == '__main__' :
     partNum=1
     provision_retries=1
     fstype='scsi'
-    create='once' 
+    keep_vhd=None
     teardown_vm='fail'
     prompt = 'yes'
+    stable_vm_vhd=None
+    stable_vm_image=None
     """
     We need to create a disk image container and attach it to a stable
     vm in order to copy the current sources to it.  Then we detach it,
@@ -488,19 +509,41 @@ if __name__ == '__main__' :
         elif '--part_num' == sys.argv[i] : partNum=sys.argv[i+1]
         elif '--retry' == sys.argv[i] : provision_retries=int(sys.argv[i+1])
         elif '--fstype' == sys.argv[i] : fstype=sys.argv[i+1]
-        elif '--create' == sys.argv[i] : create=sys.argv[i+1]
+        elif '--keep_vhd' == sys.argv[i] : keep_vhd=sys.argv[i+1]
         elif '--teardown_vm' == sys.argv[i] : teardown_vm=sys.argv[i+1]
         elif '--prompt' == sys.argv[i] : prompt=sys.argv[i+1]
+        elif '--stable_vm_image' == sys.argv[i] : stable_vm_image=sys.argv[i+1]
+        elif '--stable_vm_vhd' == sys.argv[i] : stable_vm_vhd=sys.argv[i+1]
+        elif '--stable_vm_acct_cert' == sys.argv[i] : stable_vm_acct_cert=sys.argv[i+1]
         
-    if len(stableVM) == 0 :
-        print '--vm <stable vm> must be provided!'
+    if len(stableVM) == 0 and not ( stable_vm_image or stable_vm_vhd ):
+        print '--vm <stable vm> must be provided unless --stable_vm_image or --stable_vm_vhd'
         waagent.Log( '--vm <stable vm> must be provided!')
         sys.exit(1)
-
+    else:
+        if stable_vm_image:
+            sourceVHD=createStableVMFromVMImage(stable_vm_image,sourceVHD)
+        elif stable_vm_vhd:
+            stable_vm_image_name=testname+'-stable-vi'
+            sourceVHD=createStableVMFromVHD(stable_vm_image_name,stable_vm_vhd)
+        stableVM=testname+'-stable-vm'
+        p = False
+        retries = provision_retries
+        while not p and retries > 0:
+            p,out = checkVMProvisioned(stableVM)
+            if not p:
+                if 'Failed' in out or 'Timeout' in out :
+                    break
+                print  stableVM + ' Not Provisioned - sleeping on retry:' + str( provision_retries - retries ) 
+                waagent.Log(  stableVM + ' Not Provisioned - sleeping on retry:' + str( provision_retries - retries ) )
+                time.sleep(30)
+            else :
+                print stableVM + ' Provision SUCCEEDED.'
+                waagent.Log( stableVM + ' Provision SUCCEEDED.')
+    # done creating the stable vm        
     vmImageName=os.path.splitext(os.path.basename(sourceVHD))[0]+'-vi'
-    flushVMImage(vmImageName)
+    #flushVMImage(vmImageName)
 
-        
     # if no disk image name is provided we want to clone the stable vm disk.
     if not sourceVHD:
         sourceVHD=createDiskImageFromStableVMDisk(stableVM)
@@ -510,10 +553,11 @@ if __name__ == '__main__' :
         diskImageName=os.path.splitext(os.path.basename(sourceVHD))[0]
     else :
         diskImageName=os.path.splitext(os.path.basename(sourceVHD))[0]+'-di'
-        code,diskImageVHD=makeDiskImage(diskImageName,sourceVHD,location,(create in ('always','once')))
+        code,diskImageVHD=makeDiskImage(diskImageName,sourceVHD,location,True)
         if code:
             print 'Error - unable to make ' + diskImageName
             waagent.Log( 'Error - unable to make ' + diskImageName)
+
     lun=addDiskImageToVM(stableVM,diskImageName)
     while lun == None :
         time.sleep(2)
@@ -523,14 +567,14 @@ if __name__ == '__main__' :
     doPrompt()
     while dropDiskImageFromVM(stableVM,lun)[1] != 0 :
         time.sleep(2)
-    while flushDiskImage(diskImageName)[1] != 0 :
+    while flushDiskImage(diskImageName,False)[1] != 0 :
         time.sleep(2)
     vmImageName=os.path.splitext(os.path.basename(sourceVHD))[0]+'-vi'
     flushVMImage(vmImageName)
     vmName=testname+'-vm'
     flushVM(vmName)
-    makeVMImage(vmImageName,diskImageVHD,(create in 'always'))
-    sourceVHD=makeVM(vmName,vmImageName,sourceVHD,testname,location,provisionedVMaccount,provisionedVMpass,provisionedVMCert,(create in 'always'))
+    makeVMImage(vmImageName,diskImageVHD,True)
+    sourceVHD=makeVM(vmName,vmImageName,sourceVHD,testname,location,provisionedVMaccount,provisionedVMpass,provisionedVMCert,False)
     print 'The new source vhd is ' + sourceVHD
     waagent.Log( 'The new source vhd is ' + sourceVHD)
     p = False
@@ -548,7 +592,7 @@ if __name__ == '__main__' :
             waagent.Log( vmName + ' Provision SUCCEEDED.')
             doPrompt()
             if teardown_vm in ('success','always'):
-                teardown(testname+'_pass')
+                teardown(testname+'_pass',keep_vhd)
             sys.exit(0)
         retries -= 1
     
@@ -556,7 +600,7 @@ if __name__ == '__main__' :
     waagent.Log( vmName + ' Provision FAILED.')
     doPrompt()
     if teardown_vm in ('fail','always'):
-                teardown(testname+'_fail')
+                teardown(testname+'_fail',keep_vhd)
     sys.exit(1)
 
 
