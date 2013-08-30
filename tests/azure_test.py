@@ -12,7 +12,6 @@ waagent=imp.load_source('waagent','waagent')
 
 from waagent import RunGetOutput,  Run, LoggerInit
 
-
 """
 Test waagent in azure using azure-cli
 Usage:
@@ -59,7 +58,7 @@ def makeDiskImage(di_name,vhd_url,location,copy=False):
     print output,code
     waagent.Log(output)
     waagent.Log(str(code))
-    return code,target
+    return target,code
 
 def makeVMImage(vmi_name,vhd_url,copy=False):
     """
@@ -68,7 +67,7 @@ def makeVMImage(vmi_name,vhd_url,copy=False):
     """
     if copy :
         target = os.path.dirname(vhd_url)
-        target = target+ '/' + di_name +  '.vhd'
+        target = target+ '/' + vmi_name +  '.vhd'
     else :
         target = vhd_url
     cmd='azure vm image create --json ' + vmi_name + ' --base-vhd '  + target + ' --os Linux --blob-url ' + vhd_url
@@ -86,7 +85,7 @@ def makeVM(vm_name,vmi_name,vhd_url,test_name,location,vmuser_name,vmuser_pass,v
     Returns 0 on success or error code upon error.
     """
     target=os.path.dirname(vhd_url)
-    target = target + '/' + testname +  '.vhd'
+    target = target + '/' + test_name +  '.vhd'
     cmd='azure vm create --json '
     if copy :
         cmd += ' --blob-url "' + target + '"'
@@ -138,12 +137,15 @@ def flushVMImage(vmi_name):
     waagent.Log(output)
     return output,code
 
-def flushVM(vm_name):
+def flushVM(vm_name,dele=False):
     """
     Delete the VM.
     On error we asume the VM is deleted
     """
-    cmd='azure vm delete --json ' + vm_name
+    cmd='azure vm delete --json '
+    if dele :
+        cmd += ' --blob-delete '
+    cmd += vm_name
     print cmd
     waagent.Log( cmd)
     code,output=RunGetOutput(cmd,False)
@@ -159,7 +161,7 @@ def createStableVMFromVMImage(vm_image,vhd_url):
     the VMImage, using the basepath of vhd_url for the new VM's vhd.
     """
     stableVM=testname+'-stable-vm'
-    return makeVM(stableVM,vm_image,vhd_url,testname,location,stableVMaccount,'Aksdf221223',provisionedVMCert,copy=True)
+    return makeVM(stableVM,vm_image,vhd_url,testname+'-stable',location,stableVMaccount,stableVMpass,provisionedVMCert,copy=True)
     
 def createStableVMFromVHD(vmi_name,vhd_url):
     """
@@ -279,64 +281,67 @@ def updateAgent(agent_path,vm_name,account,cert,disk_mountpoint,mnt_opts,lun,par
     Copy the agent specified in 'agent' to the Disk
     using the 'stableVM'.
     """
-    cmd='mkdir -p ' + disk_mountpoint
+    cmd='sudo mkdir -p ' + disk_mountpoint
     ssh_command(vm_name,account,cmd)
     retries=3
     # TODO retires here for the mount
     #mount
-    cmd='mount ' +mnt_opts + ' ' + lunToDiskName(lun,partnum) + ' ' +disk_mountpoint
+    cmd='sudo mount ' +mnt_opts + ' ' + lunToDiskName(lun,partnum) + ' ' +disk_mountpoint
     waagent.Log( cmd)
     retry=0
     while  ssh_command(vm_name,account,cmd)[1] not in (0,32) and  retry < retries :
         if retry == 0:
             if 'bsd' in fstype:
-                fcmd = "fsck_ffs -y "
+                fcmd = "sudo fsck_ffs -y "
             else :
-                fcmd = "fsck -y "
+                fcmd = "sudo fsck -y "
             fcmd += lunToDiskName(lun,partnum)
             ssh_command(vm_name,account,fcmd)
         time.sleep(2)
         retry+=1
 
     #copy agent
-    remote_path=disk_mountpoint+'/usr/sbin/waagent'
+    remote_path='/tmp'
     print 'scp ' + agent_path + ' to ' + vm_name + ' ' + account + ':' + remote_path
     waagent.Log( 'scp ' + agent_path + ' to ' + vm_name + ' ' + account + ':' + remote_path)
     retry=0
     while scp_to_host_command(account,vm_name,remote_path,agent_path)[1] != 0 and retry < retries :
         time.sleep(2)
         retry+=1
+    # move agent to /usr/sbin
+    cmd= 'sudo cp ' + remote_path +'/waagent '+ disk_mountpoint+'/usr/sbin/waagent'
+    ssh_command(vm_name,account,cmd)
     # Fix the password file
     if 'bsd' in fstype:
-        cmd='cp /etc/master.passwd ' + disk_mountpoint + '/etc/master.passwd'
+        cmd='sudo cp /etc/master.passwd ' + disk_mountpoint + '/etc/master.passwd'
         ssh_command(vm_name,account,cmd)
     else :
-        cmd='cp /etc/passwd ' + disk_mountpoint + '/etc/passwd'
+        cmd='sudo cp /etc/passwd ' + disk_mountpoint + '/etc/passwd'
         ssh_command(vm_name,account,cmd)
-        cmd='cp /etc/shadow ' + disk_mountpoint + '/etc/shadow'
+        cmd='sudo cp /etc/shadow ' + disk_mountpoint + '/etc/shadow'
         ssh_command(vm_name,account,cmd)
     #remove /var/lib/waagent
-    cmd='rm -rf ' + disk_mountpoint + '/var/lib/waagent'
+    cmd='sudo rm -rf ' + disk_mountpoint + '/var/lib/waagent'
     ssh_command(vm_name,account,cmd)
     #remove /var/log/waagent*
-    cmd='rm -rf ' + disk_mountpoint + '/var/log/waagent*'
+    cmd='sudo rm -rf ' + disk_mountpoint + '/var/log/waagent*'
     ssh_command(vm_name,account,cmd)
     #delete the provisioning user
     if 'bsd' in fstype:
-        cmd='chroot /mnt/disk rmuser -y ' + provisionedVMaccount
+        cmd='sudo chroot /mnt/disk rmuser -y ' + provisionedVMaccount
         ssh_command(vm_name,account,cmd)
     else :
-        cmd='chroot /mnt/disk userdel -f ' + provisionedVMaccount
+        cmd='sudo chroot /mnt/disk userdel -f ' + provisionedVMaccount
         ssh_command(vm_name,account,cmd)
-        cmd='chroot /mnt/disk groupdel ' + provisionedVMaccount
+        cmd='sudo chroot /mnt/disk groupdel ' + provisionedVMaccount
         ssh_command(vm_name,account,cmd)
-        cmd='rm -rf ' + disk_mountpoint + '/home/' + provisionedVMaccount 
+        cmd='sudo rm -rf ' + disk_mountpoint + '/home/' + provisionedVMaccount 
         ssh_command(vm_name,account,cmd)
     # install agent
-    cmd='chroot  /mnt/disk  /usr/sbin/waagent verbose install '
+    cmd='sudo chroot  /mnt/disk  /usr/sbin/waagent verbose install '
     ssh_command(vm_name,account,cmd)
     #umount
-    cmd='umount ' + lunToDiskName(lun,partnum)
+    cmd='sudo umount ' + lunToDiskName(lun,partnum)
     ssh_command(vm_name,account,cmd)
     
 def gatherAgentInfo(localpath,vm_name,account,cert,disk_mountpoint,mnt_opts,lun,partnum):
@@ -345,16 +350,25 @@ def gatherAgentInfo(localpath,vm_name,account,cert,disk_mountpoint,mnt_opts,lun,
     localhost:localpath.
     """
     #mount
-    cmd='mount ' +mnt_opts + ' '  + lunToDiskName(lun,partnum) + ' ' +disk_mountpoint
+    cmd='sudo mount ' +mnt_opts + ' '  + lunToDiskName(lun,partnum) + ' ' +disk_mountpoint
     print cmd
     waagent.Log( cmd)
     ssh_command(vm_name,account,cmd)
     #copy info
     Run("mkdir -p "+ localpath)
-    scp_from_host_command(account,vm_name,disk_mountpoint+'/var/log',localpath)
-    scp_from_host_command(account,vm_name,disk_mountpoint+'/var/lib/waagent',localpath)
+    cmd='sudo mkdir -p /tmp/results'
+    ssh_command(vm_name,account,cmd)
+    cmd='sudo cp -r  ' + disk_mountpoint + '/var/log /tmp/results/'
+    ssh_command(vm_name,account,cmd)
+    cmd='sudo cp -r  ' + disk_mountpoint + '/var/lib/waagent /tmp/results/'
+    ssh_command(vm_name,account,cmd)
+    cmd='sudo chmod -R 777 /tmp/results'
+    ssh_command(vm_name,account,cmd)
+    cmd='sudo chown -R ' + account + '  /tmp/results'
+    ssh_command(vm_name,account,cmd)
+    scp_from_host_command(account,vm_name,'/tmp/results',localpath)
     #umount
-    cmd='umount ' + lunToDiskName(lun,partnum)
+    cmd='sudo umount ' + lunToDiskName(lun,partnum)
     print cmd
     waagent.Log( cmd)
     ssh_command(vm_name,account,cmd)
@@ -382,7 +396,7 @@ def ssh_command(host,account,cmd):
     Wrapper for an ssh operation.
     Requires key authentication configured.
     """
-    req="ssh " + account + "@" + host.lower() + ".cloudapp.net '" + cmd + "'"
+    req="ssh -o StrictHostKeyChecking='no' " + account + "@" + host.lower() + ".cloudapp.net '" + cmd + "'"
     print req
     waagent.Log( req)
     code,output=RunGetOutput(req,False)
@@ -396,7 +410,7 @@ def scp_to_host_command(account,host,remote_path,local_path):
     Wrapper for an scp operation.  Always uses -r.
     Requires key authentication configured.
     """
-    req="scp -r " + local_path + " " + account + "@" + host.lower() + ".cloudapp.net:" + remote_path
+    req="scp -o StrictHostKeyChecking='no' -r " + local_path + " " + account + "@" + host.lower() + ".cloudapp.net:" + remote_path
     print req
     waagent.Log( req)
     code,output=RunGetOutput(req,False)
@@ -419,16 +433,20 @@ def scp_from_host_command(account,host,remote_path,local_path):
     waagent.Log(output)
     return output,code
 
-def teardown(name,delete=True):
+def teardown(name,dele=True):
     flushVM(vmName)
     flushVMImage(vmImageName)
     diskImageName=os.path.splitext(os.path.basename(sourceVHD))[0]+'-di'
-    makeDiskImage(diskImageName,sourceVHD,location,False)
+    while makeDiskImage(diskImageName,sourceVHD,location,True)[1] !=0 :
+        time.sleep(20)
     lun=addDiskImageToVM(stableVM,diskImageName)
+    while lun == None :
+        time.sleep(2)
+        lun=addDiskImageToVM(stableVM,diskImageName)
     gatherAgentInfo(localInfo+'/'+name,stableVM,stableVMaccount,stableVMCert,stableVMMountpoint,mountOptions,lun,partNum)
-    print 'Logs for ' + stableVM + ' copied to ' + localInfo + '/' + name
-    waagent.Log( 'Logs for ' + stableVM + ' copied to ' + localInfo + '/' + name)
-    if delete == False :
+    print 'Logs for ' + vmName + ' copied to ' + localInfo + '/' + name
+    waagent.Log( 'Logs for ' + vmName + ' copied to ' + localInfo + '/' + name)
+    if dele == False :
         print 'Data disk ' + diskImageName + ' is attached to ' + stableVM
         waagent.Log( ' disk ' + diskImageName + ' is attached to ' + stableVM)
         return
@@ -437,11 +455,18 @@ def teardown(name,delete=True):
         time.sleep(2)
     while flushDiskImage(diskImageName,True)[1] != 0 :
         time.sleep(2)
-        
+    out,code=flushVM(stableVM,keep_vhd)
+    if code != 0 :
+        stableVMDisk=out[out.find('disk with name ')+len('disk with name '):out.find(' is currently in use')]
+        while flushDiskImage(stableVMDisk,True)[1] != 0 :
+            time.sleep(5)
+    if stableVMImageName:
+        while flushVMImage(stableVMImageName,True)[1] != 0 :
+            time.sleep(2)
+    
 def doPrompt() :
     if prompt in ('yes','on'):
-        k=raw_input('Press enter to continue:')
-
+        raw_input('Press enter to continue:')
 
 if __name__ == '__main__' :
     """
@@ -479,7 +504,7 @@ if __name__ == '__main__' :
     teardown_vm='fail'
     prompt = 'yes'
     stable_vm_vhd=None
-    stable_vm_image=None
+    stableVMImageName=None
     """
     We need to create a disk image container and attach it to a stable
     vm in order to copy the current sources to it.  Then we detach it,
@@ -491,16 +516,17 @@ if __name__ == '__main__' :
     """
 
     LoggerInit('azure_test.log','')
-    waagent.Log("User: "+ pwd.getpwuid(os.geteuid()).pw_name +"Running Command :\n" + reduce(lambda x, y: x+' '+y,sys.argv))
+    waagent.Log("User: "+ pwd.getpwuid(os.geteuid()).pw_name +" Running Command :\n" + reduce(lambda x, y: x+' '+y,sys.argv))
     for i in range(len(sys.argv)) :
-        if '--vm' == sys.argv[i] : stableVM=sys.argv[i+1]
+        if '--stable_vm' == sys.argv[i] : stableVM=sys.argv[i+1]
         elif '--disk' == sys.argv[i]: sourceVHD=sys.argv[i+1]
         elif '--acct' == sys.argv[i]: account=sys.argv[i+1]
         elif '--testname' == sys.argv[i] : testname=sys.argv[i+1]
         elif '--mount_point' == sys.argv[i] : stableVMMountpoint=sys.argv[i+1]
         elif '--agent_path' == sys.argv[i] : localAgent=sys.argv[i+1]
-        elif '--vm_acct_name' == sys.argv[i] : stableVMaccount=sys.argv[i+1]
-        elif '--vm_acct_cert' == sys.argv[i] : stableVMCert=sys.argv[i+1]
+        elif '--stable_vm_acct_name' == sys.argv[i] : stableVMaccount=sys.argv[i+1]
+        elif '--stable_vm_acct_pass' == sys.argv[i] : stableVMpass=sys.argv[i+1]
+        elif '--stable_vm_acct_cert' == sys.argv[i] : stableVMCert=sys.argv[i+1]
         elif '--testvm_acct_name' == sys.argv[i] : provisionedVMaccount=sys.argv[i+1]
         elif '--testvm_acct_pass' == sys.argv[i] : provisionedVMpass=sys.argv[i+1]
         elif '--testvm_acct_cert' == sys.argv[i] : provisionedVMCert=sys.argv[i+1]
@@ -514,7 +540,6 @@ if __name__ == '__main__' :
         elif '--prompt' == sys.argv[i] : prompt=sys.argv[i+1]
         elif '--stable_vm_image' == sys.argv[i] : stable_vm_image=sys.argv[i+1]
         elif '--stable_vm_vhd' == sys.argv[i] : stable_vm_vhd=sys.argv[i+1]
-        elif '--stable_vm_acct_cert' == sys.argv[i] : stable_vm_acct_cert=sys.argv[i+1]
         
     if len(stableVM) == 0 and not ( stable_vm_image or stable_vm_vhd ):
         print '--vm <stable vm> must be provided unless --stable_vm_image or --stable_vm_vhd'
@@ -524,8 +549,8 @@ if __name__ == '__main__' :
         if stable_vm_image:
             sourceVHD=createStableVMFromVMImage(stable_vm_image,sourceVHD)
         elif stable_vm_vhd:
-            stable_vm_image_name=testname+'-stable-vi'
-            sourceVHD=createStableVMFromVHD(stable_vm_image_name,stable_vm_vhd)
+            stableVMImageName=testname+'-stable-vi'
+            sourceVHD=createStableVMFromVHD(stableVMImageName,stable_vm_vhd)
         stableVM=testname+'-stable-vm'
         p = False
         retries = provision_retries
@@ -537,6 +562,7 @@ if __name__ == '__main__' :
                 print  stableVM + ' Not Provisioned - sleeping on retry:' + str( provision_retries - retries ) 
                 waagent.Log(  stableVM + ' Not Provisioned - sleeping on retry:' + str( provision_retries - retries ) )
                 time.sleep(30)
+                retries -= 1
             else :
                 print stableVM + ' Provision SUCCEEDED.'
                 waagent.Log( stableVM + ' Provision SUCCEEDED.')
@@ -553,7 +579,7 @@ if __name__ == '__main__' :
         diskImageName=os.path.splitext(os.path.basename(sourceVHD))[0]
     else :
         diskImageName=os.path.splitext(os.path.basename(sourceVHD))[0]+'-di'
-        code,diskImageVHD=makeDiskImage(diskImageName,sourceVHD,location,True)
+        diskImageVHD,code=makeDiskImage(diskImageName,sourceVHD,location,True)
         if code:
             print 'Error - unable to make ' + diskImageName
             waagent.Log( 'Error - unable to make ' + diskImageName)
@@ -574,7 +600,7 @@ if __name__ == '__main__' :
     vmName=testname+'-vm'
     flushVM(vmName)
     makeVMImage(vmImageName,diskImageVHD,True)
-    sourceVHD=makeVM(vmName,vmImageName,sourceVHD,testname,location,provisionedVMaccount,provisionedVMpass,provisionedVMCert,False)
+    sourceVHD=makeVM(vmName,vmImageName,sourceVHD,testname,location,provisionedVMaccount,provisionedVMpass,provisionedVMCert,True)
     print 'The new source vhd is ' + sourceVHD
     waagent.Log( 'The new source vhd is ' + sourceVHD)
     p = False
@@ -592,7 +618,7 @@ if __name__ == '__main__' :
             waagent.Log( vmName + ' Provision SUCCEEDED.')
             doPrompt()
             if teardown_vm in ('success','always'):
-                teardown(testname+'_pass',keep_vhd)
+                teardown(testname+'_pass',('yes' in keep_vhd) )
             sys.exit(0)
         retries -= 1
     
@@ -602,5 +628,3 @@ if __name__ == '__main__' :
     if teardown_vm in ('fail','always'):
                 teardown(testname+'_fail',keep_vhd)
     sys.exit(1)
-
-
