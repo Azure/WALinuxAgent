@@ -433,7 +433,7 @@ def scp_from_host_command(account,host,remote_path,local_path):
     waagent.Log(output)
     return output,code
 
-def teardown(name,dele=True):
+def teardown(name):
     flushVM(vmName)
     flushVMImage(vmImageName)
     diskImageName=os.path.splitext(os.path.basename(sourceVHD))[0]+'-di'
@@ -446,10 +446,6 @@ def teardown(name,dele=True):
     gatherAgentInfo(localInfo+'/'+name,stableVM,stableVMaccount,stableVMCert,stableVMMountpoint,mountOptions,lun,partNum)
     print 'Logs for ' + vmName + ' copied to ' + localInfo + '/' + name
     waagent.Log( 'Logs for ' + vmName + ' copied to ' + localInfo + '/' + name)
-    if dele == False :
-        print 'Data disk ' + diskImageName + ' is attached to ' + stableVM
-        waagent.Log( ' disk ' + diskImageName + ' is attached to ' + stableVM)
-        return
     # detach and delete the disk image
     while dropDiskImageFromVM(stableVM,lun)[1] != 0 :
         time.sleep(2)
@@ -519,10 +515,10 @@ if __name__ == '__main__' :
     waagent.Log("User: "+ pwd.getpwuid(os.geteuid()).pw_name +" Running Command :\n" + reduce(lambda x, y: x+' '+y,sys.argv))
     for i in range(len(sys.argv)) :
         if '--stable_vm' == sys.argv[i] : stableVM=sys.argv[i+1]
-        elif '--disk' == sys.argv[i]: sourceVHD=sys.argv[i+1]
-        elif '--acct' == sys.argv[i]: account=sys.argv[i+1]
+        elif '--source_disk' == sys.argv[i]: sourceVHD=sys.argv[i+1]
+        elif '--storage_acct' == sys.argv[i]: account=sys.argv[i+1]
         elif '--testname' == sys.argv[i] : testname=sys.argv[i+1]
-        elif '--mount_point' == sys.argv[i] : stableVMMountpoint=sys.argv[i+1]
+        elif '--stable_vm_mount_point' == sys.argv[i] : stableVMMountpoint=sys.argv[i+1]
         elif '--agent_path' == sys.argv[i] : localAgent=sys.argv[i+1]
         elif '--stable_vm_acct_name' == sys.argv[i] : stableVMaccount=sys.argv[i+1]
         elif '--stable_vm_acct_pass' == sys.argv[i] : stableVMpass=sys.argv[i+1]
@@ -530,13 +526,14 @@ if __name__ == '__main__' :
         elif '--testvm_acct_name' == sys.argv[i] : provisionedVMaccount=sys.argv[i+1]
         elif '--testvm_acct_pass' == sys.argv[i] : provisionedVMpass=sys.argv[i+1]
         elif '--testvm_acct_cert' == sys.argv[i] : provisionedVMCert=sys.argv[i+1]
-        elif '--location' == sys.argv[i] : location=sys.argv[i+1]
-        elif '--mnt_opt' == sys.argv[i] : mountOptions=sys.argv[i+1]
+        elif '--azure_location' == sys.argv[i] : location=sys.argv[i+1]
+        elif '--mount_opts' == sys.argv[i] : mountOptions=sys.argv[i+1]
         elif '--part_num' == sys.argv[i] : partNum=sys.argv[i+1]
-        elif '--retry' == sys.argv[i] : provision_retries=int(sys.argv[i+1])
-        elif '--fstype' == sys.argv[i] : fstype=sys.argv[i+1]
-        elif '--keep_vhd' == sys.argv[i] : keep_vhd=sys.argv[i+1]
-        elif '--teardown_vm' == sys.argv[i] : teardown_vm=sys.argv[i+1]
+        elif '--retries' == sys.argv[i] : provision_retries=int(sys.argv[i+1])
+        elif '--fs_type' == sys.argv[i] : fstype=sys.argv[i+1]
+        elif '--keep_test_vm_vhd' == sys.argv[i] : keep_vhd=sys.argv[i+1]
+        elif '--teardown_test_vm' == sys.argv[i] : teardown_test_vm=sys.argv[i+1]
+        elif '--teardown_stable_vm' == sys.argv[i] : teardown_stable_vm=sys.argv[i+1]
         elif '--prompt' == sys.argv[i] : prompt=sys.argv[i+1]
         elif '--stable_vm_image' == sys.argv[i] : stable_vm_image=sys.argv[i+1]
         elif '--stable_vm_vhd' == sys.argv[i] : stable_vm_vhd=sys.argv[i+1]
@@ -617,14 +614,14 @@ if __name__ == '__main__' :
             print vmName + ' Provision SUCCEEDED.'
             waagent.Log( vmName + ' Provision SUCCEEDED.')
             doPrompt()
-            if teardown_vm in ('success','always'):
-                teardown(testname+'_pass',('yes' in keep_vhd) )
+            if teardown_test_vm in ('success','always'):
+                teardown(testname+'_pass')
             sys.exit(0)
         retries -= 1
     
     print vmName + ' Provision FAILED.'
     waagent.Log( vmName + ' Provision FAILED.')
     doPrompt()
-    if teardown_vm in ('fail','always'):
-                teardown(testname+'_fail',keep_vhd)
+    if teardown_test_vm in ('fail','always'):
+                teardown(testname+'_fail')
     sys.exit(1)
