@@ -3064,7 +3064,7 @@ class Agent(Util):
         net = self.IntegerToIpAddressV4String(net)
         mask = self.IntegerToIpAddressV4String(mask)
         gateway = self.IntegerToIpAddressV4String(gateway)
-        Run("/sbin/route add -net " + net + " netmask " + mask + " gw " + gateway)
+        Run("/sbin/route add -net " + net + " netmask " + mask + " gw " + gateway,chk_err=False)
 
     def HandleDhcpResponse(self, sendData, receiveBuffer):
         """
