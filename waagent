@@ -3365,7 +3365,7 @@ class Agent(Util):
         modloaded=False
         retcode,krn=RunGetOutput('uname -r')
         krn_pth='/lib/modules/'+krn.strip('\n')+'/kernel/drivers/ata/ata_piix.ko'
-        if Run('lsmod | grep ata_piix') == 0 :
+        if Run("lsmod | grep ata_piix",chk_err=False) == 0 :
             Log("Module " + krn_pth + " driver for ATAPI CD-ROM is already present.")
             return 0
         if retcode:
