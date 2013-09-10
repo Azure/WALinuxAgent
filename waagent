@@ -111,11 +111,11 @@ Provisioning.RegenerateSshHostKeyPair=y # Generate fresh host key pair.
 Provisioning.SshHostKeyPairType=rsa     # Supported values are "rsa", "dsa" and "ecdsa".
 Provisioning.MonitorHostName=y          # Monitor host name changes and publish changes via DHCP requests.
 
-ResourceDisk.Format=n                   # Format if unformatted. If 'n', resource disk will not be mounted.
+ResourceDisk.Format=y                   # Format if unformatted. If 'n', resource disk will not be mounted.
 ResourceDisk.Filesystem=ext4            #
 ResourceDisk.MountPoint=/mnt/resource   #
-ResourceDisk.EnableSwap=n               # Create and use swapfile on resource disk.
-ResourceDisk.SwapSizeMB=0               # Size of the swapfile.
+ResourceDisk.EnableSwap=y               # Create and use swapfile on resource disk.
+ResourceDisk.SwapSizeMB=1024               # Size of the swapfile.
 
 LBProbeResponder=y                      # Respond to load balancer probes if requested by Windows Azure.
 
@@ -147,7 +147,7 @@ class AbstractDistro(object):
         This __init__() may be called or overriden by the child.
         """
         self.agent_service_name = os.path.basename(sys.argv[0]) 
-        self.selinux=False
+        self.selinux=None
         self.ssh_service_name='ssh'
         self.ssh_config_file='/etc/ssh/sshd_config'
         self.hostname_file_path='/etc/hostname'
@@ -577,7 +577,8 @@ class SuSEDistro(AbstractDistro):
         self.dhcp_client_name='dhcpd'
         self.grubKernelBootOptionsFile = '/boot/grub/menu.lst'
         self.grubKernelBootOptionsLine = 'kernel'
-
+        self.getpidcmd='echo '
+        
     def checkPackageInstalled(self,p):
         if Run("rpm -q " + p,chk_err=False):
             return 0
@@ -609,6 +610,125 @@ class SuSEDistro(AbstractDistro):
         self.stopAgentService()
         return self.uninstallAgentService()
     
+############################################################    
+#	redhatDistro
+############################################################    
+
+redhat_init_file= """\
+#!/bin/bash
+#
+# Init file for WindowsAzureLinuxAgent.
+#
+# chkconfig: 2345 60 80
+# description: WindowsAzureLinuxAgent
+#
+
+# source function library
+. /etc/rc.d/init.d/functions
+
+RETVAL=0
+FriendlyName="WindowsAzureLinuxAgent"
+WAZD_BIN=/usr/sbin/waagent
+
+start()
+{
+    echo -n $"Starting $FriendlyName: "
+    $WAZD_BIN -daemon &
+}
+
+stop()
+{
+    echo -n $"Stopping $FriendlyName: "
+    killproc -p /var/run/waagent.pid $WAZD_BIN
+    RETVAL=$?
+    echo
+    return $RETVAL
+}
+
+case "$1" in
+    start)
+        start
+        ;;
+    stop)
+        stop
+        ;;
+    restart)
+        stop
+        start
+        ;;
+    reload)
+        ;;
+    report)
+        ;;
+    status)
+        status $WAZD_BIN
+        RETVAL=$?
+        ;;
+    *)
+        echo $"Usage: $0 {start|stop|restart|status}"
+        RETVAL=1
+esac
+exit $RETVAL
+"""
+
+class redhatDistro(AbstractDistro):
+    """
+    Redhat Distro concrete class
+    Put Redhat specific behavior here...
+    """
+    def __init__(self):
+        super(redhatDistro,self).__init__()
+        self.ssh_service_name='sshd'
+        self.hostname_file_path=None
+        self.init_file=redhat_init_file
+        self.grubKernelBootOptionsFile = '/boot/grub/menu.lst'
+        self.grubKernelBootOptionsLine = 'kernel'
+
+    def setHostname(self,name):
+        return Run('hostname ' + name)
+
+    def publishHostname(self,name):
+        filepath = "/etc/sysconfig/network"
+        if os.path.isfile(filepath):
+            ReplaceFileContentsAtomic(filepath, "HOSTNAME=" + name + "\n"
+                + "\n".join(filter(lambda a: not a.startswith("HOSTNAME"), GetFileContents(filepath).split('\n'))))
+
+        for ethernetInterface in MyDistro.GetInterfaceName():
+            filepath = "/etc/sysconfig/network-scripts/ifcfg-" + ethernetInterface
+            if os.path.isfile(filepath):
+                ReplaceFileContentsAtomic(filepath, "DHCP_HOSTNAME=" + name + "\n"
+                    + "\n".join(filter(lambda a: not a.startswith("DHCP_HOSTNAME"), GetFileContents(filepath).split('\n'))))
+        return 0
+
+    def installAgentServiceScriptFiles(self):
+        SetFileContents(self.init_script_file, self.init_file)
+        os.chmod(self.init_script_file, 0744)
+        return 0
+
+    def registerAgentService(self):
+        self.installAgentServiceScriptFiles()
+        return Run('chkconfig --add waagent')
+   
+    def uninstallAgentService(self):
+        return Run('chkconfig --del ' + self.agent_service_name)
+
+    def unregisterAgentService(self):
+        self.stopAgentService()
+        return self.uninstallAgentService()
+    
+    def checkPackageInstalled(self,p):
+        if Run("yum list installed " + p,chk_err=False):
+            return 0
+        else:
+            return 1
+
+    def checkPackageUpdateable(self,p):
+        if Run("yum check-update | grep "+ p,chk_err=False):
+            return 1
+        else:
+            return 0
+
+
    
 ############################################################    
 #	centosDistro
@@ -801,7 +921,8 @@ class debianDistro(AbstractDistro):
         self.init_file=debian_init_file
         self.agent_package_name='walinuxagent'
         self.dhcp_client_name='dhclient3'
-
+        self.getpidcmd='echo '
+        
     def setHostname(self,name):
         return Run('hostname ' + name)
 
@@ -864,8 +985,11 @@ class debianDistro(AbstractDistro):
         return 0
     
     def registerAgentService(self):
-        return self.installAgentServiceScriptFiles()
-
+        if self.installAgentServiceScriptFiles() == 0:
+            return Run('update-rc.d waagent defaults')
+        else :
+            return 1
+    
     def uninstallAgentService(self):
         return Run('update-rc.d -f ' + self.agent_service_name + ' remove')
 
@@ -924,7 +1048,8 @@ class UbuntuDistro(debianDistro):
         self.init_file=ubuntu_upstart_file
         self.fileBlackList = [ "/root/.bash_history", "/var/log/waagent.log"]
         self.dhcp_client_name='dhclient'
-        
+        self.getpidcmd='echo '
+
     def registerAgentService(self):
         return self.installAgentServiceScriptFiles()
 
@@ -3797,8 +3922,8 @@ def GetMyDistro():
              Distro=platform.system()
     dist_class_name=Distro+'Distro'
     if not globals().has_key(dist_class_name):
-        print DistroName+' is not a supported distribution!'
-        return none
+        print Distro+' is not a supported distribution.'
+        return None
     return globals()[dist_class_name]() # the distro class inside this module.
 
 def PackagedInstall(buildroot):
