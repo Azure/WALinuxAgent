@@ -94,7 +94,7 @@ def makeVM(vm_name,vmi_name,vhd_url,test_name,location,vmuser_name,vmuser_pass,v
     cmd += ' --location "' + location + '"'
     if os.path.exists(vmuser_cert):
         cmd += ' -t "' + vmuser_cert + '"'
-    cmd += ' -e 22 ' + vm_name + ' ' + vmi_name + ' ' + vmuser_name + ' "' +vmuser_pass + '"'
+    cmd += ' -e 22 ' + vm_name + ' ' + vmi_name + ' ' + vmuser_name + ' \'' +vmuser_pass + '\''
     print cmd
     waagent.Log( cmd)
     code,output=RunGetOutput(cmd,False)
@@ -281,6 +281,16 @@ def updateAgent(agent_path,vm_name,account,cert,disk_mountpoint,mnt_opts,lun,par
     Copy the agent specified in 'agent' to the Disk
     using the 'stableVM'.
     """
+    #setup sudo NOPASSWD
+    cmd='echo \'' +stableVMPass + '\' > /home/' + account + '/pswd "'
+    ssh_command(vm_name,account,cmd)
+    cmd='echo \'#!/bin/bash\ncat /home/' + account + '/pswd\n\' > /home/' + account + '/pw.sh'
+    ssh_command(vm_name,account,cmd)
+    cmd='chmod +x /home/azureuser/pw.sh'
+    ssh_command(vm_name,account,cmd)
+    cmd='export SUDO_ASKPASS=./pw.sh && sudo -A sed -ri \'s/\(.*?\) / NOPASSWD: /\'  /etc/sudoers.d/waagent'
+    ssh_command(vm_name,account,cmd)
+
     cmd='sudo mkdir -p ' + disk_mountpoint
     ssh_command(vm_name,account,cmd)
     retries=3
@@ -396,12 +406,20 @@ def ssh_command(host,account,cmd):
     Wrapper for an ssh operation.
     Requires key authentication configured.
     """
-    req="ssh -o StrictHostKeyChecking='no' " + account + "@" + host.lower() + ".cloudapp.net '" + cmd + "'"
+    req="ssh -o StrictHostKeyChecking='no' "
+    if stableVMCert == None:
+        if not os.path.exists('./pw.sh'):
+            with open('./pw.sh','w') as F:
+                F.write('#!/bin/bash\ncat ./pswd\n')
+            os.system('chmod +x ./pw.sh')
+            with open('./pswd','w') as F:
+                F.write(stableVMPass)
+        req = "export SSH_ASKPASS=./pw.sh && setsid ssh -T -o StrictHostKeyChecking='no' " + account + "@" + host.lower() + ".cloudapp.net '" + cmd + "'"
     print req
-    waagent.Log( req)
+    waagent.Log(req)
     code,output=RunGetOutput(req,False)
     print output,code
-    waagent.Log( str(code))
+    waagent.Log(str(code))
     waagent.Log(output)
     return output,code
 
@@ -497,10 +515,12 @@ if __name__ == '__main__' :
     provision_retries=1
     fstype='scsi'
     keep_vhd=None
-    teardown_vm='fail'
+    teardown_test_vm='fail'
+    teardown_stable_vm='fail'
     prompt = 'yes'
     stable_vm_vhd=None
     stableVMImageName=None
+    stable_vm_image=None
     """
     We need to create a disk image container and attach it to a stable
     vm in order to copy the current sources to it.  Then we detach it,
@@ -523,9 +543,9 @@ if __name__ == '__main__' :
         elif '--stable_vm_acct_name' == sys.argv[i] : stableVMaccount=sys.argv[i+1]
         elif '--stable_vm_acct_pass' == sys.argv[i] : stableVMpass=sys.argv[i+1]
         elif '--stable_vm_acct_cert' == sys.argv[i] : stableVMCert=sys.argv[i+1]
-        elif '--testvm_acct_name' == sys.argv[i] : provisionedVMaccount=sys.argv[i+1]
-        elif '--testvm_acct_pass' == sys.argv[i] : provisionedVMpass=sys.argv[i+1]
-        elif '--testvm_acct_cert' == sys.argv[i] : provisionedVMCert=sys.argv[i+1]
+        elif '--test_vm_acct_name' == sys.argv[i] : provisionedVMaccount=sys.argv[i+1]
+        elif '--test_vm_acct_pass' == sys.argv[i] : provisionedVMpass=sys.argv[i+1]
+        elif '--test_vm_acct_cert' == sys.argv[i] : provisionedVMCert=sys.argv[i+1]
         elif '--azure_location' == sys.argv[i] : location=sys.argv[i+1]
         elif '--mount_opts' == sys.argv[i] : mountOptions=sys.argv[i+1]
         elif '--part_num' == sys.argv[i] : partNum=sys.argv[i+1]
@@ -545,10 +565,11 @@ if __name__ == '__main__' :
     else:
         if stable_vm_image:
             sourceVHD=createStableVMFromVMImage(stable_vm_image,sourceVHD)
+            stableVM=testname+'-stable-vm'
         elif stable_vm_vhd:
             stableVMImageName=testname+'-stable-vi'
             sourceVHD=createStableVMFromVHD(stableVMImageName,stable_vm_vhd)
-        stableVM=testname+'-stable-vm'
+            stableVM=testname+'-stable-vm'
         p = False
         retries = provision_retries
         while not p and retries > 0:
@@ -586,6 +607,7 @@ if __name__ == '__main__' :
         time.sleep(2)
         lun=addDiskImageToVM(stableVM,diskImageName)
 
+    doPrompt()
     updateAgent(localAgent,stableVM,stableVMaccount,stableVMCert,stableVMMountpoint,mountOptions,lun,partNum,provisionedVMaccount)
     doPrompt()
     while dropDiskImageFromVM(stableVM,lun)[1] != 0 :
