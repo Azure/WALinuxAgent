@@ -498,6 +498,9 @@ class AbstractDistro(object):
     def GetHome(self):
         return GetHome()
 
+    def getDhcpClientName(self):
+        return self.dchp_client_name
+    
 ############################################################    
 #	SuSEDistro
 ############################################################    
@@ -577,7 +580,7 @@ class SuSEDistro(AbstractDistro):
         self.dhcp_client_name='dhcpd'
         self.grubKernelBootOptionsFile = '/boot/grub/menu.lst'
         self.grubKernelBootOptionsLine = 'kernel'
-        self.getpidcmd='echo '
+        self.getpidcmd='pidof '
         
     def checkPackageInstalled(self,p):
         if Run("rpm -q " + p,chk_err=False):
@@ -921,7 +924,7 @@ class debianDistro(AbstractDistro):
         self.init_file=debian_init_file
         self.agent_package_name='walinuxagent'
         self.dhcp_client_name='dhclient3'
-        self.getpidcmd='echo '
+        self.getpidcmd='pidof '
         
     def setHostname(self,name):
         return Run('hostname ' + name)
@@ -1047,8 +1050,8 @@ class UbuntuDistro(debianDistro):
         self.init_script_file='/etc/init/waagent.conf'
         self.init_file=ubuntu_upstart_file
         self.fileBlackList = [ "/root/.bash_history", "/var/log/waagent.log"]
-        self.dhcp_client_name='dhclient'
-        self.getpidcmd='echo '
+        self.dhcp_client_name=None
+        self.getpidcmd='pidof '
 
     def registerAgentService(self):
         return self.installAgentServiceScriptFiles()
@@ -1108,6 +1111,15 @@ class UbuntuDistro(debianDistro):
                 pass
         return 0
 
+    def getDhcpClientName(self):
+        if dchp_client_name != None :
+            return dchp_client_name
+        dl={}
+        dl['12.04']='dhclient3'
+        dl['12.10']='dhclient'
+        dl['13.04']='dhclient'
+        dchp_client_name = dl[platform.dist()[1]]
+        return dchp_client_name
 
 ############################################################    
 #	LinuxMintDistro
@@ -2282,7 +2294,7 @@ class EnvMonitor(object):
         If dchp clinet process re-start has occurred, reset routes, dhcp with fabric.
         """
         publish = ConfigurationProvider().get("Provisioning.MonitorHostName")
-        dhcpcmd = MyDistro.getpidcmd+ ' ' + MyDistro.dhcp_client_name
+        dhcpcmd = MyDistro.getpidcmd+ ' ' + MyDistro.getDhcpClientName()
         dhcppid = RunGetOutput(dhcpcmd)[1]
         while not self.shutdown:
             for a in RulesFiles:
