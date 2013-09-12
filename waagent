@@ -1112,14 +1112,14 @@ class UbuntuDistro(debianDistro):
         return 0
 
     def getDhcpClientName(self):
-        if dchp_client_name != None :
-            return dchp_client_name
+        if self.dchp_client_name != None :
+            return self.dchp_client_name
         dl={}
         dl['12.04']='dhclient3'
         dl['12.10']='dhclient'
         dl['13.04']='dhclient'
-        dchp_client_name = dl[platform.dist()[1]]
-        return dchp_client_name
+        self.dchp_client_name = dl[platform.dist()[1]]
+        return self.dchp_client_name
 
 ############################################################    
 #	LinuxMintDistro
