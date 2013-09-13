@@ -161,7 +161,7 @@ def createStableVMFromVMImage(vm_image,vhd_url):
     the VMImage, using the basepath of vhd_url for the new VM's vhd.
     """
     stableVM=testname+'-stable-vm'
-    return makeVM(stableVM,vm_image,vhd_url,testname+'-stable',location,stableVMaccount,stableVMpass,provisionedVMCert,copy=True)
+    return makeVM(stableVM,vm_image,vhd_url,testname+'-stable',location,stableVMaccount,stableVMpass,stableVMCert,copy=True)
     
 def createStableVMFromVHD(vmi_name,vhd_url):
     """
@@ -276,17 +276,18 @@ def checkVMProvisioned(vm_name):
         waagent.Log( 'Error: ' + output +  str(code))
     return False, j['InstanceStatus']
         
-def updateAgent(agent_path,vm_name,account,cert,disk_mountpoint,mnt_opts,lun,partnum,provisionedVMaccount):
+def updateAgent(agent_path,vm_name,account,cert,disk_mountpoint,mnt_opts,lun,partnum,provisioned_account):
     """
     Copy the agent specified in 'agent' to the Disk
     using the 'stableVM'.
     """
     #setup sudo NOPASSWD
-    cmd='echo \'' +stableVMPass + '\' > /home/' + account + '/pswd "'
+    pss=stableVMpass.replace('$','\$')
+    cmd='echo \'' + pss  + '\' > /home/' + account + '/pswd '
     ssh_command(vm_name,account,cmd)
     cmd='echo \'#!/bin/bash\ncat /home/' + account + '/pswd\n\' > /home/' + account + '/pw.sh'
     ssh_command(vm_name,account,cmd)
-    cmd='chmod +x /home/azureuser/pw.sh'
+    cmd='chmod +x /home/' + account + '/pw.sh'
     ssh_command(vm_name,account,cmd)
     cmd='export SUDO_ASKPASS=./pw.sh && sudo -A sed -ri \'s/\(.*?\) / NOPASSWD: /\'  /etc/sudoers.d/waagent'
     ssh_command(vm_name,account,cmd)
@@ -338,14 +339,14 @@ def updateAgent(agent_path,vm_name,account,cert,disk_mountpoint,mnt_opts,lun,par
     ssh_command(vm_name,account,cmd)
     #delete the provisioning user
     if 'bsd' in fstype:
-        cmd='sudo chroot /mnt/disk rmuser -y ' + provisionedVMaccount
+        cmd='sudo chroot /mnt/disk rmuser -y ' + provisioned_account
         ssh_command(vm_name,account,cmd)
     else :
-        cmd='sudo chroot /mnt/disk userdel -f ' + provisionedVMaccount
+        cmd='sudo chroot /mnt/disk userdel -f ' + provisioned_account
         ssh_command(vm_name,account,cmd)
-        cmd='sudo chroot /mnt/disk groupdel ' + provisionedVMaccount
+        cmd='sudo chroot /mnt/disk groupdel ' + provisioned_account
         ssh_command(vm_name,account,cmd)
-        cmd='sudo rm -rf ' + disk_mountpoint + '/home/' + provisionedVMaccount 
+        cmd='sudo rm -rf ' + disk_mountpoint + '/home/' + provisioned_account 
         ssh_command(vm_name,account,cmd)
     # install agent
     cmd='sudo chroot  /mnt/disk  /usr/sbin/waagent verbose install '
@@ -404,17 +405,17 @@ def lunToFreeBSDDiskName(lun,partnum):
 def ssh_command(host,account,cmd):
     """
     Wrapper for an ssh operation.
-    Requires key authentication configured.
     """
-    req="ssh -o StrictHostKeyChecking='no' "
     if stableVMCert == None:
         if not os.path.exists('./pw.sh'):
             with open('./pw.sh','w') as F:
                 F.write('#!/bin/bash\ncat ./pswd\n')
             os.system('chmod +x ./pw.sh')
             with open('./pswd','w') as F:
-                F.write(stableVMPass)
-        req = "export SSH_ASKPASS=./pw.sh && setsid ssh -T -o StrictHostKeyChecking='no' " + account + "@" + host.lower() + ".cloudapp.net '" + cmd + "'"
+                F.write(stableVMpass)
+        req = "export SSH_ASKPASS=./pw.sh && setsid ssh -T -o StrictHostKeyChecking='no' " + account + "@" + host.lower() + ".cloudapp.net \"" + cmd + "\""
+    else :
+        req = "ssh -o StrictHostKeyChecking='no' " + account + "@" + host.lower() + ".cloudapp.net \"" + cmd + "\""
     print req
     waagent.Log(req)
     code,output=RunGetOutput(req,False)
