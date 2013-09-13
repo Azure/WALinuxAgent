@@ -307,7 +307,7 @@ class AbstractDistro(object):
                                   + "\n".join(filter(lambda a: not a.startswith("root:"),GetFileContents(filepath).split('\n'))))
         os.chmod(filepath, 0000)
         if self.isSelinuxSystem():
-            self.setSelinuxContext(filepath,'chcon system_u:object_r:shadow_t:s0')
+            self.setSelinuxContext(filepath,'system_u:object_r:shadow_t:s0')
             Log("Root password deleted.")
         return 0
     
@@ -499,7 +499,7 @@ class AbstractDistro(object):
         return GetHome()
 
     def getDhcpClientName(self):
-        return self.dchp_client_name
+        return self.dhcp_client_name
     
 ############################################################    
 #	SuSEDistro
@@ -577,7 +577,7 @@ class SuSEDistro(AbstractDistro):
         self.hostname_file_path='/etc/HOSTNAME'
         self.requiredDeps += [ "/sbin/insserv" ]
         self.init_file=suse_init_file
-        self.dhcp_client_name='dhcpd'
+        self.dhcp_client_name='dhcpcd'
         self.grubKernelBootOptionsFile = '/boot/grub/menu.lst'
         self.grubKernelBootOptionsLine = 'kernel'
         self.getpidcmd='pidof '
@@ -923,7 +923,7 @@ class debianDistro(AbstractDistro):
         self.requiredDeps += [ "/usr/sbin/update-rc.d" ]
         self.init_file=debian_init_file
         self.agent_package_name='walinuxagent'
-        self.dhcp_client_name='dhclient3'
+        self.dhcp_client_name='dhclient'
         self.getpidcmd='pidof '
         
     def setHostname(self,name):
@@ -1112,14 +1112,14 @@ class UbuntuDistro(debianDistro):
         return 0
 
     def getDhcpClientName(self):
-        if self.dchp_client_name != None :
-            return self.dchp_client_name
+        if self.dhcp_client_name != None :
+            return self.dhcp_client_name
         dl={}
         dl['12.04']='dhclient3'
         dl['12.10']='dhclient'
         dl['13.04']='dhclient'
-        self.dchp_client_name = dl[platform.dist()[1]]
-        return self.dchp_client_name
+        self.dhcp_client_name = dl[platform.dist()[1]]
+        return self.dhcp_client_name
 
 ############################################################    
 #	LinuxMintDistro
@@ -1260,7 +1260,7 @@ class FreeBSDDistro(AbstractDistro):
         #                          + "\n".join(filter(lambda a: not a.startswith("root:"),GetFileContents(filepath).split('\n'))))
         os.chmod(filepath, 0000)
         if self.isSelinuxSystem():
-            self.setSelinuxContext(filepath,'chcon system_u:object_r:shadow_t:s0')
+            self.setSelinuxContext(filepath,'system_u:object_r:shadow_t:s0')
         RunGetOutput("pwd_mkdb -u root /etc/master.passwd")
         Log("Root password deleted.")
         return 0
@@ -2278,7 +2278,7 @@ class ConfigurationProvider(object):
 class EnvMonitor(object):
     """
     Montor changes to dhcp and hostname.
-    If dchp clinet process re-start has occurred, reset routes, dhcp with fabric.
+    If dhcp clinet process re-start has occurred, reset routes, dhcp with fabric.
     """
     def __init__(self):
         self.shutdown = False
@@ -2291,7 +2291,7 @@ class EnvMonitor(object):
     def monitor(self):
         """
         Monitor dhcp client pid and hostname.
-        If dchp clinet process re-start has occurred, reset routes, dhcp with fabric.
+        If dhcp clinet process re-start has occurred, reset routes, dhcp with fabric.
         """
         publish = ConfigurationProvider().get("Provisioning.MonitorHostName")
         dhcpcmd = MyDistro.getpidcmd+ ' ' + MyDistro.getDhcpClientName()
@@ -3666,7 +3666,7 @@ class Agent(Util):
         when provisioning has been completed.
         
         Search for VMM enviroment, start VMM script if found.
-        Perform DCHP and endpoint server discovery by calling DoDhcpWork().
+        Perform DHCP and endpoint server discovery by calling DoDhcpWork().
         Check wire protocol versions.
         Set SCSI timeout on root device.
         Call GenerateTransportCert() to create ssl certs for server communication.
