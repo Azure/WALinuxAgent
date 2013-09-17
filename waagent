@@ -315,34 +315,13 @@ class AbstractDistro(object):
         return RunSendStdin("chpasswd",(user + ":" + password + "\n"))
     
     def load_ata_piix(self):
-        """
-        Generic function to load ata_piix.ko for use with ATAPI CDROM
-        used during priovisioning.
-        """
-        retcode,krn=RunGetOutput('uname -r')
-        if retcode:
-            Error("Unable to provision: Failed to call uname -a")
-            return 1
-        krn_pth='/lib/modules/'+krn.strip('\n')+'/kernel/drivers/ata/ata_piix.ko'
-        if not os.path.isfile(krn_pth):
-            Error("Unable to provision: Failed to locate ata_piix.ko")
-            return 1
-        retcode,output=RunGetOutput('insmod ' + krn_pth)
-        if retcode is not 0:
-            if retcode == 1 and 'File Exists' in output:
-                Error('ata_piix module is already loaded')
-                return 0
-            else:
-                Error("Unable to provision: Failed to insmod " + krn_pth)
-                return 1
-        Log("Provision: Loaded " + krn_pth + " driver for ATAPI CD-ROM")
-        return 0
-    
+        return WaAgent.TryLoadAtapiix()
+
     def unload_ata_piix(self):
         """
         Generic function to remove ata_piix.ko.
         """
-        return Run('rmmod ata_piix.ko')
+        return WaAgent.TryUnloadAtapiix()
         
     def deprovisionWarnUser(self):
         """
@@ -1114,11 +1093,10 @@ class UbuntuDistro(debianDistro):
     def getDhcpClientName(self):
         if self.dhcp_client_name != None :
             return self.dhcp_client_name
-        dl={}
-        dl['12.04']='dhclient3'
-        dl['12.10']='dhclient'
-        dl['13.04']='dhclient'
-        self.dhcp_client_name = dl[platform.dist()[1]]
+        if platform.dist()[1] == '12.04' :
+            self.dhcp_client_name='dhclient3'
+        else :
+            self.dhcp_client_name='dhclient'
         return self.dhcp_client_name
 
 ############################################################    
