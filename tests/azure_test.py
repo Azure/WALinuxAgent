@@ -415,7 +415,7 @@ def ssh_command(host,account,cmd):
                 F.write(stableVMpass)
         req = "export SSH_ASKPASS=./pw.sh && setsid ssh -T -o StrictHostKeyChecking='no' " + account + "@" + host.lower() + ".cloudapp.net \"" + cmd + "\""
     else :
-        req = "ssh -o StrictHostKeyChecking='no' " + account + "@" + host.lower() + ".cloudapp.net \"" + cmd + "\""
+        req = "ssh -t -o StrictHostKeyChecking='no' " + account + "@" + host.lower() + ".cloudapp.net \"" + cmd + "\""
     print req
     waagent.Log(req)
     code,output=RunGetOutput(req,False)
