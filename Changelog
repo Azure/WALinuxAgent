@@ -1,6 +1,6 @@
 WALinuxAgent                                                          Changelog
 |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
-20 Sep 2013, WALinuxAgent 2.0.0
+23 Sep 2013, WALinuxAgent 2.0.0
    . Support for wire protocol 2012-11-30
    . Added support for Python3 via 2to3
    . Added support for new Linux distributions and FreeBSD (see README)
