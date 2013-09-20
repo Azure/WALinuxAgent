@@ -112,7 +112,7 @@ Provisioning.SshHostKeyPairType=rsa     # Supported values are "rsa", "dsa" and 
 Provisioning.MonitorHostName=y          # Monitor host name changes and publish changes via DHCP requests.
 
 ResourceDisk.Format=y                   # Format if unformatted. If 'n', resource disk will not be mounted.
-ResourceDisk.Filesystem=ext4            #
+ResourceDisk.Filesystem=ext4            # Typically ext3 or ext4. FreeBSD images should use 'ufs2' here.
 ResourceDisk.MountPoint=/mnt/resource   #
 ResourceDisk.EnableSwap=y               # Create and use swapfile on resource disk.
 ResourceDisk.SwapSizeMB=1024               # Size of the swapfile.
