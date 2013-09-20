@@ -1,5 +1,13 @@
 WALinuxAgent                                                          Changelog
 |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+20 Sep 2013, WALinuxAgent 2.0.0
+   . Support for wire protocol 2012-11-30
+   . Added support for Python3 via 2to3
+   . Added support for new Linux distributions and FreeBSD (see README)
+   . Source is now importable as a python module
+   . Code refactor to ease task of adding/testing new Linux distributions and
+     improve code readability
+
 23 Aug 2013, WALinuxAgent 1.4.0
    . Add support for bootstrapping VMM agent for Linux when running in SCVMM
      2012R2 environments (see README)
