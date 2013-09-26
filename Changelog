@@ -1,5 +1,8 @@
 WALinuxAgent                                                          Changelog
 |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+26 Sep 2013, WALinuxAgent 2.0.1-PRE
+   . Save/Restore SELinux state during provision
+
 23 Sep 2013, WALinuxAgent 2.0.0
    . Support for wire protocol 2012-11-30
    . Added support for Python3 via 2to3
