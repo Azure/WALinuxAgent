@@ -181,7 +181,7 @@ class AbstractDistro(object):
         Calls shell command 'getenforce' and returns True if 'Enforcing'.
         """
         if self.isSelinuxSystem():
-            return RunGetOutput("getenforce")[0].startswith("Enforcing")
+            return RunGetOutput("getenforce")[1].startswith("Enforcing")
         else:
             return False
         
@@ -2975,7 +2975,9 @@ class OvfEnv(object):
             MyDistro.changePass('root',self.AdminPassword)
         if self.UserName != None:
             error = MyDistro.CreateAccount(self.UserName, self.UserPassword, None, None)
-        MyDistro.setSelinuxEnforce(0)
+        sel = MyDistro.isSelinuxRunning()
+        if sel :
+            MyDistro.setSelinuxEnforce(0)
         home = MyDistro.GetHome()
         for pkey in self.SshPublicKeys:
             if not os.path.isfile(pkey[0] + ".crt"):
@@ -3011,7 +3013,8 @@ class OvfEnv(object):
             if path.startswith(os.path.normpath(home + "/" + self.UserName + "/")):
                 ChangeOwner(path, self.UserName)
                 ChangeOwner(path + ".pub", self.UserName)
-        MyDistro.setSelinuxEnforce(0)
+        if sel :
+            MyDistro.setSelinuxEnforce(1)
         while not WaAgent.EnvMonitor.IsHostnamePublished():
             time.sleep(1)
         MyDistro.restartSshService()
