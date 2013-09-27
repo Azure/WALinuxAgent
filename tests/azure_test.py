@@ -563,8 +563,6 @@ if __name__ == '__main__' :
     the VM. 
     """
 
-    LoggerInit(logfile,'')
-    waagent.Log("User: "+ pwd.getpwuid(os.geteuid()).pw_name +" Running Command :\n" + reduce(lambda x, y: x+' '+y,sys.argv))
     for i in range(len(sys.argv)) :
         if '--stable_vm' == sys.argv[i] : stableVM=sys.argv[i+1]
         elif '--source_disk' == sys.argv[i]: sourceVHD=sys.argv[i+1]
@@ -591,6 +589,9 @@ if __name__ == '__main__' :
         elif '--stable_vm_vhd' == sys.argv[i] : stable_vm_vhd=sys.argv[i+1]
         elif '--logfile' == sys.argv[i] : logfile=sys.argv[i+1]
         
+    LoggerInit(logfile,'')
+    waagent.Log("User: "+ pwd.getpwuid(os.geteuid()).pw_name +" Running Command :\n" + reduce(lambda x, y: x+' '+y,sys.argv))
+
     if len(stableVM) == 0 and not ( stable_vm_image or stable_vm_vhd ):
         print '--vm <stable vm> must be provided unless --stable_vm_image or --stable_vm_vhd'
         waagent.Log( '--vm <stable vm> must be provided!')
