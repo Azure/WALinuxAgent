@@ -16,6 +16,8 @@ from waagent import RunGetOutput,  Run, LoggerInit
 Test waagent in azure using azure-cli
 Usage:
 
+./azure_test.py --stable_vm_image b4590d9e3ed742e4a1d46e5424aa335e__openSUSE-12.3-v120 --source_disk "http://mystorage.blob.core.windows.net/vhds/my-suse2.vhd" --acct "<storage acct key>" --testname my-osuse --mount_point /mnt/disk --agent_path ../waagent --stable_vm_acct_name MyUserName --stable_vm_acct_pass 'myp455wd' --test_vm_acct_name MyUserName --test_vm_acct_pass 'myp455wd' --azure_location "East US" --part_num 1 --retries 20 --fstype scsi --test_vm_acct_cert /root/.ssh/myCert.pem --stable_vm_acct_cert /root/.ssh/myCert.pem --keep_test_vm_vhd no --teardown_test_vm always --prompt no
+
 azure_test --vm <stable vm name> --testname <testname> [--acct <storage account>]
 [--disk <vhd url to use as initial disk image>]
 If --disk is specified, use this vhd as starting point,
@@ -108,12 +110,15 @@ def makeVM(vm_name,vmi_name,vhd_url,test_name,location,vmuser_name,vmuser_pass,v
         retry -=1
     return target
 
-def flushDiskImage(di_name,delete=True):
+def flushDiskImage(di_name,dele=True):
     """
     Delete the VM Image.
     On error we asume the VM disk image is deleted
     """
-    cmd='azure vm disk delete --json ' + di_name
+    cmd='azure vm disk delete --json '
+    if dele :
+        cmd += '--blob-delete '
+    cmd+= di_name
     print cmd
     waagent.Log( cmd)
     code,output=RunGetOutput(cmd,False)
@@ -281,6 +286,12 @@ def updateAgent(agent_path,vm_name,account,cert,disk_mountpoint,mnt_opts,lun,par
     Copy the agent specified in 'agent' to the Disk
     using the 'stableVM'.
     """
+    retries=30
+    retry=0
+    cmd='uptime'
+    while  ssh_command(vm_name,account,cmd)[1] != 0 and  retry < retries :
+        time.sleep(10)
+        retry+=1
     #setup sudo NOPASSWD
     pss=stableVMpass.replace('$','\$')
     cmd='echo \'' + pss  + '\' > /home/' + account + '/pswd '
@@ -289,28 +300,32 @@ def updateAgent(agent_path,vm_name,account,cert,disk_mountpoint,mnt_opts,lun,par
     ssh_command(vm_name,account,cmd)
     cmd='chmod +x /home/' + account + '/pw.sh'
     ssh_command(vm_name,account,cmd)
-    cmd='export SUDO_ASKPASS=./pw.sh && sudo -A sed -ri \'s/\(.*?\) / NOPASSWD: /\'  /etc/sudoers.d/waagent'
-    ssh_command(vm_name,account,cmd)
-
-    cmd='sudo mkdir -p ' + disk_mountpoint
+    cmd='export SUDO_ASKPASS=./pw.sh && sudo -A mkdir -p ' + disk_mountpoint
     ssh_command(vm_name,account,cmd)
     retries=3
     # TODO retires here for the mount
     #mount
-    cmd='sudo mount ' +mnt_opts + ' ' + lunToDiskName(lun,partnum) + ' ' +disk_mountpoint
+    cmd='export SUDO_ASKPASS=./pw.sh && sudo -A mount ' +mnt_opts + ' ' + lunToDiskName(lun,partnum) + ' ' +disk_mountpoint
     waagent.Log( cmd)
     retry=0
     while  ssh_command(vm_name,account,cmd)[1] not in (0,32) and  retry < retries :
         if retry == 0:
             if 'bsd' in fstype:
-                fcmd = "sudo fsck_ffs -y "
+                fcmd = "export SUDO_ASKPASS=./pw.sh && sudo -A fsck_ffs -y "
             else :
-                fcmd = "sudo fsck -y "
+                fcmd = "export SUDO_ASKPASS=./pw.sh && sudo -A fsck -y "
             fcmd += lunToDiskName(lun,partnum)
             ssh_command(vm_name,account,fcmd)
         time.sleep(2)
         retry+=1
 
+    # remove packaged agent service if present.
+    cmd='export SUDO_ASKPASS=./pw.sh && sudo -A chroot '+ disk_mountpoint+' dpkg -r walinuxagent'
+    ssh_command(vm_name,account,cmd)    # remove Ubuntu walinuxagent agent service if present.
+    cmd='export SUDO_ASKPASS=./pw.sh && sudo -A rm '+ disk_mountpoint+'/etc/default/walinuxagent'
+    ssh_command(vm_name,account,cmd)    # remove Ubuntu walinuxagent agent service if present.
+    cmd='export SUDO_ASKPASS=./pw.sh && sudo -A chroot '+ disk_mountpoint+' rpm -e WALinuxAgent'
+    ssh_command(vm_name,account,cmd)
     #copy agent
     remote_path='/tmp'
     print 'scp ' + agent_path + ' to ' + vm_name + ' ' + account + ':' + remote_path
@@ -320,39 +335,43 @@ def updateAgent(agent_path,vm_name,account,cert,disk_mountpoint,mnt_opts,lun,par
         time.sleep(2)
         retry+=1
     # move agent to /usr/sbin
-    cmd= 'sudo cp ' + remote_path +'/waagent '+ disk_mountpoint+'/usr/sbin/waagent'
+    cmd= 'export SUDO_ASKPASS=./pw.sh && sudo -A cp ' + remote_path +'/waagent '+ disk_mountpoint+'/usr/sbin/waagent'
+    ssh_command(vm_name,account,cmd)
+    cmd= 'export SUDO_ASKPASS=./pw.sh && sudo -A chmod 755 '+ disk_mountpoint+'/usr/sbin/waagent'
     ssh_command(vm_name,account,cmd)
     # Fix the password file
     if 'bsd' in fstype:
-        cmd='sudo cp /etc/master.passwd ' + disk_mountpoint + '/etc/master.passwd'
+        cmd='export SUDO_ASKPASS=./pw.sh && sudo -A cp /etc/master.passwd ' + disk_mountpoint + '/etc/master.passwd'
         ssh_command(vm_name,account,cmd)
     else :
-        cmd='sudo cp /etc/passwd ' + disk_mountpoint + '/etc/passwd'
+        cmd='export SUDO_ASKPASS=./pw.sh && sudo -A cp /etc/passwd ' + disk_mountpoint + '/etc/passwd'
         ssh_command(vm_name,account,cmd)
-        cmd='sudo cp /etc/shadow ' + disk_mountpoint + '/etc/shadow'
+        cmd='export SUDO_ASKPASS=./pw.sh && sudo -A cp /etc/shadow ' + disk_mountpoint + '/etc/shadow'
         ssh_command(vm_name,account,cmd)
     #remove /var/lib/waagent
-    cmd='sudo rm -rf ' + disk_mountpoint + '/var/lib/waagent'
+    cmd='export SUDO_ASKPASS=./pw.sh && sudo -A rm -rf ' + disk_mountpoint + '/var/lib/waagent'
     ssh_command(vm_name,account,cmd)
     #remove /var/log/waagent*
-    cmd='sudo rm -rf ' + disk_mountpoint + '/var/log/waagent*'
+    cmd='export SUDO_ASKPASS=./pw.sh && sudo -A rm -rf ' + disk_mountpoint + '/var/log/waagent*'
     ssh_command(vm_name,account,cmd)
     #delete the provisioning user
     if 'bsd' in fstype:
-        cmd='sudo chroot /mnt/disk rmuser -y ' + provisioned_account
+        cmd='export SUDO_ASKPASS=./pw.sh && sudo -A chroot '+ disk_mountpoint+' rmuser -y ' + provisioned_account
         ssh_command(vm_name,account,cmd)
     else :
-        cmd='sudo chroot /mnt/disk userdel -f ' + provisioned_account
+        cmd='export SUDO_ASKPASS=./pw.sh && sudo -A chroot '+ disk_mountpoint+' userdel -f ' + provisioned_account
         ssh_command(vm_name,account,cmd)
-        cmd='sudo chroot /mnt/disk groupdel ' + provisioned_account
+        cmd='export SUDO_ASKPASS=./pw.sh && sudo -A chroot '+ disk_mountpoint+' groupdel ' + provisioned_account
         ssh_command(vm_name,account,cmd)
-        cmd='sudo rm -rf ' + disk_mountpoint + '/home/' + provisioned_account 
+        cmd='export SUDO_ASKPASS=./pw.sh && sudo -A rm -rf ' + disk_mountpoint + '/home/' + provisioned_account 
         ssh_command(vm_name,account,cmd)
     # install agent
-    cmd='sudo chroot  /mnt/disk  /usr/sbin/waagent verbose install '
+    cmd='export SUDO_ASKPASS=./pw.sh && sudo -A chroot  '+ disk_mountpoint+'  /usr/sbin/waagent verbose install '
+    ssh_command(vm_name,account,cmd)
+    cmd="export SUDO_ASKPASS=./pw.sh && sudo -A  sed -i 's/Verbose=n/Verbose=y/' " + disk_mountpoint+"/etc/waagent.conf"
     ssh_command(vm_name,account,cmd)
     #umount
-    cmd='sudo umount ' + lunToDiskName(lun,partnum)
+    cmd='export SUDO_ASKPASS=./pw.sh && sudo -A umount ' + lunToDiskName(lun,partnum)
     ssh_command(vm_name,account,cmd)
     
 def gatherAgentInfo(localpath,vm_name,account,cert,disk_mountpoint,mnt_opts,lun,partnum):
@@ -360,26 +379,32 @@ def gatherAgentInfo(localpath,vm_name,account,cert,disk_mountpoint,mnt_opts,lun,
     Copy the /var/lib/waagent, and /var/log directories to
     localhost:localpath.
     """
+    retries=30
+    retry=0
+    cmd='uptime'
+    while  ssh_command(vm_name,account,cmd)[1] != 0 and  retry < retries :
+        time.sleep(10)
+        retry+=1
     #mount
-    cmd='sudo mount ' +mnt_opts + ' '  + lunToDiskName(lun,partnum) + ' ' +disk_mountpoint
+    cmd='export SUDO_ASKPASS=./pw.sh && sudo -A mount ' +mnt_opts + ' '  + lunToDiskName(lun,partnum) + ' ' +disk_mountpoint
     print cmd
     waagent.Log( cmd)
     ssh_command(vm_name,account,cmd)
     #copy info
     Run("mkdir -p "+ localpath)
-    cmd='sudo mkdir -p /tmp/results'
+    cmd='export SUDO_ASKPASS=./pw.sh && sudo -A mkdir -p /tmp/results'
     ssh_command(vm_name,account,cmd)
-    cmd='sudo cp -r  ' + disk_mountpoint + '/var/log /tmp/results/'
+    cmd='export SUDO_ASKPASS=./pw.sh && sudo -A cp -r  ' + disk_mountpoint + '/var/log /tmp/results/'
     ssh_command(vm_name,account,cmd)
-    cmd='sudo cp -r  ' + disk_mountpoint + '/var/lib/waagent /tmp/results/'
+    cmd='export SUDO_ASKPASS=./pw.sh && sudo -A cp -r  ' + disk_mountpoint + '/var/lib/waagent /tmp/results/'
     ssh_command(vm_name,account,cmd)
-    cmd='sudo chmod -R 777 /tmp/results'
+    cmd='export SUDO_ASKPASS=./pw.sh && sudo -A chmod -R 777 /tmp/results'
     ssh_command(vm_name,account,cmd)
-    cmd='sudo chown -R ' + account + '  /tmp/results'
+    cmd='export SUDO_ASKPASS=./pw.sh && sudo -A chown -R ' + account + '  /tmp/results'
     ssh_command(vm_name,account,cmd)
-    scp_from_host_command(account,vm_name,'/tmp/results',localpath)
+    scp_from_host_command(account,vm_name,'/tmp/results/*',localpath)
     #umount
-    cmd='sudo umount ' + lunToDiskName(lun,partnum)
+    cmd='export SUDO_ASKPASS=./pw.sh && sudo -A umount ' + lunToDiskName(lun,partnum)
     print cmd
     waagent.Log( cmd)
     ssh_command(vm_name,account,cmd)
@@ -421,7 +446,7 @@ def ssh_command(host,account,cmd):
     code,output=RunGetOutput(req,False)
     print output,code
     waagent.Log(str(code))
-    waagent.Log(output)
+    waagent.Log(output.encode('ascii','ignore'))
     return output,code
 
 def scp_to_host_command(account,host,remote_path,local_path):
@@ -453,8 +478,6 @@ def scp_from_host_command(account,host,remote_path,local_path):
     return output,code
 
 def teardown(name):
-    flushVM(vmName)
-    flushVMImage(vmImageName)
     diskImageName=os.path.splitext(os.path.basename(sourceVHD))[0]+'-di'
     while makeDiskImage(diskImageName,sourceVHD,location,True)[1] !=0 :
         time.sleep(20)
@@ -462,15 +485,25 @@ def teardown(name):
     while lun == None :
         time.sleep(2)
         lun=addDiskImageToVM(stableVM,diskImageName)
+    out,code=flushVM(vmName,True)
+    if code != 0 :
+        vmDisk=out[out.find('disk with name ')+len('disk with name '):out.find(' is currently in use')]
+        while flushDiskImage(vmDisk,True)[1] != 0 :
+            time.sleep(5)
+    out,code=flushVMImage(vmImageName)
+    if code != 0 :
+        vmDisk=out[out.find('disk with name ')+len('disk with name '):out.find(' is currently in use')]
+        while flushDiskImage(vmDisk,True)[1] != 0 :
+            time.sleep(5)
     gatherAgentInfo(localInfo+'/'+name,stableVM,stableVMaccount,stableVMCert,stableVMMountpoint,mountOptions,lun,partNum)
     print 'Logs for ' + vmName + ' copied to ' + localInfo + '/' + name
     waagent.Log( 'Logs for ' + vmName + ' copied to ' + localInfo + '/' + name)
     # detach and delete the disk image
     while dropDiskImageFromVM(stableVM,lun)[1] != 0 :
         time.sleep(2)
-    while flushDiskImage(diskImageName,True)[1] != 0 :
+    while flushDiskImage(diskImageName,('no' in keep_vhd))[1] != 0 :
         time.sleep(2)
-    out,code=flushVM(stableVM,keep_vhd)
+    out,code=flushVM(stableVM,True)
     if code != 0 :
         stableVMDisk=out[out.find('disk with name ')+len('disk with name '):out.find(' is currently in use')]
         while flushDiskImage(stableVMDisk,True)[1] != 0 :
@@ -515,24 +548,22 @@ if __name__ == '__main__' :
     partNum=1
     provision_retries=1
     fstype='scsi'
-    keep_vhd=None
+    keep_vhd='no'
     teardown_test_vm='fail'
     teardown_stable_vm='fail'
     prompt = 'yes'
     stable_vm_vhd=None
     stableVMImageName=None
     stable_vm_image=None
+    logfile='azure_test.log'
     """
     We need to create a disk image container and attach it to a stable
     vm in order to copy the current sources to it.  Then we detach it,
     delete the disk image container, create a vm image container, and
-    the VM.  Check the VM for provision succedded, if so, exit.  If
-    provisioning failed, then: delete the vm, delete the vm image,
-    create a disk image from the VM's vhd, and attach the disk to the
-    stable VM, copy /var/log and /var/lib/waagent to the localhost.
+    the VM. 
     """
 
-    LoggerInit('azure_test.log','')
+    LoggerInit(logfile,'')
     waagent.Log("User: "+ pwd.getpwuid(os.geteuid()).pw_name +" Running Command :\n" + reduce(lambda x, y: x+' '+y,sys.argv))
     for i in range(len(sys.argv)) :
         if '--stable_vm' == sys.argv[i] : stableVM=sys.argv[i+1]
@@ -558,6 +589,7 @@ if __name__ == '__main__' :
         elif '--prompt' == sys.argv[i] : prompt=sys.argv[i+1]
         elif '--stable_vm_image' == sys.argv[i] : stable_vm_image=sys.argv[i+1]
         elif '--stable_vm_vhd' == sys.argv[i] : stable_vm_vhd=sys.argv[i+1]
+        elif '--logfile' == sys.argv[i] : logfile=sys.argv[i+1]
         
     if len(stableVM) == 0 and not ( stable_vm_image or stable_vm_vhd ):
         print '--vm <stable vm> must be provided unless --stable_vm_image or --stable_vm_vhd'
@@ -611,6 +643,10 @@ if __name__ == '__main__' :
     doPrompt()
     updateAgent(localAgent,stableVM,stableVMaccount,stableVMCert,stableVMMountpoint,mountOptions,lun,partNum,provisionedVMaccount)
     doPrompt()
+    #reboot to prevent stale mount bugs
+    cmd= 'export SUDO_ASKPASS=./pw.sh && sudo -A reboot'
+    ssh_command(stableVM,stableVMaccount,cmd)
+
     while dropDiskImageFromVM(stableVM,lun)[1] != 0 :
         time.sleep(2)
     while flushDiskImage(diskImageName,False)[1] != 0 :
