@@ -411,7 +411,7 @@ class AbstractDistro(object):
     def CreateAccount(self,user, password, expiration, thumbprint):
         return CreateAccount(user, password, expiration, thumbprint)
     
-    def DeleteAccount(user):
+    def DeleteAccount(self,user):
         return DeleteAccount(user)
 
     def ActivateResourceDisk(self):
