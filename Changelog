@@ -1,6 +1,7 @@
 WALinuxAgent                                                          Changelog
 |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
-26 Sep 2013, WALinuxAgent 2.0.1-PRE
+?? ??? 2013, WALinuxAgent 2.0.1
+   . Fix -deprovision+user
    . Save/Restore SELinux state during provision
 
 23 Sep 2013, WALinuxAgent 2.0.0
