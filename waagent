@@ -148,6 +148,7 @@ class AbstractDistro(object):
         """
         self.agent_service_name = os.path.basename(sys.argv[0]) 
         self.selinux=None
+        self.service_cmd='/usr/sbin/service'
         self.ssh_service_name='ssh'
         self.ssh_config_file='/etc/ssh/sshd_config'
         self.hostname_file_path='/etc/hostname'
@@ -254,20 +255,20 @@ class AbstractDistro(object):
         """
         Service call to start the Agent service
         """
-        return Run('service ' + self.agent_service_name + ' start')
+        return Run(self.service_cmd + ' ' + self.agent_service_name + ' start')
         
     def stopAgentService(self):
         """
         Service call to stop the Agent service
         """
-        return Run('service ' + self.agent_service_name + ' stop',False)
+        return Run(self.service_cmd + ' '  + self.agent_service_name + ' stop',False)
     
     def restartSshService(self):
         """
         Service call to re(start) the SSH service
         """
-        if not Run("service " + self.ssh_service_name + " status | grep running"):
-            return Run("service " + self.ssh_service_name + " reload")
+        if not Run(self.service_cmd + " " + self.ssh_service_name + " status | grep running"):
+            return Run(self.service_cmd + " " + self.ssh_service_name + " reload")
         else:
             return 0
         
@@ -551,6 +552,7 @@ class SuSEDistro(AbstractDistro):
     """
     def __init__(self):
         super(SuSEDistro,self).__init__()
+        self.service_cmd='/sbin/service'
         self.ssh_service_name='sshd'
         self.kernel_boot_options_file='/boot/grub/menu.lst'
         self.hostname_file_path='/etc/HOSTNAME'
@@ -1217,7 +1219,7 @@ class FreeBSDDistro(AbstractDistro):
         """
         Service call to re(start) the SSH service
         """
-        return Run("service " + self.ssh_service_name + " restart")
+        return Run(self.service_cmd + " " + self.ssh_service_name + " restart")
         
     def sshDeployPublicKey(self,fprint,path):
         """
@@ -3935,17 +3937,20 @@ def Install():
     ApplyVNUMAWorkaround()
     return 0
 
-def GetMyDistro():
+def GetMyDistro(dist_class_name=''):
     """
     Return MyDistro object.
     NOTE: Logging is not initialized at this point.
     """
-    if 'Linux' in platform.system():
-        Distro=platform.dist()[0]
-    else : # I know this is not Linux!
-        if 'FreeBSD' in platform.system():
-             Distro=platform.system()
-    dist_class_name=Distro+'Distro'
+    if dist_class_name == '':
+        if 'Linux' in platform.system():
+            Distro=platform.dist()[0]
+        else : # I know this is not Linux!
+            if 'FreeBSD' in platform.system():
+                Distro=platform.system()
+        dist_class_name=Distro+'Distro'
+    else:
+        Distro=dist_class_name
     if not globals().has_key(dist_class_name):
         print Distro+' is not a supported distribution.'
         return None
