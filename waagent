@@ -2498,7 +2498,10 @@ class SharedConfig(object):
             return None
         program = Config.get("Role.TopologyConsumer")
         if program != None:
-            Children.append(subprocess.Popen([program, LibDir + "/SharedConfig.xml"]))
+            try:
+                Children.append(subprocess.Popen([program, LibDir + "/SharedConfig.xml"]))
+            except OSError, e :
+                ErrorWithPrefix('Agent.Run','Exception: '+ str(e) +' occured launching ' + program )
         return self
         
 class HostingEnvironmentConfig(object):
@@ -2625,7 +2628,10 @@ class HostingEnvironmentConfig(object):
                 Log("Public cert with thumbprint: " + csha1 + " was retrieved.")
         program = Config.get("Role.ConfigurationConsumer")
         if program != None:
-            Children.append(subprocess.Popen([program, LibDir + "/HostingEnvironmentConfig.xml"]))
+            try:
+                Children.append(subprocess.Popen([program, LibDir + "/HostingEnvironmentConfig.xml"]))
+            except OSError, e :
+                ErrorWithPrefix('HostingEnvironmentConfig.Process','Exception: '+ str(e) +' occured launching ' + program )
 
 class GoalState(Util):
     """
@@ -3753,7 +3759,10 @@ class Agent(Util):
                             Log("Unable to create LBProbeResponder.")
 
             if program != None and DiskActivated == True:
-                Children.append(subprocess.Popen([program, "Ready"]))
+                try:
+                    Children.append(subprocess.Popen([program, "Ready"]))
+                except OSError, e :
+                    ErrorWithPrefix('SharedConfig.Parse','Exception: '+ str(e) +' occured launching ' + program )
                 program = None
 
             if goalState.ExpectedState == "Stopped":
@@ -3788,8 +3797,14 @@ def FindInLinuxKernelCmdline(option):
     Return match object if 'option' is present in the kernel boot options
     of the grub configuration.
     """
+    m=None
     matchs=r'^.*?'+MyDistro.grubKernelBootOptionsLine+r'.*?'+option+r'.*$'
-    return FindStringInFile(MyDistro.grubKernelBootOptionsFile,matchs)
+    try:
+        m=FindStringInFile(MyDistro.grubKernelBootOptionsFile,matchs)
+    except IOError, e:
+        Error('FindInLinuxKernelCmdline: Exception opening ' + MyDistro.grubKernelBootOptionsFile + 'Exception:' + str(e))
+        
+    return m
 
 def AppendToLinuxKernelCmdline(option):
     """
@@ -3798,9 +3813,13 @@ def AppendToLinuxKernelCmdline(option):
     if not FindInLinuxKernelCmdline(option):
         src=r'^(.*?'+MyDistro.grubKernelBootOptionsLine+r')(.*?)("?)$'
         rep=r'\1\2 '+ option + r'\3'
-        ReplaceStringInFile(MyDistro.grubKernelBootOptionsFile,src,rep)
+        try:
+            ReplaceStringInFile(MyDistro.grubKernelBootOptionsFile,src,rep)
+        except IOError, e :
+            Error('AppendToLinuxKernelCmdline: Exception opening ' + MyDistro.grubKernelBootOptionsFile + 'Exception:' + str(e))
+            return 1
         Run("update-grub",chk_err=False)    
-    return
+    return 0
 
 def RemoveFromLinuxKernelCmdline(option):
     """
@@ -3809,19 +3828,27 @@ def RemoveFromLinuxKernelCmdline(option):
     if FindInLinuxKernelCmdline(option):
         src=r'^(.*?'+MyDistro.grubKernelBootOptionsLine+r'.*?)('+option+r')(.*?)("?)$'
         rep=r'\1\3\4'
-        ReplaceStringInFile(MyDistro.grubKernelBootOptionsFile,src,rep)
+        try:
+            ReplaceStringInFile(MyDistro.grubKernelBootOptionsFile,src,rep)
+        except IOError, e :
+            Error('RemoveFromLinuxKernelCmdline: Exception opening ' + MyDistro.grubKernelBootOptionsFile + 'Exception:' + str(e))
+            return 1
         Run("update-grub",chk_err=False)    
-    return
+    return 0
 
 def FindStringInFile(fname,matchs):
     """
     Return match object if found in file.
     """
-    ms=re.compile(matchs)
-    for l in (open(fname,'r')).readlines():
-        m=re.search(ms,l)
-        if m:
-            return m
+    try:
+        ms=re.compile(matchs)
+        for l in (open(fname,'r')).readlines():
+            m=re.search(ms,l)
+            if m:
+                return m
+    except:
+        raise
+    
     return None
 
 def ReplaceStringInFile(fname,src,repl):
@@ -3829,13 +3856,15 @@ def ReplaceStringInFile(fname,src,repl):
     Replace 'src' with 'repl' in file.
     """
     updated=''
-    sr=re.compile(src)
-    if FindStringInFile(fname,src):
-        for l in (open(fname,'r')).readlines():
-            n=re.sub(sr,repl,l)
-            updated+=n
-            pass
+    try:
+        sr=re.compile(src)
+        if FindStringInFile(fname,src):
+            for l in (open(fname,'r')).readlines():
+                n=re.sub(sr,repl,l)
+                updated+=n
         ReplaceFileContentsAtomic(fname,updated)
+    except :
+        raise
     return
 
 def ApplyVNUMAWorkaround():
@@ -3850,16 +3879,19 @@ def ApplyVNUMAWorkaround():
         return
     if int(VersionParts[2]) > 37:
         return
-    AppendToLinuxKernelCmdline("numa=off")
-    # TODO: This is not ideal for offline installation.
-    Log("Your kernel version " + platform.release() + " has a NUMA-related bug: NUMA has been disabled.")
-
+    if AppendToLinuxKernelCmdline("numa=off") == 0 :
+        Log("Your kernel version " + platform.release() + " has a NUMA-related bug: NUMA has been disabled.")
+    else :
+        "Error adding 'numa=off'.  NUMA has not been disabled."
+        
 def RevertVNUMAWorkaround():
     """
     Remove 'numa=off' from kernel boot options.
     """
-    RemoveFromLinuxKernelCmdline("numa=off")
-    Log('NUMA has been re-enabled')
+    if RemoveFromLinuxKernelCmdline("numa=off") == 0 :
+        Log('NUMA has been re-enabled')
+    else :
+        Log('NUMA has not been re-enabled')
 
 def Install():
     """
