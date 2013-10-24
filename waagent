@@ -3624,9 +3624,10 @@ class Agent(Util):
         if not os.path.isfile("/mnt/cdrom/secure/ovf-env.xml"):
             Error("Unable to provision: Missing ovf-env.xml on DVD.")
             return "Failed to retrieve provisioning data (0x02)."
-        ovfxml = (GetFileContents("/mnt/cdrom/secure/ovf-env.xml",asbin=True))
-        ovfxml = ovfxml[3:] # First three bytes are > 128 so we ignore them.
-        ovfxml=ovfxml.strip(chr(0x00))
+        ovfxml = (GetFileContents(u"/mnt/cdrom/secure/ovf-env.xml",asbin=False)) # use unicode here to ensure correct codec gets used.
+        if ord(ovfxml[0]) > 128 and ord(ovfxml[1]) > 128 and ord(ovfxml[2]) > 128 :
+            ovfxml = ovfxml[3:] # BOM is not stripped.  First three bytes are > 128 and not unicode chars so we ignore them.
+        ovfxml=ovfxml.strip(chr(0x00)) # we may have NULLs.
         SetFileContents("ovf-env.xml", re.sub("<UserPassword>.*?<", "<UserPassword>*<", ovfxml))
         Run("umount " + dvd,chk_err=False)
         MyDistro.unload_ata_piix()
