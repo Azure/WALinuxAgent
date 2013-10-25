@@ -662,6 +662,7 @@ class redhatDistro(AbstractDistro):
     """
     def __init__(self):
         super(redhatDistro,self).__init__()
+        self.service_cmd='/sbin/service'
         self.ssh_service_name='sshd'
         self.hostname_file_path=None
         self.init_file=redhat_init_file
@@ -782,6 +783,7 @@ class centosDistro(AbstractDistro):
     """
     def __init__(self):
         super(centosDistro,self).__init__()
+        self.service_cmd='/sbin/service'
         self.ssh_service_name='sshd'
         self.hostname_file_path=None
         self.init_file=centos_init_file
