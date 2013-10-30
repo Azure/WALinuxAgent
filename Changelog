@@ -1,6 +1,9 @@
 WALinuxAgent                                                          Changelog
 |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 ?? ??? 2013, WALinuxAgent 2.0.1
+   . Add exception handling for external consumer scripts
+   . Ensure correct unicode encoding for ovf-env.xml
+   . Add self.service_cmd for distro compatibility
    . Fix -deprovision+user
    . Save/Restore SELinux state during provision
 
