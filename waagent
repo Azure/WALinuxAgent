@@ -2832,6 +2832,7 @@ class OvfEnv(object):
         self.AdminPassword = None
         self.UserName = None
         self.UserPassword = None
+        self.CustomData = None
         self.DisableSshPasswordAuthentication = True
         self.SshPublicKeys = []
         self.SshKeyPairs = []
@@ -2871,6 +2872,13 @@ class OvfEnv(object):
             self.UserPassword = GetNodeTextData(section.getElementsByTagNameNS(self.WaNs, "UserPassword")[0])
         except:
             pass
+        try:
+            self.CustomData=GetNodeTextData(section.getElementsByTagNameNS(self.WaNs, "CustomData")[0])
+            if len(self.CustomData)>0:
+                SetFileContents(LibDir + '/CustomData.bin',self.CustomData)
+                Log('Wrote ' + LibDir + '/CustomData.bin')
+        except Exception, e:
+            Error( str(e)+' occured creating ' + LibDir + '/CustomData.bin')
         disableSshPass = section.getElementsByTagNameNS(self.WaNs, "DisableSshPasswordAuthentication")
         if len(disableSshPass) != 0:
             self.DisableSshPasswordAuthentication = (GetNodeTextData(disableSshPass[0]).lower() == "true")
