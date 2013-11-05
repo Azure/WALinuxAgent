@@ -1515,7 +1515,7 @@ class FreeBSDDistro(AbstractDistro):
         filepath = "/etc/ssh/sshd_config"
         ReplaceFileContentsAtomic(filepath, "\n".join(filter(lambda a: not
             a.startswith("ClientAliveInterval"),
-            GetFileContents(filepath).split('\n'))) + "ClientAliveInterval 180\n")
+            GetFileContents(filepath).split('\n'))) + "\nClientAliveInterval 180\n")
         Log("Configured SSH client probing to keep connections alive.")
         #ApplyVNUMAWorkaround()
         return 0
@@ -3948,7 +3948,7 @@ def Install():
     filepath = "/etc/ssh/sshd_config"
     ReplaceFileContentsAtomic(filepath, "\n".join(filter(lambda a: not
         a.startswith("ClientAliveInterval"),
-        GetFileContents(filepath).split('\n'))) + "ClientAliveInterval 180\n")
+        GetFileContents(filepath).split('\n'))) + "\nClientAliveInterval 180\n")
     Log("Configured SSH client probing to keep connections alive.")
     ApplyVNUMAWorkaround()
     return 0
