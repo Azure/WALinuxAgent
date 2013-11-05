@@ -1,10 +1,11 @@
 WALinuxAgent                                                          Changelog
 |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
-?? ??? 2013, WALinuxAgent 2.0.1
+05 Nov 2013, WALinuxAgent 2.0.1
+   . Add support for CustomData
    . Add exception handling for external consumer scripts
    . Ensure correct unicode encoding for ovf-env.xml
    . Add self.service_cmd for distro compatibility
-   . Fix -deprovision+user
+   . Fix DeleteAccount() with -deprovision+user
    . Save/Restore SELinux state during provision
 
 23 Sep 2013, WALinuxAgent 2.0.0
