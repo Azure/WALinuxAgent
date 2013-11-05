@@ -2872,13 +2872,18 @@ class OvfEnv(object):
             self.UserPassword = GetNodeTextData(section.getElementsByTagNameNS(self.WaNs, "UserPassword")[0])
         except:
             pass
+        CDSection=None
         try:
-            self.CustomData=GetNodeTextData(section.getElementsByTagNameNS(self.WaNs, "CustomData")[0])
-            if len(self.CustomData)>0:
-                SetFileContents(LibDir + '/CustomData.bin',self.CustomData)
-                Log('Wrote ' + LibDir + '/CustomData.bin')
+            CDSection=section.getElementsByTagNameNS(self.WaNs, "CustomData")
+            if len(CDSection) > 0 :
+                self.CustomData=GetNodeTextData(CDSection[0])
+                if len(self.CustomData)>0:
+                    SetFileContents(LibDir + '/CustomData',self.CustomData)
+                    Log('Wrote ' + LibDir + '/CustomData')
+                else :
+                    Error('<CustomData> contains no data!')
         except Exception, e:
-            Error( str(e)+' occured creating ' + LibDir + '/CustomData.bin')
+            Error( str(e)+' occured creating ' + LibDir + '/CustomData')
         disableSshPass = section.getElementsByTagNameNS(self.WaNs, "DisableSshPasswordAuthentication")
         if len(disableSshPass) != 0:
             self.DisableSshPasswordAuthentication = (GetNodeTextData(disableSshPass[0]).lower() == "true")
