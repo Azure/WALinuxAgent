@@ -1163,7 +1163,7 @@ name="waagent"
 rcvar="waagent_enable"
 command="/usr/sbin/${name}"
 command_interpreter="/usr/local/bin/python"
-waagent_flags=" daemon verbose &"
+waagent_flags=" daemon &"
 
 pidfile="/var/run/waagent.pid"
 
