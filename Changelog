@@ -1,5 +1,8 @@
 WALinuxAgent                                                          Changelog
 |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+?? ??? ????, WALinuxAgent 2.0.2
+   . Revert to logging non-verbose by default
+
 05 Nov 2013, WALinuxAgent 2.0.1
    . Add support for CustomData
    . Add exception handling for external consumer scripts
