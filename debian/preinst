@@ -2,15 +2,22 @@
 
 set -e
 
-# If upgrading from package version
-# with unmanaged upstart configuration
-# and agent stop the agent and remove
-# the upstart configuration.
-if [ -f /etc/init/waagent.conf ]; then
-    stop waagent 2>&1 > /dev/null || true
-    rm -f /etc/init/waagent.conf
+#only on install and only if previous main version in < 2.
+if [ \( "$1" = "install" -o "$1" = "upgrade" \) -a \( -z "${2%%.*}" -o "0${2%%.*}" -lt 2 \) ]; then
+	# If upgrading from package version
+	# with unmanaged upstart configuration
+	# and agent stop the agent and remove
+	# the upstart configuration.
+	if [ -f /etc/init/waagent.conf ]; then
+		service stop waagent 2>&1 > /dev/null || true
+		rm -f /etc/init/waagent.conf
+	fi
+	# same for systemV init
+	if [ -f /etc/init.d/waagent ]; then
+    		update-rc.d waagent remove 2>&1 > /dev/null || true
+    		rm -f /etc/init.d/waagent
+	fi
 fi
-
 #DEBHELPER#
 
 exit 0
