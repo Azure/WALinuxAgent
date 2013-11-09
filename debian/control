@@ -16,7 +16,7 @@ Depends: python (>= 2.4),
          openssh-server (>=1:5.9p1),
          passwd (>=4.1.4.2),
          util-linux (>=2.0),
-         linux-image-extra-virtual,
+         linux-image (>=3.2),
          ${misc:Depends},
          ${python:Depends}
 Conflicts: network-manager
