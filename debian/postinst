@@ -7,7 +7,9 @@ fi
 
 case "$1" in
     configure)
-        waagent --setup --force
+       # no configuration needed all files part of debian package
+       # unclear: NUMA config
+       # waagent --setup --force
     ;;
 
     abort-upgrade|abort-remove|abort-deconfigure)
