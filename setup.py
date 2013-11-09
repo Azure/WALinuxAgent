@@ -184,7 +184,7 @@ def readme():
         return f.read()
     
 setuptools.setup(name = 'waagent',
-      version = '1.4.0',
+      version = '2.0.2',
       description = 'Windows Azure Linux Agent',
       long_description = readme(),
       author = 'Stephen Zarkos, Eric Gable',
