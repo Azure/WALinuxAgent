@@ -13,9 +13,9 @@ case "$1" in
     ;;
 
     abort-upgrade|abort-remove|abort-deconfigure)
-        if [ -f /etc/init.d/waagent ]; then
-            rm /etc/init.d/waagent
-        fi
+        #if [ -f /etc/init.d/waagent ]; then
+        #    rm /etc/init.d/waagent
+        #fi
     ;;
 
     *)
