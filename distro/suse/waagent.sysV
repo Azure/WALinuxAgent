@@ -34,12 +34,13 @@
 # Description: Start the WindowsAzureLinuxAgent
 ### END INIT INFO
 
-PYTHON="/usr/bin/python"
-WAZD_BIN="/usr/sbin/waagent"
-test -x "$WAZD_BIN" || { echo "$WAZD_BIN not installed"; exit 5; }
+PYTHON=/usr/bin/python
+WAZD_BIN=/usr/sbin/waagent
 WAZD_CONF=/etc/waagent.conf
-test -e $WAZD_CONF || { echo "$WAZD_CONF not found"; exit 5; }
 WAZD_PIDFILE=/var/run/waagent.pid
+
+test -x "$WAZD_BIN" || { echo "$WAZD_BIN not installed"; exit 5; }
+test -e "$WAZD_CONF" || { echo "$WAZD_CONF not found"; exit 6; }
 
 . /etc/rc.status
 
@@ -52,7 +53,8 @@ rc_reset
 # 2 - invalid or excess args
 # 3 - unimplemented feature (e.g. reload)
 # 4 - insufficient privilege
-# 5 - program not installed# 6 - program not configured
+# 5 - program not installed
+# 6 - program not configured
 #
 # Note that starting an already running service, stopping
 # or restarting a not-running service as well as the restart
@@ -65,14 +67,14 @@ case "$1" in
         echo -n "Starting WindowsAzureLinuxAgent"
         ## Start daemon with startproc(8). If this fails
         ## the echo return value is set appropriate.
-        startproc -f $PYTHON $WAZD_BIN -daemon
+        startproc -f ${PYTHON} ${WAZD_BIN} -daemon
         rc_status -v
         ;;
     stop)
         echo -n "Shutting down WindowsAzureLinuxAgent"
         ## Stop daemon with killproc(8) and if this fails
         ## set echo the echo return value.
-        killproc -p $WAZD_PIDFILE python $WAZD_BIN
+        killproc -p ${WAZD_PIDFILE} ${PYTHON} ${WAZD_BIN}
         rc_status -v
         ;;
     try-restart)
@@ -97,7 +99,7 @@ case "$1" in
         ## Check status with checkproc(8), if process is running
         ## checkproc will return with exit status 0.
 
-        checkproc -p $WAZD_PIDFILE python $WAZD_BIN
+        checkproc -p ${WAZD_PIDFILE} ${PYTHON} ${WAZD_BIN}
         rc_status -v
         ;;
     probe)
