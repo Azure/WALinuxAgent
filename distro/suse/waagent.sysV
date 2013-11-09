@@ -34,10 +34,12 @@
 # Description: Start the WindowsAzureLinuxAgent
 ### END INIT INFO
 
-WAZD_BIN=/usr/sbin/waagent
-test -x $WAZD_BIN || { echo "$WAZD_BIN not installed"; exit 5 }
+PYTHON="/usr/bin/python"
+WAZD_BIN="/usr/sbin/waagent"
+test -x "$WAZD_BIN" || { echo "$WAZD_BIN not installed"; exit 5; }
 WAZD_CONF=/etc/waagent.conf
-test -e $WAZD_CONF || { echo "$WAZD_CONF not found"; exit 5 }
+test -e $WAZD_CONF || { echo "$WAZD_CONF not found"; exit 5; }
+WAZD_PIDFILE=/var/run/waagent.pid
 
 . /etc/rc.status
 
@@ -60,25 +62,23 @@ rc_reset
 
 case "$1" in
     start)
-        echo "Starting WindowsAzureLinuxAgent"
+        echo -n "Starting WindowsAzureLinuxAgent"
         ## Start daemon with startproc(8). If this fails
         ## the echo return value is set appropriate.
-
-        startproc -f $WAZD_BIN -daemon
+        startproc -f $PYTHON $WAZD_BIN -daemon
         rc_status -v
         ;;
     stop)
-        echo "Shutting down WindowsAzureLinuxAgent"
+        echo -n "Shutting down WindowsAzureLinuxAgent"
         ## Stop daemon with killproc(8) and if this fails
         ## set echo the echo return value.
-
-        killproc -p /var/run/waagent.pid $WAZD_BIN
+        killproc -p $WAZD_PIDFILE python $WAZD_BIN
         rc_status -v
         ;;
     try-restart)
         ## Stop the service and if this succeeds (i.e. the
         ## service was running before), start it again.
-        $0 status >/dev/null &&  $0 restart
+        $0 status >/dev/null && $0 restart
         rc_status
         ;;
     restart)
@@ -97,8 +97,8 @@ case "$1" in
         ## Check status with checkproc(8), if process is running
         ## checkproc will return with exit status 0.
 
-        checkproc -p $WAZD_PIDFILE $WAZD_BIN
-        rc_status
+        checkproc -p $WAZD_PIDFILE python $WAZD_BIN
+        rc_status -v
         ;;
     probe)
         ;;
