@@ -66,6 +66,7 @@ class InstallData(install):
             if not os.path.exists('distro/%s' %self.lnx_distro):
                 msg = 'Unknown distribution "%s"' %self.lnx_distro
                 msg += ', no entry in distro directory'
+                print msg;
                 sys.exit(1)
 
     def run(self):
