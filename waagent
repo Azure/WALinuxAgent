@@ -114,8 +114,8 @@ Provisioning.MonitorHostName=y          # Monitor host name changes and publish 
 ResourceDisk.Format=y                   # Format if unformatted. If 'n', resource disk will not be mounted.
 ResourceDisk.Filesystem=ext4            # Typically ext3 or ext4. FreeBSD images should use 'ufs2' here.
 ResourceDisk.MountPoint=/mnt/resource   #
-ResourceDisk.EnableSwap=y               # Create and use swapfile on resource disk.
-ResourceDisk.SwapSizeMB=1024               # Size of the swapfile.
+ResourceDisk.EnableSwap=n               # Create and use swapfile on resource disk.
+ResourceDisk.SwapSizeMB=0               # Size of the swapfile.
 
 LBProbeResponder=y                      # Respond to load balancer probes if requested by Windows Azure.
 
@@ -1138,8 +1138,8 @@ Provisioning.MonitorHostName=y          # Monitor host name changes and publish 
 ResourceDisk.Format=y                   # Format if unformatted. If 'n', resource disk will not be mounted.
 ResourceDisk.Filesystem=ufs2            #
 ResourceDisk.MountPoint=/mnt/resource   #
-ResourceDisk.EnableSwap=y               # Create and use swapfile on resource disk.
-ResourceDisk.SwapSizeMB=1024               # Size of the swapfile.
+ResourceDisk.EnableSwap=n               # Create and use swapfile on resource disk.
+ResourceDisk.SwapSizeMB=0               # Size of the swapfile.
 
 LBProbeResponder=y                      # Respond to load balancer probes if requested by Windows Azure.
 
