@@ -99,7 +99,7 @@ WaagentConf = """\
 # Windows Azure Linux Agent Configuration
 #
 
-Role.StateConsumer=None                 # Specified program is invoked with "Ready" or "Shutdown".
+Role.StateConsumer=None                 # Specified program is invoked with "Ready".
                                         # Shutdown will be initiated only after the program returns. Windows Azure will
                                         # power off the VM if shutdown is not completed within ?? minutes.
 Role.ConfigurationConsumer=None         # Specified program is invoked with XML file argument specifying role configuration.
@@ -1123,7 +1123,7 @@ FreeBSDWaagentConf = """\
 # Windows Azure Linux Agent Configuration
 #
 
-Role.StateConsumer=None                 # Specified program is invoked with "Ready" or "Shutdown".
+Role.StateConsumer=None                 # Specified program is invoked with "Ready".
                                         # Shutdown will be initiated only after the program returns. Windows Azure will
                                         # power off the VM if shutdown is not completed within ?? minutes.
 Role.ConfigurationConsumer=None         # Specified program is invoked with XML file argument specifying role configuration.
@@ -2688,7 +2688,7 @@ class GoalState(Util):
 
     def reinitialize(self):
         self.Incarnation = None # integer
-        self.ExpectedState = None # "Started" or "Stopped"
+        self.ExpectedState = None # "Started"
         self.HostingEnvironmentConfigUrl = None
         self.HostingEnvironmentConfigXml = None
         self.HostingEnvironmentConfig = None
@@ -3681,8 +3681,6 @@ class Agent(Util):
         Call goalState.Process()
         Start LBProbeServer if indicated in waagent.conf.
         Start the StateConsumer if indicated in waagent.conf.
-        Check if the goalState.ExpectedState == "Stopped",
-        stop all children and isssue 'shutdown'.
         ReportReady if provisioning is complete.
         If provisioning failed, call ReportNotReady("ProvisioningFailed", provisionError)
         """
@@ -3782,16 +3780,6 @@ class Agent(Util):
                 except OSError, e :
                     ErrorWithPrefix('SharedConfig.Parse','Exception: '+ str(e) +' occured launching ' + program )
                 program = None
-
-            if goalState.ExpectedState == "Stopped":
-                program = Config.get("Role.StateConsumer")
-                if program != None:
-                    Run(program + " Shutdown")
-                self.EnvMonitor.ShutdownService()
-                self.LoadBalancerProbeServer_Shutdown()
-                command = '/sbin/shutdown -hP now'
-                Run(command)
-                return
 
             sleepToReduceAccessDenied = 3
             time.sleep(sleepToReduceAccessDenied)
