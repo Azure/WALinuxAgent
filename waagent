@@ -46,7 +46,7 @@ import xml.dom.minidom
     
 GuestAgentName = "WALinuxAgent"
 GuestAgentLongName = "Windows Azure Linux Agent"
-GuestAgentVersion = "WALinuxAgent-1.4.0"
+GuestAgentVersion = "WALinuxAgent-1.4.1"
 ProtocolVersion = "2011-12-31" #WARNING this value is used to confirm the correct fabric protocol.
 
 Config = None
@@ -1088,7 +1088,6 @@ class GoalState(Util):
 # There is only one Role for VM images.
 #
 # Of primary interest is:
-#  Machine/ExpectedState -- this is how shutdown is requested
 #  LBProbePorts -- an http server needs to run here
 #  We also note Container/ContainerID and RoleInstance/InstanceId to form the health report.
 #  And of course, Incarnation
@@ -1101,7 +1100,7 @@ class GoalState(Util):
 
     def reinitialize(self):
         self.Incarnation = None # integer
-        self.ExpectedState = None # "Started" or "Stopped"
+        self.ExpectedState = None # "Started"
         self.HostingEnvironmentConfigUrl = None
         self.HostingEnvironmentConfigXml = None
         self.HostingEnvironmentConfig = None
@@ -2082,16 +2081,6 @@ class Agent(Util):
                 Children.append(subprocess.Popen([program, "Ready"]))
                 program = None
 
-            if goalState.ExpectedState == "Stopped":
-                program = Config.get("Role.StateConsumer")
-                if program != None:
-                    Run(program + " Shutdown")
-                self.EnvMonitor.ShutdownService()
-                self.LoadBalancerProbeServer_Shutdown()
-                command = '/sbin/shutdown -hP now'
-                Run(command)
-                return
-
             sleepToReduceAccessDenied = 3
             time.sleep(sleepToReduceAccessDenied)
             if provisionError != None:
@@ -2311,9 +2300,7 @@ WaagentConf = """\
 # Windows Azure Linux Agent Configuration
 #
 
-Role.StateConsumer=None                 # Specified program is invoked with "Ready" or "Shutdown".
-                                        # Shutdown will be initiated only after the program returns. Windows Azure will
-                                        # power off the VM if shutdown is not completed within ?? minutes.
+Role.StateConsumer=None                 # Specified program is invoked with "Ready".
 Role.ConfigurationConsumer=None         # Specified program is invoked with XML file argument specifying role configuration.
 Role.TopologyConsumer=None              # Specified program is invoked with XML file argument specifying role topology.
 
