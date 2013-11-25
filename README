@@ -179,11 +179,6 @@ about to be reported to the Fabric. The argument specified to the program will
 be "Ready". The waagent will not wait for the program to return before
 continuing.
 
-* When the waagent has received a shutdown request from the Fabric
-and is about to shutdown the VM. The argument specified to the program will be
-"Shutdown".  waagent will wait for the program to return before initiating the
-shutdown process.
-
 Role.ConfigurationConsumer:
 Type: String Default: None
 
