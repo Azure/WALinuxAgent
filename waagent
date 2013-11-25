@@ -2675,7 +2675,6 @@ class GoalState(Util):
     # There is only one Role for VM images.
     #
     # Of primary interest is:
-    #  Machine/ExpectedState -- this is how shutdown is requested
     #  LBProbePorts -- an http server needs to run here
     #  We also note Container/ContainerID and RoleInstance/InstanceId to form the health report.
     #  And of course, Incarnation
