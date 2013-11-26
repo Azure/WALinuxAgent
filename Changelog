@@ -1,5 +1,9 @@
 WALinuxAgent                                                          Changelog
 |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+?? ??? ????, WALinuxAgent 1.4.1
+   . Remove reference to VM shutdown on "stopped" state. This behavior was an
+     artifact from pre-GA IaaS VMs on Windows Azure.
+
 23 Aug 2013, WALinuxAgent 1.4.0
    . Add support for bootstrapping VMM agent for Linux when running in SCVMM
      2012R2 environments (see README)
