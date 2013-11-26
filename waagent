@@ -46,7 +46,7 @@ import xml.dom.minidom
     
 GuestAgentName = "WALinuxAgent"
 GuestAgentLongName = "Windows Azure Linux Agent"
-GuestAgentVersion = "WALinuxAgent-1.4.0"
+GuestAgentVersion = "WALinuxAgent-1.4.1-PRE"
 ProtocolVersion = "2011-12-31" #WARNING this value is used to confirm the correct fabric protocol.
 
 Config = None
