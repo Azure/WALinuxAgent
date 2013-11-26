@@ -181,12 +181,10 @@ Configuration File Options:
 Role.StateConsumer:
 Type: String Default: None
 
-If a path to an executable program is specified, it is invoked at two events:
-
-* When the waagent has provisioned the image and the "Ready" state is
-about to be reported to the Fabric. The argument specified to the program will
-be "Ready". The waagent will not wait for the program to return before
-continuing.
+If a path to an executable program is specified, it is invoked when waagent has
+provisioned the image and the "Ready" state is about to be reported to the
+Fabric. The argument specified to the program will be "Ready". The agent will
+not wait for the program to return before continuing.
 
 Role.ConfigurationConsumer:
 Type: String Default: None
