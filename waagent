@@ -902,7 +902,10 @@ class SharedConfig(object):
             return None
         program = Config.get("Role.TopologyConsumer")
         if program != None:
-            Children.append(subprocess.Popen([program, LibDir + "/SharedConfig.xml"]))
+            try:
+                Children.append(subprocess.Popen([program, LibDir + "/SharedConfig.xml"]))
+            except OSError, e :
+                ErrorWithPrefix('Agent.Run','Exception: '+ str(e) +' occured launching ' + program )
         return self
 
 class HostingEnvironmentConfig(object):
@@ -1056,7 +1059,10 @@ class HostingEnvironmentConfig(object):
                 Log("Public cert with thumbprint: " + csha1 + " was retrieved.")
         program = Config.get("Role.ConfigurationConsumer")
         if program != None:
-            Children.append(subprocess.Popen([program, LibDir + "/HostingEnvironmentConfig.xml"]))
+            try:
+                Children.append(subprocess.Popen([program, LibDir + "/HostingEnvironmentConfig.xml"]))
+            except OSError, e :
+                ErrorWithPrefix('HostingEnvironmentConfig.Process','Exception: '+ str(e) +' occured launching ' + program )
 
 class GoalState(Util):
 #
@@ -2078,7 +2084,10 @@ class Agent(Util):
                             Log("Unable to create LBProbeResponder.")
 
             if program != None and DiskActivated == True:
-                Children.append(subprocess.Popen([program, "Ready"]))
+                try:
+                    Children.append(subprocess.Popen([program, "Ready"]))
+                except OSError, e :
+                    ErrorWithPrefix('SharedConfig.Parse','Exception: '+ str(e) +' occured launching ' + program )
                 program = None
 
             sleepToReduceAccessDenied = 3
