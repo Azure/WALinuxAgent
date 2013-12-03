@@ -105,6 +105,7 @@ class InstallData(install):
                 for f in initScripts:
                     newName = f.split('/')[-1].split('.')[0]
                     self.copy_file(f, tgtDir + initdir + '/' + newName)
+                    os.chmod(tgtDir + initdir + '/' + newName,0755)
             except:
                 print 'Could not install systemV init script', 
                 sys.exit(1)
@@ -124,6 +125,7 @@ class InstallData(install):
                     baseName = f.split('/')[-1]
                     self.copy_file(f,
                             tgtDir + prefix +'lib/systemd/system/' + baseName)
+                    os.chmod(tgtDir + prefix +'lib/systemd/system/' + baseName,0755)
                 except:
                     print 'Could not install systemd service files'
                     sys.exit(1)
