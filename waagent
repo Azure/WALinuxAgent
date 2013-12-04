@@ -308,7 +308,7 @@ class AbstractDistro(object):
         os.chmod(filepath, 0000)
         if self.isSelinuxSystem():
             self.setSelinuxContext(filepath,'system_u:object_r:shadow_t:s0')
-            Log("Root password deleted.")
+        Log("Root password deleted.")
         return 0
     
     def changePass(self,user,password):
