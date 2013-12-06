@@ -215,7 +215,7 @@ class AbstractDistro(object):
         Return 1 on failure.
         """
         try:
-            SetFileContents("/etc/hostname", name)
+            SetFileContents(self.hostname_file_path, name)
             return 0
         except:
             return 1
