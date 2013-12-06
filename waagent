@@ -164,7 +164,8 @@ class AbstractDistro(object):
         self.mount_dvd_cmd = 'mount'
         self.sudoers_dir_base = '/etc'
         self.waagent_conf_file = WaagentConf
-
+        self.shadow_file_mode=0600
+        
     def isSelinuxSystem(self):
         """
         Checks and sets self.selinux = True if SELinux is available on system.
@@ -305,7 +306,7 @@ class AbstractDistro(object):
         filepath="/etc/shadow"
         ReplaceFileContentsAtomic(filepath,"root:*LOCK*:14600::::::\n"
                                   + "\n".join(filter(lambda a: not a.startswith("root:"),GetFileContents(filepath).split('\n'))))
-        os.chmod(filepath, 0000)
+        os.chmod(filepath,self.shadow_file_mode)
         if self.isSelinuxSystem():
             self.setSelinuxContext(filepath,'system_u:object_r:shadow_t:s0')
         Log("Root password deleted.")
@@ -907,7 +908,8 @@ class debianDistro(AbstractDistro):
         self.agent_package_name='walinuxagent'
         self.dhcp_client_name='dhclient'
         self.getpidcmd='pidof '
-        
+        self.shadow_file_mode=0640
+
     def setHostname(self,name):
         return Run('hostname ' + name)
 
@@ -1238,7 +1240,7 @@ class FreeBSDDistro(AbstractDistro):
         ReplaceStringInFile(filepath,r'root:.*?:','root::')
         #ReplaceFileContentsAtomic(filepath,"root:*LOCK*:14600::::::\n"
         #                          + "\n".join(filter(lambda a: not a.startswith("root:"),GetFileContents(filepath).split('\n'))))
-        os.chmod(filepath, 0000)
+        os.chmod(filepath,self.shadow_file_mode)
         if self.isSelinuxSystem():
             self.setSelinuxContext(filepath,'system_u:object_r:shadow_t:s0')
         RunGetOutput("pwd_mkdb -u root /etc/master.passwd")
