@@ -731,10 +731,10 @@ class redhatDistro(AbstractDistro):
             ReplaceFileContentsAtomic(filepath, "HOSTNAME=" + name + "\n"
                 + "\n".join(filter(lambda a: not a.startswith("HOSTNAME"), GetFileContents(filepath).split('\n'))))
 
-        for ethernetInterface in MyDistro.GetInterfaceName():
-            filepath = "/etc/sysconfig/network-scripts/ifcfg-" + ethernetInterface
-            if os.path.isfile(filepath):
-                ReplaceFileContentsAtomic(filepath, "DHCP_HOSTNAME=" + name + "\n"
+        ethernetInterface = MyDistro.GetInterfaceName()
+        filepath = "/etc/sysconfig/network-scripts/ifcfg-" + ethernetInterface
+        if os.path.isfile(filepath):
+            ReplaceFileContentsAtomic(filepath, "DHCP_HOSTNAME=" + name + "\n"
                     + "\n".join(filter(lambda a: not a.startswith("DHCP_HOSTNAME"), GetFileContents(filepath).split('\n'))))
         return 0
 
@@ -850,13 +850,12 @@ class centosDistro(AbstractDistro):
         filepath = "/etc/sysconfig/network"
         if os.path.isfile(filepath):
             ReplaceFileContentsAtomic(filepath, "HOSTNAME=" + name + "\n"
-                + "\n".join(filter(lambda a: not a.startswith("HOSTNAME"), GetFileContents(filepath).split('\n'))))
-
-        for ethernetInterface in MyDistro.GetInterfaceName():
-            filepath = "/etc/sysconfig/network-scripts/ifcfg-" + ethernetInterface
-            if os.path.isfile(filepath):
-                ReplaceFileContentsAtomic(filepath, "DHCP_HOSTNAME=" + name + "\n"
-                    + "\n".join(filter(lambda a: not a.startswith("DHCP_HOSTNAME"), GetFileContents(filepath).split('\n'))))
+                                      + "\n".join(filter(lambda a: not a.startswith("HOSTNAME"), GetFileContents(filepath).split('\n'))))
+        ethernetInterface = MyDistro.GetInterfaceName()
+        filepath = "/etc/sysconfig/network-scripts/ifcfg-" + ethernetInterface
+        if os.path.isfile(filepath):
+            ReplaceFileContentsAtomic(filepath, "DHCP_HOSTNAME=" + name + "\n"
+                                      + "\n".join(filter(lambda a: not a.startswith("DHCP_HOSTNAME"), GetFileContents(filepath).split('\n'))))
         return 0
 
     def installAgentServiceScriptFiles(self):
@@ -2344,6 +2343,7 @@ class EnvMonitor(object):
                         Log("EnvMonitor: Detected host name change: " + self.HostName + " -> " + socket.gethostname())
                         self.HostName = socket.gethostname()
                         MyDistro.publishHostname(self.HostName)
+                        WaAgent.UpdateAndPublishHostName(self.HostName)
                         dhcppid = RunGetOutput(dhcpcmd)[1]
                         self.published = True
                 except:
@@ -3424,8 +3424,8 @@ class Agent(Util):
         """
         Log("Setting host name: " + name)
         MyDistro.publishHostname(name)
-        for ethernetInterface in MyDistro.GetInterfaceName():
-            Run("ifdown " + ethernetInterface + " && ifup " + ethernetInterface)
+        ethernetInterface = MyDistro.GetInterfaceName()
+        Run("ifdown " + ethernetInterface + " && ifup " + ethernetInterface)
         self.RestoreRoutes()
 
     def RestoreRoutes(self):
