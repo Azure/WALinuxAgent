@@ -1,6 +1,8 @@
 WALinuxAgent                                                          Changelog
 |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 ?? ??? ????, WALinuxAgent 2.0.2
+   . Specialize file mode of /etc/shadow when clearing the root password
+   . Fix publishHostname() to use self.hostname_file_path
    . Remove reference to VM shutdown on "stopped" state. This behavior was an
      artifact from pre-GA IaaS VMs on Windows Azure.
    . Revert to logging non-verbose by default
