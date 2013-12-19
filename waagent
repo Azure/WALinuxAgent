@@ -4074,7 +4074,7 @@ def Deprovision(force, deluser):
     if ovfobj != None and deluser == True:
         print("WARNING! " + ovfobj.UserName + " account and entire home directory will be deleted.")
 
-    if force == False and not input('Do you want to proceed (y/n)? ').startswith('y'):
+    if force == False and not raw_input('Do you want to proceed (y/n)? ').startswith('y'):
         return 1
 
     MyDistro.stopAgentService()
