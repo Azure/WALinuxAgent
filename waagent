@@ -967,7 +967,7 @@ class debianDistro(AbstractDistro):
 
     def publishHostname(self,name):
         r=super(debianDistro,self).publishHostname(name)
-        if r == 0 and FindStringInFile('/etc/dhcp/dhclient.conf',r'^[^#]?send host-name') == None : 
+        if r == 0:
             try:
                 r=ReplaceFileContentsAtomic('/etc/dhcp/dhclient.conf', "send host-name \"" + name + "\";\n"
                                           + "\n".join(filter(lambda a: not a.startswith("send host-name"), GetFileContents('/etc/dhcp/dhclient.conf').split('\n'))))
