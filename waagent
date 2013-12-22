@@ -1880,7 +1880,7 @@ class Agent(Util):
             if IsUbuntu() or IsDebian():
                 Run("dpkg-reconfigure openssh-server")
             if IsRedHat():
-                Run("service ssh restart")
+                Run("service sshd restart")
 		
         Log("Starting Microsoft System Center VMM Initialization Process")
         pid = subprocess.Popen(["/bin/bash","/mnt/cdrom/secure/"+VMM_STARTUP_SCRIPT_NAME,"-p /mnt/cdrom/secure/ "]).pid
