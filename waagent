@@ -1873,6 +1873,15 @@ class Agent(Util):
         """
         Spawn the VMM startup script.
         """
+        # Force regeneration of SSH host key before the VMM agent initializes
+        if not os.path.exists("/opt/microsoft"):
+            Log("Regenerating SSH Host Keys")
+            Run("rm -f /etc/ssh/ssh_host_*key*")
+            if IsUbuntu() or IsDebian():
+                Run("dpkg-reconfigure openssh-server")
+            if IsRedHat():
+                Run("service ssh restart")
+		
         Log("Starting Microsoft System Center VMM Initialization Process")
         pid = subprocess.Popen(["/bin/bash","/mnt/cdrom/secure/"+VMM_STARTUP_SCRIPT_NAME,"-p /mnt/cdrom/secure/ "]).pid
         time.sleep(5)
