@@ -211,6 +211,21 @@ def GetLineStartingWith(prefix, filepath):
             return line
     return None
 
+def FindStringInFile(fname,matchs):
+    """
+    Return match object if found in file.
+    """
+    try:
+        ms=re.compile(matchs)
+        for l in (open(fname,'r')).readlines():
+            m=re.search(ms,l)
+            if m:
+                return m
+    except:
+        raise
+    
+    return None
+
 def Run(cmd,chk_err=True):
     retcode,out=RunGetOutput(cmd,chk_err)
     return retcode
@@ -1439,7 +1454,7 @@ def UpdateAndPublishHostNameCommon(name):
         SetFileContents("/etc/hostname", name)
 
     for filepath in EtcDhcpClientConfFiles:
-        if os.path.isfile(filepath):
+        if os.path.isfile(filepath) and FindStringInFile(filepath,r'^[^#]*?send\s*host-name.*?(<hostname>|gethostname[(,)])') == None :
             ReplaceFileContentsAtomic(filepath, "send host-name \"" + name + "\";\n"
                 + "\n".join(filter(lambda a: not a.startswith("send host-name"), GetFileContents(filepath).split('\n'))))
 
