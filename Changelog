@@ -1,6 +1,6 @@
 WALinuxAgent                                                          Changelog
 |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
-?? Jan 2014, WALinuxAgent 1.4.1
+09 Jan 2014, WALinuxAgent 1.4.1
    . Do not change/overwrite 'send host-name' parameter in dhclient.conf if
      dhclient already configured to send current hostname
    . Handle potential OSError exception thrown if errors occur launching
