@@ -1,6 +1,10 @@
 WALinuxAgent                                                          Changelog
 |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
-?? ??? ????, WALinuxAgent 1.4.1
+?? Jan 2014, WALinuxAgent 1.4.1
+   . Do not change/overwrite 'send host-name' parameter in dhclient.conf if
+     dhclient already configured to send current hostname
+   . Handle potential OSError exception thrown if errors occur launching
+     external scripts
    . Remove reference to VM shutdown on "stopped" state. This behavior was an
      artifact from pre-GA IaaS VMs on Windows Azure.
 
