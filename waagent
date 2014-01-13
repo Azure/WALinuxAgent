@@ -216,10 +216,14 @@ class AbstractDistro(object):
         Return 1 on failure.
         """
         try:
-            SetFileContents(self.hostname_file_path, name)
-            return 0
+            r=SetFileContents(self.hostname_file_path, name)
+            for f in EtcDhcpClientConfFiles:
+                if os.path.exists(f) and FindStringInFile(f,r'^[^#]*?send\s*host-name.*?(<hostname>|gethostname[(,)])') == None :
+                    r=ReplaceFileContentsAtomic('/etc/dhcp/dhclient.conf', "send host-name \"" + name + "\";\n"
+                                                + "\n".join(filter(lambda a: not a.startswith("send host-name"), GetFileContents('/etc/dhcp/dhclient.conf').split('\n'))))
         except:
             return 1
+        return r
         
     def installAgentServiceScriptFiles(self):
         """
@@ -722,10 +726,8 @@ class redhatDistro(AbstractDistro):
         self.grubKernelBootOptionsFile = '/boot/grub/menu.lst'
         self.grubKernelBootOptionsLine = 'kernel'
 
-    def setHostname(self,name):
-        return Run('hostname ' + name)
-
     def publishHostname(self,name):
+        super(redhatDistro,self).publishHostname(name)
         filepath = "/etc/sysconfig/network"
         if os.path.isfile(filepath):
             ReplaceFileContentsAtomic(filepath, "HOSTNAME=" + name + "\n"
@@ -843,10 +845,8 @@ class centosDistro(AbstractDistro):
         self.grubKernelBootOptionsFile = '/boot/grub/menu.lst'
         self.grubKernelBootOptionsLine = 'kernel'
 
-    def setHostname(self,name):
-        return Run('hostname ' + name)
-
     def publishHostname(self,name):
+        super(centosDistro,self).publishHostname(name)
         filepath = "/etc/sysconfig/network"
         if os.path.isfile(filepath):
             ReplaceFileContentsAtomic(filepath, "HOSTNAME=" + name + "\n"
@@ -962,19 +962,6 @@ class debianDistro(AbstractDistro):
         self.getpidcmd='pidof '
         self.shadow_file_mode=0640
 
-    def setHostname(self,name):
-        return Run('hostname ' + name)
-
-    def publishHostname(self,name):
-        r=super(debianDistro,self).publishHostname(name)
-        if r == 0:
-            try:
-                r=ReplaceFileContentsAtomic('/etc/dhcp/dhclient.conf', "send host-name \"" + name + "\";\n"
-                                          + "\n".join(filter(lambda a: not a.startswith("send host-name"), GetFileContents('/etc/dhcp/dhclient.conf').split('\n'))))
-            except:
-                return 1
-        return r
-        
     def checkPackageInstalled(self,p):
         """
         Check that the package is installed.
@@ -2342,7 +2329,6 @@ class EnvMonitor(object):
                     if socket.gethostname() != self.HostName:
                         Log("EnvMonitor: Detected host name change: " + self.HostName + " -> " + socket.gethostname())
                         self.HostName = socket.gethostname()
-                        MyDistro.publishHostname(self.HostName)
                         WaAgent.UpdateAndPublishHostName(self.HostName)
                         dhcppid = RunGetOutput(dhcpcmd)[1]
                         self.published = True
