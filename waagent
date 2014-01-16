@@ -1606,8 +1606,13 @@ def GetFileContents(filepath,asbin=False):
     mode='r'
     if asbin:
         mode+='b'
-    with open(filepath, mode) as F :
-        c=F.read()
+    c=None
+    try:
+        with open(filepath, mode) as F :
+            c=F.read()
+    except IOError, e:
+        ErrorWithPrefix('GetFileContents','Reading from file ' + filepath + ' Exception is ' + str(e))
+        return None        
     return c
 
 def SetFileContents(filepath, contents):
@@ -1616,8 +1621,12 @@ def SetFileContents(filepath, contents):
     """
     if type(contents) == str :
         contents=contents.encode('latin-1')
-    with open(filepath, "wb+") as F :
-        F.write(contents)
+    try:
+        with open(filepath, "wb+") as F :
+            F.write(contents)
+    except IOError, e:
+        ErrorWithPrefix('SetFileContents','Writing to file ' + filepath + ' Exception is ' + str(e))
+        return None
     return 0
 
 def AppendFileContents(filepath, contents):
@@ -1626,13 +1635,17 @@ def AppendFileContents(filepath, contents):
     """
     if type(contents) == str :
         contents=contents.encode('latin-1')
-    with open(filepath, "a+") as F :
-        F.write(contents)
+    try: 
+        with open(filepath, "a+") as F :
+            F.write(contents)
+    except IOError, e:
+        ErrorWithPrefix('AppendFileContents','Appending to file ' + filepath + ' Exception is ' + str(e))
+        return None
     return 0
 
 def ReplaceFileContentsAtomic(filepath, contents):
     """
-    Write 'contents' to 'filepath' by creating a temp file, and replacing origina.
+    Write 'contents' to 'filepath' by creating a temp file, and replacing original.
     """
     handle, temp = tempfile.mkstemp(dir = os.path.dirname(filepath))
     if type(contents) == str :
@@ -1641,12 +1654,12 @@ def ReplaceFileContentsAtomic(filepath, contents):
         os.write(handle, contents)
     except IOError, e:
         ErrorWithPrefix('ReplaceFileContentsAtomic','Writing to file ' + filepath + ' Exception is ' + str(e))
-        return 1
+        return None
     finally:
         os.close(handle)
     try:
         os.rename(temp, filepath)
-        return 0
+        return None
     except IOError, e:
         ErrorWithPrefix('ReplaceFileContentsAtomic','Renaming ' + temp+ ' to ' + filepath + ' Exception is ' + str(e))
     try:
