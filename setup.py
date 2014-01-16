@@ -125,7 +125,6 @@ class InstallData(install):
                     baseName = f.split('/')[-1]
                     self.copy_file(f,
                             tgtDir + prefix +'lib/systemd/system/' + baseName)
-                    os.chmod(tgtDir + prefix +'lib/systemd/system/' + baseName,0755)
                 except:
                     print 'Could not install systemd service files'
                     sys.exit(1)
