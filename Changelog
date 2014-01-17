@@ -1,5 +1,11 @@
 WALinuxAgent                                                          Changelog
 |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+16 Jan 2014, WALinuxAgent 2.0.3
+   . Add exception awareness to GetFileContents, SetFileContents, and
+     AppendFileContents
+   . Fix publishHostname() - leave dhclient.conf alone if it is already
+     configured to send the system's current hostname to the DHCP server.
+
 18 Dec 2013, WALinuxAgent 2.0.2
    . Fix UpdateAndPublishHostName() to use correct interface name
    . Specialize file mode of /etc/shadow when clearing the root password
