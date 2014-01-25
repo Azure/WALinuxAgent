@@ -1156,6 +1156,18 @@ class LinuxMintDistro(UbuntuDistro):
         super(LinuxMintDistro,self).__init__()
 
 ############################################################    
+#	fedoraDistro
+############################################################    
+
+class fedoraDistro(redhatDistro):
+    """
+    FedoraDistro concrete class
+    Put Fedora specific behavior here...
+    """
+    def __init__(self):
+        super(fedoraDistro,self).__init__()
+
+############################################################    
 #	FreeBSD
 ############################################################    
 FreeBSDWaagentConf = """\
