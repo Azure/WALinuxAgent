@@ -2654,6 +2654,8 @@ class ExtensionsConfig(object):
             zip_dir=LibDir+"/" + os.path.basename(bundle_uri)
             z.extractall(zip_dir)
             Log('Extracted ' + bundle_uri + ' to ' + zip_dir) 
+            #write out the base64 config data so the plugin can process it.
+            SetFileContents(zip_dir +"/Config.txt",  p.getAttribute("config"))
             manifest = GetFileContents(zip_dir+'/PluginManifest.xml')
             if ord(manifest[0]) > 128 and ord(manifest[1]) > 128 and ord(manifest[2]) > 128:
                     manifest=manifest[3:]
