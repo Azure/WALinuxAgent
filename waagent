@@ -45,6 +45,7 @@ import time
 import traceback
 import xml.dom.minidom
 import fcntl
+import inspect
 
 if not hasattr(subprocess,'check_output'):
     def check_output(*popenargs, **kwargs):
@@ -471,8 +472,10 @@ class AbstractDistro(object):
     def Install(self):
         return Install()
 
-    def dvdHasMedia(self,dvd):
-        if Run("LC_ALL=C fdisk -l " + dvd + " | grep Disk"):
+    def mediaHasFilesystem(self,dsk):
+        if len(dsk) == 0 :
+            return False
+        if Run("LC_ALL=C fdisk -l " + dsk + " | grep Disk"):
             return False
         return True
     
@@ -1209,7 +1212,7 @@ bsd_init_file="""\
 # KEYWORD: nojail
 
 . /etc/rc.subr
-
+export PATH=$PATH:/usr/local/bin
 name="waagent"
 rcvar="waagent_enable"
 command="/usr/sbin/${name}"
@@ -1222,6 +1225,54 @@ load_rc_config $name
 run_rc_command "$1"
 
 """
+bsd_activate_resource_disk_txt="""\
+#!/usr/bin/env python
+
+import os
+import sys
+import imp
+
+# waagent has no '.py' therefore create waagent module import manually.
+__name__='setupmain' #prevent waagent.__main__ from executing
+waagent=imp.load_source('waagent','/tmp/waagent') 
+waagent.LoggerInit('/var/log/waagent.log','/dev/console')
+from waagent import RunGetOutput,Run
+Config=waagent.ConfigurationProvider()
+format = Config.get("ResourceDisk.Format")
+if format == None or format.lower().startswith("n"):
+    sys.exit(0)
+device_base = 'da1'
+device = "/dev/" + device_base
+for entry in RunGetOutput("mount")[1].split():
+    if entry.startswith(device + "s1"):
+        waagent.Log("ActivateResourceDisk: " + device + "s1 is already mounted.")
+        sys.exit(0)
+mountpoint = Config.get("ResourceDisk.MountPoint")
+if mountpoint == None:
+    mountpoint = "/mnt/resource"
+waagent.CreateDir(mountpoint, "root", 0755)
+fs = Config.get("ResourceDisk.Filesystem")
+if waagent.FreeBSDDistro().mediaHasFilesystem(device) == False :
+    Run("newfs " + device + "s1")
+if Run("mount " + device + "s1 " + mountpoint):
+    waagent.Error("ActivateResourceDisk: Failed to mount resource disk (" + device + "s1).")
+    sys.exit(0)
+waagent.Log("Resource disk (" + device + "s1) is mounted at " + mountpoint + " with fstype " + fs)
+swap = Config.get("ResourceDisk.EnableSwap")
+if swap == None or swap.lower().startswith("n"):
+    sys.exit(0)
+sizeKB = int(Config.get("ResourceDisk.SwapSizeMB")) * 1024
+if os.path.isfile(mountpoint + "/swapfile") and os.path.getsize(mountpoint + "/swapfile") != (sizeKB * 1024):
+    os.remove(mountpoint + "/swapfile")
+if not os.path.isfile(mountpoint + "/swapfile"):
+    Run("dd if=/dev/zero of=" + mountpoint + "/swapfile bs=1024 count=" + str(sizeKB))
+if Run("mdconfig -a -t vnode -f " + mountpoint + "/swapfile -u 0"):
+    waagent.Error("ActivateResourceDisk: Configuring swap - Failed to create md0")
+if not Run("swapon /dev/md0"):
+    waagent.Log("Enabled " + str(sizeKB) + " KB of swap at " + mountpoint + "/swapfile")
+else:
+    waagent.Error("ActivateResourceDisk: Failed to activate swap at " + mountpoint + "/swapfile")
+"""
 
 class FreeBSDDistro(AbstractDistro):
     """
@@ -1231,6 +1282,7 @@ class FreeBSDDistro(AbstractDistro):
         Generic Attributes go here.  These are based on 'majority rules'.
         This __init__() may be called or overriden by the child.
         """
+        super(FreeBSDDistro,self).__init__()
         self.agent_service_name = os.path.basename(sys.argv[0]) 
         self.selinux=False
         self.ssh_service_name='sshd'
@@ -1261,13 +1313,6 @@ class FreeBSDDistro(AbstractDistro):
         self.installAgentServiceScriptFiles()
         return Run("services_mkdb " + self.init_script_file)
    
-#     def uninstallAgentService(self):
-#         return Run('chkconfig --del ' + self.agent_service_name)
-
-#     def unregisterAgentService(self):
-#         self.stopAgentService()
-#         return self.uninstallAgentService()
-    
     def restartSshService(self):
         """
         Service call to re(start) the SSH service
@@ -1371,6 +1416,14 @@ class FreeBSDDistro(AbstractDistro):
             retries-=1
             if code > 0 and retries > 0 :
                 Log("GetFreeBSDEthernetInfo - Error: retry ethernet detection " + str(retries))
+                if retries == 9 :
+                    c,o=RunGetOutput("ifconfig | grep -A1 -B2 ether",chk_err=False)
+                    if c == 0:
+                        t=o.replace('\n',' ')
+                        t=t.split()
+                        i=t[0][:-1]
+                        Log(RunGetOutput('id')[1])
+                        Run('dhclient '+i)
                 time.sleep(10)
 
         j=output.replace('\n',' ')
@@ -1481,52 +1534,19 @@ class FreeBSDDistro(AbstractDistro):
             pass
         return
 
-    def ActivateResourceDisk(self):
+    def ActivateResourceDiskNoThread(self):
         """
         Format, mount, and if specified in the configuration
         set resource disk as swap.
         """
         global DiskActivated
-        format = Config.get("ResourceDisk.Format")
-        if format == None or format.lower().startswith("n"):
-            DiskActivated = True
-            return
-        #device = DeviceForIdePort(1)
-        device_base = 'ada1'
-#         if device == None:
-#             Error("ActivateResourceDisk: Unable to detect disk topology.")
-#            return
-        device = "/dev/" + device_base
-        for entry in RunGetOutput("mount")[1].split():
-            if entry.startswith(device + "s1"):
-                Log("ActivateResourceDisk: " + device + "s1 is already mounted.")
-                DiskActivated = True
-                return
-        mountpoint = Config.get("ResourceDisk.MountPoint")
-        if mountpoint == None:
-            mountpoint = "/mnt/resource"
-        CreateDir(mountpoint, "root", 0755)
-        fs = Config.get("ResourceDisk.Filesystem")
-        Run("newfs " + device + "s1")
-        if Run("mount " + device + "s1 " + mountpoint):
-            Error("ActivateResourceDisk: Failed to mount resource disk (" + device + "1).")
-            return
-        Log("Resource disk (" + device + "1) is mounted at " + mountpoint + " with fstype " + fs)
+        Run('cp /usr/sbin/waagent /tmp/')
+        SetFileContents('/tmp/bsd_activate_resource_disk.py',bsd_activate_resource_disk_txt)
+        Run('chmod +x /tmp/bsd_activate_resource_disk.py')
+        pid = subprocess.Popen(["/tmp/bsd_activate_resource_disk.py", ""]).pid
+        Log("Spawning bsd_activate_resource_disk.py")
         DiskActivated = True
-        swap = Config.get("ResourceDisk.EnableSwap")
-        if swap == None or swap.lower().startswith("n"):
-            return
-        sizeKB = int(Config.get("ResourceDisk.SwapSizeMB")) * 1024
-        if os.path.isfile(mountpoint + "/swapfile") and os.path.getsize(mountpoint + "/swapfile") != (sizeKB * 1024):
-            os.remove(mountpoint + "/swapfile")
-        if not os.path.isfile(mountpoint + "/swapfile"):
-            Run("dd if=/dev/zero of=" + mountpoint + "/swapfile bs=1024 count=" + str(sizeKB))
-        if Run("mdconfig -a -t vnode -f " + mountpoint + "/swapfile -u 0"):
-            Error("ActivateResourceDisk: Configuring swap - Failed to create md0")
-        if not Run("swapon /dev/md0"):
-            Log("Enabled " + str(sizeKB) + " KB of swap at " + mountpoint + "/swapfile")
-        else:
-            Error("ActivateResourceDisk: Failed to activate swap at " + mountpoint + "/swapfile")
+        return
 
     def Install(self):
         """
@@ -1571,8 +1591,8 @@ class FreeBSDDistro(AbstractDistro):
         #ApplyVNUMAWorkaround()
         return 0
     
-    def dvdHasMedia(self,dvd):
-        if Run('LC_ALL=C fdisk -p ' + dvd + ' | grep "invalid fdisk partition table found" '):
+    def mediaHasFilesystem(self,dsk):
+        if Run('LC_ALL=C fdisk -p ' + dsk + ' | grep "invalid fdisk partition table found" ',False):
             return False
         return True
     
@@ -2006,15 +2026,12 @@ class Logger(object):
     def LogIfVerbose(self,message):
         """
         Only log 'message' if global Verbose is True.
-        Verbose messages are assumed to be undesiarable in the
-        serial logs, so do not send the verbose logging to /dev/console
         """
         self.LogWithPrefixIfVerbose('',message)
     
     def LogWithPrefixIfVerbose(self,prefix, message):
         """
         Only log 'message' if global Verbose is True.
-        Log to logfile, ignoring /dev/console
         Prefix each line of 'message' with current time+'prefix'.
         """
         if self.verbose == True:
@@ -2024,7 +2041,8 @@ class Logger(object):
             for line in message.split('\n'):
                 line = t + line
                 self.LogToFile(line)
-        
+                self.LogToCon(line)
+                
     def Warn(self,message):
         """
         Prepend the text "WARNING:" to the prefix for each line in 'message'.
@@ -2665,9 +2683,17 @@ class HostingEnvironmentConfig(object):
         Create the user account.
         Launch ConfigurationConsumer if specified in the config.
         """
+        no_thread = False
         if DiskActivated == False:
-            diskThread = threading.Thread(target = self.ActivateResourceDisk)
-            diskThread.start()
+            for m in inspect.getmembers(MyDistro):
+                if 'ActivateResourceDiskNoThread' in m:
+                    no_thread = True
+                    break
+            if no_thread == True :   
+                MyDistro.ActivateResourceDiskNoThread()
+            else :
+                diskThread = threading.Thread(target = self.ActivateResourceDisk)
+                diskThread.start()
         User = None
         Pass = None
         Expiration = None
@@ -3670,11 +3696,12 @@ class Agent(Util):
             Run("ssh-keygen -N '' -t " + type + " -f /etc/ssh/ssh_host_" + type + "_key")
             MyDistro.restartSshService()
         #SetFileContents(LibDir + "/provisioned", "")
+        dvd = None
         for dvds in [re.match(r'(sr[0-9]|hd[c-z]|cdrom[0-9]|cd[0-9]?)',x) for x in os.listdir('/dev/')]:
-            if dvds == None:
+            if dvds == None :
                 continue
             dvd = '/dev/'+dvds.group(0)
-        if MyDistro.dvdHasMedia(dvd) is False :
+        if MyDistro.mediaHasFilesystem(dvd) is False :
             out=MyDistro.load_ata_piix()
             if out:
                 return out
@@ -4015,6 +4042,8 @@ def GetMyDistro(dist_class_name=''):
         else : # I know this is not Linux!
             if 'FreeBSD' in platform.system():
                 Distro=platform.system()
+        Distro=Distro.strip('"')
+        Distro=Distro.strip(' ')
         dist_class_name=Distro+'Distro'
     else:
         Distro=dist_class_name
