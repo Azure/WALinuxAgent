@@ -2697,12 +2697,7 @@ class HostingEnvironmentConfig(object):
     #   <ApplicationSettings>
     #     <Setting name="__ModelData" value="&lt;m role=&quot;MachineRole&quot; xmlns=&quot;urn:azure:m:v1&quot;>&lt;r name=&quot;MachineRole&quot;>&lt;e name=&quot;a&quot; />&lt;e name=&quot;b&quot; />&lt;e name=&quot;Microsoft.WindowsAzure.Plugins.RemoteAccess.Rdp&quot; />&lt;e name=&quot;Microsoft.WindowsAzure.Plugins.RemoteForwarder.RdpInput&quot; />&lt;/r>&lt;/m>" />
     #     <Setting name="Microsoft.WindowsAzure.Plugins.Diagnostics.ConnectionString" value="DefaultEndpointsProtocol=http;AccountName=osimages;AccountKey=DNZQ..." />
-    #     <Setting name="Microsoft.WindowsAzure.Plugins.RemoteAccess.AccountEncryptedPassword" value="MIIBnQYJKoZIhvcN..." />
-    #     <Setting name="Microsoft.WindowsAzure.Plugins.RemoteAccess.AccountExpiration" value="2022-07-23T23:59:59.0000000-07:00" />
-    #     <Setting name="Microsoft.WindowsAzure.Plugins.RemoteAccess.AccountUsername" value="test" />
-    #     <Setting name="Microsoft.WindowsAzure.Plugins.RemoteAccess.Enabled" value="true" />
     #     <Setting name="Microsoft.WindowsAzure.Plugins.RemoteForwarder.Enabled" value="true" />
-    #     <Setting name="Certificate|Microsoft.WindowsAzure.Plugins.RemoteAccess.PasswordEncryption" value="sha1:C093FA5CD3AAE057CB7C4E04532B2E16E07C26CA" />
     #   </ApplicationSettings>
     #   <ResourceReferences>
     #     <Resource name="DiagnosticStore" type="directory" request="Microsoft.Cis.Fabric.Controller.Descriptions.ServiceDescription.Data.Policy" sticky="true" size="1" path="db00a7755a5e4e8a8fe4b19bc3b330c3.MachineRole.DiagnosticStore\" disableQuota="false" />
@@ -2776,14 +2771,6 @@ class HostingEnvironmentConfig(object):
         for b in self.ApplicationSettings:
             sname = b.getAttribute("name")
             svalue = b.getAttribute("value")
-            if sname == "Microsoft.WindowsAzure.Plugins.RemoteAccess.AccountEncryptedPassword":
-                Pass = self.DecryptPassword(svalue)
-            elif sname == "Microsoft.WindowsAzure.Plugins.RemoteAccess.AccountUsername":
-                User = svalue
-            elif sname == "Microsoft.WindowsAzure.Plugins.RemoteAccess.AccountExpiration":
-                Expiration = svalue
-            elif sname == "Certificate|Microsoft.WindowsAzure.Plugins.RemoteAccess.PasswordEncryption":
-                Thumbprint = svalue.split(':')[1].upper()
         if User != None and Pass != None:
             if User != "root" and User != "" and Pass != "":
                 CreateAccount(User, Pass, Expiration, Thumbprint)
