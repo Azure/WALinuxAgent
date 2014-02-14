@@ -22,9 +22,9 @@ functionality for Linux and FreeBSD IaaS deployments:
     - Ensures the stability of the network interface name
 
   * Kernel
-    - Configuring virtual NUMA
+    - Configure virtual NUMA (disable for kernel <2.6.37)
     - Consume Hyper-V entropy for /dev/random
-    - Configuring SCSI timeouts for the root device (which could be remote)
+    - Configure SCSI timeouts for the root device (which could be remote)
 
   * Diagnostics
     - Console redirection to the serial port
@@ -50,7 +50,7 @@ REQUIREMENTS
 
 The following systems have been tested and are known to work with the Windows
 Azure Linux Agent.  Please note that this list may differ from the official
-list of supported systems on the Windows Azure Platform described here:
+list of supported systems on the Windows Azure Platform as described here:
 http://support.microsoft.com/kb/2805216
 
   Supported Linux Distributions:
@@ -201,7 +201,7 @@ Role.TopologyConsumer:
 Type: String Default: None
 
 If a path to an executable program is specified, the program is invoked when the
-Fabric indicates that a new network topology layout is available for the VM.The
+Fabric indicates that a new network topology layout is available for the VM. The
 path to the XML configuration file is provided as an argument to the executable.
 This may be invoked multiple times whenever the network topology changes (due to
 service healing for example).  A sample file is provided in the Appendix. Please
