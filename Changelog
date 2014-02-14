@@ -1,5 +1,9 @@
 WALinuxAgent                                                          Changelog
 |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+?? ??? 2014, WALinuxAgent 2.0.4
+   . Add support for the Fedora distribution
+   . Several fixes to FreeBSDDistro class
+
 16 Jan 2014, WALinuxAgent 2.0.3
    . Add exception awareness to GetFileContents, SetFileContents, and
      AppendFileContents
