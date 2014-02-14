@@ -2,7 +2,7 @@
 #
 # Windows Azure Linux Agent
 #
-# Copyright 2012 Microsoft Corporation
+# Copyright 2014 Microsoft Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -119,7 +119,7 @@ ResourceDisk.SwapSizeMB=0               # Size of the swapfile.
 
 LBProbeResponder=y                      # Respond to load balancer probes if requested by Windows Azure.
 
-Logs.Verbose=n                          #
+Logs.Verbose=n                          # Enable verbose logs
 
 OS.RootDeviceScsiTimeout=300            # Root device timeout in seconds.
 OS.OpensslPath=None                     # If "None", the system default version is used.
@@ -1197,7 +1197,7 @@ ResourceDisk.SwapSizeMB=0               # Size of the swapfile.
 
 LBProbeResponder=y                      # Respond to load balancer probes if requested by Windows Azure.
 
-Logs.Verbose=n                          #
+Logs.Verbose=n                          # Enable verbose logs
 
 OS.RootDeviceScsiTimeout=300            # Root device timeout in seconds.
 OS.OpensslPath=None                     # If "None", the system default version is used.
