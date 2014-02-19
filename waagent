@@ -2680,7 +2680,7 @@ class ExtensionsConfig(object):
             else :
                 jsn= json.loads(manifest)
                 if jsn.has_key('handlerManifest') :
-                    cmd = jsn.[handlerManifest]['installCommand']
+                    cmd = jsn[handlerManifest]['installCommand']
                 else :
                     Error('Key handlerManifest not found.  Handler cannot be installed.')
             if len(cmd) == 0 :
