@@ -66,7 +66,7 @@ http://support.microsoft.com/kb/2805216
 
 Waagent depends on some system packages in order to function properly:
 
-  * Python 2.4+
+  * Python 2.5+
   * OpenSSL 1.0+
   * OpenSSH 5.3+
   * Filesystem utilities: sfdisk, fdisk, mkfs
