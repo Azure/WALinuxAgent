@@ -46,6 +46,7 @@ import traceback
 import xml.dom.minidom
 import fcntl
 import inspect
+import zipfile
 
 if not hasattr(subprocess,'check_output'):
     def check_output(*popenargs, **kwargs):
@@ -2589,6 +2590,130 @@ class SharedConfig(object):
             except OSError, e :
                 ErrorWithPrefix('Agent.Run','Exception: '+ str(e) +' occured launching ' + program )
         return self
+
+class ExtensionsConfig(object):
+    """
+    Parse ExtensionsConfig, downloading and unpacking them to /var/lib/waagent.
+    Install if <enabled>true</enabled>, remove if it is set to false.
+    """
+    #<?xml version="1.0" encoding="utf-8"?>
+    #<Extensions version="1.0.0.0" goalStateIncarnation="3">
+    #  <Plugins>
+    #     <Plugin name="Microsoft.Compute.BGInfo" version="1.0" location="http://rdfepirv2bl2prdstr01.blob.core.windows.net/bfd5c281a7dc4e4b84
+    #381eb0b47e3aaf/Microsoft.Compute_BGInfo_useast_manifest.xml" config="PENvbmZpZ3VyYXRpb24+PFB1YmxpYyAvPjxQcml2YXRlIC8+PEVuYWJsZWQ+VHJ1Z
+    #TwvRW5hYmxlZD48L0NvbmZpZ3VyYXRpb24+" state="enabled" autoUpgrade="true" failoverlocation="http://rdfepirv2bl2prdstr02.blob.core.window
+    #s.net/bfd5c281a7dc4e4b84381eb0b47e3aaf/Microsoft.Compute_BGInfo_useast_manifest.xml" runAsStartupTask="false" />
+    #  </Plugins>
+    #</Extensions>
+    #
+    def __init__(self):
+        self.reinitialize()
+
+    def reinitialize(self):
+        """
+        Reset members.
+        """
+        self.Plugins = None
+        self.Util = None
+        
+    def Parse(self, xmlText):
+        """
+        Write configuration to file ExtensionsConfig.xml.
+        If state=enabled, attempt to download the plugin.
+        Get the manifest from 'location/failoverlocation' tag.
+        Download and extract the archive to LibDir/plugin_manifest_name/.
+        Read 'installCommand' from the PluginManifest.xml <Plugin> tag.
+        Create execuatable shell script containig 'installCommand'.
+        Spawn the script and report the PID to the Log.
+        TBD - disable plugin when <enabled> is false.
+        """
+        self.reinitialize()
+        self.Util=Util()
+        SetFileContents("ExtensionsConfig.xml", xmlText)
+        dom = xml.dom.minidom.parseString(xmlText)
+        self.Plugins = dom.getElementsByTagName("Plugin")
+        for p in self.Plugins:
+            Log("Found Plugin: " + p.getAttribute("name"))
+            if p.getAttribute("state") != 'enabled' :
+                #This check should be done later TBD - disable the plugin - 
+                continue
+            location=p.getAttribute("location")
+            Log("Downloading plugin manifest: " + p.getAttribute("name") + " from " + location)
+            self.Util.Endpoint=location.split('/')[2]
+            Log("Plugin server is: " +  self.Util.Endpoint)
+            manifest=self.Util.HttpGetWithoutHeaders(location)
+            if manifest == None:
+                Error("Unable to download plugin manifest" + p.getAttribute("name") + " from primary location.  Attempting with failover location.")
+                failoverlocation=p.getAttribute("failoverlocation")
+                self.Util.Endpoint=failoverlocation.split('/')[2]
+                Log("Plugin failover server is: " +  self.Util.Endpoint)
+                manifest=self.Util.HttpGetWithoutHeaders(failoverlocation)
+            if manifest == None:
+                Error("Unable to download plugin manifest" + p.getAttribute("name") + " from failover location")
+                continue
+            Log("Plugin manifest" + p.getAttribute("name") + "downloaded successfully length = " + str(len(manifest)))
+            filepath=LibDir+"/" + p.getAttribute("name")
+            if os.path.splitext(location)[-1] == '.xml' : #if this is an xml file we may have a BOM
+                if ord(manifest[0]) > 128 and ord(manifest[1]) > 128 and ord(manifest[2]) > 128:
+                    manifest=manifest[3:]
+            SetFileContents(filepath,manifest)
+            #Get the bundle url from the manifest
+            dom = xml.dom.minidom.parseString(manifest)
+            bundle_uri = GetNodeTextData(dom.getElementsByTagName("Uri")[0])
+            Log("Bundle URI = " + bundle_uri)
+            # Download the zipfile archive and save as '.zip'
+            bundle=self.Util.HttpGetWithoutHeaders(bundle_uri)
+            if bundle == None:
+                Error("Unable to download plugin bundle" + bundle_uri )
+                continue
+            b=bytearray(bundle)
+            filepath=LibDir+"/" + os.path.basename(bundle_uri) + '.zip'
+            SetFileContents(filepath,b)
+            Log("Plugin bundle" + bundle_uri + "downloaded successfully length = " + str(len(bundle)))
+            # unpack the archive
+            z=zipfile.ZipFile(filepath)
+            zip_dir=LibDir+"/" + os.path.basename(bundle_uri)
+            z.extractall(zip_dir)
+            Log('Extracted ' + bundle_uri + ' to ' + zip_dir) 
+            #write out the base64 config data so the plugin can process it.
+            SetFileContents(zip_dir +"/Config.txt",  p.getAttribute("config"))
+            for f in os.listdir(zip_dir):
+                if f == 'HandlerManifest.json' :
+                    mfile = f
+                elif f == 'PluginManifest.xml' :
+                    mfile = f
+                else :
+                    Error('Neither HandlerManifest.json nor PluginManifest.xml were found.')
+                    continue
+            manifest = GetFileContents(zip_dir+mfile)
+            if ord(manifest[0]) > 128 and ord(manifest[1]) > 128 and ord(manifest[2]) > 128:
+                    manifest=manifest[3:]
+            #Get the 'installCommand' from the manifest
+            cmd = ''
+            if os.path.splitext(f)[-1] == '.xml':
+                dom = xml.dom.minidom.parseString(manifest)
+                p=dom.getElementsByTagName('Plugin')[0]
+                cmd = p.getAttribute('installCommand')
+            else :
+                jsn= json.loads(manifest)
+                if jsn.has_key('handlerManifest') :
+                    cmd = jsn[handlerManifest]['installCommand']
+                else :
+                    Error('Key handlerManifest not found.  Handler cannot be installed.')
+            if len(cmd) == 0 :
+                Error('Unable to read installCmd')
+                continue
+            Log("installCommand = " + cmd)
+            #create script
+            filepath=zip_dir+'/installmyplugin.sh'
+            SetFileContents(filepath,cmd)
+            os.chmod(filepath,0755)
+            # launch
+            pid = subprocess.Popen([filepath],shell=True).pid
+            Log("Spawned "+ filepath + " PID = " + str(pid))
+
+        Log('Finished processing ExtensionsConfig.xml')
+        return self
         
 class HostingEnvironmentConfig(object):
     """
@@ -2614,12 +2739,7 @@ class HostingEnvironmentConfig(object):
     #   <ApplicationSettings>
     #     <Setting name="__ModelData" value="&lt;m role=&quot;MachineRole&quot; xmlns=&quot;urn:azure:m:v1&quot;>&lt;r name=&quot;MachineRole&quot;>&lt;e name=&quot;a&quot; />&lt;e name=&quot;b&quot; />&lt;e name=&quot;Microsoft.WindowsAzure.Plugins.RemoteAccess.Rdp&quot; />&lt;e name=&quot;Microsoft.WindowsAzure.Plugins.RemoteForwarder.RdpInput&quot; />&lt;/r>&lt;/m>" />
     #     <Setting name="Microsoft.WindowsAzure.Plugins.Diagnostics.ConnectionString" value="DefaultEndpointsProtocol=http;AccountName=osimages;AccountKey=DNZQ..." />
-    #     <Setting name="Microsoft.WindowsAzure.Plugins.RemoteAccess.AccountEncryptedPassword" value="MIIBnQYJKoZIhvcN..." />
-    #     <Setting name="Microsoft.WindowsAzure.Plugins.RemoteAccess.AccountExpiration" value="2022-07-23T23:59:59.0000000-07:00" />
-    #     <Setting name="Microsoft.WindowsAzure.Plugins.RemoteAccess.AccountUsername" value="test" />
-    #     <Setting name="Microsoft.WindowsAzure.Plugins.RemoteAccess.Enabled" value="true" />
     #     <Setting name="Microsoft.WindowsAzure.Plugins.RemoteForwarder.Enabled" value="true" />
-    #     <Setting name="Certificate|Microsoft.WindowsAzure.Plugins.RemoteAccess.PasswordEncryption" value="sha1:C093FA5CD3AAE057CB7C4E04532B2E16E07C26CA" />
     #   </ApplicationSettings>
     #   <ResourceReferences>
     #     <Resource name="DiagnosticStore" type="directory" request="Microsoft.Cis.Fabric.Controller.Descriptions.ServiceDescription.Data.Policy" sticky="true" size="1" path="db00a7755a5e4e8a8fe4b19bc3b330c3.MachineRole.DiagnosticStore\" disableQuota="false" />
@@ -2701,14 +2821,6 @@ class HostingEnvironmentConfig(object):
         for b in self.ApplicationSettings:
             sname = b.getAttribute("name")
             svalue = b.getAttribute("value")
-            if sname == "Microsoft.WindowsAzure.Plugins.RemoteAccess.AccountEncryptedPassword":
-                Pass = self.DecryptPassword(svalue)
-            elif sname == "Microsoft.WindowsAzure.Plugins.RemoteAccess.AccountUsername":
-                User = svalue
-            elif sname == "Microsoft.WindowsAzure.Plugins.RemoteAccess.AccountExpiration":
-                Expiration = svalue
-            elif sname == "Certificate|Microsoft.WindowsAzure.Plugins.RemoteAccess.PasswordEncryption":
-                Thumbprint = svalue.split(':')[1].upper()
         if User != None and Pass != None:
             if User != "root" and User != "" and Pass != "":
                 CreateAccount(User, Pass, Expiration, Thumbprint)
@@ -2734,6 +2846,7 @@ class GoalState(Util):
     Initializes and populates:
     self.HostingEnvironmentConfig
     self.SharedConfig
+    self.ExtensionsConfig
     self.Certificates
     """
     #
@@ -2756,6 +2869,9 @@ class GoalState(Util):
     #           <HostingEnvironmentConfig>http://10.115.153.40:80/machine/c6d5526c-5ac2-4200-b6e2-56f2b70c5ab2/MachineRole%5FIN%5F0?comp=config&amp;type=hostingEnvironmentConfig&amp;incarnation=1</HostingEnvironmentConfig>
     #           <SharedConfig>http://10.115.153.40:80/machine/c6d5526c-5ac2-4200-b6e2-56f2b70c5ab2/MachineRole%5FIN%5F0?comp=config&amp;type=sharedConfig&amp;incarnation=1</SharedConfig>
     #           <Certificates>http://10.115.153.40:80/machine/c6d5526c-5ac2-4200-b6e2-56f2b70c5ab2/MachineRole%5FIN%5F0?comp=certificates&amp;incarnation=1</Certificates>
+    #          <ExtensionsConfig>http://100.67.238.230:80/machine/9c87aa94-3bda-45e3-b2b7-0eb0fca7baff/1552dd64dc254e6884f8d5b8b68aa18f.eg%2Dplug%2Dvm?comp=config&amp;type=extensionsConfig&amp;incarnation=2</ExtensionsConfig>
+    #         <FullConfig>http://100.67.238.230:80/machine/9c87aa94-3bda-45e3-b2b7-0eb0fca7baff/1552dd64dc254e6884f8d5b8b68aa18f.eg%2Dplug%2Dvm?comp=config&amp;type=fullConfig&amp;incarnation=2</FullConfig>
+
     #         </Configuration>
     #       </RoleInstance>
     #     </RoleInstanceList>
@@ -2787,6 +2903,9 @@ class GoalState(Util):
         self.CertificatesUrl = None
         self.CertificatesXml = None
         self.Certificates = None
+        self.ExtensionsConfigUrl = None
+        self.ExtensionsConfigXml = None
+        self.ExtensionsConfig = None
         self.RoleInstanceId = None
         self.ContainerId = None
         self.LoadBalancerProbePort = None # integer, ?list of integers
@@ -2797,9 +2916,11 @@ class GoalState(Util):
         Parse and populate contained configuration objects.
         Calls Certificates().Parse()
         Calls SharedConfig().Parse
+        Calls ExtensionsConfig().Parse
         Calls HostingEnvironmentConfig().Parse
         """
         self.reinitialize()
+        LogIfVerbose(xmlText)
         node = xml.dom.minidom.parseString(xmlText).childNodes[0]
         if node.localName != "GoalState":
             Error("GoalState.Parse: root not GoalState")
@@ -2837,6 +2958,7 @@ class GoalState(Util):
                                                 elif d.localName == "Configuration":
                                                     for e in d.childNodes:
                                                         if e.nodeType == node.ELEMENT_NODE:
+                                                            LogIfVerbose(e.localName)
                                                             if e.localName == "HostingEnvironmentConfig":
                                                                 self.HostingEnvironmentConfigUrl = GetNodeTextData(e)
                                                                 LogIfVerbose("HostingEnvironmentConfigUrl:" + self.HostingEnvironmentConfigUrl)
@@ -2847,6 +2969,11 @@ class GoalState(Util):
                                                                 LogIfVerbose("SharedConfigUrl:" + self.SharedConfigUrl)
                                                                 self.SharedConfigXml = self.HttpGetWithHeaders(self.SharedConfigUrl)
                                                                 self.SharedConfig = SharedConfig().Parse(self.SharedConfigXml)
+                                                            elif e.localName == "ExtensionsConfig":
+                                                                self.ExtensionsConfigUrl = GetNodeTextData(e)
+                                                                LogIfVerbose("ExtensionsConfigUrl:" + self.ExtensionsConfigUrl)
+                                                                self.ExtensionsConfigXml = self.HttpGetWithHeaders(self.ExtensionsConfigUrl)
+                                                                self.ExtensionsConfig = ExtensionsConfig().Parse(self.ExtensionsConfigXml)
                                                             elif e.localName == "Certificates":
                                                                 self.CertificatesUrl = GetNodeTextData(e)
                                                                 LogIfVerbose("CertificatesUrl:" + self.CertificatesUrl)
@@ -2932,6 +3059,7 @@ class OvfEnv(object):
         Return self.
         """
         self.reinitialize()
+        LogIfVerbose(xmlText)
         dom = xml.dom.minidom.parseString(xmlText)
         if len(dom.getElementsByTagNameNS(self.OvfNs, "Environment")) != 1:
             Error("Unable to parse OVF XML.")
@@ -2977,22 +3105,28 @@ class OvfEnv(object):
         if len(disableSshPass) != 0:
             self.DisableSshPasswordAuthentication = (GetNodeTextData(disableSshPass[0]).lower() == "true")
         for pkey in section.getElementsByTagNameNS(self.WaNs, "PublicKey"):
+            LogIfVerbose(repr(pkey))
             fp = None
             path = None
             for c in pkey.childNodes:
                 if c.localName == "Fingerprint":
                     fp = GetNodeTextData(c).upper()
+                    LogIfVerbose(fp)
                 if c.localName == "Path":
                     path = GetNodeTextData(c)
+                    LogIfVerbose(path)
             self.SshPublicKeys += [[fp, path]]
         for keyp in section.getElementsByTagNameNS(self.WaNs, "KeyPair"):
             fp = None
             path = None
+            LogIfVerbose(repr(keyp))
             for c in keyp.childNodes:
                 if c.localName == "Fingerprint":
                     fp = GetNodeTextData(c).upper()
+                    LogIfVerbose(fp)
                 if c.localName == "Path":
                     path = GetNodeTextData(c)
+                    LogIfVerbose(path)
             self.SshKeyPairs += [[fp, path]]
         return self
 
