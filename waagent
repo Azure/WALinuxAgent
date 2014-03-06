@@ -2713,6 +2713,9 @@ class ExtensionsConfig(object):
                 Error('Unable to read installCmd')
                 continue
             Log("installCommand = " + cmd)
+            # create the status and config dirs
+            waagent.Run('mkdir -p ' + root + '/status')
+            waagent.Run('mkdir -p ' + root + '/config')
             # write out the goalStateIncarnation.settings file in the config path.
             incarnation=self.Extensions.getAttribute("goalStateIncarnation")
             version=self.Extensions.getAttribute("version")
@@ -2720,9 +2723,6 @@ class ExtensionsConfig(object):
             #create HandlerEnvironment.json
             handler_env='{  "version": 1.0,  "handlerEnvironment": {    "logFolder": "/var/log",    "configFolder": "' + root + '/config",    "statusFolder": "' + root + '/status",    "heartbeatFile": "'+ root + '/heartbeat.log"}}'
             waagent.SetFileContents(root+'/HandlerEnvironment.json',handler_env)
-            # create the status and config dirs
-            waagent.Run('mkdir -p ' + root + '/status')
-            waagent.Run('mkdir -p ' + root + '/config')
             #create script
             filepath=root+'/installmyplugin.sh'
             SetFileContents(filepath,"cd " + root + "; " +cmd)
