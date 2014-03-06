@@ -85,7 +85,7 @@ WaAgent = None
 DiskActivated = False
 Openssl = "openssl"
 Children = []
-
+ExtensionChildren = []
 VMM_STARTUP_SCRIPT_NAME='install'
 VMM_CONFIG_FILE_NAME='linuxosconfiguration.xml'
 global RulesFiles
@@ -406,6 +406,7 @@ class AbstractDistro(object):
         Return the ip of the 
         first active non-loopback interface.
         """
+        addr=''
         iface,addr=GetFirstActiveNetworkInterfaceNonLoopback()
         return addr
 
@@ -1300,7 +1301,7 @@ class FreeBSDDistro(AbstractDistro):
         self.grubKernelBootOptionsFile = '/boot/loader.conf'
         self.grubKernelBootOptionsLine = ''
         self.getpidcmd = 'pgrep -n'
-        self.mount_dvd_cmd = 'dd bs=2048 count=1 skip=295 if='
+        self.mount_dvd_cmd = 'dd bs=2048 count=33 skip=295 if=' # custom data max len is 64k 
         self.sudoers_dir_base = '/usr/local/etc'
         self.waagent_conf_file = FreeBSDWaagentConf
         
@@ -2084,11 +2085,11 @@ def GetFirstActiveNetworkInterfaceNonLoopback():
     Return the interface name, and ip addr of the
     first active non-loopback interface.
     """
+    iface=''
     expected=16 # how many devices should I expect...
     struct_size=40 # for 64bit the size is 40 bytes
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     buff=array.array('B', b'\0' * (expected*struct_size))
-#    retsize=(struct.unpack('iL', fcntl.ioctl(s.fileno().to_bytes(1,'little'), 0x8912, struct.pack('iL',expected*struct_size,buff.buffer_info()[0]))))[0]
     retsize=(struct.unpack('iL', fcntl.ioctl(s.fileno(), 0x8912, struct.pack('iL',expected*struct_size,buff.buffer_info()[0]))))[0]
     if retsize == (expected*struct_size) :
         Warn('SIOCGIFCONF returned more than ' + str(expected) + ' up network interfaces.')
@@ -2100,7 +2101,6 @@ def GetFirstActiveNetworkInterfaceNonLoopback():
         else :
             break
     return iface.decode('latin-1'), socket.inet_ntoa(s[i+20:i+24])
-
 
 def GetIpv4Address():
     """
@@ -2124,8 +2124,10 @@ def GetMacAddress():
     Convienience function, returns mac addr bound to
     first non-loobback interface.
     """
-    ifname=GetFirstActiveNetworkInterfaceNonLoopback()[0]
-    a = Linux_ioctl_GetInterfaceMac(ifname)
+    ifname=''
+    while len(ifname) < 2 :
+        ifname=GetFirstActiveNetworkInterfaceNonLoopback()[0]
+    a = Linux_ioctl_GetInterfaceMac(ifname)        
     return HexStringToByteArray(a)
 
 def DeviceForIdePort(n):
@@ -2598,14 +2600,18 @@ class ExtensionsConfig(object):
     """
     #<?xml version="1.0" encoding="utf-8"?>
     #<Extensions version="1.0.0.0" goalStateIncarnation="3">
-    #  <Plugins>
-    #     <Plugin name="Microsoft.Compute.BGInfo" version="1.0" location="http://rdfepirv2bl2prdstr01.blob.core.windows.net/bfd5c281a7dc4e4b84
-    #381eb0b47e3aaf/Microsoft.Compute_BGInfo_useast_manifest.xml" config="PENvbmZpZ3VyYXRpb24+PFB1YmxpYyAvPjxQcml2YXRlIC8+PEVuYWJsZWQ+VHJ1Z
-    #TwvRW5hYmxlZD48L0NvbmZpZ3VyYXRpb24+" state="enabled" autoUpgrade="true" failoverlocation="http://rdfepirv2bl2prdstr02.blob.core.window
-    #s.net/bfd5c281a7dc4e4b84381eb0b47e3aaf/Microsoft.Compute_BGInfo_useast_manifest.xml" runAsStartupTask="false" />
-    #  </Plugins>
+    #<Plugins>
+    #  <Plugin name="OSTCExtensions.VMAccessLinuxTest" version="1.0" 
+    #location="http://previewusnorthcache.blob.core.test-cint.azure-test.net/
+    #d84b216d00bf4d96982be531539e1513/OSTCExtensions_VMAccessLinuxTest_usnorth_manifest.xml" 
+    #config="PENvbmZpZ3VyYXRpb24+PFB1YmxpYyAvPjxQcml2YXRlIC8+PEVuYWJsZWQ+VHJ1ZTwvRW5hYmxlZD48L0NvbmZpZ3VyYXRpb24+" 
+    #state="enabled" autoUpgrade="true" runAsStartupTask="false" isJson="false" />
+    #</Plugins>
+    #<StatusUploadBlob>https://ostcextensions.blob.core.test-cint.azure-test.net/vhds/eg-plg-vm.eg-plg-vm.eg-plg-vm.status?sr=b
+    #&amp;sp=rw&amp;se=9999-01-01&amp;sk=key1&amp;sv=2012-02-12&amp;
+    #sig=QZ9J%2Bre2WF83KCsHny1NbYA3BlLgvRkRlr7qdwOQbLE%3D</StatusUploadBlob>
     #</Extensions>
-    #
+
     def __init__(self):
         self.reinitialize()
 
@@ -2613,6 +2619,7 @@ class ExtensionsConfig(object):
         """
         Reset members.
         """
+        self.Extensions = None
         self.Plugins = None
         self.Util = None
         
@@ -2631,6 +2638,8 @@ class ExtensionsConfig(object):
         self.Util=Util()
         SetFileContents("ExtensionsConfig.xml", xmlText)
         dom = xml.dom.minidom.parseString(xmlText)
+        self.Extensions=dom.getElementsByTagName("Extensions")
+        
         self.Plugins = dom.getElementsByTagName("Plugin")
         for p in self.Plugins:
             Log("Found Plugin: " + p.getAttribute("name"))
@@ -2675,43 +2684,63 @@ class ExtensionsConfig(object):
             zip_dir=LibDir+"/" + os.path.basename(bundle_uri)
             z.extractall(zip_dir)
             Log('Extracted ' + bundle_uri + ' to ' + zip_dir) 
+            # zip no file perms in .zip so set all the scripts to +x
+            Run( "find " + zip_dir +" | egrep '.sh|.py' | xargs chmod +x ")
             #write out the base64 config data so the plugin can process it.
-            SetFileContents(zip_dir +"/Config.txt",  p.getAttribute("config"))
-            for f in os.listdir(zip_dir):
-                if f == 'HandlerManifest.json' :
-                    mfile = f
-                elif f == 'PluginManifest.xml' :
-                    mfile = f
-                else :
-                    Error('Neither HandlerManifest.json nor PluginManifest.xml were found.')
-                    continue
-            manifest = GetFileContents(zip_dir+mfile)
-            if ord(manifest[0]) > 128 and ord(manifest[1]) > 128 and ord(manifest[2]) > 128:
-                    manifest=manifest[3:]
+            mfile=None
+            for root, dirs, files in os.walk(zip_dir):
+                for f in files:
+                    if f in ('HandlerManifest.json'):
+                        mfile=os.path.join(root,f)
+                if mfile != None:
+                    break
+            if mfile == None :
+                Error('HandlerManifest.json not found.')
+                continue
+            manifest = GetFileContents(mfile)
             #Get the 'installCommand' from the manifest
             cmd = ''
-            if os.path.splitext(f)[-1] == '.xml':
-                dom = xml.dom.minidom.parseString(manifest)
-                p=dom.getElementsByTagName('Plugin')[0]
-                cmd = p.getAttribute('installCommand')
+            try:
+                jsn = json.loads(manifest)
+            except:
+                Error('Error parsing HandlerManifest.json.')
+                continue
+            if jsn.has_key('handlerManifest') :
+                cmd = jsn[handlerManifest]['installCommand']
             else :
-                jsn= json.loads(manifest)
-                if jsn.has_key('handlerManifest') :
-                    cmd = jsn[handlerManifest]['installCommand']
-                else :
-                    Error('Key handlerManifest not found.  Handler cannot be installed.')
+                Error('Key handlerManifest not found.  Handler cannot be installed.')
             if len(cmd) == 0 :
                 Error('Unable to read installCmd')
                 continue
             Log("installCommand = " + cmd)
+            # write out the goalStateIncarnation.settings file in the config path.
+            incarnation=self.Extensions.getAttribute("goalStateIncarnation")
+            version=self.Extensions.getAttribute("version")
+            SetFileContents(root +"/config/" + incarnation +".settings",  p.getAttribute("config"))
+            #create HandlerEnvironment.json
+            handler_env='{  "version": 1.0,  "handlerEnvironment": {    "logFolder": "/var/log",    "configFolder": "' + root + '/config",    "statusFolder": "' + root + '/status",    "heartbeatFile": "'+ root + '/heartbeat.log"}}'
+            waagent.SetFileContents(root+'/HandlerEnvironment.json',handler_env)
+            # create the status and config dirs
+            waagent.Run('mkdir -p ' + root + '/status')
+            waagent.Run('mkdir -p ' + root + '/config')
             #create script
-            filepath=zip_dir+'/installmyplugin.sh'
-            SetFileContents(filepath,cmd)
-            os.chmod(filepath,0755)
+            filepath=root+'/installmyplugin.sh'
+            SetFileContents(filepath,"cd " + root + "; " +cmd)
+            os.chmod(filepath,0700)
             # launch
-            pid = subprocess.Popen([filepath],shell=True).pid
-            Log("Spawned "+ filepath + " PID = " + str(pid))
+            pid=None
+            try:
+                pid = subprocess.Popen(filepath,shell=True,cwd=root).pid
+            except Exception as e:
+                waagent.Error('Exception launching ' + filepath + str(e))
+            if pid == None or pid < 1 :
+                ExtensionChildren.append((-1,root))
+                waagent.Error('Error launching ' + filepath + '.')
+            else :
+                ExtensionChildren.append((pid,root))
+                Log("Spawned "+ filepath + " PID = " + str(pid))
 
+        #end plugin processing loop
         Log('Finished processing ExtensionsConfig.xml')
         return self
         
@@ -3636,6 +3665,7 @@ class Agent(Util):
         This signals the fabric that our provosion is completed,
         and the host is ready for operation.
         """
+        # TODO - Poll the ExtensionChildren
         counter = (self.HealthReportCounter + 1) % 1000000
         self.HealthReportCounter = counter
         healthReport = ("<?xml version=\"1.0\" encoding=\"utf-8\"?><Health xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\"><GoalStateIncarnation>"
@@ -3867,6 +3897,7 @@ class Agent(Util):
         if ord(ovfxml[0]) > 128 and ord(ovfxml[1]) > 128 and ord(ovfxml[2]) > 128 :
             ovfxml = ovfxml[3:] # BOM is not stripped.  First three bytes are > 128 and not unicode chars so we ignore them.
         ovfxml=ovfxml.strip(chr(0x00)) # we may have NULLs.
+        ovfxml=ovfxml[ovfxml.find('<?'):] # chop leading text if present
         SetFileContents("ovf-env.xml", re.sub("<UserPassword>.*?<", "<UserPassword>*<", ovfxml))
         Run("umount " + dvd,chk_err=False)
         MyDistro.unload_ata_piix()
@@ -3912,15 +3943,19 @@ class Agent(Util):
 
         # Determine if we are in VMM.  Spawn VMM_STARTUP_SCRIPT_NAME if found.
         self.SearchForVMMStartup()
-
-        if MyDistro.GetIpv4Address() == None:
-            Log("Waiting for network.")
-            while(MyDistro.GetIpv4Address() == None):
+        ipv4=''
+        while ipv4 == '' or ipv4 == '0.0.0.0' :
+            ipv4=MyDistro.GetIpv4Address()
+            if ipv4 == '' or ipv4 == '0.0.0.0' :
+                Log("Waiting for network.")
                 time.sleep(10)
 
-        Log("IPv4 address: " + MyDistro.GetIpv4Address())
-        Log("MAC  address: " + ":".join(["%02X" % Ord(a) for a in MyDistro.GetMacAddress()]))
-
+        Log("IPv4 address: " + ipv4)
+        mac=''
+        mac=MyDistro.GetMacAddress()
+        if len(mac)>0 :
+            Log("MAC  address: " + ":".join(["%02X" % Ord(a) for a in mac]))
+        
         # Consume Entropy in ACPI table provided by Hyper-V
         try:
             SetFileContents("/dev/random", GetFileContents("/sys/firmware/acpi/tables/OEM0"))
