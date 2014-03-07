@@ -3,7 +3,7 @@ Section: python
 Priority: extra
 Maintainer: Ben Howard <ben.howard@ubuntu.com>
 XSBC-Original-Maintainer: Microsoft Corporation <walinuxagent@microsoft.com>
-Build-Depends: debhelper (>= 8), python-all
+Build-Depends: debhelper (>= 8), python-all, python-setuptools
 Standards-Version: 3.9.3
 XS-Python-Version: all
 Homepage: http://go.microsoft.com/fwlink/?LinkId=250998
@@ -16,7 +16,7 @@ Depends: python (>= 2.4),
          openssh-server (>=1:5.9p1),
          passwd (>=4.1.4.2),
          util-linux (>=2.0),
-         linux-image-extra-virtual,
+         linux-image (>=3.2),
          ${misc:Depends},
          ${python:Depends}
 Conflicts: network-manager

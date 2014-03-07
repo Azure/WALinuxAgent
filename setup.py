@@ -66,6 +66,7 @@ class InstallData(install):
             if not os.path.exists('distro/%s' %self.lnx_distro):
                 msg = 'Unknown distribution "%s"' %self.lnx_distro
                 msg += ', no entry in distro directory'
+                print msg;
                 sys.exit(1)
 
     def run(self):
@@ -104,6 +105,7 @@ class InstallData(install):
                 for f in initScripts:
                     newName = f.split('/')[-1].split('.')[0]
                     self.copy_file(f, tgtDir + initdir + '/' + newName)
+                    os.chmod(tgtDir + initdir + '/' + newName,0755)
             except:
                 print 'Could not install systemV init script', 
                 sys.exit(1)
@@ -183,7 +185,7 @@ def readme():
         return f.read()
     
 setuptools.setup(name = 'waagent',
-      version = '1.4.0',
+      version = '2.0.2',
       description = 'Windows Azure Linux Agent',
       long_description = readme(),
       author = 'Stephen Zarkos, Eric Gable',

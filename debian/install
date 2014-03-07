@@ -1,1 +1,4 @@
 waagent usr/sbin
+etc/logrotate.d/waagent
+etc/init.d/waagent
+etc/waagent.conf
