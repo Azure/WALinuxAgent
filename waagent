@@ -2626,124 +2626,223 @@ class ExtensionsConfig(object):
     def Parse(self, xmlText):
         """
         Write configuration to file ExtensionsConfig.xml.
-        If state=enabled, attempt to download the plugin.
-        Get the manifest from 'location/failoverlocation' tag.
-        Download and extract the archive to LibDir/plugin_manifest_name/.
-        Read 'installCommand' from the PluginManifest.xml <Plugin> tag.
+        If state is enabled:
+            if the plugin is installed:
+                if the new plugin's version is higher:
+                    download the new archive
+                    do the updateCommand.
+
+                if the version is the same or lower:
+                    create the new .settings file from the configuration received
+                    do the enableCommand
+            if the plugin is not installed:
+                download/unpack archive and call the installCommand
+
+        if state is disabled:
+            call disableCommand
         Create execuatable shell script containig 'installCommand'.
         Spawn the script and report the PID to the Log.
-        TBD - disable plugin when <enabled> is false.
         """
         self.reinitialize()
         self.Util=Util()
-        SetFileContents("ExtensionsConfig.xml", xmlText)
         dom = xml.dom.minidom.parseString(xmlText)
+        LogIfVerbose(xmlText)
         self.Extensions=dom.getElementsByTagName("Extensions")
-        
         self.Plugins = dom.getElementsByTagName("Plugin")
+        incarnation=self.Extensions[0].getAttribute("goalStateIncarnation")
+        SetFileContents('ExtensionsConfig.'+incarnation+'.xml', xmlText)
         for p in self.Plugins:
-            Log("Found Plugin: " + p.getAttribute("name"))
-            if p.getAttribute("state") != 'enabled' :
-                #This check should be done later TBD - disable the plugin - 
-                continue
-            location=p.getAttribute("location")
-            Log("Downloading plugin manifest: " + p.getAttribute("name") + " from " + location)
-            self.Util.Endpoint=location.split('/')[2]
-            Log("Plugin server is: " +  self.Util.Endpoint)
-            manifest=self.Util.HttpGetWithoutHeaders(location)
-            if manifest == None:
-                Error("Unable to download plugin manifest" + p.getAttribute("name") + " from primary location.  Attempting with failover location.")
-                failoverlocation=p.getAttribute("failoverlocation")
-                self.Util.Endpoint=failoverlocation.split('/')[2]
-                Log("Plugin failover server is: " +  self.Util.Endpoint)
-                manifest=self.Util.HttpGetWithoutHeaders(failoverlocation)
-            if manifest == None:
-                Error("Unable to download plugin manifest" + p.getAttribute("name") + " from failover location")
-                continue
-            Log("Plugin manifest" + p.getAttribute("name") + "downloaded successfully length = " + str(len(manifest)))
-            filepath=LibDir+"/" + p.getAttribute("name")
-            if os.path.splitext(location)[-1] == '.xml' : #if this is an xml file we may have a BOM
-                if ord(manifest[0]) > 128 and ord(manifest[1]) > 128 and ord(manifest[2]) > 128:
-                    manifest=manifest[3:]
-            SetFileContents(filepath,manifest)
-            #Get the bundle url from the manifest
-            dom = xml.dom.minidom.parseString(manifest)
-            bundle_uri = GetNodeTextData(dom.getElementsByTagName("Uri")[0])
-            Log("Bundle URI = " + bundle_uri)
-            # Download the zipfile archive and save as '.zip'
-            bundle=self.Util.HttpGetWithoutHeaders(bundle_uri)
-            if bundle == None:
-                Error("Unable to download plugin bundle" + bundle_uri )
-                continue
-            b=bytearray(bundle)
-            filepath=LibDir+"/" + os.path.basename(bundle_uri) + '.zip'
-            SetFileContents(filepath,b)
-            Log("Plugin bundle" + bundle_uri + "downloaded successfully length = " + str(len(bundle)))
-            # unpack the archive
-            z=zipfile.ZipFile(filepath)
-            zip_dir=LibDir+"/" + os.path.basename(bundle_uri)
-            z.extractall(zip_dir)
-            Log('Extracted ' + bundle_uri + ' to ' + zip_dir) 
-            # zip no file perms in .zip so set all the scripts to +x
-            Run( "find " + zip_dir +" | egrep '.sh|.py' | xargs chmod +x ")
-            #write out the base64 config data so the plugin can process it.
-            mfile=None
-            for root, dirs, files in os.walk(zip_dir):
-                for f in files:
-                    if f in ('HandlerManifest.json'):
-                        mfile=os.path.join(root,f)
-                if mfile != None:
-                    break
-            if mfile == None :
-                Error('HandlerManifest.json not found.')
-                continue
-            manifest = GetFileContents(mfile)
-            #Get the 'installCommand' from the manifest
-            cmd = ''
-            try:
-                jsn = json.loads(manifest)
-            except:
-                Error('Error parsing HandlerManifest.json.')
-                continue
-            if jsn.has_key('handlerManifest') :
-                cmd = jsn[handlerManifest]['installCommand']
-            else :
-                Error('Key handlerManifest not found.  Handler cannot be installed.')
-            if len(cmd) == 0 :
-                Error('Unable to read installCmd')
-                continue
-            Log("installCommand = " + cmd)
-            # create the status and config dirs
-            waagent.Run('mkdir -p ' + root + '/status')
-            waagent.Run('mkdir -p ' + root + '/config')
-            # write out the goalStateIncarnation.settings file in the config path.
-            incarnation=self.Extensions.getAttribute("goalStateIncarnation")
-            version=self.Extensions.getAttribute("version")
-            SetFileContents(root +"/config/" + incarnation +".settings",  p.getAttribute("config"))
-            #create HandlerEnvironment.json
-            handler_env='{  "version": 1.0,  "handlerEnvironment": {    "logFolder": "/var/log",    "configFolder": "' + root + '/config",    "statusFolder": "' + root + '/status",    "heartbeatFile": "'+ root + '/heartbeat.log"}}'
-            waagent.SetFileContents(root+'/HandlerEnvironment.json',handler_env)
-            #create script
-            filepath=root+'/installmyplugin.sh'
-            SetFileContents(filepath,"cd " + root + "; " +cmd)
-            os.chmod(filepath,0700)
-            # launch
-            pid=None
-            try:
-                pid = subprocess.Popen(filepath,shell=True,cwd=root).pid
-            except Exception as e:
-                waagent.Error('Exception launching ' + filepath + str(e))
-            if pid == None or pid < 1 :
-                ExtensionChildren.append((-1,root))
-                waagent.Error('Error launching ' + filepath + '.')
-            else :
-                ExtensionChildren.append((pid,root))
-                Log("Spawned "+ filepath + " PID = " + str(pid))
+            previous_version = None
+            version=p.getAttribute("version")
+            name=p.getAttribute("name")
+            Log("Found Plugin: " + name + ' version: ' + version)
+            if p.getAttribute("state") == 'disabled' :
+                #disable
+                if self.launchCommand(name,version,'disableCommand') == None :
+                    Error('Unable to disable '+name)
+                    continue
+                else :
+                    Log(name+' is disabled')
+                    continue
+            # state is enabled
+            # if the same plugin exists and the version is newer or
+            # does not exist then download and unzip the new plugin
+            plg_dir=None
+            for root, dirs, files in os.walk(LibDir):
+                for d in dirs:
+                    if name in d:
+                        plg_dir=os.path.join(root,d)
+                    if plg_dir != None:
+                        break
+            if plg_dir != None :
+                previous_version=plg_dir.rsplit('-')[-1]
+            if plg_dir == None or version > previous_version :
+                location=p.getAttribute("location")
+                Log("Downloading plugin manifest: " + name + " from " + location)
+                self.Util.Endpoint=location.split('/')[2]
+                Log("Plugin server is: " +  self.Util.Endpoint)
+                manifest=self.Util.HttpGetWithoutHeaders(location)
+                if manifest == None:
+                    Error("Unable to download plugin manifest" + name + " from primary location.  Attempting with failover location.")
+                    failoverlocation=p.getAttribute("failoverlocation")
+                    self.Util.Endpoint=failoverlocation.split('/')[2]
+                    Log("Plugin failover server is: " +  self.Util.Endpoint)
+                    manifest=self.Util.HttpGetWithoutHeaders(failoverlocation)
+                if manifest == None:
+                    Error("Unable to download plugin manifest" + name + " from failover location")
+                    continue
+                Log("Plugin manifest" + name + "downloaded successfully length = " + str(len(manifest)))
+                filepath=LibDir+"/" + name + '.' + incarnation + '.manifest'
+                if os.path.splitext(location)[-1] == '.xml' : #if this is an xml file we may have a BOM
+                    if ord(manifest[0]) > 128 and ord(manifest[1]) > 128 and ord(manifest[2]) > 128:
+                        manifest=manifest[3:]
+                SetFileContents(filepath,manifest)
+                #Get the bundle url from the manifest
+                dom = xml.dom.minidom.parseString(manifest)
+                bundle_uri = GetNodeTextData(dom.getElementsByTagName("Uri")[0])
+                Log("Bundle URI = " + bundle_uri)
+                # Download the zipfile archive and save as '.zip'
+                bundle=self.Util.HttpGetWithoutHeaders(bundle_uri)
+                if bundle == None:
+                    Error("Unable to download plugin bundle" + bundle_uri )
+                    continue
+                b=bytearray(bundle)
+                filepath=LibDir+"/" + os.path.basename(bundle_uri) + '.zip'
+                SetFileContents(filepath,b)
+                Log("Plugin bundle" + bundle_uri + "downloaded successfully length = " + str(len(bundle)))
+                # unpack the archive
+                z=zipfile.ZipFile(filepath)
+                zip_dir=LibDir+"/" + name + '-' + version
+                z.extractall(zip_dir)
+                Log('Extracted ' + bundle_uri + ' to ' + zip_dir) 
+                # zip no file perms in .zip so set all the scripts to +x
+                Run( "find " + zip_dir +" | egrep '.sh|.py' | xargs chmod 0700 ")
+                #write out the base64 config data so the plugin can process it.
+                mfile=None
+                for root, dirs, files in os.walk(zip_dir):
+                    for f in files:
+                        if f in ('HandlerManifest.json'):
+                            mfile=os.path.join(root,f)
+                    if mfile != None:
+                        break
+                if mfile == None :
+                    Error('HandlerManifest.json not found.')
+                    continue
+                manifest = GetFileContents(mfile)
+                # create the status and config dirs
+                Run('mkdir -p ' + root + '/status')
+                Run('mkdir -p ' + root + '/config')
+                # write out the goalStateIncarnation.settings file in the config path.
+                SetFileContents(root +"/config/" + incarnation +".settings",  p.getAttribute("config"))
+                #create HandlerEnvironment.json
+                handler_env='{  "version": 1.0,  "handlerEnvironment": {    "logFolder": "/var/log",    "configFolder": "' + root + '/config",    "statusFolder": "' + root + '/status",    "heartbeatFile": "'+ root + '/heartbeat.log"}}'
+                SetFileContents(root+'/HandlerEnvironment.json',handler_env)
 
+            # end if plug_dir == None
+                cmd = ''
+                getcmd='installCommand'
+                if plg_dir != None and version > plg_dir.rsplit('-')[-1]:
+                    getcmd='updateCommand'   
+                    # disable the old plugin if it exists
+                    if previous_version != None:
+                        if self.launchCommand(name,previous_version,'disableCommand') == None :
+                            Error('Unable to disable old plugin '+name+' version ' + previous_version)
+                        else :
+                            Log(name+' version ' + previous_version + ' is disabled')
+                
+                if getcmd=='updateCommand':
+                    if self.launchCommand(name,version,getcmd,previous_version) == None :
+                        Error('Update failed for '+name+'-'+version)
+                    else :
+                        Log('Update complete'+name+'-'+version)
+                    # if we updated - call unistall for the old plugin - remove old plugin dir and zipfile
+                    if self.launchCommand(name,previous_version,'uninstallCommand') == None :
+                        Error('Uninstall failed for '+name+'-'+previous_version)
+                    else :
+                        Log('Uninstall complete'+ name +'-' + previous_version)
+                    # remove the old plugin
+                    Run('rm -rf ' + LibDir + '/' + name +'-'+ previous_version + '*')
+                else :  # run install 
+                    if self.launchCommand(name,version,getcmd) == None :
+                        Error('Installation failed for '+name+'-'+version)
+                    else :
+                        Log('Installation completed for '+name+'-'+version)
+
+            #end if zip_dir == none or version > = prev
+            # state is still enable
+            if self.launchCommand(name,version,getcmd) == None :
+                Error('Enable failed for '+name+'-'+version)
+            else :
+                Log('Enable completed for '+name+'-'+version)
+            # this plugin processing is complete
+            Log('Processing completed for '+name+'-'+version)
         #end plugin processing loop
         Log('Finished processing ExtensionsConfig.xml')
         return self
-        
+
+    def launchCommand(self,name,version,command,prev_version=None):
+        # get the manifest and read the command
+        mfile=None
+        zip_dir=LibDir+"/" + name + '-' + version
+        for root, dirs, files in os.walk(zip_dir):
+            for f in files:
+                if f in ('HandlerManifest.json'):
+                    mfile=os.path.join(root,f)
+            if mfile != None:
+                break
+        if mfile == None :
+            Error('HandlerManifest.json not found.')
+            return None
+        manifest = GetFileContents(mfile)
+        try:
+            jsn = json.loads(manifest)
+        except:
+            Error('Error parsing HandlerManifest.json.')
+            return None
+        if jsn.has_key('handlerManifest') :
+            cmd = jsn[handlerManifest][command]
+        else :
+            Error('Key handlerManifest not found.  Handler cannot be installed.')
+        if len(cmd) == 0 :
+            Error('Unable to read ' + command )
+            return None
+        # for update we send the path of the old installation
+        if prev_version != None :
+            cmd+=' ' + LibDir+'/' + name + '-' + previous_version
+        Log(command+ ' = ' + cmd)
+        filepath=root+'/'+command+'.sh'
+        SetFileContents(filepath,"cd " + root + "; " +cmd)
+        os.chmod(filepath,0700)
+        # launch
+        pid=None
+        try:
+            pid = subprocess.Popen(filepath,shell=True,cwd=root).pid
+        except Exception as e:
+            Error('Exception launching ' + filepath + str(e))
+        if pid == None or pid < 1 :
+            ExtensionChildren.append((-1,root))
+            Error('Error launching ' + filepath + '.')
+        else :
+            ExtensionChildren.append((pid,root))
+            Log("Spawned "+ filepath + " PID = " + str(pid))
+        # wait until install/upgrade is finished
+        retry = 5*60/10
+        while pid !=None and pid > 0:
+            if retry==0:
+                break
+            if Run("ps " + pid) != 0:
+                Log(filepath + ' still running with pid ' + pid)
+                time.sleep(10)
+            else :
+                pid=0
+            retry-=1
+        if retry==0:
+            Error('More than five minutes has passed.  Killing ' + pid)
+            os.kill(pid,9)
+            return None
+        Log(command + ' completed.')
+        return 0
+    
 class HostingEnvironmentConfig(object):
     """
     Parse Hosting enviromnet config and store in
@@ -3002,7 +3101,6 @@ class GoalState(Util):
                                                                 self.ExtensionsConfigUrl = GetNodeTextData(e)
                                                                 LogIfVerbose("ExtensionsConfigUrl:" + self.ExtensionsConfigUrl)
                                                                 self.ExtensionsConfigXml = self.HttpGetWithHeaders(self.ExtensionsConfigUrl)
-                                                                self.ExtensionsConfig = ExtensionsConfig().Parse(self.ExtensionsConfigXml)
                                                             elif e.localName == "Certificates":
                                                                 self.CertificatesUrl = GetNodeTextData(e)
                                                                 LogIfVerbose("CertificatesUrl:" + self.CertificatesUrl)
@@ -4045,7 +4143,11 @@ class Agent(Util):
             if provisionError != None:
                 incarnation = self.ReportNotReady("ProvisioningFailed", provisionError)
             else:
-                incarnation = self.ReportReady()                
+                incarnation = self.ReportReady()
+            # Process our extensions.
+            if goalState.ExtensionsConfig == None and goalState.ExtensionsConfigXml != None :
+                goalState.ExtensionsConfig = ExtensionsConfig().Parse(goalState.ExtensionsConfigXml)
+                # TODO report the status/heartbeat results of extension processing
             time.sleep(25 - sleepToReduceAccessDenied)
             
 WaagentLogrotate = """\
