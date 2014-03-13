@@ -754,17 +754,18 @@ class redhatDistro(AbstractDistro):
         super(redhatDistro,self).__init__()
         self.service_cmd='/sbin/service'
         self.ssh_service_name='sshd'
-        self.hostname_file_path=None
+        self.hostname_file_path= None if platform.dist()[1] < '7.0' else '/etc/hostname'
         self.init_file=redhat_init_file
         self.grubKernelBootOptionsFile = '/boot/grub/menu.lst'
         self.grubKernelBootOptionsLine = 'kernel'
 
     def publishHostname(self,name):
         super(redhatDistro,self).publishHostname(name)
-        filepath = "/etc/sysconfig/network"
-        if os.path.isfile(filepath):
-            ReplaceFileContentsAtomic(filepath, "HOSTNAME=" + name + "\n"
-                + "\n".join(filter(lambda a: not a.startswith("HOSTNAME"), GetFileContents(filepath).split('\n'))))
+        if platform.dist()[1] < '7.0' :
+            filepath = "/etc/sysconfig/network"
+            if os.path.isfile(filepath):
+                ReplaceFileContentsAtomic(filepath, "HOSTNAME=" + name + "\n"
+                    + "\n".join(filter(lambda a: not a.startswith("HOSTNAME"), GetFileContents(filepath).split('\n'))))
 
         ethernetInterface = MyDistro.GetInterfaceName()
         filepath = "/etc/sysconfig/network-scripts/ifcfg-" + ethernetInterface
