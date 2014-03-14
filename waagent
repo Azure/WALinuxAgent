@@ -803,122 +803,19 @@ class redhatDistro(AbstractDistro):
             return 0
 
 
-   
+
+
 ############################################################    
 #	centosDistro
 ############################################################    
 
-centos_init_file= """\
-#!/bin/bash
-#
-# Init file for WindowsAzureLinuxAgent.
-#
-# chkconfig: 2345 60 80
-# description: WindowsAzureLinuxAgent
-#
-
-# source function library
-. /etc/rc.d/init.d/functions
-
-RETVAL=0
-FriendlyName="WindowsAzureLinuxAgent"
-WAZD_BIN=/usr/sbin/waagent
-
-start()
-{
-    echo -n $"Starting $FriendlyName: "
-    $WAZD_BIN -daemon &
-}
-
-stop()
-{
-    echo -n $"Stopping $FriendlyName: "
-    killproc -p /var/run/waagent.pid $WAZD_BIN
-    RETVAL=$?
-    echo
-    return $RETVAL
-}
-
-case "$1" in
-    start)
-        start
-        ;;
-    stop)
-        stop
-        ;;
-    restart)
-        stop
-        start
-        ;;
-    reload)
-        ;;
-    report)
-        ;;
-    status)
-        status $WAZD_BIN
-        RETVAL=$?
-        ;;
-    *)
-        echo $"Usage: $0 {start|stop|restart|status}"
-        RETVAL=1
-esac
-exit $RETVAL
-"""
-
-class centosDistro(AbstractDistro):
+class centosDistro(redhatDistro):
     """
     CentOS Distro concrete class
     Put CentOS specific behavior here...
     """
     def __init__(self):
         super(centosDistro,self).__init__()
-        self.service_cmd='/sbin/service'
-        self.ssh_service_name='sshd'
-        self.hostname_file_path=None
-        self.init_file=centos_init_file
-        self.grubKernelBootOptionsFile = '/boot/grub/menu.lst'
-        self.grubKernelBootOptionsLine = 'kernel'
-
-    def publishHostname(self,name):
-        super(centosDistro,self).publishHostname(name)
-        filepath = "/etc/sysconfig/network"
-        if os.path.isfile(filepath):
-            ReplaceFileContentsAtomic(filepath, "HOSTNAME=" + name + "\n"
-                                      + "\n".join(filter(lambda a: not a.startswith("HOSTNAME"), GetFileContents(filepath).split('\n'))))
-        ethernetInterface = MyDistro.GetInterfaceName()
-        filepath = "/etc/sysconfig/network-scripts/ifcfg-" + ethernetInterface
-        if os.path.isfile(filepath):
-            ReplaceFileContentsAtomic(filepath, "DHCP_HOSTNAME=" + name + "\n"
-                                      + "\n".join(filter(lambda a: not a.startswith("DHCP_HOSTNAME"), GetFileContents(filepath).split('\n'))))
-        return 0
-
-    def installAgentServiceScriptFiles(self):
-        SetFileContents(self.init_script_file, self.init_file)
-        os.chmod(self.init_script_file, 0744)
-        return 0
-
-    def registerAgentService(self):
-        self.installAgentServiceScriptFiles()
-        return Run('chkconfig --add waagent')
-   
-    def uninstallAgentService(self):
-        return Run('chkconfig --del ' + self.agent_service_name)
-
-    def unregisterAgentService(self):
-        self.stopAgentService()
-        return self.uninstallAgentService()
-    
-    def checkPackageInstalled(self,p):
-        if Run("yum list installed " + p,chk_err=False):
-            return 0
-        else:
-            return 1
-
-    def checkPackageUpdateable(self,p):
-        if Run("yum check-update | grep "+ p,chk_err=False):
-            return 1
-        else:
-            return 0
 
 ############################################################    
 #	debianDistro
