@@ -47,6 +47,7 @@ import xml.dom.minidom
 import fcntl
 import inspect
 import zipfile
+import json
 
 if not hasattr(subprocess,'check_output'):
     def check_output(*popenargs, **kwargs):
@@ -2770,7 +2771,7 @@ class ExtensionsConfig(object):
 
             #end if zip_dir == none or version > = prev
             # state is still enable
-            if self.launchCommand(name,version,getcmd) == None :
+            if self.launchCommand(name,version,'enableCommand') == None :
                 Error('Enable failed for '+name+'-'+version)
             else :
                 Log('Enable completed for '+name+'-'+version)
@@ -2800,7 +2801,7 @@ class ExtensionsConfig(object):
             Error('Error parsing HandlerManifest.json.')
             return None
         if jsn.has_key('handlerManifest') :
-            cmd = jsn[handlerManifest][command]
+            cmd = jsn['handlerManifest'][command]
         else :
             Error('Key handlerManifest not found.  Handler cannot be installed.')
         if len(cmd) == 0 :
@@ -2811,7 +2812,8 @@ class ExtensionsConfig(object):
             cmd+=' ' + LibDir+'/' + name + '-' + previous_version
         Log(command+ ' = ' + cmd)
         filepath=root+'/'+command+'.sh'
-        SetFileContents(filepath,"cd " + root + "; " +cmd)
+        #the command uses a relative path
+        SetFileContents(filepath,"cd " + root + "; cd " + os.path.dirname(cmd)  + "; ./" +os.path.basename(cmd))
         os.chmod(filepath,0700)
         # launch
         pid=None
@@ -2824,20 +2826,20 @@ class ExtensionsConfig(object):
             Error('Error launching ' + filepath + '.')
         else :
             ExtensionChildren.append((pid,root))
-            Log("Spawned "+ filepath + " PID = " + str(pid))
+            Log("Spawned "+ filepath + " PID " + str(pid))
         # wait until install/upgrade is finished
         retry = 5*60/10
         while pid !=None and pid > 0:
             if retry==0:
                 break
-            if Run("ps " + pid) != 0:
-                Log(filepath + ' still running with pid ' + pid)
+            if Run("ps " + str(pid)) != 0:
+                Log(filepath + ' still running with PID ' + str(pid))
                 time.sleep(10)
             else :
                 pid=0
             retry-=1
         if retry==0:
-            Error('More than five minutes has passed.  Killing ' + pid)
+            Error('More than five minutes has passed.  Killing ' + str(pid))
             os.kill(pid,9)
             return None
         Log(command + ' completed.')
