@@ -2808,17 +2808,16 @@ class ExtensionsConfig(object):
             Error('Unable to read ' + command )
             return None
         # for update we send the path of the old installation
+        arg=''
         if prev_version != None :
-            cmd+=' ' + LibDir+'/' + name + '-' + previous_version
-        Log(command+ ' = ' + cmd)
-        filepath=root+'/'+command+'.sh'
-        #the command uses a relative path
-        SetFileContents(filepath,"cd " + root + "; cd " + os.path.dirname(cmd)  + "; ./" +os.path.basename(cmd))
-        os.chmod(filepath,0700)
+            arg=' ' + LibDir+'/' + name + '-' + previous_version
+        filepath='./'+os.path.basename(cmd)
+        dirpath=zip_dir+'/'+os.path.dirname(cmd).split('/')[1]
+        Log(command+ ' = ' + dirpath+'/'+filepath + arg)
         # launch
         pid=None
         try:
-            pid = subprocess.Popen(filepath,shell=True,cwd=root).pid
+            pid = subprocess.Popen(filepath+arg,shell=True,cwd=dirpath).pid
         except Exception as e:
             Error('Exception launching ' + filepath + str(e))
         if pid == None or pid < 1 :
