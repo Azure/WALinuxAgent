@@ -490,7 +490,34 @@ class AbstractDistro(object):
 
     def getDhcpClientName(self):
         return self.dhcp_client_name
-    
+
+    def initScsiDiskTimeout(self):
+        """
+        Set the SCSI disk timeout when the agent starts running
+        """
+        self.setScsiDiskTimeout()
+
+    def setScsiDiskTimeout(self):
+        """
+        Iterate all SCSI disks(include hot-add) and set their timeout if their value are different from the OS.RootDeviceScsiTimeout
+        """
+        try:
+            scsiTimeout = Config.get("OS.RootDeviceScsiTimeout")
+            for diskName in [disk for disk in os.listdir("/sys/block") if disk.startswith("sd")]:
+                self.setBlockDeviceTimeout(diskName, scsiTimeout)
+        except:
+            pass
+
+    def setBlockDeviceTimeout(self, device, timeout):
+        """
+        Set SCSI disk timeout by set /sys/block/sd*/device/timeout
+        """
+        if timeout != None and device:
+            filePath = "/sys/block/" + device + "/device/timeout"
+            if(GetFileContents(filePath).splitlines()[0].rstrip() != timeout):
+                SetFileContents(filePath,timeout)
+                Log("SetBlockDeviceTimeout: Update the device " + device + " with timeout " + timeout)
+
 ############################################################    
 #	SuSEDistro
 ############################################################    
@@ -1606,6 +1633,20 @@ class FreeBSDDistro(AbstractDistro):
     def GetHome(self):
         return '/home'
 
+    def initScsiDiskTimeout(self):
+        """
+        Set the SCSI disk timeout by updating the kernal config
+        """
+        timeout = Config.get("OS.RootDeviceScsiTimeout") 
+        if timeout:
+            Run("sysctl kern.cam.da.default_timeout=" + timeout)
+
+    def setScsiDiskTimeout(self):
+        return
+
+    def setBlockDeviceTimeout(self, device, timeout):
+        return
+
 ############################################################
 # END DISTRO CLASS DEFS
 ############################################################  
@@ -2371,6 +2412,7 @@ class EnvMonitor(object):
                         os.remove(GetLastPathElement(a))
                     shutil.move(a, ".")
                     Log("EnvMonitor: Moved " + a + " -> " + LibDir)
+            MyDistro.setScsiDiskTimeout()
             if publish != None and publish.lower().startswith("y"):
                 try:
                     if socket.gethostname() != self.HostName:
@@ -4076,13 +4118,8 @@ class Agent(Util):
 
         self.EnvMonitor = EnvMonitor()
 
-        # Set SCSI timeout on root device
-        try:
-            timeout = Config.get("OS.RootDeviceScsiTimeout")
-            if timeout != None:
-                SetFileContents("/sys/block/" + DeviceForIdePort(0) + "/device/timeout", timeout)
-        except:
-            pass
+        # Set SCSI timeout on SCSI disks
+        MyDistro.initScsiDiskTimeout()
 
         global Openssl
         Openssl = Config.get("OS.OpensslPath")
