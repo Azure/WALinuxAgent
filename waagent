@@ -2736,10 +2736,8 @@ class ExtensionsConfig(object):
                 # write out the goalStateIncarnation.settings file in the config path.
                 SetFileContents(root +"/config/" + incarnation +".settings",  p.getAttribute("config"))
                 #create HandlerEnvironment.json
-                handler_env='{  "version": 1.0,  "handlerEnvironment": {    "logFolder": "/var/log",    "configFolder": "' + root + '/config",    "statusFolder": "' + root + '/status",    "heartbeatFile": "'+ root + '/heartbeat.log"}}'
+                handler_env='{  "name": "'+name+'", "version": 1.0,  "handlerEnvironment": {    "logFolder": "/var/log",    "configFolder": "' + root + '/config",    "statusFolder": "' + root + '/status",    "heartbeatFile": "'+ root + '/heartbeat.log"}}'
                 SetFileContents(root+'/HandlerEnvironment.json',handler_env)
-
-            # end if plug_dir == None
                 cmd = ''
                 getcmd='installCommand'
                 if plg_dir != None and version > plg_dir.rsplit('-')[-1]:
@@ -2768,7 +2766,6 @@ class ExtensionsConfig(object):
                         Error('Installation failed for '+name+'-'+version)
                     else :
                         Log('Installation completed for '+name+'-'+version)
-
             #end if zip_dir == none or version > = prev
             # state is still enable
             if self.launchCommand(name,version,'enableCommand') == None :
@@ -2810,7 +2807,7 @@ class ExtensionsConfig(object):
         # for update we send the path of the old installation
         arg=''
         if prev_version != None :
-            arg=' ' + LibDir+'/' + name + '-' + previous_version
+            arg=' ' + LibDir+'/' + name + '-' + prev_version
         filepath='./'+os.path.basename(cmd)
         dirpath=zip_dir+'/'+os.path.dirname(cmd).split('/')[1]
         Log(command+ ' = ' + dirpath+'/'+filepath + arg)
