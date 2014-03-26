@@ -264,7 +264,8 @@ Type: String Default: ext4
 
 This specifies the filesystem type for the resource disk. Supported values vary
 by Linux distribution. If the string is X, then mkfs.X should be present on the
-Linux image.  FreeBSD images should use 'ufs2' here.
+Linux image. SLES 11 images should typically use 'ext3'. FreeBSD images should
+use 'ufs2' here.
 
 ResourceDisk.MountPoint:
 Type: String Default: /mnt/resource

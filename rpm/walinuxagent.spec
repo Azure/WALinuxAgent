@@ -2,18 +2,18 @@
 # Name: walinuxagent.spec
 #-------------------------------------------------------------------------------
 # Purpose : RPM Spec file for Python script packaging
-# Version : 2.0.0
+# Version : 2.0.4
 # Created : April 20 2012
 #===============================================================================
 
 Name:           WALinuxAgent
 Summary:        The Windows Azure Linux Agent
-Version:        2.0.3
+Version:        2.0.4
 Release:        1
 License:        Apache License Version 2.0
 Group:          System/Daemons
 Url:            http://go.microsoft.com/fwlink/?LinkId=250998
-Source0:        WALinuxAgent-2.0.3.tar.gz
+Source0:        WALinuxAgent-2.0.4.tar.gz
 Requires:       python python-pyasn1 openssh openssl util-linux sed grep sudo iptables
 Conflicts:      NetworkManager
 BuildRoot:      %{_tmppath}/%{name}-%{version}-build
@@ -39,6 +39,7 @@ find . -type f -exec chmod 0644 {} +
 %install
 python setup.py install --prefix=%{_prefix} --lnx-distro='redhat' --init-system='sysV' --root=%{buildroot}
 mkdir -p  %{buildroot}/%{_localstatedir}/log
+mkdir -p -m 0700 %{buildroot}/%{_sharedstatedir}/waagent
 touch %{buildroot}/%{_localstatedir}/log/waagent.log
 
 %post
@@ -64,9 +65,14 @@ fi
 %config(noreplace) %{_sysconfdir}/logrotate.d/waagent
 %config %{_sysconfdir}/waagent.conf
 %ghost %{_localstatedir}/log/waagent.log
+%dir %attr(0700, root, root) %{_sharedstatedir}/waagent
 
 
 %changelog
+* Thu Mar 25 2014 - walinuxagent@microsoft.com
+- Create directory /var/lib/waagent
+- Updated version to 2.0.4 for release
+
 * Thu Jan 16 2014 - walinuxagent@microsoft.com
 - Updated version to 2.0.3 for release
 
