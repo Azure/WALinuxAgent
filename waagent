@@ -2600,18 +2600,23 @@ class ExtensionsConfig(object):
     Install if <enabled>true</enabled>, remove if it is set to false.
     """
     #<?xml version="1.0" encoding="utf-8"?>
-    #<Extensions version="1.0.0.0" goalStateIncarnation="3">
-    #<Plugins>
-    #  <Plugin name="OSTCExtensions.VMAccessLinuxTest" version="1.0" 
-    #location="http://previewusnorthcache.blob.core.test-cint.azure-test.net/
-    #d84b216d00bf4d96982be531539e1513/OSTCExtensions_VMAccessLinuxTest_usnorth_manifest.xml" 
-    #config="PENvbmZpZ3VyYXRpb24+PFB1YmxpYyAvPjxQcml2YXRlIC8+PEVuYWJsZWQ+VHJ1ZTwvRW5hYmxlZD48L0NvbmZpZ3VyYXRpb24+" 
-    #state="enabled" autoUpgrade="true" runAsStartupTask="false" isJson="false" />
+    #<Extensions version="1.0.0.0" goalStateIncarnation="6"><Plugins>
+    #  <Plugin name="OSTCExtensions.ExampleHandlerLinux" version="1.5"
+    #location="http://previewusnorthcache.blob.core.test-cint.azure-test.net/d84b216d00bf4d96982be531539e1513/OSTCExtensions_ExampleHandlerLinux_usnorth_manifest.xml"
+    #config="" state="enabled" autoUpgrade="false" runAsStartupTask="false" isJson="true" />
     #</Plugins>
-    #<StatusUploadBlob>https://ostcextensions.blob.core.test-cint.azure-test.net/vhds/eg-plg-vm.eg-plg-vm.eg-plg-vm.status?sr=b
-    #&amp;sp=rw&amp;se=9999-01-01&amp;sk=key1&amp;sv=2012-02-12&amp;
-    #sig=QZ9J%2Bre2WF83KCsHny1NbYA3BlLgvRkRlr7qdwOQbLE%3D</StatusUploadBlob>
-    #</Extensions>
+    #<PluginSettings>
+    #  <Plugin name="OSTCExtensions.ExampleHandlerLinux" version="1.5">
+    #    <RuntimeSettings seqNo="2">{"runtimeSettings":[{"handlerSettings":{"protectedSettingsCertThumbprint":"1BE9A13AA1321C7C515EF109746998BAB6D86FD1",
+    #"protectedSettings":"MIIByAYJKoZIhvcNAQcDoIIBuTCCAbUCAQAxggFxMIIBbQIBADBVMEExPzA9BgoJkiaJk/IsZAEZFi9XaW5kb3dzIEF6dXJlIFNlcnZpY2UgTWFuYWdlbWVudCBmb3IgR
+    #Xh0ZW5zaW9ucwIQZi7dw+nhc6VHQTQpCiiV2zANBgkqhkiG9w0BAQEFAASCAQCKr09QKMGhwYe+O4/a8td+vpB4eTR+BQso84cV5KCAnD6iUIMcSYTrn9aveY6v6ykRLEw8GRKfri2d6
+    #tvVDggUrBqDwIgzejGTlCstcMJItWa8Je8gHZVSDfoN80AEOTws9Fp+wNXAbSuMJNb8EnpkpvigAWU2v6pGLEFvSKC0MCjDTkjpjqciGMcbe/r85RG3Zo21HLl0xNOpjDs/qqikc/ri43Y76E/X
+    #v1vBSHEGMFprPy/Hwo3PqZCnulcbVzNnaXN3qi/kxV897xGMPPC3IrO7Nc++AT9qRLFI0841JLcLTlnoVG1okPzK9w6ttksDQmKBSHt3mfYV+skqs+EOMDsGCSqGSIb3DQEHATAUBggqh
+    #kiG9w0DBwQITgu0Nu3iFPuAGD6/QzKdtrnCI5425fIUy7LtpXJGmpWDUA==","publicSettings":{"port":"3000"}}}]}</RuntimeSettings>
+    #  </Plugin>
+    #</PluginSettings>
+    #<StatusUploadBlob>https://ostcextensions.blob.core.test-cint.azure-test.net/vhds/eg-plugin7-vm.eg-plugin7-vm.eg-plugin7-vm.status?sr=b&amp;sp=rw&amp;
+    #se=9999-01-01&amp;sk=key1&amp;sv=2012-02-12&amp;sig=wRUIDN1x2GC06FWaetBP9sjjifOWvRzS2y2XBB4qoBU%3D</StatusUploadBlob></Extensions>
 
     def __init__(self):
         self.reinitialize()
@@ -2733,8 +2738,16 @@ class ExtensionsConfig(object):
                 # create the status and config dirs
                 Run('mkdir -p ' + root + '/status')
                 Run('mkdir -p ' + root + '/config')
-                # write out the goalStateIncarnation.settings file in the config path.
-                SetFileContents(root +"/config/" + incarnation +".settings",  p.getAttribute("config"))
+                # write out the configuration data to goalStateIncarnation.settings file in the config path.
+                config=''
+                pslist=dom.getElementsByTagName("PluginSettings")[0].getElementsByTagName("Plugin")
+                for ps in pslist:
+                    if name == ps.getAttribute("name") and version == ps.getAttribute("version"):
+                        Log("Found RuntimeSettings for " + name + " V " + version)
+                        config=GetNodeTextData(ps.getElementsByTagName("RuntimeSettings")[0])
+                if config == '':
+                    Error("No RuntimeSettings for " + name + " V " + version)
+                SetFileContents(root +"/config/" + incarnation +".settings",  config )
                 #create HandlerEnvironment.json
                 handler_env='{  "name": "'+name+'", "version": 1.0,  "handlerEnvironment": {    "logFolder": "/var/log",    "configFolder": "' + root + '/config",    "statusFolder": "' + root + '/status",    "heartbeatFile": "'+ root + '/heartbeat.log"}}'
                 SetFileContents(root+'/HandlerEnvironment.json',handler_env)
