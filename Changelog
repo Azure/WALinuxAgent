@@ -1,7 +1,8 @@
 WALinuxAgent                                                          Changelog
 |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
-?? ??? 2014, WALinuxAgent 2.0.4
-   . Add support for parsing ExtensionsConfiguration from GoalState document.
+02 Apr 2014, WALinuxAgent 2.0.4
+   . Fix encoding issue in LogToFile() & LogToCon()
+   . Add support for parsing ExtensionsConfiguration from GoalState document
    . Add support for the Fedora distribution
    . Several fixes to FreeBSDDistro class
 
