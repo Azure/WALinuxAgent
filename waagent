@@ -1985,22 +1985,20 @@ class Logger(object):
         """
         if self.file_path:
             with open(self.file_path, "a") as F :
-                F.write(message + "\n")
+                F.write(message.encode('ascii',errors='ignore') + "\n")
                 F.close()
             
     def LogToCon(self,message):
-         """
+        """
         Write 'message' to /dev/console.
         This supports serial port logging if the /dev/console
         is redirected to ttys0 in kernel boot options.
         """
-         if self.con_path:
-             with open(self.con_path, "w") as C :
-#                  if isinstance(message,str):
-#                      message=message.encode('latin-1'))
-                 C.write(message + "\n")
-                 C.close()
-            
+        if self.con_path:
+            with open(self.con_path, "w") as C :
+                C.write(message.encode('ascii',errors='ignore') + "\n")
+                C.close()
+                
     def Log(self,message):
         """
         Standard Log function.
@@ -2847,6 +2845,7 @@ class ExtensionsConfig(object):
             else :
                 pid=0
             retry-=1
+            
         if retry==0:
             Error('More than five minutes has passed.  Killing ' + str(pid))
             os.kill(pid,9)
@@ -3774,7 +3773,6 @@ class Agent(Util):
         This signals the fabric that our provosion is completed,
         and the host is ready for operation.
         """
-        # TODO - Poll the ExtensionChildren
         counter = (self.HealthReportCounter + 1) % 1000000
         self.HealthReportCounter = counter
         healthReport = ("<?xml version=\"1.0\" encoding=\"utf-8\"?><Health xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\"><GoalStateIncarnation>"
