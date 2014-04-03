@@ -1985,7 +1985,7 @@ class Logger(object):
         """
         if self.file_path:
             with open(self.file_path, "a") as F :
-                F.write(message.encode('ascii',errors='ignore') + "\n")
+                F.write(message.encode('ascii','ignore') + "\n")
                 F.close()
             
     def LogToCon(self,message):
@@ -1996,7 +1996,7 @@ class Logger(object):
         """
         if self.con_path:
             with open(self.con_path, "w") as C :
-                C.write(message.encode('ascii',errors='ignore') + "\n")
+                C.write(message.encode('ascii','ignore') + "\n")
                 C.close()
                 
     def Log(self,message):
