@@ -2656,6 +2656,8 @@ class ExtensionsConfig(object):
         incarnation=self.Extensions[0].getAttribute("goalStateIncarnation")
         SetFileContents('ExtensionsConfig.'+incarnation+'.xml', xmlText)
         for p in self.Plugins:
+            if len(p.getAttribute("location"))<1:  # this plugin is inside the PluginSettings
+                continue
             previous_version = None
             version=p.getAttribute("version")
             name=p.getAttribute("name")
@@ -2702,8 +2704,8 @@ class ExtensionsConfig(object):
                         manifest=manifest[3:]
                 SetFileContents(filepath,manifest)
                 #Get the bundle url from the manifest
-                dom = xml.dom.minidom.parseString(manifest)
-                bundle_uri = GetNodeTextData(dom.getElementsByTagName("Uri")[0])
+                man_dom = xml.dom.minidom.parseString(manifest)
+                bundle_uri = GetNodeTextData(man_dom.getElementsByTagName("Uri")[0])
                 Log("Bundle URI = " + bundle_uri)
                 # Download the zipfile archive and save as '.zip'
                 bundle=self.Util.HttpGetWithoutHeaders(bundle_uri)
