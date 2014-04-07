@@ -490,7 +490,34 @@ class AbstractDistro(object):
 
     def getDhcpClientName(self):
         return self.dhcp_client_name
-    
+
+    def initScsiDiskTimeout(self):
+        """
+        Set the SCSI disk timeout when the agent starts running
+        """
+        self.setScsiDiskTimeout()
+
+    def setScsiDiskTimeout(self):
+        """
+        Iterate all SCSI disks(include hot-add) and set their timeout if their value are different from the OS.RootDeviceScsiTimeout
+        """
+        try:
+            scsiTimeout = Config.get("OS.RootDeviceScsiTimeout")
+            for diskName in [disk for disk in os.listdir("/sys/block") if disk.startswith("sd")]:
+                self.setBlockDeviceTimeout(diskName, scsiTimeout)
+        except:
+            pass
+
+    def setBlockDeviceTimeout(self, device, timeout):
+        """
+        Set SCSI disk timeout by set /sys/block/sd*/device/timeout
+        """
+        if timeout != None and device:
+            filePath = "/sys/block/" + device + "/device/timeout"
+            if(GetFileContents(filePath).splitlines()[0].rstrip() != timeout):
+                SetFileContents(filePath,timeout)
+                Log("SetBlockDeviceTimeout: Update the device " + device + " with timeout " + timeout)
+
 ############################################################    
 #	SuSEDistro
 ############################################################    
@@ -727,17 +754,18 @@ class redhatDistro(AbstractDistro):
         super(redhatDistro,self).__init__()
         self.service_cmd='/sbin/service'
         self.ssh_service_name='sshd'
-        self.hostname_file_path=None
+        self.hostname_file_path= None if platform.dist()[1] < '7.0' else '/etc/hostname'
         self.init_file=redhat_init_file
         self.grubKernelBootOptionsFile = '/boot/grub/menu.lst'
         self.grubKernelBootOptionsLine = 'kernel'
 
     def publishHostname(self,name):
         super(redhatDistro,self).publishHostname(name)
-        filepath = "/etc/sysconfig/network"
-        if os.path.isfile(filepath):
-            ReplaceFileContentsAtomic(filepath, "HOSTNAME=" + name + "\n"
-                + "\n".join(filter(lambda a: not a.startswith("HOSTNAME"), GetFileContents(filepath).split('\n'))))
+        if platform.dist()[1] < '7.0' :
+            filepath = "/etc/sysconfig/network"
+            if os.path.isfile(filepath):
+                ReplaceFileContentsAtomic(filepath, "HOSTNAME=" + name + "\n"
+                    + "\n".join(filter(lambda a: not a.startswith("HOSTNAME"), GetFileContents(filepath).split('\n'))))
 
         ethernetInterface = MyDistro.GetInterfaceName()
         filepath = "/etc/sysconfig/network-scripts/ifcfg-" + ethernetInterface
@@ -775,122 +803,19 @@ class redhatDistro(AbstractDistro):
             return 0
 
 
-   
+
+
 ############################################################    
 #	centosDistro
 ############################################################    
 
-centos_init_file= """\
-#!/bin/bash
-#
-# Init file for WindowsAzureLinuxAgent.
-#
-# chkconfig: 2345 60 80
-# description: WindowsAzureLinuxAgent
-#
-
-# source function library
-. /etc/rc.d/init.d/functions
-
-RETVAL=0
-FriendlyName="WindowsAzureLinuxAgent"
-WAZD_BIN=/usr/sbin/waagent
-
-start()
-{
-    echo -n $"Starting $FriendlyName: "
-    $WAZD_BIN -daemon &
-}
-
-stop()
-{
-    echo -n $"Stopping $FriendlyName: "
-    killproc -p /var/run/waagent.pid $WAZD_BIN
-    RETVAL=$?
-    echo
-    return $RETVAL
-}
-
-case "$1" in
-    start)
-        start
-        ;;
-    stop)
-        stop
-        ;;
-    restart)
-        stop
-        start
-        ;;
-    reload)
-        ;;
-    report)
-        ;;
-    status)
-        status $WAZD_BIN
-        RETVAL=$?
-        ;;
-    *)
-        echo $"Usage: $0 {start|stop|restart|status}"
-        RETVAL=1
-esac
-exit $RETVAL
-"""
-
-class centosDistro(AbstractDistro):
+class centosDistro(redhatDistro):
     """
     CentOS Distro concrete class
     Put CentOS specific behavior here...
     """
     def __init__(self):
         super(centosDistro,self).__init__()
-        self.service_cmd='/sbin/service'
-        self.ssh_service_name='sshd'
-        self.hostname_file_path=None
-        self.init_file=centos_init_file
-        self.grubKernelBootOptionsFile = '/boot/grub/menu.lst'
-        self.grubKernelBootOptionsLine = 'kernel'
-
-    def publishHostname(self,name):
-        super(centosDistro,self).publishHostname(name)
-        filepath = "/etc/sysconfig/network"
-        if os.path.isfile(filepath):
-            ReplaceFileContentsAtomic(filepath, "HOSTNAME=" + name + "\n"
-                                      + "\n".join(filter(lambda a: not a.startswith("HOSTNAME"), GetFileContents(filepath).split('\n'))))
-        ethernetInterface = MyDistro.GetInterfaceName()
-        filepath = "/etc/sysconfig/network-scripts/ifcfg-" + ethernetInterface
-        if os.path.isfile(filepath):
-            ReplaceFileContentsAtomic(filepath, "DHCP_HOSTNAME=" + name + "\n"
-                                      + "\n".join(filter(lambda a: not a.startswith("DHCP_HOSTNAME"), GetFileContents(filepath).split('\n'))))
-        return 0
-
-    def installAgentServiceScriptFiles(self):
-        SetFileContents(self.init_script_file, self.init_file)
-        os.chmod(self.init_script_file, 0744)
-        return 0
-
-    def registerAgentService(self):
-        self.installAgentServiceScriptFiles()
-        return Run('chkconfig --add waagent')
-   
-    def uninstallAgentService(self):
-        return Run('chkconfig --del ' + self.agent_service_name)
-
-    def unregisterAgentService(self):
-        self.stopAgentService()
-        return self.uninstallAgentService()
-    
-    def checkPackageInstalled(self,p):
-        if Run("yum list installed " + p,chk_err=False):
-            return 0
-        else:
-            return 1
-
-    def checkPackageUpdateable(self,p):
-        if Run("yum check-update | grep "+ p,chk_err=False):
-            return 1
-        else:
-            return 0
 
 ############################################################    
 #	debianDistro
@@ -1605,6 +1530,20 @@ class FreeBSDDistro(AbstractDistro):
 
     def GetHome(self):
         return '/home'
+
+    def initScsiDiskTimeout(self):
+        """
+        Set the SCSI disk timeout by updating the kernal config
+        """
+        timeout = Config.get("OS.RootDeviceScsiTimeout") 
+        if timeout:
+            Run("sysctl kern.cam.da.default_timeout=" + timeout)
+
+    def setScsiDiskTimeout(self):
+        return
+
+    def setBlockDeviceTimeout(self, device, timeout):
+        return
 
 ############################################################
 # END DISTRO CLASS DEFS
@@ -2369,6 +2308,7 @@ class EnvMonitor(object):
                         os.remove(GetLastPathElement(a))
                     shutil.move(a, ".")
                     Log("EnvMonitor: Moved " + a + " -> " + LibDir)
+            MyDistro.setScsiDiskTimeout()
             if publish != None and publish.lower().startswith("y"):
                 try:
                     if socket.gethostname() != self.HostName:
@@ -4086,13 +4026,8 @@ class Agent(Util):
 
         self.EnvMonitor = EnvMonitor()
 
-        # Set SCSI timeout on root device
-        try:
-            timeout = Config.get("OS.RootDeviceScsiTimeout")
-            if timeout != None:
-                SetFileContents("/sys/block/" + DeviceForIdePort(0) + "/device/timeout", timeout)
-        except:
-            pass
+        # Set SCSI timeout on SCSI disks
+        MyDistro.initScsiDiskTimeout()
 
         global Openssl
         Openssl = Config.get("OS.OpensslPath")
