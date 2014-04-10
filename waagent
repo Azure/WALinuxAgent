@@ -2750,6 +2750,8 @@ class ExtensionsConfig(object):
         except:
             Error('Error parsing HandlerManifest.json.')
             return None
+        if type(jsn)==list:
+            jsn=jsn[0]
         if jsn.has_key('handlerManifest') :
             cmd = jsn['handlerManifest'][command]
         else :
@@ -2762,7 +2764,11 @@ class ExtensionsConfig(object):
         if prev_version != None :
             arg=' ' + LibDir+'/' + name + '-' + prev_version
         filepath='./'+os.path.basename(cmd)
-        dirpath=zip_dir+'/'+os.path.dirname(cmd).split('/')[1]
+        try:
+            dirpath=zip_dir+'/'+os.path.dirname(cmd).split('/')[1]
+        except:
+            Error("Unable to parse handler command path: " + cmd)
+            return None
         Log(command+ ' = ' + dirpath+'/'+filepath + arg)
         # launch
         pid=None
