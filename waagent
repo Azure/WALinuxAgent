@@ -2645,7 +2645,14 @@ class ExtensionsConfig(object):
                 SetFileContents(filepath,manifest)
                 #Get the bundle url from the manifest
                 man_dom = xml.dom.minidom.parseString(manifest)
-                bundle_uri = GetNodeTextData(man_dom.getElementsByTagName("Uri")[0])
+                bundle_uri = ""
+                for mp in man_dom.getElementsByTagName("Plugin"):
+                    if GetNodeTextData(mp.getElementsByTagName("Version")[0]) == version:
+                        bundle_uri = GetNodeTextData(mp.getElementsByTagName("Uri")[0])
+                        break
+                if len(bundle_uri) < 1 :
+                    Error("Unable to fetch Bundle URI from manifest for " + name + " v " + version)
+                    continue
                 Log("Bundle URI = " + bundle_uri)
                 # Download the zipfile archive and save as '.zip'
                 bundle=self.Util.HttpGetWithoutHeaders(bundle_uri)
@@ -2689,7 +2696,7 @@ class ExtensionsConfig(object):
                     Error("No RuntimeSettings for " + name + " V " + version)
                 SetFileContents(root +"/config/" + incarnation +".settings",  config )
                 #create HandlerEnvironment.json
-                handler_env='{  "name": "'+name+'", "version": 1.0,  "handlerEnvironment": {    "logFolder": "/var/log",    "configFolder": "' + root + '/config",    "statusFolder": "' + root + '/status",    "heartbeatFile": "'+ root + '/heartbeat.log"}}'
+                handler_env='[{  "name": "'+name+'", "version": 1.0,  "handlerEnvironment": {    "logFolder": "/var/log",    "configFolder": "' + root + '/config",    "statusFolder": "' + root + '/status",    "heartbeatFile": "'+ root + '/heartbeat.log"}}]'
                 SetFileContents(root+'/HandlerEnvironment.json',handler_env)
                 cmd = ''
                 getcmd='installCommand'
@@ -2759,21 +2766,19 @@ class ExtensionsConfig(object):
         if len(cmd) == 0 :
             Error('Unable to read ' + command )
             return None
+
         # for update we send the path of the old installation
         arg=''
         if prev_version != None :
             arg=' ' + LibDir+'/' + name + '-' + prev_version
         filepath='./'+os.path.basename(cmd)
-        try:
-            dirpath=zip_dir+'/'+os.path.dirname(cmd).split('/')[1]
-        except:
-            Error("Unable to parse handler command path: " + cmd)
-            return None
+        dirpath=os.path.dirname(mfile)
         Log(command+ ' = ' + dirpath+'/'+filepath + arg)
+
         # launch
         pid=None
         try:
-            pid = subprocess.Popen(filepath+arg,shell=True,cwd=dirpath).pid
+            pid = subprocess.Popen(dirpath+'/'+filepath+arg,shell=True,cwd=dirpath).pid
         except Exception as e:
             Error('Exception launching ' + filepath + str(e))
         if pid == None or pid < 1 :
@@ -2784,10 +2789,10 @@ class ExtensionsConfig(object):
             Log("Spawned "+ filepath + " PID " + str(pid))
         # wait until install/upgrade is finished
         retry = 5*60/10
-        while pid !=None and pid > 0:
+        while pid != None and pid > 0:
             if retry==0:
                 break
-            if Run("ps " + str(pid)) != 0:
+            if Run("ps --no-headers " + str(pid),chk_err=False) == 0:
                 Log(filepath + ' still running with PID ' + str(pid))
                 time.sleep(10)
             else :
