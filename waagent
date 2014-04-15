@@ -4088,6 +4088,13 @@ class Agent(Util):
                             lbProbeResponder = False
                             Log("Unable to create LBProbeResponder.")
 
+                # Report SSH key fingerprint
+                type = Config.get("Provisioning.SshHostKeyPairType")
+                if type == None:
+                    type = "rsa"
+                fingerprint = RunGetOutput("ssh-keygen -lf /etc/ssh/ssh_host_" + type + "_key.pub")[1].rstrip().split()[1].replace(':','')
+                self.ReportRoleProperties(fingerprint)
+
             if program != None and DiskActivated == True:
                 try:
                     Children.append(subprocess.Popen([program, "Ready"]))
