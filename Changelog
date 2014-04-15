@@ -1,7 +1,10 @@
 WALinuxAgent                                                          Changelog
 |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 ?? ??? 2014, WALinuxAgent 2.0.5
-
+   . Multiple fixes for extensions config framework
+   . Inherit from redhatDistro in centosDistro class
+   . Fix hostname configurtion for RHEL7-based systems
+   . EnvMonitor - Set SCSI I/O timeout for all attached disks
 
 02 Apr 2014, WALinuxAgent 2.0.4
    . Fix encoding issue in LogToFile() & LogToCon()
