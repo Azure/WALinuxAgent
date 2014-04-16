@@ -96,6 +96,10 @@ VarLibDhcpDirectories = ["/var/lib/dhclient", "/var/lib/dhcpcd", "/var/lib/dhcp"
 EtcDhcpClientConfFiles = ["/etc/dhcp/dhclient.conf", "/etc/dhcp3/dhclient.conf"]
 global LibDir
 LibDir = "/var/lib/waagent"
+global provisioned
+provisioned=False
+global provisionError
+provisionError=None
 
 WaagentConf = """\
 #
@@ -2201,6 +2205,40 @@ class Util(object):
                 log("return HttpPost(" + url + "),retry=" + strRetry + ",status=" + strStatus)
                 return response
 
+    def HttpPutBlockBlob(self, url, data):
+        """
+        Send http PUT to server, sleeping 10 retrying maxRetry times upon error.
+        """
+        LogIfVerbose("HttpPutBlockBlob(" + url + ")")
+        maxRetry = 2
+        for retry in range(0, maxRetry + 1):
+            strRetry = str(retry)
+            log = [NoLog, Error][retry > 0]
+            log("retry HttpPutBlockBlob(" + url + "),retry=" + strRetry)
+            response = None
+            strStatus = "None"
+            try:
+                httpConnection = httplib.HTTPConnection(self.Endpoint)
+                request = httpConnection.request("PUT", url, data, {"x-ms-blob-type" : "BlockBlob", "x-ms-date" : time.strftime("%Y-%M-%dT%H:%M:%SZ", time.gmtime()) ,"Content-Length": str(len(data))} )
+                response = httpConnection.getresponse()
+                strStatus = str(response.status)
+            except httplib.HTTPException, e:
+                Error('HTTPException ' + e.message + ' args: ' + repr(e.args))
+            except IOError, e:
+                Error('socket IOError ' + e.message + ' args: ' + repr(e.args))
+            log("response HttpPutBlockBlob(" + url + "),retry=" + strRetry + ",status=" + strStatus)
+            if response == None or (response.status != httplib.OK and response.status != httplib.CREATED):
+                Error("HttpPutBlockBlob(" + url + "),retry=" + strRetry + ",status=" + strStatus)
+                if retry == maxRetry:
+                    Error("return HttpPutBlockBlob(" + url + "),retry=" + strRetry + ",status=" + strStatus)
+                    return None
+                else:
+                    Error("sleep 10 seconds HttpPutBlockBlob(" + url + "),retry=" + strRetry + ",status=" + strStatus)
+                    time.sleep(10)
+            else:
+                log("return HttpPutBlockBlob(" + url + "),retry=" + strRetry + ",status=" + strStatus)
+                return response
+
 class TCPHandler(SocketServer.BaseRequestHandler):
     """
     Callback object for LoadBalancerProbeServer.
@@ -2575,24 +2613,23 @@ class ExtensionsConfig(object):
                 if the new plugin's version is higher:
                     download the new archive
                     do the updateCommand.
-
-                if the version is the same or lower:
+                    disable the old plugin and remove
+                    enable the new plugin
+                if the new plugin's version is the same or lower:
                     create the new .settings file from the configuration received
                     do the enableCommand
             if the plugin is not installed:
-                download/unpack archive and call the installCommand
-
+                download/unpack archive and call the installCommand/Enable
         if state is disabled:
             call disableCommand
-        Create execuatable shell script containig 'installCommand'.
-        Spawn the script and report the PID to the Log.
         """
         self.reinitialize()
         self.Util=Util()
         dom = xml.dom.minidom.parseString(xmlText)
         LogIfVerbose(xmlText)
         self.Extensions=dom.getElementsByTagName("Extensions")
-        self.Plugins = dom.getElementsByTagName("Plugin")
+        pg = dom.getElementsByTagName("Plugins")
+        self.Plugins = pg[0].getElementsByTagName("Plugin")
         incarnation=self.Extensions[0].getAttribute("goalStateIncarnation")
         SetFileContents('ExtensionsConfig.'+incarnation+'.xml', xmlText)
         for p in self.Plugins:
@@ -2604,6 +2641,19 @@ class ExtensionsConfig(object):
             Log("Found Plugin: " + name + ' version: ' + version)
             if p.getAttribute("state") == 'disabled' :
                 #disable
+                zip_dir=LibDir+"/" + name + '-' + version
+                mfile=None
+                for root, dirs, files in os.walk(zip_dir):
+                    for f in files:
+                        if f in ('HandlerManifest.json'):
+                            mfile=os.path.join(root,f)
+                    if mfile != None:
+                        break
+                if mfile == None :
+                    Error('HandlerManifest.json not found.')
+                    continue
+                manifest = GetFileContents(mfile)
+                p.setAttribute('manifestdata',manifest)
                 if self.launchCommand(name,version,'disableCommand') == None :
                     Error('Unable to disable '+name)
                     continue
@@ -2644,6 +2694,7 @@ class ExtensionsConfig(object):
                         manifest=manifest[3:]
                 SetFileContents(filepath,manifest)
                 #Get the bundle url from the manifest
+                p.setAttribute('manifestdata',manifest)
                 man_dom = xml.dom.minidom.parseString(manifest)
                 bundle_uri = ""
                 for mp in man_dom.getElementsByTagName("Plugin"):
@@ -2682,6 +2733,7 @@ class ExtensionsConfig(object):
                     Error('HandlerManifest.json not found.')
                     continue
                 manifest = GetFileContents(mfile)
+                p.setAttribute('manifestdata',manifest)
                 # create the status and config dirs
                 Run('mkdir -p ' + root + '/status')
                 Run('mkdir -p ' + root + '/config')
@@ -2692,11 +2744,13 @@ class ExtensionsConfig(object):
                     if name == ps.getAttribute("name") and version == ps.getAttribute("version"):
                         Log("Found RuntimeSettings for " + name + " V " + version)
                         config=GetNodeTextData(ps.getElementsByTagName("RuntimeSettings")[0])
+                        seqNo=ps.getElementsByTagName("RuntimeSettings")[0].getAttribute("seqNo") 
+                        break
                 if config == '':
                     Error("No RuntimeSettings for " + name + " V " + version)
                 SetFileContents(root +"/config/" + incarnation +".settings",  config )
                 #create HandlerEnvironment.json
-                handler_env='[{  "name": "'+name+'", "version": 1.0,  "handlerEnvironment": {    "logFolder": "/var/log",    "configFolder": "' + root + '/config",    "statusFolder": "' + root + '/status",    "heartbeatFile": "'+ root + '/heartbeat.log"}}]'
+                handler_env='[{  "name": "'+name+'", "seqNo": "'+seqNo+'", "version": 1.0,  "handlerEnvironment": {    "logFolder": "/var/log",    "configFolder": "' + root + '/config",    "statusFolder": "' + root + '/status",    "heartbeatFile": "'+ root + '/heartbeat.log"}}]'
                 SetFileContents(root+'/HandlerEnvironment.json',handler_env)
                 cmd = ''
                 getcmd='installCommand'
@@ -2726,7 +2780,33 @@ class ExtensionsConfig(object):
                         Error('Installation failed for '+name+'-'+version)
                     else :
                         Log('Installation completed for '+name+'-'+version)
-            #end if zip_dir == none or version > = prev
+            #end if plg_dir == none or version > = prev
+            # change incarnation of settings file so it knows how to name status...
+            zip_dir=LibDir+"/" + name + '-' + version
+            mfile=None
+            for root, dirs, files in os.walk(zip_dir):
+                for f in files:
+                    if f in ('HandlerManifest.json'):
+                        mfile=os.path.join(root,f)
+                if mfile != None:
+                    break
+            if mfile == None :
+                Error('HandlerManifest.json not found.')
+                continue
+            manifest = GetFileContents(mfile)
+            p.setAttribute('manifestdata',manifest)
+            config=''
+            pslist=dom.getElementsByTagName("PluginSettings")[0].getElementsByTagName("Plugin")
+            for ps in pslist:
+                if name == ps.getAttribute("name") and version == ps.getAttribute("version"):
+                    Log("Found RuntimeSettings for " + name + " V " + version)
+                    config=GetNodeTextData(ps.getElementsByTagName("RuntimeSettings")[0])
+                    seqNo=ps.getElementsByTagName("RuntimeSettings")[0].getAttribute("seqNo") 
+                    break
+            if config == '':
+                Error("No RuntimeSettings for " + name + " V " + version)
+            SetFileContents(root +"/config/" + incarnation +".settings",  config )
+
             # state is still enable
             if self.launchCommand(name,version,'enableCommand') == None :
                 Error('Enable failed for '+name+'-'+version)
@@ -2771,29 +2851,27 @@ class ExtensionsConfig(object):
         arg=''
         if prev_version != None :
             arg=' ' + LibDir+'/' + name + '-' + prev_version
-        filepath='./'+os.path.basename(cmd)
         dirpath=os.path.dirname(mfile)
-        Log(command+ ' = ' + dirpath+'/'+filepath + arg)
-
+        LogIfVerbose('Command is '+ dirpath+'/'+ cmd)
         # launch
         pid=None
         try:
-            pid = subprocess.Popen(dirpath+'/'+filepath+arg,shell=True,cwd=dirpath).pid
+            pid = subprocess.Popen(dirpath+'/'+cmd+arg,shell=True,cwd=dirpath).pid
         except Exception as e:
-            Error('Exception launching ' + filepath + str(e))
+            Error('Exception launching ' + cmd + str(e))
         if pid == None or pid < 1 :
             ExtensionChildren.append((-1,root))
-            Error('Error launching ' + filepath + '.')
+            Error('Error launching ' + cmd + '.')
         else :
             ExtensionChildren.append((pid,root))
-            Log("Spawned "+ filepath + " PID " + str(pid))
+            Log("Spawned "+ cmd + " PID " + str(pid))
         # wait until install/upgrade is finished
         retry = 5*60/10
         while pid != None and pid > 0:
             if retry==0:
                 break
             if Run("ps --no-headers " + str(pid),chk_err=False) == 0:
-                Log(filepath + ' still running with PID ' + str(pid))
+                Log(cmd + ' still running with PID ' + str(pid))
                 time.sleep(10)
             else :
                 pid=0
@@ -2805,7 +2883,111 @@ class ExtensionsConfig(object):
             return None
         Log(command + ' completed.')
         return 0
+
+    def ReportHandlerStatus(self):
+        """
+        Collect all status reports.
+        """
+        # { "version": "1.0", "timestampUTC": "2014-03-31T21:28:58Z", 
+        # "aggregateStatus": { 
+        # "guestAgentStatus": { "version": "2.0.4PRE", "status": "Ready", "formattedMessage": { "lang": "en-US", "message": "GuestAgent is running and accepting new configurations." } }, 
+        # "handlerAggregateStatus": [{ 
+        # "handlerName": "ExampleHandlerLinux", "handlerVersion": "1.0", "status": "Ready", "runtimeSettingsStatus": { 
+        # "sequenceNumber": "2", "settingsStatus": { "timestampUTC": "2014-03-31T23:46:00Z", "status": { "name": "ExampleHandlerLinux", "operation": "Command Execution Finished", "configurationAppliedTime": "2014-03-31T23:46:00Z", "status": "success", "formattedMessage": { "lang": "en-US", "message": "Finished executing command" }, 
+        # "substatus": [
+        # { "name": "StdOut", "status": "success", "formattedMessage": { "lang": "en-US", "message": "Goodbye world!" }  }, 
+        # { "name": "StdErr", "status": "success", "formattedMessage": { "lang": "en-US", "message": "" } }
+        # ] 
+        # } } } }
+        # ]
+        #  }}
+
+        incarnation=self.Extensions[0].getAttribute("goalStateIncarnation")
+        status=''
+        statuses=''
+        for p in self.Plugins:
+            version=p.getAttribute("version")
+            name=p.getAttribute("name")
+            status_file=LibDir+'/'+name+'-'+version+'/status/'+incarnation+'.status'
+            if os.path.exists(status_file) !=True and os.path.exists(status_file+'_sent') != True:
+                Error("Unable to locate " + status_file)
+                Error('Status report '+status_file+' Not sent!')
+                continue
+            elif os.path.exists(status_file+'_sent') == True:
+                continue
+            if len(statuses)>0:
+                statuses+=','
+            statuses+=GetFileContents(status_file)
+            os.rename(status_file,status_file+'_sent')
+            
+        if len(statuses)<1:
+            Log('No Handler status to report')
+            return None
+        tstamp=time.strftime("%Y-%M-%dT%H:%M:%SZ", time.gmtime())
+        #header
+        #agent state
+        if provisioned == False:
+            if provisionError == None :
+                agent_state='Provisioning'
+                agent_msg='Guest Agent is starting.'
+            else:
+                agent_state='Provisioning Error.'
+                agent_msg=provisionError
+        else:
+            agent_state='Ready'
+            agent_msg='GuestAgent is running and accepting new configurations.'
+            
+        status='{"version":"1.0","timestampUTC":"'+tstamp+'","aggregateStatus":{"guestAgentStatus":{"version":"'+GuestAgentVersion+'","status":"'+agent_state+'","formattedMessage":{"lang":"en-US","message":"'+agent_msg+'"}},"handlerAggregateStatus":['+statuses+']}}'
+        uri=GetNodeTextData(self.Extensions[0].getElementsByTagName("StatusUploadBlob")[0]).replace('&amp;','&')
+        self.Util.Endpoint=uri.split('/')[2]
+        self.Util.HttpPutBlockBlob(uri, status)
+        Log('Status report '+status+' sent to ' + uri)
+        return True
     
+    def CheckHeartbeat(self):
+        incarnation=self.Extensions[0].getAttribute("goalStateIncarnation")
+        uri=GetNodeTextData(self.Extensions[0].getElementsByTagName("StatusUploadBlob")[0])
+        for p in self.Plugins:
+            if json.loads(p.getAttribute("manifestdata"))[0]['handlerManifest']['reportHeartbeat']!=True :
+                continue
+            if p.getAttribute("state") == 'disabled':
+                continue
+            version=p.getAttribute("version")
+            name=p.getAttribute("name")
+            heartbeat_file=LibDir+'/'+name+'-'+version+'/heartbeat.log'
+            status_file=LibDir+'/'+name+'-'+version+'/status/'+incarnation+'.status'
+            if not os.path.exists(heartbeat_file):
+                Error('Missing '+ heartbeat_file)
+                continue
+            else:
+                heartbeat=GetFileContents(heartbeat_file)
+                try:
+                    hb=json.loads(heartbeat)
+                except:
+                    Error("JSON error, unable to process " + heartbeat_file)
+                d=int(time.time()-os.stat(heartbeat_file).st_mtime)
+                if d >= 700: # stop sending heartbeats 
+                    return 'NotReady'
+                if d < 120:   # within 2 mins considered active
+                    return 'Ready'
+                if d < 600:    # less than 10 mins unknown
+                    state='Unknown'
+                else: # more than 10 mins with no update considered notready
+                    state='NotReady'
+                stat_rept='{"handlerName":"' + name + '","handlerVersion":"'+version+ '","status":"' +hb[0]['heartbeat']['status'] + '","code":' + hb[0]['heartbeat']['code'] + ',"formattedMessage":{"lang":"en-US","message":"' + hb[0]['heartbeat']['Message'] + '"}}'
+                cur_file=status_file+'_current'
+                with open(cur_file,'w+') as f:
+                    f.write(stat_rept)
+                # if inc.status exists, rename the inc.status to inc.status_sent
+                if os.path.exists(status_file) == True:
+                    os.rename(status_file,status_file+'_sent')
+                # rename inc.status_current to inc.status
+                os.rename(cur_file,status_file)
+                # remove  inc.status_sent
+                if os.path.exists(status_file+'_sent') == True:
+                    os.unlink(status_file+'_sent')
+                
+   
 class HostingEnvironmentConfig(object):
     """
     Parse Hosting enviromnet config and store in
@@ -4039,7 +4221,9 @@ class Agent(Util):
 
         # Set SCSI timeout on SCSI disks
         MyDistro.initScsiDiskTimeout()
-
+        global provisioned
+        global provisionError
+        
         global Openssl
         Openssl = Config.get("OS.OpensslPath")
         if Openssl == None:
@@ -4111,8 +4295,13 @@ class Agent(Util):
             # Process our extensions.
             if goalState.ExtensionsConfig == None and goalState.ExtensionsConfigXml != None :
                 goalState.ExtensionsConfig = ExtensionsConfig().Parse(goalState.ExtensionsConfigXml)
-                # TODO report the status/heartbeat results of extension processing
-            time.sleep(25 - sleepToReduceAccessDenied)
+
+            # report the status/heartbeat results of extension processing
+            if goalState.ExtensionsConfig != None :
+                goalState.ExtensionsConfig.ReportHandlerStatus()
+                goalState.ExtensionsConfig.CheckHeartbeat()
+
+            time.sleep(25 - sleepToReduceAccessDenied)	
             
 WaagentLogrotate = """\
 /var/log/waagent.log {
