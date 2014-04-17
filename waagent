@@ -2639,8 +2639,8 @@ class ExtensionsConfig(object):
             version=p.getAttribute("version")
             name=p.getAttribute("name")
             Log("Found Plugin: " + name + ' version: ' + version)
-            if p.getAttribute("state") == 'disabled' :
-                #disable
+            if p.getAttribute("state") == 'disabled' or p.getAttribute("state") == 'uninstall': 
+                #disable 
                 zip_dir=LibDir+"/" + name + '-' + version
                 mfile=None
                 for root, dirs, files in os.walk(zip_dir):
@@ -2656,10 +2656,18 @@ class ExtensionsConfig(object):
                 p.setAttribute('manifestdata',manifest)
                 if self.launchCommand(name,version,'disableCommand') == None :
                     Error('Unable to disable '+name)
-                    continue
                 else :
                     Log(name+' is disabled')
-                    continue
+                # uninstall if needed
+                if p.getAttribute("state") == 'uninstall':
+                    if self.launchCommand(name,version,'uninstallCommand') == None :
+                        Error('Unable to uninstall '+name)
+                    else :
+                        Log(name+' uninstallCommand completed .')
+                    # remove the plugin
+                    Run('rm -rf ' + LibDir + '/' + name +'-'+ version + '*')
+                    Log(name +'-'+ version + ' extension files deleted.')
+                continue    
             # state is enabled
             # if the same plugin exists and the version is newer or
             # does not exist then download and unzip the new plugin
@@ -2720,7 +2728,7 @@ class ExtensionsConfig(object):
                 z.extractall(zip_dir)
                 Log('Extracted ' + bundle_uri + ' to ' + zip_dir) 
                 # zip no file perms in .zip so set all the scripts to +x
-                Run( "find " + zip_dir +" | egrep '.sh|.py' | xargs chmod 0700 ")
+                Run( "find " + zip_dir +" -type f | xargs chmod  u+x ")
                 #write out the base64 config data so the plugin can process it.
                 mfile=None
                 for root, dirs, files in os.walk(zip_dir):
@@ -2906,10 +2914,15 @@ class ExtensionsConfig(object):
         status=''
         statuses=''
         for p in self.Plugins:
+            if p.getAttribute("state") == 'uninstall':
+                continue
             version=p.getAttribute("version")
             name=p.getAttribute("name")
             status_file=LibDir+'/'+name+'-'+version+'/status/'+incarnation+'.status'
             if os.path.exists(status_file) !=True and os.path.exists(status_file+'_sent') != True:
+                if p.getAttribute("state") == 'disabled' :
+                    Log(name+'-'+version+' is disabled.  No status to report.')
+                    continue
                 Error("Unable to locate " + status_file)
                 Error('Status report '+status_file+' Not sent!')
                 continue
@@ -2948,9 +2961,9 @@ class ExtensionsConfig(object):
         incarnation=self.Extensions[0].getAttribute("goalStateIncarnation")
         uri=GetNodeTextData(self.Extensions[0].getElementsByTagName("StatusUploadBlob")[0])
         for p in self.Plugins:
-            if json.loads(p.getAttribute("manifestdata"))[0]['handlerManifest']['reportHeartbeat']!=True :
+            if p.getAttribute("state") == 'disabled' or p.getAttribute("state") == 'uninstall':
                 continue
-            if p.getAttribute("state") == 'disabled':
+            if len(p.getAttribute("manifestdata"))<1 or  json.loads(p.getAttribute("manifestdata"))[0]['handlerManifest']['reportHeartbeat']!=True :
                 continue
             version=p.getAttribute("version")
             name=p.getAttribute("name")
