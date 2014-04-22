@@ -2627,11 +2627,15 @@ class ExtensionsConfig(object):
         self.Util=Util()
         dom = xml.dom.minidom.parseString(xmlText)
         LogIfVerbose(xmlText)
-        self.Extensions=dom.getElementsByTagName("Extensions")
-        pg = dom.getElementsByTagName("Plugins")
-        self.Plugins = pg[0].getElementsByTagName("Plugin")
-        incarnation=self.Extensions[0].getAttribute("goalStateIncarnation")
-        SetFileContents('ExtensionsConfig.'+incarnation+'.xml', xmlText)
+        try:
+            self.Extensions=dom.getElementsByTagName("Extensions")
+            pg = dom.getElementsByTagName("Plugins")
+            self.Plugins = pg[0].getElementsByTagName("Plugin")
+            incarnation=self.Extensions[0].getAttribute("goalStateIncarnation")
+            SetFileContents('ExtensionsConfig.'+incarnation+'.xml', xmlText)
+        except:
+            Error('Error parsing ExtensionsConfig.')
+            return None
         for p in self.Plugins:
             if len(p.getAttribute("location"))<1:  # this plugin is inside the PluginSettings
                 continue
@@ -2776,13 +2780,11 @@ class ExtensionsConfig(object):
                         Error('Update failed for '+name+'-'+version)
                     else :
                         Log('Update complete'+name+'-'+version)
-                    # if we updated - call unistall for the old plugin - remove old plugin dir and zipfile
+                    # if we updated - call unistall for the old plugin
                     if self.launchCommand(name,previous_version,'uninstallCommand') == None :
                         Error('Uninstall failed for '+name+'-'+previous_version)
                     else :
                         Log('Uninstall complete'+ name +'-' + previous_version)
-                    # remove the old plugin
-                    Run('rm -rf ' + LibDir + '/' + name +'-'+ previous_version + '*')
                 else :  # run install 
                     if self.launchCommand(name,version,getcmd) == None :
                         Error('Installation failed for '+name+'-'+version)
@@ -2804,7 +2806,11 @@ class ExtensionsConfig(object):
             manifest = GetFileContents(mfile)
             p.setAttribute('manifestdata',manifest)
             config=''
-            pslist=dom.getElementsByTagName("PluginSettings")[0].getElementsByTagName("Plugin")
+            try:
+                pslist=dom.getElementsByTagName("PluginSettings")[0].getElementsByTagName("Plugin")
+            except:
+                Error('Error parsing ExtensionsConfig.')
+                continue
             for ps in pslist:
                 if name == ps.getAttribute("name") and version == ps.getAttribute("version"):
                     Log("Found RuntimeSettings for " + name + " V " + version)
@@ -2910,7 +2916,11 @@ class ExtensionsConfig(object):
         # ]
         #  }}
 
-        incarnation=self.Extensions[0].getAttribute("goalStateIncarnation")
+        try:
+            incarnation=self.Extensions[0].getAttribute("goalStateIncarnation")
+        except:
+            Error('Error parsing ExtensionsConfig.  Unable to send status reports')
+            return None
         status=''
         statuses=''
         for p in self.Plugins:
@@ -2951,20 +2961,33 @@ class ExtensionsConfig(object):
             agent_msg='GuestAgent is running and accepting new configurations.'
             
         status='{"version":"1.0","timestampUTC":"'+tstamp+'","aggregateStatus":{"guestAgentStatus":{"version":"'+GuestAgentVersion+'","status":"'+agent_state+'","formattedMessage":{"lang":"en-US","message":"'+agent_msg+'"}},"handlerAggregateStatus":['+statuses+']}}'
-        uri=GetNodeTextData(self.Extensions[0].getElementsByTagName("StatusUploadBlob")[0]).replace('&amp;','&')
+        try:
+            uri=GetNodeTextData(self.Extensions[0].getElementsByTagName("StatusUploadBlob")[0]).replace('&amp;','&')
+        except:
+            Error('Error parsing ExtensionsConfig.  Unable to send status reports')
+            return None
         self.Util.Endpoint=uri.split('/')[2]
         self.Util.HttpPutBlockBlob(uri, status)
         Log('Status report '+status+' sent to ' + uri)
         return True
     
     def CheckHeartbeat(self):
-        incarnation=self.Extensions[0].getAttribute("goalStateIncarnation")
-        uri=GetNodeTextData(self.Extensions[0].getElementsByTagName("StatusUploadBlob")[0])
+        try:
+            incarnation=self.Extensions[0].getAttribute("goalStateIncarnation")
+            uri=GetNodeTextData(self.Extensions[0].getElementsByTagName("StatusUploadBlob")[0])
+        except:
+            Error('Error parsing ExtensionsConfig.  Unable to check hearbeat.')
+            return None
         for p in self.Plugins:
             if p.getAttribute("state") == 'disabled' or p.getAttribute("state") == 'uninstall':
                 continue
-            if len(p.getAttribute("manifestdata"))<1 or  json.loads(p.getAttribute("manifestdata"))[0]['handlerManifest']['reportHeartbeat']!=True :
+            try:
+                if len(p.getAttribute("manifestdata"))<1 or  json.loads(p.getAttribute("manifestdata"))[0]['handlerManifest']['reportHeartbeat']!=True :
+                    Error("JSON error, unable to process manifestdata")
+                    continue
+            except:
                 continue
+            
             version=p.getAttribute("version")
             name=p.getAttribute("name")
             heartbeat_file=LibDir+'/'+name+'-'+version+'/heartbeat.log'
@@ -2978,7 +3001,12 @@ class ExtensionsConfig(object):
                     hb=json.loads(heartbeat)
                 except:
                     Error("JSON error, unable to process " + heartbeat_file)
-                d=int(time.time()-os.stat(heartbeat_file).st_mtime)
+                try:
+                    d=int(time.time()-os.stat(heartbeat_file).st_mtime)
+                except:
+                    Error("Unable to stat " + heartbeat_file)
+                    continue
+                
                 if d >= 700: # stop sending heartbeats 
                     return 'NotReady'
                 if d < 120:   # within 2 mins considered active
@@ -2987,19 +3015,22 @@ class ExtensionsConfig(object):
                     state='Unknown'
                 else: # more than 10 mins with no update considered notready
                     state='NotReady'
-                stat_rept='{"handlerName":"' + name + '","handlerVersion":"'+version+ '","status":"' +hb[0]['heartbeat']['status'] + '","code":' + hb[0]['heartbeat']['code'] + ',"formattedMessage":{"lang":"en-US","message":"' + hb[0]['heartbeat']['Message'] + '"}}'
-                cur_file=status_file+'_current'
-                with open(cur_file,'w+') as f:
-                    f.write(stat_rept)
-                # if inc.status exists, rename the inc.status to inc.status_sent
-                if os.path.exists(status_file) == True:
-                    os.rename(status_file,status_file+'_sent')
-                # rename inc.status_current to inc.status
-                os.rename(cur_file,status_file)
-                # remove  inc.status_sent
-                if os.path.exists(status_file+'_sent') == True:
-                    os.unlink(status_file+'_sent')
-                
+                try:
+                    stat_rept='{"handlerName":"' + name + '","handlerVersion":"'+version+ '","status":"' +hb[0]['heartbeat']['status'] + '","code":' + hb[0]['heartbeat']['code'] + ',"formattedMessage":{"lang":"en-US","message":"' + hb[0]['heartbeat']['Message'] + '"}}'
+                    cur_file=status_file+'_current'
+                    with open(cur_file,'w+') as f:
+                        f.write(stat_rept)
+                    # if inc.status exists, rename the inc.status to inc.status_sent
+                    if os.path.exists(status_file) == True:
+                        os.rename(status_file,status_file+'_sent')
+                    # rename inc.status_current to inc.status
+                    os.rename(cur_file,status_file)
+                    # remove  inc.status_sent
+                    if os.path.exists(status_file+'_sent') == True:
+                        os.unlink(status_file+'_sent')
+                except:
+                    Error("Unable to create " + status_file)
+                    continue
    
 class HostingEnvironmentConfig(object):
     """
