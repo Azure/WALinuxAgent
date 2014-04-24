@@ -4522,7 +4522,9 @@ def GetMyDistro(dist_class_name=''):
 
 def DistInfo(fullname=0):
     if 'linux_distribution' in dir(platform):
-        return platform.linux_distribution(full_distribution_name=fullname)
+        distinfo = list(platform.linux_distribution(full_distribution_name=fullname))
+        distinfo[0] = distinfo[0].strip() # remove trailing whitespace in distro name
+        return distinfo
     else:
         return platform.dist()
 
