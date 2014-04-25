@@ -143,8 +143,8 @@ class AbstractDistro(object):
 
     Generic methods and attributes are kept here, distribution specific attributes
     and behavior are to be placed in the concrete child named distroDistro, where
-    distro is the string returned by calling python platform.dist()[0].  So for CentOS
-    the derived class is called 'centosDistro'.
+    distro is the string returned by calling python platform.linux_distribution()[0].
+    So for CentOS the derived class is called 'centosDistro'.
     """
 
     def __init__(self):
@@ -761,14 +761,14 @@ class redhatDistro(AbstractDistro):
         self.service_cmd='/sbin/service'
         self.ssh_service_restart_option='condrestart'
         self.ssh_service_name='sshd'
-        self.hostname_file_path= None if platform.dist()[1] < '7.0' else '/etc/hostname'
+        self.hostname_file_path= None if DistInfo()[1] < '7.0' else '/etc/hostname'
         self.init_file=redhat_init_file
         self.grubKernelBootOptionsFile = '/boot/grub/menu.lst'
         self.grubKernelBootOptionsLine = 'kernel'
 
     def publishHostname(self,name):
         super(redhatDistro,self).publishHostname(name)
-        if platform.dist()[1] < '7.0' :
+        if DistInfo()[1] < '7.0' :
             filepath = "/etc/sysconfig/network"
             if os.path.isfile(filepath):
                 ReplaceFileContentsAtomic(filepath, "HOSTNAME=" + name + "\n"
@@ -1074,7 +1074,7 @@ class UbuntuDistro(debianDistro):
     def getDhcpClientName(self):
         if self.dhcp_client_name != None :
             return self.dhcp_client_name
-        if platform.dist()[1] == '12.04' :
+        if DistInfo()[1] == '12.04' :
             self.dhcp_client_name='dhclient3'
         else :
             self.dhcp_client_name='dhclient'
@@ -4503,7 +4503,7 @@ def GetMyDistro(dist_class_name=''):
     """
     if dist_class_name == '':
         if 'Linux' in platform.system():
-            Distro=platform.dist()[0]
+            Distro=DistInfo()[0]
         else : # I know this is not Linux!
             if 'FreeBSD' in platform.system():
                 Distro=platform.system()
@@ -4516,6 +4516,14 @@ def GetMyDistro(dist_class_name=''):
         print Distro+' is not a supported distribution.'
         return None
     return globals()[dist_class_name]() # the distro class inside this module.
+
+def DistInfo(fullname=0):
+    if 'linux_distribution' in dir(platform):
+        distinfo = list(platform.linux_distribution(full_distribution_name=fullname))
+        distinfo[0] = distinfo[0].strip() # remove trailing whitespace in distro name
+        return distinfo
+    else:
+        return platform.dist()
 
 def PackagedInstall(buildroot):
     """
@@ -4631,7 +4639,7 @@ def main():
 
     LoggerInit('/var/log/waagent.log','/dev/console')
     global LinuxDistro
-    LinuxDistro=platform.dist()[0]
+    LinuxDistro=DistInfo()[0]
     global MyDistro
     MyDistro=GetMyDistro()
     if MyDistro == None :
