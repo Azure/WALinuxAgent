@@ -2639,6 +2639,9 @@ class ExtensionsConfig(object):
             previous_version = None
             version=p.getAttribute("version")
             name=p.getAttribute("name")
+            if p.getAttribute("isJson") != 'true':
+                Error("Plugin " + name+" version: " +version+" is not a JSON Extension.  Skipping.")
+                continue
             Log("Found Plugin: " + name + ' version: ' + version)
             if p.getAttribute("state") == 'disabled' or p.getAttribute("state") == 'uninstall': 
                 #disable 
@@ -2748,13 +2751,15 @@ class ExtensionsConfig(object):
                 Run('mkdir -p ' + root + '/config')
                 # write out the configuration data to goalStateIncarnation.settings file in the config path.
                 config=''
-                pslist=dom.getElementsByTagName("PluginSettings")[0].getElementsByTagName("Plugin")
-                for ps in pslist:
-                    if name == ps.getAttribute("name") and version == ps.getAttribute("version"):
-                        Log("Found RuntimeSettings for " + name + " V " + version)
-                        config=GetNodeTextData(ps.getElementsByTagName("RuntimeSettings")[0])
-                        seqNo=ps.getElementsByTagName("RuntimeSettings")[0].getAttribute("seqNo") 
-                        break
+                seqNo='0'
+                if len(dom.getElementsByTagName("PluginSettings")) != 0 :
+                    pslist=dom.getElementsByTagName("PluginSettings")[0].getElementsByTagName("Plugin")
+                    for ps in pslist:
+                        if name == ps.getAttribute("name") and version == ps.getAttribute("version"):
+                            Log("Found RuntimeSettings for " + name + " V " + version)
+                            config=GetNodeTextData(ps.getElementsByTagName("RuntimeSettings")[0])
+                            seqNo=ps.getElementsByTagName("RuntimeSettings")[0].getAttribute("seqNo") 
+                            break
                 if config == '':
                     Error("No RuntimeSettings for " + name + " V " + version)
                 SetFileContents(root +"/config/" + incarnation +".settings",  config )
@@ -2803,17 +2808,19 @@ class ExtensionsConfig(object):
             manifest = GetFileContents(mfile)
             p.setAttribute('manifestdata',manifest)
             config=''
-            try:
-                pslist=dom.getElementsByTagName("PluginSettings")[0].getElementsByTagName("Plugin")
-            except:
-                Error('Error parsing ExtensionsConfig.')
-                continue
-            for ps in pslist:
-                if name == ps.getAttribute("name") and version == ps.getAttribute("version"):
-                    Log("Found RuntimeSettings for " + name + " V " + version)
-                    config=GetNodeTextData(ps.getElementsByTagName("RuntimeSettings")[0])
-                    seqNo=ps.getElementsByTagName("RuntimeSettings")[0].getAttribute("seqNo") 
-                    break
+            seqNo='0'
+            if len(dom.getElementsByTagName("PluginSettings")) != 0 :
+                try:
+                    pslist=dom.getElementsByTagName("PluginSettings")[0].getElementsByTagName("Plugin")
+                except:
+                    Error('Error parsing ExtensionsConfig.')
+                    continue
+                for ps in pslist:
+                    if name == ps.getAttribute("name") and version == ps.getAttribute("version"):
+                        Log("Found RuntimeSettings for " + name + " V " + version)
+                        config=GetNodeTextData(ps.getElementsByTagName("RuntimeSettings")[0])
+                        seqNo=ps.getElementsByTagName("RuntimeSettings")[0].getAttribute("seqNo") 
+                        break
             if config == '':
                 Error("No RuntimeSettings for " + name + " V " + version)
             SetFileContents(root +"/config/" + incarnation +".settings",  config )
@@ -2925,6 +2932,9 @@ class ExtensionsConfig(object):
                 continue
             version=p.getAttribute("version")
             name=p.getAttribute("name")
+            if p.getAttribute("isJson") != 'true':
+                Error("Plugin " + name+" version: " +version+" is not a JSON Extension.  Skipping.")
+                continue
             status_file=LibDir+'/'+name+'-'+version+'/status/'+incarnation+'.status'
             if os.path.exists(status_file) !=True and os.path.exists(status_file+'_sent') != True:
                 if p.getAttribute("state") == 'disabled' :
@@ -2978,6 +2988,11 @@ class ExtensionsConfig(object):
         for p in self.Plugins:
             if p.getAttribute("state") == 'disabled' or p.getAttribute("state") == 'uninstall':
                 continue
+            version=p.getAttribute("version")
+            name=p.getAttribute("name")
+            if p.getAttribute("isJson") != 'true':
+                Error("Plugin " + name+" version: " +version+" is not a JSON Extension.  Skipping.")
+                continue
             try:
                 if len(p.getAttribute("manifestdata"))<1 or  json.loads(p.getAttribute("manifestdata"))[0]['handlerManifest']['reportHeartbeat']!=True :
                     Error("JSON error, unable to process manifestdata")
@@ -2985,8 +3000,6 @@ class ExtensionsConfig(object):
             except:
                 continue
             
-            version=p.getAttribute("version")
-            name=p.getAttribute("name")
             heartbeat_file=LibDir+'/'+name+'-'+version+'/heartbeat.log'
             status_file=LibDir+'/'+name+'-'+version+'/status/'+incarnation+'.status'
             if not os.path.exists(heartbeat_file):
