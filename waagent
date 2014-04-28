@@ -3089,7 +3089,7 @@ class ExtensionsConfig(object):
         if (handlerState):
             return handlerState.rstrip('\r\n')
         else:
-            return None
+            return 'NotInstalled'
 
 
 class HostingEnvironmentConfig(object):
