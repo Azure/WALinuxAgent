@@ -2901,9 +2901,10 @@ class ExtensionsConfig(object):
         # launch
         pid=None
         try:
-            pid = subprocess.Popen(dirpath+'/'+cmd+arg,shell=True,cwd=dirpath).pid
+            child = subprocess.Popen(dirpath+'/'+cmd+arg,shell=True,cwd=dirpath)
         except Exception as e:
             Error('Exception launching ' + cmd + str(e))
+        pid = child.pid
         if pid == None or pid < 1 :
             ExtensionChildren.append((-1,root))
             Error('Error launching ' + cmd + '.')
@@ -2916,8 +2917,8 @@ class ExtensionsConfig(object):
             if retry==0:
                 break
             if Run("ps --no-headers " + str(pid),chk_err=False) == 0:
-                Log(cmd + ' still running with PID ' + str(pid))
-                time.sleep(10)
+#                Log(cmd + ' still running with PID ' + str(pid))
+                time.sleep(5)
             else :
                 pid=0
             retry-=1
@@ -2925,6 +2926,10 @@ class ExtensionsConfig(object):
         if retry==0:
             Error('More than five minutes has passed.  Killing ' + str(pid))
             os.kill(pid,9)
+            return None
+        code = child.wait()
+        if code == None or code != 0:
+            Error('Process ' + str(pid) + ' returned non-zero exit code (' + str(code) + ')')
             return None
         Log(command + ' completed.')
         return 0
