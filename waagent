@@ -2763,7 +2763,7 @@ class ExtensionsConfig(object):
                             seqNo=ps.getElementsByTagName("RuntimeSettings")[0].getAttribute("seqNo") 
                             break
                 if config == '':
-                    Error("No RuntimeSettings for " + name + " V " + version)
+                    Log("No RuntimeSettings for " + name + " V " + version)
                 SetFileContents(root +"/config/" + incarnation +".settings",  config )
                 #create HandlerEnvironment.json
                 handler_env='[{  "name": "'+name+'", "seqNo": "'+seqNo+'", "version": 1.0,  "handlerEnvironment": {    "logFolder": "/var/log",    "configFolder": "' + root + '/config",    "statusFolder": "' + root + '/status",    "heartbeatFile": "'+ root + '/heartbeat.log"}}]'
@@ -2886,20 +2886,18 @@ class ExtensionsConfig(object):
         else :
             ExtensionChildren.append((pid,root))
             Log("Spawned "+ cmd + " PID " + str(pid))
+
         # wait until install/upgrade is finished
-        retry = 5*60/10
-        while pid != None and pid > 0:
+        timeout = 300 # 5 minutes
+        retry = timeout/5
+        while child.poll() == None:
             if retry==0:
                 break
-            if Run("ps --no-headers " + str(pid),chk_err=False) == 0:
-#                Log(cmd + ' still running with PID ' + str(pid))
-                time.sleep(5)
-            else :
-                pid=0
+            LogIfVerbose(cmd + ' still running with PID ' + str(pid))
+            time.sleep(5)
             retry-=1
-            
         if retry==0:
-            Error('More than five minutes has passed.  Killing ' + str(pid))
+            Error('Process exceeded timeout of ' + timeout + ' seconds. Terminating process ' + str(pid))
             os.kill(pid,9)
             return None
         code = child.wait()
@@ -2945,7 +2943,7 @@ class ExtensionsConfig(object):
             status_file=LibDir+'/'+name+'-'+version+'/status/'+incarnation+'.status'
             if os.path.exists(status_file) !=True and os.path.exists(status_file+'_sent') != True:
                 if p.getAttribute("state") == 'disabled' :
-                    Log(name+'-'+version+' is disabled.  No status to report.')
+                    LogIfVerbose(name+'-'+version+' is disabled.  No status to report.')
                     continue
                 Error("Unable to locate " + status_file)
                 Error('Status report '+status_file+' Not sent!')
@@ -2958,7 +2956,7 @@ class ExtensionsConfig(object):
             os.rename(status_file,status_file+'_sent')
             
         if len(statuses)<1:
-            Log('No Handler status to report')
+            LogIfVerbose('No Handler status to report')
             return None
         tstamp=time.strftime("%Y-%M-%dT%H:%M:%SZ", time.gmtime())
         #header
