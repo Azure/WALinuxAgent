@@ -1529,7 +1529,18 @@ class FreeBSDDistro(AbstractDistro):
     
     def mountDVD(self,dvd,location):
         #At this point we cannot read a joliet option udf DVD in freebsd10 - so we 'dd' it into our location
-        return RunGetOutput(self.mount_dvd_cmd + dvd + ' of=' + location + '/ovf-env.xml')
+        retcode,out = RunGetOutput(self.mount_dvd_cmd + dvd + ' of=' + location + '/ovf-env.xml')
+        if retcode != 0:
+            return retcode,out
+
+        ovfxml = (GetFileContents(location+"/ovf-env.xml",asbin=False))
+        ovfxml = re.sub('>.*\Z', '', ovfxml)
+        ovfxml += '>'
+        if ord(ovfxml[0]) > 128 and ord(ovfxml[1]) > 128 and ord(ovfxml[2]) > 128 :
+            ovfxml = ovfxml[3:] # BOM is not stripped. First three bytes are > 128 and not unicode chars so we ignore them.
+        ovfxml=ovfxml.strip(chr(0x00))
+        SetFileContents(location+"/ovf-env.xml", ovfxml)
+        return retcode,out
 
     def GetHome(self):
         return '/home'
@@ -3877,8 +3888,12 @@ class Agent(Util):
                 sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
                 missingDefaultRoute = True
                 try:
-                    for line in RunGetOutput("route -n")[1].split('\n'):
-                        if line.startswith("0.0.0.0 "):
+                    if DistInfo()[0] == 'FreeBSD':
+                        routes = RunGetOutput("netstat -nr")[1]
+                    else:
+                        routes = RunGetOutput("route -n")[1]
+                    for line in routes.split('\n'):
+                        if line.startswith("0.0.0.0 ") or line.startswith("default "):
                             missingDefaultRoute = False
                 except:
                     pass
@@ -3928,7 +3943,10 @@ class Agent(Util):
         Log("Setting host name: " + name)
         MyDistro.publishHostname(name)
         ethernetInterface = MyDistro.GetInterfaceName()
-        Run("ifdown " + ethernetInterface + " && ifup " + ethernetInterface)
+        if DistInfo()[0] == 'FreeBSD':
+            Run("service netif restart")
+        else:
+            Run("ifdown " + ethernetInterface + " && ifup " + ethernetInterface)
         self.RestoreRoutes()
 
     def RestoreRoutes(self):
@@ -4537,6 +4555,10 @@ def GetMyDistro(dist_class_name=''):
     return globals()[dist_class_name]() # the distro class inside this module.
 
 def DistInfo(fullname=0):
+    if 'FreeBSD' in platform.system():
+        release = re.sub('\-.*\Z', '', str(platform.release()))
+        distinfo = ['FreeBSD', release]
+        return distinfo
     if 'linux_distribution' in dir(platform):
         distinfo = list(platform.linux_distribution(full_distribution_name=fullname))
         distinfo[0] = distinfo[0].strip() # remove trailing whitespace in distro name
