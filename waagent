@@ -2915,9 +2915,7 @@ class ExtensionsConfig(object):
         # wait until install/upgrade is finished
         timeout = 300 # 5 minutes
         retry = timeout/5
-        while child.poll() == None:
-            if retry==0:
-                break
+        while retry > 0 and child.poll() == None:
             LogIfVerbose(cmd + ' still running with PID ' + str(pid))
             time.sleep(5)
             retry-=1
