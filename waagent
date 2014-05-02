@@ -4185,6 +4185,10 @@ class Agent(Util):
             if dvds == None :
                 continue
             dvd = '/dev/'+dvds.group(0)
+        if dvd == None:
+            # No DVD device detected
+            Error("No DVD device detected, unable to provision.")
+            return "No DVD device detected, unable to provision."
         if MyDistro.mediaHasFilesystem(dvd) is False :
             out=MyDistro.load_ata_piix()
             if out:
@@ -4228,8 +4232,8 @@ class Agent(Util):
             if ovfobj != None:
                 error = ovfobj.Process()
                 if error :
-                    Error ("Provisioninig image FAILED " + error)
-                    return ("Provisioninig image FAILED " + error)
+                    Error ("Provisioning image FAILED " + error)
+                    return ("Provisioning image FAILED " + error)
         # This is done here because regenerated SSH host key pairs may be potentially overwritten when processing the ovfxml
         fingerprint = RunGetOutput("ssh-keygen -lf /etc/ssh/ssh_host_" + type + "_key.pub")[1].rstrip().split()[1].replace(':','')
         self.ReportRoleProperties(fingerprint)
