@@ -2961,7 +2961,7 @@ class ExtensionsConfig(object):
             version=p.getAttribute("version")
             name=p.getAttribute("name")
             if p.getAttribute("isJson") != 'true':
-                Error("Plugin " + name+" version: " +version+" is not a JSON Extension.  Skipping.")
+                LogIfVerbose("Plugin " + name+" version: " +version+" is not a JSON Extension.  Skipping.")
                 continue
             status_file=LibDir+'/'+name+'-'+version+'/status/'+incarnation+'.status'
             if os.path.exists(status_file) !=True and os.path.exists(status_file+'_sent') != True:
