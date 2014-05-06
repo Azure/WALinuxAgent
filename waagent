@@ -1534,12 +1534,12 @@ class FreeBSDDistro(AbstractDistro):
             return retcode,out
 
         ovfxml = (GetFileContents(location+"/ovf-env.xml",asbin=False))
-        ovfxml = re.sub('>.*\Z', '', ovfxml)
-        ovfxml += '>'
         if ord(ovfxml[0]) > 128 and ord(ovfxml[1]) > 128 and ord(ovfxml[2]) > 128 :
             ovfxml = ovfxml[3:] # BOM is not stripped. First three bytes are > 128 and not unicode chars so we ignore them.
         ovfxml = ovfxml.strip(chr(0x00))
         ovfxml = "".join(filter(lambda x: ord(x)<128, ovfxml))
+        ovfxml = re.sub('>.*\Z', '', ovfxml)
+        ovfxml += '>'
         SetFileContents(location+"/ovf-env.xml", ovfxml)
         return retcode,out
 
