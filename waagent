@@ -2652,6 +2652,7 @@ class ExtensionsConfig(object):
             previous_version = None
             version=p.getAttribute("version")
             name=p.getAttribute("name")
+            handler=name + '-' + version
             if p.getAttribute("isJson") != 'true':
                 Error("Plugin " + name+" version: " +version+" is not a JSON Extension.  Skipping.")
                 continue
@@ -2672,14 +2673,18 @@ class ExtensionsConfig(object):
                 manifest = GetFileContents(mfile)
                 p.setAttribute('manifestdata',manifest)
                 if self.launchCommand(name,version,'disableCommand') == None :
+                    self.SetHandlerState(handler, 'Enabled')
                     Error('Unable to disable '+name)
                 else :
+                    self.SetHandlerState(handler, 'Installed')
                     Log(name+' is disabled')
                 # uninstall if needed
                 if p.getAttribute("state") == 'uninstall':
                     if self.launchCommand(name,version,'uninstallCommand') == None :
+                        self.SetHandlerState(handler, 'Installed')
                         Error('Unable to uninstall '+name)
                     else :
+                        self.SetHandlerState(handler, 'NotInstalled')
                         Log(name+' uninstallCommand completed .')
                     # remove the plugin
                     Run('rm -rf ' + LibDir + '/' + name +'-'+ version + '*')
@@ -2774,22 +2779,27 @@ class ExtensionsConfig(object):
                             seqNo=ps.getElementsByTagName("RuntimeSettings")[0].getAttribute("seqNo") 
                             break
                 if config == '':
-                    Error("No RuntimeSettings for " + name + " V " + version)
+                    Log("No RuntimeSettings for " + name + " V " + version)
                 SetFileContents(root +"/config/" + incarnation +".settings",  config )
                 #create HandlerEnvironment.json
                 handler_env='[{  "name": "'+name+'", "seqNo": "'+seqNo+'", "version": 1.0,  "handlerEnvironment": {    "logFolder": "/var/log",    "configFolder": "' + root + '/config",    "statusFolder": "' + root + '/status",    "heartbeatFile": "'+ root + '/heartbeat.log"}}]'
                 SetFileContents(root+'/HandlerEnvironment.json',handler_env)
+                self.SetHandlerState(handler, 'NotInstalled')
+
                 cmd = ''
                 getcmd='installCommand'
                 if plg_dir != None and version > plg_dir.rsplit('-')[-1]:
-                    getcmd='updateCommand'   
-                    # disable the old plugin if it exists
-                    if previous_version != None:
-                        if self.launchCommand(name,previous_version,'disableCommand') == None :
-                            Error('Unable to disable old plugin '+name+' version ' + previous_version)
-                        else :
-                            Log(name+' version ' + previous_version + ' is disabled')
-                
+                    if (self.GetHandlerState(handler) != 'NotInstalled'):
+                        getcmd='updateCommand'
+                        # disable the old plugin if it exists
+                        if previous_version != None:
+                            if self.launchCommand(name,previous_version,'disableCommand') == None :
+                                self.SetHandlerState(handler, 'Enabled')
+                                Error('Unable to disable old plugin '+name+' version ' + previous_version)
+                            else :
+                                self.SetHandlerState(handler, 'Installed')
+                                Log(name+' version ' + previous_version + ' is disabled')
+
                 if getcmd=='updateCommand':
                     if self.launchCommand(name,version,getcmd,previous_version) == None :
                         Error('Update failed for '+name+'-'+version)
@@ -2797,13 +2807,17 @@ class ExtensionsConfig(object):
                         Log('Update complete'+name+'-'+version)
                     # if we updated - call unistall for the old plugin
                     if self.launchCommand(name,previous_version,'uninstallCommand') == None :
+                        self.SetHandlerState(handler, 'Installed')
                         Error('Uninstall failed for '+name+'-'+previous_version)
                     else :
+                        self.SetHandlerState(handler, 'NotInstalled')
                         Log('Uninstall complete'+ name +'-' + previous_version)
-                else :  # run install 
+                else :  # run install
                     if self.launchCommand(name,version,getcmd) == None :
+                        self.SetHandlerState(handler, 'NotInstalled')
                         Error('Installation failed for '+name+'-'+version)
                     else :
+                        self.SetHandlerState(handler, 'Installed')
                         Log('Installation completed for '+name+'-'+version)
             #end if plg_dir == none or version > = prev
             # change incarnation of settings file so it knows how to name status...
@@ -2839,10 +2853,21 @@ class ExtensionsConfig(object):
             SetFileContents(root +"/config/" + incarnation +".settings",  config )
 
             # state is still enable
-            if self.launchCommand(name,version,'enableCommand') == None :
-                Error('Enable failed for '+name+'-'+version)
-            else :
-                Log('Enable completed for '+name+'-'+version)
+            if (self.GetHandlerState(handler) == 'NotInstalled'):  # run install first if true
+                if self.launchCommand(name,version,'installCommand') == None :
+                    self.SetHandlerState(handler, 'NotInstalled')
+                    Error('Installation failed for '+name+'-'+version)
+                else :
+                    self.SetHandlerState(handler, 'Installed')
+                    Log('Installation completed for '+name+'-'+version)
+
+            if (self.GetHandlerState(handler) != 'NotInstalled'):
+                if self.launchCommand(name,version,'enableCommand') == None :
+                    self.SetHandlerState(handler, 'Installed')
+                    Error('Enable failed for '+name+'-'+version)
+                else :
+                    self.SetHandlerState(handler, 'Enabled')
+                    Log('Enable completed for '+name+'-'+version)
             # this plugin processing is complete
             Log('Processing completed for '+name+'-'+version)
         #end plugin processing loop
@@ -2887,30 +2912,31 @@ class ExtensionsConfig(object):
         # launch
         pid=None
         try:
-            pid = subprocess.Popen(dirpath+'/'+cmd+arg,shell=True,cwd=dirpath).pid
+            child = subprocess.Popen(dirpath+'/'+cmd+arg,shell=True,cwd=dirpath)
         except Exception as e:
             Error('Exception launching ' + cmd + str(e))
+        pid = child.pid
         if pid == None or pid < 1 :
             ExtensionChildren.append((-1,root))
             Error('Error launching ' + cmd + '.')
         else :
             ExtensionChildren.append((pid,root))
             Log("Spawned "+ cmd + " PID " + str(pid))
+
         # wait until install/upgrade is finished
-        retry = 5*60/10
-        while pid != None and pid > 0:
-            if retry==0:
-                break
-            if Run("ps --no-headers " + str(pid),chk_err=False) == 0:
-                Log(cmd + ' still running with PID ' + str(pid))
-                time.sleep(10)
-            else :
-                pid=0
+        timeout = 300 # 5 minutes
+        retry = timeout/5
+        while retry > 0 and child.poll() == None:
+            LogIfVerbose(cmd + ' still running with PID ' + str(pid))
+            time.sleep(5)
             retry-=1
-            
         if retry==0:
-            Error('More than five minutes has passed.  Killing ' + str(pid))
+            Error('Process exceeded timeout of ' + timeout + ' seconds. Terminating process ' + str(pid))
             os.kill(pid,9)
+            return None
+        code = child.wait()
+        if code == None or code != 0:
+            Error('Process ' + str(pid) + ' returned non-zero exit code (' + str(code) + ')')
             return None
         Log(command + ' completed.')
         return 0
@@ -2946,12 +2972,12 @@ class ExtensionsConfig(object):
             version=p.getAttribute("version")
             name=p.getAttribute("name")
             if p.getAttribute("isJson") != 'true':
-                Error("Plugin " + name+" version: " +version+" is not a JSON Extension.  Skipping.")
+                LogIfVerbose("Plugin " + name+" version: " +version+" is not a JSON Extension.  Skipping.")
                 continue
             status_file=LibDir+'/'+name+'-'+version+'/status/'+incarnation+'.status'
             if os.path.exists(status_file) !=True and os.path.exists(status_file+'_sent') != True:
                 if p.getAttribute("state") == 'disabled' :
-                    Log(name+'-'+version+' is disabled.  No status to report.')
+                    LogIfVerbose(name+'-'+version+' is disabled.  No status to report.')
                     continue
                 Error("Unable to locate " + status_file)
                 Error('Status report '+status_file+' Not sent!')
@@ -2964,7 +2990,7 @@ class ExtensionsConfig(object):
             os.rename(status_file,status_file+'_sent')
             
         if len(statuses)<1:
-            Log('No Handler status to report')
+            LogIfVerbose('No Handler status to report')
             return None
         tstamp=time.strftime("%Y-%M-%dT%H:%M:%SZ", time.gmtime())
         #header
@@ -3054,7 +3080,30 @@ class ExtensionsConfig(object):
                 except:
                     Error("Unable to create " + status_file)
                     continue
-   
+
+    def SetHandlerState(self, handler, state=''):
+        zip_dir=LibDir+"/" + handler
+        mfile=None
+        for root, dirs, files in os.walk(zip_dir):
+            for f in files:
+                if f in ('HandlerManifest.json'):
+                    mfile=os.path.join(root,f)
+            if mfile != None:
+                break
+        if mfile == None :
+            Error('SetHandlerState(): HandlerManifest.json not found, cannot set HandlerState.')
+            return None
+        Log("SetHandlerState: "+handler+", "+state)
+        return SetFileContents(os.path.dirname(mfile)+'/config/HandlerState', state)
+
+    def GetHandlerState(self, handler):
+        handlerState = GetFileContents(handler+'/config/HandlerState')
+        if (handlerState):
+            return handlerState.rstrip('\r\n')
+        else:
+            return 'NotInstalled'
+
+
 class HostingEnvironmentConfig(object):
     """
     Parse Hosting enviromnet config and store in
