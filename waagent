@@ -2680,7 +2680,6 @@ class ExtensionsConfig(object):
                 Error("Plugin " + name+" version: " +version+" is not a JSON Extension.  Skipping.")
                 continue
             Log("Found Plugin: " + name + ' version: ' + version)
-            SimpleLog(p.plugin_log,"Found Plugin: " + name + ' version: ' + version)
             if p.getAttribute("state") == 'disabled' or p.getAttribute("state") == 'uninstall': 
                 #disable 
                 zip_dir=LibDir+"/" + name + '-' + version
@@ -2838,26 +2837,25 @@ class ExtensionsConfig(object):
 
                 SetFileContents(root +"/config/" + incarnation +".settings",  config )
                 #create HandlerEnvironment.json
-                handler_env='[{  "name": "'+name+'", "seqNo": "'+seqNo+'", "version": 1.0,  "handlerEnvironment": {    "logFolder": "'+os.path.dirpath(p.plugin_log)+'",    "configFolder": "' + root + '/config",    "statusFolder": "' + root + '/status",    "heartbeatFile": "'+ root + '/heartbeat.log"}}]'
+                handler_env='[{  "name": "'+name+'", "seqNo": "'+seqNo+'", "version": 1.0,  "handlerEnvironment": {    "logFolder": "'+os.path.dirname(p.plugin_log)+'",    "configFolder": "' + root + '/config",    "statusFolder": "' + root + '/status",    "heartbeatFile": "'+ root + '/heartbeat.log"}}]'
                 SetFileContents(root+'/HandlerEnvironment.json',handler_env)
                 self.SetHandlerState(handler, 'NotInstalled')
 
                 cmd = ''
                 getcmd='installCommand'
-                if plg_dir != None and version > plg_dir.rsplit('-')[-1]:
-                    if (self.GetHandlerState(handler) != 'NotInstalled'):
+                if plg_dir != None and previous_version != None and version > previous_version :
+                    previous_handler=name+'-'+previous_version
+                    if self.GetHandlerState(previous_handler) != 'NotInstalled':
                         getcmd='updateCommand'
                         # disable the old plugin if it exists
-                        if previous_version != None:
-                            if self.launchCommand(p.plugin_log,name,previous_version,'disableCommand') == None :
-                                self.SetHandlerState(handler, 'Enabled')
-                                Error('Unable to disable old plugin '+name+' version ' + previous_version)
-                                SimpleLog(p.plugin_log,'Unable to disable old plugin '+name+' version ' + previous_version)
-
-                            else :
-                                self.SetHandlerState(handler, 'Installed')
-                                Log(name+' version ' + previous_version + ' is disabled')
-                                SimpleLog(p.plugin_log,name+' version ' + previous_version + ' is disabled')
+                        if self.launchCommand(p.plugin_log,name,previous_version,'disableCommand') == None :
+                            self.SetHandlerState(previous_handler, 'Enabled')
+                            Error('Unable to disable old plugin '+name+' version ' + previous_version)
+                            SimpleLog(p.plugin_log,'Unable to disable old plugin '+name+' version ' + previous_version)
+                        else :
+                            self.SetHandlerState(previous_handler, 'Disabled')
+                            Log(name+' version ' + previous_version + ' is disabled')
+                            SimpleLog(p.plugin_log,name+' version ' + previous_version + ' is disabled')
 
 
                 if getcmd=='updateCommand':
@@ -2871,13 +2869,13 @@ class ExtensionsConfig(object):
 
                     # if we updated - call unistall for the old plugin
                     if self.launchCommand(p.plugin_log,name,previous_version,'uninstallCommand') == None :
-                        self.SetHandlerState(handler, 'Installed')
+                        self.SetHandlerState(previous_handler, 'Installed')
                         Error('Uninstall failed for '+name+'-'+previous_version)
                         SimpleLog(p.plugin_log,'Uninstall failed for '+name+'-'+previous_version)
 
                     else :
-                        self.SetHandlerState(handler, 'NotInstalled')
-                        Log('Uninstall complete'+ name +'-' + previous_version)
+                        self.SetHandlerState(previous_handler, 'NotInstalled')
+                        Log('Uninstall complete'+ previous_handler )
                         SimpleLog(p.plugin_log,'Uninstall complete'+ name +'-' + previous_version)
 
                 else :  # run install
