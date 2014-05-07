@@ -2628,11 +2628,10 @@ class ExtensionsConfig(object):
     def Parse(self, xmlText):
         """
         Write configuration to file ExtensionsConfig.xml.
-        Log all plugin activity to /var/log/azure/CommandExecution.log.
         Log plugin specific activity to /var/log/azure/<Publisher>.<PluginName>/<Version>/CommandExecution.log.
         If state is enabled:
             if the plugin is installed:
-                if the new plugin's version is higher and IsInternal = False and
+                if the new plugin's version is higher
                 if DisallowMajorVersionUpgrade is false or if true, the version is a minor version do upgrade:
                     download the new archive
                     do the updateCommand.
@@ -2656,7 +2655,6 @@ class ExtensionsConfig(object):
         self.plugin_log_dir='/var/log/azure'
         if not os.path.exists(self.plugin_log_dir):
             os.mkdir(self.plugin_log_dir)
-        self.all_plugins_log=self.plugin_log_dir+'/CommandExecution.log'
         try:
             self.Extensions=dom.getElementsByTagName("Extensions")
             pg = dom.getElementsByTagName("Plugins")
@@ -2665,7 +2663,6 @@ class ExtensionsConfig(object):
             SetFileContents('ExtensionsConfig.'+incarnation+'.xml', xmlText)
         except:
             Error('Error parsing ExtensionsConfig.')
-            SimpleLog(self.all_plugins_log,'Error parsing ExtensionsConfig.')
             return None
         for p in self.Plugins:
             if len(p.getAttribute("location"))<1:  # this plugin is inside the PluginSettings
@@ -2681,10 +2678,8 @@ class ExtensionsConfig(object):
             handler=name + '-' + version
             if p.getAttribute("isJson") != 'true':
                 Error("Plugin " + name+" version: " +version+" is not a JSON Extension.  Skipping.")
-                SimpleLog(self.all_plugins_log,"Plugin " + name+" version: " +version+" is not a JSON Extension.  Skipping.")
                 continue
             Log("Found Plugin: " + name + ' version: ' + version)
-            SimpleLog(self.all_plugins_log,"Found Plugin: " + name + ' version: ' + version)
             SimpleLog(p.plugin_log,"Found Plugin: " + name + ' version: ' + version)
             if p.getAttribute("state") == 'disabled' or p.getAttribute("state") == 'uninstall': 
                 #disable 
@@ -2704,12 +2699,10 @@ class ExtensionsConfig(object):
                 if self.launchCommand(p.plugin_log,name,version,'disableCommand') == None :
                     self.SetHandlerState(handler, 'Enabled')
                     Error('Unable to disable '+name)
-                    SimpleLog(self.all_plugins_log,'ERROR: Unable to disable '+name)
                     SimpleLog(p.plugin_log,'ERROR: Unable to disable '+name)
                 else :
                     self.SetHandlerState(handler, 'Installed')
                     Log(name+' is disabled')
-                    SimpleLog(self.all_plugins_log,name+' is disabled')
                     SimpleLog(p.plugin_log,name+' is disabled')
 
                 # uninstall if needed
@@ -2717,7 +2710,6 @@ class ExtensionsConfig(object):
                     if self.launchCommand(p.plugin_log,name,version,'uninstallCommand') == None :
                         self.SetHandlerState(handler, 'Installed')
                         Error('Unable to uninstall '+name)
-                        SimpleLog(self.all_plugins_log,'Unable to uninstall '+name)
                         SimpleLog(p.plugin_log,'Unable to uninstall '+name)
                     else :
                         self.SetHandlerState(handler, 'NotInstalled')
@@ -2725,7 +2717,6 @@ class ExtensionsConfig(object):
                     # remove the plugin
                     Run('rm -rf ' + LibDir + '/' + name +'-'+ version + '*')
                     Log(name +'-'+ version + ' extension files deleted.')
-                    SimpleLog(self.all_plugins_log,name +'-'+ version + ' extension files deleted.')
                     SimpleLog(p.plugin_log,name +'-'+ version + ' extension files deleted.')
 
                 continue    
@@ -2744,29 +2735,24 @@ class ExtensionsConfig(object):
             if plg_dir == None or version > previous_version :
                 location=p.getAttribute("location")
                 Log("Downloading plugin manifest: " + name + " from " + location)
-                SimpleLog(self.all_plugins_log,"Downloading plugin manifest: " + name + " from " + location)
                 SimpleLog(p.plugin_log,"Downloading plugin manifest: " + name + " from " + location)
 
                 self.Util.Endpoint=location.split('/')[2]
                 Log("Plugin server is: " +  self.Util.Endpoint)
-                SimpleLog(self.all_plugins_log,"Plugin server is: " +  self.Util.Endpoint)
                 SimpleLog(p.plugin_log,"Plugin server is: " +  self.Util.Endpoint)
 
                 manifest=self.Util.HttpGetWithoutHeaders(location)
                 if manifest == None:
                     Error("Unable to download plugin manifest" + name + " from primary location.  Attempting with failover location.")
-                    SimpleLog(self.all_plugins_log,"Unable to download plugin manifest" + name + " from primary location.  Attempting with failover location.")
                     SimpleLog(p.plugin_log,"Unable to download plugin manifest" + name + " from primary location.  Attempting with failover location.")
                     failoverlocation=p.getAttribute("failoverlocation")
                     self.Util.Endpoint=failoverlocation.split('/')[2]
                     Log("Plugin failover server is: " +  self.Util.Endpoint)
-                    SimpleLog(self.all_plugins_log,"Plugin failover server is: " +  self.Util.Endpoint)
                     SimpleLog(p.plugin_log,"Plugin failover server is: " +  self.Util.Endpoint)
 
                     manifest=self.Util.HttpGetWithoutHeaders(failoverlocation)
                 if manifest == None:
                     Log("Plugin manifest" + name + "downloaded successfully length = " + str(len(manifest)))
-                    SimpleLog(self.all_plugins_log,"Plugin manifest" + name + "downloaded successfully length = " + str(len(manifest)))
                     SimpleLog(p.plugin_log,"Plugin manifest" + name + "downloaded successfully length = " + str(len(manifest)))
 
                 filepath=LibDir+"/" + name + '.' + incarnation + '.manifest'
@@ -2782,41 +2768,29 @@ class ExtensionsConfig(object):
                     if GetNodeTextData(mp.getElementsByTagName("Version")[0]) == version:
                         bundle_uri = GetNodeTextData(mp.getElementsByTagName("Uri")[0])
                         break
-                if len(mp.getElementsByTagName("IsInternal")):
-                    if GetNodeTextData(mp.getElementsByTagName("IsInternal")[0]) == 'true':
-                        Log('IsInternal is true, this version is restricted from upgrade.')
-                        SimpleLog(self.all_plugins_log,'IsInternal is true, this version is restricted from upgrade.')
-                        SimpleLog(p.plugin_log,'IsInternal is true, this version is restricted from upgrade.')
-                        p.setAttribute('restricted','true')
-                        continue
                 if len(mp.getElementsByTagName("DisallowMajorVersionUpgrade")):
                     if GetNodeTextData(mp.getElementsByTagName("DisallowMajorVersionUpgrade")[0]) == 'true' and previous_version !=None and previous_version.split('.')[0] != version.split('.')[0] :
                         Log('DisallowMajorVersionUpgrade is true, this major version is restricted from upgrade.')
-                        SimpleLog(self.all_plugins_log,'DisallowMajorVersionUpgrade is true, this major version is restricted from upgrade.')
                         SimpleLog(p.plugin_log,'DisallowMajorVersionUpgrade is true, this major version is restricted from upgrade.')
                         p.setAttribute('restricted','true')
                         continue
                 if len(bundle_uri) < 1 :
                     Error("Unable to fetch Bundle URI from manifest for " + name + " v " + version)
-                    SimpleLog(self.all_plugins_log,"Unable to fetch Bundle URI from manifest for " + name + " v " + version)
                     SimpleLog(p.plugin_log,"Unable to fetch Bundle URI from manifest for " + name + " v " + version)
                     continue
                 Log("Bundle URI = " + bundle_uri)
-                SimpleLog(self.all_plugins_log,"Bundle URI = " + bundle_uri)
                 SimpleLog(p.plugin_log,"Bundle URI = " + bundle_uri)
 
                 # Download the zipfile archive and save as '.zip'
                 bundle=self.Util.HttpGetWithoutHeaders(bundle_uri)
                 if bundle == None:
                     Error("Unable to download plugin bundle" + bundle_uri )
-                    SimpleLog(self.all_plugins_log,"Unable to download plugin bundle" + bundle_uri )
                     SimpleLog(p.plugin_log,"Unable to download plugin bundle" + bundle_uri )
                     continue
                 b=bytearray(bundle)
                 filepath=LibDir+"/" + os.path.basename(bundle_uri) + '.zip'
                 SetFileContents(filepath,b)
                 Log("Plugin bundle" + bundle_uri + "downloaded successfully length = " + str(len(bundle)))
-                SimpleLog(self.all_plugins_log,"Plugin bundle" + bundle_uri + "downloaded successfully length = " + str(len(bundle)))
                 SimpleLog(p.plugin_log,"Plugin bundle" + bundle_uri + "downloaded successfully length = " + str(len(bundle)))
 
                 # unpack the archive
@@ -2824,7 +2798,6 @@ class ExtensionsConfig(object):
                 zip_dir=LibDir+"/" + name + '-' + version
                 z.extractall(zip_dir)
                 Log('Extracted ' + bundle_uri + ' to ' + zip_dir) 
-                SimpleLog(self.all_plugins_log,'Extracted ' + bundle_uri + ' to ' + zip_dir) 
                 SimpleLog(p.plugin_log,'Extracted ' + bundle_uri + ' to ' + zip_dir) 
 
                 # zip no file perms in .zip so set all the scripts to +x
@@ -2839,7 +2812,6 @@ class ExtensionsConfig(object):
                         break
                 if mfile == None :
                     Error('HandlerManifest.json not found.')
-                    SimpleLog(self.all_plugins_log,'HandlerManifest.json not found.')
                     SimpleLog(p.plugin_log,'HandlerManifest.json not found.')
                     continue
                 manifest = GetFileContents(mfile)
@@ -2855,7 +2827,6 @@ class ExtensionsConfig(object):
                     for ps in pslist:
                         if name == ps.getAttribute("name") and version == ps.getAttribute("version"):
                             Log("Found RuntimeSettings for " + name + " V " + version)
-                            SimpleLog(self.all_plugins_log,"Found RuntimeSettings for " + name + " V " + version)
                             SimpleLog(p.plugin_log,"Found RuntimeSettings for " + name + " V " + version)
 
                             config=GetNodeTextData(ps.getElementsByTagName("RuntimeSettings")[0])
@@ -2863,12 +2834,11 @@ class ExtensionsConfig(object):
                             break
                 if config == '':
                     Log("No RuntimeSettings for " + name + " V " + version)
-                    SimpleLog(self.all_plugins_log,"No RuntimeSettings for " + name + " V " + version)
                     SimpleLog(p.plugin_log,"No RuntimeSettings for " + name + " V " + version)
 
                 SetFileContents(root +"/config/" + incarnation +".settings",  config )
                 #create HandlerEnvironment.json
-                handler_env='[{  "name": "'+name+'", "seqNo": "'+seqNo+'", "version": 1.0,  "handlerEnvironment": {    "logFolder": "/var/log",    "configFolder": "' + root + '/config",    "statusFolder": "' + root + '/status",    "heartbeatFile": "'+ root + '/heartbeat.log"}}]'
+                handler_env='[{  "name": "'+name+'", "seqNo": "'+seqNo+'", "version": 1.0,  "handlerEnvironment": {    "logFolder": "'+os.path.dirpath(p.plugin_log)+'",    "configFolder": "' + root + '/config",    "statusFolder": "' + root + '/status",    "heartbeatFile": "'+ root + '/heartbeat.log"}}]'
                 SetFileContents(root+'/HandlerEnvironment.json',handler_env)
                 self.SetHandlerState(handler, 'NotInstalled')
 
@@ -2882,51 +2852,43 @@ class ExtensionsConfig(object):
                             if self.launchCommand(p.plugin_log,name,previous_version,'disableCommand') == None :
                                 self.SetHandlerState(handler, 'Enabled')
                                 Error('Unable to disable old plugin '+name+' version ' + previous_version)
-                                SimpleLog(self.all_plugins_log,'Unable to disable old plugin '+name+' version ' + previous_version)
                                 SimpleLog(p.plugin_log,'Unable to disable old plugin '+name+' version ' + previous_version)
 
                             else :
                                 self.SetHandlerState(handler, 'Installed')
                                 Log(name+' version ' + previous_version + ' is disabled')
-                                SimpleLog(self.all_plugins_log,name+' version ' + previous_version + ' is disabled')
                                 SimpleLog(p.plugin_log,name+' version ' + previous_version + ' is disabled')
 
 
                 if getcmd=='updateCommand':
                     if self.launchCommand(p.plugin_log,name,version,getcmd,previous_version) == None :
                         Error('Update failed for '+name+'-'+version)
-                        SimpleLog(self.all_plugins_log,'Update failed for '+name+'-'+version)
                         SimpleLog(p.plugin_log,'Update failed for '+name+'-'+version)
 
                     else :
                         Log('Update complete'+name+'-'+version)
-                        SimpleLog(self.all_plugins_log,'Update complete'+name+'-'+version)
                         SimpleLog(p.plugin_log,'Update complete'+name+'-'+version)
 
                     # if we updated - call unistall for the old plugin
                     if self.launchCommand(p.plugin_log,name,previous_version,'uninstallCommand') == None :
                         self.SetHandlerState(handler, 'Installed')
                         Error('Uninstall failed for '+name+'-'+previous_version)
-                        SimpleLog(self.all_plugins_log,'Uninstall failed for '+name+'-'+previous_version)
                         SimpleLog(p.plugin_log,'Uninstall failed for '+name+'-'+previous_version)
 
                     else :
                         self.SetHandlerState(handler, 'NotInstalled')
                         Log('Uninstall complete'+ name +'-' + previous_version)
-                        SimpleLog(self.all_plugins_log,'Uninstall complete'+ name +'-' + previous_version)
                         SimpleLog(p.plugin_log,'Uninstall complete'+ name +'-' + previous_version)
 
                 else :  # run install
                     if self.launchCommand(p.plugin_log,name,version,getcmd) == None :
                         self.SetHandlerState(handler, 'NotInstalled')
                         Error('Installation failed for '+name+'-'+version)
-                        SimpleLog(self.all_plugins_log,'Installation failed for '+name+'-'+version)
                         SimpleLog(p.plugin_log,'Installation failed for '+name+'-'+version)
 
                     else :
                         self.SetHandlerState(handler, 'Installed')
                         Log('Installation completed for '+name+'-'+version)
-                        SimpleLog(self.all_plugins_log,'Installation completed for '+name+'-'+version)
                         SimpleLog(p.plugin_log,'Installation completed for '+name+'-'+version)
 
             #end if plg_dir == none or version > = prev
@@ -2941,7 +2903,6 @@ class ExtensionsConfig(object):
                     break
             if mfile == None :
                 Error('HandlerManifest.json not found.')
-                SimpleLog(self.all_plugins_log,'HandlerManifest.json not found.')
                 SimpleLog(p.plugin_log,'HandlerManifest.json not found.')
 
                 continue
@@ -2954,14 +2915,12 @@ class ExtensionsConfig(object):
                     pslist=dom.getElementsByTagName("PluginSettings")[0].getElementsByTagName("Plugin")
                 except:
                     Error('Error parsing ExtensionsConfig.')
-                    SimpleLog(self.all_plugins_log,'Error parsing ExtensionsConfig.')
                     SimpleLog(p.plugin_log,'Error parsing ExtensionsConfig.')
 
                     continue
                 for ps in pslist:
                     if name == ps.getAttribute("name") and version == ps.getAttribute("version"):
                         Log("Found RuntimeSettings for " + name + " V " + version)
-                        SimpleLog(self.all_plugins_log,"Found RuntimeSettings for " + name + " V " + version)
                         SimpleLog(p.plugin_log,"Found RuntimeSettings for " + name + " V " + version)
 
                         config=GetNodeTextData(ps.getElementsByTagName("RuntimeSettings")[0])
@@ -2969,7 +2928,6 @@ class ExtensionsConfig(object):
                         break
             if config == '':
                 Error("No RuntimeSettings for " + name + " V " + version)
-                SimpleLog(self.all_plugins_log,"No RuntimeSettings for " + name + " V " + version)
                 SimpleLog(p.plugin_log,"No RuntimeSettings for " + name + " V " + version)
 
             SetFileContents(root +"/config/" + incarnation +".settings",  config )
@@ -2979,13 +2937,11 @@ class ExtensionsConfig(object):
                 if self.launchCommand(p.plugin_log,name,version,'installCommand') == None :
                     self.SetHandlerState(handler, 'NotInstalled')
                     Error('Installation failed for '+name+'-'+version)
-                    SimpleLog(self.all_plugins_log,'Installation failed for '+name+'-'+version)
                     SimpleLog(p.plugin_log,'Installation failed for '+name+'-'+version)
 
                 else :
                     self.SetHandlerState(handler, 'Installed')
                     Log('Installation completed for '+name+'-'+version)
-                    SimpleLog(self.all_plugins_log,'Installation completed for '+name+'-'+version)
                     SimpleLog(p.plugin_log,'Installation completed for '+name+'-'+version)
 
 
@@ -2993,23 +2949,19 @@ class ExtensionsConfig(object):
                 if self.launchCommand(p.plugin_log,name,version,'enableCommand') == None :
                     self.SetHandlerState(handler, 'Installed')
                     Error('Enable failed for '+name+'-'+version)
-                    SimpleLog(self.all_plugins_log,'Enable failed for '+name+'-'+version)
                     SimpleLog(p.plugin_log,'Enable failed for '+name+'-'+version)
 
                 else :
                     self.SetHandlerState(handler, 'Enabled')
                     Log('Enable completed for '+name+'-'+version)
-                    SimpleLog(self.all_plugins_log,'Enable completed for '+name+'-'+version)
                     SimpleLog(p.plugin_log,'Enable completed for '+name+'-'+version)
 
             # this plugin processing is complete
             Log('Processing completed for '+name+'-'+version)
-            SimpleLog(self.all_plugins_log,'Processing completed for '+name+'-'+version)
             SimpleLog(p.plugin_log,'Processing completed for '+name+'-'+version)
 
         #end plugin processing loop
         Log('Finished processing ExtensionsConfig.xml')
-        SimpleLog(self.all_plugins_log,'Finished processing ExtensionsConfig.xml')
         SimpleLog(p.plugin_log,'Finished processing ExtensionsConfig.xml')
 
         return self
@@ -3026,7 +2978,6 @@ class ExtensionsConfig(object):
                 break
         if mfile == None :
             Error('HandlerManifest.json not found.')
-            SimpleLog(self.all_plugins_log,'HandlerManifest.json not found.')
             SimpleLog(plugin_log,'HandlerManifest.json not found.')
 
             return None
@@ -3035,7 +2986,6 @@ class ExtensionsConfig(object):
             jsn = json.loads(manifest)
         except:
             Error('Error parsing HandlerManifest.json.')
-            SimpleLog(self.all_plugins_log,'Error parsing HandlerManifest.json.')
             SimpleLog(plugin_log,'Error parsing HandlerManifest.json.')
 
             return None
@@ -3045,12 +2995,10 @@ class ExtensionsConfig(object):
             cmd = jsn['handlerManifest'][command]
         else :
             Error('Key handlerManifest not found.  Handler cannot be installed.')
-            SimpleLog(self.all_plugins_log,'Key handlerManifest not found.  Handler cannot be installed.')
             SimpleLog(plugin_log,'Key handlerManifest not found.  Handler cannot be installed.')
 
         if len(cmd) == 0 :
             Error('Unable to read ' + command )
-            SimpleLog(self.all_plugins_log,'Unable to read ' + command )
             SimpleLog(plugin_log,'Unable to read ' + command )
 
             return None
@@ -3067,20 +3015,17 @@ class ExtensionsConfig(object):
             child = subprocess.Popen(dirpath+'/'+cmd+arg,shell=True,cwd=dirpath)
         except Exception as e:
             Error('Exception launching ' + cmd + str(e))
-            SimpleLog(self.all_plugins_log,'Exception launching ' + cmd + str(e))
             SimpleLog(plugin_log,'Exception launching ' + cmd + str(e))
 
         pid = child.pid
         if pid == None or pid < 1 :
             ExtensionChildren.append((-1,root))
             Error('Error launching ' + cmd + '.')
-            SimpleLog(self.all_plugins_log,'Error launching ' + cmd + '.')
             SimpleLog(plugin_log,'Error launching ' + cmd + '.')
 
         else :
             ExtensionChildren.append((pid,root))
             Log("Spawned "+ cmd + " PID " + str(pid))
-            SimpleLog(self.all_plugins_log,"Spawned "+ cmd + " PID " + str(pid))
             SimpleLog(plugin_log,"Spawned "+ cmd + " PID " + str(pid))
 
 
@@ -3093,7 +3038,6 @@ class ExtensionsConfig(object):
             retry-=1
         if retry==0:
             Error('Process exceeded timeout of ' + timeout + ' seconds. Terminating process ' + str(pid))
-            SimpleLog(self.all_plugins_log,'Process exceeded timeout of ' + timeout + ' seconds. Terminating process ' + str(pid))
             SimpleLog(plugin_log,'Process exceeded timeout of ' + timeout + ' seconds. Terminating process ' + str(pid))
 
             os.kill(pid,9)
@@ -3101,12 +3045,10 @@ class ExtensionsConfig(object):
         code = child.wait()
         if code == None or code != 0:
             Error('Process ' + str(pid) + ' returned non-zero exit code (' + str(code) + ')')
-            SimpleLog(self.all_plugins_log,'Process ' + str(pid) + ' returned non-zero exit code (' + str(code) + ')')
             SimpleLog(plugin_log,'Process ' + str(pid) + ' returned non-zero exit code (' + str(code) + ')')
 
             return None
         Log(command + ' completed.')
-        SimpleLog(self.all_plugins_log,command + ' completed.')
         SimpleLog(plugin_log,command + ' completed.')
 
         return 0
