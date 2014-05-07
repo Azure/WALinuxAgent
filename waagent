@@ -423,6 +423,9 @@ class AbstractDistro(object):
     def GetInterfaceName(self):
         return GetFirstActiveNetworkInterfaceNonLoopback()[0]
 
+    def RestartInterface(self, iface):
+        Run("ifdown " + iface + " && ifup " + iface)
+
     def CreateAccount(self,user, password, expiration, thumbprint):
         return CreateAccount(user, password, expiration, thumbprint)
     
@@ -3977,7 +3980,7 @@ class Agent(Util):
         Log("Setting host name: " + name)
         MyDistro.publishHostname(name)
         ethernetInterface = MyDistro.GetInterfaceName()
-        Run("ifdown " + ethernetInterface + " && ifup " + ethernetInterface)
+        MyDistro.RestartInterface(ethernetInterface)
         self.RestoreRoutes()
 
     def RestoreRoutes(self):
