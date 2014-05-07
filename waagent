@@ -599,12 +599,6 @@ class gentooDistro(AbstractDistro):
         else:
             return 1
 
-    def load_ata_piix(self):
-        return 0
-
-    def unload_ata_piix(self):
-        return 0
-
     def RestartInterface(self, iface):
         Run("/etc/init.d/net." + iface + " restart")
 
