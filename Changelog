@@ -1,9 +1,16 @@
 WALinuxAgent                                                          Changelog
 |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 ?? ??? 2014, WALinuxAgent 2.0.5
-   . Multiple fixes for extensions config framework
+   . Multiple fixes for FreeBSD provisioning
+   . Add support for SLES 12
+   . Multiple fixes for extension handler framework
+     . New logging support
+     . Add state handling for each extension
+     . Properly handle non-JSON extensions
+     . Several other bugfixes
+   . Replace platform.* calls with DistInfo() function
    . Inherit from redhatDistro in centosDistro class
-   . Fix hostname configurtion for RHEL7-based systems
+   . Fix hostname configuration for RHEL7-based systems
    . EnvMonitor - Set SCSI I/O timeout for all attached disks
 
 02 Apr 2014, WALinuxAgent 2.0.4
