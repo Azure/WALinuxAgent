@@ -2665,7 +2665,7 @@ class ExtensionsConfig(object):
             incarnation=self.Extensions[0].getAttribute("goalStateIncarnation")
             SetFileContents('ExtensionsConfig.'+incarnation+'.xml', xmlText)
         except:
-            Error('Error parsing ExtensionsConfig.')
+            LogIfVerbose('ERROR:  Error parsing ExtensionsConfig.')
             return None
         for p in self.Plugins:
             if len(p.getAttribute("location"))<1:  # this plugin is inside the PluginSettings
