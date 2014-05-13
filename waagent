@@ -2659,9 +2659,6 @@ class ExtensionsConfig(object):
             self.Extensions=dom.getElementsByTagName("Extensions")
             pg = dom.getElementsByTagName("Plugins")
             self.Plugins = pg[0].getElementsByTagName("Plugin")
-            #if <Plugins/> is empty
-            if self.Plugins[0].hasChildNodes() != True:
-                return
             incarnation=self.Extensions[0].getAttribute("goalStateIncarnation")
             SetFileContents('ExtensionsConfig.'+incarnation+'.xml', xmlText)
         except:
@@ -3080,9 +3077,6 @@ class ExtensionsConfig(object):
         status=''
         statuses=''
         for p in self.Plugins:
-            #if <Plugins/> is empty
-            if self.Plugins[0].hasChildNodes() != True:
-                return
             if p.getAttribute("state") == 'uninstall' or p.getAttribute("restricted") == 'true' :
                 continue
             version=p.getAttribute("version")
@@ -3141,9 +3135,6 @@ class ExtensionsConfig(object):
             Error('Error parsing ExtensionsConfig.  Unable to check hearbeat.')
             return None
         for p in self.Plugins:
-            #if <Plugins/> is empty
-            if self.Plugins[0].hasChildNodes() != True:
-                return
             if p.getAttribute("state") == 'disabled' or p.getAttribute("state") == 'uninstall' or p.getAttribute("restricted") == 'true' :
                 continue
             version=p.getAttribute("version")
