@@ -2960,8 +2960,11 @@ class ExtensionsConfig(object):
 
         #end plugin processing loop
         Log('Finished processing ExtensionsConfig.xml')
-        SimpleLog(p.plugin_log,'Finished processing ExtensionsConfig.xml')
-
+        try:
+            SimpleLog(p.plugin_log,'Finished processing ExtensionsConfig.xml')
+        except:
+            pass
+        
         return self
 
     def launchCommand(self,plugin_log,name,version,command,prev_version=None):
