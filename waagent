@@ -3079,6 +3079,7 @@ class ExtensionsConfig(object):
             return None
         status=''
         statuses=''
+        sent_suffix = '_sent'
         for p in self.Plugins:
             if p.getAttribute("state") == 'uninstall' or p.getAttribute("restricted") == 'true' :
                 continue
@@ -3088,24 +3089,27 @@ class ExtensionsConfig(object):
                 LogIfVerbose("Plugin " + name+" version: " +version+" is not a JSON Extension.  Skipping.")
                 continue
             status_file=LibDir+'/'+name+'-'+version+'/status/'+incarnation+'.status'
-            if os.path.exists(status_file) !=True and os.path.exists(status_file+'_sent') != True:
+            if os.path.exists(status_file) !=True and os.path.exists(status_file+sent_suffix) != True:
                 if p.getAttribute("state") == 'disabled' :
                     LogIfVerbose(name+'-'+version+' is disabled.  No status to report.')
                     continue
                 Error("Unable to locate " + status_file)
                 Error('Status report '+status_file+' Not sent!')
                 continue
-            elif os.path.exists(status_file+'_sent') == True:
-                continue
+            elif os.path.exists(status_file) !=True and os.path.exists(status_file+sent_suffix) == True:
+                status_file = status_file+sent_suffix
             if len(statuses)>0:
                 statuses+=','
             statuses+=GetFileContents(status_file)
-            os.rename(status_file,status_file+'_sent')
+            if status_file.find(sent_suffix) < 0:
+                if os.path.exists(status_file + sent_suffix):
+                    os.remove(status_file + sent_suffix)
+                os.rename(status_file,status_file+sent_suffix)
             
         if len(statuses)<1:
             LogIfVerbose('No Handler status to report')
             return None
-        tstamp=time.strftime("%Y-%M-%dT%H:%M:%SZ", time.gmtime())
+        tstamp=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         #header
         #agent state
         if provisioned == False:
