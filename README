@@ -33,6 +33,11 @@ functionality for Linux and FreeBSD IaaS deployments:
     - Detect and bootstrap the VMM agent for Linux when running in a System
 	  Center Virtual Machine Manager 2012R2 environment
 
+  * VM Extension
+    - Inject component authored by Microsoft and Partners into Linux VM (IaaS)
+	  to enable software and configuration automation
+    - VM Extension reference implementation on https://github.com/Azure/azure-linux-extensions
+
 
 COMMUNICATION
 

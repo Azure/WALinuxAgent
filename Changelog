@@ -1,6 +1,6 @@
 WALinuxAgent                                                          Changelog
 |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
-?? ??? 2014, WALinuxAgent 2.0.5
+19 May 2014, WALinuxAgent 2.0.5
    . Multiple fixes for FreeBSD provisioning
    . Add support for SLES 12
    . Multiple fixes for extension handler framework
