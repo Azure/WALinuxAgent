@@ -424,9 +424,6 @@ class AbstractDistro(object):
     def GetInterfaceName(self):
         return GetFirstActiveNetworkInterfaceNonLoopback()[0]
 
-    def RestartInterface(self, iface):
-        Run("ifdown " + iface + " && ifup " + iface)
-
     def CreateAccount(self,user, password, expiration, thumbprint):
         return CreateAccount(user, password, expiration, thumbprint)
     
@@ -527,81 +524,6 @@ class AbstractDistro(object):
             if(GetFileContents(filePath).splitlines()[0].rstrip() != timeout):
                 SetFileContents(filePath,timeout)
                 Log("SetBlockDeviceTimeout: Update the device " + device + " with timeout " + timeout)
-
-############################################################
-#	GentooDistro
-############################################################
-gentoo_init_file = """\
-#!/sbin/runscript
-# Copyright 2014 Austen Dicken <cvpcsm@gmail.com>
-# All rights reserved. Released under the GNU Public License v2
-
-command=/usr/sbin/waagent
-pidfile=/var/run/waagent.pid
-command_args=-daemon
-command_background=true
-name="Windows Azure Linux Agent"
-
-depend()
-{
-	needs localmount
-	use logger network
-	after bootmisc modules
-}
-
-"""
-class gentooDistro(AbstractDistro):
-    """
-    Gentoo distro concrete class
-    """
-
-    def __init__(self): #
-        super(gentooDistro,self).__init__()
-        self.service_cmd='/sbin/service'
-        self.ssh_service_name='sshd'
-        self.hostname_file_path='/etc/conf.d/hostname'
-        self.dhcp_client_name='dhcpcd'
-        self.shadow_file_mode=0640
-        self.init_file=gentoo_init_file
-        
-    def publishHostname(self,name):
-        try:
-            if (os.path.isfile(self.hostname_file_path)):
-                r=ReplaceFileContentsAtomic(self.hostname_file_path, "hostname=\"" + name + "\"\n"
-                    + "\n".join(filter(lambda a: not a.startswith("hostname="), GetFileContents(self.hostname_file_path).split("\n"))))
-        except:
-            return 1
-        return r
-        
-    def installAgentServiceScriptFiles(self):
-        SetFileContents(self.init_script_file, self.init_file)
-        os.chmod(self.init_script_file, 0755)
-
-    def registerAgentService(self):
-        self.installAgentServiceScriptFiles()
-        return Run('rc-update add ' + self.agent_service_name + ' default')
-    
-    def uninstallAgentService(self):
-        return Run('rc-update del ' + self.agent_service_name + ' default')
-
-    def unregisterAgentService(self):
-        self.stopAgentService()
-        return self.uninstallAgentService()
-
-    def checkPackageInstalled(self,p):
-        if Run('eix -I ^' + p + '$',chk_err=False):
-            return 0
-        else:
-            return 1
-
-    def checkPackageUpdateable(self,p):
-        if Run('eix -u ^' + p + '$',chk_err=False):
-            return 0
-        else:
-            return 1
-
-    def RestartInterface(self, iface):
-        Run("/etc/init.d/net." + iface + " restart")
 
 ############################################################    
 #	SuSEDistro
@@ -1383,9 +1305,6 @@ class FreeBSDDistro(AbstractDistro):
         """
         iface,inet,mac=self.GetFreeBSDEthernetInfo()
         return iface
-
-    def RestartInterface(self, iface):
-        Run("service netif restart")
 
     def GetIpv4Address(self):
         """
@@ -4193,7 +4112,10 @@ class Agent(Util):
         Log("Setting host name: " + name)
         MyDistro.publishHostname(name)
         ethernetInterface = MyDistro.GetInterfaceName()
-        MyDistro.RestartInterface(ethernetInterface)
+        if DistInfo()[0] == 'FreeBSD':
+            Run("service netif restart")
+        else:
+            Run("ifdown " + ethernetInterface + " && ifup " + ethernetInterface)
         self.RestoreRoutes()
 
     def RestoreRoutes(self):
