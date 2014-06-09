@@ -533,8 +533,6 @@ class AbstractDistro(object):
 ############################################################
 gentoo_init_file = """\
 #!/sbin/runscript
-# Copyright 2014 Austen Dicken <cvpcsm@gmail.com>
-# All rights reserved. Released under the GNU Public License v2
 
 command=/usr/sbin/waagent
 pidfile=/var/run/waagent.pid
