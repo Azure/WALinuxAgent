@@ -3014,7 +3014,7 @@ class ExtensionsConfig(object):
         # launch
         pid=None
         try:
-            child = subprocess.Popen(dirpath+'/'+cmd+arg,shell=True,cwd=dirpath)
+            child = subprocess.Popen(dirpath+'/'+cmd+arg,shell=True,cwd=dirpath,stdout=subprocess.PIPE)
         except Exception as e:
             Error('Exception launching ' + cmd + str(e))
             SimpleLog(plugin_log,'Exception launching ' + cmd + str(e))
