@@ -930,6 +930,100 @@ class centosDistro(redhatDistro):
     def __init__(self):
         super(centosDistro,self).__init__()
 
+
+############################################################
+#   coreosDistro
+############################################################
+
+coreos_systemd_conf = """\
+[Unit]
+Description=Microsoft Azure Agent
+After=network.target
+After=sshd.service
+ConditionFileIsExecutable=/home/core/WALinuxAgent/waagent
+ConditionPathExists=/etc/systemd/system/waagent.service
+
+[Service]
+Type=simple
+ExecStart=/home/core/WALinuxAgent/waagent -daemon
+
+[Install]
+WantedBy=multi-user.target
+"""
+
+class coreosDistro(AbstractDistro):
+    """
+    CoreOS Distro concrete class
+    Put CoreOS specific behavior here...
+    """
+    def __init__(self):
+        super(coreosDistro,self).__init__()
+        self.requiredDeps += [ "/usr/bin/systemctl" ]
+        self.agent_service_name = 'waagent'
+        self.init_script_file='/etc/systemd/system/waagent.service'
+        self.init_file=coreos_systemd_conf
+        self.dhcp_client_name=None
+        self.getpidcmd='pidof '
+        self.shadow_file_mode=0640
+
+    def checkPackageInstalled(self,p):
+        """
+        There is no package manager in CoreOS.  Return 1 since it must be preinstalled.
+        """
+        return 1
+
+    def checkDependencies(self):
+        for a in self.requiredDeps:
+            if Run("which " + a + " > /dev/null 2>&1",chk_err=False):
+                Error("Missing required dependency: " + a)
+                return 1
+        return 0
+
+
+    def checkPackageUpdateable(self,p):
+        """
+        There is no package manager in CoreOS.  Return 0 since it can't be updated via package.
+        """
+        return 0
+
+    def installAgentServiceScriptFiles(self):
+        try:
+            SetFileContents(self.init_script_file, self.init_file)
+            os.chmod(self.init_script_file, 0744)
+        except OSError, e:
+            ErrorWithPrefix('installAgentServiceScriptFiles','Exception: '+str(e)+' occured creating ' + self.init_script_file)
+            return 1
+        return 0
+
+    def registerAgentService(self):
+        if self.installAgentServiceScriptFiles() == 0:
+            return Run('systemctl enable ' + self.agent_service_name)
+        else :
+            return 1
+
+    def startAgentService(self):
+        return Run('systemctl start ' + self.agent_service_name)
+
+    def stopAgentService(self):
+        return Run('systemctl stop ' + self.agent_service_name)
+
+    def uninstallAgentService(self):
+        Run('systemctl disable ' + self.agent_service_name)
+        return Run('rm ' + self.init_script_file)
+
+    def unregisterAgentService(self):
+        self.stopAgentService()
+        return self.uninstallAgentService()
+
+    def sshDeployPublicKey(self,fprint,path):
+        """
+        We support PKCS8.
+        """
+        if Run("ssh-keygen -i -m PKCS8 -f " + fprint + " >> " + path):
+            return 1
+        else :
+            return 0
+
 ############################################################    
 #	debianDistro
 ############################################################    
