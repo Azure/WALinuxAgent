@@ -132,6 +132,10 @@ OS.RootDeviceScsiTimeout=300            # Root device timeout in seconds.
 OS.OpensslPath=None                     # If "None", the system default version is used.
 """
 
+README="""\
+WARNING: this is a temperary dir. All the content saved under this dir will be removed after rebooting.
+"""
+
 ############################################################
 # BEGIN DISTRO CLASS DEFS
 ############################################################
@@ -467,6 +471,8 @@ class AbstractDistro(object):
             Error("ActivateResourceDisk: Failed to mount resource disk (" + device + "1).")
             return
         Log("Resource disk (" + device + "1) is mounted at " + mountpoint + " with fstype " + fs)
+        #Create README file under the root of resource disk
+        SetFileContents(os.path.join(mountpoint,"README"), README)
         DiskActivated = True
         swap = Config.get("ResourceDisk.EnableSwap")
         if swap == None or swap.lower().startswith("n"):
