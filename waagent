@@ -4124,14 +4124,15 @@ class Agent(Util):
         """
         ShortSleep = False # Sleep 1 second before retrying DHCP queries.
         ifname=None
-        Run("iptables -D INPUT -p udp --dport 68 -j ACCEPT",chk_err=False)  # We supress error logging on error.
-        Run("iptables -I INPUT -p udp --dport 68 -j ACCEPT",chk_err=False)  # We supress error logging on error.
 
         sleepDurations = [0, 10, 30, 60, 60]
         maxRetry = len(sleepDurations)
         lastTry = (maxRetry - 1)
         for retry in range(0, maxRetry):
             try:
+                #Open DHCP port if iptables is enabled.
+                Run("iptables -D INPUT -p udp --dport 68 -j ACCEPT",chk_err=False)  # We supress error logging on error.
+                Run("iptables -I INPUT -p udp --dport 68 -j ACCEPT",chk_err=False)  # We supress error logging on error.
                 strRetry = str(retry)
                 prefix = "DoDhcpWork: try=" + strRetry
                 LogIfVerbose(prefix)
