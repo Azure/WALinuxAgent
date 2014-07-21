@@ -287,7 +287,7 @@ class AbstractDistro(object):
         sshRestartCmd = self.service_cmd + " " + self.ssh_service_name + " " + self.ssh_service_restart_option
         retcode = Run(sshRestartCmd)
         if retcode > 0:
-            Error("Failed to restart SSH service with return code:" + retcode)
+            Error("Failed to restart SSH service with return code:" + str(retcode))
         return retcode
 
     def sshDeployPublicKey(self,fprint,path):
@@ -4080,7 +4080,7 @@ class Agent(Util):
                 # http://msdn.microsoft.com/en-us/library/cc227282%28PROT.10%29.aspx
                 LogIfVerbose("Routes at offset:" + hex(i) + " with length:" + hex(length))
                 if length < 5:
-                    Error("Data too small for option " + option)
+                    Error("Data too small for option " + str(option))
                 j = i + 2
                 while j < (i + length + 2):
                     maskLengthBits = Ord(receiveBuffer[j])
@@ -4111,7 +4111,7 @@ class Agent(Util):
                         name = "Windows Azure wire protocol endpoint"
                     LogIfVerbose(name + ": " + IpAddress + " at " + hex(i))
                 else:
-                    Error("HandleDhcpResponse: Data too small for option " + option)
+                    Error("HandleDhcpResponse: Data too small for option " + str(option))
             else:
                 LogIfVerbose("Skipping DHCP option " + hex(option) + " at " + hex(i) + " with length " + hex(length))
             i += length + 2
