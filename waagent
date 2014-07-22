@@ -452,28 +452,33 @@ class AbstractDistro(object):
             Error("ActivateResourceDisk: Unable to detect disk topology.")
             return
         device = "/dev/" + device
-        for entry in RunGetOutput("mount")[1].split():
-            if entry.startswith(device + "1"):
-                Log("ActivateResourceDisk: " + device + "1 is already mounted.")
-                DiskActivated = True
+
+        mountlist = RunGetOutput("mount")[1]
+        mountpoint = GetMountPoint(mountlist, device)
+
+        if(mountpoint):
+            Log("ActivateResourceDisk: " + device + "1 is already mounted.")
+        else:
+            mountpoint = Config.get("ResourceDisk.MountPoint")
+            if mountpoint == None:
+                mountpoint = "/mnt/resource"
+            CreateDir(mountpoint, "root", 0755)
+            fs = Config.get("ResourceDisk.Filesystem")
+            if fs == None:
+                fs = "ext3"
+            if RunGetOutput("sfdisk -q -c " + device + " 1")[1].rstrip() == "7" and fs != "ntfs":
+                Run("sfdisk -c " + device + " 1 83")
+                Run("mkfs." + fs + " " + device + "1")
+            if Run("mount " + device + "1 " + mountpoint):
+                Error("ActivateResourceDisk: Failed to mount resource disk (" + device + "1).")
                 return
-        mountpoint = Config.get("ResourceDisk.MountPoint")
-        if mountpoint == None:
-            mountpoint = "/mnt/resource"
-        CreateDir(mountpoint, "root", 0755)
-        fs = Config.get("ResourceDisk.Filesystem")
-        if fs == None:
-            fs = "ext3"
-        if RunGetOutput("sfdisk -q -c " + device + " 1")[1].rstrip() == "7" and fs != "ntfs":
-            Run("sfdisk -c " + device + " 1 83")
-            Run("mkfs." + fs + " " + device + "1")
-        if Run("mount " + device + "1 " + mountpoint):
-            Error("ActivateResourceDisk: Failed to mount resource disk (" + device + "1).")
-            return
-        Log("Resource disk (" + device + "1) is mounted at " + mountpoint + " with fstype " + fs)
+            Log("Resource disk (" + device + "1) is mounted at " + mountpoint + " with fstype " + fs)
+
         #Create README file under the root of resource disk
         SetFileContents(os.path.join(mountpoint,"README"), README)
         DiskActivated = True
+
+        #Create swap space
         swap = Config.get("ResourceDisk.EnableSwap")
         if swap == None or swap.lower().startswith("n"):
             return
@@ -4672,6 +4677,25 @@ WaagentLogrotate = """\
     missingok
 }
 """
+
+def GetMountPoint(mountlist, device):
+    """
+    Example of mountlist:
+        /dev/sda1 on / type ext4 (rw)
+        proc on /proc type proc (rw)
+        sysfs on /sys type sysfs (rw)
+        devpts on /dev/pts type devpts (rw,gid=5,mode=620)
+        tmpfs on /dev/shm type tmpfs (rw,rootcontext="system_u:object_r:tmpfs_t:s0")
+        none on /proc/sys/fs/binfmt_misc type binfmt_misc (rw)
+        /dev/sdb1 on /mnt/resource type ext4 (rw)
+    """
+    if (mountlist and device):
+        for entry in mountlist.split('\n'):
+            if(re.search(device, entry)):
+                tokens = entry.split()
+                #Return the 3rd column of this line
+                return tokens[2] if len(tokens) > 2 else None
+    return None
 
 def FindInLinuxKernelCmdline(option):
     """

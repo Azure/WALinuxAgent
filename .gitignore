@@ -1,1 +1,3 @@
 waagentc
+*.py[cod]*
+
