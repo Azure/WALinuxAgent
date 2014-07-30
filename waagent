@@ -131,9 +131,15 @@ Logs.Verbose=n                          # Enable verbose logs
 OS.RootDeviceScsiTimeout=300            # Root device timeout in seconds.
 OS.OpensslPath=None                     # If "None", the system default version is used.
 """
+README_FILENAME="DATALOSS_WARNING_README.txt"
+README_FILECONTENT="""\
+WARNING: THIS IS A TEMPORARY DISK. 
 
-README="""\
-WARNING: this is a temperary dir. All the content saved under this dir will be removed after rebooting.
+Any data stored on this drive is SUBJECT TO LOSS and THERE IS NO WAY TO RECOVER IT.
+
+Please do not use this disk for storing any personal or application data.
+
+For additional details to please refer to the MSDN documentation at : http://msdn.microsoft.com/en-us/library/windowsazure/jj672979.aspx
 """
 
 ############################################################
@@ -475,7 +481,7 @@ class AbstractDistro(object):
             Log("Resource disk (" + device + "1) is mounted at " + mountpoint + " with fstype " + fs)
 
         #Create README file under the root of resource disk
-        SetFileContents(os.path.join(mountpoint,"README"), README)
+        SetFileContents(os.path.join(mountpoint,README_FILENAME), README_FILECONTENT)
         DiskActivated = True
 
         #Create swap space
