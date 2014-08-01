@@ -1660,8 +1660,8 @@ class FreeBSDDistro(AbstractDistro):
             ovfxml = ovfxml[3:] # BOM is not stripped. First three bytes are > 128 and not unicode chars so we ignore them.
         ovfxml = ovfxml.strip(chr(0x00))
         ovfxml = "".join(filter(lambda x: ord(x)<128, ovfxml))
-        ovfxml = re.sub('>.*\Z', '', ovfxml)
-        ovfxml += '>'
+        ovfxml = re.sub(r'</Environment>.*\Z','',ovfxml,0,re.DOTALL)
+        ovfxml += '</Environment>'
         SetFileContents(location+"/ovf-env.xml", ovfxml)
         return retcode,out
 
