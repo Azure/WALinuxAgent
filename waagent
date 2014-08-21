@@ -3158,8 +3158,8 @@ class ExtensionsConfig(object):
             time.sleep(5)
             retry-=1
         if retry==0:
-            Error('Process exceeded timeout of ' + timeout + ' seconds. Terminating process ' + str(pid))
-            SimpleLog(plugin_log,'Process exceeded timeout of ' + timeout + ' seconds. Terminating process ' + str(pid))
+            Error('Process exceeded timeout of ' + str(timeout) + ' seconds. Terminating process ' + str(pid))
+            SimpleLog(plugin_log,'Process exceeded timeout of ' + str(timeout) + ' seconds. Terminating process ' + str(pid))
 
             os.kill(pid,9)
             return None
