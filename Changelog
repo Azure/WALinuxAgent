@@ -1,5 +1,8 @@
 WALinuxAgent                                                          Changelog
 |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+25 Aug 2014, WALinuxAgent 2.0.8
+   . Fix for extension timeout handling
+
 08 Aug 2014, WALinuxAgent 2.0.7
    . Add warning for resource disk data loss
    . Multiple fixes for provisioning and extension handler
