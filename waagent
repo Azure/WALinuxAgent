@@ -932,7 +932,7 @@ class centosDistro(redhatDistro):
 
 
 ############################################################
-#   coreosDistro
+#   CoreOSDistro
 ############################################################
 
 coreos_systemd_conf = """\
@@ -940,31 +940,42 @@ coreos_systemd_conf = """\
 Description=Microsoft Azure Agent
 After=network.target
 After=sshd.service
-ConditionFileIsExecutable=/home/core/WALinuxAgent/waagent
+ConditionFileIsExecutable=/usr/share/oem/waagent/bin/waagent
 ConditionPathExists=/etc/systemd/system/waagent.service
 
 [Service]
 Type=simple
-ExecStart=/home/core/WALinuxAgent/waagent -daemon
+ExecStart=/usr/share/oem/python/bin/python /usr/share/oem/waagent/bin/waagent -daemon
 
 [Install]
 WantedBy=multi-user.target
 """
 
-class coreosDistro(AbstractDistro):
+class CoreOSDistro(AbstractDistro):
     """
     CoreOS Distro concrete class
     Put CoreOS specific behavior here...
     """
     def __init__(self):
-        super(coreosDistro,self).__init__()
+        super(CoreOSDistro,self).__init__()
         self.requiredDeps += [ "/usr/bin/systemctl" ]
         self.agent_service_name = 'waagent'
         self.init_script_file='/etc/systemd/system/waagent.service'
         self.init_file=coreos_systemd_conf
-        self.dhcp_client_name=None
+        self.dhcp_client_name='systemd-networkd'
         self.getpidcmd='pidof '
         self.shadow_file_mode=0640
+        self.waagent_path='/usr/share/oem/waagent/bin'
+        self.python_path='/usr/share/oem/python/bin'
+        if 'PATH' in os.environ:
+            os.environ['PATH'] = "{0}:{1}".format(os.environ['PATH'], self.python_path)
+        else:
+            os.environ['PATH'] = self.python_path
+
+        if 'PYTHONPATH' in os.environ:
+            os.environ['PYTHONPATH'] = "{0}:{1}".format(os.environ['PYTHONPATH'], self.waagent_path)
+        else:
+            os.environ['PYTHONPATH'] = self.waagent_path
 
     def checkPackageInstalled(self,p):
         """
@@ -1014,7 +1025,16 @@ class coreosDistro(AbstractDistro):
     def unregisterAgentService(self):
         self.stopAgentService()
         return self.uninstallAgentService()
-
+    
+    def restartSshService(self):
+        """
+        Service call to re(start) the SSH service
+        """
+        retcode = Run("systemctl restart sshd")
+        if retcode > 0:
+            Error("Failed to restart SSH service with return code:" + str(retcode))
+        return retcode
+#   
     def sshDeployPublicKey(self,fprint,path):
         """
         We support PKCS8.
@@ -3944,6 +3964,7 @@ class OvfEnv(object):
             MyDistro.setSelinuxEnforce(0)
         home = MyDistro.GetHome()
         for pkey in self.SshPublicKeys:
+            Log("Deploy public key:{0}".format(pkey[0]))
             if not os.path.isfile(pkey[0] + ".crt"):
                 Error("PublicKey not found: " + pkey[0])
                 error = "Failed to deploy public key (0x09)."
@@ -3960,6 +3981,7 @@ class OvfEnv(object):
             if path.startswith(os.path.normpath(home + "/" + self.UserName + "/")):
                 ChangeOwner(path, self.UserName)
         for keyp in self.SshKeyPairs:
+            Log("Deploy key pair:{0}".format(keyp[0]))
             if not os.path.isfile(keyp[0] + ".prv"):
                 Error("KeyPair not found: " + keyp[0])
                 error = "Failed to deploy key pair (0x0A)."
@@ -4611,6 +4633,7 @@ class Agent(Util):
                 if error :
                     Error ("Provisioning image FAILED " + error)
                     return ("Provisioning image FAILED " + error)
+            Log("Ovf XML process finished")
         # This is done here because regenerated SSH host key pairs may be potentially overwritten when processing the ovfxml
         fingerprint = RunGetOutput("ssh-keygen -lf /etc/ssh/ssh_host_" + type + "_key.pub")[1].rstrip().split()[1].replace(':','')
         self.ReportRoleProperties(fingerprint)
