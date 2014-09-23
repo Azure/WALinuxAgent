@@ -1,0 +1,62 @@
+# Copyright 2014 Microsoft Corporation
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# Requires Python 2.4+ and Openssl 1.0+
+#
+# Implements parts of RFC 2131, 1541, 1497 and
+# http://msdn.microsoft.com/en-us/library/cc227282%28PROT.10%29.aspx
+# http://msdn.microsoft.com/en-us/library/cc227259%28PROT.13%29.aspx
+
+import env
+import test.tools as tools
+import uuid
+import unittest
+import azure.linuxagent.logger as logger
+import test
+
+class TestLogger(unittest.TestCase):
+
+    def test_no_appender(self):
+        #The logger won't throw exception even if no appender.
+        _logger = logger.Logger()
+        _logger.verbose("Assert no exception")
+        _logger.info("Assert no exception")
+        _logger.warn("Assert no exception")
+        _logger.error("Assert no exception")
+
+    def test_file_appender(self):
+        appender_config = logger.AppenderConfig({'type':'FILE', 'level':'INFO', 'file_path':'/tmp/log'})
+        _logger = logger.Logger()
+        _logger.addLoggerAppender(appender_config)
+
+        msg = str(uuid.uuid4())
+        _logger.info("Test logger: {0}", msg)
+        self.assertTrue(tools.simple_file_grep('/tmp/log', msg))
+
+        msg = str(uuid.uuid4())
+        _logger.verbose("Verbose should not be logged: {0}", msg)
+        self.assertFalse(tools.simple_file_grep('/tmp/log', msg))
+
+    def test_logger_init(self):
+        _logger = logger.Logger()
+        logger.LoggerInit('/tmp/log1', '/dev/console', logger = _logger)
+        self.assertEquals(2, len(_logger.appenders))
+
+        msg = str(uuid.uuid4())
+        _logger.info("Test logger: {0}", msg)
+        self.assertTrue(tools.simple_file_grep('/tmp/log1', msg))
+
+
+if __name__ == '__main__':
+    unittest.main()
