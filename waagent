@@ -930,6 +930,120 @@ class centosDistro(redhatDistro):
     def __init__(self):
         super(centosDistro,self).__init__()
 
+
+############################################################
+#   CoreOSDistro
+############################################################
+
+coreos_systemd_conf = """\
+[Unit]
+Description=Microsoft Azure Agent
+After=network.target
+After=sshd.service
+ConditionFileIsExecutable=/usr/share/oem/waagent/bin/waagent
+ConditionPathExists=/etc/systemd/system/waagent.service
+
+[Service]
+Type=simple
+ExecStart=/usr/share/oem/python/bin/python /usr/share/oem/waagent/bin/waagent -daemon
+
+[Install]
+WantedBy=multi-user.target
+"""
+
+class CoreOSDistro(AbstractDistro):
+    """
+    CoreOS Distro concrete class
+    Put CoreOS specific behavior here...
+    """
+    def __init__(self):
+        super(CoreOSDistro,self).__init__()
+        self.requiredDeps += [ "/usr/bin/systemctl" ]
+        self.agent_service_name = 'waagent'
+        self.init_script_file='/etc/systemd/system/waagent.service'
+        self.init_file=coreos_systemd_conf
+        self.dhcp_client_name='systemd-networkd'
+        self.getpidcmd='pidof '
+        self.shadow_file_mode=0640
+        self.waagent_path='/usr/share/oem/waagent/bin'
+        self.python_path='/usr/share/oem/python/bin'
+        if 'PATH' in os.environ:
+            os.environ['PATH'] = "{0}:{1}".format(os.environ['PATH'], self.python_path)
+        else:
+            os.environ['PATH'] = self.python_path
+
+        if 'PYTHONPATH' in os.environ:
+            os.environ['PYTHONPATH'] = "{0}:{1}".format(os.environ['PYTHONPATH'], self.waagent_path)
+        else:
+            os.environ['PYTHONPATH'] = self.waagent_path
+
+    def checkPackageInstalled(self,p):
+        """
+        There is no package manager in CoreOS.  Return 1 since it must be preinstalled.
+        """
+        return 1
+
+    def checkDependencies(self):
+        for a in self.requiredDeps:
+            if Run("which " + a + " > /dev/null 2>&1",chk_err=False):
+                Error("Missing required dependency: " + a)
+                return 1
+        return 0
+
+
+    def checkPackageUpdateable(self,p):
+        """
+        There is no package manager in CoreOS.  Return 0 since it can't be updated via package.
+        """
+        return 0
+
+    def installAgentServiceScriptFiles(self):
+        try:
+            SetFileContents(self.init_script_file, self.init_file)
+            os.chmod(self.init_script_file, 0744)
+        except OSError, e:
+            ErrorWithPrefix('installAgentServiceScriptFiles','Exception: '+str(e)+' occured creating ' + self.init_script_file)
+            return 1
+        return 0
+
+    def registerAgentService(self):
+        if self.installAgentServiceScriptFiles() == 0:
+            return Run('systemctl enable ' + self.agent_service_name)
+        else :
+            return 1
+
+    def startAgentService(self):
+        return Run('systemctl start ' + self.agent_service_name)
+
+    def stopAgentService(self):
+        return Run('systemctl stop ' + self.agent_service_name)
+
+    def uninstallAgentService(self):
+        Run('systemctl disable ' + self.agent_service_name)
+        return Run('rm ' + self.init_script_file)
+
+    def unregisterAgentService(self):
+        self.stopAgentService()
+        return self.uninstallAgentService()
+    
+    def restartSshService(self):
+        """
+        Service call to re(start) the SSH service
+        """
+        retcode = Run("systemctl restart sshd")
+        if retcode > 0:
+            Error("Failed to restart SSH service with return code:" + str(retcode))
+        return retcode
+#   
+    def sshDeployPublicKey(self,fprint,path):
+        """
+        We support PKCS8.
+        """
+        if Run("ssh-keygen -i -m PKCS8 -f " + fprint + " >> " + path):
+            return 1
+        else :
+            return 0
+
 ############################################################    
 #	debianDistro
 ############################################################    
@@ -3850,6 +3964,7 @@ class OvfEnv(object):
             MyDistro.setSelinuxEnforce(0)
         home = MyDistro.GetHome()
         for pkey in self.SshPublicKeys:
+            Log("Deploy public key:{0}".format(pkey[0]))
             if not os.path.isfile(pkey[0] + ".crt"):
                 Error("PublicKey not found: " + pkey[0])
                 error = "Failed to deploy public key (0x09)."
@@ -3866,6 +3981,7 @@ class OvfEnv(object):
             if path.startswith(os.path.normpath(home + "/" + self.UserName + "/")):
                 ChangeOwner(path, self.UserName)
         for keyp in self.SshKeyPairs:
+            Log("Deploy key pair:{0}".format(keyp[0]))
             if not os.path.isfile(keyp[0] + ".prv"):
                 Error("KeyPair not found: " + keyp[0])
                 error = "Failed to deploy key pair (0x0A)."
@@ -4517,6 +4633,7 @@ class Agent(Util):
                 if error :
                     Error ("Provisioning image FAILED " + error)
                     return ("Provisioning image FAILED " + error)
+            Log("Ovf XML process finished")
         # This is done here because regenerated SSH host key pairs may be potentially overwritten when processing the ovfxml
         fingerprint = RunGetOutput("ssh-keygen -lf /etc/ssh/ssh_host_" + type + "_key.pub")[1].rstrip().split()[1].replace(':','')
         self.ReportRoleProperties(fingerprint)
