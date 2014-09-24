@@ -48,6 +48,8 @@ import fcntl
 import inspect
 import zipfile
 import json
+import datetime
+import xml.sax.saxutils
 
 if not hasattr(subprocess,'check_output'):
     def check_output(*popenargs, **kwargs):
@@ -3091,12 +3093,12 @@ class ExtensionsConfig(object):
                             Log(name+' version ' + previous_version + ' is disabled')
                             SimpleLog(p.plugin_log,name+' version ' + previous_version + ' is disabled')
 
-
+                isupgradeSuccess = True
                 if getcmd=='updateCommand':
                     if self.launchCommand(p.plugin_log,name,version,getcmd,previous_version) == None :
                         Error('Update failed for '+name+'-'+version)
                         SimpleLog(p.plugin_log,'Update failed for '+name+'-'+version)
-
+                        isupgradeSuccess=False
                     else :
                         Log('Update complete'+name+'-'+version)
                         SimpleLog(p.plugin_log,'Update complete'+name+'-'+version)
@@ -3106,18 +3108,18 @@ class ExtensionsConfig(object):
                         self.SetHandlerState(previous_handler, 'Installed')
                         Error('Uninstall failed for '+name+'-'+previous_version)
                         SimpleLog(p.plugin_log,'Uninstall failed for '+name+'-'+previous_version)
-
+                        isupgradeSuccess=False
                     else :
                         self.SetHandlerState(previous_handler, 'NotInstalled')
                         Log('Uninstall complete'+ previous_handler )
                         SimpleLog(p.plugin_log,'Uninstall complete'+ name +'-' + previous_version)
-
+                    AddExtensionEvent(name,WALAEventOperation.Upgrade,isupgradeSuccess,0,previous_version)
                 else :  # run install
                     if self.launchCommand(p.plugin_log,name,version,getcmd) == None :
                         self.SetHandlerState(handler, 'NotInstalled')
                         Error('Installation failed for '+name+'-'+version)
                         SimpleLog(p.plugin_log,'Installation failed for '+name+'-'+version)
-
+                        isupgradeSuccess=False
                     else :
                         self.SetHandlerState(handler, 'Installed')
                         Log('Installation completed for '+name+'-'+version)
@@ -3200,8 +3202,24 @@ class ExtensionsConfig(object):
             pass
         
         return self
-
     def launchCommand(self,plugin_log,name,version,command,prev_version=None):
+        commandToEventOperation={
+        "installCommand":WALAEventOperation.Install,
+        "uninstallCommand":WALAEventOperation.UnIsntall,
+        "updateCommand": WALAEventOperation.Upgrade,
+        "enableCommand": WALAEventOperation.Enable,
+        "disableCommand": WALAEventOperation.Disable,
+        }
+        isSuccess=True
+        start = datetime.datetime.now()
+        r=self.launchCommandWithoutEventLog(plugin_log,name,version,command,prev_version)
+        if r==None:
+            isSuccess=False
+        Duration = int((datetime.datetime.now() - start).total_seconds())
+        if commandToEventOperation.get(command):
+            AddExtensionEvent(name,commandToEventOperation[command],isSuccess,Duration,version)
+
+    def launchCommandWithoutEventLog(self,plugin_log,name,version,command,prev_version=None):
         # get the manifest and read the command
         mfile=None
         zip_dir=LibDir+"/" + name + '-' + version
@@ -3214,7 +3232,7 @@ class ExtensionsConfig(object):
         if mfile == None :
             Error('HandlerManifest.json not found.')
             SimpleLog(plugin_log,'HandlerManifest.json not found.')
-
+            
             return None
         manifest = GetFileContents(mfile)
         try:
@@ -4006,6 +4024,239 @@ class OvfEnv(object):
         MyDistro.restartSshService()
         return error
 
+
+class WALAEvent(object):   
+    def __init__(self):
+            
+        self.provideId=""
+        self.eventId=1
+        self.filedCount=12 
+        
+        self.OpcodeName=""
+        self.KeywordName=""
+        self.TaskName=""
+        self.TenantName=""
+        self.RoleName=""
+        self.RoleInstanceName=""
+        self.ContainerId=""
+        self.ExecutionMode="IAAS"
+        self.OSVersion=""
+        self.GAVersion=""
+        self.RAM=0
+        self.Processors=0
+
+
+    def ToXml(self):
+        strEventid=u'<Event id="{0}"/>'.format(self.eventId)
+        strProviderid=u'<Provider id="{0}"/>'.format(self.provideId)
+        strRecordFormat = u'<Param Name="{0}" Value="{1}" T="{2}" />'
+        strRecordNoQuoteFormat = u'<Param Name="{0}" Value={1} T="{2}" />'
+        strMtStr=u'mt:wstr'
+        strMtUInt64=u'mt:uint64'
+        strMtBool=u'mt:bool'
+        strMtFloat=u'mt:float64'
+        strEventsData=u""
+        nCount=0
+        for attName in  self.__dict__:
+            if attName in ["eventId","filedCount","provideId"]:
+                continue
+            
+            nCount+=1
+            attValue = self.__dict__[attName]
+            if type(attValue) is int:
+                strEventsData+=strRecordFormat.format(attName,attValue,strMtUInt64)
+                continue
+            if type(attValue) is str:
+                attValue = xml.sax.saxutils.quoteattr(attValue)			                
+                strEventsData+=strRecordNoQuoteFormat.format(attName,attValue,strMtStr)
+                continue
+            if str(type(attValue)).count("'unicode'") >0 :
+                attValue = xml.sax.saxutils.quoteattr(attValue)			 
+                strEventsData+=strRecordNoQuoteFormat.format(attName,attValue,strMtStr)
+                continue
+            if type(attValue) is bool:
+                strEventsData+=strRecordFormat.format(attName,attValue,strMtBool)
+                continue
+            if type(attValue) is float:
+                strEventsData+=strRecordFormat.format(attName,attValue,strMtFloat)
+                continue
+            
+            Logs("Warning: property "+attName+":"+str(type(attValue))+":type"+str(type(attValue))+"Can't convert to events data:"+":type not supported")
+            nCount-=1
+
+        if nCount != self.filedCount:
+            Logs("Error:serilized filed count not match expect"+str(self.filedCount)+"actual"+str(nCount))
+        return u"<Data>{0}{1}{2}</Data>".format(strProviderid,strEventid,strEventsData)
+
+    def Save(self):
+        eventfolder = LibDir+"/events"
+        if not os.path.exists(eventfolder):
+            os.mkdir(eventfolder)
+            os.chmod(eventfolder,0x700)
+        if len(os.listdir(eventfolder)) > 1000:
+            raise Exception("WriteToFolder:Too many file under "+datafolder+" exit")
+    
+        filename = os.path.join(eventfolder,str(int(time.time()*1000000)))
+        hfile = open(filename+".tmp",'wb+')
+        hfile.write(self.ToXml().encode("utf-8"))
+        hfile.close()
+        os.rename(filename+".tmp",filename+".tld")
+
+
+class WALAEventOperation:
+    HeartBeat="HeartBeat"
+    Provision = "Provision"
+    Install = "Install"
+    UnIsntall = "UnInstall"
+    Disable = "Disable"
+    Enable = "Enable"
+    Download = "Download"
+    Upgrade = "Upgrade"
+    Update = "Update"           
+
+def AddExtensionEvent(name,op,isSuccess,duration=0,version="1.0",message="",type="",isInternal=False):
+    event = ExtensionEvent()
+    event.Name=name 
+    event.Version=version 
+    event.IsInternal=isInternal
+    event.Operation=op
+    event.OperationSuccess=isSuccess
+    event.Message=message 
+    event.Duration=duration
+    event.ExtensionType=type
+    try:
+        event.Save()
+    except:
+        Error("Error "+traceback.format_exc())
+        
+    
+class ExtensionEvent(WALAEvent):
+    def __init__(self):
+                
+        WALAEvent.__init__(self)
+        self.eventId=1
+        self.provideId="69B669B9-4AF8-4C50-BDC4-6006FA76E975"
+        self.filedCount+=8
+        self.Name=""
+        self.Version=""
+        self.IsInternal=False
+        self.Operation=""
+        self.OperationSuccess=True
+        self.ExtensionType=""
+        self.Message=""
+        self.Duration=0
+    
+               		           
+class WALAEventMonitor(WALAEvent):
+    def __init__(self,postMethod):
+        WALAEvent.__init__(self)
+        self.post = postMethod
+        self.sysInfo={}
+        self.eventdir = LibDir+"/events"
+        self.issysteminfoinitilized = False
+
+    def StartEventsLoop(self):
+        threading.Thread(target = self.EventsLoop).start()
+        
+    def EventsLoop(self):
+        LastReportHeartBeatTime = datetime.datetime.min
+        try:
+            while(True):
+                if int((datetime.datetime.now()-LastReportHeartBeatTime).total_seconds())/3600/12>0:
+                    LastReportHeartBeatTime = datetime.datetime.now()
+                    AddExtensionEvent(op=WALAEventOperation.HeartBeat,name="WALA",isSuccess=True)
+                self.postNumbersInOneLoop=0
+                self.CollectAndSendWALAEvents()
+                time.sleep(60)
+        except:
+            Error("Exception in events loop:"+traceback.format_exc())
+			     		    		
+    def SendEvent(self,providerid,events):
+        self.post(providerid+events)
+
+    def CollectAndSendWALAEvents(self):        
+        if not os.path.exists(self.eventdir):
+            return
+        #Throtting, can't send more than 3 events in 15 seconds  
+        eventSendNumber=0
+        eventFiles = os.listdir(self.eventdir)
+        events = {}
+        for file in eventFiles:
+            if not file.endswith(".tld"):
+                continue      
+            hfile=open(os.path.join(self.eventdir,file),"rb")
+            #if fail to open or delete the file, throw exception 
+            xmlStr = hfile.read().decode("utf-8",errors="ignore")
+            hfile.close()
+            os.remove(os.path.join(self.eventdir,file))
+            params=""
+            eventid=""
+            providerid=""
+            #if exception happen during process an event, catch it and continue
+            try:
+                xmlStr = self.AddSystemInfo(xmlStr)
+                for node in xml.dom.minidom.parseString(xmlStr.encode("utf-8")).childNodes[0].childNodes:
+                    if node.tagName == "Param":
+                        params+=node.toxml()
+                    if node.tagName == "Event":
+                        eventid=node.getAttribute("id")
+                    if node.tagName == "Provider":
+                        providerid = node.getAttribute("id")
+            except:
+                Error(traceback.format_exc())
+                continue
+            if len(params)==0 or len(eventid)==0 or len(providerid)==0:
+                Error("Empty filed in params:"+params+" event id:"+eventid+" provider id:"+providerid)
+                continue
+
+            eventstr = u'<Event id="{0}"><![CDATA[{1}]]</Event>'.format(eventid,params)
+            if not events.get(providerid):
+                events[providerid]=""
+            if len(events[providerid]) >0 and  len(events.get(providerid)+eventstr)>= 63*1024:
+                eventSendNumber+=1
+                self.SendEvent(providerid,events.get(providerid))
+                if eventSendNumber %3 ==0:
+                    time.sleep(15)
+                events[providerid]=""
+            events[providerid]=events.get(providerid)+eventstr
+
+        for key in events.keys():
+            if len(events[key]) > 0:
+                eventSendNumber+=1
+                self.SendEvent(key,events[key])
+                if eventSendNumber%3 == 0:
+                    time.sleep(15)
+                
+
+    def AddSystemInfo(self,eventData):
+        if not self.issysteminfoinitilized:
+            self.issysteminfoinitilized=True
+            try:
+                self.sysInfo["RAM"]=int(RunGetOutput("grep MemTotal /proc/meminfo |awk '{print $2}'")[1])/1024
+                self.sysInfo["Processors"]=int(RunGetOutput("grep 'processor.*:' /proc/cpuinfo |wc -l")[1])
+                self.sysInfo["OSVersion"]=platform.system()+":"+"-".join(DistInfo())+":"+platform.release()
+                sharedConfig = xml.dom.minidom.parse("/var/lib/waagent/SharedConfig.xml").childNodes[0]
+                hostEnvConfig= xml.dom.minidom.parse("/var/lib/waagent/HostingEnvironmentConfig.xml").childNodes[0]
+                gfiles = RunGetOutput("ls -t /var/lib/waagent/GoalState.*.xml")[1]
+                goalStateConfi =  xml.dom.minidom.parse(gfiles.split("\n")[0]).childNodes[0]
+                self.sysInfo["TenantName"]=hostEnvConfig.getElementsByTagName("Deployment")[0].getAttribute("name")
+                self.sysInfo["RoleName"]=hostEnvConfig.getElementsByTagName("Role")[0].getAttribute("name")
+                self.sysInfo["RoleInstanceName"]=sharedConfig.getElementsByTagName("Instance")[0].getAttribute("id")
+                self.sysInfo["GAVersion"]=GuestAgentVersion
+                self.sysInfo["ContainerId"]=goalStateConfi.getElementsByTagName("ContainerId")[0].childNodes[0].nodeValue
+            except:
+                Error(traceback.format_exc())
+
+        eventObject = xml.dom.minidom.parseString(eventData.encode("utf-8")).childNodes[0]
+        for node in eventObject.childNodes:
+            if node.tagName == "Param":
+                name = node.getAttribute("Name")
+                if self.sysInfo.get(name):
+                    node.setAttribute("Value",xml.sax.saxutils.escape(str(self.sysInfo[name])))
+
+        return  eventObject.toxml()            
+
+
 class Agent(Util):
     """
     Primary object container for the provisioning process.
@@ -4712,7 +4963,8 @@ class Agent(Util):
             Openssl = "openssl"
 
         self.TransportCert = self.GenerateTransportCert()
-
+        
+        eventMonitor = None
         incarnation = None # goalStateIncarnationFromHealthReport
         currentPort = None # loadBalancerProbePort
         goalState = None # self.GoalState, instance of GoalState
@@ -4737,8 +4989,9 @@ class Agent(Util):
                     provisionError = self.Provision()
                     if provisionError == None :
                         provisioned = True
+                        AddExtensionEvent(name="WALA",op=WALAEventOperation.Provision,isSuccess=True)
                         SetFileContents(LibDir + "/provisioned", "")
-
+                        
                 #
                 # only one port supported
                 # restart server if new port is different than old port
@@ -4784,8 +5037,16 @@ class Agent(Util):
             # report the status/heartbeat results of extension processing
             if goalState.ExtensionsConfig != None :
                 goalState.ExtensionsConfig.ReportHandlerStatus()
+            
+            if not eventMonitor:
+                eventMonitor = WALAEventMonitor(TestPost)
+                eventMonitor.StartEventsLoop()
 
             time.sleep(25 - sleepToReduceAccessDenied)	
+
+def TestPost(data):
+    Log("in Test POST 5031")
+    Log(data)
             
 WaagentLogrotate = """\
 /var/log/waagent.log {
