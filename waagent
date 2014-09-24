@@ -2986,7 +2986,9 @@ class ExtensionsConfig(object):
                     SimpleLog(p.plugin_log,"Plugin failover server is: " +  self.Util.Endpoint)
 
                     manifest=self.Util.HttpGetWithoutHeaders(failoverlocation)
+                #if failoverlocation also fail what to do then?
                 if manifest == None:
+                    AddExtensionEvent(name,WALAEventOperation.Download,False,0,version,"Download mainfest fail "+failoverlocation)
                     Log("Plugin manifest" + name + "downloaded successfully length = " + str(len(manifest)))
                     SimpleLog(p.plugin_log,"Plugin manifest" + name + "downloaded successfully length = " + str(len(manifest)))
 
@@ -3019,9 +3021,11 @@ class ExtensionsConfig(object):
                 # Download the zipfile archive and save as '.zip'
                 bundle=self.Util.HttpGetWithoutHeaders(bundle_uri)
                 if bundle == None:
+                    AddExtensionEvent(name,WALAEventOperation.Download,True,0,version,"Download zip fail "+bundle_uri)
                     Error("Unable to download plugin bundle" + bundle_uri )
                     SimpleLog(p.plugin_log,"Unable to download plugin bundle" + bundle_uri )
                     continue
+                AddExtensionEvent(name,WALAEventOperation.Download,True,0,version,"Download Success")
                 b=bytearray(bundle)
                 filepath=LibDir+"/" + os.path.basename(bundle_uri) + '.zip'
                 SetFileContents(filepath,b)
@@ -3119,7 +3123,6 @@ class ExtensionsConfig(object):
                         self.SetHandlerState(handler, 'NotInstalled')
                         Error('Installation failed for '+name+'-'+version)
                         SimpleLog(p.plugin_log,'Installation failed for '+name+'-'+version)
-                        isupgradeSuccess=False
                     else :
                         self.SetHandlerState(handler, 'Installed')
                         Log('Installation completed for '+name+'-'+version)
