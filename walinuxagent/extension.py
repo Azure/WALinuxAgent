@@ -31,7 +31,7 @@ def HandleExtensions(self, config):
             ext.disable()
         elif state == 'uninstalled':
             ext.uninstall()
-        else
+        else:
             raise Exception('Unknown extension state: {0}'.format(ext.state))
 
 class ExtensionInfo():
@@ -82,7 +82,7 @@ class Extension():
     def download(self, uri):
         pass
 
-class ExtensionState()
+class ExtensionState():
     
     def handleEnable(self, extension):
         pass
@@ -124,6 +124,7 @@ class ExtensionNotInstalled(ExtensionState):
         pass
 
     def handleUninstall(self, extension):
+        pass
 
 class ExtensionInstalled(ExtensionState):
     
