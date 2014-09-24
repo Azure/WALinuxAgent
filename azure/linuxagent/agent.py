@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-#
 # Windows Azure Linux Agent
 #
 # Copyright 2014 Microsoft Corporation
@@ -18,7 +16,13 @@
 #
 # Requires Python 2.4+ and Openssl 1.0+
 #
+
+GuestAgentName = "WALinuxAgent"
+GuestAgentLongName = "Windows Azure Linux Agent"
+GuestAgentVersion = "WALinuxAgent-2.0.8"
+#WARNING this value is used to confirm the correct fabric protocol.
+ProtocolVersion = "2012-11-30" 
+
 class Agent():
     def run(self):
         pass
-

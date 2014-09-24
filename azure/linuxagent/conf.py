@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-#
 # Windows Azure Linux Agent
 #
 # Copyright 2014 Microsoft Corporation
