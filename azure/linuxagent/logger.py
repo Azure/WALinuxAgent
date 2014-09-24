@@ -20,6 +20,9 @@
 
 from datetime import datetime
 
+LogFilePath = '/var/log/waagent.log'
+ConsoleFilePath = '/dev/console'
+
 class Logger(object):
     def __init__(self):
         self.appenders = []
