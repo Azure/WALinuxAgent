@@ -4175,7 +4175,8 @@ class WALAEventMonitor(WALAEvent):
             Error("Exception in events loop:"+traceback.format_exc())
 			     		    		
     def SendEvent(self,providerid,events):
-        self.post(providerid+events)
+        data = u'<?xml version="1.0"?><TelemetryData version="1.0"><Provider id="{0}">{1}</Provider></TelemetryData>'.format(providerid,events)
+        self.post("/machine/?comp=telemetrydata",data)
 
     def CollectAndSendWALAEvents(self):        
         if not os.path.exists(self.eventdir):
@@ -4212,7 +4213,7 @@ class WALAEventMonitor(WALAEvent):
                 Error("Empty filed in params:"+params+" event id:"+eventid+" provider id:"+providerid)
                 continue
 
-            eventstr = u'<Event id="{0}"><![CDATA[{1}]]</Event>'.format(eventid,params)
+            eventstr = u'<Event id="{0}"><![CDATA[{1}]]></Event>'.format(eventid,params)
             if not events.get(providerid):
                 events[providerid]=""
             if len(events[providerid]) >0 and  len(events.get(providerid)+eventstr)>= 63*1024:
@@ -4992,8 +4993,13 @@ class Agent(Util):
                     provisionError = self.Provision()
                     if provisionError == None :
                         provisioned = True
-                        AddExtensionEvent(name="WALA",op=WALAEventOperation.Provision,isSuccess=True)
                         SetFileContents(LibDir + "/provisioned", "")
+                        #Get Ctime of wala config, can help identify the base image of this VM
+                        walaConfigFile = "/etc/waagent.conf"
+                        if os.path.isfile(walaConfigFile):
+                            AddExtensionEvent(name="WALA",op=WALAEventOperation.Provision,isSuccess=True,
+                                              message="WALA Config Ctime:"+time.ctime(os.path.getctime(walaConfigFile)))
+
                         
                 #
                 # only one port supported
@@ -5042,14 +5048,11 @@ class Agent(Util):
                 goalState.ExtensionsConfig.ReportHandlerStatus()
             
             if not eventMonitor:
-                eventMonitor = WALAEventMonitor(TestPost)
+                eventMonitor = WALAEventMonitor(self.HttpPost)
                 eventMonitor.StartEventsLoop()
 
             time.sleep(25 - sleepToReduceAccessDenied)	
 
-def TestPost(data):
-    Log("in Test POST 5031")
-    Log(data)
             
 WaagentLogrotate = """\
 /var/log/waagent.log {
