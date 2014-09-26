@@ -3221,6 +3221,7 @@ class ExtensionsConfig(object):
         Duration = int((datetime.datetime.now() - start).total_seconds())
         if commandToEventOperation.get(command):
             AddExtensionEvent(name,commandToEventOperation[command],isSuccess,Duration,version)
+        return r
 
     def launchCommandWithoutEventLog(self,plugin_log,name,version,command,prev_version=None):
         # get the manifest and read the command
@@ -4095,7 +4096,7 @@ class WALAEvent(object):
         eventfolder = LibDir+"/events"
         if not os.path.exists(eventfolder):
             os.mkdir(eventfolder)
-            os.chmod(eventfolder,0x700)
+            os.chmod(eventfolder,0700)
         if len(os.listdir(eventfolder)) > 1000:
             raise Exception("WriteToFolder:Too many file under "+datafolder+" exit")
     
