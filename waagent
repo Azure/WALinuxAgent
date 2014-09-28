@@ -4192,7 +4192,7 @@ class WALAEventMonitor(WALAEvent):
                 continue      
             hfile=open(os.path.join(self.eventdir,file),"rb")
             #if fail to open or delete the file, throw exception 
-            xmlStr = hfile.read().decode("utf-8",errors="ignore")
+            xmlStr = hfile.read().decode("utf-8",'ignore')
             hfile.close()
             os.remove(os.path.join(self.eventdir,file))
             params=""
