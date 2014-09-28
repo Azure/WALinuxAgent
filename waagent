@@ -2555,10 +2555,16 @@ class ConfigurationProvider(object):
     """
     def __init__(self):
         self.values = dict()
-        if os.path.isfile("/etc/waagent.conf") == False:
+        self.lastAccessTime=""
+        walaConfigFile = "/etc/waagent.conf"
+        if os.path.isfile(walaConfigFile) == False:
             raise Exception("Missing configuration in /etc/waagent.conf")
         try:
-            for line in GetFileContents("/etc/waagent.conf").split('\n'):
+            Log(LibDir+"/walaConfigAtime")
+            if not os.path.exists(LibDir+"/walaConfigAtime"):
+                SetFileContents(LibDir+"/walaConfigAtime",str(os.path.getatime(walaConfigFile)))
+            self.lastAccessTime = GetFileContents(LibDir+"/walaConfigAtime")
+            for line in GetFileContents(walaConfigFile).split('\n'):
                 if not line.startswith("#") and "=" in line:
                     parts = line.split()[0].split('=')
                     value = parts[1].strip("\" ")
@@ -3218,7 +3224,7 @@ class ExtensionsConfig(object):
         r=self.launchCommandWithoutEventLog(plugin_log,name,version,command,prev_version)
         if r==None:
             isSuccess=False
-        Duration = int((datetime.datetime.now() - start).total_seconds())
+        Duration = int((datetime.datetime.now() - start).seconds)
         if commandToEventOperation.get(command):
             AddExtensionEvent(name,commandToEventOperation[command],isSuccess,Duration,version)
         return r
@@ -4166,7 +4172,7 @@ class WALAEventMonitor(WALAEvent):
         LastReportHeartBeatTime = datetime.datetime.min
         try:
             while(True):
-                if int((datetime.datetime.now()-LastReportHeartBeatTime).total_seconds())/3600/12>0:
+                if (datetime.datetime.now()-LastReportHeartBeatTime) > datetime.timedelta(hours=12):
                     LastReportHeartBeatTime = datetime.datetime.now()
                     AddExtensionEvent(op=WALAEventOperation.HeartBeat,name="WALA",isSuccess=True)
                 self.postNumbersInOneLoop=0
@@ -4996,10 +5002,8 @@ class Agent(Util):
                         provisioned = True
                         SetFileContents(LibDir + "/provisioned", "")
                         #Get Ctime of wala config, can help identify the base image of this VM
-                        walaConfigFile = "/etc/waagent.conf"
-                        if os.path.isfile(walaConfigFile):
-                            AddExtensionEvent(name="WALA",op=WALAEventOperation.Provision,isSuccess=True,
-                                              message="WALA Config Ctime:"+time.ctime(os.path.getctime(walaConfigFile)))
+                        AddExtensionEvent(name="WALA",op=WALAEventOperation.Provision,isSuccess=True,
+                                              message="WALA Config Ctime:"+Config.lastAccessTime)
 
                         
                 #
@@ -5356,6 +5360,8 @@ def Usage():
     """
     print("usage: " + sys.argv[0] + " [-verbose] [-force] [-help|-install|-uninstall|-deprovision[+user]|-version|-serialconsole|-daemon]")
     return 0
+
+
 
 def main():
     """
