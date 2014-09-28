@@ -2555,15 +2555,10 @@ class ConfigurationProvider(object):
     """
     def __init__(self):
         self.values = dict()
-        self.lastAccessTime=""
         walaConfigFile = "/etc/waagent.conf"
         if os.path.isfile(walaConfigFile) == False:
             raise Exception("Missing configuration in /etc/waagent.conf")
         try:
-            Log(LibDir+"/walaConfigAtime")
-            if not os.path.exists(LibDir+"/walaConfigAtime"):
-                SetFileContents(LibDir+"/walaConfigAtime",str(os.path.getatime(walaConfigFile)))
-            self.lastAccessTime = GetFileContents(LibDir+"/walaConfigAtime")
             for line in GetFileContents(walaConfigFile).split('\n'):
                 if not line.startswith("#") and "=" in line:
                     parts = line.split()[0].split('=')
@@ -5001,10 +4996,10 @@ class Agent(Util):
                     if provisionError == None :
                         provisioned = True
                         SetFileContents(LibDir + "/provisioned", "")
+                        lastCtime = os.path.getctime("/etc/waagent.conf")
                         #Get Ctime of wala config, can help identify the base image of this VM
                         AddExtensionEvent(name="WALA",op=WALAEventOperation.Provision,isSuccess=True,
-                                              message="WALA Config Ctime:"+Config.lastAccessTime)
-
+                                              message="WALA Config Ctime:"+time.ctime(lastCtime))
                         
                 #
                 # only one port supported
@@ -5308,6 +5303,10 @@ def Deprovision(force, deluser):
     Set hostname to 'localhost.localdomain'.
     Delete cached system configuration files in /var/lib and /var/lib/waagent.
     """
+    
+    #Append blank line at the end of file, so the ctime of this file is changed every time
+    Run("echo ''>>"+"/etc/waagent.conf")
+
     SwitchCwd()
     ovfxml = GetFileContents(LibDir+"/ovf-env.xml")
     ovfobj = None
