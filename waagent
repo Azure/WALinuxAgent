@@ -184,6 +184,7 @@ class AbstractDistro(object):
         self.sudoers_dir_base = '/etc'
         self.waagent_conf_file = WaagentConf
         self.shadow_file_mode=0600
+        self.dhcp_enabled = False
         
     def isSelinuxSystem(self):
         """
@@ -556,6 +557,24 @@ class AbstractDistro(object):
             Error("Can't find host key: {0}".format(path))
             return False
 
+    def isDHCPEnabled(self):
+        return self.dhcp_enabled
+
+    def stopDHCP(self):
+        """
+        Stop the system DHCP client so that tha agent can bind on its port. If
+        the distro has set dhcp_enabled to True, it will need to provide an
+        implementation of this method.
+        """
+        raise NotImplementedError('stopDHCP method missing')
+
+    def startDHCP(self):
+        """
+        Start the system DHCP client. If the distro has set dhcp_enabled to
+        True, it will need to provide an implementation of this method.
+        """
+        raise NotImplementedError('startDHCP method missing')
+
 ############################################################
 #	GentooDistro
 ############################################################
@@ -765,6 +784,7 @@ class SuSEDistro(AbstractDistro):
         self.grubKernelBootOptionsFile = '/boot/grub/menu.lst'
         self.grubKernelBootOptionsLine = 'kernel'
         self.getpidcmd='pidof '
+        self.dhcp_enabled=True
         
     def checkPackageInstalled(self,p):
         if Run("rpm -q " + p,chk_err=False):
@@ -796,6 +816,12 @@ class SuSEDistro(AbstractDistro):
     def unregisterAgentService(self):
         self.stopAgentService()
         return self.uninstallAgentService()
+
+    def startDHCP(self):
+        Run("service " + self.dhcp_client_name + " start", chk_err=False)
+
+    def stopDHCP(self):
+        Run("service " + self.dhcp_client_name + " stop", chk_err=False)
     
 ############################################################    
 #	redhatDistro
@@ -951,6 +977,7 @@ class CoreOSDistro(AbstractDistro):
         self.shadow_file_mode=0640
         self.waagent_path='/usr/share/oem/waagent/bin'
         self.python_path='/usr/share/oem/python/bin'
+        self.dhcp_enabled=True
         if 'PATH' in os.environ:
             os.environ['PATH'] = "{0}:{1}".format(os.environ['PATH'], self.python_path)
         else:
@@ -1064,6 +1091,12 @@ class CoreOSDistro(AbstractDistro):
             ChangeOwner(dir + "/authorized_keys", user)
         Log("Created user account: " + user)
         return None
+
+    def startDHCP(self):
+        Run("systemctl start " + self.dhcp_client_name, chk_err=False)
+
+    def stopDHCP(self):
+        Run("systemctl stop " + self.dhcp_client_name, chk_err=False)
 
 
 ############################################################    
@@ -4327,10 +4360,9 @@ class Agent(Util):
                     ifname=MyDistro.GetInterfaceName()
                     Log("DoDhcpWork: Missing default route - adding broadcast route for DHCP.")
                     Run("route add 255.255.255.255 dev " + ifname,chk_err=False)   # We supress error logging on error.
-                if MyDistro.dhcp_client_name == 'wickedd-dhcp4':
-                    Run("service " + MyDistro.dhcp_client_name + " stop",chk_err=False)
-                if MyDistro.dhcp_client_name == 'systemd-networkd':
-                    Run("systemctl stop " + MyDistro.dhcp_client_name,chk_err=False)
+                if MyDistro.isDHCPEnabled():
+                    MyDistro.stopDHCP()
+
                 sock.bind(("0.0.0.0", 68)) 
                 sock.sendto(sendData, ("<broadcast>", 67))
                 sock.settimeout(10)
@@ -4358,10 +4390,8 @@ class Agent(Util):
                     #We added this route - delete it
                     Run("route del 255.255.255.255 dev " + ifname,chk_err=False)  # We supress error logging on error.
                     Log("DoDhcpWork: Removing broadcast route for DHCP.")
-                if MyDistro.dhcp_client_name == 'wickedd-dhcp4':
-                    Run("service " + MyDistro.dhcp_client_name + " start",chk_err=False)
-                if MyDistro.dhcp_client_name == 'systemd-networkd':
-                    Run("systemctl start " + MyDistro.dhcp_client_name,chk_err=False)
+                if MyDistro.isDHCPEnabled():
+                    MyDistro.startDHCP()
         return None
 
     def UpdateAndPublishHostName(self, name):
