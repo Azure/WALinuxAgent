@@ -556,6 +556,12 @@ class AbstractDistro(object):
             Error("Can't find host key: {0}".format(path))
             return False
 
+    def translateCustomData(self, data):
+        """
+        Translate the custom data from a Base64 encoding. Default to no-op.
+        """
+        return data
+
 ############################################################
 #	GentooDistro
 ############################################################
@@ -1043,6 +1049,9 @@ class CoreOSDistro(AbstractDistro):
             return 1
         else :
             return 0
+
+    def translateCustomData(self, data):
+        return base64.b64decode(data)
 
 ############################################################    
 #	debianDistro
@@ -3833,7 +3842,7 @@ class OvfEnv(object):
             if len(CDSection) > 0 :
                 self.CustomData=GetNodeTextData(CDSection[0])
                 if len(self.CustomData)>0:
-                    SetFileContents(LibDir + '/CustomData',self.CustomData)
+                    SetFileContents(LibDir + '/CustomData', MyDistro.translateCustomData(self.CustomData))
                     Log('Wrote ' + LibDir + '/CustomData')
                 else :
                     Error('<CustomData> contains no data!')
