@@ -4033,9 +4033,8 @@ class OvfEnv(object):
 class WALAEvent(object):   
     def __init__(self):
             
-        self.provideId=""
+        self.providerId=""
         self.eventId=1
-        self.filedCount=12 
         
         self.OpcodeName=""
         self.KeywordName=""
@@ -4053,7 +4052,7 @@ class WALAEvent(object):
 
     def ToXml(self):
         strEventid=u'<Event id="{0}"/>'.format(self.eventId)
-        strProviderid=u'<Provider id="{0}"/>'.format(self.provideId)
+        strProviderid=u'<Provider id="{0}"/>'.format(self.providerId)
         strRecordFormat = u'<Param Name="{0}" Value="{1}" T="{2}" />'
         strRecordNoQuoteFormat = u'<Param Name="{0}" Value={1} T="{2}" />'
         strMtStr=u'mt:wstr'
@@ -4061,12 +4060,11 @@ class WALAEvent(object):
         strMtBool=u'mt:bool'
         strMtFloat=u'mt:float64'
         strEventsData=u""
-        nCount=0
+
         for attName in  self.__dict__:
-            if attName in ["eventId","filedCount","provideId"]:
+            if attName in ["eventId","filedCount","providerId"]:
                 continue
             
-            nCount+=1
             attValue = self.__dict__[attName]
             if type(attValue) is int:
                 strEventsData+=strRecordFormat.format(attName,attValue,strMtUInt64)
@@ -4086,11 +4084,8 @@ class WALAEvent(object):
                 strEventsData+=strRecordFormat.format(attName,attValue,strMtFloat)
                 continue
             
-            Logs("Warning: property "+attName+":"+str(type(attValue))+":type"+str(type(attValue))+"Can't convert to events data:"+":type not supported")
-            nCount-=1
+            Log("Warning: property "+attName+":"+str(type(attValue))+":type"+str(type(attValue))+"Can't convert to events data:"+":type not supported")
 
-        if nCount != self.filedCount:
-            Logs("Error:serilized filed count not match expect"+str(self.filedCount)+"actual"+str(nCount))
         return u"<Data>{0}{1}{2}</Data>".format(strProviderid,strEventid,strEventsData)
 
     def Save(self):
@@ -4140,8 +4135,7 @@ class ExtensionEvent(WALAEvent):
                 
         WALAEvent.__init__(self)
         self.eventId=1
-        self.provideId="69B669B9-4AF8-4C50-BDC4-6006FA76E975"
-        self.filedCount+=8
+        self.providerId="69B669B9-4AF8-4C50-BDC4-6006FA76E975"
         self.Name=""
         self.Version=""
         self.IsInternal=False
