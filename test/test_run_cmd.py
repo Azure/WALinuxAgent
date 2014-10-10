@@ -23,26 +23,26 @@ import test.tools as tools
 import uuid
 import unittest
 import os
-import walinuxagent.util as util
+import walinuxagent.utils.shellutil as shellutil
 import test
 
 class TestRunCmd(unittest.TestCase):
     def test_run_get_output(self):
-        output = util.RunGetOutput("ls /")
+        output = shellutil.RunGetOutput("ls /")
         self.assertNotEquals(None, output)
         self.assertEquals(0, output[0])
 
-        err = util.RunGetOutput("ls /not-exists")
+        err = shellutil.RunGetOutput("ls /not-exists")
         self.assertNotEquals(0, err[0])
 
     def test_run_send_stdin(self):
         test_dir = os.path.dirname(os.path.abspath(__file__))
         test_sh = os.path.join(test_dir, "read_stdin.sh")
         
-        output = util.RunSendStdin(test_sh, "y")
+        output = shellutil.RunSendStdin(test_sh, "y")
         self.assertEquals(0, output[0])
         
-        output = util.RunSendStdin(test_sh, "n")
+        output = shellutil.RunSendStdin(test_sh, "n")
         self.assertEquals(1, output[0])
     
 if __name__ == '__main__':

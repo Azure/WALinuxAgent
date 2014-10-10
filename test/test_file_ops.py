@@ -23,22 +23,22 @@ import test.tools as tools
 import uuid
 import unittest
 import os
-import walinuxagent.util as util
+import walinuxagent.utils.fileutil as fileutil
 import test
 
 class TestFileOperations(unittest.TestCase):
     def test_get_set_file_contents(self):
         test_file='/tmp/test_file'
         content = str(uuid.uuid4())
-        util.SetFileContents(test_file, content)
+        fileutil.SetFileContents(test_file, content)
         self.assertTrue(tools.simple_file_grep(test_file, content))
-        self.assertEquals(content, util.GetFileContents('/tmp/test_file'))
+        self.assertEquals(content, fileutil.GetFileContents('/tmp/test_file'))
         os.remove(test_file)
 
     def test_append_file(self):
         test_file='/tmp/test_file2'
         content = str(uuid.uuid4())
-        util.AppendFileContents(test_file, content)
+        fileutil.AppendFileContents(test_file, content)
         self.assertTrue(tools.simple_file_grep(test_file, content))
         os.remove(test_file)
 
@@ -48,18 +48,18 @@ class TestFileOperations(unittest.TestCase):
         content = str(uuid.uuid4())
         with open(test_file, "a+") as F:
             F.write(contentOld)
-        util.ReplaceFileContentsAtomic(test_file, content)
+        fileutil.ReplaceFileContentsAtomic(test_file, content)
         self.assertFalse(tools.simple_file_grep(test_file, contentOld))
         self.assertTrue(tools.simple_file_grep(test_file, content))
         os.remove(test_file)
 
     def test_get_last_path_element(self):
         filepath = '/tmp/abc.def'
-        filename = util.GetLastPathElement(filepath)
+        filename = fileutil.GetLastPathElement(filepath)
         self.assertEquals('abc.def', filename)
 
         filepath = '/tmp/abc'
-        filename = util.GetLastPathElement(filepath)
+        filename = fileutil.GetLastPathElement(filepath)
         self.assertEquals('abc', filename)
 
 if __name__ == '__main__':

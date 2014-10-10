@@ -16,17 +16,3 @@
 #
 # Requires Python 2.4+ and Openssl 1.0+
 #
-
-import walinuxagent.utils.osutil as osutil
-
-def Install():
-    osutil.CheckDependencies()
-    osutil.RemoveRuleFiles()
-    osutil.SetSshClientAliveInterval()
-    osutil.RegisterAgentService()
-
-def Uninstall():
-    osutil.SwitchCwd()
-    osutil.UnregisterAgentService()
-    osutil.RestoreRuleFiles()
-
