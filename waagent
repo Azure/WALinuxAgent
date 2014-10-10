@@ -974,6 +974,8 @@ class CoreOSDistro(AbstractDistro):
     CoreOS Distro concrete class
     Put CoreOS specific behavior here...
     """
+    CORE_UID = 500
+
     def __init__(self):
         super(CoreOSDistro,self).__init__()
         self.requiredDeps += [ "/usr/bin/systemctl" ]
@@ -1061,7 +1063,7 @@ class CoreOSDistro(AbstractDistro):
             pass
         if uidmin == None:
             uidmin = 100
-        if userentry != None and userentry[2] < uidmin:
+        if userentry != None and userentry[2] < uidmin and userentry[2] != self.CORE_UID:
             Error("CreateAccount: " + user + " is a system user. Will not set password.")
             return "Failed to set password for system user: " + user + " (0x06)."
         if userentry == None:
