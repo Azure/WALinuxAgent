@@ -22,7 +22,7 @@ import env
 import test.tools as tools
 import uuid
 import unittest
-import azure.linuxagent.logger as logger
+import walinuxagent.logger as logger
 import test
 
 class TestLogger(unittest.TestCase):
@@ -34,6 +34,12 @@ class TestLogger(unittest.TestCase):
         _logger.info("Assert no exception")
         _logger.warn("Assert no exception")
         _logger.error("Assert no exception")
+        
+    def test_logger_format(self):
+        _logger = logger.Logger()
+        _logger.info("This is an exception {0}", Exception("Test"))
+        _logger.info("This is an number {0}", 0)
+        _logger.info("This is an boolean {0}", True)
 
     def test_file_appender(self):
         appender_config = logger.AppenderConfig({'type':'FILE', 'level':'INFO', 'file_path':'/tmp/log'})

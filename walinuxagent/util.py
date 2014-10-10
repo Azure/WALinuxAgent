@@ -18,40 +18,193 @@
 #
 
 import platform
+import os
+import shutil
+import tempfile
+import walinuxagent.logger as logger
 
 LibDir = '/var/lib/waagent'
 
-def SetFileContent(path, content):
+"""
+File operation util functions
+"""
+def GetFileContents(filepath,asbin=False):
+    """
+    Read and return contents of 'filepath'.
+    """
+    mode='r'
+    if asbin:
+        mode+='b'
+    c=None
+    try:
+        with open(filepath, mode) as F :
+            c=F.read()
+    except IOError, e:
+        logger.Error('Reading from file {0} Exception is {1}', filepath, e)
+        return None        
+    return c
+
+def SetFileContents(filepath, contents):
+    """
+    Write 'contents' to 'filepath'.
+    """
+    if type(contents) == str :
+        contents=contents.encode('latin-1', 'ignore')
+    try:
+        with open(filepath, "wb+") as F :
+            F.write(contents)
+    except IOError, e:
+        logger.Error('Writing to file {0} Exception is {1}', filepath, e)
+        return None
+    return 0
+
+def AppendFileContents(filepath, contents):
+    """
+    Append 'contents' to 'filepath'.
+    """
+    if type(contents) == str :
+        contents=contents.encode('latin-1')
+    try: 
+        with open(filepath, "a+") as F :
+            F.write(contents)
+    except IOError, e:
+        logger.Error('Appending to file {0} Exception is {1}', filepath, e)
+        return 1
+    return 0
+
+def ReplaceFileContentsAtomic(filepath, contents):
+    """
+    Write 'contents' to 'filepath' by creating a temp file, and replacing original.
+    """
+    handle, temp = tempfile.mkstemp(dir = os.path.dirname(filepath))
+    if type(contents) == str :
+        contents=contents.encode('latin-1')
+    try:
+        os.write(handle, contents)
+    except IOError, e:
+        logger.Error('Write to file {0}, Exception is {1}', filepath, e)
+        return 1
+    finally:
+        os.close(handle)
+
+    try:
+        os.rename(temp, filepath)
+    except IOError, e:
+        logger.Info('Rename {0} to {1}, Exception is {2}',temp,  filepath, e)
+        logger.Info('Remove original file and retry')
+        try:
+            os.remove(filepath)
+        except IOError, e:
+            logger.Error('Remove {0}, Exception is {1}',temp,  filepath, e)
+
+        try:
+            os.rename(temp, filepath)
+        except IOError, e:
+            logger.Error('Rename {0} to {1}, Exception is {2}',temp,  filepath, e)
+            return 1
+    return 0
+
+def GetLastPathElement(path):
+    head, tail = os.path.split(path)
+    return tail
+
+#End File operation util functions
+
+"""
+Shell command util functions
+"""
+def Run():
     pass
 
-def GetFileContet(path):
-    pass
+#End shell command util functions
 
 def RestartNetwork():
     CurrentDistro.restartNetwork()
 
 def OpenPortForDhcp():
     #Open DHCP port if iptables is enabled.
-    Run("iptables -D INPUT -p udp --dport 68 -j ACCEPT",chk_err=False)  # We supress error logging on error.
-    Run("iptables -I INPUT -p udp --dport 68 -j ACCEPT",chk_err=False)  # We supress error logging on error.
+    # We supress error logging on error.
+    Run("iptables -D INPUT -p udp --dport 68 -j ACCEPT",chk_err=False)      
+    Run("iptables -I INPUT -p udp --dport 68 -j ACCEPT",chk_err=False)
+
+def CheckDependencies():
+    CurrentDistro.checkDependencies()
+
+__RulesFiles = [ "/lib/udev/rules.d/75-persistent-net-generator.rules",
+                 "/etc/udev/rules.d/70-persistent-net.rules" ]
+def RemoveRulesFiles(rulesFiles=__RulesFiles, libDir = LibDir):
+    for src in rulesFiles:
+        fileName = GetLastPathElement(src)
+        dest = os.path.join(libDir, fileName)
+        if os.path.isfile(dest):
+            os.remove(dest)
+        if os.path.isfile(src):
+            logger.Warn("Move rules file {0} to {1}", fileName, dest)
+            shutil.move(src, dest)
+
+def RestoreRulesFiles(rulesFiles=__RulesFiles, libDir = LibDir):
+    for dest in rulesFiles:
+        fileName = GetLastPathElement(dest)
+        src = os.path.join(libDir, fileName)
+        if os.path.isfile(dest):
+            continue
+        if os.path.isfile(src):
+            logger.Warn("Move rules file {0} to {1}", fileName, dest)
+            shutil.move(src, dest)
+
+def RegisterAgentService():
+    CurrentDistro.registerAgentService()
+
+def UnregisterAgentService():
+    CurrentDistro.unregisterAgentService()
+
+def SetSshClientAliveInterval():
+    CurrentDistro.setSshClientAliveInterval()
 
 """
-Define distro specific behavior. DefaultDistro class defines default behavior for all distros. Each concrete
-distro classes could overwrite default behavior if needed.
+Define distro specific behavior. DefaultDistro class defines default behavior 
+for all distros. Each concrete distro classes could overwrite default behavior
+if needed.
 
-All distro classes should be transparent to caller. 
+Distro classes should be transparent to caller. 
 """
 class DefaultDistro():
+    def checkDependencies():
+        pass
+
     def restartNetwork():
         pass
 
+    def registerAgentService():
+        pass
+
+    def unregisterAgentService():
+        pass
+
+    def setSshClientAliveInterval():
+        filepath = "/etc/ssh/sshd_config"
+        options = filter(lambda opt: not opt.startswith("ClientAliveInterval"), 
+                        GetFileContents(filepath).split('\n'))
+        options.append("ClientAliveInterval 180")
+        ReplaceFileContentsAtomic(filepath, '\n'.join(options))
+        logger.Info("Configured SSH client probing to keep connections alive.")
+
 class DebianDistro():
+    pass
+
+class UbuntuDistro():
     pass
 
 class RedHatDistro():
     pass
 
+class FedoraDistro():
+    pass
+
 class CoreOSDistro():
+    pass
+
+class GentooDistro():
     pass
 
 class SUSEDistro():
@@ -76,11 +229,15 @@ def GetDistro(distroInfo):
 
     if name == 'ubuntu':
         return UbuntuDistro()
-    elif name == 'centos' or name == 'redhat' or name == 'fedoro':
+    elif name == 'centos' or name == 'redhat':
         return RedhatDistro()
+    elif name == 'fedora':
+        return FedoraDistro()
     elif name == 'debian':
         return DebianDistro()
     elif name == 'coreos':
+        return CoreOSDistro()
+    elif name == 'gentoo':
         return CoreOSDistro()
     elif name == 'suse':
         return SUSEDistro()
@@ -89,4 +246,3 @@ def GetDistro(distroInfo):
 
 CurrentDistroInfo = GetdistroInfo()
 CurrentDistro = GetDistro(CurrentDistroInfo)
-

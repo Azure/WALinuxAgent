@@ -20,25 +20,13 @@
 import walinuxagent.util as util
 
 def Install():
-    util.CheckDependency()
-    RemoveRuleFiles()
+    util.CheckDependencies()
+    util.RemoveRuleFiles()
+    util.SetSshClientAliveInterval()
     util.RegisterAgentService()
-    CopyConfig()
-    ConfigSshd()
 
 def Uninstall():
     util.SwitchCwd()
     util.UnregisterAgentService()
-    RestoreRuleFiles()
+    util.RestoreRuleFiles()
 
-def CopyConfig():
-    pass
-
-def ConfigSshd():
-    pass
-
-def RemoveRuleFiles():
-    pass
-
-def RestoreRuleFiles():
-    pass
