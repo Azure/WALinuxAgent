@@ -28,19 +28,19 @@ class Logger(object):
         self.appenders = []
 
     def verbose(self, msg_format, *args):
-        self.log("VERBOSE", msg_format, args)
+        self.log("VERBOSE", msg_format, *args)
 
     def info(self, msg_format, *args):
-        self.log("INFO", msg_format, args)
+        self.log("INFO", msg_format, *args)
 
     def warn(self, msg_format, *args):
-        self.log("WARNING", msg_format, args)
+        self.log("WARNING", msg_format, *args)
 
     def error(self, msg_format, *args):
-        self.log("ERROR", msg_format, args)
+        self.log("ERROR", msg_format, *args)
 
     def log(self, level, msg_format, *args):
-        msg = msg_format.format(args)
+        msg = msg_format.format(*args)
         time = datetime.now().strftime('%Y/%m/%d %H:%M:%S.%f')
         log_item = "{0} {1} {2}".format(time, level, msg)
         for appender in self.appenders:
