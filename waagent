@@ -575,6 +575,12 @@ class AbstractDistro(object):
         """
         raise NotImplementedError('startDHCP method missing')
 
+    def translateCustomData(self, data):
+        """
+        Translate the custom data from a Base64 encoding. Default to no-op.
+        """
+        return data
+
 ############################################################
 #	GentooDistro
 ############################################################
@@ -1097,6 +1103,9 @@ class CoreOSDistro(AbstractDistro):
 
     def stopDHCP(self):
         Run("systemctl stop " + self.dhcp_client_name, chk_err=False)
+
+    def translateCustomData(self, data):
+        return base64.b64decode(data)
 
 ############################################################    
 #	debianDistro
@@ -3887,7 +3896,7 @@ class OvfEnv(object):
             if len(CDSection) > 0 :
                 self.CustomData=GetNodeTextData(CDSection[0])
                 if len(self.CustomData)>0:
-                    SetFileContents(LibDir + '/CustomData',self.CustomData)
+                    SetFileContents(LibDir + '/CustomData', MyDistro.translateCustomData(self.CustomData))
                     Log('Wrote ' + LibDir + '/CustomData')
                 else :
                     Error('<CustomData> contains no data!')
