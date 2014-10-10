@@ -570,7 +570,7 @@ name="Windows Azure Linux Agent"
 
 depend()
 {
-	needs localmount
+	need localmount
 	use logger network
 	after bootmisc modules
 }
