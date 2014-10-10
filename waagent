@@ -1041,7 +1041,7 @@ class CoreOSDistro(AbstractDistro):
     def RestartInterface(self, iface):
         Run("systemctl restart systemd-networkd")
 
-    def CreateAccount(user, password, expiration, thumbprint):
+    def CreateAccount(self, user, password, expiration, thumbprint):
         """
         Create a user account, with 'user', 'password', 'expiration', ssh keys
         and sudo permissions.
@@ -1072,7 +1072,7 @@ class CoreOSDistro(AbstractDistro):
         else:
             Log("CreateAccount: " + user + " already exists. Will update password.")
         if password != None:
-            RunSendStdin("chpasswd",(user + ":" + password + "\n"))
+            RunSendStdin("chpasswd", user + ":" + password + "\n")
         try:
             if password == None:
                 SetFileContents("/etc/sudoers.d/waagent", user + " ALL = (ALL) NOPASSWD: ALL\n")
