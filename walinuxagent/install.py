@@ -16,3 +16,29 @@
 #
 # Requires Python 2.4+ and Openssl 1.0+
 #
+
+import walinuxagent.util as util
+
+def Install():
+    util.CheckDependency()
+    RemoveRuleFiles()
+    util.RegisterAgentService()
+    CopyConfig()
+    ConfigSshd()
+
+def Uninstall():
+    util.SwitchCwd()
+    util.UnregisterAgentService()
+    RestoreRuleFiles()
+
+def CopyConfig():
+    pass
+
+def ConfigSshd():
+    pass
+
+def RemoveRuleFiles():
+    pass
+
+def RestoreRuleFiles():
+    pass
