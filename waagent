@@ -4016,7 +4016,7 @@ class OvfEnv(object):
             # Disable RFC 4252 and RFC 4256 authentication schemes.
             ReplaceFileContentsAtomic(filepath, "\n".join(filter(lambda a: not
                 (a.startswith("PasswordAuthentication") or a.startswith("ChallengeResponseAuthentication")),
-                GetFileContents(filepath).split('\n'))) + "PasswordAuthentication no\nChallengeResponseAuthentication no\n")
+                GetFileContents(filepath).split('\n'))) + "\nPasswordAuthentication no\nChallengeResponseAuthentication no\n")
             Log("Disabled SSH password-based authentication methods.")
         if self.AdminPassword != None:
             MyDistro.changePass('root',self.AdminPassword)
