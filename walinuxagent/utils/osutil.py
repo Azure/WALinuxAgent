@@ -23,6 +23,8 @@ import shutil
 import tempfile
 import subprocess
 import walinuxagent.logger as logger
+import walinuxagent.utils.fileutil as fileutil
+import walinuxagent.utils.shellutil as shellutil
 
 LibDir = '/var/lib/waagent'
 
@@ -94,7 +96,7 @@ class DefaultDistro():
         options = filter(lambda opt: not opt.startswith("ClientAliveInterval"), 
                         GetFileContents(filepath).split('\n'))
         options.append("ClientAliveInterval 180")
-        ReplaceFileContentsAtomic(filepath, '\n'.join(options))
+        fileutil.ReplaceFileContentsAtomic(filepath, '\n'.join(options))
         logger.Info("Configured SSH client probing to keep connections alive.")
 
 class DebianDistro():
