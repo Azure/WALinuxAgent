@@ -2213,7 +2213,7 @@ def SimpleLog(file_path,message):
     lines=re.sub(re.compile(r'^(.)',re.MULTILINE),t+r'\1',message)
     with open(file_path, "a") as F :
         F.write(lines.encode('ascii','ignore') + "\n")
-        
+
 class Logger(object):
     """
     The Agent's logging assumptions are:
@@ -2244,9 +2244,12 @@ class Logger(object):
         Write 'message' to logfile.
         """
         if self.file_path:
-            with open(self.file_path, "a") as F :
-                F.write(message.encode('ascii','ignore') + "\n")
-                F.close()
+            try:
+                with open(self.file_path, "a") as F :
+                    F.write(message.encode('ascii','ignore') + "\n")
+            except IOError, e:
+                print e
+                pass
             
     def LogToCon(self,message):
         """
@@ -2255,9 +2258,12 @@ class Logger(object):
         is redirected to ttys0 in kernel boot options.
         """
         if self.con_path:
-            with open(self.con_path, "w") as C :
-                C.write(message.encode('ascii','ignore') + "\n")
-                C.close()
+            try:
+                with open(self.con_path, "w") as C :
+                    C.write(message.encode('ascii','ignore') + "\n")
+            except IOError, e:
+                print e
+                pass
                 
     def Log(self,message):
         """
