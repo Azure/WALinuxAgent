@@ -27,6 +27,7 @@ import walinuxagent.utils.fileutil as fileutil
 import walinuxagent.utils.shellutil as shellutil
 
 LibDir = '/var/lib/waagent'
+OvfMountPoint='/mnt/cdrom/secure'
 
 def RestartNetwork():
     CurrentDistro.restartNetwork()
@@ -68,6 +69,15 @@ def RegisterAgentService():
 def UnregisterAgentService():
     CurrentDistro.unregisterAgentService()
 
+def RegenerateSshHostkey(keyPairType):
+    shellutil.Run("rm -f /etc/ssh/ssh_host_*key*")
+    shellutil.Run("ssh-keygen -N '' -t {0} -f /etc/ssh/ssh_host_{1}_key"
+            .format(keyPairType, keyPairType))
+    RestartSshService()
+
+def RestartSshService():
+    pass
+
 def SetSshClientAliveInterval():
     CurrentDistro.setSshClientAliveInterval()
 
@@ -99,28 +109,28 @@ class DefaultDistro():
         fileutil.ReplaceFileContentsAtomic(filepath, '\n'.join(options))
         logger.Info("Configured SSH client probing to keep connections alive.")
 
-class DebianDistro():
+class DebianDistro(DefaultDistro):
     pass
 
-class UbuntuDistro():
+class UbuntuDistro(DefaultDistro):
     pass
 
-class RedHatDistro():
+class RedHatDistro(DefaultDistro):
     pass
 
-class FedoraDistro():
+class FedoraDistro(DefaultDistro):
     pass
 
-class CoreOSDistro():
+class CoreOSDistro(DefaultDistro):
     pass
 
-class GentooDistro():
+class GentooDistro(DefaultDistro):
     pass
 
-class SUSEDistro():
+class SUSEDistro(DefaultDistro):
     pass
 
-def GetdistroInfo():
+def GetDistroInfo():
     if 'FreeBSD' in platform.system():
         release = re.sub('\-.*\Z', '', str(platform.release()))
         distroInfo = ['freebsd', release, '']
@@ -154,5 +164,5 @@ def GetDistro(distroInfo):
     else:
         return DefaultDistro()
 
-CurrentDistroInfo = GetdistroInfo()
+CurrentDistroInfo = GetDistroInfo()
 CurrentDistro = GetDistro(CurrentDistroInfo)
