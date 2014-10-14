@@ -4360,7 +4360,7 @@ class Agent(Util):
                 missingDefaultRoute = True
                 try:
                     if DistInfo()[0] == 'FreeBSD':
-                        routes = RunGetOutput("netstat -nr")[1]
+                        missingDefaultRoute = True
                     else:
                         routes = RunGetOutput("route -n")[1]
                     for line in routes.split('\n'):
@@ -4373,7 +4373,10 @@ class Agent(Util):
                     # network unreachable when the default gateway is not set up.
                     ifname=MyDistro.GetInterfaceName()
                     Log("DoDhcpWork: Missing default route - adding broadcast route for DHCP.")
-                    Run("route add 255.255.255.255 dev " + ifname,chk_err=False)   # We supress error logging on error.
+                    if DistInfo()[0] == 'FreeBSD':
+                        Run("route add -net 255.255.255.255 -iface " + ifname,chk_err=False)
+                    else:
+                        Run("route add 255.255.255.255 dev " + ifname,chk_err=False)
                 if MyDistro.isDHCPEnabled():
                     MyDistro.stopDHCP()
                 sock.bind(("0.0.0.0", 68)) 
@@ -4401,8 +4404,11 @@ class Agent(Util):
                 sock.close()
                 if missingDefaultRoute:
                     #We added this route - delete it
-                    Run("route del 255.255.255.255 dev " + ifname,chk_err=False)  # We supress error logging on error.
                     Log("DoDhcpWork: Removing broadcast route for DHCP.")
+                    if DistInfo()[0] == 'FreeBSD':
+                        Run("route del -net 255.255.255.255 -iface " + ifname,chk_err=False)
+                    else:
+                        Run("route del 255.255.255.255 dev " + ifname,chk_err=False)  # We supress error logging on error.
                 if MyDistro.isDHCPEnabled():
                     MyDistro.startDHCP()
         return None
