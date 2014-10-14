@@ -62,7 +62,7 @@ class Extension():
         self.name = name
         self.version = version
         self.extInfo = extInfo
-        self.state = ExtensionInstalled() if installed else ExtensionNotInstalled()
+        self.state=ExtensionInstalled() if installed else ExtensionNotInstalled()
 
     def enable(self):
         self.state.handleEnable()

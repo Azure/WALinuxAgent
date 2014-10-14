@@ -28,12 +28,17 @@ import test
 
 class TestHttpOperations(unittest.TestCase):
     def test_parse_url(self):
-        host, action = restutil._ParseUrl("http://abc.def/ghi?jkl=mn")
+        host, action, secure = restutil._ParseUrl("http://abc.def/ghi?jkl=mn")
         self.assertEquals("abc.def", host)
         self.assertEquals("/ghi?jkl=mn", action)
-        host, action = restutil._ParseUrl("http://abc.def/")
+
+        host, action, secure = restutil._ParseUrl("http://abc.def/")
         self.assertEquals("abc.def", host)
         self.assertEquals("/", action)
+        self.assertEquals(False, secure)
+
+        host, action, secure = restutil._ParseUrl("https://abc.def/ghi?jkl=mn")
+        self.assertEquals(True, secure)
 
     def test_http_get(self):
         resp = restutil.HttpGet("http://httpbin.org/get")
@@ -43,6 +48,10 @@ class TestHttpOperations(unittest.TestCase):
         resp = restutil.HttpGet("http://httpbin.org/get", {"x-abc":msg})
         self.assertNotEquals(None, resp)
         self.assertTrue(msg in resp)
+
+    def test_https_get(self):
+        resp = restutil.HttpGet("https://httpbin.org/get")
+        self.assertNotEquals(None, resp)
 
 if __name__ == '__main__':
     unittest.main()

@@ -36,13 +36,21 @@ def _ParseUrl(url):
         action = "{0}?{1}".format(action, o.query)
     if o.fragment:
         action = "{0}#{1}".format(action, o.fragment)
+    secure = False
+    if o.scheme.lower() == "https":
+        secure = True
+    return o.netloc, action, secure
 
-    return o.netloc, action
-
-def _HttpRequest(method, host, action, data=None, headers=None):
+def _HttpRequest(method, host, action, data=None, secure=False, headers=None):
     resp = None;
     try:
-        httpConnection = httplib.HTTPConnection(host)
+        httpConnection = None
+
+        if secure:
+            httpConnection = httplib.HTTPSConnection(host)
+        else:
+            httpConnection = httplib.HTTPConnection(host)
+
         if headers == None:
             httpConnection.request(method, action, data)
         else:
@@ -61,8 +69,8 @@ def HttpRequest(method, url, data, headers=None, maxRetry=0):
     Return the output buffer or None.
     """
     logger.Verbose("{0} {1}", method, url)
-    host, action = _ParseUrl(url)
-    resp = _HttpRequest(method, host, action, data, headers)
+    host, action, secure = _ParseUrl(url)
+    resp = _HttpRequest(method, host, action, data, secure, headers)
     for retry in range(0, maxRetry):
         if resp and resp.status == httplib.OK:
             break;
@@ -70,7 +78,7 @@ def HttpRequest(method, url, data, headers=None, maxRetry=0):
             logger.Error("Retry={0}, Status={1}, {2} {3}{4}", retry, 
                          resp.status, method, host, action)
         time.sleep(__RetryWaitingInterval)
-        resp = _HttpRequest(method, host, action, data, headers)
+        resp = _HttpRequest(method, host, action, data, secure, headers)
 
     if resp and (resp.status == httplib.OK or resp.status == httplib.ACCEPTED):
         return resp.read()
@@ -89,7 +97,7 @@ def HttpPut(url, data, headers=None, maxRetry=0):
 def HttpDelete(url, data, headers=None, maxRetry=0):
     return HttpRequest("DELETE", url, data, headers, maxRetry)
    
-def HttpPutBlockBlob(url, data, maxRetry):
+def HttpPutBlockBlob(url, data, maxRetry=0):
     headers = {
         "x-ms-blob-type" : "BlockBlob", 
         "x-ms-date" : time.strftime("%Y-%M-%dT%H:%M:%SZ", time.gmtime()),
