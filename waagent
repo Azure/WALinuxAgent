@@ -3216,7 +3216,7 @@ class ExtensionsConfig(object):
         }
         isSuccess=True
         start = datetime.datetime.now()
-        r=self.launchCommandWithoutEventLog(plugin_log,name,version,command,prev_version)
+        r=self.__launchCommandWithoutEventLog(plugin_log,name,version,command,prev_version)
         if r==None:
             isSuccess=False
         Duration = int((datetime.datetime.now() - start).seconds)
@@ -3224,7 +3224,7 @@ class ExtensionsConfig(object):
             AddExtensionEvent(name,commandToEventOperation[command],isSuccess,Duration,version)
         return r
 
-    def launchCommandWithoutEventLog(self,plugin_log,name,version,command,prev_version=None):
+    def __launchCommandWithoutEventLog(self,plugin_log,name,version,command,prev_version=None):
         # get the manifest and read the command
         mfile=None
         zip_dir=LibDir+"/" + name + '-' + version
@@ -4097,9 +4097,8 @@ class WALAEvent(object):
             raise Exception("WriteToFolder:Too many file under "+datafolder+" exit")
     
         filename = os.path.join(eventfolder,str(int(time.time()*1000000)))
-        hfile = open(filename+".tmp",'wb+')
-        hfile.write(self.ToXml().encode("utf-8"))
-        hfile.close()
+        with open(filename+".tmp",'wb+') as hfile:
+            hfile.write(self.ToXml().encode("utf-8"))
         os.rename(filename+".tmp",filename+".tld")
 
 
@@ -4155,7 +4154,9 @@ class WALAEventMonitor(WALAEvent):
         self.issysteminfoinitilized = False
 
     def StartEventsLoop(self):
-        threading.Thread(target = self.EventsLoop).start()
+        eventThread = threading.Thread(target = self.EventsLoop)
+        eventThread.setDaemon(True)
+        eventThread.start()
         
     def EventsLoop(self):
         LastReportHeartBeatTime = datetime.datetime.min
@@ -4171,7 +4172,9 @@ class WALAEventMonitor(WALAEvent):
             Error("Exception in events loop:"+traceback.format_exc())
 			     		    		
     def SendEvent(self,providerid,events):
-        data = u'<?xml version="1.0"?><TelemetryData version="1.0"><Provider id="{0}">{1}</Provider></TelemetryData>'.format(providerid,events)
+        dataFormat = u'<?xml version="1.0"?><TelemetryData version="1.0"><Provider id="{0}">{1}'\
+        '</Provider></TelemetryData>'
+        data = dataFormat.format(providerid,events)
         self.post("/machine/?comp=telemetrydata",data)
 
     def CollectAndSendWALAEvents(self):        
@@ -4184,10 +4187,9 @@ class WALAEventMonitor(WALAEvent):
         for file in eventFiles:
             if not file.endswith(".tld"):
                 continue      
-            hfile=open(os.path.join(self.eventdir,file),"rb")
+            with open(os.path.join(self.eventdir,file),"rb") as hfile:
             #if fail to open or delete the file, throw exception 
-            xmlStr = hfile.read().decode("utf-8",'ignore')
-            hfile.close()
+                xmlStr = hfile.read().decode("utf-8",'ignore')
             os.remove(os.path.join(self.eventdir,file))
             params=""
             eventid=""
@@ -4218,6 +4220,10 @@ class WALAEventMonitor(WALAEvent):
                 if eventSendNumber %3 ==0:
                     time.sleep(15)
                 events[providerid]=""
+            if len(eventstr) >= 63*1024:
+                Error("Signle event too large abort "+eventstr[:300])
+                continue
+
             events[providerid]=events.get(providerid)+eventstr
 
         for key in events.keys():
@@ -4232,9 +4238,10 @@ class WALAEventMonitor(WALAEvent):
         if not self.issysteminfoinitilized:
             self.issysteminfoinitilized=True
             try:
+                self.sysInfo["OSVersion"]=platform.system()+":"+"-".join(DistInfo())+":"+platform.release()
+                self.sysInfo["GAVersion"]=GuestAgentVersion
                 self.sysInfo["RAM"]=int(RunGetOutput("grep MemTotal /proc/meminfo |awk '{print $2}'")[1])/1024
                 self.sysInfo["Processors"]=int(RunGetOutput("grep 'processor.*:' /proc/cpuinfo |wc -l")[1])
-                self.sysInfo["OSVersion"]=platform.system()+":"+"-".join(DistInfo())+":"+platform.release()
                 sharedConfig = xml.dom.minidom.parse("/var/lib/waagent/SharedConfig.xml").childNodes[0]
                 hostEnvConfig= xml.dom.minidom.parse("/var/lib/waagent/HostingEnvironmentConfig.xml").childNodes[0]
                 gfiles = RunGetOutput("ls -t /var/lib/waagent/GoalState.*.xml")[1]
@@ -4242,7 +4249,6 @@ class WALAEventMonitor(WALAEvent):
                 self.sysInfo["TenantName"]=hostEnvConfig.getElementsByTagName("Deployment")[0].getAttribute("name")
                 self.sysInfo["RoleName"]=hostEnvConfig.getElementsByTagName("Role")[0].getAttribute("name")
                 self.sysInfo["RoleInstanceName"]=sharedConfig.getElementsByTagName("Instance")[0].getAttribute("id")
-                self.sysInfo["GAVersion"]=GuestAgentVersion
                 self.sysInfo["ContainerId"]=goalStateConfi.getElementsByTagName("ContainerId")[0].childNodes[0].nodeValue
             except:
                 Error(traceback.format_exc())
