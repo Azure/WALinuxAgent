@@ -1393,6 +1393,21 @@ class LinuxMintDistro(UbuntuDistro):
 ############################################################    
 #	fedoraDistro
 ############################################################    
+fedora_systemd_service = """\
+[Unit]
+Description=Windows Azure Linux Agent
+After=network.target
+After=sshd.service
+ConditionFileIsExecutable=/usr/sbin/waagent
+ConditionPathExists=/etc/waagent.conf
+
+[Service]
+Type=simple
+ExecStart=/usr/sbin/waagent -daemon
+
+[Install]
+WantedBy=multi-user.target
+"""
 
 class fedoraDistro(redhatDistro):
     """
@@ -1401,6 +1416,104 @@ class fedoraDistro(redhatDistro):
     """
     def __init__(self):
         super(fedoraDistro,self).__init__()
+        self.service_cmd = '/usr/bin/systemctl'
+        self.hostname_file_path = '/etc/hostname'
+        self.init_script_file = '/usr/lib/systemd/system/' + self.agent_service_name + '.service'
+        self.init_file = fedora_systemd_service
+        self.grubKernelBootOptionsFile = '/etc/default/grub'
+        self.grubKernelBootOptionsLine = 'GRUB_CMDLINE_LINUX='
+
+    def publishHostname(self, name):
+        SetFileContents(self.hostname_file_path, name + '\n')
+        ethernetInterface = MyDistro.GetInterfaceName()
+        filepath = "/etc/sysconfig/network-scripts/ifcfg-" + ethernetInterface
+        if os.path.isfile(filepath):
+            ReplaceFileContentsAtomic(filepath, "DHCP_HOSTNAME=" + name + "\n"
+                    + "\n".join(filter(lambda a: not a.startswith("DHCP_HOSTNAME"), GetFileContents(filepath).split('\n'))))
+        return 0
+
+    def installAgentServiceScriptFiles(self):
+        SetFileContents(self.init_script_file, self.init_file)
+        os.chmod(self.init_script_file, 0644)
+        return Run(self.service_cmd + ' daemon-reload')
+
+    def registerAgentService(self):
+        self.installAgentServiceScriptFiles()
+        return Run(self.service_cmd + ' enable ' + self.agent_service_name)
+
+    def uninstallAgentService(self):
+        """
+        Call service subsystem to remove waagent script.
+        """
+        return Run(self.service_cmd + ' disable ' + self.agent_service_name)
+
+    def unregisterAgentService(self):
+        """
+        Calls self.stopAgentService and call self.uninstallAgentService()
+        """
+        self.stopAgentService()
+        self.uninstallAgentService()
+
+    def startAgentService(self):
+        """
+        Service call to start the Agent service
+        """
+        return Run(self.service_cmd + ' start ' + self.agent_service_name)
+
+    def stopAgentService(self):
+        """
+        Service call to stop the Agent service
+        """
+        return Run(self.service_cmd + ' stop '  + self.agent_service_name, False)
+
+    def restartSshService(self):
+        """
+        Service call to re(start) the SSH service
+        """
+        sshRestartCmd = self.service_cmd + " " +  self.ssh_service_restart_option + " " + self.ssh_service_name
+        retcode = Run(sshRestartCmd)
+        if retcode > 0:
+            Error("Failed to restart SSH service with return code:" + str(retcode))
+        return retcode
+
+    def checkPackageInstalled(self, p):
+        """
+        Query package database for prescence of an installed package.
+        """
+        import rpm
+        ts = rpm.TransactionSet()
+        rpms = ts.dbMatch(rpm.RPMTAG_PROVIDES, p)
+        return bool(len(rpms) > 0)
+
+    def deleteRootPassword(self):
+        return Run("/sbin/usermod root -p '!!'")
+
+    def packagedInstall(self,buildroot):
+        """
+        Called from setup.py for use by RPM.
+        Copies generated files waagent.conf, under the buildroot.
+        """
+        if not os.path.exists(buildroot+'/etc'):
+            os.mkdir(buildroot+'/etc')
+        SetFileContents(buildroot+'/etc/waagent.conf', MyDistro.waagent_conf_file)
+
+        if not os.path.exists(buildroot+'/etc/logrotate.d'):
+            os.mkdir(buildroot+'/etc/logrotate.d')
+        SetFileContents(buildroot+'/etc/logrotate.d/WALinuxAgent', WaagentLogrotate)
+
+        self.init_script_file=buildroot+self.init_script_file
+        # this allows us to call installAgentServiceScriptFiles()
+        if not os.path.exists(os.path.dirname(self.init_script_file)):
+            os.mkdir(os.path.dirname(self.init_script_file))
+        self.installAgentServiceScriptFiles()
+
+    def CreateAccount(self, user, password, expiration, thumbprint):
+        super(fedoraDistro, self).CreateAccount(user, password, expiration, thumbprint)
+        Run('/sbin/usermod ' + user + ' -G wheel')
+
+    def DeleteAccount(self, user):
+        Run('/sbin/usermod ' + user + ' -G ""')
+        super(fedoraDistro, self).DeleteAccount(user)
 
 ############################################################    
 #	FreeBSD
