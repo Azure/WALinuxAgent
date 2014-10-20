@@ -48,6 +48,8 @@ import fcntl
 import inspect
 import zipfile
 import json
+import datetime
+import xml.sax.saxutils
 
 if not hasattr(subprocess,'check_output'):
     def check_output(*popenargs, **kwargs):
@@ -1391,6 +1393,21 @@ class LinuxMintDistro(UbuntuDistro):
 ############################################################    
 #	fedoraDistro
 ############################################################    
+fedora_systemd_service = """\
+[Unit]
+Description=Windows Azure Linux Agent
+After=network.target
+After=sshd.service
+ConditionFileIsExecutable=/usr/sbin/waagent
+ConditionPathExists=/etc/waagent.conf
+
+[Service]
+Type=simple
+ExecStart=/usr/sbin/waagent -daemon
+
+[Install]
+WantedBy=multi-user.target
+"""
 
 class fedoraDistro(redhatDistro):
     """
@@ -1399,6 +1416,104 @@ class fedoraDistro(redhatDistro):
     """
     def __init__(self):
         super(fedoraDistro,self).__init__()
+        self.service_cmd = '/usr/bin/systemctl'
+        self.hostname_file_path = '/etc/hostname'
+        self.init_script_file = '/usr/lib/systemd/system/' + self.agent_service_name + '.service'
+        self.init_file = fedora_systemd_service
+        self.grubKernelBootOptionsFile = '/etc/default/grub'
+        self.grubKernelBootOptionsLine = 'GRUB_CMDLINE_LINUX='
+
+    def publishHostname(self, name):
+        SetFileContents(self.hostname_file_path, name + '\n')
+        ethernetInterface = MyDistro.GetInterfaceName()
+        filepath = "/etc/sysconfig/network-scripts/ifcfg-" + ethernetInterface
+        if os.path.isfile(filepath):
+            ReplaceFileContentsAtomic(filepath, "DHCP_HOSTNAME=" + name + "\n"
+                    + "\n".join(filter(lambda a: not a.startswith("DHCP_HOSTNAME"), GetFileContents(filepath).split('\n'))))
+        return 0
+
+    def installAgentServiceScriptFiles(self):
+        SetFileContents(self.init_script_file, self.init_file)
+        os.chmod(self.init_script_file, 0644)
+        return Run(self.service_cmd + ' daemon-reload')
+
+    def registerAgentService(self):
+        self.installAgentServiceScriptFiles()
+        return Run(self.service_cmd + ' enable ' + self.agent_service_name)
+
+    def uninstallAgentService(self):
+        """
+        Call service subsystem to remove waagent script.
+        """
+        return Run(self.service_cmd + ' disable ' + self.agent_service_name)
+
+    def unregisterAgentService(self):
+        """
+        Calls self.stopAgentService and call self.uninstallAgentService()
+        """
+        self.stopAgentService()
+        self.uninstallAgentService()
+
+    def startAgentService(self):
+        """
+        Service call to start the Agent service
+        """
+        return Run(self.service_cmd + ' start ' + self.agent_service_name)
+
+    def stopAgentService(self):
+        """
+        Service call to stop the Agent service
+        """
+        return Run(self.service_cmd + ' stop '  + self.agent_service_name, False)
+
+    def restartSshService(self):
+        """
+        Service call to re(start) the SSH service
+        """
+        sshRestartCmd = self.service_cmd + " " +  self.ssh_service_restart_option + " " + self.ssh_service_name
+        retcode = Run(sshRestartCmd)
+        if retcode > 0:
+            Error("Failed to restart SSH service with return code:" + str(retcode))
+        return retcode
+
+    def checkPackageInstalled(self, p):
+        """
+        Query package database for prescence of an installed package.
+        """
+        import rpm
+        ts = rpm.TransactionSet()
+        rpms = ts.dbMatch(rpm.RPMTAG_PROVIDES, p)
+        return bool(len(rpms) > 0)
+
+    def deleteRootPassword(self):
+        return Run("/sbin/usermod root -p '!!'")
+
+    def packagedInstall(self,buildroot):
+        """
+        Called from setup.py for use by RPM.
+        Copies generated files waagent.conf, under the buildroot.
+        """
+        if not os.path.exists(buildroot+'/etc'):
+            os.mkdir(buildroot+'/etc')
+        SetFileContents(buildroot+'/etc/waagent.conf', MyDistro.waagent_conf_file)
+
+        if not os.path.exists(buildroot+'/etc/logrotate.d'):
+            os.mkdir(buildroot+'/etc/logrotate.d')
+        SetFileContents(buildroot+'/etc/logrotate.d/WALinuxAgent', WaagentLogrotate)
+
+        self.init_script_file=buildroot+self.init_script_file
+        # this allows us to call installAgentServiceScriptFiles()
+        if not os.path.exists(os.path.dirname(self.init_script_file)):
+            os.mkdir(os.path.dirname(self.init_script_file))
+        self.installAgentServiceScriptFiles()
+
+    def CreateAccount(self, user, password, expiration, thumbprint):
+        super(fedoraDistro, self).CreateAccount(user, password, expiration, thumbprint)
+        Run('/sbin/usermod ' + user + ' -G wheel')
+
+    def DeleteAccount(self, user):
+        Run('/sbin/usermod ' + user + ' -G ""')
+        super(fedoraDistro, self).DeleteAccount(user)
 
 ############################################################    
 #	FreeBSD
@@ -2625,10 +2740,11 @@ class ConfigurationProvider(object):
     """
     def __init__(self):
         self.values = dict()
-        if os.path.isfile("/etc/waagent.conf") == False:
+        walaConfigFile = "/etc/waagent.conf"
+        if os.path.isfile(walaConfigFile) == False:
             raise Exception("Missing configuration in /etc/waagent.conf")
         try:
-            for line in GetFileContents("/etc/waagent.conf").split('\n'):
+            for line in GetFileContents(walaConfigFile).split('\n'):
                 if not line.startswith("#") and "=" in line:
                     parts = line.split()[0].split('=')
                     value = parts[1].strip("\" ")
@@ -3056,7 +3172,9 @@ class ExtensionsConfig(object):
                     SimpleLog(p.plugin_log,"Plugin failover server is: " +  self.Util.Endpoint)
 
                     manifest=self.Util.HttpGetWithoutHeaders(failoverlocation)
+                #if failoverlocation also fail what to do then?
                 if manifest == None:
+                    AddExtensionEvent(name,WALAEventOperation.Download,False,0,version,"Download mainfest fail "+failoverlocation)
                     Log("Plugin manifest" + name + "downloaded successfully length = " + str(len(manifest)))
                     SimpleLog(p.plugin_log,"Plugin manifest" + name + "downloaded successfully length = " + str(len(manifest)))
 
@@ -3089,9 +3207,11 @@ class ExtensionsConfig(object):
                 # Download the zipfile archive and save as '.zip'
                 bundle=self.Util.HttpGetWithoutHeaders(bundle_uri)
                 if bundle == None:
+                    AddExtensionEvent(name,WALAEventOperation.Download,True,0,version,"Download zip fail "+bundle_uri)
                     Error("Unable to download plugin bundle" + bundle_uri )
                     SimpleLog(p.plugin_log,"Unable to download plugin bundle" + bundle_uri )
                     continue
+                AddExtensionEvent(name,WALAEventOperation.Download,True,0,version,"Download Success")
                 b=bytearray(bundle)
                 filepath=LibDir+"/" + os.path.basename(bundle_uri) + '.zip'
                 SetFileContents(filepath,b)
@@ -3163,12 +3283,12 @@ class ExtensionsConfig(object):
                             Log(name+' version ' + previous_version + ' is disabled')
                             SimpleLog(p.plugin_log,name+' version ' + previous_version + ' is disabled')
 
-
+                isupgradeSuccess = True
                 if getcmd=='updateCommand':
                     if self.launchCommand(p.plugin_log,name,version,getcmd,previous_version) == None :
                         Error('Update failed for '+name+'-'+version)
                         SimpleLog(p.plugin_log,'Update failed for '+name+'-'+version)
-
+                        isupgradeSuccess=False
                     else :
                         Log('Update complete'+name+'-'+version)
                         SimpleLog(p.plugin_log,'Update complete'+name+'-'+version)
@@ -3178,18 +3298,17 @@ class ExtensionsConfig(object):
                         self.SetHandlerState(previous_handler, 'Installed')
                         Error('Uninstall failed for '+name+'-'+previous_version)
                         SimpleLog(p.plugin_log,'Uninstall failed for '+name+'-'+previous_version)
-
+                        isupgradeSuccess=False
                     else :
                         self.SetHandlerState(previous_handler, 'NotInstalled')
                         Log('Uninstall complete'+ previous_handler )
                         SimpleLog(p.plugin_log,'Uninstall complete'+ name +'-' + previous_version)
-
+                    AddExtensionEvent(name,WALAEventOperation.Upgrade,isupgradeSuccess,0,previous_version)
                 else :  # run install
                     if self.launchCommand(p.plugin_log,name,version,getcmd) == None :
                         self.SetHandlerState(handler, 'NotInstalled')
                         Error('Installation failed for '+name+'-'+version)
                         SimpleLog(p.plugin_log,'Installation failed for '+name+'-'+version)
-
                     else :
                         self.SetHandlerState(handler, 'Installed')
                         Log('Installation completed for '+name+'-'+version)
@@ -3272,8 +3391,25 @@ class ExtensionsConfig(object):
             pass
         
         return self
-
     def launchCommand(self,plugin_log,name,version,command,prev_version=None):
+        commandToEventOperation={
+        "installCommand":WALAEventOperation.Install,
+        "uninstallCommand":WALAEventOperation.UnIsntall,
+        "updateCommand": WALAEventOperation.Upgrade,
+        "enableCommand": WALAEventOperation.Enable,
+        "disableCommand": WALAEventOperation.Disable,
+        }
+        isSuccess=True
+        start = datetime.datetime.now()
+        r=self.__launchCommandWithoutEventLog(plugin_log,name,version,command,prev_version)
+        if r==None:
+            isSuccess=False
+        Duration = int((datetime.datetime.now() - start).seconds)
+        if commandToEventOperation.get(command):
+            AddExtensionEvent(name,commandToEventOperation[command],isSuccess,Duration,version)
+        return r
+
+    def __launchCommandWithoutEventLog(self,plugin_log,name,version,command,prev_version=None):
         # get the manifest and read the command
         mfile=None
         zip_dir=LibDir+"/" + name + '-' + version
@@ -3286,7 +3422,7 @@ class ExtensionsConfig(object):
         if mfile == None :
             Error('HandlerManifest.json not found.')
             SimpleLog(plugin_log,'HandlerManifest.json not found.')
-
+            
             return None
         manifest = GetFileContents(mfile)
         try:
@@ -4078,6 +4214,240 @@ class OvfEnv(object):
         MyDistro.restartSshService()
         return error
 
+
+class WALAEvent(object):   
+    def __init__(self):
+            
+        self.providerId=""
+        self.eventId=1
+        
+        self.OpcodeName=""
+        self.KeywordName=""
+        self.TaskName=""
+        self.TenantName=""
+        self.RoleName=""
+        self.RoleInstanceName=""
+        self.ContainerId=""
+        self.ExecutionMode="IAAS"
+        self.OSVersion=""
+        self.GAVersion=""
+        self.RAM=0
+        self.Processors=0
+
+
+    def ToXml(self):
+        strEventid=u'<Event id="{0}"/>'.format(self.eventId)
+        strProviderid=u'<Provider id="{0}"/>'.format(self.providerId)
+        strRecordFormat = u'<Param Name="{0}" Value="{1}" T="{2}" />'
+        strRecordNoQuoteFormat = u'<Param Name="{0}" Value={1} T="{2}" />'
+        strMtStr=u'mt:wstr'
+        strMtUInt64=u'mt:uint64'
+        strMtBool=u'mt:bool'
+        strMtFloat=u'mt:float64'
+        strEventsData=u""
+
+        for attName in  self.__dict__:
+            if attName in ["eventId","filedCount","providerId"]:
+                continue
+            
+            attValue = self.__dict__[attName]
+            if type(attValue) is int:
+                strEventsData+=strRecordFormat.format(attName,attValue,strMtUInt64)
+                continue
+            if type(attValue) is str:
+                attValue = xml.sax.saxutils.quoteattr(attValue)			                
+                strEventsData+=strRecordNoQuoteFormat.format(attName,attValue,strMtStr)
+                continue
+            if str(type(attValue)).count("'unicode'") >0 :
+                attValue = xml.sax.saxutils.quoteattr(attValue)			 
+                strEventsData+=strRecordNoQuoteFormat.format(attName,attValue,strMtStr)
+                continue
+            if type(attValue) is bool:
+                strEventsData+=strRecordFormat.format(attName,attValue,strMtBool)
+                continue
+            if type(attValue) is float:
+                strEventsData+=strRecordFormat.format(attName,attValue,strMtFloat)
+                continue
+            
+            Log("Warning: property "+attName+":"+str(type(attValue))+":type"+str(type(attValue))+"Can't convert to events data:"+":type not supported")
+
+        return u"<Data>{0}{1}{2}</Data>".format(strProviderid,strEventid,strEventsData)
+
+    def Save(self):
+        eventfolder = LibDir+"/events"
+        if not os.path.exists(eventfolder):
+            os.mkdir(eventfolder)
+            os.chmod(eventfolder,0700)
+        if len(os.listdir(eventfolder)) > 1000:
+            raise Exception("WriteToFolder:Too many file under "+datafolder+" exit")
+    
+        filename = os.path.join(eventfolder,str(int(time.time()*1000000)))
+        with open(filename+".tmp",'wb+') as hfile:
+            hfile.write(self.ToXml().encode("utf-8"))
+        os.rename(filename+".tmp",filename+".tld")
+
+
+class WALAEventOperation:
+    HeartBeat="HeartBeat"
+    Provision = "Provision"
+    Install = "Install"
+    UnIsntall = "UnInstall"
+    Disable = "Disable"
+    Enable = "Enable"
+    Download = "Download"
+    Upgrade = "Upgrade"
+    Update = "Update"           
+
+def AddExtensionEvent(name,op,isSuccess,duration=0,version="1.0",message="",type="",isInternal=False):
+    event = ExtensionEvent()
+    event.Name=name 
+    event.Version=version 
+    event.IsInternal=isInternal
+    event.Operation=op
+    event.OperationSuccess=isSuccess
+    event.Message=message 
+    event.Duration=duration
+    event.ExtensionType=type
+    try:
+        event.Save()
+    except:
+        Error("Error "+traceback.format_exc())
+        
+    
+class ExtensionEvent(WALAEvent):
+    def __init__(self):
+                
+        WALAEvent.__init__(self)
+        self.eventId=1
+        self.providerId="69B669B9-4AF8-4C50-BDC4-6006FA76E975"
+        self.Name=""
+        self.Version=""
+        self.IsInternal=False
+        self.Operation=""
+        self.OperationSuccess=True
+        self.ExtensionType=""
+        self.Message=""
+        self.Duration=0
+    
+               		           
+class WALAEventMonitor(WALAEvent):
+    def __init__(self,postMethod):
+        WALAEvent.__init__(self)
+        self.post = postMethod
+        self.sysInfo={}
+        self.eventdir = LibDir+"/events"
+        self.issysteminfoinitilized = False
+
+    def StartEventsLoop(self):
+        eventThread = threading.Thread(target = self.EventsLoop)
+        eventThread.setDaemon(True)
+        eventThread.start()
+        
+    def EventsLoop(self):
+        LastReportHeartBeatTime = datetime.datetime.min
+        try:
+            while(True):
+                if (datetime.datetime.now()-LastReportHeartBeatTime) > datetime.timedelta(hours=12):
+                    LastReportHeartBeatTime = datetime.datetime.now()
+                    AddExtensionEvent(op=WALAEventOperation.HeartBeat,name="WALA",isSuccess=True)
+                self.postNumbersInOneLoop=0
+                self.CollectAndSendWALAEvents()
+                time.sleep(60)
+        except:
+            Error("Exception in events loop:"+traceback.format_exc())
+			     		    		
+    def SendEvent(self,providerid,events):
+        dataFormat = u'<?xml version="1.0"?><TelemetryData version="1.0"><Provider id="{0}">{1}'\
+        '</Provider></TelemetryData>'
+        data = dataFormat.format(providerid,events)
+        self.post("/machine/?comp=telemetrydata",data)
+
+    def CollectAndSendWALAEvents(self):        
+        if not os.path.exists(self.eventdir):
+            return
+        #Throtting, can't send more than 3 events in 15 seconds  
+        eventSendNumber=0
+        eventFiles = os.listdir(self.eventdir)
+        events = {}
+        for file in eventFiles:
+            if not file.endswith(".tld"):
+                continue      
+            with open(os.path.join(self.eventdir,file),"rb") as hfile:
+            #if fail to open or delete the file, throw exception 
+                xmlStr = hfile.read().decode("utf-8",'ignore')
+            os.remove(os.path.join(self.eventdir,file))
+            params=""
+            eventid=""
+            providerid=""
+            #if exception happen during process an event, catch it and continue
+            try:
+                xmlStr = self.AddSystemInfo(xmlStr)
+                for node in xml.dom.minidom.parseString(xmlStr.encode("utf-8")).childNodes[0].childNodes:
+                    if node.tagName == "Param":
+                        params+=node.toxml()
+                    if node.tagName == "Event":
+                        eventid=node.getAttribute("id")
+                    if node.tagName == "Provider":
+                        providerid = node.getAttribute("id")
+            except:
+                Error(traceback.format_exc())
+                continue
+            if len(params)==0 or len(eventid)==0 or len(providerid)==0:
+                Error("Empty filed in params:"+params+" event id:"+eventid+" provider id:"+providerid)
+                continue
+
+            eventstr = u'<Event id="{0}"><![CDATA[{1}]]></Event>'.format(eventid,params)
+            if not events.get(providerid):
+                events[providerid]=""
+            if len(events[providerid]) >0 and  len(events.get(providerid)+eventstr)>= 63*1024:
+                eventSendNumber+=1
+                self.SendEvent(providerid,events.get(providerid))
+                if eventSendNumber %3 ==0:
+                    time.sleep(15)
+                events[providerid]=""
+            if len(eventstr) >= 63*1024:
+                Error("Signle event too large abort "+eventstr[:300])
+                continue
+
+            events[providerid]=events.get(providerid)+eventstr
+
+        for key in events.keys():
+            if len(events[key]) > 0:
+                eventSendNumber+=1
+                self.SendEvent(key,events[key])
+                if eventSendNumber%3 == 0:
+                    time.sleep(15)
+                
+
+    def AddSystemInfo(self,eventData):
+        if not self.issysteminfoinitilized:
+            self.issysteminfoinitilized=True
+            try:
+                self.sysInfo["OSVersion"]=platform.system()+":"+"-".join(DistInfo())+":"+platform.release()
+                self.sysInfo["GAVersion"]=GuestAgentVersion
+                self.sysInfo["RAM"]=int(RunGetOutput("grep MemTotal /proc/meminfo |awk '{print $2}'")[1])/1024
+                self.sysInfo["Processors"]=int(RunGetOutput("grep 'processor.*:' /proc/cpuinfo |wc -l")[1])
+                sharedConfig = xml.dom.minidom.parse("/var/lib/waagent/SharedConfig.xml").childNodes[0]
+                hostEnvConfig= xml.dom.minidom.parse("/var/lib/waagent/HostingEnvironmentConfig.xml").childNodes[0]
+                gfiles = RunGetOutput("ls -t /var/lib/waagent/GoalState.*.xml")[1]
+                goalStateConfi =  xml.dom.minidom.parse(gfiles.split("\n")[0]).childNodes[0]
+                self.sysInfo["TenantName"]=hostEnvConfig.getElementsByTagName("Deployment")[0].getAttribute("name")
+                self.sysInfo["RoleName"]=hostEnvConfig.getElementsByTagName("Role")[0].getAttribute("name")
+                self.sysInfo["RoleInstanceName"]=sharedConfig.getElementsByTagName("Instance")[0].getAttribute("id")
+                self.sysInfo["ContainerId"]=goalStateConfi.getElementsByTagName("ContainerId")[0].childNodes[0].nodeValue
+            except:
+                Error(traceback.format_exc())
+
+        eventObject = xml.dom.minidom.parseString(eventData.encode("utf-8")).childNodes[0]
+        for node in eventObject.childNodes:
+            if node.tagName == "Param":
+                name = node.getAttribute("Name")
+                if self.sysInfo.get(name):
+                    node.setAttribute("Value",xml.sax.saxutils.escape(str(self.sysInfo[name])))
+
+        return  eventObject.toxml()            
+
+
 class Agent(Util):
     """
     Primary object container for the provisioning process.
@@ -4363,7 +4733,7 @@ class Agent(Util):
                 missingDefaultRoute = True
                 try:
                     if DistInfo()[0] == 'FreeBSD':
-                        routes = RunGetOutput("netstat -nr")[1]
+                        missingDefaultRoute = True
                     else:
                         routes = RunGetOutput("route -n")[1]
                     for line in routes.split('\n'):
@@ -4376,7 +4746,10 @@ class Agent(Util):
                     # network unreachable when the default gateway is not set up.
                     ifname=MyDistro.GetInterfaceName()
                     Log("DoDhcpWork: Missing default route - adding broadcast route for DHCP.")
-                    Run("route add 255.255.255.255 dev " + ifname,chk_err=False)   # We supress error logging on error.
+                    if DistInfo()[0] == 'FreeBSD':
+                        Run("route add -net 255.255.255.255 -iface " + ifname,chk_err=False)
+                    else:
+                        Run("route add 255.255.255.255 dev " + ifname,chk_err=False)
                 if MyDistro.isDHCPEnabled():
                     MyDistro.stopDHCP()
                 sock.bind(("0.0.0.0", 68)) 
@@ -4404,8 +4777,11 @@ class Agent(Util):
                 sock.close()
                 if missingDefaultRoute:
                     #We added this route - delete it
-                    Run("route del 255.255.255.255 dev " + ifname,chk_err=False)  # We supress error logging on error.
                     Log("DoDhcpWork: Removing broadcast route for DHCP.")
+                    if DistInfo()[0] == 'FreeBSD':
+                        Run("route del -net 255.255.255.255 -iface " + ifname,chk_err=False)
+                    else:
+                        Run("route del 255.255.255.255 dev " + ifname,chk_err=False)  # We supress error logging on error.
                 if MyDistro.isDHCPEnabled():
                     MyDistro.startDHCP()
         return None
@@ -4784,7 +5160,8 @@ class Agent(Util):
             Openssl = "openssl"
 
         self.TransportCert = self.GenerateTransportCert()
-
+        
+        eventMonitor = None
         incarnation = None # goalStateIncarnationFromHealthReport
         currentPort = None # loadBalancerProbePort
         goalState = None # self.GoalState, instance of GoalState
@@ -4810,7 +5187,11 @@ class Agent(Util):
                     if provisionError == None :
                         provisioned = True
                         SetFileContents(LibDir + "/provisioned", "")
-
+                        lastCtime = os.path.getctime("/etc/waagent.conf")
+                        #Get Ctime of wala config, can help identify the base image of this VM
+                        AddExtensionEvent(name="WALA",op=WALAEventOperation.Provision,isSuccess=True,
+                                              message="WALA Config Ctime:"+time.ctime(lastCtime))
+                        
                 #
                 # only one port supported
                 # restart server if new port is different than old port
@@ -4856,8 +5237,13 @@ class Agent(Util):
             # report the status/heartbeat results of extension processing
             if goalState.ExtensionsConfig != None :
                 goalState.ExtensionsConfig.ReportHandlerStatus()
+            
+            if not eventMonitor:
+                eventMonitor = WALAEventMonitor(self.HttpPost)
+                eventMonitor.StartEventsLoop()
 
             time.sleep(25 - sleepToReduceAccessDenied)	
+
             
 WaagentLogrotate = """\
 /var/log/waagent.log {
@@ -5108,6 +5494,10 @@ def Deprovision(force, deluser):
     Set hostname to 'localhost.localdomain'.
     Delete cached system configuration files in /var/lib and /var/lib/waagent.
     """
+    
+    #Append blank line at the end of file, so the ctime of this file is changed every time
+    Run("echo ''>>"+"/etc/waagent.conf")
+
     SwitchCwd()
     ovfxml = GetFileContents(LibDir+"/ovf-env.xml")
     ovfobj = None
@@ -5160,6 +5550,8 @@ def Usage():
     """
     print("usage: " + sys.argv[0] + " [-verbose] [-force] [-help|-install|-uninstall|-deprovision[+user]|-version|-serialconsole|-daemon]")
     return 0
+
+
 
 def main():
     """
