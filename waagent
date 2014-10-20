@@ -2212,6 +2212,7 @@ def SimpleLog(file_path,message):
     t = "%04u/%02u/%02u %02u:%02u:%02u " % (t.tm_year, t.tm_mon, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec)
     lines=re.sub(re.compile(r'^(.)',re.MULTILINE),t+r'\1',message)
     with open(file_path, "a") as F :
+        lines = filter(lambda x : x in string.printable, lines)
         F.write(lines.encode('ascii','ignore') + "\n")
 
 class Logger(object):
@@ -2246,6 +2247,7 @@ class Logger(object):
         if self.file_path:
             try:
                 with open(self.file_path, "a") as F :
+                    message = filter(lambda x : x in string.printable, message)
                     F.write(message.encode('ascii','ignore') + "\n")
             except IOError, e:
                 print e
@@ -2260,6 +2262,7 @@ class Logger(object):
         if self.con_path:
             try:
                 with open(self.con_path, "w") as C :
+                    message = filter(lambda x : x in string.printable, message)
                     C.write(message.encode('ascii','ignore') + "\n")
             except IOError, e:
                 print e

@@ -29,7 +29,7 @@ class TestWAAgentLogger(unittest.TestCase):
 
     def test_log_unicode(self):
         logger = waagent.Logger('/tmp/testlog', '/tmp/testconsole')
-        logger.Log(u"\u6211\u7231\u5201\u831C")
+        logger.Log(u"anything\u6211\u7231\u5201\u831C".encode("utf-8"))
 
 if __name__ == '__main__':
     unittest.main()
