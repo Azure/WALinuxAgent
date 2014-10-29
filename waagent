@@ -583,6 +583,9 @@ class AbstractDistro(object):
         """
         return data
 
+    def getConfigurationPath(self):
+        return "/etc/waagent.conf"
+
 ############################################################
 #	GentooDistro
 ############################################################
@@ -1110,6 +1113,9 @@ class CoreOSDistro(AbstractDistro):
 
     def translateCustomData(self, data):
         return base64.b64decode(data)
+
+    def getConfigurationPath(self):
+        return "/usr/share/oem/waagent.conf"
 
 ############################################################    
 #	debianDistro
@@ -2738,13 +2744,13 @@ class LoadBalancerProbeServer(object):
 
 class ConfigurationProvider(object):
     """
-    Parse amd store key:values in /etc/waagent.conf.
+    Parse amd store key:values in waagent.conf
     """
     def __init__(self):
         self.values = dict()
-        walaConfigFile = "/etc/waagent.conf"
+        walaConfigFile = MyDistro.getConfigurationPath()
         if os.path.isfile(walaConfigFile) == False:
-            raise Exception("Missing configuration in /etc/waagent.conf")
+            raise Exception("Missing configuration in {0}".format(walaConfigFile))
         try:
             for line in GetFileContents(walaConfigFile).split('\n'):
                 if not line.startswith("#") and "=" in line:
@@ -2755,7 +2761,7 @@ class ConfigurationProvider(object):
                     else:
                         self.values[parts[0]] = None
         except:
-            Error("Unable to parse /etc/waagent.conf")
+            Error("Unable to parse {0}".format(walaConfigFile))
             raise
         return
 
