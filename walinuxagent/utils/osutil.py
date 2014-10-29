@@ -38,6 +38,21 @@ def OpenPortForDhcp():
     Run("iptables -D INPUT -p udp --dport 68 -j ACCEPT",chk_err=False)      
     Run("iptables -I INPUT -p udp --dport 68 -j ACCEPT",chk_err=False)
 
+def SetBroadcastRouteForDhcp():
+    CurrentDistro.setBroadcastRouteForDhcp()
+
+def RemoveBroadcastRouteForDhcp():
+    CurrentDistro.removeBroadcastRouteForDhcp()
+
+def IsDhcpEnabled():
+    CurrentDistro.isDhcpEnabled()
+
+def StartDhcpService():
+    CurrentDistro.startDhcpService()
+
+def StopDhcpService():
+    CurrentDistro.stopDhcpService()
+
 def CheckDependencies():
     CurrentDistro.checkDependencies()
 
@@ -81,6 +96,9 @@ def RestartSshService():
 def SetSshClientAliveInterval():
     CurrentDistro.setSshClientAliveInterval()
 
+def GetOpensslCmd():
+    return '/usr/bin/openssl'
+
 """
 Define distro specific behavior. DefaultDistro class defines default behavior 
 for all distros. Each concrete distro classes could overwrite default behavior
@@ -90,6 +108,21 @@ Distro classes should be transparent to caller.
 """
 class DefaultDistro():
     def checkDependencies():
+        pass
+
+    def setBroadcastRouteForDhcp():
+        pass
+
+    def removeBroadcastRouteForDhcp():
+        pass
+
+    def isDhcpEnabled():
+        return False
+
+    def stopDhcpService():
+        pass
+
+    def startDhcpService():
         pass
 
     def restartNetwork():

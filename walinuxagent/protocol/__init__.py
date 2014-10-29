@@ -25,5 +25,3 @@ Call DetectEndpoint() function to initialize protocol object.
 Call GetProtocol() function to get protocol object.
 """
 
-from walinuxagent.protocol.contract import *
-from walinuxagent.protocol.detection import *

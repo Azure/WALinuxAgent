@@ -20,6 +20,7 @@ import os
 import walinuxagent.logger as logger
 import walinuxagent.utils.osutil as osutil
 import walinuxagent.utils.fileutil as fileutil
+from walinuxagent.protocol.common import *
 from walinuxagent.protocol.v1 import ProtocolV1
 from walinuxagent.protocol.v2 import ProtocolV2
 

@@ -24,6 +24,7 @@ import uuid
 import unittest
 import os
 import walinuxagent.protocol as protocol
+from walinuxagent.protocol.detection as detection
 
 class TestProtocolDetection(unittest.TestCase):
 
