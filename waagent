@@ -1878,7 +1878,7 @@ class FreeBSDDistro(AbstractDistro):
             Error("DeleteAccount: " + user + " is a system user. Will not delete account.")
             return
         Run("> /var/run/utmp") #Delete utmp to prevent error if we are the 'user' deleted
-        Run("rmuser -y " + user)
+        pid = subprocess.Popen(['rmuser', '-y', user], stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE).pid
         try:
             os.remove(MyDistro.sudoers_dir_base+"/sudoers.d/waagent")
         except:
@@ -5527,8 +5527,6 @@ def Deprovision(force, deluser):
         return 1
 
     MyDistro.stopAgentService()
-    if deluser == True:
-        MyDistro.DeleteAccount(ovfobj.UserName)
 
     # Remove SSH host keys
     regenerateKeys = Config.get("Provisioning.RegenerateSshHostKeyPair")
@@ -5542,6 +5540,8 @@ def Deprovision(force, deluser):
 
     MyDistro.publishHostname('localhost.localdomain')
     MyDistro.deprovisionDeleteFiles()
+    if deluser == True:
+        MyDistro.DeleteAccount(ovfobj.UserName)
     return 0
 
 def SwitchCwd():
