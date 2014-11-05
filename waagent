@@ -4996,10 +4996,15 @@ class Agent(Util):
                     if provisionError == None :
                         provisioned = True
                         SetFileContents(LibDir + "/provisioned", "")
-                        lastCtime = os.path.getctime("/etc/waagent.conf")
+                        lastCtime = "NOTFIND"
+                        try:
+                            walaConfigFile = MyDistro.getConfigurationPath()
+                            lastCtime = time.ctime(os.path.getctime(walaConfigFile))
+                        except:
+                            pass
                         #Get Ctime of wala config, can help identify the base image of this VM
                         AddExtensionEvent(name="WALA",op=WALAEventOperation.Provision,isSuccess=True,
-                                              message="WALA Config Ctime:"+time.ctime(lastCtime))
+                                              message="WALA Config Ctime:"+lastCtime)
                         
                 #
                 # only one port supported
@@ -5305,7 +5310,7 @@ def Deprovision(force, deluser):
     """
     
     #Append blank line at the end of file, so the ctime of this file is changed every time
-    Run("echo ''>>"+"/etc/waagent.conf")
+    Run("echo ''>>"+ MyDistro.getConfigurationPath())
 
     SwitchCwd()
     ovfxml = GetFileContents(LibDir+"/ovf-env.xml")
