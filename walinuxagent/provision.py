@@ -19,9 +19,9 @@
 
 import os
 import walinuxagent.logger as logger
-import walinuxagent.utils.osutil as osutil
+from walinuxagent.utils.osutil import CurrOS, CurrOSInfo
 import walinuxagent.utils.shellutil as shellutil
-from osutil import LibDir, OvfMountPoint
+from CurrOS import LibDir, OvfMountPoint
 
 CustomDataFile="CustomData"
 
@@ -36,7 +36,7 @@ class ProvisionHandler(object):
             return
         
         logger.Info("Provisioning image started")
-        ovfenv = protocol.copyOvf()
+        ovfenv = self.protocol.copyOvf()
     
         self.setHostName(ovfenv.getComputerName())
         self.createUserAccount(ovfenv.getUserName(), ovfenv.getUserPassword())
@@ -45,16 +45,16 @@ class ProvisionHandler(object):
 
         if config.getSwitch("Provisioning.RegenerateSshHostKeyPair"):
             keyPairType = config.get("Provisioning.SshHostKeyPairType", "rsa")
-            osutil.RegenerateSshHostkey(keyPairType)
+            CurrOS.RegenerateSshHostkey(keyPairType)
 
-        osutil.RestartSshService()
+        CurrOS.RestartSshService()
         self.reportSshHostkeyThumbnail()
 
         if config.getSwitch("Provisioning.DeleteRootPassword"):
             self.deleteRootPassword()
 
     def saveCustomData(self, customData):
-        osutil.SetFileContents(os.path.join(self.libDir, CustomDataFile), 
+        CurrOS.SetFileContents(os.path.join(self.libDir, CustomDataFile), 
                                customData)
 
     def deploySshPublicKeys(self, keys):
@@ -66,13 +66,13 @@ class ProvisionHandler(object):
     def createUserAccount(self, userName, password):
         if userName is None:
             raise Exception("User name is empty.")
-        if osutil.IsSysUser(userName):
+        if CurrOS.IsSysUser(userName):
             raise Exception("User:{0} is a system user.".format(userName))
-        osutil.CreateUserAccount(userName, password)
+        CurrOS.CreateUserAccount(userName, password)
 
     def reportSshHostkeyThumbnail(self):
         pass
 
     def deleteRootPassword(self):
-        osutil.DeleteRootPassword()
+        CurrOS.DeleteRootPassword()
 

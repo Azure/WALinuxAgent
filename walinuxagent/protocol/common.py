@@ -240,7 +240,7 @@ class Protocol():
         pass
 
     def getOvf(self):
-        ovfFilePath = os.path.join(osutil.GetLibDir(), OvfFileName)
+        ovfFilePath = os.path.join(CurrOS.GetLibDir(), OvfFileName)
         xmlText = fileutil.GetFileContents(ovfFilePath)        
         return OvfEnv(xmlText)
 
@@ -249,22 +249,19 @@ class Protocol():
         Copy ovf env file from dvd to hard disk. 
         Remove password before save it to the disk
         """
-        dvd = osutil.GetDvdDevice()
-        mountPoint = osutil.getOvfMountPoint()
-        ovfFile = osutil.GetOvfEnvPathOnDvd()
+        ovfFile = CurrOS.GetOvfEnvPathOnDvd()
+        CurrOS.MountDvd()
 
-        #Why do we need to load atapiix?
-        #TODO load atapiix
-        osutil.MountDvd(dvd, mountPoint)
         if not os.path.isfile(ovfFile):
             raise Exception("Unable to provision: Missing ovf-env.xml on DVD")
-        ovfxml = osutil.GetFileContents(ovfFile, removeBom=True)
+        ovfxml = CurrOS.GetFileContents(ovfFile, removeBom=True)
         ovfenv = OvfEnv(ovfxml)
         ovfxml = re.sub("<UserPassword>.*?<", "<UserPassword>*<", ovfxml)
-        ovfFilePath = os.path.join(osutil.GetLibDir(), OvfFileName)
-        osutil.SetFileContents(ovfFilePath, self.xmlText)
+        ovfFilePath = os.path.join(CurrOS.GetLibDir(), OvfFileName)
+        CurrOS.SetFileContents(ovfFilePath, self.xmlText)
         self.ovfenv = ovfenv
-        osutil.UmountDvd(mountPoint)
+
+        CurrOS.UmountDvd()
         return ovfenv
 
     def reportProvisionStatus(self, status, subStatus, description, thumbprint):

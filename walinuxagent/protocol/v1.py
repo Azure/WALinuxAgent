@@ -23,7 +23,7 @@ import time
 import xml.etree.ElementTree as ET
 import walinuxagent.logger as logger
 import walinuxagent.utils.restutil as restutil
-import walinuxagent.utils.osutil as osutil
+from walinuxagent.utils.osutil import CurrOS, CurrOSInfo
 import walinuxagent.utils.fileutil as fileutil
 import walinuxagent.utils.shellutil as shellutil
 from walinuxagent.utils.textutil import *
@@ -61,7 +61,7 @@ class ProtocolV1(Protocol):
 
     @staticmethod
     def Detect():
-        endpoint = osutil.GetWireServerEndpoint()
+        endpoint = CurrOS.GetWireServerEndpoint()
         if endpoint is None:
             raise Exception("Wire server endpoint not found.")
         protocol = ProtocolV1(endpoint)
@@ -70,7 +70,7 @@ class ProtocolV1(Protocol):
       
     @staticmethod
     def Init():
-        endpoint = osutil.GetWireServerEndpoint()
+        endpoint = CurrOS.GetWireServerEndpoint()
         if endpoint is None:
             raise Exception("Wire server endpoint not found.")
         protocol = ProtocolV1(endpoint)
@@ -79,7 +79,7 @@ class ProtocolV1(Protocol):
 
     def __init__(self, endpoint):
         self.endpoint = endpoint
-        self.libDir = osutil.GetLibDir()
+        self.libDir = CurrOS.GetLibDir()
   
     def _checkProtocolVersion(self):
         negotiated = None;
@@ -105,7 +105,7 @@ class ProtocolV1(Protocol):
         fileutil.SetFileContents(VersionInfoFile, versionInfoXml)
 
         self._checkProtocolVersion()
-        osutil.GenerateTransportCert()
+        CurrOS.GenerateTransportCert()
    
         self.incarnation = 0
         incarnationStr = fileutil.GetFileContents(IncarnationFile)
@@ -489,8 +489,8 @@ class Certificates(object):
     Object containing certificates of host and provisioned user.
     """
     def __init__(self, jsonText=None):
-        self.libDir = osutil.GetLibDir()
-        self.opensslCmd = osutil.GetOpensslCmd()
+        self.libDir = CurrOS.GetLibDir()
+        self.opensslCmd = CurrOS.GetOpensslCmd()
         if jsonText is not None:
             self.parse(jsonText)
 

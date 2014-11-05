@@ -118,3 +118,13 @@ def GetLineStartingWith(prefix, filepath):
     return None
 
 #End File operation util functions
+
+def CreateDir(dirpath, owner, mode):
+    if os.path.isdir(dirpath):
+        os.makedirs(dirpath, mode)
+    ChangeOwner(dirpath, owner)
+
+def ChangeOwner(path, owner):
+    ownerInfo = pwd.getpwnam(owner)
+    os.chown(path, ownerInfo[2], ownerInfo[3])   
+

@@ -171,8 +171,8 @@ def MockGetOpensslCmd():
 
 class TestCertificates(unittest.TestCase):
     def setUp(self):
-        v1.osutil.GetLibDir = MockGetLibDir
-        v1.osutil.MockGetOpensslCmd = MockGetOpensslCmd
+        v1.CurrOS.GetLibDir = MockGetLibDir
+        v1.CurrOS.MockGetOpensslCmd = MockGetOpensslCmd
 
     def test_certificates(self):
         crt1 = '/tmp/33B0ABCE4673538650971C10F7D7397E71561F35.crt'

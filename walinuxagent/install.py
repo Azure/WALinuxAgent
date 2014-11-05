@@ -17,16 +17,16 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
-import walinuxagent.utils.osutil as osutil
+from walinuxagent.utils.osutil import CurrOS, CurrOSInfo
 
 def Install():
-    osutil.CheckDependencies()
-    osutil.RemoveRuleFiles()
-    osutil.SetSshClientAliveInterval()
-    osutil.RegisterAgentService()
+    CurrOS.CheckDependencies()
+    CurrOS.RemoveRuleFiles()
+    CurrOS.SetSshClientAliveInterval()
+    CurrOS.RegisterAgentService()
 
 def Uninstall():
-    osutil.SwitchCwd()
-    osutil.UnregisterAgentService()
-    osutil.RestoreRuleFiles()
+    CurrOS.SwitchCwd()
+    CurrOS.UnregisterAgentService()
+    CurrOS.RestoreRuleFiles()
 

@@ -21,7 +21,7 @@
 
 import os
 import sys
-import walinuxagent.utils.osutil as osutil
+from walinuxagent.utils.osutil import CurrOS, CurrOSInfo
 
 parent = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(parent)
@@ -65,12 +65,12 @@ def MockIsDhcpEnabled():
 def MockGetLibDir():
     return "/tmp"
 
-#Mock osutil so that the test of other part will be os unrelated
-osutil.GetLibDir = MockGetLibDir
-osutil.GetMacAddress = MockGetMacAddress
-osutil.IsDhcpEnabled = MockIsDhcpEnabled
-osutil.OpenPortForDhcp = Dummy
-osutil.StartDhcpService = Dummy
-osutil.StopDhcpService = Dummy
-osutil.GenerateTransportCert = Dummy
+#Mock CurrOS so that the test of other part will be os unrelated
+CurrOS.GetLibDir = MockGetLibDir
+CurrOS.GetMacAddress = MockGetMacAddress
+CurrOS.IsDhcpEnabled = MockIsDhcpEnabled
+CurrOS.OpenPortForDhcp = Dummy
+CurrOS.StartDhcpService = Dummy
+CurrOS.StopDhcpService = Dummy
+CurrOS.GenerateTransportCert = Dummy
 

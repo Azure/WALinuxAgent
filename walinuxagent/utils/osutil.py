@@ -27,94 +27,28 @@ import walinuxagent.logger as logger
 import walinuxagent.utils.fileutil as fileutil
 import walinuxagent.utils.shellutil as shellutil
 
-LibDir = '/var/lib/waagent'
-OvfMountPoint='/mnt/cdrom/secure'
-OvfEnvPathOnDvd = '/mnt/cdrom/secure/ovf-env.xml'
-
-def GetLibDir():
-    return CurrentDistro.getLibDir()
-
-def GetOvfMountPoint():
-    return CurrentDistro.GetOvfMountPoint()
-
-def GetOvfEnvPathOnDvd():
-    return CurrentDistro.getOvfEnvPathOnDvd()
-
-def OpenPortForDhcp():
-    #Open DHCP port if iptables is enabled.
-    # We supress error logging on error.
-    Run("iptables -D INPUT -p udp --dport 68 -j ACCEPT",chk_err=False)      
-    Run("iptables -I INPUT -p udp --dport 68 -j ACCEPT",chk_err=False)
-
-def CreateUserAccount(userName, password, expiration):
-    return CurrentDistro.createUserAccount(userName, password, expiration)
-
-def GetOpensslCmd():
-    return CurrentDistro.getOpensslCmd()
-
 RulesFiles = [ "/lib/udev/rules.d/75-persistent-net-generator.rules",
                "/etc/udev/rules.d/70-persistent-net.rules" ]
-def RemoveRulesFiles(rulesFiles=RulesFiles, libDir = LibDir):
-    for src in rulesFiles:
-        fileName = GetLastPathElement(src)
-        dest = os.path.join(libDir, fileName)
-        if os.path.isfile(dest):
-            os.remove(dest)
-        if os.path.isfile(src):
-            logger.Warn("Move rules file {0} to {1}", fileName, dest)
-            shutil.move(src, dest)
 
-def RestoreRulesFiles(rulesFiles=RulesFiles, libDir = LibDir):
-    for dest in rulesFiles:
-        fileName = GetLastPathElement(dest)
-        src = os.path.join(libDir, fileName)
-        if os.path.isfile(dest):
-            continue
-        if os.path.isfile(src):
-            logger.Warn("Move rules file {0} to {1}", fileName, dest)
-            shutil.move(src, dest)
-
-def GetMacAddress():
-    pass
-
-def SetBroadcastRouteForDhcp():
-    pass
-
-def IsDhcpEnabled():
-    return CurrentDistro.isDhcpEnabled()
-
-def StartDhcpService():
-    return CurrentDistro.startDhcpService()
-
-def StopDhcpService():
-    return CurrentDistro.stopDhcpService()
-
-def GenerateTransportCert():
-    """
-    Create ssl certificate for https communication with endpoint server.
-    """
-    opensslCmd = GetOpensslCmd()
-    cmd = ("{0} req -x509 -nodes -subj /CN=LinuxTransport -days 32768 "
-           "-newkey rsa:2048 -keyout TransportPrivate.pem "
-           "-out TransportCert.pem").format(opensslCmd)
-    shellutil.Run(cmd)
-  
 """
 Define distro specific behavior. DefaultDistro class defines default behavior 
 for all distros. Each concrete distro classes could overwrite default behavior
 if needed.
 """
 class DefaultDistro():
-    def getLibDir(self):
+    def GetLibDir(self):
         return "/var/lib/waagent"
 
-    def getOvfMountPoint(self):
+    def GetDvdMountPoint(self):
         return "/mnt/cdrom/secure"
 
-    def getOvfEnvPathOnDvd(self):
+    def GetOvfEnvPathOnDvd(self):
         return "/mnt/cdrom/secure/ovf-env.xml"
 
-    def isSysUser(self, userName):
+    def GetAgentPidPath(self):
+        return '/var/run/waagent.pid'
+
+    def IsSysUser(self, userentry):
         uidmin = None
         try:
             uidminDef = GetLineStartingWith("UID_MIN", "/etc/login.defs")
@@ -127,48 +61,72 @@ class DefaultDistro():
             return True
         else:
             return False
+   
+    def CreateUserAccount(self, userName, expiration):
+        self.createUserAccount(userName)
+        cmd = "useradd -m {0}".format(user)
+        if expiration is not None:
+            cmd = "{0} -e {1}".format(cmd, expiration)
+        retcode, out = shellutil.RunGetOutput(cmd)
+        if retcode != 0:
+            raise Exception(("Failed to create user account:{0}, "
+                             "retcode:{1}, "
+                             "output:{2}").format(userName, retcode, out))
 
-    def createUserAccount(self, userName, password, expiration):
-        userentry = pwd.getpwnam(user)
-        if userentry is None:
-            cmd = "useradd -m {0}".format(user)
-            if expiration is not None:
-                cmd = "{0} -e {1}".format(cmd, expiration)
-            retcode, out = shellutil.RunGetOutput(cmd)
-            if retcode != 0:
-                raise Exception(("Failed to create user account:{0}, "
-                                 "retcode:{1}, "
-                                 "output:{2}").format(userName, retcode, out))
-        if password is not None:
-            shellutil.RunSendStdin("chpasswd", 
-                                   "{0}:{1}\n".format(userName, password))
+    def ChangePassword(self, userName, password):
+        shellutil.RunSendStdin("chpasswd", 
+                               "{0}:{1}\n".format(userName, password))
+                    
+    def ConfigSudoer(self, userName, nopasswd):
+        # for older distros create sudoers.d
+        if not os.path.isdir('/etc/sudoers.d/'):
+            # create the /etc/sudoers.d/ directory
+            os.mkdir('/etc/sudoers.d/')
+            # add the include of sudoers.d to the /etc/sudoers
+            sudoers = fileutil.GetFileContents('/etc/sudoers')
+            sudoers = sudoers + '\n' + '#includedir /etc/sudoers.d/\n'
+            fileutil.SetFileContents('/etc/sudoers', sudoers)
+        sudoer = None
+        if nopasswd:
+            sudoer = "{0} ALL = (ALL) NOPASSWD\n".format(userName)
+        else:
+            sudoer = "{0} ALL = (ALL) ALL\n".format(userName)
+        fileutil.SetFileContents('/etc/sudoers.d/waagent', sudoer)
+        os.chmod('/etc/sudoers.d/waagent', 0440)
+   
+    def GetHome(self):
+        return '/home'
+    
+    def ConfigSshKey(self, userName, thumbprint):
+        sshDir = os.path.join(self.getHome(), userName, '.ssh')
+        fileutil.CreateDir(sshDir, userName, '0700')
+        pub = os.path.join(sshDir, 'id_rsa.pub')
+        prv = os.path.join(sshDir, 'id_rsa')
 
-
-    def regenerateSshHostkey(self, keyPairType):
+    def RegenerateSshHostkey(self, keyPairType):
         shellutil.Run("rm -f /etc/ssh/ssh_host_*key*")
         shellutil.Run("ssh-keygen -N '' -t {0} -f /etc/ssh/ssh_host_{1}_key"
                 .format(keyPairType, keyPairType))
         self.restartSshService()
 
-    def getOpensslCmd(self):
+    def GetOpensslCmd(self):
         return '/usr/bin/openssl'
 
-    def getDvdDevice(self, devDir='/dev'):
+    def GetDvdDevice(self, devDir='/dev'):
         patten=r'(sr[0-9]|hd[c-z]|cdrom[0-9]|cd[0-9]?)'
         for dvd in [re.match(patten, dev) for dev in os.listdir(devDir)]:
             if dvd is not None:
                 return "/dev/{0}".format(dvd.group(0))
         return None
 
-    def getMountCmd(self):
-        return "mount"
-
-    def mountDvd(self, dvd, mountPoint, maxRetry=6):
+    def MountDvd(self, maxRetry=6):
+        dvd = CurrentDistro.getDvdDevice()
+        mountPoint = CurrentDistro.getDvdMountPoint()
+        #Why do we need to load atapiix?
+        #TODO load atapiix
         if not os.path.exits(mountPoint):
             os.makedirs(mountPoint)
-
-        cmd = "{0} {1} {2}".format(self.getMountCmd(), dvd, mountPoint)
-        retcode, output = RunGetOutput(cmd)
+        CurrentDistro.mountDvd(dvd, mountPoint)
         for retry in range(0, maxRetry):
             if retcode == 0:
                 logger.Info("Successfully mounted provision dvd")
@@ -178,37 +136,112 @@ class DefaultDistro():
                             retry, 
                             retcode)
             time.sleep(5)
-            retcode, output = RunGetOutput(cmd)
+            CurrentDistro.mount(dvd, mountPoint)
         raise Exception("Failed to mount provision dvd")
 
-    def checkDependencies(self):
+    def UmountDvd(self):
+        mountPoint = CurrentDistro.getDvdMountPoint()
+        self.umount(mountPoint)
+ 
+    def Mount(self, dvd, mountPoint):
+        return RunGetOutput("mount {0} {1}".format(dvd, mountPoint))
+
+    def Umount(self, mountPoint):
+        return "umount {0}".format(mountPoint)
+
+    def OpenPortForDhcp():
+        #Open DHCP port if iptables is enabled.
+        # We supress error logging on error.
+        Run("iptables -D INPUT -p udp --dport 68 -j ACCEPT",chk_err=False)      
+        Run("iptables -I INPUT -p udp --dport 68 -j ACCEPT",chk_err=False)
+
+    def UpdateUserAccount(userName, password, expiration, thumbprint):
+        """
+        Update password and ssh key for user account.
+        New account will be created if not exists.
+        """
+        if userName is None:
+            raise Exception("User name is empty")
+        userentry = pwd.getpwnam(user)
+
+        if self.IsSysUser(self, userentry):
+            raise Exception(("User {0} is a system user. "
+                             "Will not set passwd.").format(userName))
+
+        if userentry is None:
+            self.CreateUserAccount(userName, expiration)
+            
+        if password is not None:
+            self.ChangePassword(userName, password)
+        
+        self.ConfigSudoer(userName, password is None)
+
+        if thumbprint is not None:
+            self.ConfigSshKey(userName, thumbprint)
+  
+    def GenerateTransportCert():
+        """
+        Create ssl certificate for https communication with endpoint server.
+        """
+        opensslCmd = GetOpensslCmd()
+        cmd = ("{0} req -x509 -nodes -subj /CN=LinuxTransport -days 32768 "
+               "-newkey rsa:2048 -keyout TransportPrivate.pem "
+               "-out TransportCert.pem").format(opensslCmd)
+        shellutil.Run(cmd)
+
+    def RemoveRulesFiles(self, rulesFiles=RulesFiles):
+        libDir = self.GetLibDir()
+        for src in rulesFiles:
+            fileName = GetLastPathElement(src)
+            dest = os.path.join(libDir, fileName)
+            if os.path.isfile(dest):
+                os.remove(dest)
+            if os.path.isfile(src):
+                logger.Warn("Move rules file {0} to {1}", fileName, dest)
+                shutil.move(src, dest)
+
+    def RestoreRulesFiles(self, rulesFiles=RulesFiles):
+        libDir = self.GetLibDir()
+        for dest in rulesFiles:
+            fileName = GetLastPathElement(dest)
+            src = os.path.join(libDir, fileName)
+            if os.path.isfile(dest):
+                continue
+            if os.path.isfile(src):
+                logger.Warn("Move rules file {0} to {1}", fileName, dest)
+                shutil.move(src, dest)
+
+    def CheckDependencies(self):
         pass
 
-    def setBroadcastRouteForDhcp(self):
+    def GetMacAddress(self):
         pass
 
-    def removeBroadcastRouteForDhcp(self):
+    def SetBroadcastRouteForDhcp(self):
         pass
 
-    def isDhcpEnabled(self):
+    def RemoveBroadcastRouteForDhcp(self):
+        pass
+
+    def IsDhcpEnabled(self):
         return False
 
-    def stopDhcpService(self):
+    def StopDhcpService(self):
         pass
 
-    def startDhcpService(self):
+    def StartDhcpService(self):
         pass
 
-    def restartNetwork(self):
+    def StartNetwork(self):
         pass
 
-    def registerAgentService(self):
+    def RegisterAgentService(self):
         pass
 
-    def unregisterAgentService(self):
+    def UnregisterAgentService(self):
         pass
 
-    def setSshClientAliveInterval(self):
+    def SetSshClientAliveInterval(self):
         filepath = "/etc/ssh/sshd_config"
         options = filter(lambda opt: not opt.startswith("ClientAliveInterval"), 
                         GetFileContents(filepath).split('\n'))
@@ -216,17 +249,16 @@ class DefaultDistro():
         fileutil.ReplaceFileContentsAtomic(filepath, '\n'.join(options))
         logger.Info("Configured SSH client probing to keep connections alive.")
    
-    def getRestartSshServiceCmd(self):
+    def GetRestartSshServiceCmd(self):
         return "service sshd restart"
 
-    def restartSshService(self):
+    def RestartSshService(self):
         cmd = self.getRestartSshServiceCmd()
         retcode = Run(cmd)
         if retcode > 0:
             logger.Error("Failed to restart SSH service with return code:{0}",
                          retcode)
         return retcode
-
     
 class DebianDistro(DefaultDistro):
     pass
@@ -241,7 +273,7 @@ class FedoraDistro(DefaultDistro):
     pass
 
 class CoreOSDistro(DefaultDistro):
-    def isSysUser(self, userName):
+    def IsSysUser(self, userName):
        return super(CoreOSDistro, self).isSysUser(userName)
 
 class GentooDistro(DefaultDistro):
@@ -285,6 +317,5 @@ def GetDistro(distroInfo):
     else:
         return DefaultDistro()
 
-CurrentDistroInfo = GetDistroInfo()
-CurrentDistro = GetDistro(CurrentDistroInfo)
-
+CurrOSInfo = GetDistroInfo()
+CurrOS = GetDistro(CurrOSInfo)

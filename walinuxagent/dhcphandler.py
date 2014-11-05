@@ -23,7 +23,7 @@ import array
 import time
 import walinuxagent.logger as logger
 import walinuxagent.utils.restutil as restutil
-import walinuxagent.utils.osutil as osutil
+from walinuxagent.utils.osutil import CurrOS, CurrOSInfo
 import walinuxagent.utils.fileutil as fileutil
 import walinuxagent.utils.shellutil as shellutil
 from walinuxagent.utils.textutil import *
@@ -35,7 +35,7 @@ class DhcpHandler():
         self.routes = None
 
     def probe(self):
-        macAddress = osutil.GetMacAddress()
+        macAddress = CurrOS.GetMacAddress()
         req = BuildDhcpRequest(macAddress)
         resp = SendDhcpRequest(req)
         endpoint, gateway, routes = ParseDhcpResponse(resp)
@@ -173,10 +173,10 @@ def AllowBroadcastForDhcp(func):
     Temporary allow broadcase for dhcp. Remove the route when done.
     """
     def Wrapper(*args, **kwargs):
-        routeAdded = osutil.SetBroadcastRouteForDhcp()
+        routeAdded = CurrOS.SetBroadcastRouteForDhcp()
         result = func(*args, **kwargs)
         if routeAdded:
-            osutil.RemoveBroadcastRouteForDhcp()
+            CurrOS.RemoveBroadcastRouteForDhcp()
         return result
     return Wrapper
 
@@ -186,10 +186,10 @@ def DisableDhcpServiceIfNeeded(func):
     endpoint through dhcp.
     """
     def Wrapper(*args, **kwargs):
-        if osutil.IsDhcpEnabled():
-            osutil.StopDhcpService()
+        if CurrOS.IsDhcpEnabled():
+            CurrOS.StopDhcpService()
             result = func(*args, **kwargs)
-            osutil.StartDhcpService()
+            CurrOS.StartDhcpService()
             return result
         else:
             return func(*args, **kwargs)
@@ -201,17 +201,20 @@ __SleepDuration = [0, 10, 30, 60, 60]
 @DisableDhcpServiceIfNeeded
 def SendDhcpRequest(request):
     sock = None
-    try:
-        osutil.OpenPortForDhcp()
-        response = _SendDhcpRequest(request)
-        ValidateDhcpResponse(request, response)
-        return response
-    except Exception, e:
-        logger.Error("Failed to send DHCP request: {0}", e)
-        return None
-    finally:
-        if sock:
-            sock.close()
+    for duration in __SleepDuration:
+        try:
+            CurrOS.OpenPortForDhcp()
+            CurrOS.StartNetwork()
+            response = _SendDhcpRequest(request)
+            ValidateDhcpResponse(request, response)
+            return response
+        except Exception, e:
+            logger.Error("Failed to send DHCP request: {0}", e)
+            return None
+        finally:
+            if sock:
+                sock.close()
+        time.sleep(duration)
 
 def _SendDhcpRequest(request):
     sock = socket.socket(socket.AF_INET, 

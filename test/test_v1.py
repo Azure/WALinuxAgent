@@ -27,7 +27,7 @@ import os
 import time
 import walinuxagent.logger as logger
 import walinuxagent.protocol.v1 as v1
-import walinuxagent.utils.osutil
+from  walinuxagent.utils.osutil import CurrOSInfo, CurrOS
 from test_version import VersionInfoSample
 from test_goalstate import GoalStateSample
 from test_hostingenv import HostingEnvSample
@@ -100,7 +100,7 @@ class TestProtocolV1(unittest.TestCase):
 
     @Mockup(v1.restutil, 'HttpGet', MockHttpGet)
     def test_v1(self):
-        os.chdir(osutil.GetLibDir())
+        os.chdir(CurrOS.GetLibDir())
         p = v1.ProtocolV1("foobar")
         p.refreshCache()
         p = v1.ProtocolV1("foobar")

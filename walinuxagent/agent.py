@@ -20,18 +20,22 @@
 import os
 import walinuxagent.logger as logger
 import walinuxagent.conf as conf
-import walinuxagent.utils.osutil as osutil
+from walinuxagent.utils.osutil import CurrOS, CurrOSInfo
 import walinuxagent.utils.shellutil as shellutil
 import walinuxagent.protocol.detection as protocols
+import walinuxagent.dhcphandler as dhcphandler
 
 GuestAgentName = "WALinuxAgent"
 GuestAgentLongName = "Microsoft Azure Linux Agent"
-GuestAgentVersion = "WALinuxAgent-2.0.8"
+GuestAgentVersion = "WALinuxAgent-2.1.0-pre"
 
 class Agent():
 
+    def __init__(self):
+        self.libDir = CurrOS.GetLibDir()
+    
     def version(self):
-        distro = osutil.CurrentDistroInfo;
+        distro = CurrOS.CurrentDistroInfo;
         print "{0} running on {1} {2}".format(GuestAgentVersion, 
                                               distro[0], 
                                               distro[1])
@@ -40,21 +44,22 @@ class Agent():
         pass
 
     def run(self):
-        if self._detectScvmmEnv():
+        self.savePid()
+
+        if self.detectScvmmEnv():
+            self.startScvmmAgent()
             return
 
         #Initialize 
-        confPath = osutil.GetConfigurationPath() 
+        confPath = CurrOS.GetConfigurationPath() 
         config = conf.LoadConfiguration(confPath) 
-
-        protocol = protocols.DetectEndpoint()
-        if protocol is None:
-            logger.Error("No available protocol detected.")
-            return 
-        if protocol.checkVersion():
-            logger.Error("Protocol version check failed")
-            return
-        protocol.refreshCache()  
+        
+        dhcpHandler = dhcphandler.DhcpHandler()
+        dhcpHandler.probe()
+        dhcpHandler.configNetwork()
+    
+        CurrOS.GenerateTransportCert()
+        protocol = protocol.DetectDefaultProtocol()
 
         if config.getSwitch("Provisioning.Enabled"):
             ProvisionHandler(config, protocol).provision()
@@ -68,9 +73,17 @@ class Agent():
         while True:
             #Handle extensions
             #Report status
+            
+            #Wait for 25 seconds and detect protocol again.
             time.sleep(25)
-            protocol.refreshCache()
+            protocol = protocol.DetectDefaultProtocol()
 
-    def _detectScvmmEnv(self):
+    def detectScvmmEnv(self):
         return False
+
+    def startScvmmAgent(self):
+        pass
+
+    def savePid(self):
+        fileutil.SetFileContents(CurrOS.GetAgentPidPath(), str(os.getpid()))
 

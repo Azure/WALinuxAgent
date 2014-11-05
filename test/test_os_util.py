@@ -26,7 +26,7 @@ import os
 import walinuxagent.utils.osutil as osutil
 import test
 
-class TestOSUtil(unittest.TestCase):
+class TestGetDistro(unittest.TestCase):
     def test_get_distro(self):
         distroInfo = osutil.GetDistroInfo()
         self.assertNotEquals(None, distroInfo)
@@ -37,8 +37,8 @@ class TestOSUtil(unittest.TestCase):
         self.assertNotEquals(None, distro)
 
     def test_current_distro(self):
-        self.assertNotEquals(None, osutil.CurrentDistroInfo)
-        self.assertNotEquals(None, osutil.CurrentDistro)
+        self.assertNotEquals(None, osutil.CurrOSInfo)
+        self.assertNotEquals(None, osutil.CurrOS)
 
 if __name__ == '__main__':
     unittest.main()

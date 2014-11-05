@@ -61,7 +61,7 @@ def MockGetLibDir():
 
 protocol.ProtocolV1 = MockProtocol
 protocol.ProtocolV2 = MockProtocolDetectionFailure
-protocol.osutil.GetLibDir = MockGetLibDir
+protocol.CurrOS.GetLibDir = MockGetLibDir
 
 if __name__ == '__main__':
     unittest.main()

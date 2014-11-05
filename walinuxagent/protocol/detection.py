@@ -18,7 +18,7 @@
 #
 import os
 import walinuxagent.logger as logger
-import walinuxagent.utils.osutil as osutil
+from walinuxagent.utils.osutil import CurrOS, CurrOSInfo
 import walinuxagent.utils.fileutil as fileutil
 import walinuxagent.dhcphandler as dhcphandler
 from walinuxagent.protocol.common import *
@@ -36,7 +36,7 @@ until a valid protocol endpoint is detected.
 __Protocols = [ProtocolV2, ProtocolV1]
 
 def DetectAvailableProtocols(protocols=__Protocols):
-    libDir = osutil.GetLibDir()
+    libDir = CurrOS.GetLibDir()
     availableProtocols = []
     for protocol in protocols:
         logger.Info("Detect endpoint...")
@@ -75,7 +75,7 @@ and a valid protocol endpoint was detected.
 Agent will call DetectAvailableProtocols periodically
 """
 def GetAvailableProtocols(protocols=__Protocols):
-    libDir = osutil.GetLibDir()
+    libDir = CurrOS.GetLibDir()
     availableProtocols = []
     for protocol in protocols:
         protocolFilePath = os.path.join(libDir, protocol.__name__)
