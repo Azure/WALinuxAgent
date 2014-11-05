@@ -24,7 +24,6 @@ import uuid
 import unittest
 import os
 import walinuxagent.protocol as protocol
-from walinuxagent.protocol.detection as detection
 
 class TestProtocolDetection(unittest.TestCase):
 
@@ -32,34 +31,37 @@ class TestProtocolDetection(unittest.TestCase):
         if os.path.isfile('/tmp/MockProtocol'):
             os.remove('/tmp/MockProtocol')
         protocols = [MockProtocolDetectionFailure, MockProtocol]
-        protocol.DetectEndpoint(protocols, '/tmp/', [0])
+        protocol.DetectDefaultProtocol(protocols)
         self.assertTrue(os.path.isfile('/tmp/MockProtocol'))
 
     def test_detection_failure(self):
         with self.assertRaises(Exception):
             protocols = [MockProtocolDetectionFailured]
-            protocol.DetectEndpoint(protocols, '/tmp/', [0, 1])
-
-    def test_contract(self):
-        self.assertNotEquals(None, protocol.Protocol)
+            protocol.DetectDefaultProtocol(protocols)
 
 class MockProtocol():
     @staticmethod
     def Detect():
-        return True
+        pass
 
     @staticmethod
     def Init():
-        return MockProtocol()
+        pass
 
 class MockProtocolDetectionFailure():
     @staticmethod
     def Detect():
-        return False
+        raise Exception("Mock dection failure.")
 
     @staticmethod
     def Init():
-        return MockProtocolDetectionFailure()
+        pass
+def MockGetLibDir():
+    return '/tmp'
+
+protocol.ProtocolV1 = MockProtocol
+protocol.ProtocolV2 = MockProtocolDetectionFailure
+protocol.osutil.GetLibDir = MockGetLibDir
 
 if __name__ == '__main__':
     unittest.main()

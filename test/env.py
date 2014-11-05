@@ -21,5 +21,6 @@
 import os
 import sys
 
-project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+test_root = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(test_root)
 sys.path.insert(0, project_root)

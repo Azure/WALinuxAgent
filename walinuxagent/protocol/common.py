@@ -16,6 +16,7 @@
 #
 # Requires Python 2.4+ and Openssl 1.0+
 #
+import os
 import xml.dom.minidom
 import walinuxagent.logger as logger
 from walinuxagent.utils.textutil import GetNodeTextData
@@ -50,6 +51,24 @@ class CertInfo():
 class ExtensionInfo():
     def __init__(self, data):
         self.data = data
+        self.baseDir = "{0}-{0}/".format(self.getName(), self.getVersion())
+        self.statusFile = "{0}/status/{1}.status".format(self.baseDir,
+                                                         self.getSeqNo())
+        self.handlerStateFile = os.path.join(self.baseDir, 
+                                             'config',
+                                             'HandlerState')
+        self.heartbeatFile = os.path.join(self.baseDir, 'heartbeat.log')
+    def getPluginBaseDir(self):
+        return self.baseDir
+
+    def getStatusFile(self):
+        return self.statusFile
+
+    def getHandlerStateFile(self):
+        return self.handlerStateFile
+
+    def getHeartbeatFile(self):
+        return self.heartbeatFile
 
     def getName(self):
         return self.data["name"]
@@ -81,41 +100,14 @@ class ExtensionInfo():
     def getCertificateThumbprint(self):
         settings = self.data["properties"]["runtimeSettings"]["handlerSettings"]
         return settings["certificateThumbprint"]
-
-class Protocol():
-    def refreshCache(self):
-        pass
-
-    def getVmInfo(self):
-        pass
-
-    def getCerts(self):
-        pass
-
-    def getExtensions(self):
-        pass
-
-    def getOvf(self):
-        pass
-
-    def reportProvisionStatus(self):
-        pass
-
-    def reportAgentStatus(self):
-        pass
-
-    def reportExtensionStatus(self):
-        pass
-
-    def reportEvent(self):
-        pass
-
+    
+OvfFileName="ovf-env.xml"
 class OvfEnv(object):
     """
     Read, and process provisioning info from provisioning file OvfEnv.xml
     """
     def __init__(self, xmlText):
-        self.Parse(xmlText)
+        self.parse(xmlText)
 
     def reinitialize(self):
         """
@@ -159,8 +151,8 @@ class OvfEnv(object):
 
     def getSshKeyPairs(self):
         return self.SshKeyPairs
-
-    def Parse(self, xmlText):
+    
+    def parse(self, xmlText):
         """
         Parse xml tree, retreiving user and ssh key information.
         Return self.
@@ -230,3 +222,61 @@ class OvfEnv(object):
                     logger.Verbose(path)
             self.SshKeyPairs += [[fp, path]]
         return self
+
+class Protocol():
+    def checkVersion(self):
+        pass
+
+    def refreshCache(self):
+        pass
+
+    def getVmInfo(self):
+        pass
+
+    def getCerts(self):
+        pass
+
+    def getExtensions(self):
+        pass
+
+    def getOvf(self):
+        ovfFilePath = os.path.join(osutil.GetLibDir(), OvfFileName)
+        xmlText = fileutil.GetFileContents(ovfFilePath)        
+        return OvfEnv(xmlText)
+
+    def copyOvf(self):
+        """
+        Copy ovf env file from dvd to hard disk. 
+        Remove password before save it to the disk
+        """
+        dvd = osutil.GetDvdDevice()
+        mountPoint = osutil.getOvfMountPoint()
+        ovfFile = osutil.GetOvfEnvPathOnDvd()
+
+        #Why do we need to load atapiix?
+        #TODO load atapiix
+        osutil.MountDvd(dvd, mountPoint)
+        if not os.path.isfile(ovfFile):
+            raise Exception("Unable to provision: Missing ovf-env.xml on DVD")
+        ovfxml = osutil.GetFileContents(ovfFile, removeBom=True)
+        ovfenv = OvfEnv(ovfxml)
+        ovfxml = re.sub("<UserPassword>.*?<", "<UserPassword>*<", ovfxml)
+        ovfFilePath = os.path.join(osutil.GetLibDir(), OvfFileName)
+        osutil.SetFileContents(ovfFilePath, self.xmlText)
+        self.ovfenv = ovfenv
+        osutil.UmountDvd(mountPoint)
+        return ovfenv
+
+    def reportProvisionStatus(self, status, subStatus, description, thumbprint):
+        pass
+
+    def reportAgentStatus(self):
+        pass
+
+    def reportExtensionStatus(self):
+        pass
+
+    def reportEvent(self):
+        pass
+
+

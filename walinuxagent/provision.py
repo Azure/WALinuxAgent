@@ -23,61 +23,56 @@ import walinuxagent.utils.osutil as osutil
 import walinuxagent.utils.shellutil as shellutil
 from osutil import LibDir, OvfMountPoint
 
-def _GetDvdDevice(devDir = '/dev'):
-    patten=r'(sr[0-9]|hd[c-z]|cdrom[0-9]|cd[0-9]?)'
-    for dvd in [re.match(patten, dev) for dev in os.listdir(devDir)]:
-        if not dvd = None
-            return "/dev/{0}".format(dvd.group(0))
-    return None
-    
-def _MountDvd(dvd, mountPoint = OvfMountPoint):
-    if not os.path.exits(mountPoint):
-        os.makedirs(mountPoint)
-    for retry in range(1, 6):
-        retcode, output = osutil.MountDvd(dvd, mountPoint) 
-        if retcode == 0:
-            logger.Info("Successfully mounted provision dvd")
+CustomDataFile="CustomData"
+
+class ProvisionHandler(object):
+    def __init__(self, config, protocol, libDir=LibDir):
+        self.config = config
+        self.protocol = protocol
+        self.libDir = libDir
+
+    def provision(self):
+        if self.config.getSwitch("Provisioning.Enabled"):
             return
-        else:
-            logger.Warn("Mount dvd failed: retry={0}, ret={1}", retry, retcode)
-    logger.Error("Failed to mount provision dvd")
-#TODO raise exception
-    raise Exception("Failed to mount provision dvd")
-
-def _UmountDvd(mountPoint = OvfMountPoint):
-    pass
-
-def _CreateUserAccount():
-    pass
-
-def _ReportSshHostkeyThumbnail():
-    pass
-
-def _DeleteRootPassword():
-    pass
-
-def Provision(config, libDir = LibDir):
-    if not config.getSwitch("Provisioning.Enabled"):
-        return
-    if os.path.exits(os.path.join(libDir, "provisioned")):
-        return
+        
+        logger.Info("Provisioning image started")
+        ovfenv = protocol.copyOvf()
     
-    logger.Info("Provisioning image started")
-    dvd = _GetDvdDevice()
-    _MountDvd(dvd)
-    ovfxml = _ReadOvfFile()
-    _SaveOvfFile(ovfxml)
-    _UmountDvd()
+        self.setHostName(ovfenv.getComputerName())
+        self.createUserAccount(ovfenv.getUserName(), ovfenv.getUserPassword())
+        self.deploySshPublicKeys(ovfenv.getSshPublicKeys)
+        self.saveCustomData(ovfenv.getCustomData())
 
-    osutil.CreateUserAccount()
+        if config.getSwitch("Provisioning.RegenerateSshHostKeyPair"):
+            keyPairType = config.get("Provisioning.SshHostKeyPairType", "rsa")
+            osutil.RegenerateSshHostkey(keyPairType)
 
-    if config.getSwitch("Provisioning.RegenerateSshHostKeyPair"):
-        keyPairType = config.get("Provisioning.SshHostKeyPairType", "rsa")
-        osutil.RegenerateSshHostkey(keyPairType)
+        osutil.RestartSshService()
+        self.reportSshHostkeyThumbnail()
 
-    _ReportSshHostkeyThumbnail()
+        if config.getSwitch("Provisioning.DeleteRootPassword"):
+            self.deleteRootPassword()
 
-    _DeleteRootPassword()
+    def saveCustomData(self, customData):
+        osutil.SetFileContents(os.path.join(self.libDir, CustomDataFile), 
+                               customData)
 
-def Deprovision(config, libDir = LibDir):
-    pass
+    def deploySshPublicKeys(self, keys):
+        pass
+    
+    def setHostName(self, hostName):
+        pass
+
+    def createUserAccount(self, userName, password):
+        if userName is None:
+            raise Exception("User name is empty.")
+        if osutil.IsSysUser(userName):
+            raise Exception("User:{0} is a system user.".format(userName))
+        osutil.CreateUserAccount(userName, password)
+
+    def reportSshHostkeyThumbnail(self):
+        pass
+
+    def deleteRootPassword(self):
+        osutil.DeleteRootPassword()
+

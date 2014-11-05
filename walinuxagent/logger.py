@@ -94,7 +94,11 @@ def _MatchLogLevel(expected, actual):
 
 def LoggerInit(log_file_path, log_console_path, Verbose=False, logger=__logger):
     if log_file_path:
-        file_appender_config = AppenderConfig({"type":"FILE", "level" : "INFO", "file_path" : log_file_path})
+        file_appender_config = AppenderConfig({
+            "type":"FILE", 
+            "level" : "INFO", 
+            "file_path" : log_file_path
+        })
         
         #File appender will log Verbose log if the switch is on
         if Verbose: 
@@ -102,7 +106,11 @@ def LoggerInit(log_file_path, log_console_path, Verbose=False, logger=__logger):
         logger.addLoggerAppender(file_appender_config)
 
     if log_console_path:
-        console_appender_config = AppenderConfig({"type":"CONSOLE", "level" : "INFO", "console_path" : log_console_path})
+        console_appender_config = AppenderConfig({
+            "type":"CONSOLE", 
+            "level" : "INFO", 
+            "console_path" : log_console_path
+        })
         logger.addLoggerAppender(console_appender_config)
 
 def AddLoggerAppender(appender_config):

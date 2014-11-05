@@ -163,23 +163,34 @@ vbtwtsknAHtTbotXJwfaBZv2RGgGRr3DzNo6ll2Aez0lNblZFXq132h7+y5iLvar
 4euORaD/fuM4UPlR5mN+bypU
 -----END PRIVATE KEY-----
 """
+def MockGetLibDir():
+    return '/tmp'
+
+def MockGetOpensslCmd():
+    return 'openssl'
 
 class TestCertificates(unittest.TestCase):
+    def setUp(self):
+        v1.osutil.GetLibDir = MockGetLibDir
+        v1.osutil.MockGetOpensslCmd = MockGetOpensslCmd
+
     def test_certificates(self):
         crt1 = '/tmp/33B0ABCE4673538650971C10F7D7397E71561F35.crt'
         crt2 = '/tmp/4037FBF5F1F3014F99B5D6C7799E9B20E6871CB3.crt'
         prv2 = '/tmp/4037FBF5F1F3014F99B5D6C7799E9B20E6871CB3.prv'
         os.chdir('/tmp')
-        os.remove(crt1)
-        os.remove(crt2)
-        os.remove(prv2)
+        if os.path.isfile(crt1):
+            os.remove(crt1)
+        if os.path.isfile(crt2):
+            os.remove(crt2)
+        if os.path.isfile(prv2):
+            os.remove(prv2)
         fileutil.SetFileContents(os.path.join('/tmp', v1.TransportCertFile), 
                                  TransportCert)
         fileutil.SetFileContents(os.path.join('/tmp', v1.TransportPrivateFile), 
                                  TransportPrivate)
-        config = v1.Certificates(CertificatesSample, 
-                                 opensslCmd='openssl', 
-                                 libDir='/tmp')
+        config = v1.Certificates()
+        config.decrypt(CertificatesSample)
         self.assertNotEquals(None, config)
         self.assertTrue(os.path.isfile(crt1))
         self.assertTrue(os.path.isfile(crt2))

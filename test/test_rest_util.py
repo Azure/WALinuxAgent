@@ -25,8 +25,18 @@ import unittest
 import os
 import walinuxagent.utils.restutil as restutil
 import test
+import socket
+import walinuxagent.logger as logger
 
 class TestHttpOperations(unittest.TestCase):
+
+    def _setUp(self):
+       logger.AddLoggerAppender(logger.AppenderConfig({
+           "type":"CONSOLE",
+           "level":"VERBOSE",
+           "console_path":"/dev/stdout"
+       }))
+
     def test_parse_url(self):
         host, action, secure = restutil._ParseUrl("http://abc.def/ghi?jkl=mn")
         self.assertEquals("abc.def", host)

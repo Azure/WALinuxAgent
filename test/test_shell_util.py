@@ -36,8 +36,7 @@ class TestRunCmd(unittest.TestCase):
         self.assertNotEquals(0, err[0])
 
     def test_run_send_stdin(self):
-        test_dir = os.path.dirname(os.path.abspath(__file__))
-        test_sh = os.path.join(test_dir, "read_stdin.sh")
+        test_sh = os.path.join(env.test_root, "read_stdin.sh")
         
         output = shellutil.RunSendStdin(test_sh, "y")
         self.assertEquals(0, output[0])

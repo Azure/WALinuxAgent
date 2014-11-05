@@ -17,6 +17,9 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
+from walinuxagent.protocol.common import *
+from walinuxagent.protocol.detection import *
+
 """
 Protocol object defines all communication interface between agent and 
 infrustructure

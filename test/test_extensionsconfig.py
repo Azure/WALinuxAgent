@@ -77,10 +77,11 @@ ExtensionsConfigSample="""
 class TestExtensionsConfig(unittest.TestCase):
     def test_extensions_config(self):
         config = v1.ExtensionsConfig(ExtensionsConfigSample)
-        self.assertNotEquals(None, config.Extensions)
-        self.assertEquals(1, len(config.Extensions))
-        self.assertNotEquals(None, config.Extensions[0])
-        extension = config.Extensions[0]
+        extensions = config.getExtensions()
+        self.assertNotEquals(None, extensions)
+        self.assertEquals(1, len(extensions))
+        self.assertNotEquals(None, extensions[0])
+        extension = extensions[0]
         self.assertEquals("OSTCExtensions.ExampleHandlerLinux", 
                           extension.getName())
         self.assertEquals("1.4", extension.getVersion())

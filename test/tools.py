@@ -21,6 +21,7 @@
 
 import os
 import sys
+import walinuxagent.utils.osutil as osutil
 
 parent = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(parent)
@@ -29,3 +30,47 @@ def simple_file_grep(file_path, search_str):
     for line in open(file_path):
          if search_str in line:
                 return line
+
+def Mockup(target, name, mock):
+    def Decorator(func):
+        def Wrapper(*args, **kwargs):
+            origin = getattr(target, name)
+            setattr(target, name, mock)
+            result = func(*args, **kwargs)
+            setattr(target, name, origin)
+            return result
+        return Wrapper
+    return Decorator
+
+class MockFunc():
+    def __init__(self, name, retval=None):
+        self.name = name
+        self.retval = retval
+
+    def __call__(*args, **kwargs):
+        self = args[0]
+        self.args = args[1:]
+        self.kwargs = kwargs
+        return self.retval
+
+def Dummy():
+    pass
+
+def MockGetMacAddress():
+    return "\x00\x15\x5D\x38\xAA\x38"
+
+def MockIsDhcpEnabled():
+    return True
+
+def MockGetLibDir():
+    return "/tmp"
+
+#Mock osutil so that the test of other part will be os unrelated
+osutil.GetLibDir = MockGetLibDir
+osutil.GetMacAddress = MockGetMacAddress
+osutil.IsDhcpEnabled = MockIsDhcpEnabled
+osutil.OpenPortForDhcp = Dummy
+osutil.StartDhcpService = Dummy
+osutil.StopDhcpService = Dummy
+osutil.GenerateTransportCert = Dummy
+

@@ -59,14 +59,14 @@ GoalStateSample="""
 class TestGoalState(unittest.TestCase):
     def test_goal_state(self):
         goalState = v1.GoalState(GoalStateSample)
-        self.assertEquals('1', goalState.Incarnation)
-        self.assertNotEquals(None, goalState.ExpectedState)
-        self.assertNotEquals(None, goalState.HostingEnvUri)
-        self.assertNotEquals(None, goalState.SharedConfigUri)
-        self.assertNotEquals(None, goalState.CertificatesUri)
-        self.assertNotEquals(None, goalState.ExtensionsUri)
-        self.assertNotEquals(None, goalState.RoleInstanceId)
-        self.assertNotEquals(None, goalState.ContainerId)
+        self.assertEquals('1', goalState.getIncarnation())
+        self.assertNotEquals(None, goalState.getExpectedState())
+        self.assertNotEquals(None, goalState.getHostingEnvUri())
+        self.assertNotEquals(None, goalState.getSharedConfigUri())
+        self.assertNotEquals(None, goalState.getCertificatesUri())
+        self.assertNotEquals(None, goalState.getExtensionsUri())
+        self.assertNotEquals(None, goalState.getRoleInstanceId())
+        self.assertNotEquals(None, goalState.getContainerId())
 
 if __name__ == '__main__':
     unittest.main()

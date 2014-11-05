@@ -22,6 +22,7 @@ import os
 import subprocess
 import walinuxagent.logger as logger
 import httplib
+import time
 from urlparse import urlparse
 
 """
@@ -50,7 +51,6 @@ def _HttpRequest(method, host, action, data=None, secure=False, headers=None):
             httpConnection = httplib.HTTPSConnection(host)
         else:
             httpConnection = httplib.HTTPConnection(host)
-
         if headers == None:
             httpConnection.request(method, action, data)
         else:
@@ -62,7 +62,7 @@ def _HttpRequest(method, host, action, data=None, secure=False, headers=None):
         logger.Error('Socket IOError {0}, args:{1}', e, repr(e.args)) 
     return resp
 
-def HttpRequest(method, url, data, headers=None, maxRetry=0):
+def HttpRequest(method, url, data, headers=None, maxRetry=1):
     """
     Sending http request to server
     On error, sleep 10 and maxRetry times.
@@ -72,32 +72,35 @@ def HttpRequest(method, url, data, headers=None, maxRetry=0):
     host, action, secure = _ParseUrl(url)
     resp = _HttpRequest(method, host, action, data, secure, headers)
     for retry in range(0, maxRetry):
-        if resp and resp.status == httplib.OK:
+        if resp is not None and resp.status == httplib.OK:
             break;
+        elif resp is None:
+            logger.Error("Retry={0}, response is empty.", retry)
         else:
             logger.Error("Retry={0}, Status={1}, {2} {3}{4}", retry, 
                          resp.status, method, host, action)
         time.sleep(__RetryWaitingInterval)
         resp = _HttpRequest(method, host, action, data, secure, headers)
 
-    if resp and (resp.status == httplib.OK or resp.status == httplib.ACCEPTED):
+    if (resp is not None 
+            and (resp.status == httplib.OK or resp.status == httplib.ACCEPTED)):
         return resp.read()
     else:
         return None
 
-def HttpGet(url, headers=None, maxRetry=0):
+def HttpGet(url, headers=None, maxRetry=1):
     return HttpRequest("GET", url, None, headers, maxRetry)
     
-def HttpPost(url, data, headers=None, maxRetry=0):
+def HttpPost(url, data, headers=None, maxRetry=1):
     return HttpRequest("POST", url, data, headers, maxRetry)
 
-def HttpPut(url, data, headers=None, maxRetry=0):
+def HttpPut(url, data, headers=None, maxRetry=1):
     return HttpRequest("PUT", url, data, headers, maxRetry)
 
-def HttpDelete(url, data, headers=None, maxRetry=0):
+def HttpDelete(url, data, headers=None, maxRetry=1):
     return HttpRequest("DELETE", url, data, headers, maxRetry)
    
-def HttpPutBlockBlob(url, data, maxRetry=0):
+def HttpPutBlockBlob(url, data, maxRetry=1):
     headers = {
         "x-ms-blob-type" : "BlockBlob", 
         "x-ms-date" : time.strftime("%Y-%M-%dT%H:%M:%SZ", time.gmtime()),

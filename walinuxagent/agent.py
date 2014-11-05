@@ -17,12 +17,60 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
+import os
+import walinuxagent.logger as logger
+import walinuxagent.conf as conf
+import walinuxagent.utils.osutil as osutil
+import walinuxagent.utils.shellutil as shellutil
+import walinuxagent.protocol.detection as protocols
+
 GuestAgentName = "WALinuxAgent"
-GuestAgentLongName = "Windows Azure Linux Agent"
+GuestAgentLongName = "Microsoft Azure Linux Agent"
 GuestAgentVersion = "WALinuxAgent-2.0.8"
-#WARNING this value is used to confirm the correct fabric protocol.
-ProtocolVersion = "2012-11-30" 
 
 class Agent():
-    def run(self):
+
+    def version(self):
+        distro = osutil.CurrentDistroInfo;
+        print "{0} running on {1} {2}".format(GuestAgentVersion, 
+                                              distro[0], 
+                                              distro[1])
+
+    def deprovision(self, force=True, deluser=True):
         pass
+
+    def run(self):
+        if self._detectScvmmEnv():
+            return
+
+        #Initialize 
+        confPath = osutil.GetConfigurationPath() 
+        config = conf.LoadConfiguration(confPath) 
+
+        protocol = protocols.DetectEndpoint()
+        if protocol is None:
+            logger.Error("No available protocol detected.")
+            return 
+        if protocol.checkVersion():
+            logger.Error("Protocol version check failed")
+            return
+        protocol.refreshCache()  
+
+        if config.getSwitch("Provisioning.Enabled"):
+            ProvisionHandler(config, protocol).provision()
+        
+        #Start EnvMonitor
+        #Activate resource disk
+        #Set scsi disk timeout
+        #Start load balancer
+
+        #Handle state change
+        while True:
+            #Handle extensions
+            #Report status
+            time.sleep(25)
+            protocol.refreshCache()
+
+    def _detectScvmmEnv(self):
+        return False
+

@@ -20,9 +20,7 @@
 import os
 import walinuxagent.utils.fileutil as fileutil
 
-ConfFilePath = '/etc/waagent.conf' 
-
-def LoadConfiguration(confFilePath = ConfFilePath):
+def LoadConfiguration(confFilePath):
     if os.path.isfile(confFilePath) == False:
         raise Exception("Missing configuration in {0}", confFilePath)
     try:

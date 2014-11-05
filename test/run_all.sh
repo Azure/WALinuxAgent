@@ -23,5 +23,9 @@ cd $root
 root=`pwd`
 
 echo "Run unit test:"
-ls test_*.py
-ls test_*.py | sed -e 's/\.py//'|xargs python -m unittest
+tests=`ls test_*.py | sed -e 's/\.py//'`
+for test in $tests ; do
+    echo $test
+    #python -m unittest $test
+done
+echo $tests | xargs python -m unittest

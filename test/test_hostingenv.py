@@ -54,8 +54,9 @@ HostingEnvSample="""
 
 class TestHostingEvn(unittest.TestCase):
     def test_hostingenv(self):
-        hostingenv = v1.HostingEnvironmentConfig(HostingEnvSample)
+        hostingenv = v1.HostingEnv(HostingEnvSample)
         self.assertNotEquals(None, hostingenv)
+        self.assertEquals("MachineRole_IN_0", hostingenv.getVmName())
 
    
 if __name__ == '__main__':

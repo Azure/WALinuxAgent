@@ -20,6 +20,7 @@ import os
 import walinuxagent.logger as logger
 import walinuxagent.utils.osutil as osutil
 import walinuxagent.utils.fileutil as fileutil
+import walinuxagent.dhcphandler as dhcphandler
 from walinuxagent.protocol.common import *
 from walinuxagent.protocol.v1 import ProtocolV1
 from walinuxagent.protocol.v2 import ProtocolV2
@@ -33,40 +34,59 @@ until a valid protocol endpoint is detected.
 """
 
 __Protocols = [ProtocolV2, ProtocolV1]
-__SleepDurations = [0, 10, 30, 60, 60]
 
-def DetectEndpoint(protocols=__Protocols, libDir=osutil.LibDir, 
-                   sleepDurations=__SleepDurations):
-    for duration in sleepDurations:
+def DetectAvailableProtocols(protocols=__Protocols):
+    libDir = osutil.GetLibDir()
+    availableProtocols = []
+    for protocol in protocols:
         logger.Info("Detect endpoint...")
-        for protocol in protocols:
-            protocolFilePath = os.path.join(libDir, protocol.__name__)
-            if protocol.Detect():
-                fileutil.SetFileContents(protocolFilePath, '')
-                return
-            elif os.path.isfile(protocolFilePath):
+        protocolFilePath = os.path.join(libDir, protocol.__name__)
+        try:
+            detected = protocol.Detect()
+            fileutil.SetFileContents(protocolFilePath, '')
+            logger.Info("Detect protocol:{0}", protocol.__name__)
+            availableProtocols.append(detected)
+            break
+        except Exception, e:
+            logger.Warn("Probe {0} failed:{1}", protocol.__name__, e)
+            if os.path.isfile(protocolFilePath):
                 os.remove(protocolFilePath)
-        sleep(duration)
-        osutil.RestartNetwork()
+    return availableProtocols
 
-#TODO report event
-    raise Exception("Detect endpoint failed.") 
+def DetectDefaultProtocol(protocols=__Protocols):
+    availableProtocols = DetectAvailableProtocols(protocols)
+    return ChooseDefaultProtocol(availableProtocols)
+
+def ChooseDefaultProtocol(availableProtocols):
+    if len(availableProtocols) == 2:
+        raise Exception("Not implemented")
+    if len(availableProtocols) == 1:
+        return availableProtocols[0]
+    else:
+        raise Exception("No supported protocol detected.")
 
 """
 This routine will check 'ProtocolV*' file under lib dir. If detected, It will call
 Init() defined by protocol classes passed by param and return.
 
-Please note this method must be called after DetectEndpoint is called and a valid
-protocol endpoint was detected.
+Please note this method must be called after DetectAvailableProtocols is called 
+and a valid protocol endpoint was detected.
 
-Agent will call DetectEndpoint on start. 
+Agent will call DetectAvailableProtocols periodically
 """
-def GetProtocol(protocols=__Protocols, libDir=osutil.LibDir):
+def GetAvailableProtocols(protocols=__Protocols):
+    libDir = osutil.GetLibDir()
+    availableProtocols = []
     for protocol in protocols:
         protocolFilePath = os.path.join(libDir, protocol.__name__)
         if os.path.isfile(protocolFilePath):
-            return protocol.Init()
+            availableProtocol = protocol.Init()
+            availableProtocols.append(availableProtocol)
+    return availableProtocols
 
-#TODO report event
-    raise Exeption("Endpoint not detected")
+def GetDefaultProtocol(protocols=__Protocols):
+    availableProtocols = GetAvailableProtocols(protocols)
+    return ChooseDefaultProtocol(availableProtocols)
+
+
 

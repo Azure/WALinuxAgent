@@ -15,9 +15,11 @@
 # limitations under the License.
 #
 # Requires Python 2.4+ and Openssl 1.0+
+
 import os
 import json
 import re
+import time
 import xml.etree.ElementTree as ET
 import walinuxagent.logger as logger
 import walinuxagent.utils.restutil as restutil
@@ -27,54 +29,63 @@ import walinuxagent.utils.shellutil as shellutil
 from walinuxagent.utils.textutil import *
 from walinuxagent.protocol.common import *
 
-WireServerAddrFile = "WireServer"
-VersionVersionUri = "http://{0}/?comp=versions"
-VersionInfoFile = "Versions.xml"
+VersionInfoUri = "http://{0}/?comp=versions"
 GoalStateUri = "http://{0}/machine/?comp=goalstate"
+HealthReportUri="http://{0}/machine?comp=health"
+RolePropUri="http://{0}/machine?comp=roleProperties"
+
+WireServerAddrFile = "WireServer"
+VersionInfoFile = "Versions.xml"
+IncarnationFile = "Incarnation"
 GoalStateFile = "GoalState.{0}.xml"
 HostingEnvFile = "HostingEnvironmentConfig.xml"
 SharedConfigFile = "SharedConfig.xml"
 CertificatesFile = "Certificates.xml"
+CertificatesJsonFile = "Certificates.json"
+P7MFile="Certificates.p7m"
+PEMFile="Certificates.pem"
 ExtensionsFile = "ExtensionsConfig.{0}.xml"
 TransportCertFile = "TransportCert.pem"
 TransportPrivateFile = "TransportPrivate.pem"
-P7MFile="Certificates.p7m"
-PEMFile="Certificates.pem"
 
 ProtocolVersion = "2012-11-30"
+
+HandlerStatusMapping = {
+    'installed' : 'Installing',
+    'enabled' : 'Ready',
+    'uninstalled' : 'NotReady',
+    'disabled' : 'NotReady'
+}
 
 class ProtocolV1(Protocol):
 
     @staticmethod
     def Detect():
-        macAddress = osutil.GetMacAddress()
-        req = BuildDhcpRequest(macAddress)
-        resp = SendDhcpRequest(req)
-
-        if not ValidateDhcpResponse(req, reps):
-            return False
-
-        endpoint, gateway, routes = parseDhcpResponse(resp)
-#TODO set gateway and routes
-        if endpoint:
-            fileutil.SetFileContents(__WireServerAddrFile, endpoint)
-            return True
-        else:
-            return False
-
+        endpoint = osutil.GetWireServerEndpoint()
+        if endpoint is None:
+            raise Exception("Wire server endpoint not found.")
+        protocol = ProtocolV1(endpoint)
+        protocol.refreshCache()
+        return protocol
+      
     @staticmethod
     def Init():
-        endpoint = fileutil.GetFileContents(__WireServerAddrFile)
-        return ProtocolV1(endpoint)
+        endpoint = osutil.GetWireServerEndpoint()
+        if endpoint is None:
+            raise Exception("Wire server endpoint not found.")
+        protocol = ProtocolV1(endpoint)
+        protocol.loadFromCache()
+        return protocol
 
     def __init__(self, endpoint):
         self.endpoint = endpoint
-
+        self.libDir = osutil.GetLibDir()
+  
     def _checkProtocolVersion(self):
         negotiated = None;
         if ProtocolVersion == self.versionInfo.getPreferred():
             negotiated = self.versionInfo.getPreferred()
-        for version in self.getSupported():
+        for version in self.versionInfo.getSupported():
             if ProtocolVersion == version:
                 negotiated = version
                 break
@@ -83,44 +94,87 @@ class ProtocolV1(Protocol):
         else:
             logger.Warn("Agent supported wire protocol version: {0} was not "
                         "advised by Fabric.", ProtocolVersion)
+            raise Exception("Wire protocol version not supported")
 
     def refreshCache(self):
         """
         Force the cached data to refresh
         """
-        versionInfoXml = restutil.HttpGet(__VersionInfoUri.format(endpoint))
+        versionInfoXml = restutil.HttpGet(VersionInfoUri.format(self.endpoint))
         self.versionInfo = VersionInfo(versionInfoXml)
-        fileutil.SetFileContents(__VersionInfoFile, versionInfoXml)
+        fileutil.SetFileContents(VersionInfoFile, versionInfoXml)
 
         self._checkProtocolVersion()
-
-        incarnation = self.incarnation if self.incarnation else 0
-        goalStateXml = restutil.HttpGet(__GoalStateUri.format(endpoint, 
-                                                              incarnation))
+        osutil.GenerateTransportCert()
+   
+        self.incarnation = 0
+        incarnationStr = fileutil.GetFileContents(IncarnationFile)
+        if incarnationStr is not None:
+            self.incarnation = int(incarnationStr)
+       
+        goalStateXml = restutil.HttpGet(GoalStateUri.format(self.endpoint, 
+                                                            self.incarnation))
         self.goalState = GoalState(goalStateXml)
         self.incarnation = self.goalState.getIncarnation()
-        goalStateFile = __GoalStateFile.format(self.incarnation)
+
+        goalStateFile = GoalStateFile.format(self.incarnation)
         fileutil.SetFileContents(goalStateFile, goalStateXml)
 
         hostingEnvXml = restutil.HttpGet(self.goalState.getHostingEnvUri())
         self.hostingEnv = HostingEnv(hostingEnvXml)
-        fileutil.SetFileContents(__HostingEnvFile, hostingEnvXml)
+        fileutil.SetFileContents(HostingEnvFile, hostingEnvXml)
 
         sharedConfigXml = restutil.HttpGet(self.goalState.getSharedConfigUri())
-        self.shareConfig = ShareConfig(sharedConfigXml)
-        fileutil.SetFileContents(__SharedConfigFile, sharedConfigXml)
+        self.sharedConfig = SharedConfig(sharedConfigXml)
+        fileutil.SetFileContents(SharedConfigFile, sharedConfigXml)
 
         certificatesXml = restutil.HttpGet(self.goalState.getCertificatesUri())
-        self.certificates = Certificates(certificatesXml)
-        fileutil.SetFileContents(__CertificatesFile, certificatesXml)
+        fileutil.SetFileContents(CertificatesFile, certificatesXml)
+        self.certificates = Certificates()
+        certificatesJson = self.certificates.decrypt(certificatesXml)
+        fileutil.SetFileContents(CertificatesJsonFile, certificatesJson)
 
         extentionsXml = restutil.HttpGet(self.goalState.getExtensionsUri())
-        self.extensions = Extensions(extentionsXml)
-        extensionsFile = __ExtensionsFile.format(self.incarnation)
+        self.extensions = ExtensionsConfig(extentionsXml)
+        extensionsFile = ExtensionsFile.format(self.incarnation)
         fileutil.SetFileContents(extensionsFile, extentionsXml)
 
+        fileutil.SetFileContents(IncarnationFile, str(self.incarnation))
+
+    def loadFromCache(self):
+        versionInfoXml = fileutil.GetFileContents(VersionInfoFile)
+        self.versionInfo = VersionInfo(versionInfoXml)
+
+        self.incarnation = 0
+        incarnationStr = fileutil.GetFileContents(IncarnationFile)
+        if incarnationStr is not None:
+            self.incarnation = int(incarnationStr)
+        
+        goalStateFile = GoalStateFile.format(self.incarnation)
+        goalStateXml = fileutil.GetFileContents(goalStateFile) 
+        self.goalState = GoalState(goalStateXml)
+        self.incarnation = self.goalState.getIncarnation()
+
+        hostingEnvXml = fileutil.GetFileContents(HostingEnvFile)
+        self.hostingEnv = HostingEnv(hostingEnvXml)
+
+        sharedConfigXml = fileutil.GetFileContents(SharedConfigFile)
+        self.shareConfig = SharedConfig(sharedConfigXml)
+
+        certificatesJson = fileutil.GetFileContents(CertificatesJsonFile)
+        self.certificates = Certificates(certificatesJson)
+
+        extensionsFile = ExtensionsFile.format(self.incarnation)
+        extentionsXml = fileutil.GetFileContents(extensionsFile)
+        self.extensions = ExtensionsConfig(extentionsXml)
+        
+
     def getVmInfo(self):
-        return self.goalState.getVmInfo()
+        vmInfo = {
+            "subscriptionId":None,
+            "vmName":self.hostingEnv.getVmName()
+        }
+        return VmInfo(vmInfo)
 
     def getCerts(self):
         return self.certificates.getCerts()
@@ -128,262 +182,164 @@ class ProtocolV1(Protocol):
     def getExtensions(self):
         return self.extensions.getExtensions()
 
-    def reportProvisionStatus(self):
-        pass
+    def reportProvisionStatus(self, status=None, subStatus=None, 
+                              description=None, thumbprint=None):
+        if status is not None:
+            healthReport = self._buildHealthReport(status, 
+                                                   subStatus, 
+                                                   description)
+            healthReportUri = HealthReportUri.format(self.endpoint)
+            ret = restutil.HttpPost(healthReportUri, healthReport)
 
-    def reportAgentStatus(self):
-        pass
+        if thumbprint is not None:
+            roleProp = self._buildRoleProperties(thumbprint)
+            rolePropUri = RolePropUri.format(self.endpoint)
+            ret = restutil.HttpPost(rolePropUri, roleProp)
 
-    def reportExtensionStatus(self):
+    def _buildRoleProperties(self, thumbprint):
+        return ("<?xml version=\"1.0\" encoding=\"utf-8\"?>"
+                "<RoleProperties>"
+                "<Container>"
+                "<ContainerId>{0}</ContainerId>"
+                "<RoleInstances>"
+                "<RoleInstance>"
+                "<Id>{1}</Id>"
+                "<Properties>"
+                "<Property name=\"CertificateThumbprint\" value=\"{2}\" />"
+                "</Properties>"
+                "</RoleInstance>"
+                "</RoleInstances>"
+                "</Container>"
+                "</RoleProperties>"
+                "").format(self.goalState.getContainerId(),
+                           self.goalState.getRoleInstanceId(),
+                           thumbprint)
+
+    def _buildHealthReport(self, status, subStatus, description):
+        return ("<?xml version=\"1.0\" encoding=\"utf-8\"?>"
+                "<Health xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\""                " xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\">"
+                "<GoalStateIncarnation>{0}</GoalStateIncarnation>"
+                "<Container>"
+                "<ContainerId>{1}</ContainerId>"
+                "<RoleInstanceList>"
+                "<Role>"
+                "<InstanceId>{2}</InstanceId>"
+                "<Health>"
+                "<State>{3}</State>"
+                "<Details>"
+                "<SubStatus>{4}</SubStatus>"
+                "<Description>{5}</Description>"
+                "</Details>"
+                "</Health>"
+                "</Role>"
+                "</RoleInstanceList>"
+                "</Container>"
+                "</Health>"
+                "").format(self.goalState.getIncarnation(),
+                           self.goalState.getContainerId(),
+                           self.goalState.getRoleInstanceId(),
+                           status, 
+                           subStatus, 
+                           description)
+
+    def reportAgentStatus(self, version, status, message):
+        tstamp=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        formattedMessage = {
+            'lang' : 'en-Us',
+            'message' : message
+        }
+        guestAgentStatus = {
+            'version' : version,
+            'status' : status,
+            'formattedMessage' : formattedMessage
+        }
+        handlerAggregateStatus = self.getExtensionStatus()
+        aggregateStatus = {
+            'guestAgentStatus': guestAgentStatus,
+            'handlerAggregateStatus' : handlerAggregateStatus
+        }
+        report = {
+            'version' : version,
+            'timestampUTC' : tstamp,
+            'aggregateStatus' : aggregateStatus
+        }
+        data = json.dumps(report)
+        headers = {
+             "x-ms-blob-type" : "BlockBlob", 
+             "x-ms-date" : time.strftime("%Y-%M-%dT%H:%M:%SZ", time.gmtime()) ,
+             "Content-Length": str(len(data))
+        }
+        restutil.HttpPut(self.extensions.getStatusUploadBlob(),
+                         data,
+                         headers, 2)
+
+    def getExtensionStatus(self): 
+        aggregatedStatusList = []
+        for ext in self.getExtensions():
+            status = None
+            statusFile = os.path.join(self.libDir,  ext.getStatusFile())
+            if os.path.isfile(statusFile):
+                try:
+                    statusJson = fileutil.GetFileContents(statusFile)
+                    status = json.loads(statusJson)[0]
+                except Exception, e:
+                    logger.Error("Failed to parse extension status file: {0}", e)
+            
+            handlerStatus = None
+            handlerCode = None
+            handlerMessage = None
+            handlerFormattedMessage = None
+            handlerStatusFile = os.path.join(self.libDir, 
+                                             ext.getHandlerStateFile())
+            if os.path.isfile(handlerStatusFile):
+                handlerStatus = fileutil.GetFileContents(handlerStatusFile)
+                handlerStatus = handlerStatus.lower()
+                handlerStatus = HandlerStatusMapping[handlerStatus]
+            
+            heartbeat = None
+            heartbeatFile = os.path.join(self.libDir, ext.getHeartbeatFile())
+            if os.path.isfile(heartbeatFile):
+                if not self.isResponsive(heartbeatFile):
+                    handlerStatus = 'Unresponsive'
+                else:
+                    try:
+                        heartbeatJson = fileutil.GetFileContents(heartbeatFile)
+                        heartbeat = json.loads()[0]['heartbeat']
+                        handlerStatus = heartbeat['status']
+                        handlerCode = heartbeat['code']
+                        handlerMessage = heartbeat['message']
+                        handlerFormattedMessage = heartbeat['formattedMessage']
+                    except Exception, e:
+                        logger.Error(("Failed to parse extension "
+                                      "heart beat file: {0}"), e)
+            aggregatedStatus = {
+                'handlerVersion' : ext.getVersion(),
+                'handlerName' : ext.getName(),
+                'status' : handlerStatus,
+                'code' : handlerCode,
+                'message' : handlerMessage,
+                'formattedMessage' : handlerFormattedMessage,
+                'runtimeSettingsStatus' : {
+                    'settingsStatus' : status
+                }
+            }
+            aggregatedStatusList.append(aggregatedStatus)
+        return aggregatedStatusList
+
+    def isResponsive(self, heartbeatFile):
+        lastUpdate=int(time.time()-os.stat(heartbeatFile).st_mtime)
+        return  lastUpdate > 600    # not updated for more than 10 min
+
+    def reportExtensionStatus(self, status):
+        """
+        In wire protocol, extensions status is reported together with 
+        agent status in a fixed period. Leave this method empty.
+        """
         pass
 
     def reportEvent(self):
+        #TODO port diagnostic code here
         pass
-
-
-def ValidateDhcpResponse(request, response):
-    bytesReceived = len(response)
-    if bytesReceived < 0xF6:
-        logger.Error("HandleDhcpResponse: Too few bytes received:{0}", 
-                     str(bytesReceived))
-        return False
-
-    logger.Verbose("BytesReceived:{0}", hex(bytesReceived))
-    logger.Verbose("DHCP response:{0}", HexDump(response, bytesReceived))
-
-    # check transactionId, cookie, MAC address cookie should never mismatch
-    # transactionId and MAC address may mismatch if we see a response 
-    # meant from another machine
-    if CompareBytes(request, response, 0xEC, 4):
-        logger.Verbose("Cookie not match:\nsend={0},\nreceive={1}", 
-                       self.HexDump3(request, 0xEC, 4),
-                       self.HexDump3(response, 0xEC, 4))
-        return False
-
-    if CompareBytes(request, response, 4, 4):
-        logger.Verbose("TransactionID not match:\nsend={0},\nreceive={1}", 
-                       self.HexDump3(request, 4, 4),
-                       self.HexDump3(response, 4, 4))
-        return False
-
-    if CompareBytes(request, response, 0x1C, 6):
-        logger.Verbose("Mac Address not match:\nsend={0},\nreceive={1}", 
-                       self.HexDump3(request, 0x1C, 6),
-                       self.HexDump3(response, 0x1C, 6))
-        return False
-
-    return True
-
-def parseRoute(response, option, i, length, bytesReceived):
-    # http://msdn.microsoft.com/en-us/library/cc227282%28PROT.10%29.aspx
-    logger.Verbose("Routes at offset: {0} with length:{1}", 
-                   hex(i), 
-                   hex(length))
-    routes = []
-    if length < 5:
-        logger.Error("Data too small for option:{0}", str(option))
-    j = i + 2
-    while j < (i + length + 2):
-        maskLengthBits = Ord(response[j])
-        maskLengthBytes = (((maskLengthBits + 7) & ~7) >> 3)
-        mask = 0xFFFFFFFF & (0xFFFFFFFF << (32 - maskLengthBits))
-        j += 1
-        net = UnpackBigEndian(response, j, maskLengthBytes)
-        net <<= (32 - maskLengthBytes * 8)
-        net &= mask
-        j += maskLengthBytes
-        gateway = UnpackBigEndian(response, j, 4)
-        j += 4
-        routes.append((net, mask, gateway))
-    if j != (i + length + 2):
-        logger.Error("Unable to parse routes")
-    return routes
-
-def parseIpAddress(response, option, i, length, bytesReceived):
-    if i + 5 < bytesReceived:
-        if length != 4:
-            logger.Error("Endpoint or Default Gateway not 4 bytes")
-            return None
-        addr = UnpackBigEndian(response, i + 2, 4)
-        IpAddress = IntegerToIpAddressV4String(addr)
-        return IpAddress
-    else:
-        logger.Error("Data too small for option:{0}", str(option))
-    return None
-
-def parseDhcpResponse(response):
-    """
-    parse DHCP response:
-    Returns endpoint server or None on error.
-    """
-    logger.Verbose("parse Dhcp Response")
-    bytesReceived = len(response)
-    endpoint = None
-    gateway = None
-    routes = None
-
-    # Walk all the returned options, parsing out what we need, ignoring the 
-    # others. We need the custom option 245 to find the the endpoint we talk to,
-    # as well as, to handle some Linux DHCP client incompatibilities,
-    # options 3 for default gateway and 249 for routes. And 255 is end.
-
-    i = 0xF0 # offset to first option
-    while i < bytesReceived:
-        option = Ord(response[i])
-        length = 0
-        if (i + 1) < bytesReceived:
-            length = Ord(response[i + 1])
-        logger.Verbose("DHCP option {0} at offset:{1} with length:{2}",
-                       hex(option), 
-                       hex(i), 
-                       hex(length))
-        if option == 255:
-            logger.Verbose("DHCP packet ended at offset:{0}", hex(i))
-            break
-        elif option == 249:
-            routes = parseRoute(response, option, i, length, bytesReceived)
-        elif option == 3:
-            gateway = parseIpAddres(response, option, i, length, bytesReceived)
-            logger.Verbose("Default gateway:{0}, at {1}",
-                           gateway, 
-                           hex(i))
-        elif option == 245:
-            endpoint = parseIpAddres(response, option, i, length, bytesReceived)
-            logger.Verbose("Azure wire protocol endpoint:{0}, at {1}",
-                           gateway, 
-                           hex(i))
-        else:
-            logger.Verbose("Skipping DHCP option:{0} at {1} with length {2}",
-                           hex(option),
-                           hex(i),
-                           hex(length))
-        i += length + 2
-    return endpoint, gateway, routes
-
-
-def AllowBroadcastForDhcp(func):
-    """
-    Temporary allow broadcase for dhcp. Remove the route when done.
-    """
-    def Wrapper():
-        routeAdded = SetBroadcastRouteForDhcp()
-        func(*args, **kwargs)
-        if routeAdded:
-            RemoveBroadcastRouteForDhcp()
-    return Wrapper
-
-def DisableDhcpServiceIfNeeded(func):
-    """
-    In some distros, dhcp service needs to be shutdown before agent probe
-    endpoint through dhcp.
-    """
-    def Wrapper():
-        if osutil.IsDhcpEnabled():
-            osutil.StopDhcpService()
-            func(*args, **kwargs)
-            osutil.StartDhcpService()
-        else:
-            func(*args, **kwargs)
-    return Wrapper
-
-__SleepDuration = [0, 10, 30, 60, 60]
-
-@AllowBroadcastForDhcp
-@DisableDhcpServiceIfNeeded
-def SendDhcpRequest(request, sleepDuration = __SleepDuration):
-    resp = _SendDhcpRequest(request)
-    for duration in sleepDuration:
-       if resp:
-           break
-       time.Sleep(duration)
-       resp = _SendDhcpRequest(request)
-    return resp if resp else None
-
-def _SendDhcpRequest(request):
-    sock = None
-    try:
-        osutil.OpenPortForDhcp()
-        sock = socket.socket(socket.AF_INET, 
-                             socket.SOCK_DGRAM, 
-                             socket.IPPROTO_UDP)
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        sock.bind(("0.0.0.0", 68)) 
-        sock.sendto(request, ("<broadcast>", 67))
-        sock.settimeout(10)
-        logger.Log("Send DHCP request: Setting socket.timeout=10, entering recv")
-        response = sock.recv(1024)
-        return response
-    except Exception, e:
-        logger.Error("Failed to send DHCP request: {0}", e)
-        return None
-    finally:
-        if sock:
-            sock.close()
-
-def BuildDhcpRequest(macAddress):
-    """
-    Build DHCP request string.
-    """
-    #
-    # typedef struct _DHCP {
-    #     UINT8   Opcode;                    /* op:    BOOTREQUEST or BOOTREPLY */
-    #     UINT8   HardwareAddressType;       /* htype: ethernet */
-    #     UINT8   HardwareAddressLength;     /* hlen:  6 (48 bit mac address) */
-    #     UINT8   Hops;                      /* hops:  0 */
-    #     UINT8   TransactionID[4];          /* xid:   random */
-    #     UINT8   Seconds[2];                /* secs:  0 */
-    #     UINT8   Flags[2];                  /* flags: 0 or 0x8000 for broadcast */
-    #     UINT8   ClientIpAddress[4];        /* ciaddr: 0 */
-    #     UINT8   YourIpAddress[4];          /* yiaddr: 0 */
-    #     UINT8   ServerIpAddress[4];        /* siaddr: 0 */
-    #     UINT8   RelayAgentIpAddress[4];    /* giaddr: 0 */
-    #     UINT8   ClientHardwareAddress[16]; /* chaddr: 6 byte eth MAC address */
-    #     UINT8   ServerName[64];            /* sname:  0 */
-    #     UINT8   BootFileName[128];         /* file:   0  */
-    #     UINT8   MagicCookie[4];            /*   99  130   83   99 */
-    #                                        /* 0x63 0x82 0x53 0x63 */
-    #     /* options -- hard code ours */
-    #
-    #     UINT8 MessageTypeCode;              /* 53 */
-    #     UINT8 MessageTypeLength;            /* 1 */
-    #     UINT8 MessageType;                  /* 1 for DISCOVER */
-    #     UINT8 End;                          /* 255 */
-    # } DHCP;
-    #
-
-    # tuple of 244 zeros
-    # (struct.pack_into would be good here, but requires Python 2.5)
-    request = [0] * 244
-
-    transactionID = os.urandom(4)
-
-    # Opcode = 1
-    # HardwareAddressType = 1 (ethernet/MAC)
-    # HardwareAddressLength = 6 (ethernet/MAC/48 bits)
-    for a in range(0, 3):
-        request[a] = [1, 1, 6][a]
-
-    # fill in transaction id (random number to ensure response matches request)
-    for a in range(0, 4):
-        request[4 + a] = Ord(transactionID[a])
-
-    logger.Verbose("BuildDhcpRequest: transactionId:%s,%04X" % (
-                   self.HexDump2(transactionID), 
-                   self.UnpackBigEndian(request, 4, 4)))
-
-    # fill in ClientHardwareAddress
-    for a in range(0, 6):
-        request[0x1C + a] = Ord(macAddress[a])
-
-    # DHCP Magic Cookie: 99, 130, 83, 99
-    # MessageTypeCode = 53 DHCP Message Type
-    # MessageTypeLength = 1
-    # MessageType = DHCPDISCOVER
-    # End = 255 DHCP_END
-    for a in range(0, 8):
-        request[0xEC + a] = [99, 130, 83, 99, 53, 1, 1, 255][a]
-    return array.array("B", request)
 
 class VersionInfo():
     def __init__(self, xmlText):
@@ -412,22 +368,47 @@ class VersionInfo():
         return self.supported
 
 class GoalState():
-    """
-    """
     
     def __init__(self, xmlText):
         self.parse(xmlText)
 
     def reinitialize(self):
-        self.Incarnation = None # integer
-        self.ExpectedState = None # "Started"
-        self.HostingEnvUri = None
-        self.SharedConfigUri = None
-        self.CertificatesUri = None
-        self.ExtensionsUri = None
-        self.RoleInstanceId = None
-        self.ContainerId = None
-        self.LoadBalancerProbePort = None # integer, ?list of integers
+        self.incarnation = None
+        self.expectedState = None
+        self.hostingEnvUri = None
+        self.sharedConfigUri = None
+        self.certificatesUri = None
+        self.extensionsUri = None
+        self.roleInstanceId = None
+        self.containerId = None
+        self.loadBalancerProbePort = None
+
+    def getIncarnation(self):
+        return self.incarnation
+    
+    def getExpectedState(self):
+        return self.expectedState
+
+    def getHostingEnvUri(self):
+        return self.hostingEnvUri
+
+    def getSharedConfigUri(self):
+        return self.sharedConfigUri
+    
+    def getCertificatesUri(self):
+        return self.certificatesUri
+
+    def getExtensionsUri(self):
+        return self.extensionsUri
+
+    def getRoleInstanceId(self):
+        return self.roleInstanceId
+
+    def getContainerId(self):
+        return self.containerId
+
+    def getLoadBalancerProbePort(self):
+        return self.loadBalancerProbePort
 
     def parse(self, xmlText):
         """
@@ -437,23 +418,23 @@ class GoalState():
         logger.Verbose(xmlText)
         self.xmlText = xmlText
         xmlDoc = ET.fromstring(xmlText.strip())
-        self.Incarnation = (FindFirstNode(xmlDoc, ".//Incarnation")).text
-        self.ExpectedState = (FindFirstNode(xmlDoc, ".//ExpectedState")).text
-        self.HostingEnvUri = (FindFirstNode(xmlDoc, 
+        self.incarnation = (FindFirstNode(xmlDoc, ".//Incarnation")).text
+        self.expectedState = (FindFirstNode(xmlDoc, ".//ExpectedState")).text
+        self.hostingEnvUri = (FindFirstNode(xmlDoc, 
                                             ".//HostingEnvironmentConfig")).text
-        self.SharedConfigUri = (FindFirstNode(xmlDoc, ".//SharedConfig")).text
-        self.CertificatesUri = (FindFirstNode(xmlDoc, ".//Certificates")).text
-        self.ExtensionsUri = (FindFirstNode(xmlDoc, ".//ExtensionsConfig")).text
-        self.RoleInstanceId = (FindFirstNode(xmlDoc, 
+        self.sharedConfigUri = (FindFirstNode(xmlDoc, ".//SharedConfig")).text
+        self.certificatesUri = (FindFirstNode(xmlDoc, ".//Certificates")).text
+        self.extensionsUri = (FindFirstNode(xmlDoc, ".//ExtensionsConfig")).text
+        self.roleInstanceId = (FindFirstNode(xmlDoc, 
                                              ".//RoleInstance/InstanceId")).text
-        self.ContainerId = (FindFirstNode(xmlDoc, 
+        self.containerId = (FindFirstNode(xmlDoc, 
                                              ".//Container/ContainerId")).text
-        self.LoadBalancerProbePort = (FindFirstNode(xmlDoc, 
+        self.loadBalancerProbePort = (FindFirstNode(xmlDoc, 
                                                     ".//LBProbePorts/Port")).text
         return self
         
 
-class HostingEnvironmentConfig(object):
+class HostingEnv(object):
     """
     parse Hosting enviromnet config and store in
     HostingEnvironmentConfig.xml
@@ -465,14 +446,20 @@ class HostingEnvironmentConfig(object):
         """
         Reset Members.
         """
-        pass
+        self.vmName = None
+        self.xmlText = None
+
+    def getVmName(self):
+        return self.vmName
 
     def parse(self, xmlText):
         """
         parse and create HostingEnvironmentConfig.xml.
         """
         self.reinitialize()
-        #Not used currently        
+        self.xmlText = xmlText
+        xmlDoc = ET.fromstring(xmlText.strip())
+        self.vmName = FindFirstNode(xmlDoc, ".//Incarnation").attrib["instance"]
         return self
 
 class SharedConfig(object):
@@ -480,7 +467,7 @@ class SharedConfig(object):
     parse role endpoint server and goal state config.
     """
     def __init__(self, xmlText):
-        self.parses(xmlText)
+        self.parse(xmlText)
 
     def reinitialize(self):
         """
@@ -501,12 +488,11 @@ class Certificates(object):
     """
     Object containing certificates of host and provisioned user.
     """
-    def __init__(self, xmlText, libDir=osutil.LibDir,
-                 opensslCmd = osutil.GetOpensslCmd()):
-        self.libDir = libDir
-        self.opensslCmd = opensslCmd
-        self.xmlText = xmlText
-        self.parse(xmlText)
+    def __init__(self, jsonText=None):
+        self.libDir = osutil.GetLibDir()
+        self.opensslCmd = osutil.GetOpensslCmd()
+        if jsonText is not None:
+            self.parse(jsonText)
 
     def reinitialize(self):
         """
@@ -514,12 +500,17 @@ class Certificates(object):
         """
         self.certs = []
 
-    def parse(self, xmlText):
+    def parse(self, jsonText):
+        self.reinitialize()
+        certs = json.loads(jsonText)
+        for cert in certs:
+            self.certs.append(CertInfo(cert))
+
+    def decrypt(self, xmlText):
         """
         Parse multiple certificates into seperate files.
         """
         self.reinitialize()
-        self.xmlText = self.xmlText
         xmlDoc = ET.fromstring(xmlText.strip())
         dataNode = FindFirstNode(xmlDoc, ".//Data")
         if dataNode is None:
@@ -594,7 +585,7 @@ class Certificates(object):
 
         for cert in certs:
             self.certs.append(CertInfo(cert))
-        return self
+        return json.dumps(certs)
 
     def getCerts(self):
         return self.certs
@@ -637,9 +628,15 @@ class ExtensionsConfig(object):
         """
         Reset members.
         """
-        self.Extensions = None
-        self.StatusUploadBlob = None
+        self.extensions = None
+        self.statusUploadBlob = None
+    
+    def getExtensions(self):
+        return self.extensions
 
+    def getStatusUploadBlob(self):
+        return self.statusUploadBlob
+    
     def parse(self, xmlText):
         """
         Write configuration to file ExtensionsConfig.xml.
@@ -691,8 +688,8 @@ class ExtensionsConfig(object):
             properties["runtimeSettings"] = runtimeSettings
             ext["properties"] = properties
             data.append(ExtensionInfo(ext))
-        self.Extensions = data 
-        self.StatusUploadBlob = (FindFirstNode(xmlDoc,"StatusUploadBlob")).text
+        self.extensions = data 
+        self.statusUploadBlob = (FindFirstNode(xmlDoc,"StatusUploadBlob")).text
         return self
 
 

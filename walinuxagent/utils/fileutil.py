@@ -27,21 +27,22 @@ import walinuxagent.logger as logger
 """
 File operation util functions
 """
-def GetFileContents(filepath,asbin=False):
+def GetFileContents(filepath, asbin=False, removeBom=False):
     """
     Read and return contents of 'filepath'.
     """
     mode='r'
     if asbin:
         mode+='b'
-    c=None
     try:
         with open(filepath, mode) as F :
             c=F.read()
+        if removeBom and ord(c[0]) > 128 and ord(c[1]) > 128 and ord(c[2] > 128):
+            c = c[3:]
+        return c
     except IOError, e:
         logger.Error('Reading from file {0} Exception is {1}', filepath, e)
         return None        
-    return c
 
 def SetFileContents(filepath, contents):
     """
@@ -106,5 +107,14 @@ def ReplaceFileContentsAtomic(filepath, contents):
 def GetLastPathElement(path):
     head, tail = os.path.split(path)
     return tail
+
+def GetLineStartingWith(prefix, filepath):
+    """
+    Return line from 'filepath' if the line startswith 'prefix'
+    """
+    for line in GetFileContents(filepath).split('\n'):
+        if line.startswith(prefix):
+            return line
+    return None
 
 #End File operation util functions

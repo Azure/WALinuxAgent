@@ -15,7 +15,7 @@
 # limitations under the License.
 #
 # Requires Python 2.4+ and Openssl 1.0+
-
+import string
 
 def FindFirstNode(xmlDoc, selector):
     nodes = FindAllNodes(xmlDoc, selector)
@@ -67,6 +67,20 @@ def HexDump2(buf):
     """
     return HexDump3(buf, 0, len(buf))
 
+def IsInRangeInclusive(a, low, high):
+    """
+    Return True if 'a' in 'low' <= a >= 'high'
+    """
+    return (a >= low and a <= high)
+
+def IsPrintable(ch):
+    """
+    Return True if character is displayable.
+    """
+    return (IsInRangeInclusive(ch, Ord('A'), Ord('Z')) 
+           or IsInRangeInclusive(ch, Ord('a'), Ord('z')) 
+           or IsInRangeInclusive(ch, Ord('0'), Ord('9')))
+
 def HexDump(buffer, size):
     """
     Return Hex formated dump of a 'buffer' of 'size'.
@@ -114,11 +128,11 @@ def Ord(a):
 
 def CompareBytes(a, b, start, length):
     for offset in range(start, start + length):
-        if a[offset] != b[offset]:
-            return false
-        return true
+        if Ord(a[offset]) != Ord(b[offset]):
+            return False
+    return True
 
-def IntegerToIpAddressV4String(self, a):
+def IntegerToIpAddressV4String(a):
     """
     Build DHCP request string.
     """

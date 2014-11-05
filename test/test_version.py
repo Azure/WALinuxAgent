@@ -30,7 +30,7 @@ VersionInfoSample="""\
 <?xml version="1.0" encoding="utf-8"?>
 <Versions>
   <Preferred>
-    <Version>2010-12-15</Version>
+    <Version>2012-11-30</Version>
   </Preferred>
   <Supported>
     <Version>2010-12-15</Version>
@@ -42,7 +42,7 @@ VersionInfoSample="""\
 class TestVersionInfo(unittest.TestCase):
     def test_version_info(self):
         config = v1.VersionInfo(VersionInfoSample)
-        self.assertEquals("2010-12-15", config.getPreferred())
+        self.assertEquals("2012-11-30", config.getPreferred())
         self.assertNotEquals(None, config.getSupported())
         self.assertEquals(2, len(config.getSupported()))
         self.assertEquals("2010-12-15", config.getSupported()[0])
