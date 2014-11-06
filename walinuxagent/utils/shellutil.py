@@ -49,7 +49,7 @@ def RunGetOutput(cmd, chk_err=True):
             logger.Error("Error Code:{0}", e.returncode)
             logger.Error("Result:{0}", e.output[:-1].decode('latin-1'))
         return e.returncode, e.output.decode('latin-1')
-    return 0, output.decode('latin-1')
+    return 0, output
 
 def RunSendStdin(cmd, input, chk_err=True):
     """

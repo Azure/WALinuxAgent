@@ -18,6 +18,7 @@
 # http://msdn.microsoft.com/en-us/library/cc227282%28PROT.10%29.aspx
 # http://msdn.microsoft.com/en-us/library/cc227259%28PROT.13%29.aspx
 
+import walinuxagent.utils.textutil as textutil
 from datetime import datetime
 
 LogFilePath = '/var/log/waagent.log'
@@ -40,11 +41,13 @@ class Logger(object):
         self.log("ERROR", msg_format, *args)
 
     def log(self, level, msg_format, *args):
+        msg_format = textutil.Ascii(msg_format) 
+        args = map(lambda x : textutil.Ascii(x), args)
         msg = msg_format.format(*args)
         time = datetime.now().strftime('%Y/%m/%d %H:%M:%S.%f')
-        log_item = "{0} {1} {2}".format(time, level, msg)
+        logItem = "{0} {1} {2}".format(time, level, msg)
         for appender in self.appenders:
-            appender.write(level, msg)
+            appender.write(level, logItem)
 
     def addLoggerAppender(self, appender_config):
         appender = CreateLoggerAppender(appender_config)
@@ -80,7 +83,7 @@ class FileAppender():
 
     def write(self, level, msg):
         if _MatchLogLevel(self.level, level):
-            with open(self.file_path, "w") as log_file:
+            with open(self.file_path, "a") as log_file:
                 log_file.write(msg.encode('ascii','ignore') + "\n")
                 log_file.close()
 

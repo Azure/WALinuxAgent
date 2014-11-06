@@ -141,3 +141,13 @@ def IntegerToIpAddressV4String(a):
                             (a >> 8) & 0xFF, 
                             (a) & 0xFF)
 
+def Ascii(val):
+    uni = None
+    if type(val) == str:
+        uni = unicode(val, 'utf-8', errors='ignore') 
+    else:
+        uni = unicode(val)
+    if uni is None:
+        return '<Unsupported charset>'
+    else:
+        return uni.encode('ascii', 'backslashreplace')

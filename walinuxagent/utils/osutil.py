@@ -48,7 +48,35 @@ class DefaultDistro():
     def GetAgentPidPath(self):
         return '/var/run/waagent.pid'
 
-    def IsSysUser(self, userentry):
+    def UpdateUserAccount(self, userName, password, expiration=None):
+        """
+        Update password and ssh key for user account.
+        New account will be created if not exists.
+        """
+        if userName is None:
+            raise Exception("User name is empty")
+
+        if self.IsSysUser(userName):
+            raise Exception(("User {0} is a system user. "
+                             "Will not set passwd.").format(userName))
+
+        userentry = self.GetUserEntry(userName)
+        if userentry is None:
+            self.CreateUserAccount(userName, expiration)
+            
+        if password is not None:
+            self.ChangePassword(userName, password)
+        
+        self.ConfigSudoer(userName, password is None)
+
+    def GetUserEntry(self, userName):
+        try:
+            return pwd.getpwnam(userName)
+        except KeyError:
+            return None
+
+    def IsSysUser(self, userName):
+        userentry = self.GetUserEntry(userName)
         uidmin = None
         try:
             uidminDef = GetLineStartingWith("UID_MIN", "/etc/login.defs")
@@ -63,8 +91,7 @@ class DefaultDistro():
             return False
    
     def CreateUserAccount(self, userName, expiration):
-        self.createUserAccount(userName)
-        cmd = "useradd -m {0}".format(user)
+        cmd = "useradd -m {0}".format(userName)
         if expiration is not None:
             cmd = "{0} -e {1}".format(cmd, expiration)
         retcode, out = shellutil.RunGetOutput(cmd)
@@ -107,7 +134,7 @@ class DefaultDistro():
         shellutil.Run("rm -f /etc/ssh/ssh_host_*key*")
         shellutil.Run("ssh-keygen -N '' -t {0} -f /etc/ssh/ssh_host_{1}_key"
                 .format(keyPairType, keyPairType))
-        self.restartSshService()
+        self.RestartSshService()
 
     def GetOpensslCmd(self):
         return '/usr/bin/openssl'
@@ -155,30 +182,6 @@ class DefaultDistro():
         Run("iptables -D INPUT -p udp --dport 68 -j ACCEPT",chk_err=False)      
         Run("iptables -I INPUT -p udp --dport 68 -j ACCEPT",chk_err=False)
 
-    def UpdateUserAccount(userName, password, expiration, thumbprint):
-        """
-        Update password and ssh key for user account.
-        New account will be created if not exists.
-        """
-        if userName is None:
-            raise Exception("User name is empty")
-        userentry = pwd.getpwnam(user)
-
-        if self.IsSysUser(self, userentry):
-            raise Exception(("User {0} is a system user. "
-                             "Will not set passwd.").format(userName))
-
-        if userentry is None:
-            self.CreateUserAccount(userName, expiration)
-            
-        if password is not None:
-            self.ChangePassword(userName, password)
-        
-        self.ConfigSudoer(userName, password is None)
-
-        if thumbprint is not None:
-            self.ConfigSshKey(userName, thumbprint)
-  
     def GenerateTransportCert():
         """
         Create ssl certificate for https communication with endpoint server.
@@ -253,8 +256,8 @@ class DefaultDistro():
         return "service sshd restart"
 
     def RestartSshService(self):
-        cmd = self.getRestartSshServiceCmd()
-        retcode = Run(cmd)
+        cmd = self.GetRestartSshServiceCmd()
+        retcode = shellutil.Run(cmd)
         if retcode > 0:
             logger.Error("Failed to restart SSH service with return code:{0}",
                          retcode)

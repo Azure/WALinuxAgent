@@ -44,6 +44,9 @@ class TestLogger(unittest.TestCase):
         _logger.info("{0} {1}", 0, 1)
         _logger.warn("{0} {1}", 0, 1)
         _logger.error("{0} {1}", 0, 1)
+        _logger.info("this is a unicode {0}", u'\u6211')
+        _logger.info("this is a utf-8 {0}", u'\u6211'.encode('utf-8'))
+        _logger.info("this is a gbk {0}", 0xff )
 
     def test_file_appender(self):
         appender_config = logger.AppenderConfig({'type':'FILE', 'level':'INFO', 'file_path':'/tmp/log'})
@@ -57,6 +60,10 @@ class TestLogger(unittest.TestCase):
         msg = str(uuid.uuid4())
         _logger.verbose("Verbose should not be logged: {0}", msg)
         self.assertFalse(tools.simple_file_grep('/tmp/log', msg))
+
+        _logger.info("this is a unicode {0}", u'\u6211')
+        _logger.info("this is a utf-8 {0}", u'\u6211'.encode('utf-8'))
+        _logger.info("this is a gbk {0}", 0xff)
 
     def test_logger_init(self):
         _logger = logger.Logger()
