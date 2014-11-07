@@ -549,15 +549,15 @@ class Certificates(object):
                     beginCrt = True
                 elif re.match(r'[-]+END.*KEY[-]+', line):
                     tmpFile = self.writeToTempFile(index, 'prv', buf)
-                    pub = self.getPubKeyFromPrv(tmpFile)
+                    pub = CurrOS.GetPubKeyFromPrv(tmpFile)
                     prvs[pub] = tmpFile
                     buf = []
                     index += 1
                     beginPrv = False
                 elif re.match(r'[-]+END.*CERTIFICATE[-]+', line):
                     tmpFile = self.writeToTempFile(index, 'crt', buf)
-                    pub = self.getPubKeyFromCrt(tmpFile)
-                    thumbprint = self.getThumbprintFromCrt(tmpFile)
+                    pub = CurrOS.GetPubKeyFromCrt(tmpFile)
+                    thumbprint = CurrOS.GetThumbprintFromCrt(tmpFile)
                     thumbprints[pub] = thumbprint
                     #Rename crt with thumbprint as the file name 
                     crt = "{0}.crt".format(thumbprint)
@@ -595,25 +595,6 @@ class Certificates(object):
         with open(fileName, 'w') as tmp:
             tmp.writelines(buf)
         return fileName
-
-    def getPubKeyFromPrv(self, fileName):
-        cmd = "{0} rsa -in {1} -pubout 2>/dev/null".format(self.opensslCmd, 
-                                                           fileName)
-        pub = shellutil.RunGetOutput(cmd)[1]
-        return pub
-
-    def getPubKeyFromCrt(self, fileName):
-        cmd = "{0} x509 -in {1} -pubkey -noout".format(self.opensslCmd, 
-                                                       fileName)
-        pub = shellutil.RunGetOutput(cmd)[1]
-        return pub
-
-    def getThumbprintFromCrt(self, fileName):
-        cmd = "{0} x509 -in {1} -fingerprint -noout".format(self.opensslCmd, 
-                                                            fileName)
-        thumbprint = shellutil.RunGetOutput(cmd)[1]
-        thumbprint = thumbprint.rstrip().split('=')[1].replace(':', '').upper()
-        return thumbprint
 
 class ExtensionsConfig(object):
     """

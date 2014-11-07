@@ -21,46 +21,57 @@ import os
 import walinuxagent.logger as logger
 from walinuxagent.utils.osutil import CurrOS, CurrOSInfo
 import walinuxagent.utils.shellutil as shellutil
-from CurrOS import LibDir, OvfMountPoint
 
 CustomDataFile="CustomData"
 
 class ProvisionHandler(object):
-    def __init__(self, config, protocol, libDir=LibDir):
+    def __init__(self, config, protocol):
         self.config = config
         self.protocol = protocol
-        self.libDir = libDir
 
     def provision(self):
         if self.config.getSwitch("Provisioning.Enabled"):
             return
         
         logger.Info("Provisioning image started")
-        ovfenv = self.protocol.copyOvf()
-    
-        self.setHostName(ovfenv.getComputerName())
-        self.createUserAccount(ovfenv.getUserName(), ovfenv.getUserPassword())
-        self.deploySshPublicKeys(ovfenv.getSshPublicKeys)
-        self.saveCustomData(ovfenv.getCustomData())
+        self.ovfenv = self.protocol.copyOvf()
+   
+        password = self.ovfenv.getUserPassword()
+        self.ovfenv.clearUserPassword()
+
+        self.setHostName()
+        self.createUserAccount(self.ovfenv.getUserName(), password)
+        self.deploySshPublicKeys()
+        self.deploySshKeyPairs()
+        self.saveCustomData()
 
         if config.getSwitch("Provisioning.RegenerateSshHostKeyPair"):
             keyPairType = config.get("Provisioning.SshHostKeyPairType", "rsa")
             CurrOS.RegenerateSshHostkey(keyPairType)
 
+        #TODO Wait for host name published
         CurrOS.RestartSshService()
-        self.reportSshHostkeyThumbnail()
+        
+        #TODO report provision status
+        self.protocol.reportProvisionStatus("")
 
         if config.getSwitch("Provisioning.DeleteRootPassword"):
             self.deleteRootPassword()
 
     def saveCustomData(self, customData):
-        CurrOS.SetFileContents(os.path.join(self.libDir, CustomDataFile), 
+        libDir = CurrOS.GetLibDir()
+        CurrOS.SetFileContents(os.path.join(libDir, CustomDataFile), 
                                customData)
 
-    def deploySshPublicKeys(self, keys):
-        pass
+    def deploySshPublicKeys(self):
+        for thumbprint, path in self.ovfenv.getSshPublicKeys():
+            CurrOS.DeploySshPublicKey(self.ovfenv.getUserName(), thumbprint, path)
     
-    def setHostName(self, hostName):
+    def deploySshKeyPairs(self):
+        for thumbprint, path in self.ovfenv.getSshKeyPairs():
+            CurrOS.DeploySshKeyPair(self.ovfenv.getUserName(), thumbprint, path)
+
+    def setHostName(self):
         pass
 
     def createUserAccount(self, userName, password):
@@ -68,10 +79,7 @@ class ProvisionHandler(object):
             raise Exception("User name is empty.")
         if CurrOS.IsSysUser(userName):
             raise Exception("User:{0} is a system user.".format(userName))
-        CurrOS.CreateUserAccount(userName, password)
-
-    def reportSshHostkeyThumbnail(self):
-        pass
+        CurrOS.UpdateUserAccount(userName, password)
 
     def deleteRootPassword(self):
         CurrOS.DeleteRootPassword()

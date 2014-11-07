@@ -120,7 +120,7 @@ def GetLineStartingWith(prefix, filepath):
 #End File operation util functions
 
 def CreateDir(dirpath, owner, mode):
-    if os.path.isdir(dirpath):
+    if not os.path.isdir(dirpath):
         os.makedirs(dirpath, mode)
     ChangeOwner(dirpath, owner)
 

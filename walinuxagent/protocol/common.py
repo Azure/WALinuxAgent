@@ -140,6 +140,9 @@ class OvfEnv(object):
     def getUserPassword(self):
         return self.UserPassword
 
+    def clearUserPassword(self):
+        self.UserPassword = None
+    
     def getCustomData(self):
         return self.CustomData
 

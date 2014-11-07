@@ -103,7 +103,7 @@ class DefaultDistro():
     def ChangePassword(self, userName, password):
         shellutil.RunSendStdin("chpasswd", 
                                "{0}:{1}\n".format(userName, password))
-                    
+            
     def ConfigSudoer(self, userName, nopasswd):
         # for older distros create sudoers.d
         if not os.path.isdir('/etc/sudoers.d/'):
@@ -120,21 +120,153 @@ class DefaultDistro():
             sudoer = "{0} ALL = (ALL) ALL\n".format(userName)
         fileutil.SetFileContents('/etc/sudoers.d/waagent', sudoer)
         os.chmod('/etc/sudoers.d/waagent', 0440)
-   
+  
+    def DeleteRootPassword(self):
+        pass
+
     def GetHome(self):
         return '/home'
     
-    def ConfigSshKey(self, userName, thumbprint):
-        sshDir = os.path.join(self.getHome(), userName, '.ssh')
-        fileutil.CreateDir(sshDir, userName, '0700')
-        pub = os.path.join(sshDir, 'id_rsa.pub')
-        prv = os.path.join(sshDir, 'id_rsa')
+    def GetPubKeyFromPrv(self, fileName):
+        cmd = "{0} rsa -in {1} -pubout 2>/dev/null".format(self.GetOpensslCmd(),
+                                                           fileName)
+        pub = shellutil.RunGetOutput(cmd)[1]
+        return pub
+
+    def GetPubKeyFromCrt(self, fileName):
+        cmd = "{0} x509 -in {1} -pubkey -noout".format(self.GetOpensslCmd(), 
+                                                       fileName)
+        pub = shellutil.RunGetOutput(cmd)[1]
+        return pub
+
+    def NormPath(self, filepath):
+        home = CurrOS.GetHome()
+        # Expand HOME variable if present in path
+        path = os.path.normpath(filepath.replace("$HOME", home))
+        
+    def GetThumbprintFromCrt(self, fileName):
+        cmd="{0} x509 -in {1} -fingerprint -noout".format(self.GetOpensslCmd(), 
+                                                            fileName)
+        thumbprint = shellutil.RunGetOutput(cmd)[1]
+        thumbprint = thumbprint.rstrip().split('=')[1].replace(':', '').upper()
+        return thumbprint
+   
+    def DeploySshKeyPair(self, userName, thumbprint, path):
+        """
+        Deploy id_rsa and id_rsa.pub
+        """
+        path = self.NormPath(path)
+        dirPath = os.path.dirname(path)
+        fileutil.CreateDir(dirPath, userName, 0700)
+        libDir = CurrOS.GetLibDir()
+        prvPath = os.path.join(libDir, thumbprint + '.prv')
+        if not os.path.isfile(prvPath):
+            logger.Error("Failed to deploy key pair, thumbprint: {0}", 
+                         thumbprint)
+            return
+        shutil.copyfile(prvPath, path)
+        pubPath = path + '.pub'
+        pub = self.GetPubKeyFromPrv(prvPath)
+        fileutil.SetFileContents(pubPath, pub)
+        self.SetSelinuxContext(path, 'unconfined_u:object_r:ssh_home_t:s')
+        self.SetSelinuxContext(pubPath, 'unconfined_u:object_r:ssh_home_t:s')
+        os.chmod(path, 0600)
+        os.chmod(pubPath, 0600)
+
+    def DeploySshPublicKey(self, userName, thumbprint, path):
+        """
+        Deploy authorized_key
+        """
+        path = self.NormPath(path)
+        dirPath = os.path.dirname(path)
+        fileutil.CreateDir(dirPath, userName, 0700)
+        libDir = CurrOS.GetLibDir()
+        crtPath = os.path.join(libDir, thumbprint + '.crt')
+        if not os.path.isfile(crtPath):
+            logger.Error("Failed to deploy public key, thumbprint: {0}", 
+                         thumbprint)
+            return
+        pubPath = os.path.join(libDir, thumbprint + '.pub')
+        pub = self.GetPubKeyFromCrt(crtPath)
+        fileutil.SetFileContents(pubPath, pub)
+        self.SetSelinuxContext(pubPath, 'unconfined_u:object_r:ssh_home_t:s')
+        shellutil.Run("ssh-keygen -i -m PKCS8 -f {0} >> {1}", thumbprint, path)
+        self.SetSelinuxContext(path, 'unconfined_u:object_r:ssh_home_t:s')
+        os.chmod(path, 0600)
+        os.chmod(pubPath, 0600)
+            
+    def IsSelinuxSystem(self):
+        """
+        Checks and sets self.selinux = True if SELinux is available on system.
+        """
+        if self.selinux == None:
+            if shellutil.Run("which getenforce", chk_err=False):
+                self.selinux = False
+            else:
+                self.selinux = True
+        return self.selinux
+    
+    def IsSelinuxRunning(self):
+        """
+        Calls shell command 'getenforce' and returns True if 'Enforcing'.
+        """
+        if self.IsSelinuxSystem():
+            output = shellutil.RunGetOutput("getenforce")[1]
+            return output.startswith("Enforcing")
+        else:
+            return False
+        
+    def SetSelinuxEnforce(self, state):
+        """
+        Calls shell command 'setenforce' with 'state' 
+        and returns resulting exit code.
+        """
+        if self.IsSelinuxSystem():
+            if state: s = '1'
+            else: s='0'
+            return shellutil.Run("setenforce "+s)
+
+    def SetSelinuxContext(self, path, cn):
+        """
+        Calls shell 'chcon' with 'path' and 'cn' context.
+        Returns exit result.
+        """
+        if self.IsSelinuxSystem():
+            return shellutil.Run('chcon ' + cn + ' ' + path)
+    
+    def GetSshdConfigPath(self):
+        return "/etc/ssh/sshd_config"
+    
+    def ConfigSshd(self, disablePassword):
+        if not disablePassword:
+            return
+        configPath = self.GetSshdConfigPath()
+        config = fileutil.GetFileContents(configPath).split("\n")
+        passwordAuthFound = False
+        challengeAuthFound = False
+        for i in range(0, len(config)):
+            if config[i].startswith("PasswordAuthentication"):
+                passwordAuthFound = True
+                config[i] = "PasswordAuthentication no"
+            elif config[i].startswith("ChallengeResponseAuthentication"):
+                challengeAuthFound = True
+                config[i] = "ChallengeResponseAuthentication no"
+            elif config[i].startswith("Match"):
+                #Match block must be put in the end of sshd config
+                break
+
+        if not passwordAuthFound:
+            config.insert(i, "PasswordAuthentication no")
+        if not challengeAuthFound:
+            config.insert(i, "ChallengeResponseAuthentication no")
+
+        logger.Info("Disabled SSH password-based authentication methods.")
+        fileutil.ReplaceFileContentsAtomic(configPath, "\n".join(config))
 
     def RegenerateSshHostkey(self, keyPairType):
         shellutil.Run("rm -f /etc/ssh/ssh_host_*key*")
         shellutil.Run("ssh-keygen -N '' -t {0} -f /etc/ssh/ssh_host_{1}_key"
                 .format(keyPairType, keyPairType))
-        self.RestartSshService()
 
     def GetOpensslCmd(self):
         return '/usr/bin/openssl'
