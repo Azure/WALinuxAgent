@@ -4,16 +4,17 @@ Platform images in the Azure Gallery will already include the agent
 package. This guide is primarily for individuals who would like to
 build their own custom packages.
 
-OpenLogic provides supported RPM packages for CentOS in their package
-repositories, for example
+OpenLogic provides an RPM package for CentOS-based distributions
+in their package repositories, for example
 http://olcentgbl.trafficmanager.net/openlogic/6/openlogic/x86_64/RPMS/
+http://olcentgbl.trafficmanager.net/openlogic/7/openlogic/x86_64/RPMS/
 
 Note: Official packaging and other patches for SLES and OpenSUSE can be
 found on the OpenSUSE Build Service:  
 https://build.opensuse.org/package/show?package=WALinuxAgent&project=Cloud%3ATools
 
 The instructions below will describe how you can build your own RPM
-package on a CentOS host:
+package:
 
     1. Install required rpmbuild package:
 
