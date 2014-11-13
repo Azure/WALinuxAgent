@@ -42,12 +42,18 @@ class DhcpHandler():
         self.endpoint = endpoint
         self.gateway = gateway
         self.routes = routes
+        self.configRoutes()
 
     def getEndpoint(self):
         return self.endpoint
 
-    def configNetwork(self):
-        pass
+    def configRoutes(self):
+        #Add default gateway
+        if self.gateway is not None:
+            CurrOS.RouteAdd(0 , 0, self.gateway)
+        if self.routes is not None:
+            for route in self.routes:
+                CurrOS.RouteAdd(route[0], route[1], route[2])
 
 def ValidateDhcpResponse(request, response):
     bytesReceived = len(response)
@@ -173,10 +179,13 @@ def AllowBroadcastForDhcp(func):
     Temporary allow broadcase for dhcp. Remove the route when done.
     """
     def Wrapper(*args, **kwargs):
-        routeAdded = CurrOS.SetBroadcastRouteForDhcp()
+        missingDefaultRoute = CurrOS.IsMissingDefaultRoute()
+        ifname = CurrOS.GetInterfaceName()
+        if missingDefaultRoute:
+            CurrOS.SetBroadcastRouteForDhcp(ifname)
         result = func(*args, **kwargs)
-        if routeAdded:
-            CurrOS.RemoveBroadcastRouteForDhcp()
+        if missingDefaultRoute:
+            CurrOS.RemoveBroadcastRouteForDhcp(ifname)
         return result
     return Wrapper
 
@@ -204,8 +213,7 @@ def SendDhcpRequest(request):
     for duration in __SleepDuration:
         try:
             CurrOS.OpenPortForDhcp()
-            CurrOS.StartNetwork()
-            response = _SendDhcpRequest(request)
+            response = SocketSend(request)
             ValidateDhcpResponse(request, response)
             return response
         except Exception, e:
@@ -216,7 +224,7 @@ def SendDhcpRequest(request):
                 sock.close()
         time.sleep(duration)
 
-def _SendDhcpRequest(request):
+def SocketSend(request):
     sock = socket.socket(socket.AF_INET, 
                          socket.SOCK_DGRAM, 
                          socket.IPPROTO_UDP)

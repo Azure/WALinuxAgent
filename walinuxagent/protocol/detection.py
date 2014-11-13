@@ -88,5 +88,3 @@ def GetDefaultProtocol(protocols=__Protocols):
     availableProtocols = GetAvailableProtocols(protocols)
     return ChooseDefaultProtocol(availableProtocols)
 
-
-

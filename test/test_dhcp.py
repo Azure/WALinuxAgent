@@ -28,26 +28,13 @@ import json
 import walinuxagent.utils.fileutil as fileutil
 import walinuxagent.dhcphandler as dhcphandler
 
-class MockSock(object):
-    def __init__(self, a, b, c):
-        pass
-    def setsockopt(self, a, b, c):
-        pass
-    def bind(self, a):
-        pass
-    def sendto(self, a, b):
-        pass
-    def settimeout(self, a):
-        pass
-    def recv(self, a):
-        with open(os.path.join(env.test_root, "dhcp")) as F:
-            buf = F.read()
-        return buf
-    def close(self):
-        pass
-
-def MockGenTransactionId():
-    return "\xC6\xAA\xD1\x5D"
+SampleDhcpResponse = None
+with open(os.path.join(env.test_root, "dhcp")) as F:
+     SampleDhcpResponse = F.read()
+        
+MockSocketSend = MockFunc('SocketSend', SampleDhcpResponse)
+MockGenTransactionId = MockFunc('GenTransactionId', "\xC6\xAA\xD1\x5D")
+MockGetMacAddress = MockFunc('GetMacAddress', "\x00\x15\x5D\x38\xAA\x38")
 
 class TestDhcpHandler(unittest.TestCase):
  
@@ -55,22 +42,21 @@ class TestDhcpHandler(unittest.TestCase):
         req = dhcphandler.BuildDhcpRequest(MockGetMacAddress())
         self.assertNotEquals(None, req)
 
-    @Mockup(dhcphandler.socket, 'socket', MockSock)
     @Mockup(dhcphandler, "GenTransactionId", MockGenTransactionId)
+    @Mockup(dhcphandler, "SocketSend", MockSocketSend)
     def test_send_dhcp_req(self):
         req = dhcphandler.BuildDhcpRequest(MockGetMacAddress())
         resp = dhcphandler.SendDhcpRequest(req)
         self.assertNotEquals(None, resp)
 
-    @Mockup(dhcphandler.socket, 'socket', MockSock)
+    @Mockup(dhcphandler, "SocketSend", MockSocketSend)
     @Mockup(dhcphandler, "GenTransactionId", MockGenTransactionId)
+    @Mockup(CurrOS, "GetMacAddress", MockGetMacAddress)
     def test_handle_dhcp(self):
         dh = dhcphandler.DhcpHandler()
         dh.probe()
         self.assertEquals("10.62.144.1", dh.gateway)
         self.assertEquals("10.62.144.140", dh.endpoint)
-
-
 
 if __name__ == '__main__':
     unittest.main()

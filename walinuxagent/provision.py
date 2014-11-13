@@ -25,38 +25,61 @@ import walinuxagent.utils.shellutil as shellutil
 CustomDataFile="CustomData"
 
 class ProvisionHandler(object):
-    def __init__(self, config, protocol):
+    def __init__(self, config, protocol, envMonitor):
         self.config = config
         self.protocol = protocol
+        self.envMonitor = envMonitor
 
     def provision(self):
-        if self.config.getSwitch("Provisioning.Enabled"):
-            return
-        
+        try:
+            if self.config.getSwitch("Provisioning.Enabled"):
+                self._provision()
+            else:
+                #In some distro like Ubuntu, cloud init is used to do provision
+                #In this case, we need to wait the cloud init to complete 
+                #provision work and generate ssh host key
+                CurrOS.WaitForSshHostKey()
+
+            keyPairType = config.get("Provisioning.SshHostKeyPairType", "rsa")
+            thumbprint = CurrOS.GetSshHostKeyThumbprint(keyPairType)
+            self.protocol.reportProvisionStatus(status="Ready",
+                                                thumbprint = thumbprint)
+        except Exception, e:
+            logger.Error("Provision failed: {0}", e)
+            self.protocol.reportProvisionStatus(status="NotReady",
+                                                subStatus="Provisioning Failed")
+            raise e
+
+    def _provision(self):
         logger.Info("Provisioning image started")
+        self.reportProvisionStatus("NotReady", "Running", "Starting")
+
         self.ovfenv = self.protocol.copyOvf()
-   
         password = self.ovfenv.getUserPassword()
         self.ovfenv.clearUserPassword()
 
-        self.setHostName()
-        self.createUserAccount(self.ovfenv.getUserName(), password)
+        self.envMonitor.setHostname(self.ovfenv.getHostName())
+        CurrOS.UpdateUserAccount(self.ovfenv.getUserName(), password)
+
+        #Disable selinux temporary
+        sel = CurrOS.isSelinuxRunning()
+        if sel:
+            CurrOS.SetSelinuxEnforce(0)
         self.deploySshPublicKeys()
         self.deploySshKeyPairs()
         self.saveCustomData()
+        if sel:
+            CurrOS.SetSelinuxEnforce(1)
 
+        keyPairType = config.get("Provisioning.SshHostKeyPairType", "rsa")
         if config.getSwitch("Provisioning.RegenerateSshHostKeyPair"):
-            keyPairType = config.get("Provisioning.SshHostKeyPairType", "rsa")
             CurrOS.RegenerateSshHostkey(keyPairType)
 
-        #TODO Wait for host name published
+        self.envMonitor.waitForHostnamePublishing()
         CurrOS.RestartSshService()
-        
-        #TODO report provision status
-        self.protocol.reportProvisionStatus("")
 
         if config.getSwitch("Provisioning.DeleteRootPassword"):
-            self.deleteRootPassword()
+            CurrOS.DeleteRootPassword()
 
     def saveCustomData(self, customData):
         libDir = CurrOS.GetLibDir()
@@ -70,17 +93,4 @@ class ProvisionHandler(object):
     def deploySshKeyPairs(self):
         for thumbprint, path in self.ovfenv.getSshKeyPairs():
             CurrOS.DeploySshKeyPair(self.ovfenv.getUserName(), thumbprint, path)
-
-    def setHostName(self):
-        pass
-
-    def createUserAccount(self, userName, password):
-        if userName is None:
-            raise Exception("User name is empty.")
-        if CurrOS.IsSysUser(userName):
-            raise Exception("User:{0} is a system user.".format(userName))
-        CurrOS.UpdateUserAccount(userName, password)
-
-    def deleteRootPassword(self):
-        CurrOS.DeleteRootPassword()
-
+   

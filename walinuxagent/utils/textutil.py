@@ -151,3 +151,31 @@ def Ascii(val):
         return '<Unsupported charset>'
     else:
         return uni.encode('ascii', 'backslashreplace')
+
+
+def HexStringToByteArray(a):
+    """
+    Return hex string packed into a binary struct.
+    """
+    b = b""
+    for c in range(0, len(a) // 2):
+        b += struct.pack("B", int(a[c * 2:c * 2 + 2], 16))
+    return b
+
+def SetSshConfig(config, name, val):
+    notfound = True
+    for i in range(0, len(config)):
+        if config[i].startswith(name):
+            config[i] = "{0} {1}".format(name, val)
+            notfound = False
+        elif config[i].startswith("Match"):
+            #Match block must be put in the end of sshd config
+            break
+    if notfound:
+        config.insert(i, "{0} {1}".format(name, val))
+    return config
+
+def RemoveBom(c):
+    if ord(c[0]) > 128 and ord(c[1]) > 128 and ord(c[2] > 128):
+        c = c[3:]
+    return c

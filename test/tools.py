@@ -56,9 +56,6 @@ class MockFunc():
 def Dummy():
     pass
 
-def MockGetMacAddress():
-    return "\x00\x15\x5D\x38\xAA\x38"
-
 def MockIsDhcpEnabled():
     return True
 
@@ -67,8 +64,8 @@ def MockGetLibDir():
 
 #Mock CurrOS so that the test of other part will be os unrelated
 CurrOS.GetLibDir = MockGetLibDir
-CurrOS.GetMacAddress = MockGetMacAddress
-CurrOS.IsDhcpEnabled = MockIsDhcpEnabled
+
+CurrOS.IsDhcpEnabled = MockFunc('IsDhcpEnabled', True)
 CurrOS.OpenPortForDhcp = Dummy
 CurrOS.StartDhcpService = Dummy
 CurrOS.StopDhcpService = Dummy

@@ -23,9 +23,14 @@ import pwd
 import shutil
 import tempfile
 import subprocess
+import socket
+import array
+import struct
+import fcntl
 import walinuxagent.logger as logger
 import walinuxagent.utils.fileutil as fileutil
 import walinuxagent.utils.shellutil as shellutil
+import walinuxagent.utils.textutil as textutil
 
 RulesFiles = [ "/lib/udev/rules.d/75-persistent-net-generator.rules",
                "/etc/udev/rules.d/70-persistent-net.rules" ]
@@ -36,17 +41,37 @@ for all distros. Each concrete distro classes could overwrite default behavior
 if needed.
 """
 class DefaultDistro():
+    def __init__(self):
+        self.libDir = "/var/lib/waagent"
+        self.dvdMountPoint = "/mnt/cdrom/secure"
+        self.ovfenvPathOnDvd = "/mnt/cdrom/secure/ovf-env.xml"
+        self.agentPidPath = "/var/run/waagent.pid"
+        self.passwdPath = "/etc/shadow"
+        self.home = '/home'
+        self.sshdConfigPath = '/etc/ssh/sshd_config'
+        self.opensslCmd = '/user/bin/openssl'
+        self.dhcpClientConfigFile = '/etc/dhcp/dhclient.conf'
+        self.hostnameFile = '/etc/hostname'
+        self.configPath = '/etc/waagent.conf'
+        self.nsConfigPath = '/etc/resolv.conf'
+
     def GetLibDir(self):
-        return "/var/lib/waagent"
+        return self.libDir
 
     def GetDvdMountPoint(self):
-        return "/mnt/cdrom/secure"
+        return self.dvdMountPoint
+
+    def GetConfigurationPath(self):
+        return self.configPath
 
     def GetOvfEnvPathOnDvd(self):
-        return "/mnt/cdrom/secure/ovf-env.xml"
+        return self.ovfenvPathOnDvd
 
     def GetAgentPidPath(self):
-        return '/var/run/waagent.pid'
+        return self.agentPidPath
+
+    def GetNSConfigPath(self):
+        return self.nsConfigPath
 
     def UpdateUserAccount(self, userName, password, expiration=None):
         """
@@ -118,23 +143,26 @@ class DefaultDistro():
             sudoer = "{0} ALL = (ALL) NOPASSWD\n".format(userName)
         else:
             sudoer = "{0} ALL = (ALL) ALL\n".format(userName)
-        fileutil.SetFileContents('/etc/sudoers.d/waagent', sudoer)
+        fileutil.SetFileContents('/etc/sudoers.d/waagent', sudoer, append=True)
         os.chmod('/etc/sudoers.d/waagent', 0440)
-  
+
     def DeleteRootPassword(self):
-        pass
+        passwd = fileutil.GetFileContents(self.passwdPath).split("\n")
+        newPasswd = filter(lambda x : not x.startswith("root:"), passwd)
+        newPasswd.insert(0, "root:*LOCK*:14600::::::")
+        fileutil.ReplaceFileContentsAtomic(self.passwdPath, "\n".join(newPasswd))
 
     def GetHome(self):
-        return '/home'
+        return self.home
     
     def GetPubKeyFromPrv(self, fileName):
-        cmd = "{0} rsa -in {1} -pubout 2>/dev/null".format(self.GetOpensslCmd(),
+        cmd = "{0} rsa -in {1} -pubout 2>/dev/null".format(self.opensslCmd,
                                                            fileName)
         pub = shellutil.RunGetOutput(cmd)[1]
         return pub
 
     def GetPubKeyFromCrt(self, fileName):
-        cmd = "{0} x509 -in {1} -pubkey -noout".format(self.GetOpensslCmd(), 
+        cmd = "{0} x509 -in {1} -pubkey -noout".format(self.opensslCmd, 
                                                        fileName)
         pub = shellutil.RunGetOutput(cmd)[1]
         return pub
@@ -145,7 +173,7 @@ class DefaultDistro():
         path = os.path.normpath(filepath.replace("$HOME", home))
         
     def GetThumbprintFromCrt(self, fileName):
-        cmd="{0} x509 -in {1} -fingerprint -noout".format(self.GetOpensslCmd(), 
+        cmd="{0} x509 -in {1} -fingerprint -noout".format(self.opensslCmd, 
                                                             fileName)
         thumbprint = shellutil.RunGetOutput(cmd)[1]
         thumbprint = thumbprint.rstrip().split('=')[1].replace(':', '').upper()
@@ -190,6 +218,7 @@ class DefaultDistro():
         pub = self.GetPubKeyFromCrt(crtPath)
         fileutil.SetFileContents(pubPath, pub)
         self.SetSelinuxContext(pubPath, 'unconfined_u:object_r:ssh_home_t:s')
+        #TODO some distros doesn't support PKCS8. Need to figure out.
         shellutil.Run("ssh-keygen -i -m PKCS8 -f {0} >> {1}", thumbprint, path)
         self.SetSelinuxContext(path, 'unconfined_u:object_r:ssh_home_t:s')
         os.chmod(path, 0600)
@@ -234,42 +263,36 @@ class DefaultDistro():
         if self.IsSelinuxSystem():
             return shellutil.Run('chcon ' + cn + ' ' + path)
     
-    def GetSshdConfigPath(self):
-        return "/etc/ssh/sshd_config"
-    
     def ConfigSshd(self, disablePassword):
-        if not disablePassword:
-            return
-        configPath = self.GetSshdConfigPath()
+        option = "no" if disablePassword else "yes"
+        configPath = self.sshdConfigPath
         config = fileutil.GetFileContents(configPath).split("\n")
-        passwordAuthFound = False
-        challengeAuthFound = False
-        for i in range(0, len(config)):
-            if config[i].startswith("PasswordAuthentication"):
-                passwordAuthFound = True
-                config[i] = "PasswordAuthentication no"
-            elif config[i].startswith("ChallengeResponseAuthentication"):
-                challengeAuthFound = True
-                config[i] = "ChallengeResponseAuthentication no"
-            elif config[i].startswith("Match"):
-                #Match block must be put in the end of sshd config
-                break
-
-        if not passwordAuthFound:
-            config.insert(i, "PasswordAuthentication no")
-        if not challengeAuthFound:
-            config.insert(i, "ChallengeResponseAuthentication no")
-
-        logger.Info("Disabled SSH password-based authentication methods.")
+        textutil.SetSshConfig(config, "PasswordAuthentication", option)
+        textutil.SetSshConfig(config, "ChallengeResponseAuthentication", option)
         fileutil.ReplaceFileContentsAtomic(configPath, "\n".join(config))
+        logger.Info("Disabled SSH password-based authentication methods.")
 
     def RegenerateSshHostkey(self, keyPairType):
         shellutil.Run("rm -f /etc/ssh/ssh_host_*key*")
         shellutil.Run("ssh-keygen -N '' -t {0} -f /etc/ssh/ssh_host_{1}_key"
                 .format(keyPairType, keyPairType))
 
-    def GetOpensslCmd(self):
-        return '/usr/bin/openssl'
+    def GetSshHostKeyThumbprint(self, keyPairType):
+        cmd = ""
+        ret = shellutil.RunGetOutput(cmd)
+        if ret[0] == 0:
+            return ret[1].rstrip().split()[1].replace(':', '')
+        else:
+            return None
+
+    def WaitForSshHostKey(keyPairType, maxRetry=6):
+        path = '/etc/ssh/ssh_host_{0}_key'.format(keyPairType)
+        for retry in range(0, maxRetry)
+            if os.path.isfile(path):
+                return
+            logger.Info("Wait for ssh host key be generated.")
+            time.sleep(1)
+        raise Exception("Can't find ssh host key.")
 
     def GetDvdDevice(self, devDir='/dev'):
         patten=r'(sr[0-9]|hd[c-z]|cdrom[0-9]|cd[0-9]?)'
@@ -279,13 +302,17 @@ class DefaultDistro():
         return None
 
     def MountDvd(self, maxRetry=6):
-        dvd = CurrentDistro.getDvdDevice()
-        mountPoint = CurrentDistro.getDvdMountPoint()
-        #Why do we need to load atapiix?
-        #TODO load atapiix
+        dvd = self.GetDvdDevice()
+        mountPoint = self.GetDvdMountPoint()
+        #TODO Why do we need to load atapiix?
+        self.LoadAtapiixModule()
+        mountlist = shellutil.RunGetOutput("mount")[1]
+        existing = GetMountPoint(mountlist, dvd)
+        if existing is not None: #Already mounted
+            return
         if not os.path.exits(mountPoint):
             os.makedirs(mountPoint)
-        CurrentDistro.mountDvd(dvd, mountPoint)
+        self.Mount(dvd, mountPoint)
         for retry in range(0, maxRetry):
             if retcode == 0:
                 logger.Info("Successfully mounted provision dvd")
@@ -295,12 +322,39 @@ class DefaultDistro():
                             retry, 
                             retcode)
             time.sleep(5)
-            CurrentDistro.mount(dvd, mountPoint)
+            self.Mount(dvd, mountPoint)
         raise Exception("Failed to mount provision dvd")
 
     def UmountDvd(self):
-        mountPoint = CurrentDistro.getDvdMountPoint()
-        self.umount(mountPoint)
+        mountPoint = self.getDvdMountPoint()
+        self.Umount(mountPoint)
+
+    def LoadAtapiixModule(self):
+        if self.IsAtaPiixModuleLoaded():
+            return
+        ret, kernVersion = shellutil.RunGetOutput("uname -r")
+        if ret != 0:
+            raise Exception("Failed to call uname -r")
+        modulePath = os.path.join('/lib/modules', 
+                                  kernVersion.strip('\n'),
+                                  'kernel/drivers/ata/ata_piix.ko')
+        if not os.path.isfile(modulePath):
+            raise Exception("Can't find module file:{0}".format(modulePath))
+
+        ret, output = shellutil.RunGetOutput("insmod " + modulePath)
+        if ret != 0:
+            raise Exception("Error calling insmod for ATAPI CD-ROM driver")
+        if not self.IsAtaPiixModuleLoaded(maxRetry=3):
+            raise Exception("Failed to load ATAPI CD-ROM driver") 
+
+    def IsAtaPiixModuleLoaded(self, maxRetry=1):
+        for retry in range(0, maxRetry):
+            ret = shellutil.Run("lsmod | grep ata_piix", chk_err=False)
+            if ret == 0:
+                logger.Info("Module driver for ATAPI CD-ROM is already present.")
+                return True
+            time.sleep(1)
+        return False
  
     def Mount(self, dvd, mountPoint):
         return RunGetOutput("mount {0} {1}".format(dvd, mountPoint))
@@ -311,17 +365,18 @@ class DefaultDistro():
     def OpenPortForDhcp():
         #Open DHCP port if iptables is enabled.
         # We supress error logging on error.
-        Run("iptables -D INPUT -p udp --dport 68 -j ACCEPT",chk_err=False)      
-        Run("iptables -I INPUT -p udp --dport 68 -j ACCEPT",chk_err=False)
+        shellutill.Run("iptables -D INPUT -p udp --dport 68 -j ACCEPT",
+                       chk_err=False)      
+        shellutill.Run("iptables -I INPUT -p udp --dport 68 -j ACCEPT",
+                       chk_err=False)
 
     def GenerateTransportCert():
         """
         Create ssl certificate for https communication with endpoint server.
         """
-        opensslCmd = GetOpensslCmd()
         cmd = ("{0} req -x509 -nodes -subj /CN=LinuxTransport -days 32768 "
                "-newkey rsa:2048 -keyout TransportPrivate.pem "
-               "-out TransportCert.pem").format(opensslCmd)
+               "-out TransportCert.pem").format(self.opensslCmd)
         shellutil.Run(cmd)
 
     def RemoveRulesFiles(self, rulesFiles=RulesFiles):
@@ -350,56 +405,268 @@ class DefaultDistro():
         pass
 
     def GetMacAddress(self):
-        pass
+        """
+        Convienience function, returns mac addr bound to
+        first non-loobback interface.
+        """
+        ifname=''
+        while len(ifname) < 2 :
+            ifname=self.GetFirstActiveNetworkInterfaceNonLoopback()[0]
+        addr = self.GetInterfaceMac(ifname)        
+        return textutil.HexStringToByteArray(addr)
 
-    def SetBroadcastRouteForDhcp(self):
-        pass
+    def GetInterfaceMac(self, ifname):
+        """
+        Return the mac-address bound to the socket.
+        """
+        sock = socket.socket(socket.AF_INET, 
+                             socket.SOCK_DGRAM, 
+                             socket.IPPROTO_UDP)
+        param = struct.pack('256s', (ifname[:15]+('\0'*241)).encode('latin-1'))
+        info = fcntl.ioctl(sock.fileno(), 0x8927, param)
+        return ''.join(['%02X' % Ord(char) for char in info[18:24]])
 
-    def RemoveBroadcastRouteForDhcp(self):
-        pass
+    def GetFirstActiveNetworkInterfaceNonLoopback(self):
+        """
+        Return the interface name, and ip addr of the
+        first active non-loopback interface.
+        """
+        iface=''
+        expected=16 # how many devices should I expect...
+        struct_size=40 # for 64bit the size is 40 bytes
+        sock = socket.socket(socket.AF_INET, 
+                             socket.SOCK_DGRAM, 
+                             socket.IPPROTO_UDP)
+        buff=array.array('B', b'\0' * (expected * struct_size))
+        param = struct.pack('iL', 
+                            expected*struct_size, 
+                            buff.buffer_info()[0])
+        ret = fcntl.ioctl(sock.fileno(), 0x8912, param)
+        retsize=(struct.unpack('iL', ret)[0])
+        if retsize == (expected * struct_size):
+            logger.Warn(('SIOCGIFCONF returned more than {0} up '
+                         'network interfaces.'), expected)
+        sock = buff.tostring()
+        for i in range(0, struct_size * expected, struct_size):
+            iface=sock[i:i+16].split(b'\0', 1)[0]
+            if iface == b'lo':
+                continue
+            else:
+                break
+        return iface.decode('latin-1'), socket.inet_ntoa(sock[i+20:i+24])
+
+    def IsMissingDefaultRoute(self):
+        routes = shellutil.RunGetOutput("route -n")[1]
+        for route in routes:
+            if route.startswith("0.0.0.0 ") or route.startswith("default "):
+               return False 
+        return True
+
+    def GetInterfaceName(self):
+        return self.GetFirstActiveNetworkInterfaceNonLoopback()[0]
+    
+    def SetBroadcastRouteForDhcp(self, ifname):
+        return shellutil.Run("route add 255.255.255.255 dev {0}".format(ifname)
+                             chk_err=False)
+
+    def RemoveBroadcastRouteForDhcp(self, ifname):
+        shellutil.Run("route del 255.255.255.255 dev {0}".format(ifname), 
+                      chk_err=False)
 
     def IsDhcpEnabled(self):
         return False
 
     def StopDhcpService(self):
-        pass
+        raise NotImplementedError('StopDhcpService method missing')
 
     def StartDhcpService(self):
-        pass
+        raise NotImplementedError('StartDhcpService method missing')
 
     def StartNetwork(self):
-        pass
+        return shellutil.Run("service networking start", chk_err=False)
 
     def RegisterAgentService(self):
-        pass
+        raise NotImplementedError('RegisterAgentService method missing')
 
     def UnregisterAgentService(self):
-        pass
+        raise NotImplementedError('UnregisterAgentService method missing')
+    
+    def StopAgentService(self):
+        raise NotImplementedError('StopAgentService method missing')
 
     def SetSshClientAliveInterval(self):
-        filepath = "/etc/ssh/sshd_config"
-        options = filter(lambda opt: not opt.startswith("ClientAliveInterval"), 
-                        GetFileContents(filepath).split('\n'))
-        options.append("ClientAliveInterval 180")
-        fileutil.ReplaceFileContentsAtomic(filepath, '\n'.join(options))
+        configPath = self.GetSshdConfigPath()
+        config = fileutil.GetFileContents(configPath).split("\n")
+        textutil.SetSshConfig(config, "ClientAliveInterval", "180")
+        fileutil.ReplaceFileContentsAtomic(filepath, '\n'.join(config))
         logger.Info("Configured SSH client probing to keep connections alive.")
    
-    def GetRestartSshServiceCmd(self):
-        return "service sshd restart"
-
     def RestartSshService(self):
-        cmd = self.GetRestartSshServiceCmd()
-        retcode = shellutil.Run(cmd)
-        if retcode > 0:
-            logger.Error("Failed to restart SSH service with return code:{0}",
-                         retcode)
-        return retcode
+        return shellutil.Run("service sshd restart", chk_err=False)
     
+    def RouteAdd(self, net, mask, gateway):
+        """
+        Add specified route using /sbin/route add -net.
+        """
+        cmd = "/sbin/route add -net {0} netmask {1} gw {2}".format(net, 
+                                                                   mask, 
+                                                                   gateway)
+        return shellutil.Run(cmd, chk_err=False)
+
+    def GetDhcpProcessId(self):
+        ret= shellutil.RunGetOutput("pidof dhclient")
+        if ret[0] == 0:
+            return ret[1]
+        else:
+            return None
+
+    def SetHostname(self, hostname):
+        fileutil.SetFileContents(self.hostnameFile, hostname)
+        shellutil.Run("hostname {0}".format(hostname), chk_err=False)
+
+    def ConfigDhcpSendHostName(self, hostname):
+        pass
+
+    def RestartInterface(self, ifname):
+        shellutil.Run("ifdown {0} && ifup {1}".format(ifname, ifname))
+
+    def StartNetwork(self):
+        shellutil.Run("service networking start")
+
+    def PublishHostname(self, hostname):
+        self.ConfigDhcpSendHostName(hostname)
+        ifname = self.GetInterfaceName()
+        self.RestartInterface(ifname)
+
+    def SetScsiDiskTimeout(self, timeout):
+        for dev in os.listdir("/sys/block"):
+            if dev.startswith('sd'):
+                self.SetBlockDeviceTimeout(dev, timeout)
+
+    def SetBlockDeviceTimeout(self, dev, timeout):
+        if dev is not None and timeout is not None:
+            filePath = "/sys/block/{0}/device/timeout".format(dev)
+            original = fileutil.GetFileContents(filePath).splitlines()[0].rstrip()
+            if original != timeout:
+                fileutil.SetFileContents(filePath, timeout)
+                logger.Info("Set block dev timeout: {0} with timeout: {1}",
+                            dev,
+                            timeout)
+
+    def MountResourceDisk(self, mountpoint, fs):
+        device = self.DeviceForIdePort(1)
+        if device is None:
+            logger.Error("Activate resource disk failed: "
+                         "unable to detect disk topology")
+            return None
+        device = "/dev/" + device
+        mountlist = shellutil.RunGetOutput("mount")[1]
+        existing = GetMountPoint(mountlist, device)
+        if(existing):
+            logger.Info("Resource disk {0} is already mounted", device)
+            return existing
+
+        fileutil.CreateDir(mountpoint, "root", 0755)  
+        output = shellutil.RunGetOutput("sfdisk -q -c {0} 1".format(device))
+        if output[1].rstrip == 7 and fs != "ntfs":
+            shellutil.Run("sfdisk -c {0} 1 83".format(device))
+            shellutil.Run("mkfsk.{0} {1}1".format(fs, device))
+        ret = shellutil.Run("mount {0}1 {1}".format(device, mountpoint))
+        if ret:
+            logger.Error("Failed to mount resource disk ({0})".format(device))
+            return None
+        else:
+            logger.Info(("Resource disk ({0}) is mounted at {1} "
+                         "with fstype {2}").format(device, mountpoint, fs))
+            return mountpoint
+
+    def DeviceForIdePort(self, n):
+        """
+        Return device name attached to ide port 'n'.
+        """
+        if n > 3:
+            return None
+        g0 = "00000000"
+        if n > 1:
+            g0 = "00000001"
+            n = n - 2
+        device = None
+        path = "/sys/bus/vmbus/devices/"
+        for vmbus in os.listdir(path):
+            deviceid = fileutil.GetFileContents(os.path.join(path, 
+                                                             vmbus, 
+                                                             "device_id"))
+            guid = deviceid.lstrip('{').split('-')
+            if guid[0] == g0 and guid[1] == "000" + str(n):
+                for root, dirs, files in os.walk(path + vmbus):
+                    if root.endswith("/block"):
+                        device = dirs[0]
+                        break
+                    else : #older distros
+                        for d in dirs:
+                            if ':' in d and "block" == d.split(':')[0]:
+                                device = d.split(':')[1]
+                                break
+                break
+        return device
+
+
+    def CreateSwapSpace(self, mountpoint, sizeMB):
+        sizeKB = sizeMB * 1024
+        size = sizeKB * 1024
+        swapfile = os.path.join(mountpoint, 'swapfile')
+        if os.path.isfile(swapfile) and os.path.getsize(swapfile) != size:
+            os.remove(swapfile)
+        if not os.path.isfile(swapfile):
+            shellutil.Run(("dd if=/dev/zero of={0} bs=1024 "
+                           "count={1}").format(swapfile, sizeKB))
+            shellutil.Run("mkswap {0}".format(swapfile))
+        if shellutil.Run("swapon {0}".format(swapfile)):
+            logger.Error("Failed to activate swap at: {0}".format(swapfile))
+        else:
+            logger.Info("Enabled {0}KB of swap at {1}".format(sizeKB, swapfile))
+
+    def DeleteAccount(self, userName):
+        if self.IsSysUser(userName):
+            logger.Error("{0} is a system user. Will not delete it.", userName)
+        shellutil.Run("> /var/run/utmp")
+        shellutil.Run("userdel -f -r " + userName)
+        #Remove user from suders
+        sudoers = fileutil.GetFileContents("/etc/sudoers.d/waagent").split()
+        sudoers = filter(lambda x : userName not in x, sudoers)
+        fileutil.SetFileContents("/etc/sudoers.d/waagent". "\n".join(sudoers))
+
+    def OnDeprovisionStart(self):
+        print("WARNING! Nameserver configuration in "
+              "/etc/resolv.conf will be deleted.")
+
+    def OnDeprovision(self):
+        """
+        Distro specific clean up work during deprovision
+        """
+        fileutil.RemoveFiles('/etc/resolv.conf')
+
 class DebianDistro(DefaultDistro):
-    pass
+    def ConfigDhcpSendHostName(self, hostname):
+        config = fileutil.GetFileContents(self.dhcpClientConfigFile).split("\n")
+        config = filter(lambda x : x.startswith("send host-name"))
+        config.append("send host-name", hostname)
+        fileutil.ReplaceFileContentsAtomic(self.dhcpClientConfigFile,
+                                           "\n".join(config))
 
 class UbuntuDistro(DefaultDistro):
-    pass
+    def OnDeprovisionStart(self):
+        print("WARNING! Nameserver configuration in "
+              "/etc/resolvconf/resolv.conf.d/{tail,originial} will be deleted.")
+
+    def OnDeprovision(self):
+        if os.path.realpath('/etc/resolv.conf') != '/run/resolvconf/resolv.conf':
+            logger.Info("resolvconf is not configured. Removing /etc/resolv.conf")
+            fileutil.RemoveFiles('/etc/resolv.conf')
+        else:
+            logger.Info("resolvconf is enabled; leaving /etc/resolv.conf intact")
+            fileutil.RemoveFiles('/etc/resolvconf/resolv.conf.d/tail',
+                                 '/etc/resolvconf/resolv.conf.d/originial')
 
 class RedHatDistro(DefaultDistro):
     pass
@@ -411,11 +678,37 @@ class CoreOSDistro(DefaultDistro):
     def IsSysUser(self, userName):
        return super(CoreOSDistro, self).isSysUser(userName)
 
+    def IsDhcpEnabled(self):
+        return True
+
+    def StopDhcpService(self):
+        shellutil.Run("systemctl systemd-networkd stop", chk_err=False)
+
+    def StartDhcpService(self):
+        shellutil.Run("systemctl systemd-networkd start", chk_err=False)
+
 class GentooDistro(DefaultDistro):
     pass
 
 class SUSEDistro(DefaultDistro):
-    pass
+    def IsDhcpEnabled(self):
+        return True
+
+    def StopDhcpService(self):
+        shellutil.Run("service wickedd-dhcp4 stop", chk_err=False)
+
+    def StartDhcpService(self):
+        shellutil.Run("service wickedd-dhcp4 start", chk_err=False)
+
+class FreeBSDDistro(DefaultDistro):
+    def __init__(self):
+        self.scsiConfigured = False
+
+    def SetScsiDiskTimeout(self, timeout):
+        if scsiConfigured:
+            return
+        shellutil.Run("sysctl kern.cam.da.default_timeout=" + timeout)
+        self.scsiConfigured = True
 
 def GetDistroInfo():
     if 'FreeBSD' in platform.system():
@@ -449,6 +742,8 @@ def GetDistro(distroInfo):
         return CoreOSDistro()
     elif name == 'suse':
         return SUSEDistro()
+    elif name == 'freebsd':
+        return FreeBSDDistro()
     else:
         return DefaultDistro()
 

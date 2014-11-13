@@ -25,8 +25,11 @@ LogFilePath = '/var/log/waagent.log'
 ConsoleFilePath = '/dev/console'
 
 class Logger(object):
-    def __init__(self):
-        self.appenders = []
+    def __init__(self, logger):
+        if logger is None:
+            self.appenders = []
+        else:
+            self.appenders = logger.appenders
 
     def verbose(self, msg_format, *args):
         self.log("VERBOSE", msg_format, *args)
@@ -88,14 +91,15 @@ class FileAppender():
                 log_file.close()
 
 #Initialize logger instance
-__logger = Logger()
+DefaultLogger = Logger()
 __log_level = {"VERBOSE" : 0, "INFO": 1, "WARNING": 2, "ERROR" : 3}        
 
 def _MatchLogLevel(expected, actual):
     return __log_level[actual] >= __log_level[expected]
 
 
-def LoggerInit(log_file_path, log_console_path, Verbose=False, logger=__logger):
+def LoggerInit(log_file_path, log_console_path, 
+               Verbose=False, logger=DefaultLogger):
     if log_file_path:
         file_appender_config = AppenderConfig({
             "type":"FILE", 
@@ -117,22 +121,22 @@ def LoggerInit(log_file_path, log_console_path, Verbose=False, logger=__logger):
         logger.addLoggerAppender(console_appender_config)
 
 def AddLoggerAppender(appender_config):
-    __logger.addLoggerAppender(appender_config)
+    DefaultLogger.addLoggerAppender(appender_config)
 
 def Verbose(msg_format, *args):
-    __logger.verbose(msg_format, *args)
+    DefaultLogger.verbose(msg_format, *args)
 
 def Info(msg_format, *args):
-    __logger.info(msg_format, *args)
+    DefaultLogger.info(msg_format, *args)
 
 def Warn(msg_format, *args):
-    __logger.warn(msg_format, *args)
+    DefaultLogger.warn(msg_format, *args)
 
 def Error(msg_format, *args):
-    __logger.error(msg_format, *args)
+    DefaultLogger.error(msg_format, *args)
 
 def Log(level, msg_format, *args):
-    __logger.log(level, msg_format, args)
+    DefaultLogger.log(level, msg_format, args)
 
 def CreateLoggerAppender(appender_config):
     if appender_config.properties['type'] == 'CONSOLE' :

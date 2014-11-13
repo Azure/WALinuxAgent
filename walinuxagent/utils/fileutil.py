@@ -23,6 +23,7 @@ import shutil
 import tempfile
 import subprocess
 import walinuxagent.logger as logger
+import walinuxagent.utils.textutil as textutil
 
 """
 File operation util functions
@@ -37,20 +38,21 @@ def GetFileContents(filepath, asbin=False, removeBom=False):
     try:
         with open(filepath, mode) as F :
             c=F.read()
-        if removeBom and ord(c[0]) > 128 and ord(c[1]) > 128 and ord(c[2] > 128):
-            c = c[3:]
+        if (not asbin) and removeBom:
+            c = textutil.RemoveBom(c)
         return c
     except IOError, e:
         logger.Error('Reading from file {0} Exception is {1}', filepath, e)
         return None        
 
-def SetFileContents(filepath, contents):
+def SetFileContents(filepath, contents, append=False):
     """
     Write 'contents' to 'filepath'.
     """
-    if type(contents) == str :
-        contents=contents.encode('latin-1', 'ignore')
+    mode = "ab+" if append else "wb+"
     try:
+        if type(contents) == str :
+            contents=contents.encode('latin-1', 'ignore')
         with open(filepath, "wb+") as F :
             F.write(contents)
     except IOError, e:
@@ -128,3 +130,20 @@ def ChangeOwner(path, owner):
     ownerInfo = pwd.getpwnam(owner)
     os.chown(path, ownerInfo[2], ownerInfo[3])   
 
+def RemoveFiles(*args, **kwargs):
+    for path in args:
+        if os.path.isfile(path):
+            os.remove(path)
+
+def CleanupDirs(*args, **kwargs):
+    """
+    Remove all the contents under the directry
+    """
+    for dirName in args:
+        if os.path.isdirectory(dirName):
+            for item in os.listdir(dirName):
+                path = os.path.join(dirName, item)
+                if os.path.isfile(path):
+                    os.remove(path)
+                elif os.path.isdirectory(path):
+                    shutil.rmtree(path)

@@ -45,6 +45,7 @@ CertificatesJsonFile = "Certificates.json"
 P7MFile="Certificates.p7m"
 PEMFile="Certificates.pem"
 ExtensionsFile = "ExtensionsConfig.{0}.xml"
+ManifestFile="{0}.{1}.manifest"
 TransportCertFile = "TransportCert.pem"
 TransportPrivateFile = "TransportPrivate.pem"
 
@@ -139,6 +140,23 @@ class ProtocolV1(Protocol):
         extensionsFile = ExtensionsFile.format(self.incarnation)
         fileutil.SetFileContents(extensionsFile, extentionsXml)
 
+        for ext in self.extentions.getExtensions():
+            manifestUris = self.extentions.getManifestUris(ext.getName())
+            for uri in manifestUris:
+                try:
+                    manifestXml = restutil.HttpGet(uri)
+                    manifestXml = textutil.RemoveBom(manifestXml)
+                    manifestFile = ManifestFile.format(ext.getName, 
+                                                       self.incarnation)
+                    fileutil.SetFileContents(manifestFile, manifestXml)
+                    ExtensionManifest(manifestXml).update(ext)
+                    break
+                except Exception, e:
+                    #Download manifest failed, will retry with failover location
+                    logger.Warn("Download manifest for {0} failed: uri={1}",
+                                ext.getName(),
+                                uri)
+
         fileutil.SetFileContents(IncarnationFile, str(self.incarnation))
 
     def loadFromCache(self):
@@ -182,8 +200,8 @@ class ProtocolV1(Protocol):
     def getExtensions(self):
         return self.extensions.getExtensions()
 
-    def reportProvisionStatus(self, status=None, subStatus=None, 
-                              description=None, thumbprint=None):
+    def reportProvisionStatus(self, status=None, subStatus="", 
+                              description="", thumbprint=None):
         if status is not None:
             healthReport = self._buildHealthReport(status, 
                                                    subStatus, 
@@ -197,7 +215,7 @@ class ProtocolV1(Protocol):
             ret = restutil.HttpPost(rolePropUri, roleProp)
 
     def _buildRoleProperties(self, thumbprint):
-        return ("<?xml version=\"1.0\" encoding=\"utf-8\"?>"
+        return (u"<?xml version=\"1.0\" encoding=\"utf-8\"?>"
                 "<RoleProperties>"
                 "<Container>"
                 "<ContainerId>{0}</ContainerId>"
@@ -216,8 +234,10 @@ class ProtocolV1(Protocol):
                            thumbprint)
 
     def _buildHealthReport(self, status, subStatus, description):
-        return ("<?xml version=\"1.0\" encoding=\"utf-8\"?>"
-                "<Health xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\""                " xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\">"
+        return (u"<?xml version=\"1.0\" encoding=\"utf-8\"?>"
+                "<Health"
+                    "xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\""
+                " xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\">"
                 "<GoalStateIncarnation>{0}</GoalStateIncarnation>"
                 "<Container>"
                 "<ContainerId>{1}</ContainerId>"
@@ -285,7 +305,7 @@ class ProtocolV1(Protocol):
                 except Exception, e:
                     logger.Error("Failed to parse extension status file: {0}", e)
             
-            handlerStatus = None
+            handlerStatus = "NotReady"
             handlerCode = None
             handlerMessage = None
             handlerFormattedMessage = None
@@ -609,11 +629,15 @@ class ExtensionsConfig(object):
         """
         Reset members.
         """
-        self.extensions = None
+        self.extensions = []
+        self.manifestUris = {}
         self.statusUploadBlob = None
     
     def getExtensions(self):
         return self.extensions
+
+    def getManifest(self, name):
+        return self.manifests[name]
 
     def getStatusUploadBlob(self):
         return self.statusUploadBlob
@@ -628,7 +652,6 @@ class ExtensionsConfig(object):
         extensions = FindAllNodes(xmlDoc, ".//Plugins/Plugin")      
         settings = FindAllNodes(xmlDoc, ".//PluginSettings/Plugin")
         
-        data = []
         for extension in extensions:
             ext = {}
             properties = {}
@@ -657,7 +680,7 @@ class ExtensionsConfig(object):
 
             ext["name"] = name
             properties["version"] = version
-            properties["versionUris"] = [location, failoverLocation]
+            properties["versionUris"] = []
             properties["upgrade-policy"] = upgradePolicy
             properties["state"] = state
             handlerSettings["sequenceNumber"] = seqNo
@@ -668,9 +691,29 @@ class ExtensionsConfig(object):
             runtimeSettings["handlerSettings"] = handlerSettings
             properties["runtimeSettings"] = runtimeSettings
             ext["properties"] = properties
-            data.append(ExtensionInfo(ext))
+            self.data.append(ExtensionInfo(ext))
+            self.manifestUris[name] = (location, failoverlocation)
         self.extensions = data 
         self.statusUploadBlob = (FindFirstNode(xmlDoc,"StatusUploadBlob")).text
         return self
 
+class ExtensionManifest(object):
+    def __init__(self, xmlText):
+        self.xmlText = xmlText
+        self.parse(xmlText)
+
+    def parse(self, xmlText):
+        logger.Verbose("Extension manifest:{0}", xmlText)
+        xmlDoc = ET.fromstring(xmlText.strip())
+        packages = FindAllNodes(xmlDoc, ".//Plugins/Plugin")
+        for package in packages:
+            version = FindFirstNode(package, "Version").text
+            uris = filter(lambda x : x.text, FindAllNodes(package, "Uri"))
+            versionUris = {
+                "version":version,
+                "uris":uris
+            }
+
+    def update(self, ext):
+        ext.data["properties"]["versionUris"] = versionUris
 

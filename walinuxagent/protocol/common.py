@@ -51,32 +51,49 @@ class CertInfo():
 class ExtensionInfo():
     def __init__(self, data):
         self.data = data
-        self.baseDir = "{0}-{0}/".format(self.getName(), self.getVersion())
-        self.statusFile = "{0}/status/{1}.status".format(self.baseDir,
-                                                         self.getSeqNo())
-        self.handlerStateFile = os.path.join(self.baseDir, 
-                                             'config',
-                                             'HandlerState')
-        self.heartbeatFile = os.path.join(self.baseDir, 'heartbeat.log')
-    def getPluginBaseDir(self):
+        libDir = CurrOS.GetLibDir()
+        baseDirName = "{0}-{1}".format(self.getName(), self.getVersion())
+        self.baseDir = os.path.join(libDir, baseDirName) 
+
+    def getBaseDir(self):
         return self.baseDir
 
+    def getStatusDir(self):
+        return  os.path.join(self.baseDir, "status")
+
     def getStatusFile(self):
-        return self.statusFile
+        return os.path.join(self.getStatusDir(), 
+                            "{0}.status".format(self.getSeqNo())
+
+    def getConfigDir(self):
+        return os.path.join(self.baseDir, 'config')
+
+    def getSettingsFile(self):
+        return os.path.join(self.getConfigDir(), 
+                            "{0}.settings".format(self.getSeqNo()))
 
     def getHandlerStateFile(self):
-        return self.handlerStateFile
+        return os.path.join(self.getConfigDir(), 'HandlerState')
 
     def getHeartbeatFile(self):
-        return self.heartbeatFile
+        return os.path.join(self.baseDir, 'heartbeat.log')
 
+    def getManifestFile(self):
+        return os.path.join(self.baseDir, 'HandlerManifest.json')
+
+    def getEnvironmentFile(self):
+        return os.path.join(self.baseDir, 'HandlerEnvironment.json')
+
+    def getLogDir(self):
+        return os.path.join('/var/log/azure',self.getName(), self.getVersion())
+    
     def getName(self):
         return self.data["name"]
 
     def getVersion(self):
         return self.data["properties"]["version"]
 
-    def getDownloadUri(self):
+    def getVersionUris(self):
         return self.data["properties"]["versionUris"]
 
     def getUpgradePolicy(self):
@@ -100,7 +117,39 @@ class ExtensionInfo():
     def getCertificateThumbprint(self):
         settings = self.data["properties"]["runtimeSettings"]["handlerSettings"]
         return settings["certificateThumbprint"]
-    
+
+    def getTargetVersion(self, currVersion):
+        if self.getUpgradePolicy().lower() != 'auto':
+            return self.getVersion()
+        if currVersion is None:
+            currVersion = self.getVersion() 
+        major = currVersion.split('.')[0]
+        if major is None:
+            return self.getVersion()
+
+        versionUris = self.getVersionUris()
+        if major is not None:
+            versionUris = filter(lambda x : x["version"].startswith(major + "."))
+        versionUris.sort(lambda x, y : cmp(x["version"], y["version"]))
+        if len(versionUris) > 0:
+            return versionUris[0]
+        else:
+            raise Exception("Couldn't find correct extension version")
+
+    def getPackageUris(self):
+        versionUris = self.getVersionUris()
+        version = self.getVersion()
+        for versionUri in versionUris:
+            if versionUri.version = version:
+                return versionUri.uris
+        return None
+
+    def copy(self, version):
+        data = copy.deepcopy(self.data)
+        if version is not None:
+            data["properties"]["version"] = version
+        return ExtensionInfo(data)
+
 OvfFileName="ovf-env.xml"
 class OvfEnv(object):
     """
@@ -270,7 +319,7 @@ class Protocol():
     def reportProvisionStatus(self, status, subStatus, description, thumbprint):
         pass
 
-    def reportAgentStatus(self):
+    def reportAgentStatus(self, version, status, message):
         pass
 
     def reportExtensionStatus(self):
