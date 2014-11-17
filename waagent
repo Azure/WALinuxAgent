@@ -178,7 +178,7 @@ class AbstractDistro(object):
         self.init_script_file='/etc/init.d/waagent'
         self.agent_package_name='WALinuxAgent'
         self.fileBlackList = [ "/root/.bash_history", "/var/log/waagent.log",'/etc/resolv.conf' ]        
-        self.agent_files_to_uninstall = ["/etc/waagent.conf", "/etc/logrotate.d/waagent", "/etc/sudoers.d/waagent"]
+        self.agent_files_to_uninstall = ["/etc/waagent.conf", "/etc/logrotate.d/waagent"]
         self.grubKernelBootOptionsFile = '/etc/default/grub'
         self.grubKernelBootOptionsLine = 'GRUB_CMDLINE_LINUX_DEFAULT='
         self.getpidcmd = 'pidof'
@@ -585,7 +585,13 @@ class AbstractDistro(object):
 
     def getConfigurationPath(self):
         return "/etc/waagent.conf"
-
+    
+    def getProcessorCores(self):
+        return int(RunGetOutput("grep 'processor.*:' /proc/cpuinfo |wc -l")[1])
+    
+    def getTotalMemory(self):
+        return int(RunGetOutput("grep MemTotal /proc/meminfo |awk '{print $2}'")[1])/1024
+        
 ############################################################
 #	GentooDistro
 ############################################################
@@ -1648,7 +1654,7 @@ class FreeBSDDistro(AbstractDistro):
         self.init_file=bsd_init_file
         self.agent_package_name='WALinuxAgent'
         self.fileBlackList = [ "/root/.bash_history", "/var/log/waagent.log",'/etc/resolv.conf' ]        
-        self.agent_files_to_uninstall = ["/etc/waagent.conf", "/usr/local/etc/sudoers.d/waagent"]
+        self.agent_files_to_uninstall = ["/etc/waagent.conf"]
         self.grubKernelBootOptionsFile = '/boot/loader.conf'
         self.grubKernelBootOptionsLine = ''
         self.getpidcmd = 'pgrep -n'
@@ -1802,7 +1808,8 @@ class FreeBSDDistro(AbstractDistro):
             pass
         uidmin = None
         try:
-            uidmin = int(GetLineStartingWith("UID_MIN", "/etc/login.defs").split()[1])
+            if os.path.isfile("/etc/login.defs"):
+                uidmin = int(GetLineStartingWith("UID_MIN", "/etc/login.defs").split()[1])
         except:
             pass
         if uidmin == None:
@@ -1869,7 +1876,8 @@ class FreeBSDDistro(AbstractDistro):
             return
         uidmin = None
         try:
-            uidmin = int(GetLineStartingWith("UID_MIN", "/etc/login.defs").split()[1])
+            if os.path.isfile("/etc/login.defs"):
+                uidmin = int(GetLineStartingWith("UID_MIN", "/etc/login.defs").split()[1])
         except:
             pass
         if uidmin == None:
@@ -1980,6 +1988,12 @@ class FreeBSDDistro(AbstractDistro):
     def setBlockDeviceTimeout(self, device, timeout):
         return
 
+    def getProcessorCores(self):
+        return int(RunGetOutput("sysctl hw.ncpu | awk '{print $2}'")[1])
+    
+    def getTotalMemory(self):
+        return int(RunGetOutput("sysctl -a | grep hw.realmem | awk '{print $2}'")[1])/1024
+        
 ############################################################
 # END DISTRO CLASS DEFS
 ############################################################  
@@ -2748,6 +2762,9 @@ class ConfigurationProvider(object):
     """
     def __init__(self):
         self.values = dict()
+        if 'MyDistro' not in globals():
+            global MyDistro
+            MyDistro = GetMyDistro()
         walaConfigFile = MyDistro.getConfigurationPath()
         if os.path.isfile(walaConfigFile) == False:
             raise Exception("Missing configuration in {0}".format(walaConfigFile))
@@ -4433,8 +4450,8 @@ class WALAEventMonitor(WALAEvent):
             try:
                 self.sysInfo["OSVersion"]=platform.system()+":"+"-".join(DistInfo())+":"+platform.release()
                 self.sysInfo["GAVersion"]=GuestAgentVersion
-                self.sysInfo["RAM"]=int(RunGetOutput("grep MemTotal /proc/meminfo |awk '{print $2}'")[1])/1024
-                self.sysInfo["Processors"]=int(RunGetOutput("grep 'processor.*:' /proc/cpuinfo |wc -l")[1])
+                self.sysInfo["RAM"]=MyDistro.getTotalMemory()
+                self.sysInfo["Processors"]=MyDistro.getProcessorCores()
                 sharedConfig = xml.dom.minidom.parse("/var/lib/waagent/SharedConfig.xml").childNodes[0]
                 hostEnvConfig= xml.dom.minidom.parse("/var/lib/waagent/HostingEnvironmentConfig.xml").childNodes[0]
                 gfiles = RunGetOutput("ls -t /var/lib/waagent/GoalState.*.xml")[1]
@@ -5593,6 +5610,9 @@ def main():
     for a in sys.argv[1:]:
         if re.match("^([-/]*)(help|usage|\?)", a):
             sys.exit(Usage())
+        elif re.match("^([-/]*)version", a):
+            print(GuestAgentVersion + " running on " + LinuxDistro)
+            sys.exit(0)
         elif re.match("^([-/]*)verbose", a):
             myLogger.verbose = True
         elif re.match("^([-/]*)force", a):
@@ -5618,9 +5638,6 @@ def main():
             sys.exit(Deprovision(force, False))
         elif re.match("^([-/]*)daemon", a):
             daemon = True
-        elif re.match("^([-/]*)version", a):
-            print(GuestAgentVersion + " running on " + LinuxDistro)
-            sys.exit(0)
         elif re.match("^([-/]*)serialconsole", a):
             AppendToLinuxKernelCmdline("console=ttyS0 earlyprintk=ttyS0")
             Log("Configured kernel to use ttyS0 as the boot console.")
