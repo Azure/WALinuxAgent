@@ -19,12 +19,13 @@
 import os
 import xml.dom.minidom
 import walinuxagent.logger as logger
+from walinuxagent.utils.osutil import CurrOS
 from walinuxagent.utils.textutil import GetNodeTextData
 
 class VmInfo():
     def __init__(self, data):
         self.data = data
-    
+
     def getSubscriptionId(self):
         return self.data["subscriptionId"]
 
@@ -63,14 +64,14 @@ class ExtensionInfo():
 
     def getStatusFile(self):
         return os.path.join(self.getStatusDir(), 
-                            "{0}.status".format(self.getSeqNo())
+                "{0}.status".format(self.getSeqNo()))
 
     def getConfigDir(self):
         return os.path.join(self.baseDir, 'config')
 
     def getSettingsFile(self):
         return os.path.join(self.getConfigDir(), 
-                            "{0}.settings".format(self.getSeqNo()))
+                "{0}.settings".format(self.getSeqNo()))
 
     def getHandlerStateFile(self):
         return os.path.join(self.getConfigDir(), 'HandlerState')
@@ -86,7 +87,7 @@ class ExtensionInfo():
 
     def getLogDir(self):
         return os.path.join('/var/log/azure',self.getName(), self.getVersion())
-    
+
     def getName(self):
         return self.data["name"]
 
@@ -140,7 +141,7 @@ class ExtensionInfo():
         versionUris = self.getVersionUris()
         version = self.getVersion()
         for versionUri in versionUris:
-            if versionUri.version = version:
+            if versionUri.version == version:
                 return versionUri.uris
         return None
 
@@ -182,7 +183,7 @@ class OvfEnv(object):
 
     def getComputerName(self):
         return self.ComputerName
-    
+
     def getUserName(self):
         return self.UserName
 
@@ -191,7 +192,7 @@ class OvfEnv(object):
 
     def clearUserPassword(self):
         self.UserPassword = None
-    
+
     def getCustomData(self):
         return self.CustomData
 
@@ -203,7 +204,7 @@ class OvfEnv(object):
 
     def getSshKeyPairs(self):
         return self.SshKeyPairs
-    
+
     def parse(self, xmlText):
         """
         Parse xml tree, retreiving user and ssh key information.
@@ -231,11 +232,11 @@ class OvfEnv(object):
                     section = p
         if newer == True:
             logger.Warn("Newer provisioning configuration detected. "
-                        "Please consider updating waagent.")
-        if section == None:
-            logger.Error("Could not find ProvisioningSection with "
-                         "major version={0}", self.MajorVersion)
-            return None
+                    "Please consider updating waagent.")
+            if section == None:
+                logger.Error("Could not find ProvisioningSection with "
+                        "major version={0}", self.MajorVersion)
+                return None
         self.ComputerName = GetNodeTextData(section.getElementsByTagNameNS(self.WaNs, "HostName")[0])
         self.UserName = GetNodeTextData(section.getElementsByTagNameNS(self.WaNs, "UserName")[0])
         try:

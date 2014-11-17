@@ -20,6 +20,7 @@
 import platform
 import os
 import shutil
+import pwd
 import tempfile
 import subprocess
 import walinuxagent.logger as logger
@@ -129,6 +130,9 @@ def CreateDir(dirpath, owner, mode):
 def ChangeOwner(path, owner):
     ownerInfo = pwd.getpwnam(owner)
     os.chown(path, ownerInfo[2], ownerInfo[3])   
+
+def ChangeMod(path, mode):
+    os.chmod(path, mode)
 
 def RemoveFiles(*args, **kwargs):
     for path in args:

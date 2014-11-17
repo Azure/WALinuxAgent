@@ -53,8 +53,6 @@ class TestUserOperation(unittest.TestCase):
                                                userName))
         self.assertTrue(os.path.isdir(os.path.join(CurrOS.GetHome(), userName)))
 
-
-MockSshdConfigPath=MockFunc("GetSshdConfigPath", "/tmp/sshd_config")
 class TestSshOperation(unittest.TestCase):
     def _setUp(self):
        logger.AddLoggerAppender(logger.AppenderConfig({
@@ -63,21 +61,15 @@ class TestSshOperation(unittest.TestCase):
            "console_path":"/dev/stdout"
        }))
 
-    @Mockup(CurrOS, "GetSshdConfigPath", MockSshdConfigPath)
-    def test_config_sshd(self):
-        shutil.copyfile(os.path.join(env.test_root, "sshd_config"), 
-                        CurrOS.GetSshdConfigPath())
-        CurrOS.ConfigSshd(True)
-        simple_file_grep(CurrOS.GetSshdConfigPath(), 
-                         "PasswordAuthentication no")
-        simple_file_grep(CurrOS.GetSshdConfigPath(), 
-                         "ChallengeResponseAuthentication no")
-
     def test_regen_ssh_host_key(self):
         oldKey = fileutil.GetFileContents('/etc/ssh/ssh_host_rsa_key')
         CurrOS.RegenerateSshHostkey('rsa')
         newKey = fileutil.GetFileContents('/etc/ssh/ssh_host_rsa_key')
         self.assertNotEquals(oldKey, newKey)
+
+    #TODO test dvd mount
+    #TODO test set scsi
+    #TODO test set/publish hostname
 
 if __name__ == '__main__':
     unittest.main()

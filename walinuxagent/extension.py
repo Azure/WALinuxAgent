@@ -81,6 +81,7 @@ class ExtensionInstance(object):
                 self.enable()
         else:
             if self.targetVersion > self.setting.getVersion():
+                #This will happen when auto upgrade policy is enabled
                 new = ExtensionInstance(self.setting, targetVersion)
                 new.download()
                 new.enable()
@@ -100,7 +101,6 @@ class ExtensionInstance(object):
         self.uninstall()
 
     def upgrade(self):
-        man = self.loadManifest()
         old = self
         new = ExtensionInstance(self.setting, targetVersion)
         new.download()

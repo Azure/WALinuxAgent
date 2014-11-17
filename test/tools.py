@@ -43,7 +43,7 @@ def Mockup(target, name, mock):
     return Decorator
 
 class MockFunc():
-    def __init__(self, name, retval=None):
+    def __init__(self, name='', retval=None):
         self.name = name
         self.retval = retval
 
@@ -56,18 +56,5 @@ class MockFunc():
 def Dummy():
     pass
 
-def MockIsDhcpEnabled():
-    return True
-
-def MockGetLibDir():
-    return "/tmp"
-
 #Mock CurrOS so that the test of other part will be os unrelated
-CurrOS.GetLibDir = MockGetLibDir
-
-CurrOS.IsDhcpEnabled = MockFunc('IsDhcpEnabled', True)
-CurrOS.OpenPortForDhcp = Dummy
-CurrOS.StartDhcpService = Dummy
-CurrOS.StopDhcpService = Dummy
-CurrOS.GenerateTransportCert = Dummy
-
+CurrOS.GetLibDir = MockFunc(retval='/tmp')

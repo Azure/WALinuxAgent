@@ -61,7 +61,7 @@ class Agent():
 
         self.dhcpHandler = dhcphandler.DhcpHandler()
         self.dhcpHandler.probe()
-
+        CurrOS.SetWireServerEndpoint(self.dhcpHandler.getEndpoint())
         self.envmonitor = envmon.EnvMonitor(self.config, self.dhcpHandler)
         self.protocol = protocol.DetectDefaultProtocol()
 

@@ -26,7 +26,7 @@ import os
 import json
 import walinuxagent.protocol.v1 as v1
 
-ExtensionsConfigSample="""
+ExtensionsConfigSample="""\
 <Extensions version="1.0.0.0" goalStateIncarnation="9"><GuestAgentExtension xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
   <GAFamilies>
     <GAFamily>
@@ -74,6 +74,21 @@ ExtensionsConfigSample="""
 <StatusUploadBlob>https://yuezhatest.blob.core.windows.net/vhds/test-cs12.test-cs12.test-cs12.status?sr=b&amp;sp=rw&amp;se=9999-01-01&amp;sk=key1&amp;sv=2014-02-14&amp;sig=hfRh7gzUE7sUtYwke78IOlZOrTRCYvkec4hGZ9zZzXo%3D</StatusUploadBlob></Extensions>
 """
 
+ManifestSample="""\
+<?xml version="1.0" encoding="utf-8"?>
+<PluginVersionManifest xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
+<Plugins>
+<Plugin>
+<Version>1.0</Version>
+<Uris>
+<Uri>http://blahblah</Uri>
+</Uris>
+</Plugin>
+</Plugins>
+<InternalPlugins />
+</PluginVersionManifest>
+"""
+
 class TestExtensionsConfig(unittest.TestCase):
     def test_extensions_config(self):
         config = v1.ExtensionsConfig(ExtensionsConfigSample)
@@ -85,7 +100,6 @@ class TestExtensionsConfig(unittest.TestCase):
         self.assertEquals("OSTCExtensions.ExampleHandlerLinux", 
                           extension.getName())
         self.assertEquals("1.4", extension.getVersion())
-        self.assertEquals(2, len(extension.getDownloadUri()))
         self.assertEquals(None, extension.getUpgradePolicy())
         self.assertEquals("enabled", extension.getState())
         self.assertEquals("4037FBF5F1F3014F99B5D6C7799E9B20E6871CB3", 

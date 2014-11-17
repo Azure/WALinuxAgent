@@ -16,6 +16,7 @@
 #
 # Requires Python 2.4+ and Openssl 1.0+
 import string
+import struct
 
 def FindFirstNode(xmlDoc, selector):
     nodes = FindAllNodes(xmlDoc, selector)

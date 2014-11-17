@@ -33,7 +33,7 @@ from test_goalstate import GoalStateSample
 from test_hostingenv import HostingEnvSample
 from test_sharedconfig import SharedConfigSample
 from test_certificates import CertificatesSample
-from test_extensionsconfig import ExtensionsConfigSample
+from test_extensionsconfig import ExtensionsConfigSample, ManifestSample
 
 def MockHttpGet(url, headers=None, maxRetry=1):
     if "versions" in url:
@@ -48,6 +48,8 @@ def MockHttpGet(url, headers=None, maxRetry=1):
         return CertificatesSample
     elif "extensionsconfiguri" in url:
         return ExtensionsConfigSample
+    elif "manifest.xml" in url:
+        return ManifestSample
     else:
         raise Exception("Bad url {0}".format(url))
 
@@ -104,7 +106,6 @@ class TestProtocolV1(unittest.TestCase):
         p = v1.ProtocolV1("foobar")
         p.refreshCache()
         p = v1.ProtocolV1("foobar")
-        p.loadFromCache()
         vmInfo = p.getVmInfo()
         self.assertNotEquals(None, vmInfo)
         self.assertNotEquals(None, vmInfo.getVmName())

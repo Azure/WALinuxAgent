@@ -25,7 +25,7 @@ LogFilePath = '/var/log/waagent.log'
 ConsoleFilePath = '/dev/console'
 
 class Logger(object):
-    def __init__(self, logger):
+    def __init__(self, logger=None):
         if logger is None:
             self.appenders = []
         else:

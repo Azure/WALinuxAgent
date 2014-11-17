@@ -75,14 +75,17 @@ class ProtocolV1(Protocol):
         if endpoint is None:
             raise Exception("Wire server endpoint not found.")
         protocol = ProtocolV1(endpoint)
-        protocol.loadFromCache()
         return protocol
 
     def __init__(self, endpoint):
         self.endpoint = endpoint
         self.libDir = CurrOS.GetLibDir()
+        self.incarnation = None
+        self.hostingEnv = None
+        self.certificates = None
+        self.extensions = None
   
-    def _checkProtocolVersion(self):
+    def checkProtocolVersion(self):
         negotiated = None;
         if ProtocolVersion == self.versionInfo.getPreferred():
             negotiated = self.versionInfo.getPreferred()
@@ -99,13 +102,15 @@ class ProtocolV1(Protocol):
 
     def refreshCache(self):
         """
-        Force the cached data to refresh
+        In protocol v1(wire server protocol), agent will periodically call wire
+        server to get the configuration and save it in the disk. So that other 
+        application like extension could read the data from the disk.
         """
         versionInfoXml = restutil.HttpGet(VersionInfoUri.format(self.endpoint))
         self.versionInfo = VersionInfo(versionInfoXml)
         fileutil.SetFileContents(VersionInfoFile, versionInfoXml)
 
-        self._checkProtocolVersion()
+        self.checkProtocolVersion()
         CurrOS.GenerateTransportCert()
    
         self.incarnation = 0
@@ -140,13 +145,13 @@ class ProtocolV1(Protocol):
         extensionsFile = ExtensionsFile.format(self.incarnation)
         fileutil.SetFileContents(extensionsFile, extentionsXml)
 
-        for ext in self.extentions.getExtensions():
-            manifestUris = self.extentions.getManifestUris(ext.getName())
-            for uri in manifestUris:
+        for ext in self.extensions.getExtensions():
+            manifestUri = self.extensions.getManifestUri(ext.getName())
+            for uri in manifestUri:
                 try:
                     manifestXml = restutil.HttpGet(uri)
-                    manifestXml = textutil.RemoveBom(manifestXml)
-                    manifestFile = ManifestFile.format(ext.getName, 
+                    manifestXml = RemoveBom(manifestXml)
+                    manifestFile = ManifestFile.format(ext.getName(), 
                                                        self.incarnation)
                     fileutil.SetFileContents(manifestFile, manifestXml)
                     ExtensionManifest(manifestXml).update(ext)
@@ -158,36 +163,17 @@ class ProtocolV1(Protocol):
                                 uri)
 
         fileutil.SetFileContents(IncarnationFile, str(self.incarnation))
-
-    def loadFromCache(self):
-        versionInfoXml = fileutil.GetFileContents(VersionInfoFile)
-        self.versionInfo = VersionInfo(versionInfoXml)
-
-        self.incarnation = 0
-        incarnationStr = fileutil.GetFileContents(IncarnationFile)
-        if incarnationStr is not None:
+        
+    def getIncarnation(self):
+        if self.incarnation is None:
+            incarnationStr = fileutil.GetFileContents(IncarnationFile)
             self.incarnation = int(incarnationStr)
-        
-        goalStateFile = GoalStateFile.format(self.incarnation)
-        goalStateXml = fileutil.GetFileContents(goalStateFile) 
-        self.goalState = GoalState(goalStateXml)
-        self.incarnation = self.goalState.getIncarnation()
-
-        hostingEnvXml = fileutil.GetFileContents(HostingEnvFile)
-        self.hostingEnv = HostingEnv(hostingEnvXml)
-
-        sharedConfigXml = fileutil.GetFileContents(SharedConfigFile)
-        self.shareConfig = SharedConfig(sharedConfigXml)
-
-        certificatesJson = fileutil.GetFileContents(CertificatesJsonFile)
-        self.certificates = Certificates(certificatesJson)
-
-        extensionsFile = ExtensionsFile.format(self.incarnation)
-        extentionsXml = fileutil.GetFileContents(extensionsFile)
-        self.extensions = ExtensionsConfig(extentionsXml)
-        
+        return self.incarnation
 
     def getVmInfo(self):
+        if self.hostingEnv is None:
+            hostingEnvXml = fileutil.GetFileContents(HostingEnvFile)
+            self.hostingEnv = HostingEnv(hostingEnvXml)
         vmInfo = {
             "subscriptionId":None,
             "vmName":self.hostingEnv.getVmName()
@@ -195,10 +181,26 @@ class ProtocolV1(Protocol):
         return VmInfo(vmInfo)
 
     def getCerts(self):
+        if self.certificates is None:
+            certificatesJson = fileutil.GetFileContents(CertificatesJsonFile)
+            self.certificates = Certificates(certificatesJson)
         return self.certificates.getCerts()
 
     def getExtensions(self):
-        return self.extensions.getExtensions()
+        return self._getExtensionConfig().getExtensions()
+
+    #TODO Move this method into class ExtensionConfig
+    def _getExtensionConfig(self):
+        if self.extensions is None:
+            extensionsFile = ExtensionsFile.format(self.getIncarnation())
+            extentionsXml = fileutil.GetFileContents(extensionsFile)
+            self.extensions = ExtensionsConfig(extentionsXml)
+            for ext in self.extensions.getExtensions():
+                manifestFile = ManifestFile.format(ext.getName(), 
+                                                   self.incarnation)
+                manifestXml = fileutil.GetFileContents(manifestFile)
+                ExtensionManifest(manifestXml).update(ext)
+        return self.extensions
 
     def reportProvisionStatus(self, status=None, subStatus="", 
                               description="", thumbprint=None):
@@ -289,7 +291,7 @@ class ProtocolV1(Protocol):
              "x-ms-date" : time.strftime("%Y-%M-%dT%H:%M:%SZ", time.gmtime()) ,
              "Content-Length": str(len(data))
         }
-        restutil.HttpPut(self.extensions.getStatusUploadBlob(),
+        restutil.HttpPut(self._getExtensionConfig().getStatusUploadBlob(),
                          data,
                          headers, 2)
 
@@ -636,8 +638,8 @@ class ExtensionsConfig(object):
     def getExtensions(self):
         return self.extensions
 
-    def getManifest(self, name):
-        return self.manifests[name]
+    def getManifestUri(self, name):
+        return self.manifestUris[name]
 
     def getStatusUploadBlob(self):
         return self.statusUploadBlob
@@ -651,7 +653,7 @@ class ExtensionsConfig(object):
         xmlDoc = ET.fromstring(xmlText.strip())
         extensions = FindAllNodes(xmlDoc, ".//Plugins/Plugin")      
         settings = FindAllNodes(xmlDoc, ".//PluginSettings/Plugin")
-        
+
         for extension in extensions:
             ext = {}
             properties = {}
@@ -691,15 +693,15 @@ class ExtensionsConfig(object):
             runtimeSettings["handlerSettings"] = handlerSettings
             properties["runtimeSettings"] = runtimeSettings
             ext["properties"] = properties
-            self.data.append(ExtensionInfo(ext))
-            self.manifestUris[name] = (location, failoverlocation)
-        self.extensions = data 
+            self.extensions.append(ExtensionInfo(ext))
+            self.manifestUris[name] = (location, failoverLocation)
         self.statusUploadBlob = (FindFirstNode(xmlDoc,"StatusUploadBlob")).text
         return self
 
 class ExtensionManifest(object):
     def __init__(self, xmlText):
         self.xmlText = xmlText
+        self.versionUris = []
         self.parse(xmlText)
 
     def parse(self, xmlText):
@@ -709,11 +711,11 @@ class ExtensionManifest(object):
         for package in packages:
             version = FindFirstNode(package, "Version").text
             uris = filter(lambda x : x.text, FindAllNodes(package, "Uri"))
-            versionUris = {
+            self.versionUris.append({
                 "version":version,
                 "uris":uris
-            }
+            })
 
     def update(self, ext):
-        ext.data["properties"]["versionUris"] = versionUris
+        ext.data["properties"]["versionUris"] = self.versionUris
 
