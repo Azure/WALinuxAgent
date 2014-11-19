@@ -24,14 +24,14 @@ import walinuxagent.agent as agent
 name = CurrOSInfo[0]
 version = CurrOSInfo[1]
 codeName = CurrOSInfo[2]
-
 data_files=[]
+
 if name == 'ubuntu':
     data_files.extend([
         ('/usr/sbin', ['bin/waagent']),
-        ('/etc', ['config/waagent.conf']),
+        ('/etc', ['config/ubuntu/waagent.conf']),
         ('/etc/logrotate.d', ['config/waagent.logrotate']),
-        ('/etc/init', ['config/ubuntu/waagent.conf']),
+        ('/etc/init', ['config/ubuntu/init/waagent.conf']),
     ])
 else:
     print "Don't kown how to install on {0} {1} {2}".format(name, 

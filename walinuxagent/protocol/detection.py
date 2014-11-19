@@ -82,6 +82,8 @@ def GetAvailableProtocols(protocols=__Protocols):
         if os.path.isfile(protocolFilePath):
             availableProtocol = protocol.Init()
             availableProtocols.append(availableProtocol)
+    if len(availableProtocols) == 0:
+        availableProtocols.append(Protocol())
     return availableProtocols
 
 def GetDefaultProtocol(protocols=__Protocols):

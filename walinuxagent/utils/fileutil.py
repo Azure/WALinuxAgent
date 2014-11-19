@@ -144,10 +144,10 @@ def CleanupDirs(*args, **kwargs):
     Remove all the contents under the directry
     """
     for dirName in args:
-        if os.path.isdirectory(dirName):
+        if os.path.isdir(dirName):
             for item in os.listdir(dirName):
                 path = os.path.join(dirName, item)
                 if os.path.isfile(path):
                     os.remove(path)
-                elif os.path.isdirectory(path):
+                elif os.path.isdir(path):
                     shutil.rmtree(path)

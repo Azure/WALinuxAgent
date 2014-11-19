@@ -25,8 +25,9 @@ import walinuxagent.logger as logger
 import walinuxagent.conf as conf
 from walinuxagent.utils.osutil import CurrOS, CurrOSInfo
 import walinuxagent.utils.shellutil as shellutil
-import walinuxagent.protocol.detection as protocols
-import walinuxagent.dhcphandler as dhcphandler
+import walinuxagent.utils.fileutil as fileutil
+import walinuxagent.protocol.detection as proto
+import walinuxagent.dhcphandler as dhcp
 import walinuxagent.envmonitor as envmon
 import walinuxagent.extension as ext
 
@@ -56,6 +57,7 @@ class Agent():
         self.config = config
 
     def run(self):
+        os.chdir(CurrOS.GetLibDir())
         self.savePid()
 
         if self.detectScvmmEnv():
@@ -65,11 +67,11 @@ class Agent():
         #Intialize
         self.waitForNetwork()
 
-        self.dhcpHandler = dhcphandler.DhcpHandler()
+        self.dhcpHandler = dhcp.DhcpHandler()
         self.dhcpHandler.probe()
         CurrOS.SetWireServerEndpoint(self.dhcpHandler.getEndpoint())
         self.envmonitor = envmon.EnvMonitor(self.config, self.dhcpHandler)
-        self.protocol = protocol.DetectDefaultProtocol()
+        self.protocol = proto.DetectDefaultProtocol()
 
         provisoned = os.path.join(CurrOS.GetLibDir(), "provisioned")
         if(not os.path.isfile(provisoned)):
@@ -109,7 +111,7 @@ class Agent():
                                             agentStatusDetail)
             #Wait for 25 seconds and detect protocol again.
             time.sleep(25)
-            self.protocol = protocol.DetectDefaultProtocol()
+            self.protocol = proto.DetectDefaultProtocol()
 
     def activateResourceDisk(self):
         mountpoint = self.config.get("ResourceDisk.MountPoint", "/mnt/resource")
@@ -187,23 +189,24 @@ def Deprovision(force=False, deluser=False):
     if delRootPasswd:
         print("WARNING! root password will be disabled. "
               "You will not be able to login as root.")
-    protocol = protocol.GetDefaultProtocol()
+    protocol = proto.GetDefaultProtocol()
     ovf = protocol.getOvf()
     if ovf is not None and deluser:
         print("WARNING! {0} account and entire home directory will be deleted.",
               ovf.getUserName())
     
     if not force:
-        confirm = raw_input("Do you wan to proceed (y/n)")
-        if confirm.lower().startswith('y'):
+        confirm = raw_input("Do you want to proceed (y/n)")
+        if not confirm.lower().startswith('y'):
             return
 
     CurrOS.StopAgentService()
-    CurrOS.DeleteRootPassword()
+    if delRootPasswd:
+        CurrOS.DeleteRootPassword()
     if config.getSwitch("Provisioning.RegenerateSshHostkey", False):
         shellutil.Run("rm -f /etc/ssh/ssh_host_*key*")
     CurrOS.SetHostname('localhost.localdomain')
-    fileutil.ClearupDirs(CurrOS.GetLibDir(), "/var/lib/dhclient", 
+    fileutil.CleanupDirs(CurrOS.GetLibDir(), "/var/lib/dhclient", 
                          "/var/lib/dhcpcd", "/var/lib/dhcp")
     fileutil.RemoveFiles('/root/.bash_history', '/var/log/waagent.log')
     CurrOS.OnDeprovision()
@@ -212,22 +215,22 @@ def Deprovision(force=False, deluser=False):
         CurrOS.DeleteAccount(ovf.getUserName())
 
 def Main():
-    os.chdir(CurrOS.GetLibDir())
-    logger.LoggerInit('/var/log/waagent.log', '/dev/console')
     command, force, verbose = ParseArgs(sys.argv[1:])
     if command == "deprovision+user":
         Deprovision(force=force, deluser=True)
     elif command == "deprovision":
         Deprovision(force=force, deluser=False)
     elif command == "daemon":
+        logger.LoggerInit('/var/log/waagent.log', '/dev/console')
+        fileutil.CreateDir(CurrOS.GetLibDir(), 'root', '0700')
+        os.chdir(CurrOS.GetLibDir())
         configPath = CurrOS.GetConfigurationPath()
         config = conf.LoadConfiguration(configPath)
         Agent(config).run()
-    elif command == "version":
-        Version()
     elif command == "serialconsole":
         #TODO
         pass
-    else:#command == 'help' or anything not supported
+    elif command == "version":
+        Version()
+    else:# command == 'help':
         Usage()
-

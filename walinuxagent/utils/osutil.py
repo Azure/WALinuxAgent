@@ -28,6 +28,7 @@ import socket
 import array
 import struct
 import fcntl
+import time
 import walinuxagent.logger as logger
 import walinuxagent.utils.fileutil as fileutil
 import walinuxagent.utils.shellutil as shellutil
@@ -688,6 +689,12 @@ class UbuntuDistro(DefaultDistro):
 
     def RestartSshService(self):
         return shellutil.Run("service sshd restart", chk_err=False)
+
+    def StopAgentService(self):
+        shellutil.Run("service walinuxagent stop", chk_err=False)
+
+    def StartAgentService(self):
+        shellutil.Run("service walinuxagent start", chk_err=False)
 
     def OnDeprovisionStart(self):
         print("WARNING! Nameserver configuration in "

@@ -21,6 +21,7 @@ import xml.dom.minidom
 import walinuxagent.logger as logger
 from walinuxagent.utils.osutil import CurrOS
 from walinuxagent.utils.textutil import GetNodeTextData
+import walinuxagent.utils.fileutil as fileutil
 
 class VmInfo():
     def __init__(self, data):
@@ -294,8 +295,11 @@ class Protocol():
 
     def getOvf(self):
         ovfFilePath = os.path.join(CurrOS.GetLibDir(), OvfFileName)
-        xmlText = fileutil.GetFileContents(ovfFilePath)        
-        return OvfEnv(xmlText)
+        if os.path.isfile(ovfFilePath):
+            xmlText = fileutil.GetFileContents(ovfFilePath)        
+            return OvfEnv(xmlText)
+        else:
+            return None
 
     def copyOvf(self):
         """
