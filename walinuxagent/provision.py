@@ -35,7 +35,7 @@ class ProvisionHandler(object):
             if self.config.getSwitch("Provisioning.Enabled"):
                 self._provision()
             else:
-                #In some distro like Ubuntu, cloud init is used to do provision
+                #In some distro like Ubuntu, cloud init does the provision
                 #In this case, we need to wait the cloud init to complete 
                 #provision work and generate ssh host key
                 CurrOS.WaitForSshHostKey()

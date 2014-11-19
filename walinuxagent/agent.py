@@ -18,6 +18,8 @@
 #
 
 import os
+import sys
+import re
 import shutil
 import walinuxagent.logger as logger
 import walinuxagent.conf as conf
@@ -30,7 +32,11 @@ import walinuxagent.extension as ext
 
 GuestAgentName = "WALinuxAgent"
 GuestAgentLongName = "Microsoft Azure Linux Agent"
-GuestAgentVersion = "WALinuxAgent-2.1.0-pre"
+GuestAgentVersion='2.1.0-pre'
+GuestAgentLongVersion = "{0}-{1}".format(GuestAgentName, GuestAgentVersion)
+GuestAgentAuthor='MS OSTC'
+GuestAgentUri='https://github.com/Azure/WALinuxAgent'
+
 VmmConfigFileName = "linuxosconfiguration.xml"
 VmmStartupScriptName= "install"
 DataLossWarningFile="DATALOSS_WARNING_README.txt"
@@ -137,11 +143,11 @@ class Agent():
     def savePid(self):
         fileutil.SetFileContents(CurrOS.GetAgentPidPath(), str(os.getpid()))
 
-def ParseArgs():
+def ParseArgs(sysArgv):
     cmd = None
     force = False
     verbose = False
-    for a in sys.argv[1:]:
+    for a in sysArgv:
         if re.match("^([-/]*)deprovision\+user", a):
             cmd = "deprovision+user"
         elif re.match("^([-/]*)deprovision", a):
@@ -152,21 +158,23 @@ def ParseArgs():
             cmd = "version"
         elif re.match("^([-/]*)serialconsole", a):
             cmd = "serialconsole" 
-        elif re.match("^([-/]*)(help|usage|\?)", a):
-            cmd = "help"
         elif re.match("^([-/]*)verbose", a):
             verbose = True
         elif re.match("^([-/]*)force", a):
             force = True
+        elif re.match("^([-/]*)(help|usage|\?)", a):
+            cmd = "help"
+        else:
+            cmd = "help"
     return cmd, force, verbose
 
 def Version():
-    print "{0} running on {1} {2}".format(GuestAgentVersion, 
+    print "{0} running on {1} {2}".format(GuestAgentLongVersion, 
                                           CurrOSInfo[0], 
                                           CurrOSInfo[1])
 def Usage():
-    print "usage: {0} [-verbose] [-force] "
-          "[-help|-deprovision[+user]|-version|-serialconsole|-daemon]"
+    print ("usage: {0} [-verbose] [-force] "
+           "[-help|-deprovision[+user]|-version|-serialconsole|-daemon]")
 
 def Deprovision(force=False, deluser=False):
     configPath = CurrOS.GetConfigurationPath()
@@ -175,7 +183,6 @@ def Deprovision(force=False, deluser=False):
     print("WARNING! All SSH host key pairs will be deleted.")
     print("WARNING! Cached DHCP leases will be deleted.")
     CurrOS.OnDeprovisionStart()
-
     delRootPasswd = config.getSwitch("Provisioning.DeleteRootPassword", False)
     if delRootPasswd:
         print("WARNING! root password will be disabled. "
@@ -200,13 +207,14 @@ def Deprovision(force=False, deluser=False):
                          "/var/lib/dhcpcd", "/var/lib/dhcp")
     fileutil.RemoveFiles('/root/.bash_history', '/var/log/waagent.log')
     CurrOS.OnDeprovision()
-    if ovf is not None and deluser
+
+    if ovf is not None and deluser:
         CurrOS.DeleteAccount(ovf.getUserName())
 
 def Main():
     os.chdir(CurrOS.GetLibDir())
     logger.LoggerInit('/var/log/waagent.log', '/dev/console')
-    command, force, verbose = ParseArgs()
+    command, force, verbose = ParseArgs(sys.argv[1:])
     if command == "deprovision+user":
         Deprovision(force=force, deluser=True)
     elif command == "deprovision":
@@ -219,6 +227,7 @@ def Main():
         Version()
     elif command == "serialconsole":
         #TODO
+        pass
     else:#command == 'help' or anything not supported
         Usage()
 

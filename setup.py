@@ -18,13 +18,33 @@
 #
 
 from distutils.core import setup
+from walinuxagent.utils.osutil import CurrOSInfo
+import walinuxagent.agent as agent
 
-setup(name='waagent',
-        version='2.1',
-        description='',
-        author='',
-        url='',
-        packages=['walinuxagent'],
-        data_files=[('bin', ['bin/waagent']),
-            ('config', ['config/waagent.conf', 'config/waagent.logrotate'])]
-        )
+name = CurrOSInfo[0]
+version = CurrOSInfo[1]
+codeName = CurrOSInfo[2]
+
+data_files=[]
+if name == 'ubuntu':
+    data_files.extend([
+        ('/usr/sbin', ['bin/waagent']),
+        ('/etc', ['config/waagent.conf']),
+        ('/etc/logrotate.d', ['config/waagent.logrotate']),
+        ('/etc/init', ['config/ubuntu/waagent.conf']),
+    ])
+else:
+    print "Don't kown how to install on {0} {1} {2}".format(name, 
+                                                            version, 
+                                                            codeName)
+    sys.exit(-1)
+
+setup(name=agent.GuestAgentName,
+      version=agent.GuestAgentVersion,
+      description=agent.GuestAgentLongVersion,
+      author=agent.GuestAgentAuthor,
+      url=agent.GuestAgentUri,
+      packages=['walinuxagent', 
+                'walinuxagent.utils', 
+                'walinuxagent.protocol'],
+      data_files=data_files)

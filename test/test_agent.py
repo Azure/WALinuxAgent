@@ -1,7 +1,3 @@
-#!/usr/bin/env python
-#
-# Windows Azure Linux Agent
-#
 # Copyright 2014 Microsoft Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,10 +17,29 @@
 # Implements parts of RFC 2131, 1541, 1497 and
 # http://msdn.microsoft.com/en-us/library/cc227282%28PROT.10%29.aspx
 # http://msdn.microsoft.com/en-us/library/cc227259%28PROT.13%29.aspx
-#
 
+import env
+import test.tools as tools
+import uuid
+import unittest
+import os
+import json
+import walinuxagent.utils.fileutil as fileutil
 import walinuxagent.agent as agent
 
-if __name__ == '__main__':
-    agent.Main()
+class TestAgent(unittest.TestCase):
+    def test_parse_args(self):
+        cmd, force, verbose = agent.ParseArgs(["deprovision+user", 
+                                               "-force", 
+                                               "/verbose"])
+        self.assertEquals("deprovision+user", cmd)
+        self.assertTrue(force)
+        self.assertTrue(verbose)
 
+        cmd, force, verbose = agent.ParseArgs(["wrong cmd"])
+        self.assertEquals("help", cmd)
+        self.assertFalse(force)
+        self.assertFalse(verbose)
+
+if __name__ == '__main__':
+    unittest.main()

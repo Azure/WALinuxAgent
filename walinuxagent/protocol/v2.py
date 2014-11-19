@@ -17,7 +17,7 @@
 # Requires Python 2.4+ and Openssl 1.0+
 
 import walinuxagent.utils.restutil as restutil
-from walinuxagent.protocol.contract import *
+from walinuxagent.protocol.common import *
 
 class ProtocolV2(Protocol):
 
