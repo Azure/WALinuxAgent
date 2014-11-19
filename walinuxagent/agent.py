@@ -111,7 +111,10 @@ class Agent():
                                             agentStatusDetail)
             #Wait for 25 seconds and detect protocol again.
             time.sleep(25)
-            self.protocol = proto.DetectDefaultProtocol()
+            try:
+                self.protocol = proto.DetectDefaultProtocol()
+            except Exception, e:
+                logger.Error("{0}", e)
 
     def activateResourceDisk(self):
         mountpoint = self.config.get("ResourceDisk.MountPoint", "/mnt/resource")
@@ -124,7 +127,7 @@ class Agent():
             CurrOS.CreateSwapSpace(mountpoint, sizeMB)
 
     def detectScvmmEnv(self):
-        CurrOS.MountDvd()
+        CurrOS.MountDvd(maxRetry=0, chk_err=False)
         mountPoint = CurrOS.GetDvdMountPoint()
         return os.path.isfile(os.path.join(mountPoint, VmmConfigFileName))
 

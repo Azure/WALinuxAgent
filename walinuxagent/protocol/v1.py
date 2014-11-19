@@ -84,8 +84,13 @@ class ProtocolV1(Protocol):
         self.hostingEnv = None
         self.certificates = None
         self.extensions = None
-  
+ 
+    @logger.LogError("check protocol version")
     def checkProtocolVersion(self):
+        versionInfoXml = restutil.HttpGet(VersionInfoUri.format(self.endpoint))
+        self.versionInfo = VersionInfo(versionInfoXml)
+        fileutil.SetFileContents(VersionInfoFile, versionInfoXml)
+
         negotiated = None;
         if ProtocolVersion == self.versionInfo.getPreferred():
             negotiated = self.versionInfo.getPreferred()
@@ -99,48 +104,65 @@ class ProtocolV1(Protocol):
             logger.Warn("Agent supported wire protocol version: {0} was not "
                         "advised by Fabric.", ProtocolVersion)
             raise Exception("Wire protocol version not supported")
-
-    def refreshCache(self):
-        """
-        In protocol v1(wire server protocol), agent will periodically call wire
-        server to get the configuration and save it in the disk. So that other 
-        application like extension could read the data from the disk.
-        """
-        versionInfoXml = restutil.HttpGet(VersionInfoUri.format(self.endpoint))
-        self.versionInfo = VersionInfo(versionInfoXml)
-        fileutil.SetFileContents(VersionInfoFile, versionInfoXml)
-
-        self.checkProtocolVersion()
-        CurrOS.GenerateTransportCert()
-   
-        self.incarnation = 0
-        incarnationStr = fileutil.GetFileContents(IncarnationFile)
-        if incarnationStr is not None:
-            self.incarnation = int(incarnationStr)
-       
-        goalStateXml = restutil.HttpGet(GoalStateUri.format(self.endpoint, 
-                                                            self.incarnation))
+    
+    def updateGoalState(self):
+        goalStateXml = restutil.HttpGet(GoalStateUri.format(self.endpoint),
+                                        headers={
+                                            "x-ms-agent-name":"WALinuxAgent",
+                                            "x-ms-version":ProtocolVersion
+                                        })
+        if goalStateXml is None:
+            raise Exception("Failed update goalstate")
         self.goalState = GoalState(goalStateXml)
         self.incarnation = self.goalState.getIncarnation()
 
         goalStateFile = GoalStateFile.format(self.incarnation)
         fileutil.SetFileContents(goalStateFile, goalStateXml)
+        fileutil.SetFileContents(IncarnationFile, str(self.incarnation))
 
-        hostingEnvXml = restutil.HttpGet(self.goalState.getHostingEnvUri())
+    def updateHostingEnv(self):
+        hostingEnvXml = restutil.HttpGet(self.goalState.getHostingEnvUri(),
+                                         headers={
+                                            "x-ms-agent-name":"WALinuxAgent",
+                                            "x-ms-version":ProtocolVersion
+                                         })
+        if hostingEnvXml is None:
+            raise Exception("Failed to update hosting environment config")
         self.hostingEnv = HostingEnv(hostingEnvXml)
         fileutil.SetFileContents(HostingEnvFile, hostingEnvXml)
 
-        sharedConfigXml = restutil.HttpGet(self.goalState.getSharedConfigUri())
+    def updateSharedConfig(self):
+        sharedConfigXml = restutil.HttpGet(self.goalState.getSharedConfigUri(),
+                                           headers={
+                                                "x-ms-agent-name":"WALinuxAgent",
+                                                "x-ms-version":ProtocolVersion
+                                           })
         self.sharedConfig = SharedConfig(sharedConfigXml)
         fileutil.SetFileContents(SharedConfigFile, sharedConfigXml)
 
-        certificatesXml = restutil.HttpGet(self.goalState.getCertificatesUri())
+    def updateCertificates(self):
+        certificatesXml = restutil.HttpGet(self.goalState.getCertificatesUri(),
+                                           headers={
+                                                "x-ms-agent-name":"WALinuxAgent",
+                                                "x-ms-version":ProtocolVersion
+                                           })
+        if certificatesXml is None:
+            raise Exception("Failed to update certificates")
         fileutil.SetFileContents(CertificatesFile, certificatesXml)
         self.certificates = Certificates()
         certificatesJson = self.certificates.decrypt(certificatesXml)
         fileutil.SetFileContents(CertificatesJsonFile, certificatesJson)
-
-        extentionsXml = restutil.HttpGet(self.goalState.getExtensionsUri())
+    
+    def updateExtensionConfig(self):
+        extentionsXml = restutil.HttpGet(self.goalState.getExtensionsUri(),
+                                         headers={
+                                            "x-ms-agent-name":"WALinuxAgent",
+                                            "x-ms-version":ProtocolVersion,
+                                            "x-ms-cipher-name": "DES_EDE3_CBC",
+                                            "x-ms-guest-agent-public-x509-cert":self.getTransportCert()
+                                         })
+        if extentionsXml is None:
+            raise Exception("Failed to update extensions config")
         self.extensions = ExtensionsConfig(extentionsXml)
         extensionsFile = ExtensionsFile.format(self.incarnation)
         fileutil.SetFileContents(extensionsFile, extentionsXml)
@@ -162,12 +184,35 @@ class ProtocolV1(Protocol):
                                 ext.getName(),
                                 uri)
 
-        fileutil.SetFileContents(IncarnationFile, str(self.incarnation))
+    def getTransportCert(self):
+        cert = ""
+        for line in fileutil.GetFileContents(TransportCertFile).split('\n'):
+            if "CERTIFICATE" not in line:
+                cert += line.rstrip()
+        return cert
+
+    def refreshCache(self):
+        """
+        In protocol v1(wire server protocol), agent will periodically call wire
+        server to get the configuration and save it in the disk. So that other 
+        application like extension could read the data from the disk.
+        """
+        self.checkProtocolVersion()
+        CurrOS.GenerateTransportCert()
+        self.updateGoalState()
+        self.updateHostingEnv()
+        self.updateSharedConfig()
+        self.updateCertificates()
+        self.updateExtensionConfig()
+        
         
     def getIncarnation(self):
         if self.incarnation is None:
-            incarnationStr = fileutil.GetFileContents(IncarnationFile)
-            self.incarnation = int(incarnationStr)
+            if os.path.isfile(IncarnationFile):
+                incarnationStr = fileutil.GetFileContents(IncarnationFile)
+                self.incarnation = int(incarnationStr)
+            else:
+                self.incarnation = 0
         return self.incarnation
 
     def getVmInfo(self):

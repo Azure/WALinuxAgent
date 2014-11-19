@@ -18,6 +18,7 @@
 # http://msdn.microsoft.com/en-us/library/cc227282%28PROT.10%29.aspx
 # http://msdn.microsoft.com/en-us/library/cc227259%28PROT.13%29.aspx
 
+import traceback
 import walinuxagent.utils.textutil as textutil
 from datetime import datetime
 
@@ -92,14 +93,15 @@ class FileAppender():
 
 #Initialize logger instance
 DefaultLogger = Logger()
+
 __log_level = {"VERBOSE" : 0, "INFO": 1, "WARNING": 2, "ERROR" : 3}        
 
 def _MatchLogLevel(expected, actual):
     return __log_level[actual] >= __log_level[expected]
 
 
-def LoggerInit(log_file_path, log_console_path, 
-               Verbose=False, logger=DefaultLogger):
+def LoggerInit(log_file_path, log_console_path, log_stdout_path='/dev/stdout',
+               verbose=False, logger=DefaultLogger):
     if log_file_path:
         file_appender_config = AppenderConfig({
             "type":"FILE", 
@@ -107,9 +109,9 @@ def LoggerInit(log_file_path, log_console_path,
             "file_path" : log_file_path
         })
         
-        #File appender will log Verbose log if the switch is on
-        if Verbose: 
-            file_appender_config.properties['level'] = "Verbose"
+        #File appender will log verbose log if the switch is on
+        if verbose: 
+            file_appender_config.properties['level'] = "VERBOSE"
         logger.addLoggerAppender(file_appender_config)
 
     if log_console_path:
@@ -119,6 +121,16 @@ def LoggerInit(log_file_path, log_console_path,
             "console_path" : log_console_path
         })
         logger.addLoggerAppender(console_appender_config)
+    
+    stdout_appender_config = AppenderConfig({
+        "type":"CONSOLE", 
+        "level" : "INFO", 
+        "console_path" : "/dev/stdout"
+    })
+    if verbose:
+        stdout_appender_config.properties['level'] = "VERBOSE"
+    logger.addLoggerAppender(stdout_appender_config)
+
 
 def AddLoggerAppender(appender_config):
     DefaultLogger.addLoggerAppender(appender_config)
@@ -146,3 +158,17 @@ def CreateLoggerAppender(appender_config):
     else:
         raise Exception("Unknown appender type")
 
+def LogError(operation):
+    def Decorator(func):
+        def Wrapper(*args, **kwargs):
+            try:
+                result = func(*args, **kwargs) 
+            except Exception, e:
+                Error("Failed to {0} :{1} {2}", 
+                      operation, 
+                      e, 
+                      traceback.format_exc()) 
+                raise e
+            return result
+        return Wrapper
+    return Decorator

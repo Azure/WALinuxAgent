@@ -28,3 +28,4 @@ import walinuxagent.agent as agent
 if __name__ == '__main__':
     agent.Main()
 
+print "hehe"

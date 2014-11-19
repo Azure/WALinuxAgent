@@ -39,7 +39,7 @@ def DetectAvailableProtocols(protocols=__Protocols):
     libDir = CurrOS.GetLibDir()
     availableProtocols = []
     for protocol in protocols:
-        logger.Info("Detect endpoint...")
+        logger.Info("Detect available protocols...")
         protocolFilePath = os.path.join(libDir, protocol.__name__)
         try:
             detected = protocol.Detect()

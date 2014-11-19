@@ -77,8 +77,8 @@ def HttpRequest(method, url, data, headers=None, maxRetry=1):
         elif resp is None:
             logger.Error("Retry={0}, response is empty.", retry)
         else:
-            logger.Error("Retry={0}, Status={1}, {2} {3}{4}", retry, 
-                         resp.status, method, host, action)
+            logger.Error("Retry={0}, Status={1}, {2} {3}", retry, 
+                         resp.status, method, url)
         time.sleep(__RetryWaitingInterval)
         resp = _HttpRequest(method, host, action, data, secure, headers)
 

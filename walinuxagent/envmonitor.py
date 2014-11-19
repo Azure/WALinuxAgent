@@ -16,7 +16,10 @@
 #
 # Requires Python 2.4+ and Openssl 1.0+
 #
+import os
 import socket
+import threading
+import time
 from walinuxagent.utils.osutil import CurrOS, CurrOSInfo
 
 class EnvMonitor(object):
@@ -44,8 +47,8 @@ class EnvMonitor(object):
             CurrOS.RemoveRulesFiles()
             timeout = self.config.get("OS.RootDeviceScsiTimeout", None)
             if timeout is not None:
-                CurrOS.SetScsiDiskTimeout()
-            required = config.getSwitch("Provisioning.MonitorHostName", False)
+                CurrOS.SetScsiDiskTimeout(timeout)
+            required = self.config.getSwitch("Provisioning.MonitorHostName", False)
             if required:
                 self.handleHostnameUpdate()
             self.handleDhcpClientRestart()

@@ -327,18 +327,18 @@ class DefaultDistro():
                 return "/dev/{0}".format(dvd.group(0))
         return None
 
-    def MountDvd(self, maxRetry=6):
+    def MountDvd(self, maxRetry=6, chk_err=True):
         dvd = self.GetDvdDevice()
         mountPoint = self.GetDvdMountPoint()
         #TODO Why do we need to load atapiix?
-        self.LoadAtapiixModule()
+        #self.LoadAtapiixModule()
         mountlist = shellutil.RunGetOutput("mount")[1]
         existing = self._GetMountPoint(mountlist, dvd)
         if existing is not None: #Already mounted
             return
         if not os.path.isdir(mountPoint):
             os.makedirs(mountPoint)
-        retcode = self.Mount(dvd, mountPoint)
+        retcode = self.Mount(dvd, mountPoint, chk_err)
         for retry in range(0, maxRetry):
             if retcode == 0:
                 logger.Info("Successfully mounted provision dvd")
@@ -348,8 +348,9 @@ class DefaultDistro():
                             retry, 
                             retcode)
             time.sleep(5)
-            self.Mount(dvd, mountPoint)
-        raise Exception("Failed to mount provision dvd")
+            self.Mount(dvd, mountPoint, chk_err)
+        if chk_err:
+            raise Exception("Failed to mount provision dvd")
 
     def UmountDvd(self):
         mountPoint = self.GetDvdMountPoint()
@@ -382,8 +383,9 @@ class DefaultDistro():
             time.sleep(1)
         return False
  
-    def Mount(self, dvd, mountPoint):
-        return shellutil.RunGetOutput("mount {0} {1}".format(dvd, mountPoint))[0]
+    def Mount(self, dvd, mountPoint, chk_err=True):
+        return shellutil.RunGetOutput("mount {0} {1}".format(dvd, mountPoint), 
+                                      chk_err)[0]
 
     def Umount(self, mountPoint):
         return "umount {0}".format(mountPoint)
@@ -408,7 +410,7 @@ class DefaultDistro():
     def RemoveRulesFiles(self, rulesFiles=RulesFiles):
         libDir = self.GetLibDir()
         for src in rulesFiles:
-            fileName = GetLastPathElement(src)
+            fileName = fileutil.GetLastPathElement(src)
             dest = os.path.join(libDir, fileName)
             if os.path.isfile(dest):
                 os.remove(dest)
@@ -419,7 +421,7 @@ class DefaultDistro():
     def RestoreRulesFiles(self, rulesFiles=RulesFiles):
         libDir = self.GetLibDir()
         for dest in rulesFiles:
-            fileName = GetLastPathElement(dest)
+            fileName = fileutil.GetLastPathElement(dest)
             src = os.path.join(libDir, fileName)
             if os.path.isfile(dest):
                 continue
@@ -491,6 +493,9 @@ class DefaultDistro():
 
     def GetInterfaceName(self):
         return self.GetFirstActiveNetworkInterfaceNonLoopback()[0]
+    
+    def GetIpv4Address(self):
+        return self.GetFirstActiveNetworkInterfaceNonLoopback()[1]
     
     def SetBroadcastRouteForDhcp(self, ifname):
         return shellutil.Run("route add 255.255.255.255 dev {0}".format(ifname),
