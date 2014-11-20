@@ -166,30 +166,40 @@ class ExtensionInstance(object):
         self.updateHandlerEnvironment()
         self.updateSetting()
         self.launchCommand(man.getEnableCommand())
+        fileutil.SetFileContents(self.setting.getHandlerStateFile(),
+                                 "Enabled")
 
     def disable(self):
         man = self.loadManifest()
         self.updateHandlerEnvironment()
         self.updateSetting()
         self.launchCommand(man.getDisableCommand())
+        fileutil.SetFileContents(self.setting.getHandlerStateFile(),
+                                 "Disabled")
 
     def install(self):
         man = self.loadManifest()
         self.updateHandlerEnvironment()
         self.updateSetting()
         self.launchCommand(man.getInstallCommand())
+        fileutil.SetFileContents(self.setting.getHandlerStateFile(),
+                                 "Installed")
 
     def uninstall(self):
         self.loadManifest()
         self.updateHandlerEnvironment()
         self.updateSetting()
         self.launchCommand(man.getUninstallCommand())
+        fileutil.SetFileContents(self.setting.getHandlerStateFile(),
+                                 "Uninstalled")
 
     def update(self):
         self.loadManifest()
         self.updateHandlerEnvironment()
         self.updateSetting()
         self.launchCommand(man.getUpdateCommand())
+        fileutil.SetFileContents(self.setting.getHandlerStateFile(),
+                                 "Installed")
 
     def launchCommand(self, cmd):
         baseDir = self.setting.getBaseDir() 
@@ -214,6 +224,7 @@ class ExtensionInstance(object):
                                   " ({1})", cmd, ret)
         except Exception, e:
             self.logger.error('Exception launching {0}, {1}', cmd, e)
+            raise e
     
     def loadManifest(self):
         manFile = self.setting.getManifestFile()
