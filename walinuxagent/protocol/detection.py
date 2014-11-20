@@ -44,11 +44,11 @@ def DetectAvailableProtocols(protocols=__Protocols):
         try:
             detected = protocol.Detect()
             fileutil.SetFileContents(protocolFilePath, '')
-            logger.Info("Detect protocol:{0}", protocol.__name__)
+            logger.Info("Detect protocol: {0}", protocol.__name__)
             availableProtocols.append(detected)
             break
         except Exception, e:
-            logger.Warn("Probe {0} failed:{1}", protocol.__name__, e)
+            logger.Warn("Probe {0} failed: {1}", protocol.__name__, e)
             if os.path.isfile(protocolFilePath):
                 os.remove(protocolFilePath)
     return availableProtocols

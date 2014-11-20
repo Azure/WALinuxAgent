@@ -151,3 +151,15 @@ def CleanupDirs(*args, **kwargs):
                     os.remove(path)
                 elif os.path.isdir(path):
                     shutil.rmtree(path)
+
+def SearchForFile(dirName, fileName):
+    for root, dirs, files in os.walk(dirName):
+        for f in files:
+            if f == 'HandlerManifest.json':
+                return os.path.join(root, f)
+    return None
+
+def RChangeMod(path, mode):
+    for root, dirs, files in os.walk(path):
+        for f in files:
+            os.chmod(os.path.join(root, f), mode)

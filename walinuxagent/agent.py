@@ -21,6 +21,8 @@ import os
 import sys
 import re
 import shutil
+import time
+import traceback
 import walinuxagent.logger as logger
 import walinuxagent.conf as conf
 from walinuxagent.utils.osutil import CurrOS, CurrOSInfo
@@ -30,6 +32,7 @@ import walinuxagent.protocol.detection as proto
 import walinuxagent.dhcphandler as dhcp
 import walinuxagent.envmonitor as envmon
 import walinuxagent.extension as ext
+import walinuxagent.provision as provision
 
 GuestAgentName = "WALinuxAgent"
 GuestAgentLongName = "Microsoft Azure Linux Agent"
@@ -75,14 +78,14 @@ class Agent():
 
         provisoned = os.path.join(CurrOS.GetLibDir(), "provisioned")
         if(not os.path.isfile(provisoned)):
-            provisionHandler = ProvisionHandler(self.config, 
+            provisionHandler = provision.ProvisionHandler(self.config, 
                                                 self.protocol, 
                                                 self.envmonitor)
             try:
                 provisionHandler.provision()
-                fileutil.SetFileContents(provisoned)
+                fileutil.SetFileContents(provisoned, "")
             except Exception, e:
-                protocol.reportAgentStatus(GuestAgentVersion, 
+                self.protocol.reportAgentStatus(GuestAgentVersion, 
                                            "NotReady", 
                                            "ProvisioningFailed")
                 raise e
@@ -102,10 +105,12 @@ class Agent():
             agentStatusDetail = "Guest Agent is running"
             #Handle extensions
             try:
-                exthandler = ext.ExtensionHandler()
+                exthandler = ext.ExtensionHandler(self.config, self.protocol)
                 exthandler.process()
             except Exception, e:
-                logger.Error("Failed to handle extensions: {0}", e)
+                logger.Error("Failed to handle extensions: {0} {1}", 
+                             e,
+                             traceback.format_exc())
             self.protocol.reportAgentStatus(GuestAgentVersion, 
                                             agentStatus,
                                             agentStatusDetail)
@@ -224,11 +229,14 @@ def Main():
     elif command == "deprovision":
         Deprovision(force=force, deluser=False)
     elif command == "daemon":
-        logger.LoggerInit('/var/log/waagent.log', '/dev/console')
-        fileutil.CreateDir(CurrOS.GetLibDir(), 'root', '0700')
-        os.chdir(CurrOS.GetLibDir())
         configPath = CurrOS.GetConfigurationPath()
         config = conf.LoadConfiguration(configPath)
+        verbose = config.getSwitch("Logs.Verbose", False)
+        logger.LoggerInit('/var/log/waagent.log', 
+                          '/dev/console',
+                          verbose=verbose)
+        fileutil.CreateDir(CurrOS.GetLibDir(), 'root', '0700')
+        os.chdir(CurrOS.GetLibDir())
         Agent(config).run()
     elif command == "serialconsole":
         #TODO

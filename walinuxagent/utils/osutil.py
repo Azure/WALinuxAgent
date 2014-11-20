@@ -311,12 +311,12 @@ class DefaultDistro():
         else:
             return None
 
-    def WaitForSshHostKey(keyPairType, maxRetry=6):
+    def WaitForSshHostKey(self, keyPairType, maxRetry=6):
         path = '/etc/ssh/ssh_host_{0}_key'.format(keyPairType)
         for retry in range(0, maxRetry):
             if os.path.isfile(path):
                 return
-            logger.Info("Wait for ssh host key be generated.")
+            logger.Info("Wait for ssh host key be generated: {0}", path)
             time.sleep(1)
         raise Exception("Can't find ssh host key.")
 

@@ -17,6 +17,7 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 import os
+import copy
 import xml.dom.minidom
 import walinuxagent.logger as logger
 from walinuxagent.utils.osutil import CurrOS
@@ -105,20 +106,25 @@ class ExtensionInfo():
         return self.data["properties"]["state"]
 
     def getSeqNo(self):
-        settings = self.data["properties"]["runtimeSettings"]["handlerSettings"]
-        return settings["sequenceNumber"]
+        settings = self.data["properties"]["runtimeSettings"][0]
+        return settings["handlerSettings"]["sequenceNumber"]
+
+    def getSettings(self):
+        return {
+            'runtimeSettings' : self.data["properties"]['runtimeSettings']
+        }
 
     def getPublicSettings(self):
-        settings = self.data["properties"]["runtimeSettings"]["handlerSettings"]
-        return settings["publicSettings"]
+        settings = self.data["properties"]["runtimeSettings"][0]
+        return settings["handlerSettings"]["publicSettings"]
 
     def getProtectedSettings(self):
-        settings = self.data["properties"]["runtimeSettings"]["handlerSettings"]
-        return settings["privateSettings"]
+        settings = self.data["properties"]["runtimeSettings"][0]
+        return settings["handlerSettings"]["privateSettings"]
 
     def getCertificateThumbprint(self):
-        settings = self.data["properties"]["runtimeSettings"]["handlerSettings"]
-        return settings["certificateThumbprint"]
+        settings = self.data["properties"]["runtimeSettings"][0]
+        return settings["handlerSettings"]["certificateThumbprint"]
 
     def getTargetVersion(self, currVersion):
         if self.getUpgradePolicy().lower() != 'auto':
@@ -131,8 +137,11 @@ class ExtensionInfo():
 
         versionUris = self.getVersionUris()
         if major is not None:
-            versionUris = filter(lambda x : x["version"].startswith(major + "."))
-        versionUris.sort(lambda x, y : cmp(x["version"], y["version"]))
+            versionUris = filter(lambda x : x["version"].startswith(major + "."), 
+                                 versionUris)
+        versionUris = sorted(versionUris, 
+                             key=lambda x: x["version"], 
+                             reverse=True)
         if len(versionUris) > 0:
             return versionUris[0]
         else:
@@ -142,8 +151,8 @@ class ExtensionInfo():
         versionUris = self.getVersionUris()
         version = self.getVersion()
         for versionUri in versionUris:
-            if versionUri.version == version:
-                return versionUri.uris
+            if versionUri['version']== version:
+                return versionUri['uris']
         return None
 
     def copy(self, version):

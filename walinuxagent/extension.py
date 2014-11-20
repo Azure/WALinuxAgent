@@ -16,11 +16,20 @@
 #
 # Requires Python 2.4+ and Openssl 1.0+
 #
+import os
+import traceback
+import zipfile
+import json
+import subprocess
+import walinuxagent.logger as logger
+import walinuxagent.utils.fileutil as fileutil
+import walinuxagent.utils.restutil as restutil
 from walinuxagent.utils.osutil import CurrOSInfo, CurrOS
 
 class ExtensionHandler(object):
-    def __init__(self, config):
+    def __init__(self, config, protocol):
         self.config = config
+        self.protocol = protocol
 
     def process(self):
         extSettings = self.protocol.getExtensions()
@@ -31,10 +40,17 @@ class ExtensionHandler(object):
             try:
                 ext.handle()
             except Exception, e:
-                logger.Error("Failed to handle extension: {0}-{1}, {2}", 
+                logger.Error("Failed to handle extension: {0}-{1}, {2}, {3}", 
                              setting.getName(),
                              setting.getVersion(),
-                             e)
+                             e,
+                             traceback.format_exc())
+
+def ParseExtensionDirName(dirName):
+    seprator = dirName.rfind('-')
+    if seprator < 0:
+        raise Exception("Invalid extenation dir name")
+    return dirName[0:seprator], dirName[seprator + 1:]
 
 def LoadExtensionInstance(setting):
     """
@@ -42,7 +58,7 @@ def LoadExtensionInstance(setting):
     """
     targetName = setting.getName()
     for dirName in os.listdir(CurrOS.GetLibDir()):
-        if dirName.startswith(targetName):
+        if os.path.isdir(dirName) and dirName.startswith(targetName):
             name, version = ParseExtensionDirName(dirName)
             #Here we need to ensure names are exactly the same.
             if name == targetName:
@@ -65,6 +81,9 @@ class ExtensionInstance(object):
         }))
  
     def handle(self):
+        self.logger.info("Process extension:{0} {1}", 
+                    self.setting.getName(),
+                    self.setting.getVersion())
         state = self.setting.getState()
         if state == 'enabled':
             self.handleEnable()
@@ -113,64 +132,70 @@ class ExtensionInstance(object):
         new.enable()
 
     def download(self):
-        uris = self.getPackageUris()
+        uris = self.setting.getPackageUris()
         package = None
         for uri in uris:
             try:
                 package = restutil.HttpGet(uri)
                 break
             except Exception, e:
-                logger.Warn("Unable to download extension from: {0}", uri)
+                self.logger.warn("Unable to download extension from: {0}", uri)
         if package is None:
             raise Exception("Download extension failed")
 
         #Unpack the package
         packageFile = os.path.join(CurrOS.GetLibDir(),
                                    os.path.basename(uri) + ".zip")
-        fileutil.SetFileContents(packageFile, package)
+        fileutil.SetFileContents(packageFile, bytearray(package))
         baseDir = self.setting.getBaseDir()
         zipfile.ZipFile(packageFile).extractall(baseDir)
         
         #Save manifest
-        manFile = fileutil.SearchFor(baseDir, 'HandlerManifest.json')
+        manFile = fileutil.SearchForFile(baseDir, 'HandlerManifest.json')
         man = fileutil.GetFileContents(manFile, removeBom=True)
         fileutil.SetFileContents(self.setting.getManifestFile(), man)    
 
         #Create status and config dir
         statusDir = self.setting.getStatusDir() 
         fileutil.CreateDir(statusDir, 'root', 0700)
-        configDir = self.self.getConfigDir()
+        configDir = self.setting.getConfigDir()
         fileutil.CreateDir(configDir, 'root', 0700)
 
     def enable(self):
         man = self.loadManifest()
         self.updateHandlerEnvironment()
+        self.updateSetting()
         self.launchCommand(man.getEnableCommand())
 
     def disable(self):
         man = self.loadManifest()
         self.updateHandlerEnvironment()
+        self.updateSetting()
         self.launchCommand(man.getDisableCommand())
 
     def install(self):
         man = self.loadManifest()
         self.updateHandlerEnvironment()
+        self.updateSetting()
         self.launchCommand(man.getInstallCommand())
 
     def uninstall(self):
         self.loadManifest()
         self.updateHandlerEnvironment()
+        self.updateSetting()
         self.launchCommand(man.getUninstallCommand())
 
     def update(self):
         self.loadManifest()
         self.updateHandlerEnvironment()
+        self.updateSetting()
         self.launchCommand(man.getUpdateCommand())
 
     def launchCommand(self, cmd):
-        baseDir = self.getBaseDir() 
+        baseDir = self.setting.getBaseDir() 
         cmd = os.path.join(baseDir, cmd)
         cmd = "{0} {1}".format(cmd, baseDir)
+        fileutil.RChangeMod(baseDir, 0700)
         try:
             devnull = open(os.devnull, 'w')
             child = subprocess.Popen(cmd, shell=True, cwd=baseDir, stdout=devnull)
@@ -180,21 +205,27 @@ class ExtensionInstance(object):
                 time.sleep(5)
                 retry -= 1
             if retry == 0:
-                self.logger.Error("Process exceeded timeout of {0} seconds" 
+                self.logger.error("Process exceeded timeout of {0} seconds" 
                                   "Terminating process", timeout)
                 os.kill(child.pid, 9)
             ret = child.wait()
-            if code == None or code != 0:
-                self.logger.Error("Process {0} returned non-zero exit code"
-                                  " ({1})", cmd, code)
+            if ret == None or ret != 0:
+                self.logger.error("Process {0} returned non-zero exit code"
+                                  " ({1})", cmd, ret)
         except Exception, e:
-            self.logger.Error('Exception launching {0}, {1}', cmd, e)
+            self.logger.error('Exception launching {0}, {1}', cmd, e)
     
     def loadManifest(self):
         manFile = self.setting.getManifestFile()
-        return json.loads(fileutil.GetFileContents(manFile))
+        data = json.loads(fileutil.GetFileContents(manFile))
+        if data is not None and len(data) > 0:
+            return HandlerManifest(data[0])
+        raise Exception('Failed to load manifest file.')
 
-    
+    def updateSetting(self):
+        fileutil.SetFileContents(self.setting.getSettingsFile(),
+                                 json.dumps(self.setting.getSettings()))
+
     def updateHandlerEnvironment(self):
         env = [{
             "name" : self.setting.getName(),
@@ -246,27 +277,27 @@ class HandlerManifest(object):
         return self.data["version"]
 
     def getInstallCommand(self):
-        return self.data["installCommand"]
+        return self.data['handlerManifest']["installCommand"]
 
     def getUninstallCommand(self):
-        return self.data["uninstallCommand"]
+        return self.data['handlerManifest']["uninstallCommand"]
 
     def getUpdateCommand(self):
-        return self.data["updateCommand"]
+        return self.data['handlerManifest']["updateCommand"]
 
     def getEnableCommand(self):
-        return self.data["enableCommand"]
+        return self.data['handlerManifest']["enableCommand"]
 
     def getDisableCommand(self):
-        return self.data["disableCommand"]
+        return self.data['handlerManifest']["disableCommand"]
 
     def getRebootAfterInstall(self):
-        return self.data["rebootAfterInstall"].lower() == "true"
+        return self.data['handlerManifest']["rebootAfterInstall"].lower() == "true"
 
     def getReportHeartbeat(self):
-        return self.data["reportHeartbeat"].lower() == "true"
+        return self.data['handlerManifest']["reportHeartbeat"].lower() == "true"
 
     def getUpdateWithInstall(self):
         if "updateMode" in self.data:
-            return self.data["updateMode"].lower() == "updatewithinstall"
+            return self.data['handlerManifest']["updateMode"].lower() == "updatewithinstall"
         return False

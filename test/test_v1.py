@@ -113,6 +113,8 @@ class TestProtocolV1(unittest.TestCase):
         self.assertNotEquals(None, certs)
         extensions = p.getExtensions()
         self.assertNotEquals(None, extensions)
+        ext = extensions[0]
+        self.assertEquals('1.1', ext.getTargetVersion('1.4')['version'])
    
     @Mockup(v1.restutil, 'HttpPost', MockHttpPost)
     def test_report_provision_status(self):

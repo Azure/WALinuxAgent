@@ -177,6 +177,6 @@ def SetSshConfig(config, name, val):
     return config
 
 def RemoveBom(c):
-    if ord(c[0]) > 128 and ord(c[1]) > 128 and ord(c[2] > 128):
+    if ord(c[0]) > 128 and ord(c[1]) > 128 and ord(c[2]) > 128:
         c = c[3:]
     return c
