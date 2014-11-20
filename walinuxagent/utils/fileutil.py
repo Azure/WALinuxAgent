@@ -37,6 +37,8 @@ def GetFileContents(filepath, asbin=False, removeBom=False):
     if asbin:
         mode+='b'
     try:
+        if not os.path.isfile(filepath):
+            return None
         with open(filepath, mode) as F :
             c=F.read()
         if (not asbin) and removeBom:
@@ -44,7 +46,7 @@ def GetFileContents(filepath, asbin=False, removeBom=False):
         return c
     except IOError, e:
         logger.Error('Reading from file {0} Exception is {1}', filepath, e)
-        return None        
+        raise e
 
 def SetFileContents(filepath, contents, append=False):
     """

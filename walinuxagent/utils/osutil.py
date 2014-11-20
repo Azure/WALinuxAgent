@@ -161,7 +161,10 @@ class DefaultDistro():
         fileutil.ChangeMod('/etc/sudoers.d/waagent', 0440)
 
     def DeleteRootPassword(self):
-        passwd = fileutil.GetFileContents(self.passwdPath).split("\n")
+        passwdContent = fileutil.GetFileContents(self.passwdPath)
+        if passwdContent is None:
+            raise Exception("Failed to delete root password.")
+        passwd = passwdContent.split('\n')
         newPasswd = filter(lambda x : not x.startswith("root:"), passwd)
         newPasswd.insert(0, "root:*LOCK*:14600::::::")
         fileutil.ReplaceFileContentsAtomic(self.passwdPath, "\n".join(newPasswd))

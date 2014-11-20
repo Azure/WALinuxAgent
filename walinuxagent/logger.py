@@ -124,7 +124,7 @@ def LoggerInit(log_file_path, log_console_path, log_stdout_path='/dev/stdout',
     
     stdout_appender_config = AppenderConfig({
         "type":"CONSOLE", 
-        "level" : "VERBOSE", 
+        "level" : "INFO", 
         "console_path" : "/dev/stdout"
     })
     if verbose:

@@ -157,6 +157,9 @@ class ProtocolV1(Protocol):
         fileutil.SetFileContents(SharedConfigFile, sharedConfigXml)
 
     def updateCertificates(self):
+        certificatesUri = self.goalState.getCertificatesUri()
+        if certificatesUri is None:
+            return
         certificatesXml = restutil.HttpGet(self.goalState.getCertificatesUri(),
                                            headers=self.getHearderWithCert())
         if certificatesXml is None:
@@ -501,7 +504,8 @@ class GoalState():
         self.hostingEnvUri = (FindFirstNode(xmlDoc, 
                                             ".//HostingEnvironmentConfig")).text
         self.sharedConfigUri = (FindFirstNode(xmlDoc, ".//SharedConfig")).text
-        self.certificatesUri = (FindFirstNode(xmlDoc, ".//Certificates")).text
+        node = (FindFirstNode(xmlDoc, ".//Certificates"))
+        self.certificatesUri = node.text if node is not None else None
         self.extensionsUri = (FindFirstNode(xmlDoc, ".//ExtensionsConfig")).text
         self.roleInstanceId = (FindFirstNode(xmlDoc, 
                                              ".//RoleInstance/InstanceId")).text
