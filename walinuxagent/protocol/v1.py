@@ -87,7 +87,7 @@ class ProtocolV1(Protocol):
         self.extensions = None
  
     def checkProtocolVersion(self):
-        versionInfoXml = restutil.HttpGet(VersionInfoUri.format(self.endpoint))
+        versionInfoXml = restutil.HttpGet(VersionInfoUri.format(self.endpoint)).read()
         self.versionInfo = VersionInfo(versionInfoXml)
         fileutil.SetFileContents(VersionInfoFile, versionInfoXml)
 
@@ -132,7 +132,7 @@ class ProtocolV1(Protocol):
 
     def updateGoalState(self):
         goalStateXml = restutil.HttpGet(GoalStateUri.format(self.endpoint),
-                                        headers=self.getHeader())
+                                        headers=self.getHeader()).read()
         if goalStateXml is None:
             raise Exception("Failed update goalstate")
         self.goalState = GoalState(goalStateXml)
@@ -144,7 +144,7 @@ class ProtocolV1(Protocol):
 
     def updateHostingEnv(self):
         hostingEnvXml = restutil.HttpGet(self.goalState.getHostingEnvUri(),
-                                         headers=self.getHeader())
+                                         headers=self.getHeader()).read()
         if hostingEnvXml is None:
             raise Exception("Failed to update hosting environment config")
         self.hostingEnv = HostingEnv(hostingEnvXml)
@@ -152,7 +152,7 @@ class ProtocolV1(Protocol):
 
     def updateSharedConfig(self):
         sharedConfigXml = restutil.HttpGet(self.goalState.getSharedConfigUri(),
-                                           headers=self.getHeader())
+                                           headers=self.getHeader()).read()
         self.sharedConfig = SharedConfig(sharedConfigXml)
         fileutil.SetFileContents(SharedConfigFile, sharedConfigXml)
 
@@ -161,7 +161,7 @@ class ProtocolV1(Protocol):
         if certificatesUri is None:
             return
         certificatesXml = restutil.HttpGet(self.goalState.getCertificatesUri(),
-                                           headers=self.getHearderWithCert())
+                                           headers=self.getHearderWithCert()).read()
         if certificatesXml is None:
             raise Exception("Failed to update certificates")
         fileutil.SetFileContents(CertificatesFile, certificatesXml)
@@ -171,7 +171,7 @@ class ProtocolV1(Protocol):
     
     def updateExtensionConfig(self):
         extentionsXml = restutil.HttpGet(self.goalState.getExtensionsUri(),
-                                         headers=self.getHeader())
+                                         headers=self.getHeader()).read()
         if extentionsXml is None:
             raise Exception("Failed to update extensions config")
         self.extensions = ExtensionsConfig(extentionsXml)
@@ -182,7 +182,7 @@ class ProtocolV1(Protocol):
             manifestUri = self.extensions.getManifestUri(ext.getName())
             for uri in manifestUri:
                 try:
-                    manifestXml = restutil.HttpGet(uri)
+                    manifestXml = restutil.HttpGet(uri).read()
                     manifestXml = RemoveBom(manifestXml)
                     manifestFile = ManifestFile.format(ext.getName(), 
                                                        self.incarnation)
@@ -253,19 +253,20 @@ class ProtocolV1(Protocol):
                 ExtensionManifest(manifestXml).update(ext)
         return self.extensions
 
-    def reportProvisionStatus(self, status=None, subStatus="", 
-                              description="", thumbprint=None):
+    def reportProvisionStatus(self, status=None, subStatus=None, 
+                              description='', thumbprint=None):
         if status is not None:
             healthReport = self._buildHealthReport(status, 
                                                    subStatus, 
                                                    description)
             healthReportUri = HealthReportUri.format(self.endpoint)
+            headers=self.getHeaderWithContentTypeXml()
             resp = restutil.HttpPost(healthReportUri, 
-                                    healthReport,
-                                    headers=self.getHeaderWithContentTypeXml())
+                                     healthReport,
+                                     headers=headers)
             if resp is not None:
                 latest = resp.getheader("x-ms-latest-goal-state-incarnation-number")
-                if latest is not none:
+                if latest is not None:
                     self.incarnation = latest
 
         if thumbprint is not None:
@@ -295,6 +296,12 @@ class ProtocolV1(Protocol):
                            thumbprint)
 
     def _buildHealthReport(self, status, subStatus, description):
+        detail = None
+        if subStatus is not None:
+            detail = ("<Details>"
+                      "<SubStatus>{0}</SubStatus>"
+                      "<Description>{1}</Description>"
+                      "</Details>").format(subStatus, description)
         return (u"<?xml version=\"1.0\" encoding=\"utf-8\"?>"
                 "<Health "
                     "xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\""
@@ -307,10 +314,7 @@ class ProtocolV1(Protocol):
                 "<InstanceId>{2}</InstanceId>"
                 "<Health>"
                 "<State>{3}</State>"
-                "<Details>"
-                "<SubStatus>{4}</SubStatus>"
-                "<Description>{5}</Description>"
-                "</Details>"
+                "{4}"
                 "</Health>"
                 "</Role>"
                 "</RoleInstanceList>"
@@ -320,8 +324,7 @@ class ProtocolV1(Protocol):
                            self.goalState.getContainerId(),
                            self.goalState.getRoleInstanceId(),
                            status, 
-                           subStatus, 
-                           description)
+                           detail if detail is not None else '')
 
     def reportAgentStatus(self, version, status, message):
         tstamp=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())

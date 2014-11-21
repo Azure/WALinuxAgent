@@ -92,7 +92,7 @@ def HttpRequest(method, url, data, headers=None, maxRetry=1):
         resp = _HttpRequest(method, host, action, data, secure, headers)
 
     if isValidResponse(resp):
-        return resp.read()
+        return resp
     else:
         return None
 

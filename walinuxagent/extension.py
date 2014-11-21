@@ -136,8 +136,10 @@ class ExtensionInstance(object):
         package = None
         for uri in uris:
             try:
-                package = restutil.HttpGet(uri)
-                break
+                resp = restutil.HttpGet(uri)
+                if resp is not None:
+                    package = resp.read()
+                    break
             except Exception, e:
                 self.logger.warn("Unable to download extension from: {0}", uri)
         if package is None:
