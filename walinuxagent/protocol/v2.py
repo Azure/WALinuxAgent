@@ -23,14 +23,13 @@ class ProtocolV2(Protocol):
 
     __MetadataServerAddr='169.254.169.254'
     __ApiVersion='2015-01-01'
-    __IdentityService="https://{0}/identity?$get-children=true&\
-                      api-version={{{1}}}".format(__MetadataServerAddr, 
+    __IdentityService=("https://{0}/identity?$get-children=true&"
+                       "api-version={{{1}}}").format(__MetadataServerAddr, 
                                                   __ApiVersion)
 
     @staticmethod
     def Detect(identityService=__IdentityService):
-        ret = restutil.HttpGet(identityService) 
-        return True if ret else False
+        raise NotImplementedError("Protocol v2 is not implemented.")
 
 
     @staticmethod
