@@ -37,6 +37,8 @@ def GetFileContents(filepath, asbin=False, removeBom=False):
     if asbin:
         mode+='b'
     try:
+        if not os.path.isfile(filepath):
+            return None
         with open(filepath, mode) as F :
             c=F.read()
         if (not asbin) and removeBom:
@@ -44,7 +46,7 @@ def GetFileContents(filepath, asbin=False, removeBom=False):
         return c
     except IOError, e:
         logger.Error('Reading from file {0} Exception is {1}', filepath, e)
-        return None        
+        raise e
 
 def SetFileContents(filepath, contents, append=False):
     """
@@ -161,3 +163,14 @@ def UpdateConfigFile(path, lineStart, val, chk_err=False):
     config.append(val)
     fileutil.ReplaceFileContentsAtomic(path, '\n'.join(config))
 
+def SearchForFile(dirName, fileName):
+    for root, dirs, files in os.walk(dirName):
+        for f in files:
+            if f == 'HandlerManifest.json':
+                return os.path.join(root, f)
+    return None
+
+def RChangeMod(path, mode):
+    for root, dirs, files in os.walk(path):
+        for f in files:
+            os.chmod(os.path.join(root, f), mode)

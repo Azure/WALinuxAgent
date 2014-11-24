@@ -68,23 +68,31 @@ def HttpRequest(method, url, data, headers=None, maxRetry=1):
     On error, sleep 10 and maxRetry times.
     Return the output buffer or None.
     """
+    def isValidResponse(resp):
+        if resp is None:
+            return False
+        if resp.status in {httplib.OK, httplib.CREATED, httplib.ACCEPTED}:
+            return True
+        return False
+
     logger.Verbose("{0} {1}", method, url)
+    logger.Verbose("Data={0}", data)
+    logger.Verbose("Header={0}", headers)
     host, action, secure = _ParseUrl(url)
     resp = _HttpRequest(method, host, action, data, secure, headers)
     for retry in range(0, maxRetry):
-        if resp is not None and resp.status == httplib.OK:
+        if isValidResponse(resp):
             break;
         elif resp is None:
             logger.Error("Retry={0}, response is empty.", retry)
         else:
-            logger.Error("Retry={0}, Status={1}, {2} {3}", retry, 
-                         resp.status, method, url)
+            logger.Error("Retry={0}, Status={1}, Message={2}, {3}, {4}", retry, 
+                         resp.status, resp.reason, method, url)
         time.sleep(__RetryWaitingInterval)
         resp = _HttpRequest(method, host, action, data, secure, headers)
 
-    if (resp is not None 
-            and (resp.status == httplib.OK or resp.status == httplib.ACCEPTED)):
-        return resp.read()
+    if isValidResponse(resp):
+        return resp
     else:
         return None
 

@@ -18,6 +18,7 @@
 #
 
 import os
+import traceback
 import walinuxagent.logger as logger
 from walinuxagent.utils.osutil import CurrOS, CurrOSInfo
 import walinuxagent.utils.shellutil as shellutil
@@ -38,14 +39,15 @@ class ProvisionHandler(object):
                 #In some distro like Ubuntu, cloud init does the provision
                 #In this case, we need to wait the cloud init to complete 
                 #provision work and generate ssh host key
-                CurrOS.WaitForSshHostKey()
+                keyPairType = self.config.get("Provisioning.SshHostKeyPairType", "rsa")
+                CurrOS.WaitForSshHostKey(keyPairType)
 
-            keyPairType = config.get("Provisioning.SshHostKeyPairType", "rsa")
+            keyPairType = self.config.get("Provisioning.SshHostKeyPairType", "rsa")
             thumbprint = CurrOS.GetSshHostKeyThumbprint(keyPairType)
             self.protocol.reportProvisionStatus(status="Ready",
                                                 thumbprint = thumbprint)
         except Exception, e:
-            logger.Error("Provision failed: {0}", e)
+            logger.Error("Provision failed: {0} {1}", e, traceback.format_exc())
             self.protocol.reportProvisionStatus(status="NotReady",
                                                 subStatus="Provisioning Failed")
             raise e

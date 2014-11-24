@@ -17,6 +17,7 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 import os
+import traceback
 import walinuxagent.logger as logger
 from walinuxagent.utils.osutil import CurrOS, CurrOSInfo
 import walinuxagent.utils.fileutil as fileutil
@@ -44,11 +45,14 @@ def DetectAvailableProtocols(protocols=__Protocols):
         try:
             detected = protocol.Detect()
             fileutil.SetFileContents(protocolFilePath, '')
-            logger.Info("Detect protocol:{0}", protocol.__name__)
+            logger.Info("Detect protocol: {0}", protocol.__name__)
             availableProtocols.append(detected)
             break
         except Exception, e:
-            logger.Warn("Probe {0} failed:{1}", protocol.__name__, e)
+            logger.Warn("Probe {0} failed: {1} {2}", 
+                        protocol.__name__, 
+                        e,
+                        traceback.format_exc())
             if os.path.isfile(protocolFilePath):
                 os.remove(protocolFilePath)
     return availableProtocols

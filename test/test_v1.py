@@ -36,22 +36,30 @@ from test_certificates import CertificatesSample
 from test_extensionsconfig import ExtensionsConfigSample, ManifestSample
 
 def MockHttpGet(url, headers=None, maxRetry=1):
+    content = None
     if "versions" in url:
-        return VersionInfoSample
+        content = VersionInfoSample
     elif "goalstate" in url:
-        return GoalStateSample
+        content = GoalStateSample
     elif "hostingenvuri" in url:
-        return HostingEnvSample
+        content = HostingEnvSample
     elif "sharedconfiguri" in url:
-        return SharedConfigSample
+        content = SharedConfigSample
     elif "certificatesuri" in url:
-        return CertificatesSample
+        content = CertificatesSample
     elif "extensionsconfiguri" in url:
-        return ExtensionsConfigSample
+        content = ExtensionsConfigSample
     elif "manifest.xml" in url:
-        return ManifestSample
+        content = ManifestSample
     else:
         raise Exception("Bad url {0}".format(url))
+    return MockResp(content)
+
+class MockResp(object):
+    def __init__(self, content):
+        self.content = content
+    def read(self):
+        return self.content
 
 MockHttpPut = MockFunc('HttpPut')
 MockHttpPost = MockFunc('HttpPost')
@@ -113,6 +121,8 @@ class TestProtocolV1(unittest.TestCase):
         self.assertNotEquals(None, certs)
         extensions = p.getExtensions()
         self.assertNotEquals(None, extensions)
+        ext = extensions[0]
+        self.assertEquals('1.1', ext.getTargetVersion('1.4')['version'])
    
     @Mockup(v1.restutil, 'HttpPost', MockHttpPost)
     def test_report_provision_status(self):

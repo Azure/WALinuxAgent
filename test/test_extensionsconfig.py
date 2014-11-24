@@ -64,7 +64,7 @@ ExtensionsConfigSample="""\
   </GAFamilies>
 </GuestAgentExtension>
 <Plugins>
-  <Plugin name="OSTCExtensions.ExampleHandlerLinux" version="1.4" location="http://rdfepirv2hknprdstr03.blob.core.windows.net/b01058962be54ceca550a390fa5ff064/Microsoft.OSTCExtensions_CustomScriptForLinuxTest_asiaeast_manifest.xml" config="" state="enabled" autoUpgrade="false" failoverlocation="http://rdfepirv2hknprdstr04.blob.core.windows.net/b01058962be54ceca550a390fa5ff064/Microsoft.OSTCExtensions_CustomScriptForLinuxTest_asiaeast_manifest.xml" runAsStartupTask="false" isJson="true" />
+  <Plugin name="OSTCExtensions.ExampleHandlerLinux" version="1.4" location="http://rdfepirv2hknprdstr03.blob.core.windows.net/b01058962be54ceca550a390fa5ff064/Microsoft.OSTCExtensions_CustomScriptForLinuxTest_asiaeast_manifest.xml" config="" state="enabled" autoUpgrade="true" failoverlocation="http://rdfepirv2hknprdstr04.blob.core.windows.net/b01058962be54ceca550a390fa5ff064/Microsoft.OSTCExtensions_CustomScriptForLinuxTest_asiaeast_manifest.xml" runAsStartupTask="false" isJson="true" />
 </Plugins>
 <PluginSettings>
   <Plugin name="OSTCExtensions.ExampleHandlerLinux" version="1.4">
@@ -80,6 +80,12 @@ ManifestSample="""\
 <Plugins>
 <Plugin>
 <Version>1.0</Version>
+<Uris>
+<Uri>http://blahblah</Uri>
+</Uris>
+</Plugin>
+<Plugin>
+<Version>1.1</Version>
 <Uris>
 <Uri>http://blahblah</Uri>
 </Uris>
@@ -100,12 +106,14 @@ class TestExtensionsConfig(unittest.TestCase):
         self.assertEquals("OSTCExtensions.ExampleHandlerLinux", 
                           extension.getName())
         self.assertEquals("1.4", extension.getVersion())
-        self.assertEquals(None, extension.getUpgradePolicy())
+        self.assertEquals('auto', extension.getUpgradePolicy())
         self.assertEquals("enabled", extension.getState())
         self.assertEquals("4037FBF5F1F3014F99B5D6C7799E9B20E6871CB3", 
                           extension.getCertificateThumbprint())
         self.assertEquals("MIICWgYJK", extension.getProtectedSettings())
-        self.assertEquals(json.loads('{"foo":"bar"}'), extension.getPublicSettings())
+        self.assertEquals(json.loads('{"foo":"bar"}'), 
+                          extension.getPublicSettings())
+
    
 if __name__ == '__main__':
     unittest.main()

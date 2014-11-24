@@ -43,7 +43,7 @@ Define distro specific behavior. DefaultDistro class defines default behavior
 for all distros. Each concrete distro classes could overwrite default behavior
 if needed.
 """
-class DefaultDistro():
+class DefaultDistro(object):
     def __init__(self):
         self.libDir = "/var/lib/waagent"
         self.dvdMountPoint = "/mnt/cdrom/secure"
@@ -160,7 +160,10 @@ class DefaultDistro():
         fileutil.ChangeMod('/etc/sudoers.d/waagent', 0440)
 
     def DeleteRootPassword(self):
-        passwd = fileutil.GetFileContents(self.passwdPath).split("\n")
+        passwdContent = fileutil.GetFileContents(self.passwdPath)
+        if passwdContent is None:
+            raise Exception("Failed to delete root password.")
+        passwd = passwdContent.split('\n')
         newPasswd = filter(lambda x : not x.startswith("root:"), passwd)
         newPasswd.insert(0, "root:*LOCK*:14600::::::")
         fileutil.ReplaceFileContentsAtomic(self.passwdPath, "\n".join(newPasswd))
@@ -310,12 +313,12 @@ class DefaultDistro():
         else:
             return None
 
-    def WaitForSshHostKey(keyPairType, maxRetry=6):
+    def WaitForSshHostKey(self, keyPairType, maxRetry=6):
         path = '/etc/ssh/ssh_host_{0}_key'.format(keyPairType)
         for retry in range(0, maxRetry):
             if os.path.isfile(path):
                 return
-            logger.Info("Wait for ssh host key be generated.")
+            logger.Info("Wait for ssh host key be generated: {0}", path)
             time.sleep(1)
         raise Exception("Can't find ssh host key.")
 
@@ -689,6 +692,7 @@ class DefaultDistro():
 
 class DebianDistro(DefaultDistro):
     def __init__(self):
+        super(DebianDistro, self).__init__()
         self.dhcpClientConfigFile = '/etc/dhcp/dhclient.conf'
 
     def RestartSshService(self):

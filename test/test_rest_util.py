@@ -51,16 +51,16 @@ class TestHttpOperations(unittest.TestCase):
         self.assertEquals(True, secure)
 
     def test_http_get(self):
-        resp = restutil.HttpGet("http://httpbin.org/get")
+        resp = restutil.HttpGet("http://httpbin.org/get").read()
         self.assertNotEquals(None, resp)
        
         msg = str(uuid.uuid4())
-        resp = restutil.HttpGet("http://httpbin.org/get", {"x-abc":msg})
+        resp = restutil.HttpGet("http://httpbin.org/get", {"x-abc":msg}).read()
         self.assertNotEquals(None, resp)
         self.assertTrue(msg in resp)
 
     def test_https_get(self):
-        resp = restutil.HttpGet("https://httpbin.org/get")
+        resp = restutil.HttpGet("https://httpbin.org/get").read()
         self.assertNotEquals(None, resp)
 
 if __name__ == '__main__':

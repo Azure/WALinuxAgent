@@ -20,6 +20,7 @@ import os
 import json
 import re
 import time
+import traceback
 import xml.etree.ElementTree as ET
 import walinuxagent.logger as logger
 import walinuxagent.utils.restutil as restutil
@@ -85,9 +86,8 @@ class ProtocolV1(Protocol):
         self.certificates = None
         self.extensions = None
  
-    @logger.LogError("check protocol version")
     def checkProtocolVersion(self):
-        versionInfoXml = restutil.HttpGet(VersionInfoUri.format(self.endpoint))
+        versionInfoXml = restutil.HttpGet(VersionInfoUri.format(self.endpoint)).read()
         self.versionInfo = VersionInfo(versionInfoXml)
         fileutil.SetFileContents(VersionInfoFile, versionInfoXml)
 
@@ -104,13 +104,35 @@ class ProtocolV1(Protocol):
             logger.Warn("Agent supported wire protocol version: {0} was not "
                         "advised by Fabric.", ProtocolVersion)
             raise Exception("Wire protocol version not supported")
-    
+
+    def getHeader(self):
+        return {
+            "x-ms-agent-name":"WALinuxAgent",
+            "x-ms-version":ProtocolVersion
+        }
+
+    def getHeaderWithContentTypeXml(self):
+        return {
+            "x-ms-agent-name":"WALinuxAgent",
+            "x-ms-version":ProtocolVersion,
+            "Content-Type":"text/xml;charset=utf-8"
+        }
+
+    def getHearderWithCert(self):
+        cert = ""
+        for line in fileutil.GetFileContents(TransportCertFile).split('\n'):
+            if "CERTIFICATE" not in line:
+                cert += line.rstrip()
+        return {
+            "x-ms-agent-name":"WALinuxAgent",
+            "x-ms-version":ProtocolVersion,
+            "x-ms-cipher-name": "DES_EDE3_CBC",
+            "x-ms-guest-agent-public-x509-cert":cert
+        }
+
     def updateGoalState(self):
         goalStateXml = restutil.HttpGet(GoalStateUri.format(self.endpoint),
-                                        headers={
-                                            "x-ms-agent-name":"WALinuxAgent",
-                                            "x-ms-version":ProtocolVersion
-                                        })
+                                        headers=self.getHeader()).read()
         if goalStateXml is None:
             raise Exception("Failed update goalstate")
         self.goalState = GoalState(goalStateXml)
@@ -122,10 +144,7 @@ class ProtocolV1(Protocol):
 
     def updateHostingEnv(self):
         hostingEnvXml = restutil.HttpGet(self.goalState.getHostingEnvUri(),
-                                         headers={
-                                            "x-ms-agent-name":"WALinuxAgent",
-                                            "x-ms-version":ProtocolVersion
-                                         })
+                                         headers=self.getHeader()).read()
         if hostingEnvXml is None:
             raise Exception("Failed to update hosting environment config")
         self.hostingEnv = HostingEnv(hostingEnvXml)
@@ -133,19 +152,16 @@ class ProtocolV1(Protocol):
 
     def updateSharedConfig(self):
         sharedConfigXml = restutil.HttpGet(self.goalState.getSharedConfigUri(),
-                                           headers={
-                                                "x-ms-agent-name":"WALinuxAgent",
-                                                "x-ms-version":ProtocolVersion
-                                           })
+                                           headers=self.getHeader()).read()
         self.sharedConfig = SharedConfig(sharedConfigXml)
         fileutil.SetFileContents(SharedConfigFile, sharedConfigXml)
 
     def updateCertificates(self):
+        certificatesUri = self.goalState.getCertificatesUri()
+        if certificatesUri is None:
+            return
         certificatesXml = restutil.HttpGet(self.goalState.getCertificatesUri(),
-                                           headers={
-                                                "x-ms-agent-name":"WALinuxAgent",
-                                                "x-ms-version":ProtocolVersion
-                                           })
+                                           headers=self.getHearderWithCert()).read()
         if certificatesXml is None:
             raise Exception("Failed to update certificates")
         fileutil.SetFileContents(CertificatesFile, certificatesXml)
@@ -155,12 +171,7 @@ class ProtocolV1(Protocol):
     
     def updateExtensionConfig(self):
         extentionsXml = restutil.HttpGet(self.goalState.getExtensionsUri(),
-                                         headers={
-                                            "x-ms-agent-name":"WALinuxAgent",
-                                            "x-ms-version":ProtocolVersion,
-                                            "x-ms-cipher-name": "DES_EDE3_CBC",
-                                            "x-ms-guest-agent-public-x509-cert":self.getTransportCert()
-                                         })
+                                         headers=self.getHeader()).read()
         if extentionsXml is None:
             raise Exception("Failed to update extensions config")
         self.extensions = ExtensionsConfig(extentionsXml)
@@ -171,7 +182,7 @@ class ProtocolV1(Protocol):
             manifestUri = self.extensions.getManifestUri(ext.getName())
             for uri in manifestUri:
                 try:
-                    manifestXml = restutil.HttpGet(uri)
+                    manifestXml = restutil.HttpGet(uri).read()
                     manifestXml = RemoveBom(manifestXml)
                     manifestFile = ManifestFile.format(ext.getName(), 
                                                        self.incarnation)
@@ -180,16 +191,11 @@ class ProtocolV1(Protocol):
                     break
                 except Exception, e:
                     #Download manifest failed, will retry with failover location
-                    logger.Warn("Download manifest for {0} failed: uri={1}",
+                    logger.Warn("Download manifest for {0} failed: {1} {2} {3}",
                                 ext.getName(),
-                                uri)
-
-    def getTransportCert(self):
-        cert = ""
-        for line in fileutil.GetFileContents(TransportCertFile).split('\n'):
-            if "CERTIFICATE" not in line:
-                cert += line.rstrip()
-        return cert
+                                uri,
+                                e,
+                                traceback.format_exc())
 
     def refreshCache(self):
         """
@@ -247,19 +253,28 @@ class ProtocolV1(Protocol):
                 ExtensionManifest(manifestXml).update(ext)
         return self.extensions
 
-    def reportProvisionStatus(self, status=None, subStatus="", 
-                              description="", thumbprint=None):
+    def reportProvisionStatus(self, status=None, subStatus=None, 
+                              description='', thumbprint=None):
         if status is not None:
             healthReport = self._buildHealthReport(status, 
                                                    subStatus, 
                                                    description)
             healthReportUri = HealthReportUri.format(self.endpoint)
-            ret = restutil.HttpPost(healthReportUri, healthReport)
+            headers=self.getHeaderWithContentTypeXml()
+            resp = restutil.HttpPost(healthReportUri, 
+                                     healthReport,
+                                     headers=headers)
+            if resp is not None:
+                latest = resp.getheader("x-ms-latest-goal-state-incarnation-number")
+                if latest is not None:
+                    self.incarnation = latest
 
         if thumbprint is not None:
             roleProp = self._buildRoleProperties(thumbprint)
             rolePropUri = RolePropUri.format(self.endpoint)
-            ret = restutil.HttpPost(rolePropUri, roleProp)
+            ret = restutil.HttpPost(rolePropUri, 
+                                    roleProp,
+                                    headers=self.getHeaderWithContentTypeXml())
 
     def _buildRoleProperties(self, thumbprint):
         return (u"<?xml version=\"1.0\" encoding=\"utf-8\"?>"
@@ -281,8 +296,14 @@ class ProtocolV1(Protocol):
                            thumbprint)
 
     def _buildHealthReport(self, status, subStatus, description):
+        detail = None
+        if subStatus is not None:
+            detail = ("<Details>"
+                      "<SubStatus>{0}</SubStatus>"
+                      "<Description>{1}</Description>"
+                      "</Details>").format(subStatus, description)
         return (u"<?xml version=\"1.0\" encoding=\"utf-8\"?>"
-                "<Health"
+                "<Health "
                     "xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\""
                 " xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\">"
                 "<GoalStateIncarnation>{0}</GoalStateIncarnation>"
@@ -293,10 +314,7 @@ class ProtocolV1(Protocol):
                 "<InstanceId>{2}</InstanceId>"
                 "<Health>"
                 "<State>{3}</State>"
-                "<Details>"
-                "<SubStatus>{4}</SubStatus>"
-                "<Description>{5}</Description>"
-                "</Details>"
+                "{4}"
                 "</Health>"
                 "</Role>"
                 "</RoleInstanceList>"
@@ -306,8 +324,7 @@ class ProtocolV1(Protocol):
                            self.goalState.getContainerId(),
                            self.goalState.getRoleInstanceId(),
                            status, 
-                           subStatus, 
-                           description)
+                           detail if detail is not None else '')
 
     def reportAgentStatus(self, version, status, message):
         tstamp=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
@@ -490,7 +507,8 @@ class GoalState():
         self.hostingEnvUri = (FindFirstNode(xmlDoc, 
                                             ".//HostingEnvironmentConfig")).text
         self.sharedConfigUri = (FindFirstNode(xmlDoc, ".//SharedConfig")).text
-        self.certificatesUri = (FindFirstNode(xmlDoc, ".//Certificates")).text
+        node = (FindFirstNode(xmlDoc, ".//Certificates"))
+        self.certificatesUri = node.text if node is not None else None
         self.extensionsUri = (FindFirstNode(xmlDoc, ".//ExtensionsConfig")).text
         self.roleInstanceId = (FindFirstNode(xmlDoc, 
                                              ".//RoleInstance/InstanceId")).text
@@ -710,7 +728,7 @@ class ExtensionsConfig(object):
             location = extension.attrib["location"]
             failoverLocation = extension.attrib["failoverlocation"]
             autoUpgrade = extension.attrib["autoUpgrade"]
-            upgradePolicy = "auto" if autoUpgrade == "true" else None
+            upgradePolicy = "auto" if autoUpgrade == "true" else "manual"
             state = extension.attrib["state"]
             setting = filter(lambda x: x.attrib["name"] == name 
                              and x.attrib["version"] == version,
@@ -736,7 +754,7 @@ class ExtensionsConfig(object):
             handlerSettings["certificateThumbprint"] = thumbprint
 
             runtimeSettings["handlerSettings"] = handlerSettings
-            properties["runtimeSettings"] = runtimeSettings
+            properties["runtimeSettings"] = [runtimeSettings]
             ext["properties"] = properties
             self.extensions.append(ExtensionInfo(ext))
             self.manifestUris[name] = (location, failoverLocation)
@@ -755,7 +773,8 @@ class ExtensionManifest(object):
         packages = FindAllNodes(xmlDoc, ".//Plugins/Plugin")
         for package in packages:
             version = FindFirstNode(package, "Version").text
-            uris = filter(lambda x : x.text, FindAllNodes(package, "Uri"))
+            uris = FindAllNodes(package, "Uris/Uri")
+            uris = map(lambda x : x.text, uris)
             self.versionUris.append({
                 "version":version,
                 "uris":uris
