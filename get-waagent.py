@@ -38,7 +38,8 @@ def Main():
     TargetDir='.'
 
     Depo="{0}/{1}".format(User, Project)
-    ZipFile='{0}-{1}.zip'.format(Project, Ref)
+    SrcDir="{0}-{1}".format(Project, Ref)
+    ZipFile='{0}.zip'.format(SrcDir)
     ZipFileUri='https://github.com/{0}/archive/{1}.zip'.format(Depo, Ref)
 
     print "Download zip file..."
@@ -46,7 +47,7 @@ def Main():
     zfile = zipfile.ZipFile(ZipFile)
     zfile.extractall(TargetDir)
     
-    os.chmod(os.path.join(TargetDir, 'bin/waagent'), 0500)
+    os.chmod(os.path.join(TargetDir, SrcDir, 'bin/waagent'), 0500)
 
     os.remove(ZipFile)
 

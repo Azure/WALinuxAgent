@@ -882,7 +882,7 @@ class SUSEDistro(DefaultDistro):
             return ret
         return shellutil.Run("insserv -r waagent", chk_err=False)
 
-class SUSE12Distro(SUSE12Distro):
+class SUSE12Distro(SUSEDistro):
     def __init__(self):
         super(SUSE12Distro, self).__init__()
         self.dhcpClientName = 'wickedd-dhcp4'
