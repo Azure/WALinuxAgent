@@ -22,6 +22,7 @@ import traceback
 import walinuxagent.logger as logger
 from walinuxagent.utils.osutil import CurrOS, CurrOSInfo
 import walinuxagent.utils.shellutil as shellutil
+import walinuxagent.utils.fileutil as fileutil
 
 CustomDataFile="CustomData"
 
@@ -54,17 +55,17 @@ class ProvisionHandler(object):
 
     def _provision(self):
         logger.Info("Provisioning image started")
-        self.reportProvisionStatus("NotReady", "Running", "Starting")
+        self.protocol.reportProvisionStatus("NotReady", "Provisioning", "Starting")
 
         self.ovfenv = self.protocol.copyOvf()
         password = self.ovfenv.getUserPassword()
         self.ovfenv.clearUserPassword()
 
-        self.envMonitor.setHostname(self.ovfenv.getHostName())
+        self.envMonitor.setHostname(self.ovfenv.getComputerName())
         CurrOS.UpdateUserAccount(self.ovfenv.getUserName(), password)
 
         #Disable selinux temporary
-        sel = CurrOS.isSelinuxRunning()
+        sel = CurrOS.IsSelinuxRunning()
         if sel:
             CurrOS.SetSelinuxEnforce(0)
         self.deploySshPublicKeys()
@@ -73,20 +74,23 @@ class ProvisionHandler(object):
         if sel:
             CurrOS.SetSelinuxEnforce(1)
 
-        keyPairType = config.get("Provisioning.SshHostKeyPairType", "rsa")
-        if config.getSwitch("Provisioning.RegenerateSshHostKeyPair"):
+        keyPairType = self.config.get("Provisioning.SshHostKeyPairType", "rsa")
+        if self.config.getSwitch("Provisioning.RegenerateSshHostKeyPair"):
             CurrOS.RegenerateSshHostkey(keyPairType)
 
-        self.envMonitor.waitForHostnamePublishing()
+        #self.envMonitor.waitForHostnamePublishing()
         CurrOS.RestartSshService()
 
-        if config.getSwitch("Provisioning.DeleteRootPassword"):
+        if self.config.getSwitch("Provisioning.DeleteRootPassword"):
             CurrOS.DeleteRootPassword()
 
-    def saveCustomData(self, customData):
+    def saveCustomData(self):
+        customData = self.ovfenv.getCustomData()
+        if customData is None:
+            return
         libDir = CurrOS.GetLibDir()
-        CurrOS.SetFileContents(os.path.join(libDir, CustomDataFile), 
-                               CurrOS.TranslateCustomData(customData))
+        fileutil.SetFileContents(os.path.join(libDir, CustomDataFile), 
+                                 CurrOS.TranslateCustomData(customData))
 
     def deploySshPublicKeys(self):
         for thumbprint, path in self.ovfenv.getSshPublicKeys():

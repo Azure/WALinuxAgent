@@ -23,6 +23,7 @@ import re
 import shutil
 import time
 import traceback
+import threading
 import walinuxagent.logger as logger
 import walinuxagent.conf as conf
 from walinuxagent.utils.osutil import CurrOS, CurrOSInfo

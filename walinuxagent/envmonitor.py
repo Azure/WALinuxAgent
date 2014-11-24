@@ -20,6 +20,7 @@ import os
 import socket
 import threading
 import time
+import walinuxagent.logger as logger
 from walinuxagent.utils.osutil import CurrOS, CurrOSInfo
 
 class EnvMonitor(object):

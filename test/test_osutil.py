@@ -186,5 +186,8 @@ class TestCurrOS(unittest.TestCase):
     def test_swap(self):
         CurrOS.CreateSwapSpace('/tmp', 1024)    
 
+    def test_getdvd(self):
+        CurrOS.GetDvdDevice()
+
 if __name__ == '__main__':
     unittest.main()

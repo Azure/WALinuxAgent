@@ -1,4 +1,3 @@
-# Windows Azure Linux Agent
 #
 # Copyright 2014 Microsoft Corporation
 #
@@ -323,9 +322,10 @@ class DefaultDistro(object):
         raise Exception("Can't find ssh host key.")
 
     def GetDvdDevice(self, devDir='/dev'):
-        patten=r'(sr[0-9]|hd[c-z]|cdrom[0-9]|cd[0-9]?)'
+        patten=r'(sr[0-9]|hd[c-z]|cdrom[0-9])'
         for dvd in [re.match(patten, dev) for dev in os.listdir(devDir)]:
             if dvd is not None:
+                print dvd.group(1)
                 return "/dev/{0}".format(dvd.group(0))
         return None
 
@@ -615,7 +615,7 @@ class DefaultDistro(object):
         ret = shellutil.Run("mount {0}1 {1}".format(device, mountpoint))
         if ret:
             logger.Error("Failed to mount resource disk ({0})".format(device))
-            return None
+            raise Exception("Failed to mount resource disk")
         else:
             logger.Info(("Resource disk ({0}) is mounted at {1} "
                          "with fstype {2}").format(device, mountpoint, fs))
@@ -766,6 +766,11 @@ class RedhatDistro(DefaultDistro):
 
     def StartAgentService(self):
         return shellutil.Run("/sbin/service waagent start", chk_err=False)
+
+    #Override
+    def GetDhcpProcessId(self):
+        ret= shellutil.RunGetOutput("pidof dhclient")
+        return ret[1] if ret[0] == 0 else None
 
 class Redhat7Distro(RedhatDistro):
     def __init__(self):

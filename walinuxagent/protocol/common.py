@@ -18,6 +18,7 @@
 #
 import os
 import copy
+import re
 import xml.dom.minidom
 import walinuxagent.logger as logger
 from walinuxagent.utils.osutil import CurrOS
@@ -320,11 +321,11 @@ class Protocol():
 
         if not os.path.isfile(ovfFile):
             raise Exception("Unable to provision: Missing ovf-env.xml on DVD")
-        ovfxml = CurrOS.GetFileContents(ovfFile, removeBom=True)
+        ovfxml = fileutil.GetFileContents(ovfFile, removeBom=True)
         ovfenv = OvfEnv(ovfxml)
         ovfxml = re.sub("<UserPassword>.*?<", "<UserPassword>*<", ovfxml)
         ovfFilePath = os.path.join(CurrOS.GetLibDir(), OvfFileName)
-        CurrOS.SetFileContents(ovfFilePath, self.xmlText)
+        fileutil.SetFileContents(ovfFilePath, ovfxml)
         self.ovfenv = ovfenv
 
         CurrOS.UmountDvd()
