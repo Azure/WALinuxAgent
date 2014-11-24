@@ -609,9 +609,9 @@ class DefaultDistro(object):
 
         fileutil.CreateDir(mountpoint, "root", 0755)  
         output = shellutil.RunGetOutput("sfdisk -q -c {0} 1".format(device))
-        if output[1].rstrip == 7 and fs != "ntfs":
+        if output[1].rstrip() == "7" and fs != "ntfs":
             shellutil.Run("sfdisk -c {0} 1 83".format(device))
-            shellutil.Run("mkfsk.{0} {1}1".format(fs, device))
+            shellutil.Run("mkfs.{0} {1}1".format(fs, device))
         ret = shellutil.Run("mount {0}1 {1}".format(device, mountpoint))
         if ret:
             logger.Error("Failed to mount resource disk ({0})".format(device))
