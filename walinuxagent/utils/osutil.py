@@ -830,7 +830,7 @@ class GentooDistro(DefaultDistro):
 
 class SUSEDistro(DefaultDistro):
     def __init__(self):
-        super(SUSEDistro, self).init()
+        super(SUSEDistro, self).__init__()
         self.dhcpClientName='dhcpcd'
 
     def SetHostname(self, hostname):

@@ -45,6 +45,8 @@ def Main():
     DownloadAndSaveFile(ZipFileUri, ZipFile) 
     zfile = zipfile.ZipFile(ZipFile)
     zfile.extractall(TargetDir)
+    
+    os.chmod(os.path.join(TargetDir, 'bin/waagent'), 0500)
 
     os.remove(ZipFile)
 
