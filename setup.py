@@ -18,7 +18,7 @@
 #
 
 from distutils.core import setup
-from walinuxagent.utils.osutil import CurrOSInfo
+from walinuxagent.utils.osutil import CurrOS, CurrOSInfo
 import walinuxagent.agent as agent
 
 name = CurrOSInfo[0]
