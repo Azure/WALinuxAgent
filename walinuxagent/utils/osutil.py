@@ -29,6 +29,7 @@ import array
 import struct
 import fcntl
 import time
+import base64
 import walinuxagent.logger as logger
 import walinuxagent.utils.fileutil as fileutil
 import walinuxagent.utils.shellutil as shellutil
@@ -52,8 +53,6 @@ class DefaultDistro():
         self.home = '/home'
         self.sshdConfigPath = '/etc/ssh/sshd_config'
         self.opensslCmd = '/usr/bin/openssl'
-        self.dhcpClientConfigFile = '/etc/dhcp/dhclient.conf'
-        self.hostnameFile = '/etc/hostname'
         self.configPath = '/etc/waagent.conf'
         self.selinux=None
 
@@ -517,8 +516,17 @@ class DefaultDistro():
     def StartNetwork(self):
         raise NotImplementedError('StartNetwork method missing')
 
+    def StartAgentService(self):
+        raise NotImplementedError('StartAgentService method missing')
+
     def StopAgentService(self):
         raise NotImplementedError('StopAgentService method missing')
+
+    def RegisterAgentService(self):
+        self.StartAgentService()
+
+    def UnregisterAgentService(self):
+        self.StopAgentService()
 
     def RestartSshService(self):
         raise NotImplementedError('RestartSshService method missing')
@@ -535,17 +543,17 @@ class DefaultDistro():
         raise NotImplementedError('GetDhcpProcessId method missing')
 
     def SetHostname(self, hostname):
-        fileutil.SetFileContents(self.hostnameFile, hostname)
+        fileutil.SetFileContents('/etc/hostname', hostname)
         shellutil.Run("hostname {0}".format(hostname), chk_err=False)
 
-    def ConfigDhcpSendHostName(self, hostname):
-        pass
+    def SetDhcpHostname(self, hostname):
+        raise NotImplementedError('SetDhcpHostname method missing')
 
     def RestartInterface(self, ifname):
         shellutil.Run("ifdown {0} && ifup {1}".format(ifname, ifname))
 
     def PublishHostname(self, hostname):
-        self.ConfigDhcpSendHostName(hostname)
+        self.SetDhcpHostname(hostname)
         ifname = self.GetInterfaceName()
         self.RestartInterface(ifname)
 
@@ -676,15 +684,33 @@ class DefaultDistro():
         """
         fileutil.RemoveFiles('/etc/resolv.conf')
 
+    def TranslateCustomData(self, data):
+        return data
+
 class DebianDistro(DefaultDistro):
-    def ConfigDhcpSendHostName(self, hostname):
+    def __init__(self):
+        self.dhcpClientConfigFile = '/etc/dhcp/dhclient.conf'
+
+    def RestartSshService(self):
+        return shellutil.Run("service sshd restart", chk_err=False)
+
+    def StopAgentService(self):
+        return shellutil.Run("service walinuxagent stop", chk_err=False)
+
+    def StartAgentService(self):
+        return shellutil.Run("service walinuxagent start", chk_err=False)
+
+    def SetDhcpHostname(self, hostname):
         config = fileutil.GetFileContents(self.dhcpClientConfigFile).split("\n")
         config = filter(lambda x : x.startswith("send host-name"))
         config.append("send host-name", hostname)
         fileutil.ReplaceFileContentsAtomic(self.dhcpClientConfigFile,
                                            "\n".join(config))
 
-class UbuntuDistro(DefaultDistro):
+class UbuntuDistro(DebianDistro):
+    def __init__(self):
+        super(UbuntuDistro, self).__init__()
+
     def StartNetwork(self):
         return shellutil.Run("service networking start", chk_err=False)
 
@@ -692,14 +718,8 @@ class UbuntuDistro(DefaultDistro):
         ret= shellutil.RunGetOutput("pidof dhclient")
         return ret[1] if ret[0] == 0 else None
 
-    def RestartSshService(self):
-        return shellutil.Run("service sshd restart", chk_err=False)
-
-    def StopAgentService(self):
-        shellutil.Run("service walinuxagent stop", chk_err=False)
-
-    def StartAgentService(self):
-        shellutil.Run("service walinuxagent start", chk_err=False)
+    def SetDhcpHostname(self, hostname):
+        pass
 
     def OnDeprovisionStart(self):
         print("WARNING! Nameserver configuration in "
@@ -715,50 +735,139 @@ class UbuntuDistro(DefaultDistro):
                                  '/etc/resolvconf/resolv.conf.d/originial')
 
 class Ubuntu1204Distro(UbuntuDistro):
+    def __init__(self):
+        super(Ubuntu1204Distro, self).__init__()
+
     #Override
     def GetDhcpProcessId(self):
         ret= shellutil.RunGetOutput("pidof dhclient")
         return ret[1] if ret[0] == 0 else None
 
-class RedHatDistro(DefaultDistro):
-    pass
+class RedhatDistro(DefaultDistro):
+    def __init__(self):
+        super(RedhatDistro, self).__init__()
+        self.sshdConfigPath = '/etc/ssh/sshd_config'
+        self.opensslCmd = '/usr/bin/openssl'
+        self.configPath = '/etc/waagent.conf'
+        self.selinux=None
+
+    def StartNetwork(self):
+        return shellutil.Run("/sbin/service networking start", chk_err=False)
+
+    def RestartSshService(self):
+        return shellutil.Run("/sbin/service sshd condrestart", chk_err=False)
+
+    def StopAgentService(self):
+        return shellutil.Run("/sbin/service waagent stop", chk_err=False)
+
+    def StartAgentService(self):
+        return shellutil.Run("/sbin/service waagent start", chk_err=False)
+
+class Redhat7Distro(RedhatDistro):
+    def __init__(self):
+        super(Redhat7Distro, self).__init__()
+
+    def SetHostname(self, hostname):
+        fileutil.UpdateConfigFile('/etc/sysconfig/network', 
+                                  'HOSTNAME',
+                                  'HOSTNAME={0}'.format(hostname))
+    
+    def SetDhcpHostname(self, hostname):
+        ifname = self.GetInterfaceName()
+        filepath = "/etc/sysconfig/network-scripts/ifcfg-{0}".format(ifname)
+        fileutil.UpdateConfigFile(filepath,
+                                  'DHCP_HOSTNAME',
+                                  'DHCP_HOSTNAME={0}'.format(hostname))
 
 class FedoraDistro(DefaultDistro):
     pass
 
 class CoreOSDistro(DefaultDistro):
-    CORE_UID = 500
     def __init(self):
-        pass
+        super(CoreOSDistro, self).__init__()
+        self.configPath = '/usr/share/oem/waagent.conf'
 
     def _IsSysUser(self, userName):
-       userEntry = self.GetUserEntry(userName)
        #User 'core' is not a sysuser
-       if userEntry == CORE_UID:
+       if userName == 'core':
            return False
        return super(CoreOSDistro, self).isSysUser(userName)
 
     def IsDhcpEnabled(self):
         return True
+    
+    def StartNetwork(self) :
+        return shellutil.Run("systemctl start systemd-networkd", chk_err=False)
+        
+    def RestartInterface(self, iface):
+        Run("systemctl restart systemd-networkd")
+
+    def RestartSshService(self):
+        return shellutil.Run("systemctl restart sshd", chk_err=False)
 
     def StopDhcpService(self):
-        shellutil.Run("systemctl systemd-networkd stop", chk_err=False)
+        return shellutil.Run("systemctl stop systemd-networkd", chk_err=False)
 
     def StartDhcpService(self):
-        shellutil.Run("systemctl systemd-networkd start", chk_err=False)
+        return shellutil.Run("systemctl start systemd-networkd", chk_err=False)
+
+    def GetDhcpProcessId(self):
+        ret= shellutil.RunGetOutput("pidof systemd-networkd")
+        return ret[1] if ret[0] == 0 else None
+    
+    def OnDeprovisionStart(self):
+        print "WARNING! /etc/machine-id will be removed."
+
+    def OnDeprovision(self):
+        fileutil.RemoveFiles('/etc/machine-id')
+
+    def TranslateCustomData(self, data):
+        return base64.b64decode(data)
 
 class GentooDistro(DefaultDistro):
     pass
 
 class SUSEDistro(DefaultDistro):
+    def __init__(self):
+        super(SUSEDistro, self).init()
+
+    def SetHostname(self, hostname):
+        fileutil.SetFileContents('/etc/HOSTNAME', hostname)
+        shellutil.Run("hostname {0}".format(hostname), chk_err=False)
+
     def IsDhcpEnabled(self):
         return True
 
     def StopDhcpService(self):
-        shellutil.Run("service wickedd-dhcp4 stop", chk_err=False)
+        return shellutil.Run("/sbin/service wickedd-dhcp4 stop", chk_err=False)
 
     def StartDhcpService(self):
-        shellutil.Run("service wickedd-dhcp4 start", chk_err=False)
+        return shellutil.Run("/sbin/service wickedd-dhcp4 start", chk_err=False)
+
+    def StartNetwork(self) :
+        return shellutil.Run("/sbin/service start networking", chk_err=False)
+
+    def RestartSshService(self):
+        return shellutil.Run("/sbin/service sshd restart", chk_err=False)
+
+    def StopAgentService(self):
+        return shellutil.Run("/sbin/service waagent stop", chk_err=False)
+
+    def StartAgentService(self):
+        return shellutil.Run("/sbin/service waagent start", chk_err=False)
+    
+    def RegisterAgentService(self):
+        ret = shellutil.Run("insserv waagent", chk_err=False)
+        if ret != 0:
+            return ret
+        ret = super(SUSEDistro, self).RegisterAgentService()
+        return ret
+    
+    def UnregisterAgentService(self):
+        ret = super(SUSEDistro, self).UnregisterAgentService()
+        if ret != 0:
+            return ret
+        return shellutil.Run("insserv -r waagent", chk_err=False)
 
 class FreeBSDDistro(DefaultDistro):
     def __init__(self):
@@ -794,7 +903,10 @@ def GetDistro(distroInfo):
         else:
             return UbuntuDistro()
     elif name == 'centos' or name == 'redhat':
-        return RedhatDistro()
+        if version < '7.0':
+            return RedhatDistro()
+        else:
+            return Redhat7Distro()
     elif name == 'fedora':
         return FedoraDistro()
     elif name == 'debian':

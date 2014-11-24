@@ -151,3 +151,13 @@ def CleanupDirs(*args, **kwargs):
                     os.remove(path)
                 elif os.path.isdir(path):
                     shutil.rmtree(path)
+
+def UpdateConfigFile(path, lineStart, val, chk_err=False):
+    config = []
+    if not os.path.isfile(path) and chk_err:
+        raise Exception("Can't find config file:{0}".format(path))
+    config = fileutil.GetFileContents(path).split('\n')
+    config = filter(lambda x : x.startswith(lineStart), config)
+    config.append(val)
+    fileutil.ReplaceFileContentsAtomic(path, '\n'.join(config))
+

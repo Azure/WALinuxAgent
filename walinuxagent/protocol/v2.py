@@ -27,9 +27,15 @@ class ProtocolV2(Protocol):
                       api-version={{{1}}}".format(__MetadataServerAddr, 
                                                   __ApiVersion)
 
+    @staticmethod
     def Detect(identityService=__IdentityService):
         ret = restutil.HttpGet(identityService) 
         return True if ret else False
+
+
+    @staticmethod
+    def Init():
+        pass
 
     def __init__(self):
         pass

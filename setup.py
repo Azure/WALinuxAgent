@@ -29,14 +29,32 @@ data_files=[]
 if name == 'ubuntu':
     data_files.extend([
         ('/usr/sbin', ['bin/waagent']),
-        ('/etc', ['config/ubuntu/waagent.conf']),
         ('/etc/logrotate.d', ['config/waagent.logrotate']),
+        ('/etc', ['config/ubuntu/waagent.conf']),
         ('/etc/init', ['config/ubuntu/init/waagent.conf']),
     ])
+elif name == 'redhat' or name == 'centos':
+    data_files.extend([
+        ('/usr/sbin', ['bin/waagent']),
+        ('/etc/logrotate.d', ['config/waagent.logrotate']),
+        ('/etc', ['config/redhat/waagent.conf']),
+        ('/etc/init.d', ['config/redhat/init.d/waagent.conf']),
+    ])
+elif name == 'coreos':
+    data_files.extend([
+        ('/usr/share/oem/bin', ['bin/waagent']),
+        ('/usr/share/oem/waagent.conf', ['config/coreos/waagent.conf']),
+        ('/etc/systemd/system/', ['config/coreos/waagent.service']),
+    ])
+elif name == 'suse':
+    data_files.extend([
+        ('/usr/sbin', ['bin/waagent']),
+        ('/etc/logrotate.d', ['config/waagent.logrotate']),
+        ('/etc', ['config/suse/waagent.conf']),
+        ('/etc/init.d', ['config/suse/init.d/waagent.conf']),
+    ])
 else:
-    print "Don't kown how to install on {0} {1} {2}".format(name, 
-                                                            version, 
-                                                            codeName)
+    print "NOT support: {0} {1} {2}".format(name, version, codeName)
     sys.exit(-1)
 
 setup(name=agent.GuestAgentName,
@@ -48,3 +66,5 @@ setup(name=agent.GuestAgentName,
                 'walinuxagent.utils', 
                 'walinuxagent.protocol'],
       data_files=data_files)
+
+CurrOS.RegisterAgentService()

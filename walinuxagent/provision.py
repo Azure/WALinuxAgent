@@ -84,7 +84,7 @@ class ProvisionHandler(object):
     def saveCustomData(self, customData):
         libDir = CurrOS.GetLibDir()
         CurrOS.SetFileContents(os.path.join(libDir, CustomDataFile), 
-                               customData)
+                               CurrOS.TranslateCustomData(customData))
 
     def deploySshPublicKeys(self):
         for thumbprint, path in self.ovfenv.getSshPublicKeys():
