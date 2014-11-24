@@ -543,7 +543,8 @@ class DefaultDistro(object):
         return shellutil.Run(cmd, chk_err=False)
 
     def GetDhcpProcessId(self):
-        raise NotImplementedError('GetDhcpProcessId method missing')
+        ret= shellutil.RunGetOutput("pidof dhclient")
+        return ret[1] if ret[0] == 0 else None
 
     def SetHostname(self, hostname):
         fileutil.SetFileContents('/etc/hostname', hostname)
@@ -718,10 +719,6 @@ class UbuntuDistro(DebianDistro):
     def StartNetwork(self):
         return shellutil.Run("service networking start", chk_err=False)
 
-    def GetDhcpProcessId(self):
-        ret= shellutil.RunGetOutput("pidof dhclient")
-        return ret[1] if ret[0] == 0 else None
-
     def SetDhcpHostname(self, hostname):
         pass
 
@@ -744,7 +741,7 @@ class Ubuntu1204Distro(UbuntuDistro):
 
     #Override
     def GetDhcpProcessId(self):
-        ret= shellutil.RunGetOutput("pidof dhclient")
+        ret= shellutil.RunGetOutput("pidof dhclient3")
         return ret[1] if ret[0] == 0 else None
 
 class RedhatDistro(DefaultDistro):
@@ -834,19 +831,26 @@ class GentooDistro(DefaultDistro):
 class SUSEDistro(DefaultDistro):
     def __init__(self):
         super(SUSEDistro, self).init()
+        self.dhcpClientName='dhcpcd'
 
     def SetHostname(self, hostname):
         fileutil.SetFileContents('/etc/HOSTNAME', hostname)
         shellutil.Run("hostname {0}".format(hostname), chk_err=False)
 
+    def GetDhcpProcessId(self):
+        ret= shellutil.RunGetOutput("pidof {0}".format(self.dhcpClientName))
+        return ret[1] if ret[0] == 0 else None
+    
     def IsDhcpEnabled(self):
         return True
 
     def StopDhcpService(self):
-        return shellutil.Run("/sbin/service wickedd-dhcp4 stop", chk_err=False)
+        cmd = "/sbin/service {0} stop".format(self.dhcpClientName)
+        return shellutil.Run(cmd, chk_err=False)
 
     def StartDhcpService(self):
-        return shellutil.Run("/sbin/service wickedd-dhcp4 start", chk_err=False)
+        cmd = "/sbin/service {0} start".format(self.dhcpClientName)
+        return shellutil.Run(cmd, chk_err=False)
 
     def StartNetwork(self) :
         return shellutil.Run("/sbin/service start networking", chk_err=False)
@@ -872,6 +876,11 @@ class SUSEDistro(DefaultDistro):
         if ret != 0:
             return ret
         return shellutil.Run("insserv -r waagent", chk_err=False)
+
+class SUSE12Distro(SUSE12Distro):
+    def __init__(self):
+        super(SUSE12Distro, self).__init__()
+        self.dhcpClientName = 'wickedd-dhcp4'
 
 class FreeBSDDistro(DefaultDistro):
     def __init__(self):
@@ -920,11 +929,13 @@ def GetDistro(distroInfo):
     elif name == 'gentoo':
         return CoreOSDistro()
     elif name == 'suse':
-        return SUSEDistro()
+        if version < '1.2':
+            return SUSEDistro()
+        else:
+            return SUSE12Distro()
     elif name == 'freebsd':
         return FreeBSDDistro()
-    else:
-        return DefaultDistro()
+    return DefaultDistro()
 
 CurrOSInfo = GetDistroInfo()
 CurrOS = GetDistro(CurrOSInfo)

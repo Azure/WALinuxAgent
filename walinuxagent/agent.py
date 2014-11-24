@@ -200,8 +200,8 @@ def Deprovision(force=False, deluser=False):
     protocol = proto.GetDefaultProtocol()
     ovf = protocol.getOvf()
     if ovf is not None and deluser:
-        print("WARNING! {0} account and entire home directory will be deleted.",
-              ovf.getUserName())
+        print ("WARNING! {0} account and entire home directory "
+               "will be deleted.").format(ovf.getUserName())
     
     if not force:
         confirm = raw_input("Do you want to proceed (y/n)")
