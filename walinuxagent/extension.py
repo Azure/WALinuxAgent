@@ -72,6 +72,7 @@ class ExtensionInstance(object):
         #Create a copy of setting for current version
         self.setting = setting.copy(currVersion)
         self.installed = installed
+        fileutil.CreateDir(self.setting.getLogDir(), 'root', '0644')
         self.logger = logger.Logger(logger.DefaultLogger)
         self.logger.addLoggerAppender(logger.AppenderConfig({
             'type' : 'FILE',
