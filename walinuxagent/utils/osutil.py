@@ -553,6 +553,8 @@ class DefaultDistro(object):
         autoSend = r'^[^#]*?send\s*host-name.*?(<hostname>|gethostname[(,)])'
         dhclientFiles = ['/etc/dhcp/dhclient.conf', '/etc/dhcp3/dhclient.conf']
         for confFile in dhclientFiles:
+            if not os.path.isfile(confFile):
+                continue
             if fileutil.FindStringInFile(confFile, autoSend):
                 #Return if auto send host-name is configured
                 return

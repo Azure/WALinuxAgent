@@ -36,8 +36,12 @@ def Mockup(target, name, mock):
         def Wrapper(*args, **kwargs):
             origin = getattr(target, name)
             setattr(target, name, mock)
-            result = func(*args, **kwargs)
-            setattr(target, name, origin)
+            try:
+                result = func(*args, **kwargs)
+            except:
+                raise
+            finally:
+                setattr(target, name, origin)
             return result
         return Wrapper
     return Decorator
