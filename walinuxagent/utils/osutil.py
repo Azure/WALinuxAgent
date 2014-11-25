@@ -235,7 +235,7 @@ class DefaultDistro(object):
         fileutil.SetFileContents(pubPath, pub)
         self.SetSelinuxContext(pubPath, 'unconfined_u:object_r:ssh_home_t:s')
         #TODO some distros doesn't support PKCS8. Need to figure out.
-        shellutil.Run("ssh-keygen -i -m PKCS8 -f {0} >> {1}".format(thumbprint, 
+        shellutil.Run("ssh-keygen -i -m PKCS8 -f {0} >> {1}".format(pubPath, 
                                                                     path))
         self.SetSelinuxContext(path, 'unconfined_u:object_r:ssh_home_t:s')
         os.chmod(path, 0600)
@@ -389,7 +389,7 @@ class DefaultDistro(object):
                                       chk_err)[0]
 
     def Umount(self, mountPoint):
-        return "umount {0}".format(mountPoint)
+        return shellutil.Run("umount {0}".format(mountPoint))
 
     def OpenPortForDhcp(self):
         #Open DHCP port if iptables is enabled.
@@ -856,7 +856,7 @@ class SUSEDistro(DefaultDistro):
         return shellutil.Run(cmd, chk_err=False)
 
     def StartNetwork(self) :
-        return shellutil.Run("/sbin/service start networking", chk_err=False)
+        return shellutil.Run("/sbin/service start network", chk_err=False)
 
     def RestartSshService(self):
         return shellutil.Run("/sbin/service sshd restart", chk_err=False)
