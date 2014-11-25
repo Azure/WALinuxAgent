@@ -39,6 +39,7 @@ class TestGetDistro(unittest.TestCase):
         self.assertNotEquals(None, distroInfo[0])
         self.assertNotEquals(None, distroInfo[1])
         self.assertNotEquals(None, distroInfo[2])
+        self.assertNotEquals(None, distroInfo[3])
         distro = osutil.GetDistro(distroInfo)
         self.assertNotEquals(None, distro)
 

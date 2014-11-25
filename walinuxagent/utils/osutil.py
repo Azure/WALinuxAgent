@@ -325,7 +325,6 @@ class DefaultDistro(object):
         patten=r'(sr[0-9]|hd[c-z]|cdrom[0-9])'
         for dvd in [re.match(patten, dev) for dev in os.listdir(devDir)]:
             if dvd is not None:
-                print dvd.group(1)
                 return "/dev/{0}".format(dvd.group(0))
         return None
 
@@ -900,9 +899,11 @@ class FreeBSDDistro(DefaultDistro):
 def GetDistroInfo():
     if 'FreeBSD' in platform.system():
         release = re.sub('\-.*\Z', '', str(platform.release()))
-        distroInfo = ['freebsd', release, '']
+        distroInfo = ['freebsd', release, '', 'freebsd']
     if 'linux_distribution' in dir(platform):
         distroInfo = list(platform.linux_distribution(full_distribution_name = 0))
+        fullName = platform.linux_distribution()[0]
+        distroInfo.append(fullName)
     else:
         distroInfo = platform.dist()
 
@@ -914,6 +915,7 @@ def GetDistro(distroInfo):
     name = distroInfo[0]
     version = distroInfo[1]
     codeName = distroInfo[2]
+    fullName = distroInfo[3]
 
     if name == 'ubuntu':
         if version == '12.04':
@@ -934,7 +936,8 @@ def GetDistro(distroInfo):
     elif name == 'gentoo':
         return CoreOSDistro()
     elif name == 'suse':
-        if version < '1.2':
+        if fullName == 'SUSE Linux Enterprise Server' and version < '12' \
+                or fullName == 'openSUSE' and version < '13.2':
             return SUSEDistro()
         else:
             return SUSE12Distro()
