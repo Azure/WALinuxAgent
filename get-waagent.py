@@ -47,7 +47,10 @@ def Main():
     zfile = zipfile.ZipFile(ZipFile)
     zfile.extractall(TargetDir)
     
+    os.chmod(os.path.join(TargetDir, SrcDir, 'setup.py'), 0500)
     os.chmod(os.path.join(TargetDir, SrcDir, 'bin/waagent'), 0500)
+    os.chmod(os.path.join(TargetDir, SrcDir, 'test/run_all.sh'), 0500)
+    os.chmod(os.path.join(TargetDir, SrcDir, 'test/read_stdin.sh'), 0500)
 
     os.remove(ZipFile)
 

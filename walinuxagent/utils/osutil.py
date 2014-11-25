@@ -901,7 +901,7 @@ def GetDistroInfo():
         distroInfo = ['freebsd', release, '', 'freebsd']
     if 'linux_distribution' in dir(platform):
         distroInfo = list(platform.linux_distribution(full_distribution_name = 0))
-        fullName = platform.linux_distribution()[0]
+        fullName = platform.linux_distribution()[0].strip()
         distroInfo.append(fullName)
     else:
         distroInfo = platform.dist()
