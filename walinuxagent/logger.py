@@ -100,7 +100,7 @@ def _MatchLogLevel(expected, actual):
     return __log_level[actual] >= __log_level[expected]
 
 
-def LoggerInit(log_file_path, log_console_path, log_stdout_path='/dev/stdout',
+def LoggerInit(log_file_path, log_console_path,
                verbose=False, logger=DefaultLogger):
     if log_file_path:
         file_appender_config = AppenderConfig({
@@ -121,16 +121,6 @@ def LoggerInit(log_file_path, log_console_path, log_stdout_path='/dev/stdout',
             "console_path" : log_console_path
         })
         logger.addLoggerAppender(console_appender_config)
-    
-    stdout_appender_config = AppenderConfig({
-        "type":"CONSOLE", 
-        "level" : "INFO", 
-        "console_path" : "/dev/stdout"
-    })
-    if verbose:
-        stdout_appender_config.properties['level'] = "VERBOSE"
-    logger.addLoggerAppender(stdout_appender_config)
-
 
 def AddLoggerAppender(appender_config):
     DefaultLogger.addLoggerAppender(appender_config)
