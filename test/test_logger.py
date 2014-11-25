@@ -68,7 +68,7 @@ class TestLogger(unittest.TestCase):
     def test_logger_init(self):
         _logger = logger.Logger()
         logger.LoggerInit('/tmp/testlog1', '/tmp/testconsole', logger = _logger)
-        self.assertEquals(3, len(_logger.appenders))
+        self.assertEquals(2, len(_logger.appenders))
 
         msg = str(uuid.uuid4())
         _logger.info("Test logger: {0}", msg)

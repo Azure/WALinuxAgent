@@ -550,7 +550,15 @@ class DefaultDistro(object):
         shellutil.Run("hostname {0}".format(hostname), chk_err=False)
 
     def SetDhcpHostname(self, hostname):
-        raise NotImplementedError('SetDhcpHostname method missing')
+        autoSend = r'^[^#]*?send\s*host-name.*?(<hostname>|gethostname[(,)])'
+        dhclientFiles = ['/etc/dhcp/dhclient.conf', '/etc/dhcp3/dhclient.conf']
+        for confFile in dhclientFiles:
+            if fileutil.FindStringInFile(confFile, autoSend):
+                #Return if auto send host-name is configured
+                return
+            fileutil.UpdateConfigFile(confFile,
+                                      'send host-name',
+                                      'send host-name {0}'.format(hostname))
 
     def RestartInterface(self, ifname):
         shellutil.Run("ifdown {0} && ifup {1}".format(ifname, ifname))
@@ -693,7 +701,6 @@ class DefaultDistro(object):
 class DebianDistro(DefaultDistro):
     def __init__(self):
         super(DebianDistro, self).__init__()
-        self.dhcpClientConfigFile = '/etc/dhcp/dhclient.conf'
 
     def RestartSshService(self):
         return shellutil.Run("service sshd restart", chk_err=False)
@@ -704,22 +711,12 @@ class DebianDistro(DefaultDistro):
     def StartAgentService(self):
         return shellutil.Run("service walinuxagent start", chk_err=False)
 
-    def SetDhcpHostname(self, hostname):
-        config = fileutil.GetFileContents(self.dhcpClientConfigFile).split("\n")
-        config = filter(lambda x : x.startswith("send host-name"))
-        config.append("send host-name", hostname)
-        fileutil.ReplaceFileContentsAtomic(self.dhcpClientConfigFile,
-                                           "\n".join(config))
-
 class UbuntuDistro(DebianDistro):
     def __init__(self):
         super(UbuntuDistro, self).__init__()
 
     def StartNetwork(self):
         return shellutil.Run("service networking start", chk_err=False)
-
-    def SetDhcpHostname(self, hostname):
-        pass
 
     def OnDeprovisionStart(self):
         print("WARNING! Nameserver configuration in "

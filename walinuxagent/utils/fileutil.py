@@ -19,6 +19,7 @@
 
 import platform
 import os
+import re
 import shutil
 import pwd
 import tempfile
@@ -174,3 +175,19 @@ def RChangeMod(path, mode):
     for root, dirs, files in os.walk(path):
         for f in files:
             os.chmod(os.path.join(root, f), mode)
+
+def FindStringInFile(fname, matchs):
+    """
+    Return match object if found in file.
+    """
+    try:
+        ms=re.compile(matchs)
+        for l in (open(fname,'r')).readlines():
+            m=re.search(ms,l)
+            if m:
+                return m
+    except:
+        raise
+    
+    return None
+
