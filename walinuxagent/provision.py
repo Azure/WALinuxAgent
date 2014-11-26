@@ -64,7 +64,7 @@ class ProvisionHandler(object):
         self.envMonitor.setHostname(self.ovfenv.getComputerName())
         CurrOS.UpdateUserAccount(self.ovfenv.getUserName(), password)
 
-        CurrOS.ConfigSshd(self, self.ovfenv.getDisableSshPasswordAuthentication())
+        CurrOS.ConfigSshd(self.ovfenv.getDisableSshPasswordAuthentication())
         #Disable selinux temporary
         sel = CurrOS.IsSelinuxRunning()
         if sel:

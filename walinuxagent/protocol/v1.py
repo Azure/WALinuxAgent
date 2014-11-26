@@ -343,7 +343,7 @@ class ProtocolV1(Protocol):
             'handlerAggregateStatus' : handlerAggregateStatus
         }
         report = {
-            'version' : version,
+            'version' : '1.0',
             'timestampUTC' : tstamp,
             'aggregateStatus' : aggregateStatus
         }
@@ -391,8 +391,7 @@ class ProtocolV1(Protocol):
                         heartbeat = json.loads()[0]['heartbeat']
                         handlerStatus = heartbeat['status']
                         handlerCode = heartbeat['code']
-                        handlerMessage = heartbeat['message']
-                        handlerFormattedMessage = heartbeat['formattedMessage']
+                        handlerMessage = heartbeat['Message']
                     except Exception, e:
                         logger.Error(("Failed to parse extension "
                                       "heart beat file: {0}"), e)
@@ -400,13 +399,16 @@ class ProtocolV1(Protocol):
                 'handlerVersion' : ext.getVersion(),
                 'handlerName' : ext.getName(),
                 'status' : handlerStatus,
-                'code' : handlerCode,
-                'message' : handlerMessage,
-                'formattedMessage' : handlerFormattedMessage,
                 'runtimeSettingsStatus' : {
-                    'settingsStatus' : status
+                    'settingsStatus' : status,
+                    'sequenceNumber' : ext.getSeqNo()
                 }
             }
+            if handlerCode is not None:
+                aggregatedStatus['code'] = handlerCode
+            if handlerMessage is not None:
+                aggregatedStatus['Message'] = handlerMessage
+
             aggregatedStatusList.append(aggregatedStatus)
         return aggregatedStatusList
 
