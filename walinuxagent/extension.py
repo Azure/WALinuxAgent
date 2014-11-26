@@ -153,7 +153,7 @@ class ExtensionInstance(object):
         baseDir = self.setting.getBaseDir()
         zipfile.ZipFile(packageFile).extractall(baseDir)
         
-        #Save manifest
+        #Save HandlerManifest.json
         manFile = fileutil.SearchForFile(baseDir, 'HandlerManifest.json')
         man = fileutil.GetFileContents(manFile, removeBom=True)
         fileutil.SetFileContents(self.setting.getManifestFile(), man)    
@@ -164,9 +164,11 @@ class ExtensionInstance(object):
         configDir = self.setting.getConfigDir()
         fileutil.CreateDir(configDir, 'root', 0700)
 
+        #Save HandlerEnvironment.json
+        self.createHandlerEnvironment()
+
     def enable(self):
         man = self.loadManifest()
-        self.updateHandlerEnvironment()
         self.updateSetting()
         self.launchCommand(man.getEnableCommand())
         fileutil.SetFileContents(self.setting.getHandlerStateFile(),
@@ -174,7 +176,6 @@ class ExtensionInstance(object):
 
     def disable(self):
         man = self.loadManifest()
-        self.updateHandlerEnvironment()
         self.updateSetting()
         self.launchCommand(man.getDisableCommand())
         fileutil.SetFileContents(self.setting.getHandlerStateFile(),
@@ -182,7 +183,6 @@ class ExtensionInstance(object):
 
     def install(self):
         man = self.loadManifest()
-        self.updateHandlerEnvironment()
         self.updateSetting()
         self.launchCommand(man.getInstallCommand())
         fileutil.SetFileContents(self.setting.getHandlerStateFile(),
@@ -190,7 +190,6 @@ class ExtensionInstance(object):
 
     def uninstall(self):
         self.loadManifest()
-        self.updateHandlerEnvironment()
         self.updateSetting()
         self.launchCommand(man.getUninstallCommand())
         fileutil.SetFileContents(self.setting.getHandlerStateFile(),
@@ -198,7 +197,6 @@ class ExtensionInstance(object):
 
     def update(self):
         self.loadManifest()
-        self.updateHandlerEnvironment()
         self.updateSetting()
         self.launchCommand(man.getUpdateCommand())
         fileutil.SetFileContents(self.setting.getHandlerStateFile(),
@@ -240,10 +238,8 @@ class ExtensionInstance(object):
         fileutil.SetFileContents(self.setting.getSettingsFile(),
                                  json.dumps(self.setting.getSettings()))
 
-    def updateHandlerEnvironment(self):
+    def createHandlerEnvironment(self):
         env = [{
-            "name" : self.setting.getName(),
-            "seqNo" : self.setting.getSeqNo(),
             "version" : self.setting.getVersion(),
             "handlerEnvironment" : {
                 "logFolder" : self.setting.getLogDir(),
@@ -258,13 +254,7 @@ class ExtensionInstance(object):
 class HandlerEnvironment(object):
     def __init__(self, data):
         self.data = data
-
-    def getName(self):
-        return self.data["name"]
-
-    def getSeqNo(self):
-        return self.data["seqNo"]
-
+   
     def getVersion(self):
         return self.data["version"]
 
