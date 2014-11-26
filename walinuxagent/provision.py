@@ -64,6 +64,7 @@ class ProvisionHandler(object):
         self.envMonitor.setHostname(self.ovfenv.getComputerName())
         CurrOS.UpdateUserAccount(self.ovfenv.getUserName(), password)
 
+        CurrOS.ConfigSshd(self, self.ovfenv.getDisableSshPasswordAuthentication())
         #Disable selinux temporary
         sel = CurrOS.IsSelinuxRunning()
         if sel:
@@ -78,7 +79,6 @@ class ProvisionHandler(object):
         if self.config.getSwitch("Provisioning.RegenerateSshHostKeyPair"):
             CurrOS.RegenerateSshHostkey(keyPairType)
 
-        #self.envMonitor.waitForHostnamePublishing()
         CurrOS.RestartSshService()
 
         if self.config.getSwitch("Provisioning.DeleteRootPassword"):
