@@ -27,10 +27,9 @@ import walinuxagent.utils.fileutil as fileutil
 CustomDataFile="CustomData"
 
 class ProvisionHandler(object):
-    def __init__(self, config, protocol, envMonitor):
+    def __init__(self, config, protocol):
         self.config = config
         self.protocol = protocol
-        self.envMonitor = envMonitor
 
     def provision(self):
         try:
@@ -61,7 +60,8 @@ class ProvisionHandler(object):
         password = self.ovfenv.getUserPassword()
         self.ovfenv.clearUserPassword()
 
-        self.envMonitor.setHostname(self.ovfenv.getComputerName())
+        CurrOS.SetHostname(self.ovfenv.getComputerName())
+        CurrOS.PublishHostname(self.ovfenv.getComputerName())
         CurrOS.UpdateUserAccount(self.ovfenv.getUserName(), password)
 
         CurrOS.ConfigSshd(self.ovfenv.getDisableSshPasswordAuthentication())

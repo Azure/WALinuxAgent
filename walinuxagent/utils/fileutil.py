@@ -160,7 +160,7 @@ def UpdateConfigFile(path, lineStart, val, chk_err=False):
     if not os.path.isfile(path) and chk_err:
         raise Exception("Can't find config file:{0}".format(path))
     config = GetFileContents(path).split('\n')
-    config = filter(lambda x : x.startswith(lineStart), config)
+    config = filter(lambda x : not x.startswith(lineStart), config)
     config.append(val)
     ReplaceFileContentsAtomic(path, '\n'.join(config))
 

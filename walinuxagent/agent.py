@@ -74,14 +74,12 @@ class Agent():
         self.dhcpHandler = dhcp.DhcpHandler()
         self.dhcpHandler.probe()
         CurrOS.SetWireServerEndpoint(self.dhcpHandler.getEndpoint())
-        self.envmonitor = envmon.EnvMonitor(self.config, self.dhcpHandler)
         self.protocol = proto.DetectDefaultProtocol()
 
         provisoned = os.path.join(CurrOS.GetLibDir(), "provisioned")
         if(not os.path.isfile(provisoned)):
             provisionHandler = provision.ProvisionHandler(self.config, 
-                                                self.protocol, 
-                                                self.envmonitor)
+                                                          self.protocol)
             try:
                 provisionHandler.provision()
                 fileutil.SetFileContents(provisoned, "")
@@ -97,6 +95,7 @@ class Agent():
             diskThread = threading.Thread(target = self.activateResourceDisk)
             diskThread.start()
             
+        self.envmonitor = envmon.EnvMonitor(self.config, self.dhcpHandler)
         #TODO Start load balancer
         #Need to check whether this should be kept
 

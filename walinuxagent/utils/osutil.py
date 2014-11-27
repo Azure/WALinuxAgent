@@ -683,7 +683,7 @@ class DefaultDistro(object):
         shellutil.Run("> /var/run/utmp")
         shellutil.Run("userdel -f -r " + userName)
         #Remove user from suders
-        sudoers = fileutil.GetFileContents("/etc/sudoers.d/waagent").split()
+        sudoers = fileutil.GetFileContents("/etc/sudoers.d/waagent").split("\n")
         sudoers = filter(lambda x : userName not in x, sudoers)
         fileutil.SetFileContents("/etc/sudoers.d/waagent", "\n".join(sudoers))
 

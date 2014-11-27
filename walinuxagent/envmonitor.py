@@ -32,7 +32,6 @@ class EnvMonitor(object):
         self.shutdown = False
         self.config = config
         self.dhcphandler = dhcphandler
-        self.published = False
         self.hostname = socket.gethostname()
         self.dhcpid = CurrOS.GetDhcpProcessId()
         self.server_thread = threading.Thread(target = self.monitor)
@@ -59,10 +58,8 @@ class EnvMonitor(object):
         if socket.gethostname() != self.hostname:
             logger.Info("EnvMonitor: Detected host name change: {0} -> {1}",
                         self.hostname, socket.gethostname())
-            self.published = False
             CurrOS.SetHostname(self.hostname)
-        else:
-            self.published = True
+            CurrOS.PublishHostname(self.hostname)
 
     def handleDhcpClientRestart(self):
         if self.dhcpid is None:
@@ -79,15 +76,6 @@ class EnvMonitor(object):
                        "Restoring routing table.")
            self.dhcphandler.configRoutes()
            self.dhcpid = newpid
-
-    def setHostname(self, hostname):
-        self.hostname = hostname 
-        self.handleHostnameUpdate()
-   
-    def waitForHostnamePublished(self):
-        while not self.published:
-            time.sleep(1)
-        return
 
     def shutdownService(self):
         """
