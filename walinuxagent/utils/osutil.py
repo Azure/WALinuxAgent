@@ -772,6 +772,7 @@ class Redhat7Distro(RedhatDistro):
         super(Redhat7Distro, self).__init__()
 
     def SetHostname(self, hostname):
+        super(Redhat7Distro, self).SetHostname(hostname)
         fileutil.UpdateConfigFile('/etc/sysconfig/network', 
                                   'HOSTNAME',
                                   'HOSTNAME={0}'.format(hostname))
