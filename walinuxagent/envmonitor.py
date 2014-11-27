@@ -48,18 +48,21 @@ class EnvMonitor(object):
             timeout = self.config.get("OS.RootDeviceScsiTimeout", None)
             if timeout is not None:
                 CurrOS.SetScsiDiskTimeout(timeout)
-            required = self.config.getSwitch("Provisioning.MonitorHostName", False)
+            required = self.config.getSwitch("Provisioning.MonitorHostName", 
+                                             False)
             if required:
                 self.handleHostnameUpdate()
             self.handleDhcpClientRestart()
             time.sleep(5)
 
     def handleHostnameUpdate(self):
-        if socket.gethostname() != self.hostname:
+        currHostname = socket.gethostname()
+        if currHostname != self.hostname:
             logger.Info("EnvMonitor: Detected host name change: {0} -> {1}",
-                        self.hostname, socket.gethostname())
-            CurrOS.SetHostname(self.hostname)
-            CurrOS.PublishHostname(self.hostname)
+                        self.hostname, currHostname)
+            CurrOS.SetHostname(currHostname)
+            CurrOS.PublishHostname(currHostname)
+            self.hostname = currHostname
 
     def handleDhcpClientRestart(self):
         if self.dhcpid is None:
