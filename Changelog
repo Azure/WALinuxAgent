@@ -1,5 +1,9 @@
 WALinuxAgent                                                          Changelog
 |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+27 Nov 2014, WALinuxAgent 2.0.10
+   . Multiple fixes for openSUSE-13.2+
+   . Multiple fixes for FreeBSD
+
 06 Nov 2014, WALinuxAgent 2.0.9
    . Add support for CoreOS
    . Add support for Fedora
