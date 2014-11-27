@@ -1618,6 +1618,7 @@ if Run("mount " + device + "s1 " + mountpoint):
     waagent.Error("ActivateResourceDisk: Failed to mount resource disk (" + device + "s1).")
     sys.exit(0)
 waagent.Log("Resource disk (" + device + "s1) is mounted at " + mountpoint + " with fstype " + fs)
+waagent.SetFileContents(os.path.join(mountpoint,waagent.README_FILENAME), waagent.README_FILECONTENT)
 swap = Config.get("ResourceDisk.EnableSwap")
 if swap == None or swap.lower().startswith("n"):
     sys.exit(0)
@@ -1993,7 +1994,7 @@ class FreeBSDDistro(AbstractDistro):
         return int(RunGetOutput("sysctl hw.ncpu | awk '{print $2}'")[1])
     
     def getTotalMemory(self):
-        return int(RunGetOutput("sysctl -a | grep hw.realmem | awk '{print $2}'")[1])/1024
+        return int(RunGetOutput("sysctl hw.realmem | awk '{print $2}'")[1])/1024
         
 ############################################################
 # END DISTRO CLASS DEFS
