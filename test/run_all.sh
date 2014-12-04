@@ -26,6 +26,10 @@ echo "Run unit test:"
 tests=`ls test_*.py | sed -e 's/\.py//'`
 for test in $tests ; do
     echo $test
-    #python -m unittest $test
 done
-echo $tests | xargs python -m unittest
+
+if [ "$1" == "-c" ] ; then
+    echo $tests | xargs coverage run -m unittest
+else
+    echo $tests | xargs python -m unittest
+fi

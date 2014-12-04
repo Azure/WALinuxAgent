@@ -72,9 +72,12 @@ class ConsoleAppender():
 
     def write(self, level, msg):
         if _MatchLogLevel(self.level, level):
-            with open(self.console_path, "w") as console :
-                console.write(msg.encode('ascii','ignore') + "\n")
-                console.close()
+            try:
+                with open(self.console_path, "w") as console :
+                    console.write(msg.encode('ascii','ignore') + "\n")
+                    console.close()
+            except:
+                pass
             
 class FileAppender():
     def __init__(self, appender_config):
@@ -87,9 +90,12 @@ class FileAppender():
 
     def write(self, level, msg):
         if _MatchLogLevel(self.level, level):
-            with open(self.file_path, "a") as log_file:
-                log_file.write(msg.encode('ascii','ignore') + "\n")
-                log_file.close()
+            try:
+                with open(self.file_path, "a") as log_file:
+                    log_file.write(msg.encode('ascii','ignore') + "\n")
+                    log_file.close()
+            except:
+                pass
 
 #Initialize logger instance
 DefaultLogger = Logger()

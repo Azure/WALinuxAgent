@@ -49,7 +49,11 @@ class TestLogger(unittest.TestCase):
         _logger.info("this is a gbk {0}", 0xff )
 
     def test_file_appender(self):
-        appender_config = logger.AppenderConfig({'type':'FILE', 'level':'INFO', 'file_path':'/tmp/log'})
+        appender_config = logger.AppenderConfig({
+            'type':'FILE', 
+            'level':'INFO', 
+            'file_path':'/tmp/log'
+        })
         _logger = logger.Logger()
         _logger.addLoggerAppender(appender_config)
 
@@ -73,6 +77,17 @@ class TestLogger(unittest.TestCase):
         msg = str(uuid.uuid4())
         _logger.info("Test logger: {0}", msg)
         self.assertTrue(tools.simple_file_grep('/tmp/testlog1', msg))
+
+    def test_log_to_non_exists_dev(self):
+        _logger = logger.Logger()
+        logger.LoggerInit('/tmp/testlog2', '/dev/nonexists', logger = _logger)
+        _logger.info("something")
+
+    def test_log_to_non_exists_file(self):
+        _logger = logger.Logger()
+        logger.LoggerInit('/tmp/nonexists', '/tmp/testconsole', logger = _logger)
+        _logger.info("something")
+
 
 
 if __name__ == '__main__':

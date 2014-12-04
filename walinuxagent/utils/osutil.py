@@ -42,7 +42,12 @@ Define distro specific behavior. DefaultDistro class defines default behavior
 for all distros. Each concrete distro classes could overwrite default behavior
 if needed.
 """
+
+
 class DefaultDistro(object):
+
+    __WireServer=None
+
     def __init__(self):
         self.libDir = "/var/lib/waagent"
         self.dvdMountPoint = "/mnt/cdrom/secure"
@@ -74,16 +79,10 @@ class DefaultDistro(object):
         return self.opensslCmd
 
     def GetWireServerEndpoint(self):
-        endpointFile = os.path.join(self.GetLibDir(), 'endpoint')
-        if os.path.isfile(endpointFile):
-            return fileutil.GetFileContents(endpointFile)
-        return None
+        return DefaultDistro.__WireServer
 
     def SetWireServerEndpoint(self, endpoint):
-        if endpoint is None:
-            return
-        endpointFile = os.path.join(self.GetLibDir(), 'endpoint')
-        fileutil.SetFileContents(endpointFile, endpoint)
+        DefaultDistro.__WireServer = endpoint
         
     def UpdateUserAccount(self, userName, password, expiration=None):
         """

@@ -72,13 +72,10 @@ class ProtocolV1(Protocol):
       
     @staticmethod
     def Init():
-        endpoint = CurrOS.GetWireServerEndpoint()
-        if endpoint is None:
-            raise Exception("Wire server endpoint not found.")
-        protocol = ProtocolV1(endpoint)
+        protocol = ProtocolV1()
         return protocol
 
-    def __init__(self, endpoint):
+    def __init__(self, endpoint=None):
         self.endpoint = endpoint
         self.libDir = CurrOS.GetLibDir()
         self.incarnation = None
@@ -203,6 +200,8 @@ class ProtocolV1(Protocol):
         server to get the configuration and save it in the disk. So that other 
         application like extension could read the data from the disk.
         """
+        if self.endpoint is None:
+            raise Exception("Wire server endpoint is not set.")
         self.checkProtocolVersion()
         CurrOS.GenerateTransportCert()
         self.updateGoalState()
