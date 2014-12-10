@@ -26,7 +26,7 @@ import imp
 import subprocess
 
 if __name__ == '__main__':
-    account = 'yuezh'
+    account = 'Azure'
     agentUri = ('https://raw.githubusercontent.com/{0}/'
                 'WALinuxAgent/2.0/waagent').format(account)
     print "Download WAAgent from {0}".format(agentUri)
