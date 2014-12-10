@@ -487,11 +487,11 @@ class AbstractDistro(object):
                 #GPT(Guid Partition Table) is used.
                 #Get partitions.
                 parts = filter(lambda x : re.match("^\s*[0-9]+", x), ret[1].split("\n"))
-                #If there are more than 1 partitions, it suggests that the disk is not formated yet.
+                #If there are more than 1 partitions, remove all partitions 
+                #and create a new one using the entire disk space.
                 if len(parts) > 1:
-                    #Remove old partition and create new one
-                    Run("parted {0} rm 1".format(device))
-                    Run("parted {0} rm 2".format(device))
+                    for i in range(1, len(parts) + 1):
+                        Run("parted {0} rm {1}".format(device, i))
                     Run("parted {0} mkpart primary 0% 100%".format(device))
                     Run("mkfs." + fs + " " + partition + " -F")
             else:
@@ -500,8 +500,11 @@ class AbstractDistro(object):
                     Run("sfdisk -c " + device + " 1 83")
                     Run("mkfs." + fs + " " + partition)
             if Run("mount " + partition + " " + mountpoint):
-                Error("ActivateResourceDisk: Failed to mount resource disk (" + partition + ").")
-                return
+                #If mount failed, try to format the partition and mount again
+                Run("mkfs." + fs + " " + partition + " -F")
+                if Run("mount " + partition + " " + mountpoint):
+                    Error("ActivateResourceDisk: Failed to mount resource disk (" + partition + ").")
+                    return
             Log("Resource disk (" + partition + ") is mounted at " + mountpoint + " with fstype " + fs)
 
         #Create README file under the root of resource disk
