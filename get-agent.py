@@ -21,21 +21,29 @@
 # http://msdn.microsoft.com/en-us/library/cc227259%28PROT.13%29.aspx
 #
 
+import os
 import urllib2
 import shutil
 import imp
+import subprocess
 
 if __name__ == '__main__':
     account = 'yuezh'
     agentUri = ('https://raw.githubusercontent.com/{0}/'
                 'WALinuxAgent/2.0/waagent').format(account)
+    print "Download WAAgent from {0}".format(agentUri)
     response = urllib2.urlopen(agentUri)
     html = response.read()
-    with open("waagent") as F:
+    with open("waagent", "w+") as F:
         F.write(html)
-    os.chmod("waagent", 544)
+    os.chmod("waagent", 0544)
     shutil.copyfile("waagent", "/usr/sbin/waagent")
     waagent=imp.load_source('waagent','/usr/sbin/waagent')
+    print "Upgraded WAAgent to {0}".format(waagent.GuestAgentVersion)
+    waagent.LoggerInit('/var/log/update-waagent.log','/dev/stdout')
     waagent.MyDistro=waagent.GetMyDistro()
+    waagent.MyDistro.agent_service_name="waagent"
+    if type(waagent.MyDistro) == waagent.UbuntuDistro:
+        waagent.MyDistro.agent_service_name="walinuxagent"
     waagent.MyDistro.stopAgentService()
     waagent.MyDistro.startAgentService()
