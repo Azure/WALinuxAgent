@@ -820,8 +820,8 @@ class SuSEDistro(AbstractDistro):
         self.requiredDeps += [ "/sbin/insserv" ]
         self.init_file=suse_init_file
         self.dhcp_client_name='dhcpcd'
-        if ((DistInfo(fullname=1)[0] == 'SUSE Linux Enterprise Server' and DistInfo()[1] >= 12) or \
-            (DistInfo(fullname=1)[0] == 'openSUSE'                     and DistInfo()[1] >= 13.2)):
+        if ((DistInfo(fullname=1)[0] == 'SUSE Linux Enterprise Server' and DistInfo()[1] >= '12') or \
+            (DistInfo(fullname=1)[0] == 'openSUSE'                     and DistInfo()[1] >= '13.2')):
             self.dhcp_client_name='wickedd-dhcp4'
         self.grubKernelBootOptionsFile = '/boot/grub/menu.lst'
         self.grubKernelBootOptionsLine = 'kernel'
