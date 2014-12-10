@@ -24,10 +24,10 @@
 import subprocess
 
 if __name__ == '__main__':
-    subprocess.call("umount", '/mnt/resource')
-    subprocess.call("umount", '/mnt')
-    subprocess.call('parted', '/dev/sdb', 'print')
-    subprocess.call('parted', '/dev/sdb', 'rm', '1')
-    subprocess.call('parted', '/dev/sdb', 'mklabel', 'gpt')
-    subprocess.call('parted', '/dev/sdb', 'mkpart', 'primary', '0%', '50%')
-    subprocess.call('parted', '/dev/sdb', 'mkpart', 'primary', '50%', '100%')
+    subprocess.call(['umount', '/mnt/resource'])
+    subprocess.call(['umount', '/mnt'])
+    subprocess.call(['parted', '/dev/sdb', 'print'])
+    subprocess.call(['parted', '/dev/sdb', 'rm', '1'])
+    subprocess.call(['parted', '/dev/sdb', 'mklabel', 'gpt'])
+    subprocess.call(['parted', '/dev/sdb', 'mkpart', 'primary', '0%', '50%'])
+    subprocess.call(['parted', '/dev/sdb', 'mkpart', 'primary', '50%', '100%'])
