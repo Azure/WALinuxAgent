@@ -173,8 +173,9 @@ class AbstractDistro(object):
         self.ssh_config_file='/etc/ssh/sshd_config'
         self.hostname_file_path='/etc/hostname'
         self.dhcp_client_name='dhclient'
-        self.requiredDeps = [ 'route', 'shutdown', 'ssh-keygen', 'useradd'
-                              , 'openssl', 'sfdisk', 'fdisk', 'mkfs', 'chpasswd', 'sed', 'grep', 'sudo' ]
+        self.requiredDeps = [ 'route', 'shutdown', 'ssh-keygen', 'useradd', 
+                              'openssl', 'sfdisk', 'fdisk', 'mkfs', 'chpasswd', 
+                              'sed', 'grep', 'sudo', 'parted' ]
         self.init_script_file='/etc/init.d/waagent'
         self.agent_package_name='WALinuxAgent'
         self.fileBlackList = [ "/root/.bash_history", "/var/log/waagent.log",'/etc/resolv.conf' ]        
@@ -480,9 +481,9 @@ class AbstractDistro(object):
             ret = RunGetOutput("sfdisk -q -c " + device + " 1", chk_err=False)[1].rstrip()
             partition = device + "1"
             if ("GPT" in ret or "ee" == ret) and fs != "ntfs":
-                #In Ubuntu the previous command returns 'ee'
                 #GPT(Guid Partition Table) is used.
-                #The 1st partition is Windows reserved partition.
+                #In Ubuntu the previous command returns 'ee'
+                #Remove old partition and create new one
                 Run("parted {0} rm 1".format(device))
                 Run("parted {0} rm 2".format(device))
                 Run("parted {0} mkpart primary 0% 100%".format(device))
