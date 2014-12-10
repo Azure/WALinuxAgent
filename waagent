@@ -477,20 +477,28 @@ class AbstractDistro(object):
             if fs == None:
                 fs = "ext3"
 
-            #Check partition type
-            ret = RunGetOutput("sfdisk -q -c " + device + " 1", chk_err=False)[1].rstrip()
             partition = device + "1"
-            if ("GPT" in ret or "ee" == ret) and fs != "ntfs":
+
+            #Check partition type
+            Log("Detect GPT...")
+            ret = RunGetOutput("parted {0} print".format(device))
+            if ret[0] == 0 and "gpt" in ret[1]:
+                Log("GPT detected.")
                 #GPT(Guid Partition Table) is used.
-                #In Ubuntu the previous command returns 'ee'
-                #Remove old partition and create new one
-                Run("parted {0} rm 1".format(device))
-                Run("parted {0} rm 2".format(device))
-                Run("parted {0} mkpart primary 0% 100%".format(device))
-                Run("mkfs." + fs + " " + partition + " -F")
-            elif ret == "7" and fs != "ntfs":
-                Run("sfdisk -c " + device + " 1 83")
-                Run("mkfs." + fs + " " + partition)
+                #Get partitions.
+                parts = filter(lambda x : re.match("^\s*[0-9]+", x), ret[1].split("\n"))
+                #If there are more than 1 partitions, it suggests that the disk is not formated yet.
+                if len(parts) > 1:
+                    #Remove old partition and create new one
+                    Run("parted {0} rm 1".format(device))
+                    Run("parted {0} rm 2".format(device))
+                    Run("parted {0} mkpart primary 0% 100%".format(device))
+                    Run("mkfs." + fs + " " + partition + " -F")
+            else:
+                existingFS = RunGetOutput("sfdisk -q -c " + device + " 1", chk_err=False)[1].rstrip()
+                if existingFS == "7" and fs != "ntfs":
+                    Run("sfdisk -c " + device + " 1 83")
+                    Run("mkfs." + fs + " " + partition)
             if Run("mount " + partition + " " + mountpoint):
                 Error("ActivateResourceDisk: Failed to mount resource disk (" + partition + ").")
                 return
