@@ -29,9 +29,20 @@ import re
 import platform
 
 def upgrade():
+    #Define variables
     account = 'Azure'
     agentUri = ('https://raw.githubusercontent.com/{0}/'
                 'WALinuxAgent/2.0/waagent').format(account)
+    distro = platform.linux_distribution()
+    cmd = ['service', 'waagent', 'restart']
+    agent_file="/usr/sbin/waagent"
+
+    if "Ubuntu" in distro[0]:
+        cmd[1]='walinuxagent'
+    if "CoreOS" in distro[0]:
+        cmd = ['systemctl', 'restart', 'waagent']
+        agent_file = "/usr/share/oem/bin/waagent"
+
     if os.path.isfile('waagent'):
         os.remove('waagent')
     print "Download WAAgent from: {0}".format(agentUri)
@@ -45,13 +56,10 @@ def upgrade():
         subprocess.call(['wget', agentUri])
 
     print "Upgrade WAAgent"
-    shutil.copyfile("waagent", "/usr/sbin/waagent")
-    os.chmod("/usr/sbin/waagent", 0700)
 
-    distro = platform.linux_distribution()
-    cmd = ['service', 'waagent', 'restart']
-    if "Ubuntu" in distro[0]:
-        cmd[1]='walinuxagent'
+    shutil.copyfile("waagent", agent_file)
+    os.chmod(agent_file, 0700)
+
     job = subprocess.Popen(cmd)
     job.wait()
     
