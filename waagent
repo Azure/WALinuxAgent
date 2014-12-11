@@ -80,7 +80,7 @@ if not hasattr(subprocess,'check_output'):
     
 GuestAgentName = "WALinuxAgent"
 GuestAgentLongName = "Windows Azure Linux Agent"
-GuestAgentVersion = "WALinuxAgent-2.0.11-pre"
+GuestAgentVersion = "WALinuxAgent-2.0.11"
 ProtocolVersion = "2012-11-30" #WARNING this value is used to confirm the correct fabric protocol.
 
 Config = None
