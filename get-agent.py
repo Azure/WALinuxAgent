@@ -49,10 +49,11 @@ def upgrade():
     os.chmod("/usr/sbin/waagent", 0700)
 
     distro = platform.linux_distribution()
+    cmd = ['service', 'waagent', 'restart']
     if "Ubuntu" in distro[0]:
-        subprocess.Popen(['service', 'walinuxagent', 'restart'])
-    else:
-        subprocess.Popen(['service', 'waagent', 'restart'])
+        cmd[1]='walinuxagent'
+    job = subprocess.Popen(cmd)
+    job.wait()
     
 if __name__ == '__main__':
     upgrade()
