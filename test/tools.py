@@ -62,3 +62,4 @@ def Dummy():
 
 #Mock CurrOS so that the test of other part will be os unrelated
 CurrOS.GetLibDir = MockFunc(retval='/tmp')
+CurrOS.GetExtLogDir = MockFunc(retval='/tmp/log')

@@ -106,7 +106,7 @@ def ReplaceFileContentsAtomic(filepath, contents):
         try:
             os.rename(temp, filepath)
         except IOError, e:
-            logger.Error('Rename {0} to {1}, Exception is {2}',temp,  filepath, e)
+            logger.Error('Rename {0} to {1}, Exception is {2}',temp, filepath, e)
             return 1
     return 0
 
@@ -125,10 +125,13 @@ def GetLineStartingWith(prefix, filepath):
 
 #End File operation util functions
 
-def CreateDir(dirpath, owner, mode):
+def CreateDir(dirpath, mode=None, owner=None):
     if not os.path.isdir(dirpath):
-        os.makedirs(dirpath, mode)
-    ChangeOwner(dirpath, owner)
+        os.makedirs(dirpath)
+    if mode is not None:
+        ChangeMod(dirpath, mode)
+    if owner is not None:
+        ChangeOwner(dirpath, owner)
 
 def ChangeOwner(path, owner):
     ownerInfo = pwd.getpwnam(owner)

@@ -52,18 +52,18 @@ class TestLogger(unittest.TestCase):
         appender_config = logger.AppenderConfig({
             'type':'FILE', 
             'level':'INFO', 
-            'file_path':'/tmp/log'
+            'file_path':'/tmp/testlog'
         })
         _logger = logger.Logger()
         _logger.addLoggerAppender(appender_config)
 
         msg = str(uuid.uuid4())
         _logger.info("Test logger: {0}", msg)
-        self.assertTrue(tools.simple_file_grep('/tmp/log', msg))
+        self.assertTrue(tools.simple_file_grep('/tmp/testlog', msg))
 
         msg = str(uuid.uuid4())
         _logger.verbose("Verbose should not be logged: {0}", msg)
-        self.assertFalse(tools.simple_file_grep('/tmp/log', msg))
+        self.assertFalse(tools.simple_file_grep('/tmp/testlog', msg))
 
         _logger.info("this is a unicode {0}", u'\u6211')
         _logger.info("this is a utf-8 {0}", u'\u6211'.encode('utf-8'))

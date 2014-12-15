@@ -89,7 +89,9 @@ class ExtensionInfo():
         return os.path.join(self.baseDir, 'HandlerEnvironment.json')
 
     def getLogDir(self):
-        return os.path.join('/var/log/azure',self.getName(), self.getVersion())
+        return os.path.join(CurrOS.GetExtLogDir(), 
+                            self.getName(), 
+                            self.getVersion())
 
     def getName(self):
         return self.data["name"]

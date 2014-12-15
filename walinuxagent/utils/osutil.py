@@ -50,6 +50,7 @@ class DefaultDistro(object):
 
     def __init__(self):
         self.libDir = "/var/lib/waagent"
+        self.extLogDir = "/var/log/azure"
         self.dvdMountPoint = "/mnt/cdrom/secure"
         self.ovfenvPathOnDvd = "/mnt/cdrom/secure/ovf-env.xml"
         self.agentPidPath = "/var/run/waagent.pid"
@@ -62,6 +63,9 @@ class DefaultDistro(object):
 
     def GetLibDir(self):
         return self.libDir
+
+    def GetExtLogDir(self):
+        return self.extLogDir
 
     def GetDvdMountPoint(self):
         return self.dvdMountPoint
@@ -200,7 +204,7 @@ class DefaultDistro(object):
         """
         path = self._NormPath(path)
         dirPath = os.path.dirname(path)
-        fileutil.CreateDir(dirPath, userName, 0700)
+        fileutil.CreateDir(dirPath, mode=0700, owner=userName)
         libDir = CurrOS.GetLibDir()
         prvPath = os.path.join(libDir, thumbprint + '.prv')
         if not os.path.isfile(prvPath):
@@ -222,7 +226,7 @@ class DefaultDistro(object):
         """
         path = self._NormPath(path)
         dirPath = os.path.dirname(path)
-        fileutil.CreateDir(dirPath, userName, 0700)
+        fileutil.CreateDir(dirPath, mode=0700, owner=userName)
         libDir = CurrOS.GetLibDir()
         crtPath = os.path.join(libDir, thumbprint + '.crt')
         if not os.path.isfile(crtPath):
@@ -616,7 +620,7 @@ class DefaultDistro(object):
             logger.Info("Resource disk {0} is already mounted", device)
             return existing
 
-        fileutil.CreateDir(mountpoint, "root", 0755)  
+        fileutil.CreateDir(mountpoint, mode=0755)  
         output = shellutil.RunGetOutput("sfdisk -q -c {0} 1".format(device))
         if output[1].rstrip() == "7" and fs != "ntfs":
             shellutil.Run("sfdisk -c {0} 1 83".format(device))

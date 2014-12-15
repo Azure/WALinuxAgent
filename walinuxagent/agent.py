@@ -235,7 +235,7 @@ def Main():
         logger.LoggerInit('/var/log/waagent.log', 
                           '/dev/console',
                           verbose=verbose)
-        fileutil.CreateDir(CurrOS.GetLibDir(), 'root', '0700')
+        fileutil.CreateDir(CurrOS.GetLibDir(), mode='0700')
         os.chdir(CurrOS.GetLibDir())
         Agent(config).run()
     elif command == "serialconsole":

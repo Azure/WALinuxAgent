@@ -57,14 +57,20 @@ def LoadExtensionInstance(setting):
     Return the highest version instance with the same name
     """
     targetName = setting.getName()
-    for dirName in os.listdir(CurrOS.GetLibDir()):
-        if os.path.isdir(dirName) and dirName.startswith(targetName):
+    installedVersion = None
+    libDir = CurrOS.GetLibDir()
+    ext = None
+    for dirName in os.listdir(libDir):
+        path = os.path.join(libDir, dirName)
+        if os.path.isdir(path) and dirName.startswith(targetName):
             name, version = ParseExtensionDirName(dirName)
             #Here we need to ensure names are exactly the same.
             if name == targetName:
-                ext = ExtensionInstance(setting, version)
-                return ext
-    return None
+                if installedVersion is None or installedVersion < version:
+                    installedVersion = version
+    if installedVersion is not None:
+        ext = ExtensionInstance(setting, installedVersion, installed=True)
+    return ext
 
 class ExtensionInstance(object):
     def __init__(self, setting, currVersion , installed=False):
@@ -72,7 +78,7 @@ class ExtensionInstance(object):
         #Create a copy of setting for current version
         self.setting = setting.copy(currVersion)
         self.installed = installed
-        fileutil.CreateDir(self.setting.getLogDir(), 'root', 0644)
+        fileutil.CreateDir(self.setting.getLogDir(), mode=0644)
         self.logger = logger.Logger(logger.DefaultLogger)
         self.logger.addLoggerAppender(logger.AppenderConfig({
             'type' : 'FILE',
@@ -160,9 +166,9 @@ class ExtensionInstance(object):
 
         #Create status and config dir
         statusDir = self.setting.getStatusDir() 
-        fileutil.CreateDir(statusDir, 'root', 0700)
+        fileutil.CreateDir(statusDir, mode=0700)
         configDir = self.setting.getConfigDir()
-        fileutil.CreateDir(configDir, 'root', 0700)
+        fileutil.CreateDir(configDir, mode=0700)
 
         #Save HandlerEnvironment.json
         self.createHandlerEnvironment()
