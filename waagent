@@ -80,7 +80,7 @@ if not hasattr(subprocess,'check_output'):
     
 GuestAgentName = "WALinuxAgent"
 GuestAgentLongName = "Windows Azure Linux Agent"
-GuestAgentVersion = "WALinuxAgent-2.0.10"
+GuestAgentVersion = "WALinuxAgent-2.0.11-pre"
 ProtocolVersion = "2012-11-30" #WARNING this value is used to confirm the correct fabric protocol.
 
 Config = None
@@ -173,8 +173,9 @@ class AbstractDistro(object):
         self.ssh_config_file='/etc/ssh/sshd_config'
         self.hostname_file_path='/etc/hostname'
         self.dhcp_client_name='dhclient'
-        self.requiredDeps = [ 'route', 'shutdown', 'ssh-keygen', 'useradd'
-                              , 'openssl', 'sfdisk', 'fdisk', 'mkfs', 'chpasswd', 'sed', 'grep', 'sudo' ]
+        self.requiredDeps = [ 'route', 'shutdown', 'ssh-keygen', 'useradd', 
+                              'openssl', 'sfdisk', 'fdisk', 'mkfs', 'chpasswd', 
+                              'sed', 'grep', 'sudo', 'parted' ]
         self.init_script_file='/etc/init.d/waagent'
         self.agent_package_name='WALinuxAgent'
         self.fileBlackList = [ "/root/.bash_history", "/var/log/waagent.log",'/etc/resolv.conf' ]        
@@ -475,13 +476,36 @@ class AbstractDistro(object):
             fs = Config.get("ResourceDisk.Filesystem")
             if fs == None:
                 fs = "ext3"
-            if RunGetOutput("sfdisk -q -c " + device + " 1")[1].rstrip() == "7" and fs != "ntfs":
-                Run("sfdisk -c " + device + " 1 83")
-                Run("mkfs." + fs + " " + device + "1")
-            if Run("mount " + device + "1 " + mountpoint):
-                Error("ActivateResourceDisk: Failed to mount resource disk (" + device + "1).")
-                return
-            Log("Resource disk (" + device + "1) is mounted at " + mountpoint + " with fstype " + fs)
+
+            partition = device + "1"
+
+            #Check partition type
+            Log("Detect GPT...")
+            ret = RunGetOutput("parted {0} print".format(device))
+            if ret[0] == 0 and "gpt" in ret[1]:
+                Log("GPT detected.")
+                #GPT(Guid Partition Table) is used.
+                #Get partitions.
+                parts = filter(lambda x : re.match("^\s*[0-9]+", x), ret[1].split("\n"))
+                #If there are more than 1 partitions, remove all partitions 
+                #and create a new one using the entire disk space.
+                if len(parts) > 1:
+                    for i in range(1, len(parts) + 1):
+                        Run("parted {0} rm {1}".format(device, i))
+                    Run("parted {0} mkpart primary 0% 100%".format(device))
+                    Run("mkfs." + fs + " " + partition + " -F")
+            else:
+                existingFS = RunGetOutput("sfdisk -q -c " + device + " 1", chk_err=False)[1].rstrip()
+                if existingFS == "7" and fs != "ntfs":
+                    Run("sfdisk -c " + device + " 1 83")
+                    Run("mkfs." + fs + " " + partition)
+            if Run("mount " + partition + " " + mountpoint):
+                #If mount failed, try to format the partition and mount again
+                Run("mkfs." + fs + " " + partition + " -F")
+                if Run("mount " + partition + " " + mountpoint):
+                    Error("ActivateResourceDisk: Failed to mount resource disk (" + partition + ").")
+                    return
+            Log("Resource disk (" + partition + ") is mounted at " + mountpoint + " with fstype " + fs)
 
         #Create README file under the root of resource disk
         SetFileContents(os.path.join(mountpoint,README_FILENAME), README_FILECONTENT)
@@ -796,8 +820,8 @@ class SuSEDistro(AbstractDistro):
         self.requiredDeps += [ "/sbin/insserv" ]
         self.init_file=suse_init_file
         self.dhcp_client_name='dhcpcd'
-        if ((DistInfo(fullname=1)[0] == 'SUSE Linux Enterprise Server' and DistInfo()[1] >= 12) or \
-            (DistInfo(fullname=1)[0] == 'openSUSE'                     and DistInfo()[1] >= 13.2)):
+        if ((DistInfo(fullname=1)[0] == 'SUSE Linux Enterprise Server' and DistInfo()[1] >= '12') or \
+            (DistInfo(fullname=1)[0] == 'openSUSE'                     and DistInfo()[1] >= '13.2')):
             self.dhcp_client_name='wickedd-dhcp4'
         self.grubKernelBootOptionsFile = '/boot/grub/menu.lst'
         self.grubKernelBootOptionsLine = 'kernel'
