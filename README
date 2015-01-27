@@ -67,7 +67,7 @@ http://support.microsoft.com/kb/2805216
     * Oracle Linux 6.4+
 
   Other Supported Systems:
-    * FreeBSD 9+
+    * FreeBSD 10+
 
 Waagent depends on some system packages in order to function properly:
 
