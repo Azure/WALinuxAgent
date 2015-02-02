@@ -1819,7 +1819,6 @@ class FreeBSDDistro(AbstractDistro):
             elif j[i] == 'ether' :
                 mac=j[i+1]
 		
-		Log("iface = {0}, inet = {1}, mac = {2}".format(iface, inet, mac));
         return iface, inet, mac
 
     def CreateAccount(self,user, password, expiration, thumbprint):
