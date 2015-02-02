@@ -1788,7 +1788,7 @@ class FreeBSDDistro(AbstractDistro):
         code,output=RunGetOutput("ifconfig",chk_err=False)
         Log(output)
         retries=10
-        cmd='ifconfig | grep -A1 -B2 ether | grep -B3 inet | grep -A3 UP '
+        cmd='ifconfig | grep -A2 -B2 ether | grep -B3 inet | grep -A4 UP '
         code=1
 
         while code > 0 :
@@ -1818,7 +1818,7 @@ class FreeBSDDistro(AbstractDistro):
                 inet=j[i+1]
             elif j[i] == 'ether' :
                 mac=j[i+1]
-
+		
         return iface, inet, mac
 
     def CreateAccount(self,user, password, expiration, thumbprint):
