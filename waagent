@@ -1060,12 +1060,9 @@ class CoreOSDistro(AbstractDistro):
 
     def restartSshService(self):
         """
-        Service call to re(start) the SSH service
+        SSH is socket activated on CoreOS. No need to restart it.
         """
-        retcode = Run("systemctl restart sshd")
-        if retcode > 0:
-            Error("Failed to restart SSH service with return code:" + str(retcode))
-        return retcode
+        return 0
 
     def sshDeployPublicKey(self,fprint,path):
         """
