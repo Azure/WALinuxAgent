@@ -1371,7 +1371,7 @@ class UbuntuDistro(debianDistro):
         """
         Ubuntu specific warning string from Deprovision.
         """
-        print("WARNING! Nameserver configuration in /etc/resolvconf/resolv.conf.d/{tail,originial} will be deleted.")
+        print("WARNING! Nameserver configuration in /etc/resolvconf/resolv.conf.d/{tail,original} will be deleted.")
 
     def deprovisionDeleteFiles(self):
         """
@@ -1385,7 +1385,7 @@ class UbuntuDistro(debianDistro):
         else:
             Log("resolvconf is enabled; leaving /etc/resolv.conf intact")
             resolvConfD = '/etc/resolvconf/resolv.conf.d/'
-            self.fileBlackList.extend([resolvConfD + 'tail', resolvConfD + 'originial'])
+            self.fileBlackList.extend([resolvConfD + 'tail', resolvConfD + 'original'])
         for f in os.listdir(LibDir)+self.fileBlackList:
             try:
                 os.remove(f)
