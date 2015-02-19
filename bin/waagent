@@ -3136,7 +3136,7 @@ class ExtensionsConfig(object):
                     Error('Unable to disable '+name)
                     SimpleLog(p.plugin_log,'ERROR: Unable to disable '+name)
                 else :
-                    self.SetHandlerState(handler, 'Installed')
+                    self.SetHandlerState(handler, 'Disabled')
                     Log(name+' is disabled')
                     SimpleLog(p.plugin_log,name+' is disabled')
 
