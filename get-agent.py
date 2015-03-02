@@ -28,11 +28,10 @@ import time
 import re
 import platform
 
-def upgrade():
+def upgrade(account='Azure', ref='2.0'):
     #Define variables
-    account = 'Azure'
     agentUri = ('https://raw.githubusercontent.com/{0}/'
-                'WALinuxAgent/2.0/waagent').format(account)
+                'WALinuxAgent/{1}/waagent').format(account, ref)
     distro = platform.linux_distribution()
     cmd = ['service', 'waagent', 'restart']
     agent_file="/usr/sbin/waagent"
@@ -64,4 +63,7 @@ def upgrade():
     job.wait()
     
 if __name__ == '__main__':
-    upgrade()
+    if len(sys.argv) == 3:
+        upgrade(sys.argv[1], sys.argv[2])
+    else:
+        upgrade()
