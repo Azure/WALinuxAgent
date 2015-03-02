@@ -19,5 +19,5 @@ import os
 projet_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 waagent = imp.load_source('waagent', os.path.join(projet_root, 'waagent'))
 
-waagent.LoggerInit('/tmp/test.log','/dev/stdout')
+waagent.LoggerInit('/dev/stdout', '/dev/null')
 

@@ -2590,140 +2590,233 @@ class Util(object):
     Http communication class.
     Base of GoalState, and Agent classes.
     """
-    def _HttpGet(self, url, headers):
+    __RetryWaitingInterval=10
+
+    def __init__(self):
+        self.Endpoint = None
+
+    def _ParseUrl(self, url):
+        secure = False
+        host = self.Endpoint
+        action = url
+
+        #Strip "http[s]://hostname/" from url
+        if url.startswith("http://"):
+            url = url[7:]
+            pos = url.index("/")
+            if pos > 0:
+                host = url[0: pos]
+                action = url[pos:]
+        elif url.startswith("https://"):
+            secure = True
+            url = url[8:]
+            pos = url.index("/")
+            if pos > 0:
+                host = url[0:pos]
+                action = url[pos:]
+        return host, action, secure        
+
+    def _HttpRequest(self, method, host, action, data=None, 
+                     secure=False, headers=None):
+        resp = None;
+        try:
+            httpConnection = None
+
+            #If httplib module is not built with ssl support. Failback to http
+            if secure and hasattr(httplib, "HTTPSConnection"):
+                httpConnection = httplib.HTTPSConnection(host)
+            else:
+                httpConnection = httplib.HTTPConnection(host)
+            if headers == None:
+                httpConnection.request(method, action, data)
+            else:
+                httpConnection.request(method, action, data, headers)
+            resp = httpConnection.getresponse()
+        except httplib.HTTPException, e:
+            Error('HTTPException {0}, args:{1}'.format(e, repr(e.args)))
+        except IOError, e:
+            Error('Socket IOError {0}, args:{1}'.format(e, repr(e.args)))
+        return resp
+
+    def HttpRequest(self, method, url, data, headers=None, maxRetry=3):
         """
-        Do HTTP get on 'url' with 'headers'.
+        Sending http request to server
         On error, sleep 10 and maxRetry times.
         Return the output buffer or None.
         """
-        LogIfVerbose("HttpGet(" + url + ")")
-        maxRetry = 2
-        if url.startswith("http://"):
-            url = url[7:]
-            url = url[url.index("/"):]
-        for retry in range(0, maxRetry + 1):
-            strRetry = str(retry)
-            log = [NoLog, Error][retry > 0]
-            log("retry HttpGet(" + url + "),retry=" + strRetry)
-            response = None
-            strStatus = "None"
-            try:
-                httpConnection = httplib.HTTPConnection(self.Endpoint)
-                if headers == None:
-                    request = httpConnection.request("GET", url)
-                else:
-                    request = httpConnection.request("GET", url, None, headers)
-                response = httpConnection.getresponse()
-                strStatus = str(response.status)
-            except httplib.HTTPException, e:
-                Error('HTTPException ' + e.message + ' args: ' + repr(e.args))
-            except IOError, e:
-                Error('socket IOError ' + e.message + ' args: ' + repr(e.args))
-            log("response HttpGet(" + url + "),retry=" + strRetry + ",status=" + strStatus)
-            if response == None or response.status != httplib.OK:
-                Error("HttpGet(" + url + "),retry=" + strRetry + ",status=" + strStatus)
-                if retry == maxRetry:
-                    Error("return HttpGet(" + url + "),retry=" + strRetry + ",status=" + strStatus)
-                    return None
-                else:
-                    Error("sleep 10 seconds HttpGet(" + url + "),retry=" + strRetry + ",status=" + strStatus)
-                    time.sleep(10)
-            else:
-                log("return HttpGet(" + url + "),retry=" + strRetry + ",status=" + strStatus)
-                return response.read()
+        LogIfVerbose("HTTP Req: {0} {1}".format(method, url))
+        LogIfVerbose("HTTP Req: Data={0}".format(data))
+        LogIfVerbose("HTTP Req: Header={0}".format(headers))
+        host, action, secure = self._ParseUrl(url)
+        resp = self._HttpRequest(method, host, action, data, secure, headers)
+        for retry in range(0, maxRetry):
+            if resp is not None and \
+                   (resp.status == httplib.OK or \
+                    resp.status == httplib.CREATED or \
+                    resp.status == httplib.ACCEPTED):
+                return resp;
 
-    def HttpGetWithoutHeaders(self, url):
+            Error("Retry={0}".format(retry))
+            Error("HTTP Req: {0} {1}".format(method, url))
+            Error("HTTP Req: Data={0}".format(data))
+            Error("HTTP Req: Header={0}".format(headers))
+            if resp is None:
+                Error("HTTP Err: response is empty.".format(retry))
+            else:
+                Error("HTTP Err: Status={0}".format(resp.status))
+                Error("HTTP Err: Reason={0}".format(resp.reason))
+                Error("HTTP Err: Header={0}".format(resp.getheaders()))
+                Error("HTTP Err: Body={0}".format(resp.read()))
+            time.sleep(self.__class__.__RetryWaitingInterval)
+            resp = self._HttpRequest(method, host, action, data, secure, 
+                                     headers)
+
+        return None
+
+    def HttpGet(self, url, headers=None, maxRetry=3):
+        return self.HttpRequest("GET", url, None, headers, maxRetry)
+        
+    def HttpHead(self, url, headers=None, maxRetry=3):
+        return self.HttpRequest("HEAD", url, None, headers, maxRetry)
+        
+    def HttpPost(self, url, data, headers=None, maxRetry=3):
+        return self.HttpRequest("POST", url, data, headers, maxRetry)
+
+    def HttpPut(self, url, data, headers=None, maxRetry=3):
+        return self.HttpRequest("PUT", url, data, headers, maxRetry)
+
+    def HttpDelete(url, data, headers=None, maxRetry=3):
+        return self.HttpRequest("DELETE", url, data, headers, maxRetry)
+    
+    def HttpGetWithoutHeaders(self, url, maxRetry=3):
         """
         Return data from an HTTP get on 'url'.
         """
-        return self._HttpGet(url, None)
+        resp = self.HttpGet(url, None, maxRetry)
+        return resp.read() if resp is not None else None
 
-    def HttpGetWithHeaders(self, url):
+    def HttpGetWithHeaders(self, url, maxRetry=3):
         """
         Return data from an HTTP get on 'url' with
         x-ms-agent-name and x-ms-version
         headers.
         """
-        return self._HttpGet(url, {"x-ms-agent-name": GuestAgentName, "x-ms-version": ProtocolVersion})
+        resp = self.HttpGet(url, {
+            "x-ms-agent-name": GuestAgentName, 
+            "x-ms-version": ProtocolVersion
+        }, maxRetry)
+        return resp.read() if resp is not None else None
 
-    def HttpSecureGetWithHeaders(self, url, transportCert):
+    def HttpSecureGetWithHeaders(self, url, transportCert, maxRetry=3):
         """
         Return output of get using ssl cert.
         """
-        return self._HttpGet(url, {"x-ms-agent-name": GuestAgentName,
-                                   "x-ms-version": ProtocolVersion,
-                                   "x-ms-cipher-name": "DES_EDE3_CBC",
-                                   "x-ms-guest-agent-public-x509-cert": transportCert})
+        resp = self.HttpGet(url, {
+            "x-ms-agent-name": GuestAgentName,
+            "x-ms-version": ProtocolVersion,
+            "x-ms-cipher-name": "DES_EDE3_CBC",
+            "x-ms-guest-agent-public-x509-cert": transportCert
+        }, maxRetry)
+        return resp.read() if resp is not None else None
 
-    def HttpPost(self, url, data):
-        """
-        Send http POST to server, sleeping 10 retrying maxRetry times upon error.
-        """
-        LogIfVerbose("HttpPost(" + url + ")")
-        maxRetry = 2
-        for retry in range(0, maxRetry + 1):
-            strRetry = str(retry)
-            log = [NoLog, Error][retry > 0]
-            log("retry HttpPost(" + url + "),retry=" + strRetry)
-            response = None
-            strStatus = "None"
-            try:
-                httpConnection = httplib.HTTPConnection(self.Endpoint)
-                request = httpConnection.request("POST", url, data, {"x-ms-agent-name": GuestAgentName,
-                                                                     "Content-Type": "text/xml; charset=utf-8",
-                                                                     "x-ms-version": ProtocolVersion})
-                response = httpConnection.getresponse()
-                strStatus = str(response.status)
-            except httplib.HTTPException, e:
-                Error('HTTPException ' + e.message + ' args: ' + repr(e.args))
-            except IOError, e:
-                Error('socket IOError ' + e.message + ' args: ' + repr(e.args))
-            log("response HttpPost(" + url + "),retry=" + strRetry + ",status=" + strStatus)
-            if response == None or (response.status != httplib.OK and response.status != httplib.ACCEPTED):
-                Error("HttpPost(" + url + "),retry=" + strRetry + ",status=" + strStatus)
-                if retry == maxRetry:
-                    Error("return HttpPost(" + url + "),retry=" + strRetry + ",status=" + strStatus)
-                    return None
-                else:
-                    Error("sleep 10 seconds HttpPost(" + url + "),retry=" + strRetry + ",status=" + strStatus)
-                    time.sleep(10)
-            else:
-                log("return HttpPost(" + url + "),retry=" + strRetry + ",status=" + strStatus)
-                return response
+    def HttpPostWithHeaders(self, url, data, maxRetry=3):
+        header = {
+            "x-ms-agent-name": GuestAgentName,
+            "Content-Type": "text/xml; charset=utf-8",
+            "x-ms-version": ProtocolVersion
+        }
+        return self.HttpPost(url, data, header, maxRetry)
 
-    def HttpPutBlockBlob(self, url, data):
-        """
-        Send http PUT to server, sleeping 10 retrying maxRetry times upon error.
-        """
-        LogIfVerbose("HttpPutBlockBlob(" + url + ")")
-        maxRetry = 2
-        for retry in range(0, maxRetry + 1):
-            strRetry = str(retry)
-            log = [NoLog, Error][retry > 0]
-            log("retry HttpPutBlockBlob(" + url + "),retry=" + strRetry)
-            response = None
-            strStatus = "None"
-            try:
-                httpConnection = httplib.HTTPConnection(self.Endpoint)
-                request = httpConnection.request("PUT", url, data, {"x-ms-blob-type" : "BlockBlob", "x-ms-date" : time.strftime("%Y-%M-%dT%H:%M:%SZ", time.gmtime()) ,"Content-Length": str(len(data))} )
-                response = httpConnection.getresponse()
-                strStatus = str(response.status)
-            except httplib.HTTPException, e:
-                Error('HTTPException ' + e.message + ' args: ' + repr(e.args))
-            except IOError, e:
-                Error('socket IOError ' + e.message + ' args: ' + repr(e.args))
-            log("response HttpPutBlockBlob(" + url + "),retry=" + strRetry + ",status=" + strStatus)
-            if response == None or (response.status != httplib.OK and response.status != httplib.CREATED):
-                Error("HttpPutBlockBlob(" + url + "),retry=" + strRetry + ",status=" + strStatus)
-                if retry == maxRetry:
-                    Error("return HttpPutBlockBlob(" + url + "),retry=" + strRetry + ",status=" + strStatus)
-                    return None
-                else:
-                    Error("sleep 10 seconds HttpPutBlockBlob(" + url + "),retry=" + strRetry + ",status=" + strStatus)
-                    time.sleep(10)
-            else:
-                log("return HttpPutBlockBlob(" + url + "),retry=" + strRetry + ",status=" + strStatus)
-                return response
+__StorageVersion="2014-02-14"
+
+def GetBlobType(url):
+    restutil = Util()
+    #Check blob type
+    LogIfVerbose("Check blob type.")
+    timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    blobPropResp = restutil.HttpHead(url, {
+        "x-ms-date" :  timestamp,
+        'x-ms-version' : __StorageVersion
+    });
+    blobType = None
+    if blobPropResp is None:
+        Error("Can't get status blob type.")
+        return None
+    blobType = blobPropResp.getheader("x-ms-blob-type")
+    LogIfVerbose("Blob type={0}".format(blobType))
+    return blobType
+
+def PutBlockBlob(url, data):
+    restutil = Util()
+    LogIfVerbose("Upload block blob")
+    timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    ret = restutil.HttpPut(url, data, {
+        "x-ms-date" :  timestamp,
+        "x-ms-blob-type" : "BlockBlob",
+        "Content-Length": str(len(data)),
+        "x-ms-version" : __StorageVersion
+    })
+    if ret is None:
+        Error("Failed to upload block blob for status.")
+
+def PutPageBlob(url, data):
+    restutil = Util()
+    LogIfVerbose("Replace old page blob")
+    timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    #Align to 512 bytes
+    pageBlobSize = ((len(data) + 511) / 512) * 512
+    ret = restutil.HttpPut(url, "", {
+        "x-ms-date" :  timestamp,
+        "x-ms-blob-type" : "PageBlob",
+        "Content-Length": "0",
+        "x-ms-blob-content-length" : str(pageBlobSize),
+        "x-ms-version" : __StorageVersion
+    })
+    if ret is None:
+        Error("Failed to clean up page blob for status")
+        return
+        
+    if url.index('?') < 0:
+        url = "{0}?comp=page".format(url)
+    else:
+        url = "{0}&comp=page".format(url)
+   
+    LogIfVerbose("Upload page blob")
+    pageMax = 4 * 1024 * 1024 #Max page size: 4MB
+    start = 0
+    end = 0
+    while end < len(data):
+        end = min(len(data), start + pageMax)
+        contentSize = end - start
+        #Align to 512 bytes
+        pageEnd = ((end + 511) / 512) * 512
+        bufSize = pageEnd - start
+        buf = bytearray(bufSize)
+        buf[0 : contentSize] = data[start : end]
+        ret = restutil.HttpPut(url, buf, {
+            "x-ms-date" :  timestamp,
+            "x-ms-range" : "bytes={0}-{1}".format(start, pageEnd - 1),
+            "x-ms-page-write" : "update",
+            "x-ms-version" : __StorageVersion,
+            "Content-Length": str(pageEnd - start)
+        })
+        if ret is None:
+            Error("Failed to upload page blob for status")
+            return
+        start = end
+
+def UploadStatusBlob(url, data):
+    LogIfVerbose("Upload status blob")
+    LogIfVerbose("Status={0}".format(data))
+    blobType = GetBlobType(url) 
+
+    if blobType == "BlockBlob":
+        PutBlockBlob(url, data)    
+    elif blobType == "PageBlob":
+        PutPageBlob(url, data)    
+    else:
+        Error("Unknown blob type: {0}".format(blobType))
+        return None
 
 class TCPHandler(SocketServer.BaseRequestHandler):
     """
@@ -3128,11 +3221,14 @@ class ExtensionsConfig(object):
         try:
             self.Extensions=dom.getElementsByTagName("Extensions")
             pg = dom.getElementsByTagName("Plugins")
-            self.Plugins = pg[0].getElementsByTagName("Plugin")
+            if len(pg) > 0:
+                self.Plugins = pg[0].getElementsByTagName("Plugin")
+            else:
+                self.Plugins = []
             incarnation=self.Extensions[0].getAttribute("goalStateIncarnation")
             SetFileContents('ExtensionsConfig.'+incarnation+'.xml', xmlText)
-        except:
-            LogIfVerbose('ERROR:  Error parsing ExtensionsConfig.')
+        except Exception, e:
+            Error('ERROR:  Error parsing ExtensionsConfig: {0}.'.format(e))
             return None
         for p in self.Plugins:
             if len(p.getAttribute("location"))<1:  # this plugin is inside the PluginSettings
@@ -3605,8 +3701,8 @@ class ExtensionsConfig(object):
         except:
             Error('Error parsing ExtensionsConfig.  Unable to send status reports')
             return None
-        self.Util.Endpoint=uri.split('/')[2]
-        self.Util.HttpPutBlockBlob(uri, status)
+
+        UploadStatusBlob(uri, status.encode("utf-8"))
         LogIfVerbose('Status report '+status+' sent to ' + uri)
         return True
 
@@ -4053,7 +4149,7 @@ class OvfEnv(object):
         Return self.
         """
         self.reinitialize()
-        LogIfVerbose(xmlText)
+        LogIfVerbose(re.sub("<UserPassword>.*?<", "<UserPassword>*<", xmlText))
         dom = xml.dom.minidom.parseString(xmlText)
         if len(dom.getElementsByTagNameNS(self.OvfNs, "Environment")) != 1:
             Error("Unable to parse OVF XML.")
@@ -4408,7 +4504,7 @@ class WALAEventMonitor(WALAEvent):
         dataFormat = u'<?xml version="1.0"?><TelemetryData version="1.0"><Provider id="{0}">{1}'\
         '</Provider></TelemetryData>'
         data = dataFormat.format(providerid,events)
-        self.post("/machine/?comp=telemetrydata",data)
+        self.post("/machine/?comp=telemetrydata", data)
 
     def CollectAndSendWALAEvents(self):        
         if not os.path.exists(self.eventdir):
@@ -4890,7 +4986,7 @@ class Agent(Util):
                         + "</ContainerId><RoleInstanceList><Role><InstanceId>"
                         + self.GoalState.RoleInstanceId
                         + "</InstanceId><Health><State>Ready</State></Health></Role></RoleInstanceList></Container></Health>")
-        a = self.HttpPost("/machine?comp=health", healthReport)
+        a = self.HttpPostWithHeaders("/machine?comp=health", healthReport)
         if a != None:
             return a.getheader("x-ms-latest-goal-state-incarnation-number")
         return None
@@ -4909,7 +5005,7 @@ class Agent(Util):
                         + "</InstanceId><Health><State>NotReady</State>"
                         + "<Details><SubStatus>" + status + "</SubStatus><Description>" + desc + "</Description></Details>"
                         + "</Health></Role></RoleInstanceList></Container></Health>")
-        a = self.HttpPost("/machine?comp=health", healthReport)
+        a = self.HttpPostWithHeaders("/machine?comp=health", healthReport)
         if a != None:
             return a.getheader("x-ms-latest-goal-state-incarnation-number")
         return None
@@ -4924,7 +5020,8 @@ class Agent(Util):
                         + "<Id>" + self.GoalState.RoleInstanceId + "</Id>"
                         + "<Properties><Property name=\"CertificateThumbprint\" value=\"" + thumbprint + "\" /></Properties>"
                         + "</RoleInstance></RoleInstances></Container></RoleProperties>")
-        a = self.HttpPost("/machine?comp=roleProperties", roleProperties)
+        a = self.HttpPostWithHeaders("/machine?comp=roleProperties", 
+                                     roleProperties)
         Log("Posted Role Properties. CertificateThumbprint=" + thumbprint)
         return a
 
@@ -5292,7 +5389,7 @@ class Agent(Util):
                 goalState.ExtensionsConfig.ReportHandlerStatus()
             
             if not eventMonitor:
-                eventMonitor = WALAEventMonitor(self.HttpPost)
+                eventMonitor = WALAEventMonitor(self.HttpPostWithHeaders)
                 eventMonitor.StartEventsLoop()
 
             time.sleep(25 - sleepToReduceAccessDenied)	
