@@ -3122,36 +3122,61 @@ class SharedConfig(object):
         """
         Reset members.
         """
-        self.Deployment = None
-        self.Incarnation = None
-        self.Role = None
-        self.LoadBalancerSettings = None
-        self.OutputEndpoints = None
-        self.Instances = None
+        self.RdmaMacAddress = None
+        self.RdmaIPv4Address = None
+        self.xmlText = None
 
     def Parse(self, xmlText):
         """
         Parse and write configuration to file SharedConfig.xml.
         """
         self.reinitialize()
-        SetFileContents("SharedConfig.xml", xmlText)
+        self.xmlText = xmlText
         dom = xml.dom.minidom.parseString(xmlText)
         for a in [ "SharedConfig", "Deployment", "Service",
                    "ServiceInstance", "Incarnation", "Role", ]:
             if not dom.getElementsByTagName(a):
                 Error("SharedConfig.Parse: Missing " + a)
-                return None
+
         node = dom.childNodes[0]
         if node.localName != "SharedConfig":
             Error("SharedConfig.Parse: root not SharedConfig")
-            return None
+
+        nodes = dom.getElementsByTagName("Instance")
+        if nodes is not None and len(nodes) != 0:
+            node = nodes[0]
+            if node.hasAttribute("rdmaMacAddress"):
+                self.RdmaMacAddress = node.getAttribute("rdmaMacAddress")
+            if node.hasAttribute("rdmaIPv4Address"):
+                self.RdmaIPv4Address = node.getAttribute("rdmaIPv4Address")
+        return self
+    
+    def Save(self):
+        SetFileContents("SharedConfig.xml", self.xmlText)
+
+    def ConfigRdma(self, dev="/dev/hvnd_rdma"):
+        if self.RdmaIPv4Address is not None and self.RdmaMacAddress is not None:
+            if os.path.isfile(dev):
+                data = ('rdmaMacAddress="{0}" rdmaIPv4Address="{1}"'
+                        '').format(self.RdmaMacAddress, self.RdmaIPv4Address)
+                Log("Write rdma config to {0}: {1}".format(dev, data))
+                try:
+                    with open(dev, "w") as c:
+                        c.write(data)
+                except IOError, e:
+                    Error("Error writing {0}, {1}".format(dev, e))
+
+    def InvokeTopologyConsumer(self):
         program = Config.get("Role.TopologyConsumer")
         if program != None:
             try:
                 Children.append(subprocess.Popen([program, LibDir + "/SharedConfig.xml"]))
             except OSError, e :
                 ErrorWithPrefix('Agent.Run','Exception: '+ str(e) +' occured launching ' + program )
-        return self
+
+    def Process(self):
+        self.ConfigRdma()
+        self.InvokeTopologyConsumer()
 
 class ExtensionsConfig(object):
     """
@@ -4089,6 +4114,8 @@ class GoalState(Util):
         Calls HostingEnvironmentConfig.Process()
         """
         self.HostingEnvironmentConfig.Process()
+        self.SharedConfig.Process()
+        self.SharedConfig.Save()
         
 class OvfEnv(object):
     """
