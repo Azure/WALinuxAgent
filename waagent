@@ -499,8 +499,9 @@ class AbstractDistro(object):
                 if existingFS == "7" and fs != "ntfs":
                     Run("sfdisk -c " + device + " 1 83")
                     Run("mkfs." + fs + " " + partition)
-            if Run("mount " + partition + " " + mountpoint):
+            if Run("mount " + partition + " " + mountpoint, chk_err=False):
                 #If mount failed, try to format the partition and mount again
+                Warn("Failed to mount resource disk. Retry mounting.")            
                 Run("mkfs." + fs + " " + partition + " -F")
                 if Run("mount " + partition + " " + mountpoint):
                     Error("ActivateResourceDisk: Failed to mount resource disk (" + partition + ").")
