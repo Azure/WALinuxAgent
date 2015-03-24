@@ -18,8 +18,8 @@
 #
 
 from distutils.core import setup
-from walinuxagent.utils.osutil import CurrOS, CurrOSInfo
-import walinuxagent.agent as agent
+from azurelinuxagent.utils.osutil import CurrOS, CurrOSInfo
+import azurelinuxagent.agent as agent
 
 name = CurrOSInfo[0]
 version = CurrOSInfo[1]
@@ -62,9 +62,9 @@ setup(name=agent.GuestAgentName,
       description=agent.GuestAgentLongVersion,
       author=agent.GuestAgentAuthor,
       url=agent.GuestAgentUri,
-      packages=['walinuxagent', 
-                'walinuxagent.utils', 
-                'walinuxagent.protocol'],
+      packages=['azurelinuxagent', 
+                'azurelinuxagent.utils', 
+                'azurelinuxagent.protocol'],
       data_files=data_files)
 
 CurrOS.RegisterAgentService()
