@@ -5620,6 +5620,7 @@ def DistInfo(fullname=0):
         release = re.sub('\-.*\Z', '', str(platform.release()))
         distinfo = ['FreeBSD', release]
         return distinfo
+    
     if 'linux_distribution' in dir(platform):
         distinfo = list(platform.linux_distribution(full_distribution_name=fullname))
         distinfo[0] = distinfo[0].strip() # remove trailing whitespace in distro name
@@ -5748,6 +5749,12 @@ def main():
     LoggerInit('/var/log/waagent.log','/dev/console')
     global LinuxDistro
     LinuxDistro=DistInfo()[0]
+    
+    #The platform.py lib has issue with detecting oracle linux distribution.
+    #Merge the following patch provided by oracle as a temparory fix.
+    if os.path.exists("/etc/oracle-release"): 
+        LinuxDistro="Oracle Linux" 
+
     global MyDistro
     MyDistro=GetMyDistro()
     if MyDistro == None :
