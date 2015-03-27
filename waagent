@@ -2686,8 +2686,8 @@ class Util(object):
     def HttpPut(self, url, data, headers=None, maxRetry=3):
         return self.HttpRequest("PUT", url, data, headers, maxRetry)
 
-    def HttpDelete(url, data, headers=None, maxRetry=3):
-        return self.HttpRequest("DELETE", url, data, headers, maxRetry)
+    def HttpDelete(self, url, headers=None, maxRetry=3):
+        return self.HttpRequest("DELETE", url, None, headers, maxRetry)
     
     def HttpGetWithoutHeaders(self, url, maxRetry=3):
         """
@@ -4451,7 +4451,7 @@ class WALAEvent(object):
             os.mkdir(eventfolder)
             os.chmod(eventfolder,0700)
         if len(os.listdir(eventfolder)) > 1000:
-            raise Exception("WriteToFolder:Too many file under "+datafolder+" exit")
+            raise Exception("WriteToFolder:Too many file under "+eventfolder+" exit")
     
         filename = os.path.join(eventfolder,str(int(time.time()*1000000)))
         with open(filename+".tmp",'wb+') as hfile:
