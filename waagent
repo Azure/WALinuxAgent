@@ -5876,7 +5876,7 @@ def main():
     if len(sys.argv) == 1:
         sys.exit(Usage())
 
-    LoggerInit('/var/log/waagent.log','/dev/console')
+    LoggerInit('/dev/stdout',None)
     global LinuxDistro
     LinuxDistro=DistInfo()[0]
     
