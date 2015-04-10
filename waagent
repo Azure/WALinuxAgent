@@ -4595,7 +4595,7 @@ class WALAEventMonitor(WALAEvent):
         if not self.issysteminfoinitilized:
             self.issysteminfoinitilized=True
             try:
-                self.sysInfo["OSVersion"]=platform.system()+":"+"-".join(DistInfo())+":"+platform.release()
+                self.sysInfo["OSVersion"]=platform.system()+":"+"-".join(DistInfo(1))+":"+platform.release()
                 self.sysInfo["GAVersion"]=GuestAgentVersion
                 self.sysInfo["RAM"]=MyDistro.getTotalMemory()
                 self.sysInfo["Processors"]=MyDistro.getProcessorCores()
