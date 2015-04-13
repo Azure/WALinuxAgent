@@ -1341,18 +1341,6 @@ class UbuntuDistro(debianDistro):
 
     def registerAgentService(self):
         return self.installAgentServiceScriptFiles()
-
-    def startAgentService(self):
-        """
-        Use upstart syntax.
-        """
-        return Run('start ' + self.agent_service_name)
-        
-    def stopAgentService(self):
-        """
-        Use upstart syntax.
-        """
-        return Run('stop ' + self.agent_service_name)
     
     def uninstallAgentService(self):
         """
@@ -3134,6 +3122,7 @@ class SharedConfig(object):
         """
         Parse and write configuration to file SharedConfig.xml.
         """
+        LogIfVerbose(xmlText)
         self.reinitialize()
         self.xmlText = xmlText
         dom = xml.dom.minidom.parseString(xmlText)
@@ -3156,6 +3145,7 @@ class SharedConfig(object):
         return self
     
     def Save(self):
+        LogIfVerbose("Save SharedConfig.xml")
         SetFileContents("SharedConfig.xml", self.xmlText)
 
     def ConfigRdma(self, dev="/dev/hvnd_rdma"):
@@ -4089,6 +4079,7 @@ class GoalState(Util):
                                                                 LogIfVerbose("SharedConfigUrl:" + self.SharedConfigUrl)
                                                                 self.SharedConfigXml = self.HttpGetWithHeaders(self.SharedConfigUrl)
                                                                 self.SharedConfig = SharedConfig().Parse(self.SharedConfigXml)
+                                                                self.SharedConfig.Save()
                                                             elif e.localName == "ExtensionsConfig":
                                                                 self.ExtensionsConfigUrl = GetNodeTextData(e)
                                                                 LogIfVerbose("ExtensionsConfigUrl:" + self.ExtensionsConfigUrl)
@@ -4117,9 +4108,9 @@ class GoalState(Util):
         """
         Calls HostingEnvironmentConfig.Process()
         """
+        LogIfVerbose("Process goalstate")
         self.HostingEnvironmentConfig.Process()
         self.SharedConfig.Process()
-        self.SharedConfig.Save()
         
 class OvfEnv(object):
     """
@@ -5352,6 +5343,7 @@ class Agent(Util):
             if (goalState == None) or (incarnation == None) or (goalState.Incarnation != incarnation):
                 goalState = self.UpdateGoalState()
                 if goalState == None :
+                    Warn("Failed to fetch goalstate")
                     continue
                 if provisioned == False:
                     self.ReportNotReady("Provisioning", "Starting")
@@ -5380,13 +5372,17 @@ class Agent(Util):
                 #
                 goalPort = goalState.LoadBalancerProbePort
                 if currentPort != goalPort:
-                    self.LoadBalancerProbeServer_Shutdown()
-                    currentPort = goalPort
-                    if currentPort != None and lbProbeResponder == True:
-                        self.LoadBalancerProbeServer = LoadBalancerProbeServer(currentPort)
-                        if self.LoadBalancerProbeServer == None :
-                            lbProbeResponder = False
-                            Log("Unable to create LBProbeResponder.")
+                    try:
+                        self.LoadBalancerProbeServer_Shutdown()
+                        currentPort = goalPort
+                        if currentPort != None and lbProbeResponder == True:
+                            self.LoadBalancerProbeServer = LoadBalancerProbeServer(currentPort)
+                            if self.LoadBalancerProbeServer == None :
+                                lbProbeResponder = False
+                                Log("Unable to create LBProbeResponder.")
+                    except Exception, e:
+                        Error("Failed to launch LBProbeResponder: {0}".format(e))
+                        currentPort = None
 
                 # Report SSH key fingerprint
                 type = Config.get("Provisioning.SshHostKeyPairType")
