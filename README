@@ -95,6 +95,7 @@ installed by running:
 
 The agent's log file is kept at /var/log/waagent.log.
 
+
 UPGRADE
 
 Upgrading via your distribution's package repository is preferred.
