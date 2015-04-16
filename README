@@ -96,6 +96,30 @@ installed by running:
 The agent's log file is kept at /var/log/waagent.log.
 
 
+UPGRADE
+
+Upgrading via your distribution's package repository is preferred.
+
+If upgrading manually, same with installation above, waagent should be copied 
+to /usr/sbin/waagent to override original file and installed by running:
+
+	# sudo chmod 755 /usr/sbin/waagent
+	
+Restart waagent service,for most of linux distributions:
+
+    #sudo service waagent restart
+
+For Ubuntu, use:
+    
+	#sudo service walinuxagent restart
+
+For CoreOS, use:
+
+    #sudo systemctl restart waagent 
+
+The agent's log file is kept at /var/log/waagent.log.
+
+
 COMMAND LINE OPTIONS
 
 Flags:
