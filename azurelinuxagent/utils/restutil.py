@@ -30,6 +30,7 @@ REST api util functions
 """
 __RetryWaitingInterval=10
 
+
 def _ParseUrl(url):
     o = urlparse(url)
     action = o.path
@@ -43,72 +44,61 @@ def _ParseUrl(url):
     return o.netloc, action, secure
 
 def _HttpRequest(method, host, action, data=None, secure=False, headers=None):
-    resp = None;
-    try:
-        httpConnection = None
+    httpConnection = None
 
-        if secure:
-            httpConnection = httplib.HTTPSConnection(host)
-        else:
-            httpConnection = httplib.HTTPConnection(host)
-        if headers == None:
-            httpConnection.request(method, action, data)
-        else:
-            httpConnection.request(method, action, data, headers)
-        resp = httpConnection.getresponse()
-    except httplib.HTTPException, e:
-        logger.Error('HTTPException {0}, args:{1}', e, repr(e.args))
-    except IOError, e:
-        logger.Error('Socket IOError {0}, args:{1}', e, repr(e.args)) 
+    #If httplib module is not built with ssl support. Failback to http
+    if secure and hasattr(httplib, "HTTPSConnection"):
+        httpConnection = httplib.HTTPSConnection(host)
+    else:
+        httpConnection = httplib.HTTPConnection(host)
+    if headers == None:
+        httpConnection.request(method, action, data)
+    else:
+        httpConnection.request(method, action, data, headers)
+    resp = httpConnection.getresponse()
+    if resp is None:
+        raise ValueError("Http response is None")
     return resp
 
-def HttpRequest(method, url, data, headers=None, maxRetry=1):
+def HttpRequest(method, url, data, headers=None,  maxRetry=3):
     """
     Sending http request to server
-    On error, sleep 10 and maxRetry times.
-    Return the output buffer or None.
+    On error, sleep 10 and retry maxRetry times.
     """
-    def isValidResponse(resp):
-        if resp is None:
-            return False
-        if resp.status in {httplib.OK, httplib.CREATED, httplib.ACCEPTED}:
-            return True
-        return False
-
-    logger.Verbose("{0} {1}", method, url)
-    logger.Verbose("Data={0}", data)
-    logger.Verbose("Header={0}", headers)
+    logger.Verbose("HTTP Req: {0} {1}", method, url)
+    logger.Verbose("    Data={0}", data)
+    logger.Verbose("    Header={0}", headers)
     host, action, secure = _ParseUrl(url)
-    resp = _HttpRequest(method, host, action, data, secure, headers)
+
     for retry in range(0, maxRetry):
-        if isValidResponse(resp):
-            break;
-        elif resp is None:
-            logger.Error("Retry={0}, response is empty.", retry)
-        else:
-            logger.Error("Retry={0}, Status={1}, Message={2}, {3}, {4}", retry, 
-                         resp.status, resp.reason, method, url)
+        try:
+            resp = _HttpRequest(method, host, action, data, secure, headers)
+            logger.Verbose("HTTP Resp: Status={0}", resp.status)
+            logger.Verbose("    Header={0}", resp.getheaders())
+            logger.Verbose("    Body={0}", resp.read())
+            return resp
+        except httplib.HTTPException, e:
+            logger.Warn('HTTPException {0}, args:{1}', e, repr(e.args))
+        except IOError, e:
+            logger.Warn('Socket IOError {0}, args:{1}', e, repr(e.args)) 
+
+        logger.Warn("Retry={0}, {1} {2}", retry, method, url)
         time.sleep(__RetryWaitingInterval)
-        resp = _HttpRequest(method, host, action, data, secure, headers)
+    raise e 
 
-    if isValidResponse(resp):
-        return resp
-    else:
-        return None
-
-def HttpGet(url, headers=None, maxRetry=1):
+def HttpGet(url, headers=None, maxRetry=3):
     return HttpRequest("GET", url, None, headers, maxRetry)
     
-def HttpPost(url, data, headers=None, maxRetry=1):
+def HttpPost(url, data, headers=None, maxRetry=3):
     return HttpRequest("POST", url, data, headers, maxRetry)
 
-def HttpPut(url, data, headers=None, maxRetry=1):
+def HttpPut(url, data, headers=None, maxRetry=3):
     return HttpRequest("PUT", url, data, headers, maxRetry)
 
-def HttpDelete(url, data, headers=None, maxRetry=1):
-    return HttpRequest("DELETE", url, data, headers, maxRetry)
+def HttpDelete(url, headers=None, maxRetry=3):
+    return HttpRequest("DELETE", url, None, headers, maxRetry)
    
-def HttpPutBlockBlob(url, data, maxRetry=1):
+def HttpPutBlockBlob(url, data, maxRetry=3):
     headers = {
         "x-ms-blob-type" : "BlockBlob", 
         "x-ms-date" : time.strftime("%Y-%M-%dT%H:%M:%SZ", time.gmtime()),

@@ -116,11 +116,7 @@ class Agent():
                                             agentStatusDetail)
             #Wait for 25 seconds and detect protocol again.
             time.sleep(25)
-            try:
-                self.protocol = proto.DetectDefaultProtocol()
-            except Exception, e:
-                logger.Error("{0}", e)
-
+         
     def activateResourceDisk(self):
         mountpoint = self.config.get("ResourceDisk.MountPoint", "/mnt/resource")
         fs = self.config.get("ResourceDisk.Filesystem", "ext3")

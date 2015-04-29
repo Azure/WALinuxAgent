@@ -28,6 +28,7 @@ import azurelinuxagent.utils.fileutil as fileutil
 import azurelinuxagent.utils.shellutil as shellutil
 from azurelinuxagent.utils.textutil import *
 
+
 class DhcpHandler():
     def __init__(self):
         self.endpoint = None

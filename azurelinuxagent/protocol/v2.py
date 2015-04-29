@@ -19,6 +19,72 @@
 import azurelinuxagent.utils.restutil as restutil
 from azurelinuxagent.protocol.common import *
 
+class VmInfoV2():
+    def __init__(self, data):
+        self.data = data
+
+    def getSubscriptionId(self):
+        return self.data["subscriptionId"]
+
+    def getVmName(self):
+        return self.data["vmName"]
+
+class CertInfoV2():
+    def __init__(self, data):
+        self.data = data
+
+    def getName(self):
+        return self.data["name"]
+
+    def getThumbprint(self):
+        return self.data["thumbprint"]
+
+    def getCrtFile(self):
+        return self.data["crt"]
+
+    def getPrvFile(self):
+        return self.data["prv"]
+
+
+class ExtensionInfoV2(ExtensionInfo):
+    def __init__(self, data):
+        self.data = data
+
+    def getName(self):
+        return self.data["name"]
+
+    def getVersion(self):
+        return self.data["properties"]["version"]
+
+    def setVersion(self, version):
+        self.data["properties"]["version"] = version
+
+    def getVersionUris(self):
+        #TODO download version json
+        return self.data["properties"]["versionUris"]
+
+    def getUpgradePolicy(self):
+        return self.data["properties"]["upgrade-policy"]
+
+    def getState(self):
+        return self.data["properties"]["state"]
+
+    def getSeqNo(self):
+        settings = self.data["properties"]["runtimeSettings"][0]
+        return settings["handlerSettings"]["sequenceNumber"]
+
+    def getPublicSettings(self):
+        settings = self.data["properties"]["runtimeSettings"][0]
+        return settings["handlerSettings"]["publicSettings"]
+
+    def getProtectedSettings(self):
+        settings = self.data["properties"]["runtimeSettings"][0]
+        return settings["handlerSettings"]["privateSettings"]
+
+    def getCertificateThumbprint(self):
+        settings = self.data["properties"]["runtimeSettings"][0]
+        return settings["handlerSettings"]["certificateThumbprint"]
+
 class ProtocolV2(Protocol):
 
     __MetadataServerAddr='169.254.169.254'
@@ -31,35 +97,30 @@ class ProtocolV2(Protocol):
     def Detect(identityService=__IdentityService):
         raise NotImplementedError("Protocol v2 is not implemented.")
 
-
-    @staticmethod
-    def Init():
-        pass
-
     def __init__(self):
-        pass
+        raise NotImplementedError()
 
     def getVmInfo(self):
-        pass
+        raise NotImplementedError()
 
     def getCerts(self):
-        pass
+        raise NotImplementedError()
 
     def getExtensions(self):
-        pass
+        raise NotImplementedError()
 
     def getOvf(self):
-        pass
+        raise NotImplementedError()
 
-    def reportProvisionStatus(self):
-        pass
+    def reportProvisionStatus(self, status, subStatus, description, thumbprint):
+        raise NotImplementedError()
 
-    def reportAgentStatus(self):
-        pass
+    def reportAgentStatus(self, version, status, message):
+        raise NotImplementedError()
 
-    def reportExtensionStatus(self):
-        pass
-
+    def reportExtensionStatus(self, name, version, statusJson):
+        raise NotImplementedError()
+    
     def reportEvent(self):
-        pass
+        raise NotImplementedError()
 

@@ -56,7 +56,7 @@ class ProvisionHandler(object):
         logger.Info("Provisioning image started")
         self.protocol.reportProvisionStatus("NotReady", "Provisioning", "Starting")
 
-        self.ovfenv = self.protocol.copyOvf()
+        self.ovfenv = self.copyOvf()
         password = self.ovfenv.getUserPassword()
         self.ovfenv.clearUserPassword()
 
@@ -83,6 +83,25 @@ class ProvisionHandler(object):
 
         if self.config.getSwitch("Provisioning.DeleteRootPassword"):
             CurrOS.DeleteRootPassword()
+
+    def copyOvf(self):
+        """
+        Copy ovf env file from dvd to hard disk. 
+        Remove password before save it to the disk
+        """
+        ovfFile = CurrOS.GetOvfEnvPathOnDvd()
+        CurrOS.MountDvd()
+
+        if not os.path.isfile(ovfFile):
+            raise Exception("Unable to provision: Missing ovf-env.xml on DVD")
+        ovfxml = fileutil.GetFileContents(ovfFile, removeBom=True)
+        ovfenv = OvfEnv(ovfxml)
+        ovfxml = re.sub("<UserPassword>.*?<", "<UserPassword>*<", ovfxml)
+        ovfFilePath = os.path.join(CurrOS.GetLibDir(), OvfFileName)
+        fileutil.SetFileContents(ovfFilePath, ovfxml)
+
+        CurrOS.UmountDvd()
+        return ovfenv
 
     def saveCustomData(self):
         customData = self.ovfenv.getCustomData()

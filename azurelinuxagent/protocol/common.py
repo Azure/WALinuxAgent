@@ -26,144 +26,140 @@ from azurelinuxagent.utils.textutil import GetNodeTextData
 import azurelinuxagent.utils.fileutil as fileutil
 
 class VmInfo():
-    def __init__(self, data):
-        self.data = data
-
     def getSubscriptionId(self):
-        return self.data["subscriptionId"]
+        raise NotImplementedError()
 
     def getVmName(self):
-        return self.data["vmName"]
+        raise NotImplementedError()
 
 class CertInfo():
-    def __init__(self, data):
-        self.data = data
-
     def getName(self):
-        return self.data["name"]
+        raise NotImplementedError()
 
     def getThumbprint(self):
-        return self.data["thumbprint"]
+        raise NotImplementedError()
 
     def getCrtFile(self):
-        return self.data["crt"]
+        raise NotImplementedError()
 
     def getPrvFile(self):
-        return self.data["prv"]
+        raise NotImplementedError()
 
+class ExtensionInfo(object):
+    def __init__(self):
+        self.baseDir = None
 
-class ExtensionInfo():
-    def __init__(self, data):
-        self.data = data
-        libDir = CurrOS.GetLibDir()
-        baseDirName = "{0}-{1}".format(self.getName(), self.getVersion())
-        self.baseDir = os.path.join(libDir, baseDirName) 
+    def getName(self):
+        raise NotImplementedError()
 
+    def getVersion(self):
+        raise NotImplementedError()
+
+    def setVersion(self, version):
+        raise NotImplementedError()
+
+    def getVersionUris(self):
+        raise NotImplementedError()
+
+   #TODO move to exthandler.py
+    def getTargetVersion(self, version, updatePolicy):
+        if version is None:
+            raise ValueError("Extension version is None")
+       
+        versionUris = self.getVersionUris()
+        if versionUris is None:
+            raise ValueError("Extension versionUris is None")
+
+        if updatePolicy is None or updatePolicy.lower() != 'auto':
+            return version
+  
+        major = currVersion.split('.')[0]
+        if major is None:
+            return version
+
+        versionUris = filter(lambda x : x["version"].startswith(major + "."), 
+                             versionUris)
+        versionUris = sorted(versionUris, 
+                             key=lambda x: x["version"], 
+                             reverse=True)
+        if len(versionUris) <= 0:
+            raise ValueError("Couldn't find correct extension version")
+
+        return versionUris[0]
+
+    #TODO move to exthandler.py
+    def getPackageUris(self, version):
+        if version is None:
+            raise ValueError("Extension version is None")
+
+        versionUris = self.getVersionUris()
+        if versionUris is None:
+            raise ValueError("Extension versionUris is None")
+        
+        for versionUri in versionUris:
+            if versionUri['version']== version:
+                return versionUri['uris']
+        return None
+
+    def getUpgradePolicy(self):
+        raise NotImplementedError()
+
+    def getState(self):
+        raise NotImplementedError()
+
+    def getSeqNo(self):
+        raise NotImplementedError()
+
+    def getPublicSettings(self):
+        raise NotImplementedError()
+
+    def getProtectedSettings(self):
+        raise NotImplementedError()
+
+    def getCertificateThumbprint(self):
+        raise NotImplementedError()
+   
     def getBaseDir(self):
+        if self.baseDir is None:
+            libDir = CurrOS.GetLibDir()
+            baseDirName = "{0}-{1}".format(self.getName(), self.getVersion())
+            self.baseDir = os.path.join(libDir, baseDirName) 
         return self.baseDir
 
     def getStatusDir(self):
-        return  os.path.join(self.baseDir, "status")
+        return os.path.join(self.getBaseDir(), "status")
 
     def getStatusFile(self):
         return os.path.join(self.getStatusDir(), 
-                "{0}.status".format(self.getSeqNo()))
+               "{0}.status".format(self.getSeqNo()))
 
     def getConfigDir(self):
-        return os.path.join(self.baseDir, 'config')
+        return os.path.join(self.getBaseDir(), 'config')
 
     def getSettingsFile(self):
         return os.path.join(self.getConfigDir(), 
-                "{0}.settings".format(self.getSeqNo()))
+               "{0}.settings".format(self.getSeqNo()))
 
     def getHandlerStateFile(self):
         return os.path.join(self.getConfigDir(), 'HandlerState')
 
     def getHeartbeatFile(self):
-        return os.path.join(self.baseDir, 'heartbeat.log')
+        return os.path.join(self.getBaseDir(), 'heartbeat.log')
 
     def getManifestFile(self):
-        return os.path.join(self.baseDir, 'HandlerManifest.json')
+        return os.path.join(self.getBaseDir(), 'HandlerManifest.json')
 
     def getEnvironmentFile(self):
-        return os.path.join(self.baseDir, 'HandlerEnvironment.json')
+        return os.path.join(self.getBaseDir(), 'HandlerEnvironment.json')
 
     def getLogDir(self):
         return os.path.join(CurrOS.GetExtLogDir(), 
                             self.getName(), 
                             self.getVersion())
 
-    def getName(self):
-        return self.data["name"]
-
-    def getVersion(self):
-        return self.data["properties"]["version"]
-
-    def getVersionUris(self):
-        return self.data["properties"]["versionUris"]
-
-    def getUpgradePolicy(self):
-        return self.data["properties"]["upgrade-policy"]
-
-    def getState(self):
-        return self.data["properties"]["state"]
-
-    def getSeqNo(self):
-        settings = self.data["properties"]["runtimeSettings"][0]
-        return settings["handlerSettings"]["sequenceNumber"]
-
-    def getSettings(self):
-        return {
-            'runtimeSettings' : self.data["properties"]['runtimeSettings']
-        }
-
-    def getPublicSettings(self):
-        settings = self.data["properties"]["runtimeSettings"][0]
-        return settings["handlerSettings"]["publicSettings"]
-
-    def getProtectedSettings(self):
-        settings = self.data["properties"]["runtimeSettings"][0]
-        return settings["handlerSettings"]["privateSettings"]
-
-    def getCertificateThumbprint(self):
-        settings = self.data["properties"]["runtimeSettings"][0]
-        return settings["handlerSettings"]["certificateThumbprint"]
-
-    def getTargetVersion(self, currVersion):
-        if self.getUpgradePolicy().lower() != 'auto':
-            return self.getVersion()
-        if currVersion is None:
-            currVersion = self.getVersion() 
-        major = currVersion.split('.')[0]
-        if major is None:
-            return self.getVersion()
-
-        versionUris = self.getVersionUris()
-        if major is not None:
-            versionUris = filter(lambda x : x["version"].startswith(major + "."), 
-                                 versionUris)
-        versionUris = sorted(versionUris, 
-                             key=lambda x: x["version"], 
-                             reverse=True)
-        if len(versionUris) > 0:
-            return versionUris[0]
-        else:
-            raise Exception("Couldn't find correct extension version")
-
-    def getPackageUris(self):
-        versionUris = self.getVersionUris()
-        version = self.getVersion()
-        for versionUri in versionUris:
-            if versionUri['version']== version:
-                return versionUri['uris']
-        return None
-
     def copy(self, version):
-        data = copy.deepcopy(self.data)
-        if version is not None:
-            data["properties"]["version"] = version
-        return ExtensionInfo(data)
-
+        raise NotImplementedError()
+        
 OvfFileName="ovf-env.xml"
 class OvfEnv(object):
     """
@@ -289,21 +285,33 @@ class OvfEnv(object):
             self.SshKeyPairs += [[fp, path]]
         return self
 
+class InstanceMetadata(object):
+    pass
+
+class ProtocolError(Exception):
+    pass
+
+class ProtocolNotFound(Exception):
+    pass
+
 class Protocol():
     def checkVersion(self):
-        pass
-
-    def refreshCache(self):
-        pass
+        raise NotImplementedError()
 
     def getVmInfo(self):
-        pass
+        raise NotImplementedError()
 
     def getCerts(self):
-        pass
+        raise NotImplementedError()
 
     def getExtensions(self):
-        pass
+        raise NotImplementedError()
+    
+    def getExtensionVersions(self, name):
+        raise NotImplementedError()
+
+    def getInstanceMetadata(self):
+        raise NotImplementedError()
 
     def getOvf(self):
         ovfFilePath = os.path.join(CurrOS.GetLibDir(), OvfFileName)
@@ -313,36 +321,15 @@ class Protocol():
         else:
             return None
 
-    def copyOvf(self):
-        """
-        Copy ovf env file from dvd to hard disk. 
-        Remove password before save it to the disk
-        """
-        ovfFile = CurrOS.GetOvfEnvPathOnDvd()
-        CurrOS.MountDvd()
-
-        if not os.path.isfile(ovfFile):
-            raise Exception("Unable to provision: Missing ovf-env.xml on DVD")
-        ovfxml = fileutil.GetFileContents(ovfFile, removeBom=True)
-        ovfenv = OvfEnv(ovfxml)
-        ovfxml = re.sub("<UserPassword>.*?<", "<UserPassword>*<", ovfxml)
-        ovfFilePath = os.path.join(CurrOS.GetLibDir(), OvfFileName)
-        fileutil.SetFileContents(ovfFilePath, ovfxml)
-        self.ovfenv = ovfenv
-
-        CurrOS.UmountDvd()
-        return ovfenv
-
     def reportProvisionStatus(self, status, subStatus, description, thumbprint):
-        pass
+        raise NotImplementedError()
 
     def reportAgentStatus(self, version, status, message):
-        pass
+        raise NotImplementedError()
 
-    def reportExtensionStatus(self):
-        pass
+    def reportExtensionStatus(self, name, version, statusJson):
+        raise NotImplementedError()
 
     def reportEvent(self):
-        pass
-
+        raise NotImplementedError()
 

@@ -25,6 +25,7 @@ import uuid
 import unittest
 import os
 import time
+import httplib
 import azurelinuxagent.logger as logger
 import azurelinuxagent.protocol.v1 as v1
 from  azurelinuxagent.utils.osutil import CurrOSInfo, CurrOS
@@ -32,10 +33,10 @@ from test_version import VersionInfoSample
 from test_goalstate import GoalStateSample
 from test_hostingenv import HostingEnvSample
 from test_sharedconfig import SharedConfigSample
-from test_certificates import CertificatesSample
+from test_certificates import CertificatesSample, TransportCert
 from test_extensionsconfig import ExtensionsConfigSample, ManifestSample
 
-def MockHttpGet(url, headers=None, maxRetry=1):
+def MockFetchUri(url, headers=None):
     content = None
     if "versions" in url:
         content = VersionInfoSample
@@ -53,102 +54,77 @@ def MockHttpGet(url, headers=None, maxRetry=1):
         content = ManifestSample
     else:
         raise Exception("Bad url {0}".format(url))
-    return MockResp(content)
+    return content
 
-class MockResp(object):
-    def __init__(self, content):
-        self.content = content
-    def read(self):
-        return self.content
+def MockFetchManifest(uris):
+    return ManifestSample
 
-MockHttpPut = MockFunc('HttpPut')
-MockHttpPost = MockFunc('HttpPost')
-MockIsFile = MockFunc('isfile', True)
-MockIsResponsive = MockFunc('isResponsive', True)
-
-StatusFileSample = """
-"status":{
-"status":"success",
-"formattedMessage":{
-"lang":"en-US",
-"message":"Scriptisfinished"
-},
-"operation":"Enable",
-"code":"0",
-"name":"ExampleHandlerLinux"
-}
-"""
-
-HeartbeatSample = """
-[{
-"version":1.0,
-"heartbeat":{
-"status":"ready",
-"code":0,
-"Message":"Extension is running"
-}
-}]
-"""
-def MockGetFileContents(filePath):
-    if 'status' in filePath:
-        return StatusFileSample
-    elif 'heartbeat' in filePath:
-        return HeartbeatSample
-    elif 'HandlerState' in filePath:
-        return 'Enabled'
+def MockFetchCache(filePath):
+    content = None
+    if "Incarnation" in filePath:
+        content = 1
+    elif "GoalState" in filePath:
+        content = GoalStateSample
+    elif "HostingEnvironmentConfig" in filePath:
+        content = HostingEnvSample
+    elif "SharedConfig" in filePath:
+        content = SharedConfigSample
+    elif "Certificates" in filePath:
+        content = CertificatesSample
+    elif "TransportCert" in filePath:
+        content = TransportCert
+    elif "ExtensionsConfig" in filePath:
+        content = ExtensionsConfigSample
+    elif "manifest" in filePath:
+        content = ManifestSample
     else:
-        raise Exception("Don't know how to mock it")
+        raise Exception("Bad filepath {0}".format(filePath))
+    return content
 
-class TestProtocolV1(unittest.TestCase):
-
-    def _setUp(self):
-       logger.AddLoggerAppender(logger.AppenderConfig({
-           "type":"CONSOLE",
-           "level":"VERBOSE",
-           "console_path":"/dev/stdout"
-       }))
-
-    @Mockup(v1.restutil, 'HttpGet', MockHttpGet)
-    def test_v1(self):
-        os.chdir(CurrOS.GetLibDir())
-        p = v1.ProtocolV1("foobar")
-        p.refreshCache()
-        p = v1.ProtocolV1("foobar")
-        vmInfo = p.getVmInfo()
-        self.assertNotEquals(None, vmInfo)
-        self.assertNotEquals(None, vmInfo.getVmName())
-        certs = p.getCerts()
-        self.assertNotEquals(None, certs)
-        extensions = p.getExtensions()
-        self.assertNotEquals(None, extensions)
-        ext = extensions[0]
-        self.assertEquals('1.1', ext.getTargetVersion('1.4')['version'])
+class TestWireClint(unittest.TestCase):
+    
+    @Mockup(v1, '_fetchCache', MockFetchCache)
+    def testGet(self):
+        os.chdir('/tmp')
+        client = v1.WireClient("foobar")
+        goalState = client.getGoalState()
+        self.assertNotEquals(None, goalState)
+        hostingEnv = client.getHostingEnv()
+        self.assertNotEquals(None, hostingEnv)
+        sharedConfig = client.getSharedConfig()
+        self.assertNotEquals(None, sharedConfig)
+        extensionsConfig = client.getExtensionsConfig()
+        self.assertNotEquals(None, extensionsConfig)
    
-    @Mockup(v1.restutil, 'HttpPost', MockHttpPost)
-    def test_report_provision_status(self):
-        p = v1.ProtocolV1("foobar")
-        p.goalState = v1.GoalState(GoalStateSample)
-        p.reportProvisionStatus('Running', 'Provisioning', 'Everything is fine')
-        self.assertEquals('http://foobar/machine?comp=health', 
-                          MockHttpPost.args[0])
-        self.assertTrue('Running' in MockHttpPost.args[1])
-        self.assertTrue('Provisioning' in MockHttpPost.args[1])
-        self.assertTrue('Everything is fine' in MockHttpPost.args[1])
+    
+    @Mockup(v1, '_fetchCache', MockFetchCache)
+    def testGetHeaderWithCert(self):
+        client = v1.WireClient("foobar")
+        header = client.getHeaderWithCert()
+        self.assertNotEquals(None, header)
 
-    @Mockup(v1.restutil, 'HttpPut', MockHttpPut)
-    @Mockup(v1.fileutil, 'GetFileContents', MockGetFileContents)
-    @Mockup(v1.ProtocolV1, 'isResponsive', MockIsResponsive)
-    @Mockup(os.path, 'isfile', MockIsFile)
-    def test_report_agent_status(self):
-        p = v1.ProtocolV1("foobar")
-        p.extensions = v1.ExtensionsConfig(ExtensionsConfigSample)
-        p.reportAgentStatus('1.0', 'Ready', 'Agent is running')
-        self.assertEquals(('https://yuezhatest.blob.core.windows.net/vhds/'
-                           'test-cs12.test-cs12.test-cs12.status?sr=b&sp=rw&'
-                           'se=9999-01-01&sk=key1&sv=2014-02-14&sig=hfRh7gzUE'
-                           '7sUtYwke78IOlZOrTRCYvkec4hGZ9zZzXo%3D'), 
-                           MockHttpPut.args[0])
-        self.assertTrue('Agent is running' in MockHttpPut.args[1])
+    @Mockup(v1.WireClient, 'getHeaderWithCert', MockFunc()) 
+    @Mockup(v1, '_fetchUri', MockFetchUri)
+    @Mockup(v1.fileutil, 'SetFileContents', MockFunc())
+    def testUpdateGoalState(self):
+        client = v1.WireClient("foobar")
+        client.updateGoalState()
+        goalState = client.getGoalState()
+        self.assertNotEquals(None, goalState)
+        hostingEnv = client.getHostingEnv()
+        self.assertNotEquals(None, hostingEnv)
+        sharedConfig = client.getSharedConfig()
+        self.assertNotEquals(None, sharedConfig)
+        extensionsConfig = client.getExtensionsConfig()
+        self.assertNotEquals(None, extensionsConfig)
+
+class TestStatusBlob(unittest.TestCase):
+    def testToJson(self):
+        statusBlob = v1.StatusBlob()
+        statusBlob.setAgentStatus("1.0", "Hehe", "Haha")
+        statusBlob.setExtensionStatus("Extension", "1.1", 
+                                      {"status":"success"})
+        print statusBlob.toJson()
 
 if __name__ == '__main__':
     unittest.main()

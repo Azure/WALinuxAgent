@@ -42,19 +42,16 @@ def DetectAvailableProtocols(protocols=__Protocols):
     for protocol in protocols:
         logger.Info("Detect available protocols...")
         protocolFilePath = os.path.join(libDir, protocol.__name__)
+        if os.path.isfile(protocolFilePath):
+            os.remove(protocolFilePath)
         try:
             detected = protocol.Detect()
             fileutil.SetFileContents(protocolFilePath, '')
-            logger.Info("Detect protocol: {0}", protocol.__name__)
+            logger.Info("Detecting protocol: {0}", protocol.__name__)
             availableProtocols.append(detected)
             break
-        except Exception, e:
-            logger.Warn("Probe {0} failed: {1} {2}", 
-                        protocol.__name__, 
-                        e,
-                        traceback.format_exc())
-            if os.path.isfile(protocolFilePath):
-                os.remove(protocolFilePath)
+        except ProtocolNotFound:
+            logger.Warn("{0} is not available.", protocol.__name__)
     return availableProtocols
 
 def DetectDefaultProtocol(protocols=__Protocols):
@@ -62,12 +59,10 @@ def DetectDefaultProtocol(protocols=__Protocols):
     return ChooseDefaultProtocol(availableProtocols)
 
 def ChooseDefaultProtocol(availableProtocols):
-    if len(availableProtocols) == 2:
-        raise Exception("Not implemented")
-    if len(availableProtocols) == 1:
-        return availableProtocols[0]
+    if len(availableProtocols) > 0:
+        return availableProtocols[-1]
     else:
-        raise Exception("No supported protocol detected.")
+        raise ProtocolNotFound("No available protocol detected.")
 
 """
 This routine will check 'ProtocolV*' file under lib dir. If detected, It will call
@@ -86,8 +81,6 @@ def GetAvailableProtocols(protocols=__Protocols):
         if os.path.isfile(protocolFilePath):
             availableProtocol = protocol.Init()
             availableProtocols.append(availableProtocol)
-    if len(availableProtocols) == 0:
-        availableProtocols.append(Protocol())
     return availableProtocols
 
 def GetDefaultProtocol(protocols=__Protocols):

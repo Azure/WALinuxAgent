@@ -174,7 +174,7 @@ def SearchForFile(dirName, fileName):
                 return os.path.join(root, f)
     return None
 
-def RChangeMod(path, mode):
+def ChangeTreeMod(path, mode):
     for root, dirs, files in os.walk(path):
         for f in files:
             os.chmod(os.path.join(root, f), mode)

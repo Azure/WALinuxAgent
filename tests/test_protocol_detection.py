@@ -35,8 +35,8 @@ class TestProtocolDetection(unittest.TestCase):
         self.assertTrue(os.path.isfile('/tmp/MockProtocol'))
 
     def test_detection_failure(self):
-        with self.assertRaises(Exception):
-            protocols = [MockProtocolDetectionFailured]
+        with self.assertRaises(protocol.ProtocolNotFound):
+            protocols = [MockProtocolDetectionFailure]
             protocol.DetectDefaultProtocol(protocols)
 
 class MockProtocol():
@@ -44,18 +44,11 @@ class MockProtocol():
     def Detect():
         pass
 
-    @staticmethod
-    def Init():
-        pass
-
 class MockProtocolDetectionFailure():
     @staticmethod
     def Detect():
-        raise Exception("Mock dection failure.")
-
-    @staticmethod
-    def Init():
-        pass
+        raise protocol.ProtocolNotFound("Mock dection failure.")
+    
 def MockGetLibDir():
     return '/tmp'
 

@@ -87,7 +87,7 @@ class DefaultDistro(object):
 
     def SetWireServerEndpoint(self, endpoint):
         DefaultDistro.__WireServer = endpoint
-        
+     
     def UpdateUserAccount(self, userName, password, expiration=None):
         """
         Update password and ssh key for user account.

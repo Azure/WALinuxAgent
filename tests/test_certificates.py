@@ -189,8 +189,7 @@ class TestCertificates(unittest.TestCase):
                                  TransportCert)
         fileutil.SetFileContents(os.path.join('/tmp', v1.TransportPrivateFile), 
                                  TransportPrivate)
-        config = v1.Certificates()
-        config.decrypt(CertificatesSample)
+        config = v1.Certificates(CertificatesSample)
         self.assertNotEquals(None, config)
         self.assertTrue(os.path.isfile(crt1))
         self.assertTrue(os.path.isfile(crt2))

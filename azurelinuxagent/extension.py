@@ -108,7 +108,7 @@ class ExtensionInstance(object):
         else:
             if self.targetVersion > self.setting.getVersion():
                 #This will happen when auto upgrade policy is enabled
-                new = ExtensionInstance(self.setting, targetVersion)
+                new = ExtensionInstance(self.setting, self.targetVersion)
                 new.download()
                 new.enable()
             else:
@@ -121,14 +121,14 @@ class ExtensionInstance(object):
         self.disable()
 
     def handleUninstall(self, setting):
-        if not sel.installed:
+        if not self.installed:
             return
         self.disable()
         self.uninstall()
 
     def upgrade(self):
         old = self
-        new = ExtensionInstance(self.setting, targetVersion)
+        new = ExtensionInstance(self.setting, self.targetVersion)
         new.download()
 
         old.disable()
@@ -212,7 +212,7 @@ class ExtensionInstance(object):
         baseDir = self.setting.getBaseDir() 
         cmd = os.path.join(baseDir, cmd)
         cmd = "{0} {1}".format(cmd, baseDir)
-        fileutil.RChangeMod(baseDir, 0700)
+        fileutil.ChangeTreeMod(baseDir, 0700)
         try:
             devnull = open(os.devnull, 'w')
             child = subprocess.Popen(cmd, shell=True, cwd=baseDir, stdout=devnull)
@@ -241,6 +241,7 @@ class ExtensionInstance(object):
         raise Exception('Failed to load manifest file.')
 
     def updateSetting(self):
+        #TODO clear old .settings file
         fileutil.SetFileContents(self.setting.getSettingsFile(),
                                  json.dumps(self.setting.getSettings()))
 

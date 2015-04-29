@@ -21,6 +21,7 @@ import json
 import re
 import time
 import traceback
+import httplib
 import xml.etree.ElementTree as ET
 import azurelinuxagent.logger as logger
 import azurelinuxagent.utils.restutil as restutil
@@ -36,17 +37,16 @@ HealthReportUri="http://{0}/machine?comp=health"
 RolePropUri="http://{0}/machine?comp=roleProperties"
 
 WireServerAddrFile = "WireServer"
-VersionInfoFile = "Versions.xml"
 IncarnationFile = "Incarnation"
 GoalStateFile = "GoalState.{0}.xml"
 HostingEnvFile = "HostingEnvironmentConfig.xml"
 SharedConfigFile = "SharedConfig.xml"
 CertificatesFile = "Certificates.xml"
-CertificatesJsonFile = "Certificates.json"
+CertJsonFile = "Certificates.json"
 P7MFile="Certificates.p7m"
 PEMFile="Certificates.pem"
-ExtensionsFile = "ExtensionsConfig.{0}.xml"
-ManifestFile="{0}.{1}.manifest"
+ExtensionsConfigFile = "ExtensionsConfig.{0}.xml"
+ManifestFile="{0}.{1}.manifest.xml"
 TransportCertFile = "TransportCert.pem"
 TransportPrivateFile = "TransportPrivate.pem"
 
@@ -59,304 +59,164 @@ HandlerStatusMapping = {
     'disabled' : 'NotReady'
 }
 
+class VmInfoV1():
+    def __init__(self, subscriptionId, vmName):
+        self.subscriptionId = subscriptionId
+        self.vmName = vmName
+
+    def getSubscriptionId(self):
+        return self.subscriptionId
+
+    def getVmName(self):
+        return self.vmName
+
+class CertInfoV1():
+    def __init__(self, name, thumbprint):
+        self.name = name
+        self.thumbprint = thumbprint
+
+    def getName(self):
+        return self.name
+
+    def getThumbprint(self):
+        return self.thumbprint
+
+    def getCrtFile(self):
+        return "{0}.crt".format(thumbprint)
+
+    def getPrvFile(self):
+        return "{0}.prv".format(thumbprint)
+
+class ExtensionInfoV1(ExtensionInfo):
+    def __init__(self, 
+                 name=None,
+                 version=None,
+                 manifestUris=None,
+                 upgradePolicy=None,
+                 state=None,
+                 seqNo=None,
+                 publicSettings=None,
+                 protectedSettings=None,
+                 thumbprint=None):
+        super(ExtensionInfoV1, self).__init__()
+        self.name = name
+        self.version = version
+        self.manifestUris = manifestUris
+        self.upgradePolicy = upgradePolicy
+        self.state = state
+        self.seqNo = seqNo
+        self.publicSettings = publicSettings
+        self.protectedSettings = protectedSettings
+        self.thumbprint = thumbprint
+        self.versionUris = None
+
+    def getName(self):
+        return self.name
+
+    def getVersion(self):
+        return self.version
+   
+    def getUpgradePolicy(self):
+        return self.upgradePolicy
+
+    def getState(self):
+        return self.state
+
+    def getSeqNo(self):
+        return self.seqNo
+
+    def getPublicSettings(self):
+        return self.publicSettings
+
+    def getProtectedSettings(self):
+        return self.protectedSettings
+
+    def getCertificateThumbprint(self):
+        return self.thumbprint
+
+    def getVersionUris(self):
+        return self.versionUris
+
+    def copy(self, version):
+        another = copy.deepcopy(self)
+        if version is not None:
+            another.version = version
+        return another
+
+class WireProtocolResourceGone(ProtocolError):
+    pass
+
 class ProtocolV1(Protocol):
 
     @staticmethod
     def Detect():
-        endpoint = CurrOS.GetWireServerEndpoint()
+        endpoint = None
+        if os.path.isfile(WireServerAddrFile):
+            endpoint = fileutil.GetFileContents(WireServerAddrFile)
         if endpoint is None:
-            raise Exception("Wire server endpoint not found.")
+            raise ProtocolNotFound("Wire server endpoint not found.")
         protocol = ProtocolV1(endpoint)
-        protocol.refreshCache()
+        protocol.checkProtocolVersion()
+        CurrOS.GenerateTransportCert()
         return protocol
-      
+   
     @staticmethod
     def Init():
-        protocol = ProtocolV1()
+        endpoint = None
+        if os.path.isfile(WireServerAddrFile):
+            endpoint = fileutil.GetFileContents(WireServerAddrFile)
+        if endpoint is None:
+            raise ProtocolNotFound("Wire server endpoint not found.")
+        protocol = ProtocolV1(endpoint)
         return protocol
+
 
     def __init__(self, endpoint=None):
         self.endpoint = endpoint
         self.libDir = CurrOS.GetLibDir()
-        self.incarnation = None
-        self.hostingEnv = None
-        self.certificates = None
-        self.extensions = None
- 
-    def checkProtocolVersion(self):
-        versionInfoXml = restutil.HttpGet(VersionInfoUri.format(self.endpoint)).read()
-        self.versionInfo = VersionInfo(versionInfoXml)
-        fileutil.SetFileContents(VersionInfoFile, versionInfoXml)
-
-        negotiated = None;
-        if ProtocolVersion == self.versionInfo.getPreferred():
-            negotiated = self.versionInfo.getPreferred()
-        for version in self.versionInfo.getSupported():
-            if ProtocolVersion == version:
-                negotiated = version
-                break
-        if negotiated:
-            logger.Info("Negotiated wire protocol version:{0}", ProtocolVersion)
-        else:
-            logger.Warn("Agent supported wire protocol version: {0} was not "
-                        "advised by Fabric.", ProtocolVersion)
-            raise Exception("Wire protocol version not supported")
-
-    def getHeader(self):
-        return {
-            "x-ms-agent-name":"WALinuxAgent",
-            "x-ms-version":ProtocolVersion
-        }
-
-    def getHeaderWithContentTypeXml(self):
-        return {
-            "x-ms-agent-name":"WALinuxAgent",
-            "x-ms-version":ProtocolVersion,
-            "Content-Type":"text/xml;charset=utf-8"
-        }
-
-    def getHearderWithCert(self):
-        cert = ""
-        for line in fileutil.GetFileContents(TransportCertFile).split('\n'):
-            if "CERTIFICATE" not in line:
-                cert += line.rstrip()
-        return {
-            "x-ms-agent-name":"WALinuxAgent",
-            "x-ms-version":ProtocolVersion,
-            "x-ms-cipher-name": "DES_EDE3_CBC",
-            "x-ms-guest-agent-public-x509-cert":cert
-        }
-
-    def updateGoalState(self):
-        goalStateXml = restutil.HttpGet(GoalStateUri.format(self.endpoint),
-                                        headers=self.getHeader()).read()
-        if goalStateXml is None:
-            raise Exception("Failed update goalstate")
-        self.goalState = GoalState(goalStateXml)
-        self.incarnation = self.goalState.getIncarnation()
-
-        goalStateFile = GoalStateFile.format(self.incarnation)
-        fileutil.SetFileContents(goalStateFile, goalStateXml)
-        fileutil.SetFileContents(IncarnationFile, str(self.incarnation))
-
-    def updateHostingEnv(self):
-        hostingEnvXml = restutil.HttpGet(self.goalState.getHostingEnvUri(),
-                                         headers=self.getHeader()).read()
-        if hostingEnvXml is None:
-            raise Exception("Failed to update hosting environment config")
-        self.hostingEnv = HostingEnv(hostingEnvXml)
-        fileutil.SetFileContents(HostingEnvFile, hostingEnvXml)
-
-    def updateSharedConfig(self):
-        sharedConfigXml = restutil.HttpGet(self.goalState.getSharedConfigUri(),
-                                           headers=self.getHeader()).read()
-        self.sharedConfig = SharedConfig(sharedConfigXml)
-        fileutil.SetFileContents(SharedConfigFile, sharedConfigXml)
-
-    def updateCertificates(self):
-        certificatesUri = self.goalState.getCertificatesUri()
-        if certificatesUri is None:
-            return
-        certificatesXml = restutil.HttpGet(self.goalState.getCertificatesUri(),
-                                           headers=self.getHearderWithCert()).read()
-        if certificatesXml is None:
-            raise Exception("Failed to update certificates")
-        fileutil.SetFileContents(CertificatesFile, certificatesXml)
-        self.certificates = Certificates()
-        certificatesJson = self.certificates.decrypt(certificatesXml)
-        fileutil.SetFileContents(CertificatesJsonFile, certificatesJson)
-    
-    def updateExtensionConfig(self):
-        extentionsXml = restutil.HttpGet(self.goalState.getExtensionsUri(),
-                                         headers=self.getHeader()).read()
-        if extentionsXml is None:
-            raise Exception("Failed to update extensions config")
-        self.extensions = ExtensionsConfig(extentionsXml)
-        extensionsFile = ExtensionsFile.format(self.incarnation)
-        fileutil.SetFileContents(extensionsFile, extentionsXml)
-
-        for ext in self.extensions.getExtensions():
-            manifestUri = self.extensions.getManifestUri(ext.getName())
-            for uri in manifestUri:
-                try:
-                    manifestXml = restutil.HttpGet(uri).read()
-                    manifestXml = RemoveBom(manifestXml)
-                    manifestFile = ManifestFile.format(ext.getName(), 
-                                                       self.incarnation)
-                    fileutil.SetFileContents(manifestFile, manifestXml)
-                    ExtensionManifest(manifestXml).update(ext)
-                    break
-                except Exception, e:
-                    #Download manifest failed, will retry with failover location
-                    logger.Warn("Download manifest for {0} failed: {1} {2} {3}",
-                                ext.getName(),
-                                uri,
-                                e,
-                                traceback.format_exc())
-
-    def refreshCache(self):
-        """
-        In protocol v1(wire server protocol), agent will periodically call wire
-        server to get the configuration and save it in the disk. So that other 
-        application like extension could read the data from the disk.
-        """
-        if self.endpoint is None:
-            raise Exception("Wire server endpoint is not set.")
-        self.checkProtocolVersion()
-        CurrOS.GenerateTransportCert()
-        self.updateGoalState()
-        self.updateHostingEnv()
-        self.updateSharedConfig()
-        self.updateCertificates()
-        self.updateExtensionConfig()
-        
-        
-    def getIncarnation(self):
-        if self.incarnation is None:
-            if os.path.isfile(IncarnationFile):
-                incarnationStr = fileutil.GetFileContents(IncarnationFile)
-                self.incarnation = int(incarnationStr)
-            else:
-                self.incarnation = 0
-        return self.incarnation
-
+        self.client = WireClient(endpoint)
+  
     def getVmInfo(self):
-        if self.hostingEnv is None:
-            hostingEnvXml = fileutil.GetFileContents(HostingEnvFile)
-            self.hostingEnv = HostingEnv(hostingEnvXml)
-        vmInfo = {
-            "subscriptionId":None,
-            "vmName":self.hostingEnv.getVmName()
-        }
-        return VmInfo(vmInfo)
+        hostingEnv = self.client.getHostingEnv()
+        vmName = hostingEnv.getVmName()
+        return VmInfoV1(None, vmName)
 
     def getCerts(self):
-        if self.certificates is None:
-            certificatesJson = fileutil.GetFileContents(CertificatesJsonFile)
-            self.certificates = Certificates(certificatesJson)
-        return self.certificates.getCerts()
-
+        certificates = self.client.getCertificates()
+        return certificates.getCerts()
+       
     def getExtensions(self):
-        return self._getExtensionConfig().getExtensions()
-
-    #TODO Move this method into class ExtensionConfig
-    def _getExtensionConfig(self):
-        if self.extensions is None:
-            extensionsFile = ExtensionsFile.format(self.getIncarnation())
-            extentionsXml = fileutil.GetFileContents(extensionsFile)
-            self.extensions = ExtensionsConfig(extentionsXml)
-            for ext in self.extensions.getExtensions():
-                manifestFile = ManifestFile.format(ext.getName(), 
-                                                   self.incarnation)
-                manifestXml = fileutil.GetFileContents(manifestFile)
-                ExtensionManifest(manifestXml).update(ext)
-        return self.extensions
-
+        #Update goal state to get latest extensions config
+        self.client.updateGoalState()
+        extensionsConfig = self.client.getExtensionsConfig()
+        return extensionsConfig.getExtensions()
+  
+    def getInstanceMetadata(self):
+        #TODO add instance metadata(SharedConfig.xml)
+        pass
+    
     def reportProvisionStatus(self, status=None, subStatus=None, 
                               description='', thumbprint=None):
         if status is not None:
-            healthReport = self._buildHealthReport(status, 
-                                                   subStatus, 
-                                                   description)
-            healthReportUri = HealthReportUri.format(self.endpoint)
-            headers=self.getHeaderWithContentTypeXml()
-            resp = restutil.HttpPost(healthReportUri, 
-                                     healthReport,
-                                     headers=headers)
-            if resp is not None:
-                latest = resp.getheader("x-ms-latest-goal-state-incarnation-number")
-                if latest is not None:
-                    self.incarnation = latest
-
+            self.client.reportHealth(status, subStatus, description)
         if thumbprint is not None:
-            roleProp = self._buildRoleProperties(thumbprint)
-            rolePropUri = RolePropUri.format(self.endpoint)
-            ret = restutil.HttpPost(rolePropUri, 
-                                    roleProp,
-                                    headers=self.getHeaderWithContentTypeXml())
+            self.client.reportRoleProperties(thumbprint)
+    
+    def reportAgentStatus(self, version, agentStatus, agentMessage):
+        statusBlob = self.client.getStatusBlob()
+        statusBlob.setAgentStatus(version, agentStatus, agentMessage)
+        self.client.uploadStatusBlob()
+        
+    def reportExtensionStatus(self, name, version, status):
+        statusBlob = self.client.getStatusBlob()
+        statusBlob.setExtensionStatus(name, version, status)
 
-    def _buildRoleProperties(self, thumbprint):
-        return (u"<?xml version=\"1.0\" encoding=\"utf-8\"?>"
-                "<RoleProperties>"
-                "<Container>"
-                "<ContainerId>{0}</ContainerId>"
-                "<RoleInstances>"
-                "<RoleInstance>"
-                "<Id>{1}</Id>"
-                "<Properties>"
-                "<Property name=\"CertificateThumbprint\" value=\"{2}\" />"
-                "</Properties>"
-                "</RoleInstance>"
-                "</RoleInstances>"
-                "</Container>"
-                "</RoleProperties>"
-                "").format(self.goalState.getContainerId(),
-                           self.goalState.getRoleInstanceId(),
-                           thumbprint)
+    def reportEvent(self):
+        #TODO port diagnostic code here
+        pass
 
-    def _buildHealthReport(self, status, subStatus, description):
-        detail = None
-        if subStatus is not None:
-            detail = ("<Details>"
-                      "<SubStatus>{0}</SubStatus>"
-                      "<Description>{1}</Description>"
-                      "</Details>").format(subStatus, description)
-        return (u"<?xml version=\"1.0\" encoding=\"utf-8\"?>"
-                "<Health "
-                    "xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\""
-                " xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\">"
-                "<GoalStateIncarnation>{0}</GoalStateIncarnation>"
-                "<Container>"
-                "<ContainerId>{1}</ContainerId>"
-                "<RoleInstanceList>"
-                "<Role>"
-                "<InstanceId>{2}</InstanceId>"
-                "<Health>"
-                "<State>{3}</State>"
-                "{4}"
-                "</Health>"
-                "</Role>"
-                "</RoleInstanceList>"
-                "</Container>"
-                "</Health>"
-                "").format(self.goalState.getIncarnation(),
-                           self.goalState.getContainerId(),
-                           self.goalState.getRoleInstanceId(),
-                           status, 
-                           detail if detail is not None else '')
-
-    def reportAgentStatus(self, version, status, message):
-        tstamp=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-        formattedMessage = {
-            'lang' : 'en-Us',
-            'message' : message
-        }
-        guestAgentStatus = {
-            'version' : version,
-            'status' : status,
-            'formattedMessage' : formattedMessage
-        }
-        handlerAggregateStatus = self.getExtensionStatus()
-        aggregateStatus = {
-            'guestAgentStatus': guestAgentStatus,
-            'handlerAggregateStatus' : handlerAggregateStatus
-        }
-        report = {
-            'version' : '1.0',
-            'timestampUTC' : tstamp,
-            'aggregateStatus' : aggregateStatus
-        }
-        data = json.dumps(report)
-        headers = {
-             "x-ms-blob-type" : "BlockBlob", 
-             "x-ms-date" : time.strftime("%Y-%M-%dT%H:%M:%SZ", time.gmtime()) ,
-             "Content-Length": str(len(data))
-        }
-        restutil.HttpPut(self._getExtensionConfig().getStatusUploadBlob(),
-                         data,
-                         headers, 2)
-
-    def getExtensionStatus(self): 
+    #TODO move to exthandler
+    def _getExtensionStatus(self): 
         aggregatedStatusList = []
         for ext in self.getExtensions():
             status = None
@@ -410,21 +270,337 @@ class ProtocolV1(Protocol):
 
             aggregatedStatusList.append(aggregatedStatus)
         return aggregatedStatusList
-
-    def isResponsive(self, heartbeatFile):
+    
+    #TODO move to exthandler
+    def _isResponsive(self, heartbeatFile):
         lastUpdate=int(time.time()-os.stat(heartbeatFile).st_mtime)
         return  lastUpdate > 600    # not updated for more than 10 min
 
-    def reportExtensionStatus(self, status):
-        """
-        In wire protocol, extensions status is reported together with 
-        agent status in a fixed period. Leave this method empty.
-        """
-        pass
+def _fetchCache(localFile):
+    if not os.path.isfile(localFile):
+        raise ProtocolError("{0} is missing.".format(localFile))
+    return fileutil.GetFileContents(path)
 
-    def reportEvent(self):
-        #TODO port diagnostic code here
-        pass
+def _fetchUri(uri, headers):
+    resp = restutil.HttpGet(uri, header)
+    if(resp.status == httplib.GONE):
+        raise WireProtocolResourceGone(uri)
+    if(resp.status != httplib.OK):
+        raise ProtocolError("{0} - {1}".format(resp.status, uri))
+    return resp.read()
+
+def _fetchManifest(uris):
+    for uri in uris:
+        try:
+            xmlText = _fetchUri(uri, None)
+            return xmlText
+        except IOError, e:
+            logger.Warn("Failed to fetch ExtensionManifest: {0}, {1}",
+                        e, 
+                        uri)
+    raise ProtocolError("Failed to fetch ExtensionManifest from all sources")
+
+def _buildRoleProperties(containerId, roleInstanceId, thumbprint):
+    xml = (u"<?xml version=\"1.0\" encoding=\"utf-8\"?>"
+            "<RoleProperties>"
+            "<Container>"
+            "<ContainerId>{0}</ContainerId>"
+            "<RoleInstances>"
+            "<RoleInstance>"
+            "<Id>{1}</Id>"
+            "<Properties>"
+            "<Property name=\"CertificateThumbprint\" value=\"{2}\" />"
+            "</Properties>"
+            "</RoleInstance>"
+            "</RoleInstances>"
+            "</Container>"
+            "</RoleProperties>"
+            "").format(containerId, roleInstanceId,thumbprint)
+    return xml
+
+def _buildHealthReport(incarnation, containerId, roleInstanceId, 
+                       status, subStatus, description):
+    detail = ''
+    if subStatus is not None:
+        detail = ("<Details>"
+                  "<SubStatus>{0}</SubStatus>"
+                  "<Description>{1}</Description>"
+                  "</Details>").format(subStatus, description)
+    xml = (u"<?xml version=\"1.0\" encoding=\"utf-8\"?>"
+            "<Health "
+            "xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\""
+            " xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\">"
+            "<GoalStateIncarnation>{0}</GoalStateIncarnation>"
+            "<Container>"
+            "<ContainerId>{1}</ContainerId>"
+            "<RoleInstanceList>"
+            "<Role>"
+            "<InstanceId>{2}</InstanceId>"
+            "<Health>"
+            "<State>{3}</State>"
+            "{4}"
+            "</Health>"
+            "</Role>"
+            "</RoleInstanceList>"
+            "</Container>"
+            "</Health>"
+            "").format(incarnation,
+                       containerId, 
+                       roleInstanceId,
+                       status, 
+                       detail)
+    return xml
+
+class StatusBlob(object):
+    def __init__(self):
+        self.agentVersion = None
+        self.agentStatus = None
+        self.agentMessage = None
+        self.extensionsStatus = {}
+
+    def setAgentStatus(self, agentVersion, agentStatus, agentMessage):
+        self.agentVersion = agentVersion
+        self.agentStatus = agentStatus
+        self.agentMessage = agentMessage
+
+    def setExtensionStatus(self, name, version, status):
+        #TODO validate status format
+        self.extensionsStatus[name] = status
+
+    def toJson(self):
+        tstamp=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        formattedMessage = {
+            'lang' : 'en-Us',
+            'message' : self.agentMessage
+        }
+        guestAgentStatus = {
+            'version' : self.agentVersion,
+            'status' : self.agentStatus,
+            'formattedMessage' : formattedMessage
+        }
+        aggregateStatus = {
+            'guestAgentStatus': guestAgentStatus,
+            'handlerAggregateStatus' : self.extensionsStatus.values()
+        }
+        report = {
+            'version' : '1.0',
+            'timestampUTC' : tstamp,
+            'aggregateStatus' : aggregateStatus
+        }
+        return json.dumps(report)
+
+class WireClient(object):
+    def __init__(self, endpoint):
+        self.endpoint = endpoint
+        self.goalState = None
+        self.updated = None
+        self.hostingEnv = None
+        self.sharedConfig = None
+        self.certificates = None
+        self.extensionsConfig = None
+        self.statusBlob = StatusBlob()
+   
+    def updateHostingEnv(self, goalState):
+        localFile = HostingEnvFile
+        xmlText = _fetchUri(goalState.getHostingEnvUri(), self.getHeader())
+        fileutil.SetFileContents(localFile, xmlText)
+        self.hostingEnv = HostingEnv(xmlText)
+  
+    def updateSharedConfig(self, goalState):
+        localFile = SharedConfigFile
+        xmlText = _fetchUri(goalState.getSharedConfigUri(), self.getHeader())
+        fileutil.SetFileContents(localFile, xmlText)
+        self.sharedConfig = SharedConfig(xmlText)
+    
+    def updateCertificates(self, goalState):
+        localFile = CertificatesFile
+        xmlText = _fetchUri(goalState.getCertificatesUri(), 
+                            self.getHeaderWithCert())
+        fileutil.SetFileContents(localFile, xmlText)
+        self.certificates = Certificates(xmlText)
+
+    def updateExtensionsConfig(self, goalState):
+        incarnation = goalState.getIncarnation()
+        localFile = ExtensionsConfigFile.format(incarnation)
+        xmlText = _fetchUri(goalState.getExtensionsUri(), 
+                            self.getHeader())
+        fileutil.SetFileContents(localFile, xmlText)
+        self.extensionsConfig = ExtensionsConfig(xmlText)
+        for extension in self.extensionsConfig.getExtensions():
+            self.updateExtensionManifest(extension, goalState)
+    
+    def updateExtensionManifest(self, extension, goalState):
+        localFile = ManifestFile.format(extension.name, 
+                                        goalState.getIncarnation())
+        xmlText = _fetchManifest(extension.manifestUris)
+        fileutil.SetFileContents(localFile, fileutil)
+        return ExtensionManifest(xmlText)
+
+    def updateGoalState(self, maxRetry=3):
+        xmlText = _fetchUri(GoalStateUri, self.getHeader())
+        goalState = GoalState(xmlText)
+        
+        lastIncarnation = None
+        if(os.path.isfile(IncarnationFile)):
+            lastIncarnation = fileutil.GetFileContents(IncarnationFile)
+        newIncarnation = goalState.getIncarnation()
+        if(lastIncarnation is not None and lastIncarnation == newIncarnation):
+            #Goalstate is not updated.
+            return
+        
+        #Start updating goalstate, retry on 410
+        for retry in range(0, maxRetry):
+            try:
+                self.goalState = goalState
+                goalStateFile = GoalStateFile.format(goalState.getIncarnation())
+                fileutil.SetFileContents(goalStateFile, xmlText)
+                fileutil.SetFileContents(IncarnationFile, 
+                                         goalState.getIncarnation())
+                self.updateHostingEnv(goalState)
+                self.updateSharedConfig(goalState)
+                self.updateCertificates(goalState)
+                self.updateExtensionsConfig(goalState)
+                return
+            except WireProtocolResourceGone:
+                logger.Info("Incarnation is out of date. Update goalstate.")
+                xmlText = _fetchUri(GoalStateUri, self.getHeader())
+                goalState = GoalState(xmlText)
+
+        raise ProtocolError("Exceeded max retry updating goal state")
+  
+    def getGoalState(self):
+        if(self.goalState is None):
+            incarnation = _fetchCache(IncarnationFile)
+            goalStateFile = GoalStateFile.format(incarnation)
+            xmlText = _fetchCache(goalStateFile)
+            self.goalState = GoalState(xmlText)
+        return self.goalState
+
+    def getHostingEnv(self):
+        if(self.hostingEnv is None):
+            xmlText = _fetchCache(HostingEnvFile)
+            self.hostingEnv = HostingEnv(xmlText)
+        return self.hostingEnv
+    
+    def getSharedConfig(self):
+        if(self.sharedConfig is None):
+            xmlText = _fetchCache(SharedConfigFile)
+            self.sharedConfig = SharedConfig(xmlText)
+        return self.sharedConfig
+
+    def getCertificates(self):
+        if(self.certificates is None):
+            xmlText = _fetchCache(Certificates)
+            self.certificates = Certificates(xmlText)
+        return self.certificates
+    
+    def getExtensionsConfig(self):
+        if(self.extensionsConfig is None):
+            goalState = self.getGoalState()
+            localFile = ExtensionsConfigFile.format(goalState.getIncarnation())
+            xmlText = _fetchCache(localFile)
+            self.extensionsConfig = ExtensionsConfig(xmlText)
+            extensions = self.extensionsConfig.getExtensions()
+            for extension in extensions:
+                man = self.getExtensionManifest(extension, goalState)
+                extension.versionUris = man.versionUris
+        return self.extensionsConfig
+    
+    def getExtensionManifest(self, extension, goalState):
+        localFile = ManifestFile.format(extension.name, 
+                                        goalState.getIncarnation())
+        xmlText = _fetchCache(localFile)
+        return ExtensionManifest(xmlText)
+        
+    def getIncarnation(self):
+        if self.incarnation is None:
+            if os.path.isfile(IncarnationFile):
+                self.incarnation = fileutil.GetFileContents(IncarnationFile)
+        return self.incarnation
+
+    def checkProtocolVersion(self):
+        uri = VersionInfoUri.format(self.endpoint)
+        versionInfoXml = restutil.HttpGet(uri).read()
+        self.versionInfo = VersionInfo(versionInfoXml)
+
+        preferred = self.versionInfo.getPreferred()
+        if ProtocolVersion == preferred:
+            logger.Info("Wire protocol version:{0}", ProtocolVersion)
+        elif ProtocolVersion in self.versionInfo.getSupported():
+            logger.Info("Wire protocol version:{0}", ProtocolVersion)
+            logger.Warn("Server prefered version:{0}", prefered)
+        else:
+            error = ("Agent supported wire protocol version: {0} was not "
+                     "advised by Fabric.").format(ProtocolVersion)
+            raise ProtocolError(error)
+
+    def getStatusBlob(self):
+        return self.statusBlob
+
+    def uploadStatusBlob(self):
+        extensionsConfig = self.getExtensionsConfig()
+        #TODO support page blob. Porting code change from 2.0.12
+        data = self.statusBlob.toJson()
+        headers = {
+             "x-ms-blob-type" : "BlockBlob", 
+             "x-ms-date" : time.strftime("%Y-%M-%dT%H:%M:%SZ", time.gmtime()) ,
+             "Content-Length": str(len(data))
+        }
+        restutil.HttpPut(extensionsConfig.getStatusUploadBlob(),
+                         data,
+                         headers)
+
+
+    def reportRoleProperties(self, thumbprint):
+        goalState = self.getGoalState()
+        roleProp = _buildRoleProperties(goalState.getContainerId(),
+                                        goalState.getRoleInstanceId(),
+                                        thumbprint)
+        rolePropUri = RolePropUri.format(self.endpoint)
+        ret = restutil.HttpPost(rolePropUri, 
+                                roleProp,
+                                headers=self.getHeaderWithContentTypeXml())
+
+    
+    def reportHealth(self, status, subStatus, description):
+        goalState = self.getGoalState()
+        healthReport = _buildHealthReport(goalState.getIncarnation(),
+                                          goalState.getContainerId(),
+                                          goalState.getRoleInstanceId(),
+                                          status, 
+                                          subStatus, 
+                                          description)
+        healthReportUri = HealthReportUri.format(self.endpoint)
+        headers=self.getHeaderWithContentTypeXml()
+        resp = restutil.HttpPost(healthReportUri, 
+                                 healthReport,
+                                 headers=headers)
+
+    def getHeader(self):
+        return {
+            "x-ms-agent-name":"WALinuxAgent",
+            "x-ms-version":ProtocolVersion
+        }
+
+    def getHeaderWithContentTypeXml(self):
+        return {
+            "x-ms-agent-name":"WALinuxAgent",
+            "x-ms-version":ProtocolVersion,
+            "Content-Type":"text/xml;charset=utf-8"
+        }
+
+    def getHeaderWithCert(self):
+        cert = ""
+        content = _fetchCache(TransportCertFile)
+        for line in content.split('\n'):
+            if "CERTIFICATE" not in line:
+                cert += line.rstrip()
+        return {
+            "x-ms-agent-name":"WALinuxAgent",
+            "x-ms-version":ProtocolVersion,
+            "x-ms-cipher-name": "DES_EDE3_CBC",
+            "x-ms-guest-agent-public-x509-cert":cert
+        }
 
 class VersionInfo():
     def __init__(self, xmlText):
@@ -452,12 +628,12 @@ class VersionInfo():
     def getSupported(self):
         return self.supported
 
-class GoalState():
+ 
+class GoalState(object):
     
     def __init__(self, xmlText):
-        self.parse(xmlText)
-
-    def reinitialize(self):
+        if xmlText is None:
+            raise ValueError("GoalState.xml is None")
         self.incarnation = None
         self.expectedState = None
         self.hostingEnvUri = None
@@ -467,16 +643,17 @@ class GoalState():
         self.roleInstanceId = None
         self.containerId = None
         self.loadBalancerProbePort = None
-
+        self.parse(xmlText)
+        
     def getIncarnation(self):
         return self.incarnation
     
     def getExpectedState(self):
         return self.expectedState
-
+    
     def getHostingEnvUri(self):
         return self.hostingEnvUri
-
+    
     def getSharedConfigUri(self):
         return self.sharedConfigUri
     
@@ -494,12 +671,14 @@ class GoalState():
 
     def getLoadBalancerProbePort(self):
         return self.loadBalancerProbePort
+    
+    def isUpdated(self):
+        return self.updated
 
     def parse(self, xmlText):
         """
         Request configuration data from endpoint server.
         """
-        self.reinitialize()
         logger.Verbose(xmlText)
         self.xmlText = xmlText
         xmlDoc = ET.fromstring(xmlText.strip())
@@ -526,14 +705,9 @@ class HostingEnv(object):
     HostingEnvironmentConfig.xml
     """
     def __init__(self, xmlText):
+        if xmlText is None:
+            raise ValueError("HostingEnvironmentConfig.xml is None")
         self.parse(xmlText)
-
-    def reinitialize(self):
-        """
-        Reset Members.
-        """
-        self.vmName = None
-        self.xmlText = None
 
     def getVmName(self):
         return self.vmName
@@ -542,7 +716,6 @@ class HostingEnv(object):
         """
         parse and create HostingEnvironmentConfig.xml.
         """
-        self.reinitialize()
         self.xmlText = xmlText
         xmlDoc = ET.fromstring(xmlText.strip())
         self.vmName = FindFirstNode(xmlDoc, ".//Incarnation").attrib["instance"]
@@ -555,17 +728,10 @@ class SharedConfig(object):
     def __init__(self, xmlText):
         self.parse(xmlText)
 
-    def reinitialize(self):
-        """
-        Reset members.
-        """
-        pass
-
     def parse(self, xmlText):
         """
         parse and write configuration to file SharedConfig.xml.
         """
-        self.reinitialize()
         #Not used currently
         return self
 
@@ -574,29 +740,18 @@ class Certificates(object):
     """
     Object containing certificates of host and provisioned user.
     """
-    def __init__(self, jsonText=None):
+    def __init__(self, xmlText=None):
+        if xmlText is None:
+            raise ValueError("Certificates.xml is None")
         self.libDir = CurrOS.GetLibDir()
         self.opensslCmd = CurrOS.GetOpensslCmd()
-        if jsonText is not None:
-            self.parse(jsonText)
-
-    def reinitialize(self):
-        """
-        Reset members.
-        """
         self.certs = []
+        self.parse(xmlText)
 
-    def parse(self, jsonText):
-        self.reinitialize()
-        certs = json.loads(jsonText)
-        for cert in certs:
-            self.certs.append(CertInfo(cert))
-
-    def decrypt(self, xmlText):
+    def parse(self, xmlText):
         """
         Parse multiple certificates into seperate files.
         """
-        self.reinitialize()
         xmlDoc = ET.fromstring(xmlText.strip())
         dataNode = FindFirstNode(xmlDoc, ".//Data")
         if dataNode is None:
@@ -649,8 +804,6 @@ class Certificates(object):
                     crt = "{0}.crt".format(thumbprint)
                     certs.append({
                         "name":None,
-                        "crt":crt,
-                        "prv":None,
                         "thumbprint":thumbprint
                     })
                     os.rename(tmpFile, os.path.join(self.libDir, crt))
@@ -667,11 +820,9 @@ class Certificates(object):
                 os.rename(tmpFile, os.path.join(self.libDir, prv))
                 cert = filter(lambda x : x["thumbprint"] == thumbprint, 
                               certs)[0]
-                cert["prv"] = prv
 
         for cert in certs:
-            self.certs.append(CertInfo(cert))
-        return json.dumps(certs)
+            self.certs.append(CertInfoV1(cert["name"], cert["thumbprint"]))
 
     def getCerts(self):
         return self.certs
@@ -682,6 +833,7 @@ class Certificates(object):
             tmp.writelines(buf)
         return fileName
 
+
 class ExtensionsConfig(object):
     """
     parse ExtensionsConfig, downloading and unpacking them to /var/lib/waagent.
@@ -689,22 +841,15 @@ class ExtensionsConfig(object):
     """
 
     def __init__(self, xmlText):
+        if xmlText is None:
+            raise ValueError("ExtensionsConfig is None")
+        self.extensions = []
+        self.statusUploadBlob = None
         self.parse(xmlText)
 
-    def reinitialize(self):
-        """
-        Reset members.
-        """
-        self.extensions = []
-        self.manifestUris = {}
-        self.statusUploadBlob = None
-    
     def getExtensions(self):
         return self.extensions
-
-    def getManifestUri(self, name):
-        return self.manifestUris[name]
-
+   
     def getStatusUploadBlob(self):
         return self.statusUploadBlob
     
@@ -712,18 +857,12 @@ class ExtensionsConfig(object):
         """
         Write configuration to file ExtensionsConfig.xml.
         """
-        self.reinitialize()
         logger.Verbose("Extensions Config: {0}", xmlText)
         xmlDoc = ET.fromstring(xmlText.strip())
         extensions = FindAllNodes(xmlDoc, ".//Plugins/Plugin")      
         settings = FindAllNodes(xmlDoc, ".//PluginSettings/Plugin")
 
         for extension in extensions:
-            ext = {}
-            properties = {}
-            runtimeSettings = {}
-            handlerSettings = {}
-
             name = extension.attrib["name"]
             version = extension.attrib["version"]
             location = extension.attrib["location"]
@@ -734,6 +873,7 @@ class ExtensionsConfig(object):
             setting = filter(lambda x: x.attrib["name"] == name 
                              and x.attrib["version"] == version,
                              settings)
+
             runtimeSettingsNode = FindFirstNode(settings[0], ("RuntimeSettings"))
             seqNo = runtimeSettingsNode.attrib["seqNo"]
             runtimeSettingsStr = runtimeSettingsNode.text
@@ -741,29 +881,26 @@ class ExtensionsConfig(object):
             runtimeSettingsData = runtimeSettingsDataList["runtimeSettings"][0]
             handlerSettingsData = runtimeSettingsData["handlerSettings"]
             publicSettings = handlerSettingsData["publicSettings"]
-            privateSettings = handlerSettingsData["protectedSettings"]
+            protectedSettings = handlerSettingsData["protectedSettings"]
             thumbprint = handlerSettingsData["protectedSettingsCertThumbprint"]
-
-            ext["name"] = name
-            properties["version"] = version
-            properties["versionUris"] = []
-            properties["upgrade-policy"] = upgradePolicy
-            properties["state"] = state
-            handlerSettings["sequenceNumber"] = seqNo
-            handlerSettings["publicSettings"] = publicSettings
-            handlerSettings["privateSettings"] = privateSettings
-            handlerSettings["certificateThumbprint"] = thumbprint
-
-            runtimeSettings["handlerSettings"] = handlerSettings
-            properties["runtimeSettings"] = [runtimeSettings]
-            ext["properties"] = properties
-            self.extensions.append(ExtensionInfo(ext))
-            self.manifestUris[name] = (location, failoverLocation)
+           
+            extInfo = ExtensionInfoV1(name=name,
+                                      version=version,
+                                      manifestUris=(location, failoverLocation),
+                                      upgradePolicy=upgradePolicy,
+                                      state=state,
+                                      seqNo=seqNo,
+                                      publicSettings=publicSettings,
+                                      protectedSettings=protectedSettings,
+                                      thumbprint=thumbprint)
+            self.extensions.append(extInfo)
         self.statusUploadBlob = (FindFirstNode(xmlDoc,"StatusUploadBlob")).text
         return self
 
 class ExtensionManifest(object):
     def __init__(self, xmlText):
+        if xmlText is None:
+            raise ValueError("ExtensionManifest is None")
         self.xmlText = xmlText
         self.versionUris = []
         self.parse(xmlText)
@@ -780,7 +917,4 @@ class ExtensionManifest(object):
                 "version":version,
                 "uris":uris
             })
-
-    def update(self, ext):
-        ext.data["properties"]["versionUris"] = self.versionUris
 
