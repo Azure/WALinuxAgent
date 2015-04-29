@@ -24,10 +24,11 @@ class TestSharedConfig(unittest.TestCase):
         self.assertNotEquals(None, conf)
         self.assertNotEquals(None, conf.RdmaMacAddress)
         self.assertNotEquals(None, conf.RdmaIPv4Address)
+        self.assertEquals("00:15:5D:34:00:44", conf.RdmaMacAddress)
         return conf
 
     def test_config_rdma(self):
-        waagent.LoggerInit("/dev/stdout", "/dev/null", verbose=True)
+        #waagent.LoggerInit("/dev/stdout", "/dev/null", verbose=True)
         testDev = "/tmp/hvnd_rdma"
         waagent.SetFileContents(testDev, "")
         conf = self.test_parse_shared_config()

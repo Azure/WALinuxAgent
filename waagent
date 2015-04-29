@@ -619,6 +619,25 @@ class AbstractDistro(object):
     
     def getTotalMemory(self):
         return int(RunGetOutput("grep MemTotal /proc/meminfo |awk '{print $2}'")[1])/1024
+    
+    def getInterfaceNameByMac(self, mac):
+        ret, output = RunGetOutput("ifconfig -a")
+        if ret != 0:
+            return Exception("Failed to get network interface info")
+        match = re.search(r"(eth\d)[^\n]+HWaddr {0}".format(mac), output)
+        if match is None:
+            return Exception("Failed to get ifname with mac: {0}".format(mac))
+        return match.group(1)
+
+    def configIpV4(self, ifName, addr):
+        ret, output = RunGetOutput("ifconfig {0} up".format(ifName))
+        if ret != 0:
+            Error("Failed to bring up {0}: {1}".format(ifName, output))
+            return
+        ret, output = RunGetOutput("ifconfig {0} {1}/24".format(ifName, addr))
+        if ret != 0:
+            Error("Failed to config ipv4 for {0}: {1}".format(ifName, output))
+            return
         
 ############################################################
 #	GentooDistro
@@ -3139,7 +3158,10 @@ class SharedConfig(object):
         if nodes is not None and len(nodes) != 0:
             node = nodes[0]
             if node.hasAttribute("rdmaMacAddress"):
-                self.RdmaMacAddress = node.getAttribute("rdmaMacAddress")
+                addr = node.getAttribute("rdmaMacAddress")
+                self.RdmaMacAddress = addr[0:2]
+                for i in range(1, 6):
+                    self.RdmaMacAddress += ":" + addr[2 * i : 2 *i + 2]
             if node.hasAttribute("rdmaIPv4Address"):
                 self.RdmaIPv4Address = node.getAttribute("rdmaIPv4Address")
         return self
@@ -3148,17 +3170,31 @@ class SharedConfig(object):
         LogIfVerbose("Save SharedConfig.xml")
         SetFileContents("SharedConfig.xml", self.xmlText)
 
-    def ConfigRdma(self, dev="/dev/hvnd_rdma"):
-        if self.RdmaIPv4Address is not None and self.RdmaMacAddress is not None:
-            if os.path.isfile(dev):
-                data = ('rdmaMacAddress="{0}" rdmaIPv4Address="{1}"'
-                        '').format(self.RdmaMacAddress, self.RdmaIPv4Address)
-                Log("Write rdma config to {0}: {1}".format(dev, data))
-                try:
-                    with open(dev, "w") as c:
-                        c.write(data)
-                except IOError, e:
-                    Error("Error writing {0}, {1}".format(dev, e))
+    def ConfigRdma(self, dev="/dev/hvnd_rdma", datConf="/etc/dat.conf"):
+        if self.RdmaIPv4Address is None or self.RdmaMacAddress is  None:
+            return
+
+        if os.path.isfile(datConf):
+            old = ("ofa-v2-ib0 u2.0 nonthreadsafe default libdaplofa.so.2 "
+                   "dapl.2.0 \"\S+ 0\"")
+            new = ("ofa-v2-ib0 u2.0 nonthreadsafe default libdaplofa.so.2 "
+                   "dapl.2.0 \"{0} 0\"").format(self.RdmaIPv4Address)
+            lines = GetFileContents(datConf)
+            lines = re.sub(old, new, lines)
+            SetFileContents(lines)
+
+        if os.path.isfile(dev):
+            data = ('rdmaMacAddress="{0}" rdmaIPv4Address="{1}"'
+                    '').format(self.RdmaMacAddress, self.RdmaIPv4Address)
+            Log("Write rdma config to {0}: {1}".format(dev, data))
+            try:
+                with open(dev, "w") as c:
+                    c.write(data)
+            except IOError, e:
+                Error("Error writing {0}, {1}".format(dev, e))
+        
+        ifName = MyDistro.getInterfaceNameByMac(self.RdmaMacAddress)
+        MyDistro.configIpV4(ifName, self.RdmaIPv4Address)
 
     def InvokeTopologyConsumer(self):
         program = Config.get("Role.TopologyConsumer")
