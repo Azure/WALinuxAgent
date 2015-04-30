@@ -5605,14 +5605,14 @@ def ReplaceStringInFile(fname,src,repl):
     """
     Replace 'src' with 'repl' in file.
     """
-    updated=''
     try:
         sr=re.compile(src)
         if FindStringInFile(fname,src):
+            updated=''
             for l in (open(fname,'r')).readlines():
                 n=re.sub(sr,repl,l)
                 updated+=n
-        ReplaceFileContentsAtomic(fname,updated)
+            ReplaceFileContentsAtomic(fname,updated)
     except :
         raise
     return
