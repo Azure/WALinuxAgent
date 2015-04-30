@@ -26,7 +26,7 @@ WARNING: This script will remove all partitions in resource disk and create
 a new one using the entire disk space.
 """
 if __name__ == '__main__':
-    print 'Umnout resource disk...'
+    print 'Unmount resource disk...'
     subprocess.call(['umount', '/dev/sdb1'])
     print 'Remove old partitions...'
     subprocess.call(['parted', '/dev/sdb', 'rm', '1'])
