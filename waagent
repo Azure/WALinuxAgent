@@ -80,7 +80,7 @@ if not hasattr(subprocess,'check_output'):
     
 GuestAgentName = "WALinuxAgent"
 GuestAgentLongName = "Windows Azure Linux Agent"
-GuestAgentVersion = "WALinuxAgent-2.0.12"
+GuestAgentVersion = "WALinuxAgent-2.0.13-pre"
 ProtocolVersion = "2012-11-30" #WARNING this value is used to confirm the correct fabric protocol.
 
 Config = None
@@ -638,7 +638,7 @@ class AbstractDistro(object):
         if ret != 0:
             Error("Failed to config ipv4 for {0}: {1}".format(ifName, output))
             return
-        
+
 ############################################################
 #	GentooDistro
 ############################################################
@@ -2601,7 +2601,7 @@ class Util(object):
     Http communication class.
     Base of GoalState, and Agent classes.
     """
-    __RetryWaitingInterval=10
+    RetryWaitingInterval=10
 
     def __init__(self):
         self.Endpoint = None
@@ -2609,47 +2609,87 @@ class Util(object):
     def _ParseUrl(self, url):
         secure = False
         host = self.Endpoint
-        action = url
-
-        #Strip "http[s]://hostname/" from url
+        path = url
+        port = 80
+        
+        #"http[s]://hostname[:port][/]"
         if url.startswith("http://"):
             url = url[7:]
-            pos = url.index("/")
-            if pos > 0:
-                host = url[0: pos]
-                action = url[pos:]
+            if "/" in url:
+                host = url[0: url.index("/")]
+                path = url[url.index("/"):]
+            else:
+                host = url
+                path = "/"
         elif url.startswith("https://"):
             secure = True
             url = url[8:]
-            pos = url.index("/")
-            if pos > 0:
-                host = url[0:pos]
-                action = url[pos:]
-        return host, action, secure        
+            if "/" in url:
+                host = url[0: url.index("/")]
+                path = url[url.index("/"):]
+            else:
+                host = url
+                path = "/"
 
-    def _HttpRequest(self, method, host, action, data=None, 
-                     secure=False, headers=None):
-        resp = None;
+        if host is None:
+            raise ValueError("Host is invalid:{0}".format(url))
+        
+        if(":" in host):
+            pos = host.rfind(":")
+            port = int(host[pos + 1:])
+            host = host[0:pos]
+        
+        return host, port, secure, path
+
+    def GetHttpProxy(self, secure):
+        """
+        Get http_proxy and https_proxy from environment variables.
+        Username and password is not supported now.
+        """
+        envName = "https_proxy" if secure else "http_proxy"
+        for key in os.environ:
+            if key.lower() == envName:
+                proxyUrl = os.environ[key]
+                try:
+                    host, port, _, _= self._ParseUrl(proxyUrl)
+                    return host, port
+                except ValueError, e:
+                    Error("Failed to parse http proxy url:{0}".format(proxyUrl))
+        return (None, None) 
+
+    def _HttpRequest(self, method, host, path, port=80, data=None, secure=False, 
+                     headers=None, proxyHost=None, proxyPort=None):
+        resp = None
+        conn = None
         try:
-            httpConnection = None
-
-            #If httplib module is not built with ssl support. Failback to http
-            if secure and hasattr(httplib, "HTTPSConnection"):
-                httpConnection = httplib.HTTPSConnection(host)
+            if secure:
+                if proxyHost is not None and proxyPort is not None:
+                    conn = httplib.HTTPSConnection(proxyHost, proxyPort)
+                    conn.set_tunnel(host, 443)
+                    #If proxy is used, full url is needed.
+                    path = "https://{0}:{1}{2}".format(host, port, path)
+                else:
+                    conn = httplib.HTTPSConnection(host, port)
             else:
-                httpConnection = httplib.HTTPConnection(host)
+                if proxyHost is not None and proxyPort is not None:
+                    conn = httplib.HTTPConnection(proxyHost, proxyPort)
+                    #If proxy is used, full url is needed.
+                    path = "http://{0}:{1}{2}".format(host, port, path)
+                else:
+                    conn = httplib.HTTPConnection(host, port)
             if headers == None:
-                httpConnection.request(method, action, data)
+                conn.request(method, path, data)
             else:
-                httpConnection.request(method, action, data, headers)
-            resp = httpConnection.getresponse()
+                conn.request(method, path, data, headers)
+            resp = conn.getresponse()
         except httplib.HTTPException, e:
             Error('HTTPException {0}, args:{1}'.format(e, repr(e.args)))
         except IOError, e:
             Error('Socket IOError {0}, args:{1}'.format(e, repr(e.args)))
         return resp
 
-    def HttpRequest(self, method, url, data, headers=None, maxRetry=3):
+    def HttpRequest(self, method, url, data=None, 
+                    headers=None, maxRetry=3, chkProxy=True):
         """
         Sending http request to server
         On error, sleep 10 and maxRetry times.
@@ -2658,8 +2698,34 @@ class Util(object):
         LogIfVerbose("HTTP Req: {0} {1}".format(method, url))
         LogIfVerbose("HTTP Req: Data={0}".format(data))
         LogIfVerbose("HTTP Req: Header={0}".format(headers))
-        host, action, secure = self._ParseUrl(url)
-        resp = self._HttpRequest(method, host, action, data, secure, headers)
+        try:
+            host, port, secure, path = self._ParseUrl(url)
+        except ValueError, e:
+            Error("Failed to parse url:{0}".format(url))
+            return None
+
+        #Check proxy
+        proxyHost, proxyPort = (None, None)
+        if chkProxy:
+            proxyHost, proxyPort = self.GetHttpProxy(secure)
+
+        #If httplib module is not built with ssl support. Fallback to http
+        if secure and not hasattr(httplib, "HTTPSConnection"):
+            Warn("httplib is not built with ssl support")
+            secure = False
+            proxyHost, proxyPort = self.GetHttpProxy(secure)
+        
+        #If httplib module doesn't support https tunnelling. Fallback to http
+        if secure and \
+                proxyHost is not None and \
+                proxyPort is not None and \
+                not hasattr(httplib.HTTPSConnection, "set_tunnel"):
+            Warn("httplib doesn't support https tunnelling(new in python 2.7)")
+            secure = False
+            proxyHost, proxyPort = self.GetHttpProxy(secure)
+
+        resp = self._HttpRequest(method, host, path, port, data, 
+                                 secure, headers, proxyHost, proxyPort)
         for retry in range(0, maxRetry):
             if resp is not None and \
                    (resp.status == httplib.OK or \
@@ -2678,32 +2744,32 @@ class Util(object):
                 Error("HTTP Err: Reason={0}".format(resp.reason))
                 Error("HTTP Err: Header={0}".format(resp.getheaders()))
                 Error("HTTP Err: Body={0}".format(resp.read()))
-            time.sleep(self.__class__.__RetryWaitingInterval)
-            resp = self._HttpRequest(method, host, action, data, secure, 
-                                     headers)
+            time.sleep(self.__class__.RetryWaitingInterval)
+            resp = self._HttpRequest(method, host, path, data, secure, 
+                                     headers, proxyHost, proxyPort)
 
         return None
 
-    def HttpGet(self, url, headers=None, maxRetry=3):
-        return self.HttpRequest("GET", url, None, headers, maxRetry)
+    def HttpGet(self, url, headers=None, maxRetry=3, chkProxy=True):
+        return self.HttpRequest("GET", url, None, headers, maxRetry, chkProxy)
         
-    def HttpHead(self, url, headers=None, maxRetry=3):
-        return self.HttpRequest("HEAD", url, None, headers, maxRetry)
+    def HttpHead(self, url, headers=None, maxRetry=3, chkProxy=True):
+        return self.HttpRequest("HEAD", url, None, headers, maxRetry, chkProxy)
         
-    def HttpPost(self, url, data, headers=None, maxRetry=3):
-        return self.HttpRequest("POST", url, data, headers, maxRetry)
+    def HttpPost(self, url, data, headers=None, maxRetry=3, chkProxy=True):
+        return self.HttpRequest("POST", url, data, headers, maxRetry, chkProxy)
 
-    def HttpPut(self, url, data, headers=None, maxRetry=3):
-        return self.HttpRequest("PUT", url, data, headers, maxRetry)
+    def HttpPut(self, url, data, headers=None, maxRetry=3, chkProxy=True):
+        return self.HttpRequest("PUT", url, data, headers, maxRetry, chkProxy)
 
-    def HttpDelete(self, url, headers=None, maxRetry=3):
-        return self.HttpRequest("DELETE", url, None, headers, maxRetry)
+    def HttpDelete(self, url, headers=None, maxRetry=3, chkProxy=True):
+        return self.HttpRequest("DELETE", url, None, headers, maxRetry, chkProxy)
     
-    def HttpGetWithoutHeaders(self, url, maxRetry=3):
+    def HttpGetWithoutHeaders(self, url, maxRetry=3, chkProxy=True):
         """
         Return data from an HTTP get on 'url'.
         """
-        resp = self.HttpGet(url, None, maxRetry)
+        resp = self.HttpGet(url, None, maxRetry, chkProxy)
         return resp.read() if resp is not None else None
 
     def HttpGetWithHeaders(self, url, maxRetry=3):
@@ -2715,7 +2781,7 @@ class Util(object):
         resp = self.HttpGet(url, {
             "x-ms-agent-name": GuestAgentName, 
             "x-ms-version": ProtocolVersion
-        }, maxRetry)
+        }, maxRetry, chkProxy=False)
         return resp.read() if resp is not None else None
 
     def HttpSecureGetWithHeaders(self, url, transportCert, maxRetry=3):
@@ -2727,7 +2793,7 @@ class Util(object):
             "x-ms-version": ProtocolVersion,
             "x-ms-cipher-name": "DES_EDE3_CBC",
             "x-ms-guest-agent-public-x509-cert": transportCert
-        }, maxRetry)
+        }, maxRetry, chkProxy=False)
         return resp.read() if resp is not None else None
 
     def HttpPostWithHeaders(self, url, data, maxRetry=3):
@@ -2736,7 +2802,7 @@ class Util(object):
             "Content-Type": "text/xml; charset=utf-8",
             "x-ms-version": ProtocolVersion
         }
-        return self.HttpPost(url, data, header, maxRetry)
+        return self.HttpPost(url, data, header, maxRetry, chkProxy=False)
 
 __StorageVersion="2014-02-14"
 
