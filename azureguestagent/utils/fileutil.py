@@ -24,8 +24,8 @@ import shutil
 import pwd
 import tempfile
 import subprocess
-import azurelinuxagent.logger as logger
-import azurelinuxagent.utils.textutil as textutil
+import azureguestagent.logger as logger
+import azureguestagent.utils.textutil as textutil
 
 """
 File operation util functions

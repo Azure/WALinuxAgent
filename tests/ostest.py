@@ -25,11 +25,11 @@ import uuid
 import shutil
 import unittest
 import os
-import azurelinuxagent.logger as logger
-import azurelinuxagent.utils.shellutil as shellutil
-import azurelinuxagent.utils.fileutil as fileutil
-import azurelinuxagent.utils.textutil as textutil
-from azurelinuxagent.utils.osutil import CurrOSInfo, CurrOS
+import azureguestagent.logger as logger
+import azureguestagent.utils.shellutil as shellutil
+import azureguestagent.utils.fileutil as fileutil
+import azureguestagent.utils.textutil as textutil
+from azureguestagent.utils.osutil import CurrOSInfo, CurrOS
 import test
 
 """

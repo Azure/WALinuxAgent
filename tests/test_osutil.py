@@ -25,11 +25,11 @@ import unittest
 import os
 import shutil
 import time
-import azurelinuxagent.utils.fileutil as fileutil
-import azurelinuxagent.utils.shellutil as shellutil
-import azurelinuxagent.utils.osutil as osutil
-from azurelinuxagent.utils.osutil import CurrOS, CurrOSInfo
-import azurelinuxagent.conf as conf
+import azureguestagent.utils.fileutil as fileutil
+import azureguestagent.utils.shellutil as shellutil
+import azureguestagent.utils.osutil as osutil
+from azureguestagent.utils.osutil import CurrOS, CurrOSInfo
+import azureguestagent.conf as conf
 import test
 
 class TestGetDistro(unittest.TestCase):

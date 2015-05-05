@@ -19,10 +19,10 @@
 
 import os
 import traceback
-import azurelinuxagent.logger as logger
-from azurelinuxagent.utils.osutil import CurrOS, CurrOSInfo
-import azurelinuxagent.utils.shellutil as shellutil
-import azurelinuxagent.utils.fileutil as fileutil
+import azureguestagent.logger as logger
+from azureguestagent.utils.osutil import CurrOS, CurrOSInfo
+import azureguestagent.utils.shellutil as shellutil
+import azureguestagent.utils.fileutil as fileutil
 
 CustomDataFile="CustomData"
 

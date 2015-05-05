@@ -24,10 +24,10 @@ import uuid
 import unittest
 import os
 import json
-import azurelinuxagent.utils.fileutil as fileutil
-import azurelinuxagent.protocol.v2 as proto
-import azurelinuxagent.extension as ext
-from azurelinuxagent.utils.osutil import CurrOS, CurrOSInfo
+import azureguestagent.utils.fileutil as fileutil
+import azureguestagent.protocol.v2 as proto
+import azureguestagent.extension as ext
+from azureguestagent.utils.osutil import CurrOS, CurrOSInfo
 
 setting = proto.ExtensionInfoV2({
     "name":"TestExt",

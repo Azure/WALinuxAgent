@@ -23,7 +23,7 @@ import tests.tools as tools
 import uuid
 import unittest
 import os
-import azurelinuxagent.protocol as protocol
+import azureguestagent.protocol as protocol
 
 class TestProtocolDetection(unittest.TestCase):
 

@@ -26,9 +26,9 @@ import unittest
 import os
 import time
 import httplib
-import azurelinuxagent.logger as logger
-import azurelinuxagent.protocol.v1 as v1
-from  azurelinuxagent.utils.osutil import CurrOSInfo, CurrOS
+import azureguestagent.logger as logger
+import azureguestagent.protocol.v1 as v1
+from  azureguestagent.utils.osutil import CurrOSInfo, CurrOS
 from test_version import VersionInfoSample
 from test_goalstate import GoalStateSample
 from test_hostingenv import HostingEnvSample

@@ -20,8 +20,8 @@ import os
 import socket
 import threading
 import time
-import azurelinuxagent.logger as logger
-from azurelinuxagent.utils.osutil import CurrOS, CurrOSInfo
+import azureguestagent.logger as logger
+from azureguestagent.utils.osutil import CurrOS, CurrOSInfo
 
 class EnvMonitor(object):
     """

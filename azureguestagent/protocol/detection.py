@@ -18,13 +18,13 @@
 #
 import os
 import traceback
-import azurelinuxagent.logger as logger
-from azurelinuxagent.utils.osutil import CurrOS, CurrOSInfo
-import azurelinuxagent.utils.fileutil as fileutil
-import azurelinuxagent.dhcphandler as dhcphandler
-from azurelinuxagent.protocol.common import *
-from azurelinuxagent.protocol.v1 import ProtocolV1
-from azurelinuxagent.protocol.v2 import ProtocolV2
+import azureguestagent.logger as logger
+from azureguestagent.utils.osutil import CurrOS, CurrOSInfo
+import azureguestagent.utils.fileutil as fileutil
+import azureguestagent.dhcphandler as dhcphandler
+from azureguestagent.protocol.common import *
+from azureguestagent.protocol.v1 import ProtocolV1
+from azureguestagent.protocol.v2 import ProtocolV2
 
 """
 This routine tries to detect protocol endpoint to deteminate which version of

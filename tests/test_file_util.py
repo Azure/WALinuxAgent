@@ -23,7 +23,7 @@ import tests.tools as tools
 import uuid
 import unittest
 import os
-import azurelinuxagent.utils.fileutil as fileutil
+import azureguestagent.utils.fileutil as fileutil
 import test
 
 class TestFileOperations(unittest.TestCase):

@@ -29,10 +29,10 @@ import struct
 import fcntl
 import time
 import base64
-import azurelinuxagent.logger as logger
-import azurelinuxagent.utils.fileutil as fileutil
-import azurelinuxagent.utils.shellutil as shellutil
-import azurelinuxagent.utils.textutil as textutil
+import azureguestagent.logger as logger
+import azureguestagent.utils.fileutil as fileutil
+import azureguestagent.utils.shellutil as shellutil
+import azureguestagent.utils.textutil as textutil
 
 RulesFiles = [ "/lib/udev/rules.d/75-persistent-net-generator.rules",
                "/etc/udev/rules.d/70-persistent-net.rules" ]
@@ -711,10 +711,10 @@ class DebianDistro(DefaultDistro):
         return shellutil.Run("service sshd restart", chk_err=False)
 
     def StopAgentService(self):
-        return shellutil.Run("service azurelinuxagent stop", chk_err=False)
+        return shellutil.Run("service azureguestagent stop", chk_err=False)
 
     def StartAgentService(self):
-        return shellutil.Run("service azurelinuxagent start", chk_err=False)
+        return shellutil.Run("service azureguestagent start", chk_err=False)
 
 class UbuntuDistro(DebianDistro):
     def __init__(self):

@@ -24,16 +24,16 @@ import shutil
 import time
 import traceback
 import threading
-import azurelinuxagent.logger as logger
-import azurelinuxagent.conf as conf
-from azurelinuxagent.utils.osutil import CurrOS, CurrOSInfo
-import azurelinuxagent.utils.shellutil as shellutil
-import azurelinuxagent.utils.fileutil as fileutil
-import azurelinuxagent.protocol.detection as proto
-import azurelinuxagent.dhcphandler as dhcp
-import azurelinuxagent.envmonitor as envmon
-import azurelinuxagent.extension as ext
-import azurelinuxagent.provision as provision
+import azureguestagent.logger as logger
+import azureguestagent.conf as conf
+from azureguestagent.utils.osutil import CurrOS, CurrOSInfo
+import azureguestagent.utils.shellutil as shellutil
+import azureguestagent.utils.fileutil as fileutil
+import azureguestagent.protocol.detection as proto
+import azureguestagent.dhcphandler as dhcp
+import azureguestagent.envmonitor as envmon
+import azureguestagent.extension as ext
+import azureguestagent.provision as provision
 
 GuestAgentName = "WALinuxAgent"
 GuestAgentLongName = "Microsoft Azure Linux Agent"

@@ -20,7 +20,7 @@
 import platform
 import os
 import subprocess
-import azurelinuxagent.logger as logger
+import azureguestagent.logger as logger
 
 """
 Shell command util functions

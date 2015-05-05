@@ -18,7 +18,7 @@
 #
 
 import os
-import azurelinuxagent.utils.fileutil as fileutil
+import azureguestagent.utils.fileutil as fileutil
 
 def LoadConfiguration(confFilePath):
     if os.path.isfile(confFilePath) == False:

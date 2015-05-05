@@ -20,10 +20,10 @@ import os
 import copy
 import re
 import xml.dom.minidom
-import azurelinuxagent.logger as logger
-from azurelinuxagent.utils.osutil import CurrOS
-from azurelinuxagent.utils.textutil import GetNodeTextData
-import azurelinuxagent.utils.fileutil as fileutil
+import azureguestagent.logger as logger
+from azureguestagent.utils.osutil import CurrOS
+from azureguestagent.utils.textutil import GetNodeTextData
+import azureguestagent.utils.fileutil as fileutil
 
 class VmInfo():
     def getSubscriptionId(self):

@@ -23,8 +23,8 @@ import tests.tools as tools
 import uuid
 import unittest
 import os
-import azurelinuxagent.utils.fileutil as fileutil
-import azurelinuxagent.conf as conf
+import azureguestagent.utils.fileutil as fileutil
+import azureguestagent.conf as conf
 import test
 
 TestConf="""\

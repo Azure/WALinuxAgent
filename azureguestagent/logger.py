@@ -19,7 +19,7 @@
 # http://msdn.microsoft.com/en-us/library/cc227259%28PROT.13%29.aspx
 
 import traceback
-import azurelinuxagent.utils.textutil as textutil
+import azureguestagent.utils.textutil as textutil
 from datetime import datetime
 
 LogFilePath = '/var/log/waagent.log'

@@ -21,10 +21,10 @@ import traceback
 import zipfile
 import json
 import subprocess
-import azurelinuxagent.logger as logger
-import azurelinuxagent.utils.fileutil as fileutil
-import azurelinuxagent.utils.restutil as restutil
-from azurelinuxagent.utils.osutil import CurrOSInfo, CurrOS
+import azureguestagent.logger as logger
+import azureguestagent.utils.fileutil as fileutil
+import azureguestagent.utils.restutil as restutil
+from azureguestagent.utils.osutil import CurrOSInfo, CurrOS
 
 class ExtensionHandler(object):
     def __init__(self, config, protocol):

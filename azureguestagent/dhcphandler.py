@@ -21,12 +21,12 @@ import re
 import socket
 import array
 import time
-import azurelinuxagent.logger as logger
-import azurelinuxagent.utils.restutil as restutil
-from azurelinuxagent.utils.osutil import CurrOS, CurrOSInfo
-import azurelinuxagent.utils.fileutil as fileutil
-import azurelinuxagent.utils.shellutil as shellutil
-from azurelinuxagent.utils.textutil import *
+import azureguestagent.logger as logger
+import azureguestagent.utils.restutil as restutil
+from azureguestagent.utils.osutil import CurrOS, CurrOSInfo
+import azureguestagent.utils.fileutil as fileutil
+import azureguestagent.utils.shellutil as shellutil
+from azureguestagent.utils.textutil import *
 
 
 class DhcpHandler():

@@ -16,8 +16,8 @@
 #
 # Requires Python 2.4+ and Openssl 1.0+
 
-import azurelinuxagent.utils.restutil as restutil
-from azurelinuxagent.protocol.common import *
+import azureguestagent.utils.restutil as restutil
+from azureguestagent.protocol.common import *
 
 class VmInfoV2():
     def __init__(self, data):

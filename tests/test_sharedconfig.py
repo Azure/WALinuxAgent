@@ -23,7 +23,7 @@ import tests.tools as tools
 import uuid
 import unittest
 import os
-import azurelinuxagent.protocol.v1 as v1
+import azureguestagent.protocol.v1 as v1
 
 SharedConfigSample="""
 

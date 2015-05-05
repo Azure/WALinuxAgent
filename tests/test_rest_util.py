@@ -23,10 +23,10 @@ import tests.tools as tools
 import uuid
 import unittest
 import os
-import azurelinuxagent.utils.restutil as restutil
+import azureguestagent.utils.restutil as restutil
 import test
 import socket
-import azurelinuxagent.logger as logger
+import azureguestagent.logger as logger
 
 class TestHttpOperations(unittest.TestCase):
 

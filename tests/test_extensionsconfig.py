@@ -24,7 +24,7 @@ import uuid
 import unittest
 import os
 import json
-import azurelinuxagent.protocol.v1 as v1
+import azureguestagent.protocol.v1 as v1
 
 ExtensionsConfigSample="""\
 <Extensions version="1.0.0.0" goalStateIncarnation="9"><GuestAgentExtension xmlns:i="http://www.w3.org/2001/XMLSchema-instance">

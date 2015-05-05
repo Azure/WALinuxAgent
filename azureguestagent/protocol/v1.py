@@ -23,13 +23,13 @@ import time
 import traceback
 import httplib
 import xml.etree.ElementTree as ET
-import azurelinuxagent.logger as logger
-import azurelinuxagent.utils.restutil as restutil
-from azurelinuxagent.utils.osutil import CurrOS, CurrOSInfo
-import azurelinuxagent.utils.fileutil as fileutil
-import azurelinuxagent.utils.shellutil as shellutil
-from azurelinuxagent.utils.textutil import *
-from azurelinuxagent.protocol.common import *
+import azureguestagent.logger as logger
+import azureguestagent.utils.restutil as restutil
+from azureguestagent.utils.osutil import CurrOS, CurrOSInfo
+import azureguestagent.utils.fileutil as fileutil
+import azureguestagent.utils.shellutil as shellutil
+from azureguestagent.utils.textutil import *
+from azureguestagent.protocol.common import *
 
 VersionInfoUri = "http://{0}/?comp=versions"
 GoalStateUri = "http://{0}/machine/?comp=goalstate"

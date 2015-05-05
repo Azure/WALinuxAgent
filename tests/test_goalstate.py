@@ -24,7 +24,7 @@ import uuid
 import unittest
 import os
 import test
-import azurelinuxagent.protocol.v1 as v1
+import azureguestagent.protocol.v1 as v1
 
 GoalStateSample="""
 <?xml version="1.0" encoding="utf-8"?>

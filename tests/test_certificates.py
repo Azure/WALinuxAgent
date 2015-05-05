@@ -24,8 +24,8 @@ import uuid
 import unittest
 import os
 import json
-import azurelinuxagent.utils.fileutil as fileutil
-import azurelinuxagent.protocol.v1 as v1
+import azureguestagent.utils.fileutil as fileutil
+import azureguestagent.protocol.v1 as v1
 
 CertificatesSample="""\
 <?xml version="1.0" encoding="utf-8"?>

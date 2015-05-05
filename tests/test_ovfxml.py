@@ -24,7 +24,7 @@ import uuid
 import unittest
 import os
 import json
-import azurelinuxagent.protocol.v1 as v1
+import azureguestagent.protocol.v1 as v1
 
 ExtensionsConfigSample="""
  <Environment xmlns="http://schemas.dmtf.org/ovf/environment/1" xmlns:oe="http://schemas.dmtf.org/ovf/environment/1" xmlns:wa="http://schemas.microsoft.com/windowsazure" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">

@@ -17,7 +17,7 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
-from azurelinuxagent.utils.osutil import CurrOS, CurrOSInfo
+from azureguestagent.utils.osutil import CurrOS, CurrOSInfo
 
 def Install():
     CurrOS.CheckDependencies()
