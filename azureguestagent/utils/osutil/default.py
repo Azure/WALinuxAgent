@@ -38,13 +38,13 @@ RulesFiles = [ "/lib/udev/rules.d/75-persistent-net-generator.rules",
                "/etc/udev/rules.d/70-persistent-net.rules" ]
 
 """
-Define distro specific behavior. DefaultDistro class defines default behavior 
+Define distro specific behavior. DefaultOSUtil class defines default behavior 
 for all distros. Each concrete distro classes could overwrite default behavior
 if needed.
 """
 
 
-class DefaultDistro(object):
+class DefaultOSUtil(object):
 
     __WireServer=None
 
@@ -83,10 +83,10 @@ class DefaultDistro(object):
         return self.opensslCmd
 
     def GetWireServerEndpoint(self):
-        return DefaultDistro.__WireServer
+        return DefaultOSUtil.__WireServer
 
     def SetWireServerEndpoint(self, endpoint):
-        DefaultDistro.__WireServer = endpoint
+        DefaultOSUtil.__WireServer = endpoint
      
     def UpdateUserAccount(self, userName, password, expiration=None):
         """
@@ -696,16 +696,16 @@ class DefaultDistro(object):
 
     def OnDeprovision(self):
         """
-        Distro specific clean up work during deprovision
+        OSUtil specific clean up work during deprovision
         """
         fileutil.RemoveFiles('/etc/resolv.conf')
 
     def TranslateCustomData(self, data):
         return data
 
-class DebianDistro(DefaultDistro):
+class DebianOSUtil(DefaultOSUtil):
     def __init__(self):
-        super(DebianDistro, self).__init__()
+        super(DebianOSUtil, self).__init__()
 
     def RestartSshService(self):
         return shellutil.Run("service sshd restart", chk_err=False)
@@ -716,9 +716,9 @@ class DebianDistro(DefaultDistro):
     def StartAgentService(self):
         return shellutil.Run("service azureguestagent start", chk_err=False)
 
-class UbuntuDistro(DebianDistro):
+class UbuntuOSUtil(DebianOSUtil):
     def __init__(self):
-        super(UbuntuDistro, self).__init__()
+        super(UbuntuOSUtil, self).__init__()
 
     def StartNetwork(self):
         return shellutil.Run("service networking start", chk_err=False)
@@ -736,18 +736,18 @@ class UbuntuDistro(DebianDistro):
             fileutil.RemoveFiles('/etc/resolvconf/resolv.conf.d/tail',
                                  '/etc/resolvconf/resolv.conf.d/originial')
 
-class Ubuntu1204Distro(UbuntuDistro):
+class Ubuntu1204OSUtil(UbuntuOSUtil):
     def __init__(self):
-        super(Ubuntu1204Distro, self).__init__()
+        super(Ubuntu1204OSUtil, self).__init__()
 
     #Override
     def GetDhcpProcessId(self):
         ret= shellutil.RunGetOutput("pidof dhclient3")
         return ret[1] if ret[0] == 0 else None
 
-class RedhatDistro(DefaultDistro):
+class RedhatOSUtil(DefaultOSUtil):
     def __init__(self):
-        super(RedhatDistro, self).__init__()
+        super(RedhatOSUtil, self).__init__()
         self.sshdConfigPath = '/etc/ssh/sshd_config'
         self.opensslCmd = '/usr/bin/openssl'
         self.configPath = '/etc/waagent.conf'
@@ -770,12 +770,12 @@ class RedhatDistro(DefaultDistro):
         ret= shellutil.RunGetOutput("pidof dhclient")
         return ret[1] if ret[0] == 0 else None
 
-class Redhat7Distro(RedhatDistro):
+class Redhat7OSUtil(RedhatOSUtil):
     def __init__(self):
-        super(Redhat7Distro, self).__init__()
+        super(Redhat7OSUtil, self).__init__()
 
     def SetHostname(self, hostname):
-        super(Redhat7Distro, self).SetHostname(hostname)
+        super(Redhat7OSUtil, self).SetHostname(hostname)
         fileutil.UpdateConfigFile('/etc/sysconfig/network', 
                                   'HOSTNAME',
                                   'HOSTNAME={0}'.format(hostname))
@@ -787,19 +787,19 @@ class Redhat7Distro(RedhatDistro):
                                   'DHCP_HOSTNAME',
                                   'DHCP_HOSTNAME={0}'.format(hostname))
 
-class FedoraDistro(DefaultDistro):
+class FedoraOSUtil(DefaultOSUtil):
     pass
 
-class CoreOSDistro(DefaultDistro):
+class CoreOSOSUtil(DefaultOSUtil):
     def __init(self):
-        super(CoreOSDistro, self).__init__()
+        super(CoreOSOSUtil, self).__init__()
         self.configPath = '/usr/share/oem/waagent.conf'
 
     def _IsSysUser(self, userName):
        #User 'core' is not a sysuser
        if userName == 'core':
            return False
-       return super(CoreOSDistro, self).isSysUser(userName)
+       return super(CoreOSOSUtil, self).isSysUser(userName)
 
     def IsDhcpEnabled(self):
         return True
@@ -832,12 +832,12 @@ class CoreOSDistro(DefaultDistro):
     def TranslateCustomData(self, data):
         return base64.b64decode(data)
 
-class GentooDistro(DefaultDistro):
+class GentooOSUtil(DefaultOSUtil):
     pass
 
-class SUSEDistro(DefaultDistro):
+class SUSEOSUtil(DefaultOSUtil):
     def __init__(self):
-        super(SUSEDistro, self).__init__()
+        super(SUSEOSUtil, self).__init__()
         self.dhcpClientName='dhcpcd'
 
     def SetHostname(self, hostname):
@@ -875,21 +875,21 @@ class SUSEDistro(DefaultDistro):
         ret = shellutil.Run("insserv waagent", chk_err=False)
         if ret != 0:
             return ret
-        ret = super(SUSEDistro, self).RegisterAgentService()
+        ret = super(SUSEOSUtil, self).RegisterAgentService()
         return ret
     
     def UnregisterAgentService(self):
-        ret = super(SUSEDistro, self).UnregisterAgentService()
+        ret = super(SUSEOSUtil, self).UnregisterAgentService()
         if ret != 0:
             return ret
         return shellutil.Run("insserv -r waagent", chk_err=False)
 
-class SUSE12Distro(SUSEDistro):
+class SUSE12OSUtil(SUSEOSUtil):
     def __init__(self):
-        super(SUSE12Distro, self).__init__()
+        super(SUSE12OSUtil, self).__init__()
         self.dhcpClientName = 'wickedd-dhcp4'
 
-class FreeBSDDistro(DefaultDistro):
+class FreeBSDOSUtil(DefaultOSUtil):
     def __init__(self):
         self.scsiConfigured = False
 
@@ -898,55 +898,3 @@ class FreeBSDDistro(DefaultDistro):
             return
         shellutil.Run("sysctl kern.cam.da.default_timeout=" + timeout)
         self.scsiConfigured = True
-
-def GetDistroInfo():
-    if 'FreeBSD' in platform.system():
-        release = re.sub('\-.*\Z', '', str(platform.release()))
-        distroInfo = ['freebsd', release, '', 'freebsd']
-    if 'linux_distribution' in dir(platform):
-        distroInfo = list(platform.linux_distribution(full_distribution_name = 0))
-        fullName = platform.linux_distribution()[0].strip()
-        distroInfo.append(fullName)
-    else:
-        distroInfo = platform.dist()
-
-    #Remove trailing whitespace and quote in distro name
-    distroInfo[0] = distroInfo[0].strip('"').strip(' ').lower() 
-    return distroInfo
-
-def GetDistro(distroInfo):
-    name = distroInfo[0]
-    version = distroInfo[1]
-    codeName = distroInfo[2]
-    fullName = distroInfo[3]
-
-    if name == 'ubuntu':
-        if version == '12.04':
-            return Ubuntu1204Distro()
-        else:
-            return UbuntuDistro()
-    elif name == 'centos' or name == 'redhat':
-        if version < '7.0':
-            return RedhatDistro()
-        else:
-            return Redhat7Distro()
-    elif name == 'fedora':
-        return FedoraDistro()
-    elif name == 'debian':
-        return DebianDistro()
-    elif name == 'coreos':
-        return CoreOSDistro()
-    elif name == 'gentoo':
-        return CoreOSDistro()
-    elif name == 'suse':
-        if fullName == 'SUSE Linux Enterprise Server' and version < '12' \
-                or fullName == 'openSUSE' and version < '13.2':
-            return SUSEDistro()
-        else:
-            return SUSE12Distro()
-    elif name == 'freebsd':
-        return FreeBSDDistro()
-    return DefaultDistro()
-
-CurrOSInfo = GetDistroInfo()
-CurrOS = GetDistro(CurrOSInfo)

@@ -26,14 +26,9 @@ import traceback
 import threading
 import azureguestagent.logger as logger
 import azureguestagent.conf as conf
-from azureguestagent.utils.osutil import CurrOS, CurrOSInfo
+from azureguestagent.os import CurrOS, CurrOSInfo
 import azureguestagent.utils.shellutil as shellutil
 import azureguestagent.utils.fileutil as fileutil
-import azureguestagent.protocol.detection as proto
-import azureguestagent.dhcphandler as dhcp
-import azureguestagent.envmonitor as envmon
-import azureguestagent.extension as ext
-import azureguestagent.provision as provision
 
 GuestAgentName = "WALinuxAgent"
 GuestAgentLongName = "Microsoft Azure Linux Agent"
@@ -64,15 +59,13 @@ class Agent():
         os.chdir(CurrOS.GetLibDir())
         self.savePid()
 
-        if self.detectScvmmEnv():
-            self.startScvmmAgent()
+        if CurrOS.scvmmHandler.detectScvmmEnv():
+            CurrOS.scvmmHandler.startScvmmAgent()
             return
-       
-        #Intialize
-        self.waitForNetwork()
+        
+        CurrOS.dhcpHandler.waitForNetwork()
+        CurrOS.dhcpHandler.probe()
 
-        self.dhcpHandler = dhcp.DhcpHandler()
-        self.dhcpHandler.probe()
         CurrOS.SetWireServerEndpoint(self.dhcpHandler.getEndpoint())
         self.protocol = proto.DetectDefaultProtocol()
 
@@ -137,15 +130,7 @@ class Agent():
         mountPoint = CurrOS.GetDvdMountPoint()
         startupScript = os.path.join(mountPoint, VmmStartupScriptName)
         subprocess.Popen(["/bin/bash", startupScript, "-p " + mountPoint])
-
-    def waitForNetwork(self):
-        ipv4 = CurrOS.GetIpv4Address()
-        while ipv4 == '' or ipv4 == '0.0.0.0':
-            logger.Info("Waiting for network.")
-            time.sleep(10)
-            CurrOS.StartNetwork()
-            ipv4 = CurrOS.GetIpv4Address()
-
+    
     def savePid(self):
         fileutil.SetFileContents(CurrOS.GetAgentPidPath(), str(os.getpid()))
 

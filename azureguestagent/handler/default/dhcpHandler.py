@@ -23,20 +23,28 @@ import array
 import time
 import azureguestagent.logger as logger
 import azureguestagent.utils.restutil as restutil
-from azureguestagent.utils.osutil import CurrOS, CurrOSInfo
 import azureguestagent.utils.fileutil as fileutil
 import azureguestagent.utils.shellutil as shellutil
 from azureguestagent.utils.textutil import *
 
 
-class DhcpHandler():
-    def __init__(self):
+class DhcpHandler(object):
+    def __init__(self, osutil):
         self.endpoint = None
         self.gateway = None
         self.routes = None
+        self.osutil = osutil
+
+    def waitForNetwork(self):
+        ipv4 = self.osutil.GetIpv4Address()
+        while ipv4 == '' or ipv4 == '0.0.0.0':
+            logger.Info("Waiting for network.")
+            time.sleep(10)
+            self.osutil.StartNetwork()
+            ipv4 = self.osutil.GetIpv4Address()
 
     def probe(self):
-        macAddress = CurrOS.GetMacAddress()
+        macAddress = self.osutil.GetMacAddress()
         req = BuildDhcpRequest(macAddress)
         resp = SendDhcpRequest(req)
         endpoint, gateway, routes = ParseDhcpResponse(resp)
@@ -51,10 +59,10 @@ class DhcpHandler():
     def configRoutes(self):
         #Add default gateway
         if self.gateway is not None:
-            CurrOS.RouteAdd(0 , 0, self.gateway)
+            self.osutil.RouteAdd(0 , 0, self.gateway)
         if self.routes is not None:
             for route in self.routes:
-                CurrOS.RouteAdd(route[0], route[1], route[2])
+                self.osutil.RouteAdd(route[0], route[1], route[2])
 
 def ValidateDhcpResponse(request, response):
     bytesReceived = len(response)
