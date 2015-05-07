@@ -21,7 +21,7 @@
 
 import os
 import sys
-from azureguestagent.utils.osutil import CurrOS, CurrOSInfo
+from azureguestagent.utils.osutil import CurrOSUtil
 
 parent = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(parent)
@@ -61,5 +61,5 @@ def Dummy():
     pass
 
 #Mock CurrOS so that the test of other part will be os unrelated
-CurrOS.GetLibDir = MockFunc(retval='/tmp')
-CurrOS.GetExtLogDir = MockFunc(retval='/tmp/log')
+CurrOSUtil.GetLibDir = MockFunc(retval='/tmp')
+CurrOSUtil.GetExtLogDir = MockFunc(retval='/tmp/log')

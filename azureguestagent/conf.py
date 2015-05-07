@@ -19,14 +19,37 @@
 
 import os
 import azureguestagent.utils.fileutil as fileutil
+from azureguestagent.exception import *
+from azureguestagent.utils.osutil import CurrOSUtil
 
 def LoadConfiguration(confFilePath):
     if os.path.isfile(confFilePath) == False:
-        raise Exception("Missing configuration in {0}", confFilePath)
+        raise AgentConfigError("Missing configuration in {0}", confFilePath)
     try:
-        return ConfigurationProvider(fileutil.GetFileContents(confFilePath)) 
+        content = fileutil.GetFileContents(confFilePath)
+        __Config__ = ConfigurationProvider(content)
+        return __Config__
     except IOError, e:
-        raise Exception("Failed to load conf file:{0}", confFilePath)
+        raise AgentConfigError("Failed to load conf file:{0}", confFilePath)
+
+__Config__ = None
+def Get(key, defaultValue=None):
+    if __Config__ is not None:
+        return __Config__.get(key, defaultValue)
+    else:
+        return defaultValue
+ 
+def GetSwitch(key, defaultValue=None):
+     if __Config__ is not None:
+         return __Config__.getSwitch(key, defaultValue)
+     else:
+         return defaultValue
+
+def GetInt(key, defaultValue=None):
+    if __Config__ is not None:
+        return __Config__.getInt(key, defaultValue)
+    else:
+        return defaultValue
 
 class ConfigurationProvider(object):
     """
@@ -35,7 +58,7 @@ class ConfigurationProvider(object):
     def __init__(self, content):
         self.values = dict()
         if not content:
-            raise Exception("Can't not parse empty configuration")
+            raise AgentConfigError("Can't not parse empty configuration")
         for line in content.split('\n'):
             if not line.startswith("#") and "=" in line:
                 parts = line.split()[0].split('=')
@@ -59,4 +82,4 @@ class ConfigurationProvider(object):
         except:
             return defaultValue
 
-        
+

@@ -18,7 +18,6 @@
 #
 
 import platform
-import azureguestagent.os.baseos.DefaultDistro
 
 def GetDistroInfo():
     if 'FreeBSD' in platform.system():

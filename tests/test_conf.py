@@ -18,14 +18,14 @@
 # http://msdn.microsoft.com/en-us/library/cc227282%28PROT.10%29.aspx
 # http://msdn.microsoft.com/en-us/library/cc227259%28PROT.13%29.aspx
 
+import os
 import env
-import tests.tools as tools
 import uuid
 import unittest
-import os
+import tests.tools as tools
 import azureguestagent.utils.fileutil as fileutil
 import azureguestagent.conf as conf
-import test
+from azureguestagent.exception import *
 
 TestConf="""\
 #
@@ -52,7 +52,7 @@ class TestConfiguration(unittest.TestCase):
         self.assertEquals(-1, config.getInt("foo.bar.str"))
 
     def test_parse_malformed_conf(self):
-        with self.assertRaises(Exception) as cm:
+        with self.assertRaises(AgentConfigError) as cm:
             conf.ConfigurationProvider(None)
 
     def test_load_conf_file(self):

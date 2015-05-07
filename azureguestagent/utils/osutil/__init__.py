@@ -18,5 +18,3 @@
 #
 
 from azureguestagent.utils.osutil.factory import CurrOSUtil
-
-__all__ = ['CurrOSUtil']

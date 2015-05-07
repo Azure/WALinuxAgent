@@ -22,6 +22,7 @@ import socket
 import array
 import time
 import azureguestagent.logger as logger
+from azureguestagent.utils.osutil import CurrOSUtil
 import azureguestagent.utils.restutil as restutil
 import azureguestagent.utils.fileutil as fileutil
 import azureguestagent.utils.shellutil as shellutil
@@ -29,22 +30,21 @@ from azureguestagent.utils.textutil import *
 
 
 class DhcpHandler(object):
-    def __init__(self, osutil):
+    def __init__(self):
         self.endpoint = None
         self.gateway = None
         self.routes = None
-        self.osutil = osutil
 
     def waitForNetwork(self):
-        ipv4 = self.osutil.GetIpv4Address()
+        ipv4 = CurrOSUtil.GetIpv4Address()
         while ipv4 == '' or ipv4 == '0.0.0.0':
             logger.Info("Waiting for network.")
             time.sleep(10)
-            self.osutil.StartNetwork()
-            ipv4 = self.osutil.GetIpv4Address()
+            CurrOSUtil.StartNetwork()
+            ipv4 = CurrOSUtil.GetIpv4Address()
 
     def probe(self):
-        macAddress = self.osutil.GetMacAddress()
+        macAddress = CurrOSUtil.GetMacAddress()
         req = BuildDhcpRequest(macAddress)
         resp = SendDhcpRequest(req)
         endpoint, gateway, routes = ParseDhcpResponse(resp)
@@ -59,10 +59,10 @@ class DhcpHandler(object):
     def configRoutes(self):
         #Add default gateway
         if self.gateway is not None:
-            self.osutil.RouteAdd(0 , 0, self.gateway)
+            CurrOSUtil.RouteAdd(0 , 0, self.gateway)
         if self.routes is not None:
             for route in self.routes:
-                self.osutil.RouteAdd(route[0], route[1], route[2])
+                CurrOSUtil.RouteAdd(route[0], route[1], route[2])
 
 def ValidateDhcpResponse(request, response):
     bytesReceived = len(response)

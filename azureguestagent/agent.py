@@ -26,7 +26,9 @@ import traceback
 import threading
 import azureguestagent.logger as logger
 import azureguestagent.conf as conf
-from azureguestagent.os import CurrOS, CurrOSInfo
+from azureguestagent.osinfo import CurrOSInfo
+from azureguestagent.handle import CurrOSHandlerFactory
+from azureguestagent.utils.osutil import CurrOSUtil
 import azureguestagent.utils.shellutil as shellutil
 import azureguestagent.utils.fileutil as fileutil
 
@@ -37,39 +39,28 @@ GuestAgentLongVersion = "{0}-{1}".format(GuestAgentName, GuestAgentVersion)
 GuestAgentAuthor='MS OSTC'
 GuestAgentUri='https://github.com/Azure/WALinuxAgent'
 
-VmmConfigFileName = "linuxosconfiguration.xml"
-VmmStartupScriptName= "install"
-DataLossWarningFile="DATALOSS_WARNING_README.txt"
-DataLossWarning="""\
-WARNING: THIS IS A TEMPORARY DISK. 
-
-Any data stored on this drive is SUBJECT TO LOSS and THERE IS NO WAY TO RECOVER IT.
-
-Please do not use this disk for storing any personal or application data.
-
-For additional details to please refer to the MSDN documentation at : http://msdn.microsoft.com/en-us/library/windowsazure/jj672979.aspx
-"""
-
-class Agent():
+class Agent(object):
 
     def __init__(self, config):
         self.config = config
 
     def run(self):
-        os.chdir(CurrOS.GetLibDir())
+        os.chdir(CurrOSUtil.GetLibDir())
         self.savePid()
 
-        if CurrOS.scvmmHandler.detectScvmmEnv():
-            CurrOS.scvmmHandler.startScvmmAgent()
+        scvmmHandler = CurrOSHandlerFactory.GetScvmmHandler()
+        if scvmmHandler.detectScvmmEnv():
+            scvmmHandler.startScvmmAgent()
             return
         
-        CurrOS.dhcpHandler.waitForNetwork()
-        CurrOS.dhcpHandler.probe()
+        dhcpHandler = CurrOSHandlerFactory.GetDhcpHandler()
+        dhcpHandler.waitForNetwork()
+        dhcpHandler.probe()
+        CurrOSUtil.SetWireServerEndpoint(dhcpHandler.getEndpoint())
 
-        CurrOS.SetWireServerEndpoint(self.dhcpHandler.getEndpoint())
         self.protocol = proto.DetectDefaultProtocol()
 
-        provisoned = os.path.join(CurrOS.GetLibDir(), "provisioned")
+        provisoned = os.path.join(CurrOSUtil.GetLibDir(), "provisioned")
         if(not os.path.isfile(provisoned)):
             provisionHandler = provision.ProvisionHandler(self.config, 
                                                           self.protocol)
@@ -83,11 +74,10 @@ class Agent():
                 raise e
        
         if self.config.getSwitch("ResourceDisk.Format", False):
-            #TODO FreeBSD use Popen to open another process to do this
-            #Need to investigate why?
-            diskThread = threading.Thread(target = self.activateResourceDisk)
-            diskThread.start()
-            
+            rdHandler = CurrOSHandlerFactory.GetResourceDiskHandler()
+            rdHandler.startActivateResourceDisk(self.config)
+        
+        
         self.envmonitor = envmon.EnvMonitor(self.config, self.dhcpHandler)
         #TODO Start load balancer
         #Need to check whether this should be kept
@@ -109,30 +99,10 @@ class Agent():
                                             agentStatusDetail)
             #Wait for 25 seconds and detect protocol again.
             time.sleep(25)
-         
-    def activateResourceDisk(self):
-        mountpoint = self.config.get("ResourceDisk.MountPoint", "/mnt/resource")
-        fs = self.config.get("ResourceDisk.Filesystem", "ext3")
-        mountpoint = CurrOS.MountResourceDisk(mountpoint, fs)
-        warningFile = os.path.join(mountpoint, DataLossWarningFile)
-        fileutil.SetFileContents(warningFile, DataLossWarning)
-        if self.config.getSwitch("ResourceDisk.EnabledSwap", False):
-            sizeMB = self.config.getInt("ResourceDisk.SwapSizeMB", 0)
-            CurrOS.CreateSwapSpace(mountpoint, sizeMB)
-
-    def detectScvmmEnv(self):
-        CurrOS.MountDvd(maxRetry=0, chk_err=False)
-        mountPoint = CurrOS.GetDvdMountPoint()
-        return os.path.isfile(os.path.join(mountPoint, VmmConfigFileName))
-
-    def startScvmmAgent(self):
-        logger.Info("Starting Microsoft System Center VMM Initialization Process")
-        mountPoint = CurrOS.GetDvdMountPoint()
-        startupScript = os.path.join(mountPoint, VmmStartupScriptName)
-        subprocess.Popen(["/bin/bash", startupScript, "-p " + mountPoint])
     
     def savePid(self):
-        fileutil.SetFileContents(CurrOS.GetAgentPidPath(), str(os.getpid()))
+        fileutil.SetFileContents(CurrOSUtil.GetAgentPidPath(), 
+                                 str(os.getpid()))
 
 def ParseArgs(sysArgv):
     cmd = None
@@ -167,62 +137,28 @@ def Usage():
     print ("usage: {0} [-verbose] [-force] "
            "[-help|-deprovision[+user]|-version|-serialconsole|-daemon]")
 
-def Deprovision(force=False, deluser=False):
-    configPath = CurrOS.GetConfigurationPath()
-    config = conf.LoadConfiguration(configPath)
-    print("WARNING! The waagent service will be stopped.")
-    print("WARNING! All SSH host key pairs will be deleted.")
-    print("WARNING! Cached DHCP leases will be deleted.")
-    CurrOS.OnDeprovisionStart()
-    delRootPasswd = config.getSwitch("Provisioning.DeleteRootPassword", False)
-    if delRootPasswd:
-        print("WARNING! root password will be disabled. "
-              "You will not be able to login as root.")
-    protocol = proto.GetDefaultProtocol()
-    ovf = protocol.getOvf()
-    if ovf is not None and deluser:
-        print ("WARNING! {0} account and entire home directory "
-               "will be deleted.").format(ovf.getUserName())
-    
-    if not force:
-        confirm = raw_input("Do you want to proceed (y/n)")
-        if not confirm.lower().startswith('y'):
-            return
-
-    CurrOS.StopAgentService()
-    if delRootPasswd:
-        CurrOS.DeleteRootPassword()
-    if config.getSwitch("Provisioning.RegenerateSshHostkey", False):
-        shellutil.Run("rm -f /etc/ssh/ssh_host_*key*")
-    CurrOS.SetHostname('localhost.localdomain')
-    fileutil.CleanupDirs(CurrOS.GetLibDir(), "/var/lib/dhclient", 
-                         "/var/lib/dhcpcd", "/var/lib/dhcp")
-    fileutil.RemoveFiles('/root/.bash_history', '/var/log/waagent.log')
-    CurrOS.OnDeprovision()
-
-    if ovf is not None and deluser:
-        CurrOS.DeleteAccount(ovf.getUserName())
-
 def Main():
     command, force, verbose = ParseArgs(sys.argv[1:])
     if command == "deprovision+user":
-        Deprovision(force=force, deluser=True)
+        deprovisionHandler = CurrOSHandlerFactory.GetDeprovisionHandler()
+        deprovisionHandler.deprovision(force=force, deluser=True)
     elif command == "deprovision":
-        Deprovision(force=force, deluser=False)
+        deprovisionHandler = CurrOSHandlerFactory.GetDeprovisionHandler()
+        deprovisionHandler.deprovision(force=force, deluser=True)
     elif command == "daemon":
-        configPath = CurrOS.GetConfigurationPath()
+        configPath = CurrOSUtil.GetConfigurationPath()
         config = conf.LoadConfiguration(configPath)
         verbose = config.getSwitch("Logs.Verbose", False)
         logger.LoggerInit('/var/log/waagent.log', 
                           '/dev/console',
                           verbose=verbose)
-        fileutil.CreateDir(CurrOS.GetLibDir(), mode='0700')
-        os.chdir(CurrOS.GetLibDir())
+        fileutil.CreateDir(CurrOSUtil.GetLibDir(), mode='0700')
+        os.chdir(CurrOSUtil.GetLibDir())
         Agent(config).run()
     elif command == "serialconsole":
         #TODO
         pass
     elif command == "version":
         Version()
-    else:# command == 'help':
+    else:
         Usage()

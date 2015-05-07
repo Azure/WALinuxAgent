@@ -17,4 +17,8 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
-from azureguestagent.handler.factory import CurrOSHandlerFactory
+class AgentError(Exception):
+    pass
+
+class AgentConfigError(AgentError):
+    pass

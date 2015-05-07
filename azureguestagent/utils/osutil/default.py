@@ -186,7 +186,7 @@ class DefaultOSUtil(object):
         return pub
 
     def _NormPath(self, filepath):
-        home = CurrOS.GetHome()
+        home = self.GetHome()
         # Expand HOME variable if present in path
         path = os.path.normpath(filepath.replace("$HOME", home))
         return path
@@ -205,7 +205,7 @@ class DefaultOSUtil(object):
         path = self._NormPath(path)
         dirPath = os.path.dirname(path)
         fileutil.CreateDir(dirPath, mode=0700, owner=userName)
-        libDir = CurrOS.GetLibDir()
+        libDir = self.GetLibDir()
         prvPath = os.path.join(libDir, thumbprint + '.prv')
         if not os.path.isfile(prvPath):
             logger.Error("Failed to deploy key pair, thumbprint: {0}", 
@@ -227,7 +227,7 @@ class DefaultOSUtil(object):
         path = self._NormPath(path)
         dirPath = os.path.dirname(path)
         fileutil.CreateDir(dirPath, mode=0700, owner=userName)
-        libDir = CurrOS.GetLibDir()
+        libDir = self.GetLibDir()
         crtPath = os.path.join(libDir, thumbprint + '.crt')
         if not os.path.isfile(crtPath):
             logger.Error("Failed to deploy public key, thumbprint: {0}", 

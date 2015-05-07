@@ -1,5 +1,3 @@
-# Windows Azure Linux Agent
-#
 # Copyright 2014 Microsoft Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,5 +14,18 @@
 #
 # Requires Python 2.4+ and Openssl 1.0+
 #
+# Implements parts of RFC 2131, 1541, 1497 and
+# http://msdn.microsoft.com/en-us/library/cc227282%28PROT.10%29.aspx
+# http://msdn.microsoft.com/en-us/library/cc227259%28PROT.13%29.aspx
 
-from azureguestagent.handler.factory import CurrOSHandlerFactory
+import env
+from tests.tools import *
+import unittest
+from azureguestagent.handler import CurrOSHandlerFactory
+
+class TestOSHandlerFactory(unittest.TestCase):
+    def test_curr_os_handler_factory(self):
+        self.assertNotEquals(None, CurrOSHandlerFactory)
+
+if __name__ == '__main__':
+    unittest.main()

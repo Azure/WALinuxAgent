@@ -17,7 +17,7 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 import azureguestagent.osinfo as osinfo
-import azureguestagent.utils.osutil.default as default
+from default import *
 
 def GetOSUtil(osInfo):
     name = osInfo[0]
