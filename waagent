@@ -3345,8 +3345,8 @@ class ExtensionsConfig(object):
                 #if failoverlocation also fail what to do then?
                 if manifest == None:
                     AddExtensionEvent(name,WALAEventOperation.Download,False,0,version,"Download mainfest fail "+failoverlocation)
-                    Log("Plugin manifest" + name + "downloaded successfully length = " + str(len(manifest)))
-                    SimpleLog(p.plugin_log,"Plugin manifest" + name + "downloaded successfully length = " + str(len(manifest)))
+                    Log("Plugin manifest " + name + " dowloading failed from failover location.")
+                    SimpleLog(p.plugin_log,"Plugin manifest " + name + " downloading failed from failover location.")
 
                 filepath=LibDir+"/" + name + '.' + incarnation + '.manifest'
                 if os.path.splitext(location)[-1] == '.xml' : #if this is an xml file we may have a BOM
