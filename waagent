@@ -2920,7 +2920,7 @@ class EnvMonitor(object):
         Monitor dhcp client pid and hostname.
         If dhcp clinet process re-start has occurred, reset routes, dhcp with fabric.
         """
-        publish = ConfigurationProvider().get("Provisioning.MonitorHostName")
+        publish = Config.get("Provisioning.MonitorHostName")
         dhcpcmd = MyDistro.getpidcmd+ ' ' + MyDistro.getDhcpClientName()
         dhcppid = RunGetOutput(dhcpcmd)[1]
         while not self.shutdown:
