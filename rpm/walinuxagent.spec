@@ -2,19 +2,19 @@
 # Name: walinuxagent.spec
 #-------------------------------------------------------------------------------
 # Purpose : RPM Spec file for Python script packaging
-# Version : 2.0.8
+# Version : 2.0.13
 # Created : April 20 2012
 #===============================================================================
 
 Name:           WALinuxAgent
 Summary:        The Windows Azure Linux Agent
-Version:        2.0.8
+Version:        2.0.13
 Release:        1
 License:        Apache License Version 2.0
 Group:          System/Daemons
 Url:            http://go.microsoft.com/fwlink/?LinkId=250998
-Source0:        WALinuxAgent-2.0.8.tar.gz
-Requires:       python python-pyasn1 openssh openssl util-linux sed grep sudo iptables
+Source0:        WALinuxAgent-2.0.13.tar.gz
+Requires:       python python-pyasn1 openssh openssl util-linux sed grep sudo iptables parted
 BuildRoot:      %{_tmppath}/%{name}-%{version}-build
 BuildArch:      noarch
 Vendor:         Microsoft Corporation
@@ -61,7 +61,8 @@ fi
 
 
 %files
-%attr(0755,root,root) %{_initddir}/waagent
+%attr(0755,root,root) %{_sysconfdir}/rc.d/init.d/waagent
+%attr(0755,root,root) %{_sysconfdir}/udev/rules.d/99-azure-product-uuid.rules
 %defattr(0644,root,root,0755)
 %doc Changelog LICENSE-2.0.txt NOTICE README
 %attr(0755,root,root) %{_sbindir}/waagent
@@ -75,7 +76,7 @@ fi
 * Thu Sep 18 2014 - walinuxagent@microsoft.com
 - Remove NetworkManager conflict for EL7+
 
-* Thu Mar 25 2014 - walinuxagent@microsoft.com
+* Sun Mar 25 2014 - walinuxagent@microsoft.com
 - Create directory /var/lib/waagent
 - Updated version to 2.0.4 for release
 
@@ -91,13 +92,13 @@ fi
 * Fri Sep 20 2013 - walinuxagent@microsoft.com
 - Updated version to 2.0.0 for release
 
-* Thu Aug 23 2013 - walinuxagent@microsoft.com
+* Fri Aug 23 2013 - walinuxagent@microsoft.com
 - Updated version to 1.4.0 for release
 
 * Thu May 30 2013 - walinuxagent@microsoft.com
 - Updated version to 1.3.3 for release
 
-* Fri Feb 26 2013 - walinuxagent@microsoft.com
+* Tue Feb 26 2013 - walinuxagent@microsoft.com
 - Updated version to 1.3.2 for release
 
 * Fri Feb 15 2013 - walinuxagent@microsoft.com
