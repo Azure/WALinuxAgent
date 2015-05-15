@@ -30,6 +30,8 @@ REST api util functions
 """
 __RetryWaitingInterval=10
 
+class HttpError(Exception):
+    pass
 
 def _ParseUrl(url):
     o = urlparse(url)
@@ -56,8 +58,6 @@ def _HttpRequest(method, host, action, data=None, secure=False, headers=None):
     else:
         httpConnection.request(method, action, data, headers)
     resp = httpConnection.getresponse()
-    if resp is None:
-        raise ValueError("Http response is None")
     return resp
 
 def HttpRequest(method, url, data, headers=None,  maxRetry=3):
@@ -77,14 +77,14 @@ def HttpRequest(method, url, data, headers=None,  maxRetry=3):
             logger.Verbose("    Header={0}", resp.getheaders())
             logger.Verbose("    Body={0}", resp.read())
             return resp
-        except httplib.HTTPException, e:
+        except httplib.HTTPException as e:
             logger.Warn('HTTPException {0}, args:{1}', e, repr(e.args))
-        except IOError, e:
+        except IOError as e:
             logger.Warn('Socket IOError {0}, args:{1}', e, repr(e.args)) 
 
-        logger.Warn("Retry={0}, {1} {2}", retry, method, url)
+        logger.Info("Retry={0}, {1} {2}", retry, method, url)
         time.sleep(__RetryWaitingInterval)
-    raise e 
+    raise HttpError("HTTP Err: {0} {1}".format(method, url))
 
 def HttpGet(url, headers=None, maxRetry=3):
     return HttpRequest("GET", url, None, headers, maxRetry)

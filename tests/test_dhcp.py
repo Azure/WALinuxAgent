@@ -26,7 +26,7 @@ import unittest
 import os
 import json
 import azureguestagent.utils.fileutil as fileutil
-import azureguestagent.dhcphandler as dhcphandler
+import azureguestagent.handler.default.dhcpHandler as dhcpHandler
 
 SampleDhcpResponse = None
 with open(os.path.join(env.test_root, "dhcp")) as F:
@@ -36,24 +36,24 @@ MockSocketSend = MockFunc('SocketSend', SampleDhcpResponse)
 MockGenTransactionId = MockFunc('GenTransactionId', "\xC6\xAA\xD1\x5D")
 MockGetMacAddress = MockFunc('GetMacAddress', "\x00\x15\x5D\x38\xAA\x38")
 
-class TestDhcpHandler(unittest.TestCase):
+class TestdhcpHandler(unittest.TestCase):
  
     def test_build_dhcp_req(self):
-        req = dhcphandler.BuildDhcpRequest(MockGetMacAddress())
+        req = dhcpHandler.BuildDhcpRequest(MockGetMacAddress())
         self.assertNotEquals(None, req)
 
-    @Mockup(dhcphandler, "GenTransactionId", MockGenTransactionId)
-    @Mockup(dhcphandler, "SocketSend", MockSocketSend)
+    @Mockup(dhcpHandler, "GenTransactionId", MockGenTransactionId)
+    @Mockup(dhcpHandler, "SocketSend", MockSocketSend)
     def test_send_dhcp_req(self):
-        req = dhcphandler.BuildDhcpRequest(MockGetMacAddress())
-        resp = dhcphandler.SendDhcpRequest(req)
+        req = dhcpHandler.BuildDhcpRequest(MockGetMacAddress())
+        resp = dhcpHandler.SendDhcpRequest(req)
         self.assertNotEquals(None, resp)
 
-    @Mockup(dhcphandler, "SocketSend", MockSocketSend)
-    @Mockup(dhcphandler, "GenTransactionId", MockGenTransactionId)
-    @Mockup(CurrOS, "GetMacAddress", MockGetMacAddress)
+    @Mockup(dhcpHandler, "SocketSend", MockSocketSend)
+    @Mockup(dhcpHandler, "GenTransactionId", MockGenTransactionId)
+    @Mockup(dhcpHandler.CurrOSUtil, "GetMacAddress", MockGetMacAddress)
     def test_handle_dhcp(self):
-        dh = dhcphandler.DhcpHandler()
+        dh = dhcpHandler.DhcpHandler()
         dh.probe()
         self.assertEquals("10.62.144.1", dh.gateway)
         self.assertEquals("10.62.144.140", dh.endpoint)

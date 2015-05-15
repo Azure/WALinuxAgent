@@ -21,12 +21,29 @@
 import env
 from tests.tools import *
 import unittest
-from azureguestagent.handler import CurrOSHandlerFactory
+import time
+from azureguestagent.utils.osutil import CurrOSUtil
+from azureguestagent.handler.default.envHandler import EnvMonitor
 
-class TestOSHandlerFactory(unittest.TestCase):
-    def test_curr_os_handler_factory(self):
-        self.assertNotEquals(None, CurrOSHandlerFactory)
+class MockDhcpHandler(object):
+    def configRoutes(self):
+        pass
 
+MockDhcpProcessIdNotChange = MockFunc(retval="1234")
+def MockDhcpProcessIdChange():
+    return str(time.time())
+
+class TestEnvMonitor(unittest.TestCase):
+
+    @Mockup(CurrOSUtil, 'GetDhcpProcessId', MockDhcpProcessIdNotChange)
+    def test_dhcpProcessIdNotChange(self):
+        monitor = EnvMonitor(MockDhcpHandler())
+        monitor.handleDhcpClientRestart()
+
+    @Mockup(CurrOSUtil, 'GetDhcpProcessId', MockDhcpProcessIdChange)
+    def test_dhcpProcessIdChange(self):
+        monitor = EnvMonitor(MockDhcpHandler())
+        monitor.handleDhcpClientRestart()
 
 if __name__ == '__main__':
     unittest.main()

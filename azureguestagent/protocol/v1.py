@@ -25,7 +25,7 @@ import httplib
 import xml.etree.ElementTree as ET
 import azureguestagent.logger as logger
 import azureguestagent.utils.restutil as restutil
-from azureguestagent.utils.osutil import CurrOS, CurrOSInfo
+from azureguestagent.utils.osutil import CurrOSUtil
 import azureguestagent.utils.fileutil as fileutil
 import azureguestagent.utils.shellutil as shellutil
 from azureguestagent.utils.textutil import *
@@ -52,12 +52,6 @@ TransportPrivateFile = "TransportPrivate.pem"
 
 ProtocolVersion = "2012-11-30"
 
-HandlerStatusMapping = {
-    'installed' : 'Installing',
-    'enabled' : 'Ready',
-    'uninstalled' : 'NotReady',
-    'disabled' : 'NotReady'
-}
 
 class VmInfoV1():
     def __init__(self, subscriptionId, vmName):
@@ -137,17 +131,12 @@ class ExtensionInfoV1(ExtensionInfo):
     def getVersionUris(self):
         return self.versionUris
 
-    def copy(self, version):
-        another = copy.deepcopy(self)
-        if version is not None:
-            another.version = version
-        return another
-
 class WireProtocolResourceGone(ProtocolError):
     pass
 
 class ProtocolV1(Protocol):
 
+    #TODO move to detect.py
     @staticmethod
     def Detect():
         endpoint = None
@@ -157,7 +146,7 @@ class ProtocolV1(Protocol):
             raise ProtocolNotFound("Wire server endpoint not found.")
         protocol = ProtocolV1(endpoint)
         protocol.checkProtocolVersion()
-        CurrOS.GenerateTransportCert()
+        CurrOSUtil.GenerateTransportCert()
         return protocol
    
     @staticmethod
@@ -173,7 +162,7 @@ class ProtocolV1(Protocol):
 
     def __init__(self, endpoint=None):
         self.endpoint = endpoint
-        self.libDir = CurrOS.GetLibDir()
+        self.libDir = CurrOSUtil.GetLibDir()
         self.client = WireClient(endpoint)
   
     def getVmInfo(self):
@@ -214,67 +203,6 @@ class ProtocolV1(Protocol):
     def reportEvent(self):
         #TODO port diagnostic code here
         pass
-
-    #TODO move to exthandler
-    def _getExtensionStatus(self): 
-        aggregatedStatusList = []
-        for ext in self.getExtensions():
-            status = None
-            statusFile = os.path.join(self.libDir,  ext.getStatusFile())
-            if os.path.isfile(statusFile):
-                try:
-                    statusJson = fileutil.GetFileContents(statusFile)
-                    status = json.loads(statusJson)[0]
-                except Exception, e:
-                    logger.Error("Failed to parse extension status file: {0}", e)
-            
-            handlerStatus = "NotReady"
-            handlerCode = None
-            handlerMessage = None
-            handlerFormattedMessage = None
-            handlerStatusFile = os.path.join(self.libDir, 
-                                             ext.getHandlerStateFile())
-            if os.path.isfile(handlerStatusFile):
-                handlerStatus = fileutil.GetFileContents(handlerStatusFile)
-                handlerStatus = handlerStatus.lower()
-                handlerStatus = HandlerStatusMapping[handlerStatus]
-            
-            heartbeat = None
-            heartbeatFile = os.path.join(self.libDir, ext.getHeartbeatFile())
-            if os.path.isfile(heartbeatFile):
-                if not self.isResponsive(heartbeatFile):
-                    handlerStatus = 'Unresponsive'
-                else:
-                    try:
-                        heartbeatJson = fileutil.GetFileContents(heartbeatFile)
-                        heartbeat = json.loads()[0]['heartbeat']
-                        handlerStatus = heartbeat['status']
-                        handlerCode = heartbeat['code']
-                        handlerMessage = heartbeat['Message']
-                    except Exception, e:
-                        logger.Error(("Failed to parse extension "
-                                      "heart beat file: {0}"), e)
-            aggregatedStatus = {
-                'handlerVersion' : ext.getVersion(),
-                'handlerName' : ext.getName(),
-                'status' : handlerStatus,
-                'runtimeSettingsStatus' : {
-                    'settingsStatus' : status,
-                    'sequenceNumber' : ext.getSeqNo()
-                }
-            }
-            if handlerCode is not None:
-                aggregatedStatus['code'] = handlerCode
-            if handlerMessage is not None:
-                aggregatedStatus['Message'] = handlerMessage
-
-            aggregatedStatusList.append(aggregatedStatus)
-        return aggregatedStatusList
-    
-    #TODO move to exthandler
-    def _isResponsive(self, heartbeatFile):
-        lastUpdate=int(time.time()-os.stat(heartbeatFile).st_mtime)
-        return  lastUpdate > 600    # not updated for more than 10 min
 
 def _fetchCache(localFile):
     if not os.path.isfile(localFile):
@@ -743,8 +671,8 @@ class Certificates(object):
     def __init__(self, xmlText=None):
         if xmlText is None:
             raise ValueError("Certificates.xml is None")
-        self.libDir = CurrOS.GetLibDir()
-        self.opensslCmd = CurrOS.GetOpensslCmd()
+        self.libDir = CurrOSUtil.GetLibDir()
+        self.opensslCmd = CurrOSUtil.GetOpensslCmd()
         self.certs = []
         self.parse(xmlText)
 
@@ -790,15 +718,15 @@ class Certificates(object):
                     beginCrt = True
                 elif re.match(r'[-]+END.*KEY[-]+', line):
                     tmpFile = self.writeToTempFile(index, 'prv', buf)
-                    pub = CurrOS.GetPubKeyFromPrv(tmpFile)
+                    pub = CurrOSUtil.GetPubKeyFromPrv(tmpFile)
                     prvs[pub] = tmpFile
                     buf = []
                     index += 1
                     beginPrv = False
                 elif re.match(r'[-]+END.*CERTIFICATE[-]+', line):
                     tmpFile = self.writeToTempFile(index, 'crt', buf)
-                    pub = CurrOS.GetPubKeyFromCrt(tmpFile)
-                    thumbprint = CurrOS.GetThumbprintFromCrt(tmpFile)
+                    pub = CurrOSUtil.GetPubKeyFromCrt(tmpFile)
+                    thumbprint = CurrOSUtil.GetThumbprintFromCrt(tmpFile)
                     thumbprints[pub] = thumbprint
                     #Rename crt with thumbprint as the file name 
                     crt = "{0}.crt".format(thumbprint)

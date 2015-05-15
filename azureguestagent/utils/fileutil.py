@@ -38,8 +38,6 @@ def GetFileContents(filepath, asbin=False, removeBom=False):
     if asbin:
         mode+='b'
     try:
-        if not os.path.isfile(filepath):
-            return None
         with open(filepath, mode) as F :
             c=F.read()
         if (not asbin) and removeBom:
@@ -54,15 +52,10 @@ def SetFileContents(filepath, contents, append=False):
     Write 'contents' to 'filepath'.
     """
     mode = "ab+" if append else "wb+"
-    try:
-        if type(contents) == str :
-            contents=contents.encode('latin-1', 'ignore')
-        with open(filepath, "wb+") as F :
-            F.write(contents)
-    except IOError, e:
-        logger.Error('Writing to file {0} Exception is {1}', filepath, e)
-        return None
-    return 0
+    if type(contents) == str :
+        contents=contents.encode('latin-1', 'ignore')
+    with open(filepath, "wb+") as F :
+        F.write(contents)
 
 def AppendFileContents(filepath, contents):
     """
@@ -170,7 +163,7 @@ def UpdateConfigFile(path, lineStart, val, chk_err=False):
 def SearchForFile(dirName, fileName):
     for root, dirs, files in os.walk(dirName):
         for f in files:
-            if f == 'HandlerManifest.json':
+            if f == fileName:
                 return os.path.join(root, f)
     return None
 

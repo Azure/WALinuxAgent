@@ -17,8 +17,32 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
+"""
+Base class of agent error.
+"""
 class AgentError(Exception):
-    pass
+    def __init__(self, errno, msg):
+        msg = "({0}){1}".format(errno, msg)
+        super(AgentError, self).__init__(msg)
 
+"""
+When configure file is not found or malformed.
+"""
 class AgentConfigError(AgentError):
-    pass
+    def __init__(self, msg):
+        super(AgentConfigError, self).__init__('000001', msg)
+
+"""
+When network is not avaiable.
+"""
+class AgentNetworkError(AgentError):
+    def __init__(self, msg):
+        super(AgentNetworkError, self).__init__('000002', msg)
+
+"""
+When failed to execute an extension
+"""
+class ExtensionError(AgentError):
+    def __init__(self, msg):
+        super(ExtensionError, self).__init__('000003', msg)
+

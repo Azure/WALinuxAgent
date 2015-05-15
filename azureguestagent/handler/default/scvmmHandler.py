@@ -32,7 +32,8 @@ class ScvmmHandler(object):
         return os.path.isfile(os.path.join(mountPoint, VmmConfigFileName))
 
     def startScvmmAgent(self):
-        logger.Info("Starting Microsoft System Center VMM Initialization Process")
+        logger.Info("Starting Microsoft System Center VMM Initialization "
+                    "Process")
         mountPoint = CurrOSUtil.GetDvdMountPoint()
         startupScript = os.path.join(mountPoint, VmmStartupScriptName)
         subprocess.Popen(["/bin/bash", startupScript, "-p " + mountPoint])

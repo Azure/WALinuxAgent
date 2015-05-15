@@ -26,11 +26,11 @@ LogFilePath = '/var/log/waagent.log'
 ConsoleFilePath = '/dev/console'
 
 class Logger(object):
-    def __init__(self, logger=None):
-        if logger is None:
-            self.appenders = []
-        else:
-            self.appenders = logger.appenders
+    def __init__(self, logger=None, prefix=""):
+        self.appenders = []
+        if logger is not None:
+            self.appenders.extend(logger.appenders)
+        self.prefix = prefix
 
     def verbose(self, msg_format, *args):
         self.log("VERBOSE", msg_format, *args)
@@ -49,7 +49,7 @@ class Logger(object):
         args = map(lambda x : textutil.Ascii(x), args)
         msg = msg_format.format(*args)
         time = datetime.now().strftime('%Y/%m/%d %H:%M:%S.%f')
-        logItem = "{0} {1} {2}".format(time, level, msg)
+        logItem = "{0} {1} {2} {3}".format(time, self.prefix, level, msg)
         for appender in self.appenders:
             appender.write(level, logItem)
 
@@ -75,9 +75,8 @@ class ConsoleAppender():
             try:
                 with open(self.console_path, "w") as console :
                     console.write(msg.encode('ascii','ignore') + "\n")
-                    console.close()
-            except:
-                pass
+            except IOError as e:
+                print e
             
 class FileAppender():
     def __init__(self, appender_config):
@@ -91,11 +90,10 @@ class FileAppender():
     def write(self, level, msg):
         if _MatchLogLevel(self.level, level):
             try:
-                with open(self.file_path, "a") as log_file:
+                with open(self.file_path, "a+") as log_file:
                     log_file.write(msg.encode('ascii','ignore') + "\n")
-                    log_file.close()
-            except:
-                pass
+            except IOError as e:
+                print e
 
 #Initialize logger instance
 DefaultLogger = Logger()

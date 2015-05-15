@@ -30,7 +30,7 @@ def GetOSHandlerFactory(osInfo):
     fullName = osInfo[3]
     
     #Return default implementation 
-    return default.DefaultHandlers()
+    return default.DefaultHandlerFactory()
 
 CurrOSHandlerFactory = GetOSHandlerFactory(CurrOSInfo)
 

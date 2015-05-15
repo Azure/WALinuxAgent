@@ -19,9 +19,8 @@
 import os
 import traceback
 import azureguestagent.logger as logger
-from azureguestagent.utils.osutil import CurrOS, CurrOSInfo
+from azureguestagent.utils.osutil import CurrOSUtil
 import azureguestagent.utils.fileutil as fileutil
-import azureguestagent.dhcphandler as dhcphandler
 from azureguestagent.protocol.common import *
 from azureguestagent.protocol.v1 import ProtocolV1
 from azureguestagent.protocol.v2 import ProtocolV2
@@ -37,7 +36,7 @@ until a valid protocol endpoint is detected.
 __Protocols = [ProtocolV2, ProtocolV1]
 
 def DetectAvailableProtocols(protocols=__Protocols):
-    libDir = CurrOS.GetLibDir()
+    libDir = CurrOSUtil.GetLibDir()
     availableProtocols = []
     for protocol in protocols:
         logger.Info("Detect available protocols...")
@@ -74,7 +73,7 @@ and a valid protocol endpoint was detected.
 Agent will call DetectAvailableProtocols periodically
 """
 def GetAvailableProtocols(protocols=__Protocols):
-    libDir = CurrOS.GetLibDir()
+    libDir = CurrOSUtil.GetLibDir()
     availableProtocols = []
     for protocol in protocols:
         protocolFilePath = os.path.join(libDir, protocol.__name__)

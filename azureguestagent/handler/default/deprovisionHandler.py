@@ -17,48 +17,92 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
-from azureguestagent.utils.osutil import CurrOSUtilUtil
+import azureguestagent.conf as conf
+from azureguestagent.utils.osutil import CurrOSUtil
 import azureguestagent.utils.fileutil as fileutil
 
-class Deprovisionhandler(object):
+class DeprovisionAction(object):
+    def __init__(self, func, args=[], kwargs={}):
+        self.func = func
+        self.args = args
+        self.kwargs = kwargs
+
+    def invoke(self):
+        self.func(*self.args, **self.kwargs)
+
+class DeprovisionHandler(object):
+   
+    def deleteRootPassword(self, warnings, actions):
+        warnings.append("WARNING! root password will be disabled. "
+                        "You will not be able to login as root.")
+
+        actions.append(DeprovisionAction(CurrOSUtil.DeleteRootPassword))
     
-    def promptUser(self, delRootPasswd, ovf):
-        print("WARNING! The waagent service will be stopped.")
-        print("WARNING! All SSH host key pairs will be deleted.")
-        print("WARNING! Cached DHCP leases will be deleted.")
-        if delRootPasswd:
-            print("WARNING! root password will be disabled. "
-                  "You will not be able to login as root.")
-        if ovf is not None and deluser:
-            print ("WARNING! {0} account and entire home directory "
-                   "will be deleted.").format(ovf.getUserName())
-        
-    def deprovision(force=False, deluser=False):
-        configPath = CurrOSUtil.GetConfigurationPath()
-        config = conf.LoadConfiguration(configPath)
-        delRootPasswd = config.getSwitch("Provisioning.DeleteRootPassword", False)
+    def deleteUser(self, warnings, actions):
         protocol = proto.GetDefaultProtocol()
         ovf = protocol.getOvf()
+        if ovf is None:
+            warnings.append("WARNING! ovf-env.xml is not found.")
+            warnings.append("WARNING! Skip delete user.")
+            return
 
-        self.promptUser(delRootPasswd, ovf)
+        userName = ovf.getUserName()
+        warnings.append(("WARNING! {0} account and entire home directory "
+                         "will be deleted.").format(userName))
+        actions.append(DeprovisionAction(CurrOSUtil.DeleteAccount, [userName]))
+
+
+    def regenerateHostKeyPair(self, warnings, actions):
+        warnings.append("WARNING! All SSH host key pairs will be deleted.")
+        actions.append(DeprovisionAction(CurrOSUtil.SetHostname, 
+                                         ['localhost.localdomain']))
+        actions.append(DeprovisionAction(shellutil.Run, 
+                                         ['rm -f /etc/ssh/ssh_host_*key*']))
+    
+    def stopAgentService(self, warnings, actions):
+        warnings.append("WARNING! The waagent service will be stopped.")
+        actions.append(DeprovisionAction(CurrOSUtil.StopAgentService))
+        filesToDel = ['/root/.bash_history', '/var/log/waagent.log']
+        actions.append(DeprovisionAction(fileutil.RemoveFiles, [filesToDel]))
+
+    def deleteDhcpLease(self, warnings, actions):
+        warnings.append("WARNING! Cached DHCP leases will be deleted.")
+        dirsToDel = [CurrOSUtil.GetLibDir(), "/var/lib/dhclient", 
+                     "/var/lib/dhcpcd", "/var/lib/dhcp"]
+        actions.append(DeprovisionAction(fileutil.CleanupDirs, [dirsToDel]))
+
+    def setUp(self, deluser):
+        warnings = []
+        actions = []
+
+        self.stopAgentService(warnings, actions)
+        if conf.GetSwitch("Provisioning.RegenerateSshHostkey", False):
+            self.regenerateHostKeyPair(warnings, actions)
+        
+        self.deleteDhcpLease(warnings, actions)
+
+        if conf.GetSwitch("Provisioning.DeleteRootPassword", False):
+            self.deleteRootPassword(warnings, actions)
+
+        if deluser:
+            self.deleteUser(warnings, actions)
+
+        return warnings, actions
+        
+    def deprovision(self, force=False, deluser=False):
+        warnings, actions = self.setUp(deluser)
+        for warning in warnings:
+            print warning
+
         if not force:
             confirm = raw_input("Do you want to proceed (y/n)")
             if not confirm.lower().startswith('y'):
                 return
 
-        self.cleanup(delRootPasswd)
+        for action in actions:
+            action.invoke()
     
-    def cleanup(self, delRootPasswd, ovf)
-        CurrOSUtil.StopAgentService()
-        if delRootPasswd:
-            CurrOSUtil.DeleteRootPassword()
-        if config.getSwitch("Provisioning.RegenerateSshHostkey", False):
-            shellutil.Run("rm -f /etc/ssh/ssh_host_*key*")
-        CurrOSUtil.SetHostname('localhost.localdomain')
-        fileutil.CleanupDirs(CurrOSUtil.GetLibDir(), "/var/lib/dhclient", 
-                             "/var/lib/dhcpcd", "/var/lib/dhcp")
-        fileutil.RemoveFiles('/root/.bash_history', '/var/log/waagent.log')
-
-        if ovf is not None and deluser:
-            CurrOSUtil.DeleteAccount(ovf.getUserName())
+    
+    def cleanup(self):
+        fileutil.CleanupDirs()
 

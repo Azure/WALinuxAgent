@@ -19,21 +19,31 @@
 # http://msdn.microsoft.com/en-us/library/cc227259%28PROT.13%29.aspx
 
 import env
-import tests.tools as tools
+from tests.tools import *
 import uuid
 import unittest
 import os
 import json
+import azureguestagent.logger as logger
 import azureguestagent.utils.fileutil as fileutil
-import azureguestagent.protocol.v2 as proto
-import azureguestagent.extension as ext
-from azureguestagent.utils.osutil import CurrOS, CurrOSInfo
+import azureguestagent.protocol.v2 as prot
+import azureguestagent.handler.default.extensionHandler as ext
+from azureguestagent.utils.osutil import CurrOSUtil
 
-setting = proto.ExtensionInfoV2({
+settingJson = {
     "name":"TestExt",
     "properties":{
-        "version":"2.1",
+        "version":"2.0",
+        "state":"enabled",
         "upgrade-policy":"auto",
+        "runtimeSettings":[{
+            "handlerSettings":{
+                "sequenceNumber": 0,
+                "publicSettings": "",
+                "protectedSettings": "",
+                "certificateThumbprint": "",
+            }
+        }],
         "versionUris":[{
             "version":"2.1",
             "uris":["http://foo.bar"]
@@ -42,19 +52,104 @@ setting = proto.ExtensionInfoV2({
             "uris":["http://foo.bar"]
         }]
     }
-})
+}
+setting = prot.ExtensionInfoV2(settingJson)
 
+manJson = {
+    "handlerManifest":{
+        "installCommand": "echo 'install'",
+        "uninstallCommand": "echo 'uninstall'",
+        "updateCommand": "echo 'update'",
+        "enableCommand": "echo 'enable'",
+        "disableCommand": "echo 'disable'",
+    }
+}
+man = ext.HandlerManifest(manJson)
+
+def MockLoadManifest(self):
+    return man
+
+MockLaunchCommand = MockFunc()
+MockSetHandlerStatus = MockFunc()
+
+def MockDownload(self):
+    fileutil.CreateDir(self.getBaseDir())
+    fileutil.SetFileContents(self.getManifestFile(), json.dumps(manJson))
+
+#logger.LoggerInit("/dev/null", "/dev/stdout")
 class TestExtensions(unittest.TestCase):
-    
+
     def test_load_ext(self):
-        libDir = CurrOS.GetLibDir()
+        libDir = CurrOSUtil.GetLibDir()
         testExt1 = os.path.join(libDir, 'TestExt-1.0')
         testExt2 = os.path.join(libDir, 'TestExt-2.0')
-        for path in {testExt1, testExt2}:
+        for path in [testExt1, testExt2]:
             if not os.path.isdir(path):
                 os.mkdir(path)
         testExt = ext.LoadExtensionInstance(setting)
         self.assertNotEqual(None, testExt)
+
+    def test_getters(self):
+        testExt = ext.ExtensionInstance(setting, setting.getVersion())
+        self.assertEqual("/tmp/TestExt-2.0", testExt.getBaseDir())
+        self.assertEqual("/tmp/TestExt-2.0/status", testExt.getStatusDir())
+        self.assertEqual("/tmp/TestExt-2.0/status/0.status", 
+                         testExt.getStatusFile())
+        self.assertEqual("/tmp/TestExt-2.0/status/HandlerState", 
+                         testExt.getHandlerStateFile())
+        self.assertEqual("/tmp/TestExt-2.0/config", testExt.getConfigDir())
+        self.assertEqual("/tmp/TestExt-2.0/config/0.settings", 
+                         testExt.getSettingsFile())
+        self.assertEqual("/tmp/TestExt-2.0/heartbeat.log", 
+                         testExt.getHeartbeatFile())
+        self.assertEqual("/tmp/TestExt-2.0/HandlerManifest.json", 
+                         testExt.getManifestFile())
+        self.assertEqual("/tmp/TestExt-2.0/HandlerEnvironment.json", 
+                         testExt.getEnvironmentFile())
+        self.assertEqual("/tmp/log/TestExt/2.0", testExt.getLogDir())
+
+        testExt = ext.ExtensionInstance(setting, "2.1")
+        self.assertEqual("/tmp/TestExt-2.1", testExt.getBaseDir())
+        self.assertEqual("2.1", testExt.getTargetVersion())
+   
+    @Mockup(ext.ExtensionInstance, 'loadManifest', MockLoadManifest)
+    @Mockup(ext.ExtensionInstance, 'launchCommand', MockLaunchCommand)
+    @Mockup(ext.ExtensionInstance, 'setHandlerStatus', MockSetHandlerStatus)
+    def test_handle_uninstall(self):
+        MockLaunchCommand.args = None
+        MockSetHandlerStatus.args = None
+        testExt = ext.ExtensionInstance(setting, setting.getVersion(), False)
+        testExt.handleUninstall()
+        self.assertEqual(None, MockLaunchCommand.args)
+        self.assertEqual(None, MockSetHandlerStatus.args)
+        self.assertEqual(None, testExt.getCurrOperation())
+
+        testExt = ext.ExtensionInstance(setting, setting.getVersion(), True)
+        testExt.handleUninstall()
+        self.assertEqual(man.getUninstallCommand(), MockLaunchCommand.args[0])
+        self.assertEqual("Uninstall", testExt.getCurrOperation())
+        self.assertEqual("uninstalled", MockSetHandlerStatus.args[0])
+
+    @Mockup(ext.ExtensionInstance, 'loadManifest', MockLoadManifest)
+    @Mockup(ext.ExtensionInstance, 'launchCommand', MockLaunchCommand)
+    @Mockup(ext.ExtensionInstance, 'download', MockDownload)
+    @Mockup(ext.ExtensionInstance, 'getHandlerStatus', MockFunc(retval="enabled"))
+    @Mockup(ext.ExtensionInstance, 'setHandlerStatus', MockSetHandlerStatus)
+    def test_handle(self):
+        #Test handle
+        testExt = ext.ExtensionInstance(setting, setting.getVersion(), False)
+        testExt.initLog()
+        self.assertEqual(1, len(testExt.logger.appenders) - len(logger.DefaultLogger.appenders))
+        testExt.handle()
+        
+        #Test upgrade 
+        testExt = ext.ExtensionInstance(setting, setting.getVersion(), True)
+        testExt.initLog()
+        self.assertEqual(1, len(testExt.logger.appenders) - len(logger.DefaultLogger.appenders))
+        testExt.handle()
+
+    def test_status(self):
+        pass
 
 if __name__ == '__main__':
     unittest.main()

@@ -26,24 +26,33 @@ from azureguestagent.handler.default.extensionHandler import ExtensionHandler
 from azureguestagent.handler.default.deprovisionHandler import DeprovisionHandler
 
 class DefaultHandlerFactory(object):
+    def __init__(self):
+        self.scvmmHandler = ScvmmHandler()
+        self.dhcpHandler = DhcpHandler()
+        self.envHandler = EnvHandler(self.dhcpHandler)
+        self.provisionHandler = ProvisionHandler()
+        self.resourceDiskHandler = ResourceDiskHandler()
+        self.extensionHandler = ExtensionHandler()
+        self.deprovisionHandler = DeprovisionHandler()
 
     def getScvmmHandler(self):
-        return ScvmmHandler()
+        return self.scvmmHandler
 
     def getEnvHandler(self):
-        return EnvHandler()
+        return self.envHandler
 
     def getDhcpHandler(self):
-        return DhcpHandler()
+        return self.dhcpHandler
 
     def getProvisionHandler(self):
-        return ProvisionHandler()
+        return self.provisionHandler
 
     def getResourceDiskHandler(self):
-        return ResourceDiskHandler()
+        return self.resourceDiskHandler
 
     def getExtensionHandler(self):
-        return ExtensionHandler()
+        return self.extensionHandler
 
     def getDeprovionHandler(self):
-        return DeprovisionHandler()
+        return self.deprovisionHandler
+

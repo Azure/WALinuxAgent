@@ -27,7 +27,7 @@ import threading
 import azureguestagent.logger as logger
 import azureguestagent.conf as conf
 from azureguestagent.osinfo import CurrOSInfo
-from azureguestagent.handle import CurrOSHandlerFactory
+from azureguestagent.handler import CurrOSHandlerFactory
 from azureguestagent.utils.osutil import CurrOSUtil
 import azureguestagent.utils.shellutil as shellutil
 import azureguestagent.utils.fileutil as fileutil
@@ -45,6 +45,10 @@ class Agent(object):
         self.config = config
 
     def run(self):
+        self.initialize()
+        self.start()
+
+    def initialize(self):
         os.chdir(CurrOSUtil.GetLibDir())
         self.savePid()
 
@@ -77,27 +81,23 @@ class Agent(object):
             rdHandler = CurrOSHandlerFactory.GetResourceDiskHandler()
             rdHandler.startActivateResourceDisk(self.config)
         
-        
         self.envmonitor = envmon.EnvMonitor(self.config, self.dhcpHandler)
         #TODO Start load balancer
         #Need to check whether this should be kept
 
+    def start(self):
         #Handle state change
         while True:
+            #Handle extensions
+            extHandler = CurrOSHandlerFactory.GetExtensionHandler()
+            extHandler.process(self.protocol)
+            
+            #Report status
             agentStatus = "Ready"
             agentStatusDetail = "Guest Agent is running"
-            #Handle extensions
-            try:
-                exthandler = ext.ExtensionHandler(self.config, self.protocol)
-                exthandler.process()
-            except Exception, e:
-                logger.Error("Failed to handle extensions: {0} {1}", 
-                             e,
-                             traceback.format_exc())
             self.protocol.reportAgentStatus(GuestAgentVersion, 
                                             agentStatus,
                                             agentStatusDetail)
-            #Wait for 25 seconds and detect protocol again.
             time.sleep(25)
     
     def savePid(self):

@@ -17,4 +17,4 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
-from azureguestagent.handler.factory import CurrOSHandlerFactory
+#from azureguestagent.handler.factory import CurrOSHandlerFactory

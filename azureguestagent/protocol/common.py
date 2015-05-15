@@ -21,7 +21,7 @@ import copy
 import re
 import xml.dom.minidom
 import azureguestagent.logger as logger
-from azureguestagent.utils.osutil import CurrOS
+from azureguestagent.utils.osutil import CurrOSUtil
 from azureguestagent.utils.textutil import GetNodeTextData
 import azureguestagent.utils.fileutil as fileutil
 
@@ -46,60 +46,15 @@ class CertInfo():
         raise NotImplementedError()
 
 class ExtensionInfo(object):
-    def __init__(self):
-        self.baseDir = None
-
+    
     def getName(self):
         raise NotImplementedError()
 
     def getVersion(self):
         raise NotImplementedError()
 
-    def setVersion(self, version):
-        raise NotImplementedError()
-
     def getVersionUris(self):
         raise NotImplementedError()
-
-   #TODO move to exthandler.py
-    def getTargetVersion(self, version, updatePolicy):
-        if version is None:
-            raise ValueError("Extension version is None")
-       
-        versionUris = self.getVersionUris()
-        if versionUris is None:
-            raise ValueError("Extension versionUris is None")
-
-        if updatePolicy is None or updatePolicy.lower() != 'auto':
-            return version
-  
-        major = currVersion.split('.')[0]
-        if major is None:
-            return version
-
-        versionUris = filter(lambda x : x["version"].startswith(major + "."), 
-                             versionUris)
-        versionUris = sorted(versionUris, 
-                             key=lambda x: x["version"], 
-                             reverse=True)
-        if len(versionUris) <= 0:
-            raise ValueError("Couldn't find correct extension version")
-
-        return versionUris[0]
-
-    #TODO move to exthandler.py
-    def getPackageUris(self, version):
-        if version is None:
-            raise ValueError("Extension version is None")
-
-        versionUris = self.getVersionUris()
-        if versionUris is None:
-            raise ValueError("Extension versionUris is None")
-        
-        for versionUri in versionUris:
-            if versionUri['version']== version:
-                return versionUri['uris']
-        return None
 
     def getUpgradePolicy(self):
         raise NotImplementedError()
@@ -119,46 +74,6 @@ class ExtensionInfo(object):
     def getCertificateThumbprint(self):
         raise NotImplementedError()
    
-    def getBaseDir(self):
-        if self.baseDir is None:
-            libDir = CurrOS.GetLibDir()
-            baseDirName = "{0}-{1}".format(self.getName(), self.getVersion())
-            self.baseDir = os.path.join(libDir, baseDirName) 
-        return self.baseDir
-
-    def getStatusDir(self):
-        return os.path.join(self.getBaseDir(), "status")
-
-    def getStatusFile(self):
-        return os.path.join(self.getStatusDir(), 
-               "{0}.status".format(self.getSeqNo()))
-
-    def getConfigDir(self):
-        return os.path.join(self.getBaseDir(), 'config')
-
-    def getSettingsFile(self):
-        return os.path.join(self.getConfigDir(), 
-               "{0}.settings".format(self.getSeqNo()))
-
-    def getHandlerStateFile(self):
-        return os.path.join(self.getConfigDir(), 'HandlerState')
-
-    def getHeartbeatFile(self):
-        return os.path.join(self.getBaseDir(), 'heartbeat.log')
-
-    def getManifestFile(self):
-        return os.path.join(self.getBaseDir(), 'HandlerManifest.json')
-
-    def getEnvironmentFile(self):
-        return os.path.join(self.getBaseDir(), 'HandlerEnvironment.json')
-
-    def getLogDir(self):
-        return os.path.join(CurrOS.GetExtLogDir(), 
-                            self.getName(), 
-                            self.getVersion())
-
-    def copy(self, version):
-        raise NotImplementedError()
         
 OvfFileName="ovf-env.xml"
 class OvfEnv(object):
@@ -314,7 +229,7 @@ class Protocol():
         raise NotImplementedError()
 
     def getOvf(self):
-        ovfFilePath = os.path.join(CurrOS.GetLibDir(), OvfFileName)
+        ovfFilePath = os.path.join(CurrOSUtil.GetLibDir(), OvfFileName)
         if os.path.isfile(ovfFilePath):
             xmlText = fileutil.GetFileContents(ovfFilePath)        
             return OvfEnv(xmlText)

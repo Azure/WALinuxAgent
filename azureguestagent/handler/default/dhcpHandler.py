@@ -81,20 +81,22 @@ def ValidateDhcpResponse(request, response):
         logger.Verbose("Cookie not match:\nsend={0},\nreceive={1}", 
                        HexDump3(request, 0xEC, 4),
                        HexDump3(response, 0xEC, 4))
-        raise ValueError("Cookie in dhcp respones doesn't match the request")
+        raise AgentNetworkError("Cookie in dhcp respones "
+                                "doesn't match the request")
 
     if not CompareBytes(request, response, 4, 4):
         logger.Verbose("TransactionID not match:\nsend={0},\nreceive={1}", 
                        HexDump3(request, 4, 4),
                        HexDump3(response, 4, 4))
-        raise ValueError("TransactionID in dhcp respones "
-                         "doesn't match the request")
+        raise AgentNetworkError("TransactionID in dhcp respones "
+                                "doesn't match the request")
 
     if not CompareBytes(request, response, 0x1C, 6):
         logger.Verbose("Mac Address not match:\nsend={0},\nreceive={1}", 
                        HexDump3(request, 0x1C, 6),
                        HexDump3(response, 0x1C, 6))
-        raise ValueError("Mac Addr in dhcp respones doesn't match the request")
+        raise AgentNetworkError("Mac Addr in dhcp respones "
+                                "doesn't match the request")
 
 def ParseRoute(response, option, i, length, bytesReceived):
     # http://msdn.microsoft.com/en-us/library/cc227282%28PROT.10%29.aspx
@@ -188,13 +190,13 @@ def AllowBroadcastForDhcp(func):
     Temporary allow broadcase for dhcp. Remove the route when done.
     """
     def Wrapper(*args, **kwargs):
-        missingDefaultRoute = CurrOS.IsMissingDefaultRoute()
-        ifname = CurrOS.GetInterfaceName()
+        missingDefaultRoute = CurrOSUtil.IsMissingDefaultRoute()
+        ifname = CurrOSUtil.GetInterfaceName()
         if missingDefaultRoute:
-            CurrOS.SetBroadcastRouteForDhcp(ifname)
+            CurrOSUtil.SetBroadcastRouteForDhcp(ifname)
         result = func(*args, **kwargs)
         if missingDefaultRoute:
-            CurrOS.RemoveBroadcastRouteForDhcp(ifname)
+            CurrOSUtil.RemoveBroadcastRouteForDhcp(ifname)
         return result
     return Wrapper
 
@@ -204,10 +206,10 @@ def DisableDhcpServiceIfNeeded(func):
     endpoint through dhcp.
     """
     def Wrapper(*args, **kwargs):
-        if CurrOS.IsDhcpEnabled():
-            CurrOS.StopDhcpService()
+        if CurrOSUtil.IsDhcpEnabled():
+            CurrOSUtil.StopDhcpService()
             result = func(*args, **kwargs)
-            CurrOS.StartDhcpService()
+            CurrOSUtil.StartDhcpService()
             return result
         else:
             return func(*args, **kwargs)
@@ -221,7 +223,7 @@ def SendDhcpRequest(request):
     sock = None
     for duration in __SleepDuration:
         try:
-            CurrOS.OpenPortForDhcp()
+            CurrOSUtil.OpenPortForDhcp()
             response = SocketSend(request)
             ValidateDhcpResponse(request, response)
             return response
