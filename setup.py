@@ -41,7 +41,6 @@ def getDistro():
         distro = 'redhat'
 
     return distro
-    
 
 class InstallData(install):
     user_options = install.user_options + [
@@ -133,19 +132,33 @@ class InstallData(install):
     
         # Configuration file
         if not os.path.exists(tgtDir + 'etc'):
-                try:
-                    self.mkpath(tgtDir + 'etc', 0755)
-                except:
-                    msg = 'Could not create config dir '
-                    msg += tgtDir
-                    msg += 'etc'
-                    print msg
-                    sys.exit(1)
+            try:
+                self.mkpath(tgtDir + 'etc', 0755)
+            except:
+                msg = 'Could not create config dir '
+                msg += tgtDir
+                msg += 'etc'
+                print msg
+                sys.exit(1)
         try:
             self.copy_file('config/waagent.conf', tgtDir + 'etc/waagent.conf')
         except:
-            print 'Could not install configuration file %etc' %tgtDir
+            print 'Could not install configuration file %setc' %tgtDir
             sys.exit(1)
+
+        if not os.path.exists(tgtDir + 'etc/udev/rules.d'):
+            try:
+                self.mkpath(tgtDir + 'etc/udev/rules.d', 0755)
+            except Exception as e:
+                print e
+
+        try:
+            self.copy_file('config/99-azure-product-uuid.rules', tgtDir + 'etc/udev/rules.d/99-azure-product-uuid.rules')
+        except Exception as e:
+            print e
+            print 'Could not install product uuid rules file %setc' %tgtDir
+            sys.exit(1)
+
         if not os.path.exists(tgtDir + 'etc/logrotate.d'):
             try:
                 self.mkpath(tgtDir + 'etc/logrotate.d', 0755)
@@ -161,7 +174,7 @@ class InstallData(install):
             msg += tgtDir + 'etc/logrotate.d'
             print  msg
             sys.exit(1)
-    
+         
         # Daemon
         if not os.path.exists(tgtDir + prefix + 'sbin'):
             try:
