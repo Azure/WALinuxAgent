@@ -606,6 +606,9 @@ class AbstractDistro(object):
         """
         Translate the custom data from a Base64 encoding. Default to no-op.
         """
+        decodeCustomData = Config.get("DecodeCustomData")
+        if decodeCustomData != None and decodeCustomData.lower().startswith("y"):
+            return base64.b64decode(data)
         return data
 
     def getConfigurationPath(self):
