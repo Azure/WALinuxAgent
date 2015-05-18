@@ -17,7 +17,15 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 import azureguestagent.osinfo as osinfo
-from default import *
+from default import DefaultOSUtil
+from debian import DebianOSUtil
+from ubuntu import UbuntuOSUtil, Ubuntu1204OSUtil
+from redhat import RedhatOSUtil, RedhatOSUtil
+from coreos import CoreOSOSUtil
+from suse import SUSEOSUtil, SUSE12OSUtil
+from gentoo import GentooOSUtil
+from fedora import FedoraOSUtil
+from freebsd import FreeBSDOSUtil
 
 def GetOSUtil(osInfo):
     name = osInfo[0]
