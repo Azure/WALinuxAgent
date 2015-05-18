@@ -2727,6 +2727,10 @@ class Util(object):
                 Error("HTTP Err: Reason={0}".format(resp.reason))
                 Error("HTTP Err: Header={0}".format(resp.getheaders()))
                 Error("HTTP Err: Body={0}".format(resp.read()))
+
+            if resp is not None and resp.status == httplib.GONE:
+                raise Exception("Http resource gone.")
+
             time.sleep(self.__class__.RetryWaitingInterval)
             resp = self._HttpRequest(method, host, path, data, secure, 
                                      headers, proxyHost, proxyPort)
@@ -5409,10 +5413,16 @@ class Agent(Util):
             lbProbeResponder = False
         while True:
             if (goalState == None) or (incarnation == None) or (goalState.Incarnation != incarnation):
-                goalState = self.UpdateGoalState()
+                try:
+                    goalState = self.UpdateGoalState()
+                except Exception as e:
+                    Warn("Failed to fetch goalstate:{0}".format(e))
+                    continue
+
                 if goalState == None :
                     Warn("Failed to fetch goalstate")
                     continue
+
                 if provisioned == False:
                     self.ReportNotReady("Provisioning", "Starting")
 
