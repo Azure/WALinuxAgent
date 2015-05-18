@@ -22,7 +22,7 @@ import zipfile
 import json
 import subprocess
 import azureguestagent.logger as logger
-import azureguestagent.prot as prot
+import azureguestagent.protocol as prot
 from azureguestagent.exception import ExtensionError
 import azureguestagent.utils.fileutil as fileutil
 import azureguestagent.utils.restutil as restutil
@@ -49,7 +49,7 @@ class ExtensionHandler(object):
             #TODO handle extension in parallel
             self.processExtension(protocol, setting) 
     
-    def processExtension(self, protocol, setting)
+    def processExtension(self, protocol, setting):
         ext = LoadExtensionInstance(setting)
         if ext is None:
             ext = ExtensionInstance(setting, setting.getVersion())
@@ -79,7 +79,7 @@ class ExtensionHandler(object):
 def ParseExtensionDirName(dirName):
     seprator = dirName.rfind('-')
     if seprator < 0:
-        raise Exception("Invalid extenation dir name")
+        raise ExtensionError("Invalid extenation dir name")
     return dirName[0:seprator], dirName[seprator + 1:]
 
 def LoadExtensionInstance(setting):
@@ -368,8 +368,8 @@ class ExtensionInstance(object):
         if not self.isResponsive(heartbeatFile):
             return {
                     "status": "Unresponsive",
-                    "code": -1
-                    "Message": ""
+                    "code": -1,
+                    "Message": "Extension heartbeat is not responsive"
             }    
         try:
             heartbeatJson = fileutil.GetFileContents(heartbeatFile)

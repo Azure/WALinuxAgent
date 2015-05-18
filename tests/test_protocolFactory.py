@@ -19,42 +19,26 @@
 # http://msdn.microsoft.com/en-us/library/cc227259%28PROT.13%29.aspx
 
 import env
-import tests.tools as tools
+from tests.tools import *
 import uuid
 import unittest
 import os
 import azureguestagent.protocol as protocol
 
-class TestProtocolDetection(unittest.TestCase):
-
-    def test_detect_endpoint(self):
-        if os.path.isfile('/tmp/MockProtocol'):
-            os.remove('/tmp/MockProtocol')
-        protocols = [MockProtocolDetectionFailure, MockProtocol]
-        protocol.DetectDefaultProtocol(protocols)
-        self.assertTrue(os.path.isfile('/tmp/MockProtocol'))
-
-    def test_detection_failure(self):
+class TestWireProtocolEndpoint(unittest.TestCase):
+    def test_get_wire_protocol_endpoint(self):
         with self.assertRaises(protocol.ProtocolNotFound):
-            protocols = [MockProtocolDetectionFailure]
-            protocol.DetectDefaultProtocol(protocols)
-
-class MockProtocol():
-    @staticmethod
-    def Detect():
-        pass
-
-class MockProtocolDetectionFailure():
-    @staticmethod
-    def Detect():
-        raise protocol.ProtocolNotFound("Mock dection failure.")
+            protocol.GetWireProtocolEndpoint()
     
-def MockGetLibDir():
-    return '/tmp'
+    def test_get_available_protocol(self):
+        with self.assertRaises(protocol.ProtocolNotFound):
+            protocol.GetDefaultProtocol()
 
-protocol.ProtocolV1 = MockProtocol
-protocol.ProtocolV2 = MockProtocolDetectionFailure
-protocol.CurrOS.GetLibDir = MockGetLibDir
+    def test_get_available_protocols(self):
+        mockGetV1 = MockFunc(retval="Mock protocol")
+        protocols = protocol.GetAvailableProtocols([mockGetV1])
+        self.assertNotEquals(None, protocols)
+        self.assertNotEquals(0, len(protocols))
 
 if __name__ == '__main__':
     unittest.main()

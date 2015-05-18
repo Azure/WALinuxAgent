@@ -93,10 +93,6 @@ class ProtocolV2(Protocol):
                        "api-version={{{1}}}").format(__MetadataServerAddr, 
                                                   __ApiVersion)
 
-    @staticmethod
-    def Detect(identityService=__IdentityService):
-        raise NotImplementedError("Protocol v2 is not implemented.")
-
     def __init__(self):
         raise NotImplementedError()
 

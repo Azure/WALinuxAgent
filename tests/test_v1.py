@@ -28,7 +28,6 @@ import time
 import httplib
 import azureguestagent.logger as logger
 import azureguestagent.protocol.v1 as v1
-from  azureguestagent.utils.osutil import CurrOSInfo, CurrOS
 from test_version import VersionInfoSample
 from test_goalstate import GoalStateSample
 from test_hostingenv import HostingEnvSample
@@ -124,7 +123,7 @@ class TestStatusBlob(unittest.TestCase):
         statusBlob.setAgentStatus("1.0", "Hehe", "Haha")
         statusBlob.setExtensionStatus("Extension", "1.1", 
                                       {"status":"success"})
-        print statusBlob.toJson()
+        self.assertNotEquals(None, statusBlob.toJson())
 
 if __name__ == '__main__':
     unittest.main()

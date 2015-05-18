@@ -18,13 +18,5 @@
 #
 
 from azureguestagent.protocol.common import *
-from azureguestagent.protocol.detection import *
-
-"""
-Protocol object defines all communication interface between agent and 
-infrustructure
-
-Call DetectEndpoint() function to initialize protocol object.
-Call GetProtocol() function to get protocol object.
-"""
+from azureguestagent.protocol.factory import *
 

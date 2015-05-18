@@ -18,7 +18,7 @@
 #
 
 from azureguestagent.osinfo import CurrOSInfo
-import azureguestagent.handler.default as default
+from azureguestagent.handler.default.handlerFactory import DefaultHandlerFactory
 
 def GetOSHandlerFactory(osInfo):
     """
@@ -30,7 +30,7 @@ def GetOSHandlerFactory(osInfo):
     fullName = osInfo[3]
     
     #Return default implementation 
-    return default.DefaultHandlerFactory()
+    return DefaultHandlerFactory()
 
 CurrOSHandlerFactory = GetOSHandlerFactory(CurrOSInfo)
 

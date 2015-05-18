@@ -71,14 +71,7 @@ class TestCurrOS(unittest.TestCase):
         CurrOSUtil.DeleteRootPassword()
         self.assertEquals('root:*LOCK*:14600::::::',
                           fileutil.ReplaceFileContentsAtomic.args[1])
-  
-    def test_wireserver_endpoint(self):
-        if os.path.isfile('/tmp/wireserver'):
-            os.remove('/tmp/wireserver')
-        CurrOSUtil.SetWireServerEndpoint("wireserver")
-        endpoint = CurrOSUtil.GetWireServerEndpoint()
-        self.assertEquals('wireserver', endpoint)
-
+ 
     def test_cert_operation(self):
         if os.path.isfile('/tmp/test.prv'):
             os.remove('/tmp/test.prv')
@@ -139,12 +132,9 @@ class TestCurrOS(unittest.TestCase):
     @Mockup(shellutil, 'RunGetOutput', MockFunc(retval=[0, '']))
     @Mockup(CurrOSUtil, 'GetSshdConfigPath', MockFunc(retval='/tmp/sshd_config'))
     def test_ssh_operation(self):
-        CurrOSUtil.RegenerateSshHostkey('rsa')
         shellutil.RunGetOutput.retval=[0, 
                                        '2048 f1:fe:14:66:9d:46:9a:60:8b:8c:'
                                        '80:43:39:1c:20:9e  root@api (RSA)']
-        thumbprint = CurrOSUtil.GetSshHostKeyThumbprint('rsa')
-        self.assertEquals('f1fe14669d469a608b8c8043391c209e', thumbprint)
         sshdConfig = CurrOSUtil.GetSshdConfigPath()
         self.assertEquals('/tmp/sshd_config', sshdConfig)
         if os.path.isfile(sshdConfig):

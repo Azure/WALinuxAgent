@@ -135,32 +135,10 @@ class WireProtocolResourceGone(ProtocolError):
     pass
 
 class ProtocolV1(Protocol):
-
-    #TODO move to detect.py
-    @staticmethod
-    def Detect():
-        endpoint = None
-        if os.path.isfile(WireServerAddrFile):
-            endpoint = fileutil.GetFileContents(WireServerAddrFile)
-        if endpoint is None:
-            raise ProtocolNotFound("Wire server endpoint not found.")
-        protocol = ProtocolV1(endpoint)
-        protocol.checkProtocolVersion()
-        CurrOSUtil.GenerateTransportCert()
-        return protocol
-   
-    @staticmethod
-    def Init():
-        endpoint = None
-        if os.path.isfile(WireServerAddrFile):
-            endpoint = fileutil.GetFileContents(WireServerAddrFile)
-        if endpoint is None:
-            raise ProtocolNotFound("Wire server endpoint not found.")
-        protocol = ProtocolV1(endpoint)
-        return protocol
-
-
+ 
     def __init__(self, endpoint=None):
+        if endpoint is None:
+            raise ProtocolNotFound("Wire server endpoint not found.")
         self.endpoint = endpoint
         self.libDir = CurrOSUtil.GetLibDir()
         self.client = WireClient(endpoint)

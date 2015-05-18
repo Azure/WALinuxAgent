@@ -66,9 +66,9 @@ class ConsoleAppender():
         self.level = appender_config.properties['level']
         self.console_path = appender_config.properties['console_path']
         if not self.level:
-            raise Exception("Log level is not specified.")
+            raise ValueError("Log level is not specified.")
         if not self.console_path:
-            raise Exception("Console path is not specified.")
+            raise ValueError("Console path is not specified.")
 
     def write(self, level, msg):
         if _MatchLogLevel(self.level, level):
@@ -76,16 +76,16 @@ class ConsoleAppender():
                 with open(self.console_path, "w") as console :
                     console.write(msg.encode('ascii','ignore') + "\n")
             except IOError as e:
-                print e
+                pass
             
 class FileAppender():
     def __init__(self, appender_config):
         self.level = appender_config.properties['level']
         self.file_path = appender_config.properties['file_path']
         if not self.level:
-            raise Exception("Log level is not specified.")
+            raise ValueError("Log level is not specified.")
         if not self.file_path:
-            raise Exception("File path is not specified.")
+            raise ValueError("File path is not specified.")
 
     def write(self, level, msg):
         if _MatchLogLevel(self.level, level):
@@ -93,7 +93,7 @@ class FileAppender():
                 with open(self.file_path, "a+") as log_file:
                     log_file.write(msg.encode('ascii','ignore') + "\n")
             except IOError as e:
-                print e
+                pass
 
 #Initialize logger instance
 DefaultLogger = Logger()
@@ -150,7 +150,7 @@ def CreateLoggerAppender(appender_config):
     elif appender_config.properties['type'] == 'FILE' :
         return FileAppender(appender_config)
     else:
-        raise Exception("Unknown appender type")
+        raise ValueError("Unknown appender type")
 
 def LogError(operation):
     def Decorator(func):

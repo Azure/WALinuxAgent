@@ -25,7 +25,6 @@ from azureguestagent.osinfo import CurrOSInfo
 
 class TestOSInfo(unittest.TestCase):
     def test_curr_os_info(self):
-        print "hehe"
         self.assertNotEquals(None, CurrOSInfo)
         self.assertNotEquals(None, CurrOSInfo[0])
         self.assertNotEquals(None, CurrOSInfo[1])

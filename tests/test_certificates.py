@@ -19,7 +19,7 @@
 # http://msdn.microsoft.com/en-us/library/cc227259%28PROT.13%29.aspx
 
 import env
-import tests.tools as tools
+from  tools import *
 import uuid
 import unittest
 import os
@@ -163,17 +163,12 @@ vbtwtsknAHtTbotXJwfaBZv2RGgGRr3DzNo6ll2Aez0lNblZFXq132h7+y5iLvar
 4euORaD/fuM4UPlR5mN+bypU
 -----END PRIVATE KEY-----
 """
-def MockGetLibDir():
-    return '/tmp'
 
 def MockGetOpensslCmd():
     return 'openssl'
 
 class TestCertificates(unittest.TestCase):
-    def setUp(self):
-        v1.CurrOS.GetLibDir = MockGetLibDir
-        v1.CurrOS.MockGetOpensslCmd = MockGetOpensslCmd
-
+    
     def test_certificates(self):
         crt1 = '/tmp/33B0ABCE4673538650971C10F7D7397E71561F35.crt'
         crt2 = '/tmp/4037FBF5F1F3014F99B5D6C7799E9B20E6871CB3.crt'

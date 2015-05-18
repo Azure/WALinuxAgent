@@ -26,7 +26,7 @@ import traceback
 import threading
 import azureguestagent.logger as logger
 import azureguestagent.conf as conf
-import azureguestagent.prot as prot
+import azureguestagent.protocol as prot
 from azureguestagent.osinfo import CurrOSInfo
 from azureguestagent.handler import CurrOSHandlerFactory
 from azureguestagent.utils.osutil import CurrOSUtil

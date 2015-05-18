@@ -46,8 +46,6 @@ if needed.
 
 class DefaultOSUtil(object):
 
-    __WireServer=None
-
     def __init__(self):
         self.libDir = "/var/lib/waagent"
         self.extLogDir = "/var/log/azure"
@@ -82,12 +80,6 @@ class DefaultOSUtil(object):
     def GetOpensslCmd(self):
         return self.opensslCmd
 
-    def GetWireServerEndpoint(self):
-        return DefaultOSUtil.__WireServer
-
-    def SetWireServerEndpoint(self, endpoint):
-        DefaultOSUtil.__WireServer = endpoint
-     
     def UpdateUserAccount(self, userName, password, expiration=None):
         """
         Update password and ssh key for user account.

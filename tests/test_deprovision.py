@@ -24,7 +24,8 @@ import unittest
 import azureguestagent.handler.default.deprovisionHandler as deprovisionHandler
 
 def MockAction(param):
-    print param
+    #print param
+    pass
 
 def MockSetup(self, deluser):
     warnings = ["Print warning to console"]
