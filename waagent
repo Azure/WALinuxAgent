@@ -2591,7 +2591,7 @@ class Util(object):
         secure = False
         host = self.Endpoint
         path = url
-        port = 80
+        port = None
         
         #"http[s]://hostname[:port][/]"
         if url.startswith("http://"):
@@ -2638,20 +2638,22 @@ class Util(object):
                     Error("Failed to parse http proxy url:{0}".format(proxyUrl))
         return (None, None) 
 
-    def _HttpRequest(self, method, host, path, port=80, data=None, secure=False, 
+    def _HttpRequest(self, method, host, path, port=None, data=None, secure=False, 
                      headers=None, proxyHost=None, proxyPort=None):
         resp = None
         conn = None
         try:
             if secure:
+                port = 443 if port is None else port
                 if proxyHost is not None and proxyPort is not None:
                     conn = httplib.HTTPSConnection(proxyHost, proxyPort)
-                    conn.set_tunnel(host, 443)
+                    conn.set_tunnel(host, port)
                     #If proxy is used, full url is needed.
                     path = "https://{0}:{1}{2}".format(host, port, path)
                 else:
                     conn = httplib.HTTPSConnection(host, port)
             else:
+                port = 80 if port is None else port
                 if proxyHost is not None and proxyPort is not None:
                     conn = httplib.HTTPConnection(proxyHost, proxyPort)
                     #If proxy is used, full url is needed.
