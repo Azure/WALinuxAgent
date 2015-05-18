@@ -46,3 +46,10 @@ class ExtensionError(AgentError):
     def __init__(self, msg):
         super(ExtensionError, self).__init__('000003', msg)
 
+"""
+When provision failed
+"""
+class ProvisionError(AgentError):
+    def __init__(self, msg):
+        super(ExtensionError, self).__init__('000004', msg)
+

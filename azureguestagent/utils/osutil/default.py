@@ -302,27 +302,6 @@ class DefaultOSUtil(object):
         fileutil.ReplaceFileContentsAtomic(configPath, "\n".join(config))
         logger.Info("Disabled SSH password-based authentication methods.")
 
-    def RegenerateSshHostkey(self, keyPairType):
-        shellutil.Run("rm -f /etc/ssh/ssh_host_*key*")
-        shellutil.Run("ssh-keygen -N '' -t {0} -f /etc/ssh/ssh_host_{1}_key"
-                .format(keyPairType, keyPairType))
-
-    def GetSshHostKeyThumbprint(self, keyPairType):
-        cmd = "ssh-keygen -lf /etc/ssh/ssh_host_{0}_key.pub".format(keyPairType)
-        ret = shellutil.RunGetOutput(cmd)
-        if ret[0] == 0:
-            return ret[1].rstrip().split()[1].replace(':', '')
-        else:
-            return None
-
-    def WaitForSshHostKey(self, keyPairType, maxRetry=6):
-        path = '/etc/ssh/ssh_host_{0}_key'.format(keyPairType)
-        for retry in range(0, maxRetry):
-            if os.path.isfile(path):
-                return
-            logger.Info("Wait for ssh host key be generated: {0}", path)
-            time.sleep(1)
-        raise Exception("Can't find ssh host key.")
 
     def GetDvdDevice(self, devDir='/dev'):
         patten=r'(sr[0-9]|hd[c-z]|cdrom[0-9])'

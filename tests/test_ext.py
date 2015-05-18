@@ -136,7 +136,7 @@ class TestExtensions(unittest.TestCase):
     @Mockup(ext.ExtensionInstance, 'getHandlerStatus', MockFunc(retval="enabled"))
     @Mockup(ext.ExtensionInstance, 'setHandlerStatus', MockSetHandlerStatus)
     def test_handle(self):
-        #Test handle
+        #Test enable
         testExt = ext.ExtensionInstance(setting, setting.getVersion(), False)
         testExt.initLog()
         self.assertEqual(1, len(testExt.logger.appenders) - len(logger.DefaultLogger.appenders))
@@ -147,9 +147,6 @@ class TestExtensions(unittest.TestCase):
         testExt.initLog()
         self.assertEqual(1, len(testExt.logger.appenders) - len(logger.DefaultLogger.appenders))
         testExt.handle()
-
-    def test_status(self):
-        pass
 
 if __name__ == '__main__':
     unittest.main()

@@ -22,6 +22,7 @@ import zipfile
 import json
 import subprocess
 import azureguestagent.logger as logger
+import azureguestagent.prot as prot
 from azureguestagent.exception import ExtensionError
 import azureguestagent.utils.fileutil as fileutil
 import azureguestagent.utils.restutil as restutil
@@ -40,7 +41,9 @@ HandlerStatusToAggStatus = {
 
 class ExtensionHandler(object):
 
-    def process(self, protocol):
+    def process(self):
+        protocol = prot.GetDefaultProtocol()
+
         extSettings = protocol.getExtensions()
         for setting in extSettings:
             #TODO handle extension in parallel
@@ -55,7 +58,7 @@ class ExtensionHandler(object):
             ext.handle()
             aggStatus = ext.getAggStatus()
         except ExtensionError as e:
-            logger.Error("Failed to handle extension: {0}-{1}, {2}", 
+            logger.Error("Failed to handle extension: {0}-{1}\n {2}", 
                          setting.getName(),
                          setting.getVersion(),
                          e)
@@ -396,7 +399,8 @@ class ExtensionInstance(object):
         self.updateSetting()
         try:
             devnull = open(os.devnull, 'w')
-            child = subprocess.Popen(cmd, shell=True, cwd=baseDir, stdout=devnull)
+            child = subprocess.Popen([cmd], shell=True, 
+                                     cwd=baseDir, stdout=devnull)
         except Exception as e:
             #TODO do not catch all exception
             raise ExtensionError("Failed to launch: {0}, {1}".format(cmd, e))

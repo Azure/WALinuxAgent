@@ -17,17 +17,13 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
-#TODO move install/uninstall handler to setup.py
-from azureguestagent.utils.osutil import CurrOSUtil
+from azureguestagent.handler.default.handlerFactory import DefaultHandlerFactory
+from azureguestagent.handler.ubuntu.provisionHandler import UbuntuProvisionHandler
 
-def Install():
-    CurrOSUtil.CheckDependencies()
-    CurrOSUtil.RemoveRuleFiles()
-    CurrOSUtil.SetSshClientAliveInterval()
-    CurrOSUtil.RegisterAgentService()
+class UbuntuHandlerFactory(DefaultHandlerFactory):
+    def __init__(self):
+        super(UbuntuHandlerFactory, self).__init__()
+        self.provisionHandler = UbuntuProvisionHandler()
 
-def Uninstall():
-    CurrOSUtil.SwitchCwd()
-    CurrOSUtil.UnregisterAgentService()
-    CurrOSUtil.RestoreRuleFiles()
-
+    def getProvisionHandler(self):
+        return self.provisionHandler

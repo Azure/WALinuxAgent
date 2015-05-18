@@ -18,6 +18,8 @@
 #
 
 import os
+import azureguestagent.logger as logger
+import azureguestagent.conf as conf
 from azureguestagent.utils.osutil import CurrOSUtil
 import azureguestagent.utils.fileutil as fileutil
 
@@ -34,19 +36,17 @@ For additional details to please refer to the MSDN documentation at : http://msd
 
 class ResourceDiskHandler(object):
 
-    def startActivateResourceDisk(self, config):
-        #TODO FreeBSD use Popen to open another process to do this
-        diskThread = threading.Thread(target = self.activateResourceDisk,
-                                      args = (config))
+    def startActivateResourceDisk(self):
+        diskThread = threading.Thread(target = self.activateResourceDisk)
         diskThread.start()
 
-    def activateResourceDisk(self, config):
-        mountpoint = config.get("ResourceDisk.MountPoint", "/mnt/resource")
-        fs = config.get("ResourceDisk.Filesystem", "ext3")
+    def activateResourceDisk(self):
+        mountpoint = conf.Get("ResourceDisk.MountPoint", "/mnt/resource")
+        fs = conf.Get("ResourceDisk.Filesystem", "ext3")
         mountpoint = CurrOSUtil.MountResourceDisk(mountpoint, fs)
         warningFile = os.path.join(mountpoint, DataLossWarningFile)
         fileutil.SetFileContents(warningFile, DataLossWarning)
-        if config.getSwitch("ResourceDisk.EnabledSwap", False):
+        if conf.GetSwitch("ResourceDisk.EnabledSwap", False):
             sizeMB = config.getInt("ResourceDisk.SwapSizeMB", 0)
             CurrOSUtil.CreateSwapSpace(mountpoint, sizeMB)
 

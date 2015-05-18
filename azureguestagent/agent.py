@@ -26,6 +26,7 @@ import traceback
 import threading
 import azureguestagent.logger as logger
 import azureguestagent.conf as conf
+import azureguestagent.prot as prot
 from azureguestagent.osinfo import CurrOSInfo
 from azureguestagent.handler import CurrOSHandlerFactory
 from azureguestagent.utils.osutil import CurrOSUtil
@@ -39,71 +40,64 @@ GuestAgentLongVersion = "{0}-{1}".format(GuestAgentName, GuestAgentVersion)
 GuestAgentAuthor='MS OSTC'
 GuestAgentUri='https://github.com/Azure/WALinuxAgent'
 
-class Agent(object):
-
-    def __init__(self, config):
-        self.config = config
-
-    def run(self):
-        self.initialize()
-        self.start()
-
-    def initialize(self):
-        os.chdir(CurrOSUtil.GetLibDir())
-        self.savePid()
-
-        scvmmHandler = CurrOSHandlerFactory.GetScvmmHandler()
-        if scvmmHandler.detectScvmmEnv():
-            scvmmHandler.startScvmmAgent()
-            return
-        
-        dhcpHandler = CurrOSHandlerFactory.GetDhcpHandler()
-        dhcpHandler.waitForNetwork()
-        dhcpHandler.probe()
-        CurrOSUtil.SetWireServerEndpoint(dhcpHandler.getEndpoint())
-
-        self.protocol = proto.DetectDefaultProtocol()
-
-        provisoned = os.path.join(CurrOSUtil.GetLibDir(), "provisioned")
-        if(not os.path.isfile(provisoned)):
-            provisionHandler = provision.ProvisionHandler(self.config, 
-                                                          self.protocol)
-            try:
-                provisionHandler.provision()
-                fileutil.SetFileContents(provisoned, "")
-            except Exception, e:
-                self.protocol.reportAgentStatus(GuestAgentVersion, 
-                                           "NotReady", 
-                                           "ProvisioningFailed")
-                raise e
-       
-        if self.config.getSwitch("ResourceDisk.Format", False):
-            rdHandler = CurrOSHandlerFactory.GetResourceDiskHandler()
-            rdHandler.startActivateResourceDisk(self.config)
-        
-        self.envmonitor = envmon.EnvMonitor(self.config, self.dhcpHandler)
-        #TODO Start load balancer
-        #Need to check whether this should be kept
-
-    def start(self):
-        #Handle state change
-        while True:
-            #Handle extensions
-            extHandler = CurrOSHandlerFactory.GetExtensionHandler()
-            extHandler.process(self.protocol)
-            
-            #Report status
-            agentStatus = "Ready"
-            agentStatusDetail = "Guest Agent is running"
-            self.protocol.reportAgentStatus(GuestAgentVersion, 
-                                            agentStatus,
-                                            agentStatusDetail)
-            time.sleep(25)
+def Init():
+    #Init config
+    configPath = CurrOSUtil.GetConfigurationPath()
+    conf.LoadConfiguration(configPath)
     
-    def savePid(self):
-        fileutil.SetFileContents(CurrOSUtil.GetAgentPidPath(), 
-                                 str(os.getpid()))
+    #Init log
+    verbose = conf.GetSwitch("Logs.Verbose", False)
+    logger.LoggerInit('/var/log/waagent.log', '/dev/console', verbose=verbose)
+    
+    #Create lib dir
+    fileutil.CreateDir(CurrOSUtil.GetLibDir(), mode='0700')
+    os.chdir(CurrOSUtil.GetLibDir())
 
+def Run():
+    fileutil.SetFileContents(CurrOSUtil.GetAgentPidPath(), 
+                             str(os.getpid()))
+
+    scvmmHandler = CurrOSHandlerFactory.GetScvmmHandler()
+    if scvmmHandler.detectScvmmEnv():
+        scvmmHandler.startScvmmAgent()
+        return
+    
+    dhcpHandler = CurrOSHandlerFactory.GetDhcpHandler()
+    dhcpHandler.probe()
+
+    prot.DetectDefaultProtocol()
+    
+    provisionHandler = CurrOSHandlerFactory.getProvisionHandler()
+    provisionHandler.process()
+
+    if conf.getSwitch("ResourceDisk.Format", False):
+        rdHandler = CurrOSHandlerFactory.GetResourceDiskHandler()
+        rdHandler.startActivateResourceDisk()
+    
+    envHandler = CurrOSHandlerFactory.GetEnvHandler()
+    envHandler.startMonitor()
+
+    #TODO Start load balancer
+    #Need to check whether this should be kept
+
+    protocol = prot.GetDefaultProtocol()
+    while True:
+        #Handle extensions
+        extHandler = CurrOSHandlerFactory.GetExtensionHandler()
+        extHandler.process()
+        
+        #Report status
+        agentStatus = "Ready"
+        agentStatusDetail = "Guest Agent is running"
+        protocol.reportAgentStatus(GuestAgentVersion, 
+                                   agentStatus,
+                                   agentStatusDetail)
+        time.sleep(25)
+
+def Deprovision(force=False, deluser=False):
+    deprovisionHandler = CurrOSHandlerFactory.GetDeprovisionHandler()
+    deprovisionHandler.deprovision(force=force, deluser=deluser)
+        
 def ParseArgs(sysArgv):
     cmd = None
     force = False
@@ -115,6 +109,8 @@ def ParseArgs(sysArgv):
             cmd = "deprovision"
         elif re.match("^([-/]*)daemon", a):
             cmd = "daemon"
+        elif re.match("^([-/]*)run", a):
+            cmd = "run"
         elif re.match("^([-/]*)version", a):
             cmd = "version"
         elif re.match("^([-/]*)serialconsole", a):
@@ -134,31 +130,30 @@ def Version():
                                           CurrOSInfo[0], 
                                           CurrOSInfo[1])
 def Usage():
-    print ("usage: {0} [-verbose] [-force] "
-           "[-help|-deprovision[+user]|-version|-serialconsole|-daemon]")
+    print (("usage: {0} [-verbose] [-force] "
+            "[-help|-deprovision[+user]|-version|-serialconsole|-daemon|-run]"
+            "").format(sys.argv[0]))
+
+def Daemon():
+    print "Start daemon in backgroud"
+    subprocess.Popen([sys.argv[0], "run"], stdout=devnull, stderr=devnull)
 
 def Main():
     command, force, verbose = ParseArgs(sys.argv[1:])
-    if command == "deprovision+user":
-        deprovisionHandler = CurrOSHandlerFactory.GetDeprovisionHandler()
-        deprovisionHandler.deprovision(force=force, deluser=True)
-    elif command == "deprovision":
-        deprovisionHandler = CurrOSHandlerFactory.GetDeprovisionHandler()
-        deprovisionHandler.deprovision(force=force, deluser=True)
-    elif command == "daemon":
-        configPath = CurrOSUtil.GetConfigurationPath()
-        config = conf.LoadConfiguration(configPath)
-        verbose = config.getSwitch("Logs.Verbose", False)
-        logger.LoggerInit('/var/log/waagent.log', 
-                          '/dev/console',
-                          verbose=verbose)
-        fileutil.CreateDir(CurrOSUtil.GetLibDir(), mode='0700')
-        os.chdir(CurrOSUtil.GetLibDir())
-        Agent(config).run()
-    elif command == "serialconsole":
-        #TODO
-        pass
-    elif command == "version":
+    if command == "version":
         Version()
-    else:
+    elif command == "help":
         Usage()
+    elif command == "daemon":
+        Daemon()
+    else: 
+        Init()
+        if command == "serialconsole":
+            #TODO
+            pass
+        if command == "deprovision+user":
+            Deprovision(force, deluser=True)
+        elif command == "deprovision":
+            Deprovision(force, deluser=False)
+        elif command == "run":
+            Run()

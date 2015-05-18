@@ -44,11 +44,14 @@ class DhcpHandler(object):
             ipv4 = CurrOSUtil.GetIpv4Address()
 
     def probe(self):
+        self.waitForNetwork()
         macAddress = CurrOSUtil.GetMacAddress()
         req = BuildDhcpRequest(macAddress)
         resp = SendDhcpRequest(req)
         endpoint, gateway, routes = ParseDhcpResponse(resp)
         self.endpoint = endpoint
+        if endpoint is not None:
+            CurrOSUtil.SetWireServerEndpoint(endpoint)
         self.gateway = gateway
         self.routes = routes
         self.configRoutes()

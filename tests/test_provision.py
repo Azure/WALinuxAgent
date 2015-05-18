@@ -1,5 +1,3 @@
-# Windows Azure Linux Agent
-#
 # Copyright 2014 Microsoft Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,17 +15,19 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
-#TODO move install/uninstall handler to setup.py
-from azureguestagent.utils.osutil import CurrOSUtil
+import env
+import tests.tools as tools
+import uuid
+import unittest
+import os
+import json
+import azureguestagent.utils.fileutil as fileutil
+from azureguestagent.handler.default.provisionHandler import ProvisionHandler
 
-def Install():
-    CurrOSUtil.CheckDependencies()
-    CurrOSUtil.RemoveRuleFiles()
-    CurrOSUtil.SetSshClientAliveInterval()
-    CurrOSUtil.RegisterAgentService()
+class TestProvision(unittest.TestCase):
 
-def Uninstall():
-    CurrOSUtil.SwitchCwd()
-    CurrOSUtil.UnregisterAgentService()
-    CurrOSUtil.RestoreRuleFiles()
-
+    def test_process(self):
+        pass
+    
+if __name__ == '__main__':
+    unittest.main()

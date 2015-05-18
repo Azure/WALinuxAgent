@@ -1,5 +1,3 @@
-# Windows Azure Linux Agent
-#
 # Copyright 2014 Microsoft Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,102 +18,122 @@
 import os
 import traceback
 import azureguestagent.logger as logger
-from azureguestagent.utils.osutil import CurrOS, CurrOSInfo
+import azureguestagent.conf as conf
+from azureguestagent.utils.osutil import CurrOSUtil
 import azureguestagent.utils.shellutil as shellutil
 import azureguestagent.utils.fileutil as fileutil
 
 CustomDataFile="CustomData"
 
 class ProvisionHandler(object):
-    def __init__(self, config, protocol):
-        self.config = config
-        self.protocol = protocol
+    def process(self):
+        #If provision is not enabled, return
+        if not conf.GetSwitch("Provisioning.Enabled", True):
+            logger.Info("Provisioning is disabled. Skip.")
+            return
+
+        provisoned = os.path.join(CurrOSUtil.GetLibDir(), "provisioned")
+        if os.path.isfile(provisioned):
+            return
+        
+        logger.Info("Start provisioning.")
+        protocol = prot.GetDefaultProtocol()
+        try:
+            logger.Info("Provisioning image started")
+            protocol.reportProvisionStatus("NotReady", 
+                                           "Provisioning", 
+                                           "Starting")
+            self.provision()
+            fileutil.SetFileContents(provisoned, "")
+            thumbprint = self.regenerateSshHostKey(keyPairType)
+            protocol.reportProvisionStatus(status="Ready",
+                                           thumbprint = thumbprint)
+        except ProvisionError as e:
+            logger.Error("Provision failed: {0}", e)
+            protocol.reportProvisionStatus(status="NotReady", subStatus=str(e))
+
+    
+    def regenerateSshHostKey(self):
+        keyPairType = conf.Get("Provisioning.SshHostKeyPairType", "rsa")
+        if self.config.getSwitch("Provisioning.RegenerateSshHostKeyPair"):
+            shellutil.Run("rm -f /etc/ssh/ssh_host_*key*")
+            shellutil.Run(("ssh-keygen -N '' -t {0} -f /etc/ssh/ssh_host_{1}_key"
+                           "").format(keyPairType, keyPairType))
+        thumbprint = self.getSshHostKeyThumbprint(keyPairType)
+        return thumbprint
+
+    def getSshHostKeyThumbprint(self, keyPairType):
+        cmd = "ssh-keygen -lf /etc/ssh/ssh_host_{0}_key.pub".format(keyPairType)
+        ret = shellutil.RunGetOutput(cmd)
+        if ret[0] == 0:
+            return ret[1].rstrip().split()[1].replace(':', '')
+        else:
+            raise ProvisionError(("Failed to generate ssh host key: "
+                                  "ret={0}, out= {1}").format(ret[0], ret[1]))
+            
 
     def provision(self):
-        try:
-            if self.config.getSwitch("Provisioning.Enabled"):
-                self._provision()
-            else:
-                #In some distro like Ubuntu, cloud init does the provision
-                #In this case, we need to wait the cloud init to complete 
-                #provision work and generate ssh host key
-                keyPairType = self.config.get("Provisioning.SshHostKeyPairType", "rsa")
-                CurrOS.WaitForSshHostKey(keyPairType)
+        ovfenv = self.copyOvf()
+        password = ovfenv.getUserPassword()
+        ovfenv.clearUserPassword()
 
-            keyPairType = self.config.get("Provisioning.SshHostKeyPairType", "rsa")
-            thumbprint = CurrOS.GetSshHostKeyThumbprint(keyPairType)
-            self.protocol.reportProvisionStatus(status="Ready",
-                                                thumbprint = thumbprint)
-        except Exception, e:
-            logger.Error("Provision failed: {0} {1}", e, traceback.format_exc())
-            self.protocol.reportProvisionStatus(status="NotReady",
-                                                subStatus="Provisioning Failed")
-            raise e
+        CurrOSUtil.SetHostname(ovfenv.getComputerName())
+        CurrOSUtil.PublishHostname(ovfenv.getComputerName())
+        CurrOSUtil.UpdateUserAccount(ovfenv.getUserName(), password)
 
-    def _provision(self):
-        logger.Info("Provisioning image started")
-        self.protocol.reportProvisionStatus("NotReady", "Provisioning", "Starting")
+        CurrOSUtil.ConfigSshd(ovfenv.getDisableSshPasswordAuthentication())
 
-        self.ovfenv = self.copyOvf()
-        password = self.ovfenv.getUserPassword()
-        self.ovfenv.clearUserPassword()
-
-        CurrOS.SetHostname(self.ovfenv.getComputerName())
-        CurrOS.PublishHostname(self.ovfenv.getComputerName())
-        CurrOS.UpdateUserAccount(self.ovfenv.getUserName(), password)
-
-        CurrOS.ConfigSshd(self.ovfenv.getDisableSshPasswordAuthentication())
         #Disable selinux temporary
-        sel = CurrOS.IsSelinuxRunning()
+        sel = CurrOSUtil.IsSelinuxRunning()
         if sel:
-            CurrOS.SetSelinuxEnforce(0)
-        self.deploySshPublicKeys()
-        self.deploySshKeyPairs()
-        self.saveCustomData()
+            CurrOSUtil.SetSelinuxEnforce(0)
+
+        self.deploySshPublicKeys(ovfenv)
+        self.deploySshKeyPairs(ovfenv)
+        self.saveCustomData(ovfenv)
+
         if sel:
-            CurrOS.SetSelinuxEnforce(1)
+            CurrOSUtil.SetSelinuxEnforce(1)
 
-        keyPairType = self.config.get("Provisioning.SshHostKeyPairType", "rsa")
-        if self.config.getSwitch("Provisioning.RegenerateSshHostKeyPair"):
-            CurrOS.RegenerateSshHostkey(keyPairType)
-
-        CurrOS.RestartSshService()
+        CurrOSUtil.RestartSshService()
 
         if self.config.getSwitch("Provisioning.DeleteRootPassword"):
-            CurrOS.DeleteRootPassword()
+            CurrOSUtil.DeleteRootPassword()
 
     def copyOvf(self):
         """
         Copy ovf env file from dvd to hard disk. 
         Remove password before save it to the disk
         """
-        ovfFile = CurrOS.GetOvfEnvPathOnDvd()
-        CurrOS.MountDvd()
+        CurrOSUtil.MountDvd()
 
+        ovfFile = CurrOSUtil.GetOvfEnvPathOnDvd()
         if not os.path.isfile(ovfFile):
-            raise Exception("Unable to provision: Missing ovf-env.xml on DVD")
+            raise ProvisionError("Missing ovf-env.xml")
+
         ovfxml = fileutil.GetFileContents(ovfFile, removeBom=True)
         ovfenv = OvfEnv(ovfxml)
         ovfxml = re.sub("<UserPassword>.*?<", "<UserPassword>*<", ovfxml)
-        ovfFilePath = os.path.join(CurrOS.GetLibDir(), OvfFileName)
+        ovfFilePath = os.path.join(CurrOSUtil.GetLibDir(), OvfFileName)
         fileutil.SetFileContents(ovfFilePath, ovfxml)
 
-        CurrOS.UmountDvd()
+        CurrOSUtil.UmountDvd()
         return ovfenv
 
-    def saveCustomData(self):
-        customData = self.ovfenv.getCustomData()
+    def saveCustomData(self, ovfenv):
+        customData = ovfenv.getCustomData()
         if customData is None:
             return
-        libDir = CurrOS.GetLibDir()
+        #TODO  port Abel's fix to decoding custom data
+        libDir = CurrOSUtil.GetLibDir()
         fileutil.SetFileContents(os.path.join(libDir, CustomDataFile), 
-                                 CurrOS.TranslateCustomData(customData))
+                                 CurrOSUtil.TranslateCustomData(customData))
 
-    def deploySshPublicKeys(self):
-        for thumbprint, path in self.ovfenv.getSshPublicKeys():
-            CurrOS.DeploySshPublicKey(self.ovfenv.getUserName(), thumbprint, path)
+    def deploySshPublicKeys(self, ovfenv):
+        for thumbprint, path in ovfenv.getSshPublicKeys():
+            CurrOSUtil.DeploySshPublicKey(ovfenv.getUserName(), thumbprint, path)
     
-    def deploySshKeyPairs(self):
-        for thumbprint, path in self.ovfenv.getSshKeyPairs():
-            CurrOS.DeploySshKeyPair(self.ovfenv.getUserName(), thumbprint, path)
+    def deploySshKeyPairs(self, ovfenv):
+        for thumbprint, path in ovfenv.getSshKeyPairs():
+            CurrOSUtil.DeploySshKeyPair(ovfenv.getUserName(), thumbprint, path)
    
