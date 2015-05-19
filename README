@@ -195,6 +195,8 @@ Provisioning.DeleteRootPassword=n
 Provisioning.RegenerateSshHostKeyPair=y
 Provisioning.SshHostKeyPairType=rsa
 Provisioning.MonitorHostName=y
+Provisioning.DecodeCustomData=n
+Provisioning.ExecuteCustomData=n
 ResourceDisk.Format=y
 ResourceDisk.Filesystem=ext4
 ResourceDisk.MountPoint=/mnt/resource
@@ -204,7 +206,6 @@ LBProbeResponder=y
 Logs.Verbose=n
 OS.RootDeviceScsiTimeout=300
 OS.OpensslPath=None
-DecodeCustomData=n
 
 The various configuration options are described in detail below. Configuration
 options are of three types : Boolean, String or Integer. The Boolean
@@ -285,6 +286,16 @@ the image to reflect the change. In order to push the name change to the DNS
 servers, networking will be restarted in the VM. This will result in brief loss
 of Internet connectivity.
 
+Provisioning.DecodeCustomData:
+Type: Boolean Default: n
+
+If set, waagent will decode CustomData from Base64.
+
+Provisioning.ExecuteCustomData:
+Type: Boolean Default: n
+
+If set, waagent will execute CustomData after provisioning.
+
 ResourceDisk.Format:
 Type: Boolean Default: y
 
@@ -341,11 +352,6 @@ Type: String Default: None
 
 This can be used to specify an alternate path for the openssl binary to use for
 cryptographic operations.
-
-DecodeCustomData:
-Type: Boolean Default: n
-
-If set, waagent will decode CustomData from Base64.
 
 
 APPENDIX
