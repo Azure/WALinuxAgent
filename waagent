@@ -2596,6 +2596,9 @@ def DeviceForIdePort(n):
             break
     return device
 
+class HttpResourceGoneError(Exception):
+    pass
+
 class Util(object):
     """
     Http communication class.
@@ -2735,6 +2738,9 @@ class Util(object):
                     resp.status == httplib.ACCEPTED):
                 return resp;
 
+            if resp is not None and resp.status == httplib.GONE:
+                raise HttpResourceGoneError("Http resource gone.")
+
             Error("Retry={0}".format(retry))
             Error("HTTP Req: {0} {1}".format(method, url))
             Error("HTTP Req: Data={0}".format(data))
@@ -2746,9 +2752,6 @@ class Util(object):
                 Error("HTTP Err: Reason={0}".format(resp.reason))
                 Error("HTTP Err: Header={0}".format(resp.getheaders()))
                 Error("HTTP Err: Body={0}".format(resp.read()))
-
-            if resp is not None and resp.status == httplib.GONE:
-                raise Exception("Http resource gone.")
 
             time.sleep(self.__class__.RetryWaitingInterval)
             resp = self._HttpRequest(method, host, path, data, secure, 
@@ -5453,8 +5456,9 @@ class Agent(Util):
             if (goalState == None) or (incarnation == None) or (goalState.Incarnation != incarnation):
                 try:
                     goalState = self.UpdateGoalState()
-                except Exception as e:
-                    Warn("Failed to fetch goalstate:{0}".format(e))
+                except HttpResourceGoneError as e:
+                    Warn("Incarnation is out of date:{0}".format(e))
+                    incarnation = None
                     continue
 
                 if goalState == None :
