@@ -35,6 +35,7 @@ VersionInfoUri = "http://{0}/?comp=versions"
 GoalStateUri = "http://{0}/machine/?comp=goalstate"
 HealthReportUri="http://{0}/machine?comp=health"
 RolePropUri="http://{0}/machine?comp=roleProperties"
+TelemetryUri="http://{0}/machine?comp=telemetrydata"
 
 WireServerAddrFile = "WireServer"
 IncarnationFile = "Incarnation"
@@ -131,18 +132,36 @@ class ExtensionInfoV1(ExtensionInfo):
     def getVersionUris(self):
         return self.versionUris
 
+class InstanceMetadataV1(object):
+    def __init__(self, goalState, hostingEnv, sharedConfig):
+        self.goalState = goalState
+        self.hostingEnv = hostingEnv
+        self.sharedConfig = sharedConfig
+
+    def getDeploymentName(self):
+        return self.hostingEnv.getDeploymentName()
+        
+    def getRoleName(self):
+        return self.hostingEnv.getRoleName()
+        
+    def getRoleInstanceId(self):
+        return self.goalState.getRoleInstanceId()
+        
+    def getContainerId(self):
+        return self.goalState.getContainerId()
+
 class WireProtocolResourceGone(ProtocolError):
     pass
 
 class ProtocolV1(Protocol):
  
-    def __init__(self, endpoint=None):
-        if endpoint is None:
-            raise ProtocolNotFound("Wire server endpoint not found.")
-        self.endpoint = endpoint
-        self.libDir = CurrOSUtil.GetLibDir()
+    def __init__(self, endpoint):
         self.client = WireClient(endpoint)
-  
+   
+    def initialize(self):
+        self.client.checkWireProtocolVersion()
+        self.client.updateGoalState()
+
     def getVmInfo(self):
         hostingEnv = self.client.getHostingEnv()
         vmName = hostingEnv.getVmName()
@@ -159,8 +178,10 @@ class ProtocolV1(Protocol):
         return extensionsConfig.getExtensions()
   
     def getInstanceMetadata(self):
-        #TODO add instance metadata(SharedConfig.xml)
-        pass
+        goalState = self.client.getGoalState()
+        hostingEnv = self.client.getHostingEnv()
+        sharedConfig = self.client.getSharedConfig()
+        return InstanceMetadataV1(goalState, hostingEnv, sharedConfig)
     
     def reportProvisionStatus(self, status=None, subStatus=None, 
                               description='', thumbprint=None):
@@ -178,9 +199,8 @@ class ProtocolV1(Protocol):
         statusBlob = self.client.getStatusBlob()
         statusBlob.setExtensionStatus(name, version, status)
 
-    def reportEvent(self):
-        #TODO port diagnostic code here
-        pass
+    def reportEvent(self, eventData):
+        self.client.reportEvent(eventData)
 
 def _fetchCache(localFile):
     if not os.path.isfile(localFile):
@@ -417,14 +437,8 @@ class WireClient(object):
                                         goalState.getIncarnation())
         xmlText = _fetchCache(localFile)
         return ExtensionManifest(xmlText)
-        
-    def getIncarnation(self):
-        if self.incarnation is None:
-            if os.path.isfile(IncarnationFile):
-                self.incarnation = fileutil.GetFileContents(IncarnationFile)
-        return self.incarnation
 
-    def checkProtocolVersion(self):
+    def checkWireProtocolVersion(self):
         uri = VersionInfoUri.format(self.endpoint)
         versionInfoXml = restutil.HttpGet(uri).read()
         self.versionInfo = VersionInfo(versionInfoXml)
@@ -438,7 +452,7 @@ class WireClient(object):
         else:
             error = ("Agent supported wire protocol version: {0} was not "
                      "advised by Fabric.").format(ProtocolVersion)
-            raise ProtocolError(error)
+            raise ProtocolNotFound(error)
 
     def getStatusBlob(self):
         return self.statusBlob
@@ -481,6 +495,11 @@ class WireClient(object):
         resp = restutil.HttpPost(healthReportUri, 
                                  healthReport,
                                  headers=headers)
+
+    def reportEvent(self, eventData):
+        uri = TelemetryUri.format(self.endpoint)
+        #TODO handle throttling
+        restutil.HttpPost(uri, eventData)
 
     def getHeader(self):
         return {
@@ -618,6 +637,12 @@ class HostingEnv(object):
     def getVmName(self):
         return self.vmName
 
+    def getRoleName(self):
+        return self.roleName
+
+    def getDeploymentName(self):
+        return self.deploymentName
+
     def parse(self, xmlText):
         """
         parse and create HostingEnvironmentConfig.xml.
@@ -625,6 +650,9 @@ class HostingEnv(object):
         self.xmlText = xmlText
         xmlDoc = ET.fromstring(xmlText.strip())
         self.vmName = FindFirstNode(xmlDoc, ".//Incarnation").attrib["instance"]
+        self.roleName = FindFirstNode(xmlDoc, ".//Role").attrib["name"]
+        deployment = FindFirstNode(xmlDoc, ".//Deployment")
+        self.deploymentName = deployment.attrib["name"]
         return self
 
 class SharedConfig(object):

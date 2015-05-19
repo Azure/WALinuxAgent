@@ -57,6 +57,9 @@ class TestHostingEvn(unittest.TestCase):
         hostingenv = v1.HostingEnv(HostingEnvSample)
         self.assertNotEquals(None, hostingenv)
         self.assertEquals("MachineRole_IN_0", hostingenv.getVmName())
+        self.assertEquals("MachineRole", hostingenv.getRoleName())
+        self.assertEquals("db00a7755a5e4e8a8fe4b19bc3b330c3", 
+                          hostingenv.getDeploymentName())
 
    
 if __name__ == '__main__':

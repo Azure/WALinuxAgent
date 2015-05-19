@@ -674,3 +674,17 @@ class DefaultOSUtil(object):
     def TranslateCustomData(self, data):
         return data
 
+    def GetTotalMemory(self):
+        cmd = "grep MemTotal /proc/meminfo |awk '{print $2}'"
+        ret = shellutil.RunGetOutput(cmd)
+        if ret[0] == 0:
+            return int(ret[1])/1024
+        else:
+            raise Exception("Failed to get total memory: {0}".format(ret[1]))
+
+    def GetProcessorCores(self):
+        ret = shellutil.RunGetOutput("grep 'processor.*:' /proc/cpuinfo |wc -l")
+        if ret[0] == 0:
+            return int(ret[1])
+        else:
+            raise Exception("Failed to get procerssor cores")

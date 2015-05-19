@@ -201,7 +201,17 @@ class OvfEnv(object):
         return self
 
 class InstanceMetadata(object):
-    pass
+    def getDeploymentName(self):
+        raise NotImplementedError()
+        
+    def getRoleName(self):
+        raise NotImplementedError()
+        
+    def getRoleInstanceId(self):
+        raise NotImplementedError()
+        
+    def getContainerId(self):
+        raise NotImplementedError()
 
 class ProtocolError(Exception):
     pass
@@ -210,7 +220,7 @@ class ProtocolNotFound(Exception):
     pass
 
 class Protocol():
-    def checkVersion(self):
+    def initialize(self):
         raise NotImplementedError()
 
     def getVmInfo(self):

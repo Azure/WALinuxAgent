@@ -46,9 +46,9 @@ def GetWireProtocolEndpoint():
 def DetectV1():
     endpoint = GetWireProtocolEndpoint() 
 
-    protocol = ProtocolV1(endpoint)
-    protocol.checkProtocolVersion()
     CurrOSUtil.GenerateTransportCert()
+    protocol = ProtocolV1(endpoint)
+    protocol.initialize()
 
     path = os.path.join(CurrOSUtil.GetLibDir(), ProtocolV1)
     fileutil.SetFileContents(path, "")
