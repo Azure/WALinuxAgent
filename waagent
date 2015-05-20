@@ -1316,6 +1316,7 @@ class debianDistro(AbstractDistro):
         
 ############################################################    
 #	KaliDistro - WIP
+#       Installs on Kali 1.1.0a so far
 ############################################################ 
 class KaliDistro(debianDistro):
     """
