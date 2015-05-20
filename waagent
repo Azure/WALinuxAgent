@@ -1317,6 +1317,13 @@ class debianDistro(AbstractDistro):
 ############################################################    
 #	KaliDistro - WIP
 ############################################################ 
+class KaliDistro(debianDistro):
+    """
+    Kali Distro concrete class
+    Put Kali specific behavior here...
+    """
+    def __init__(self):
+        super(KaliDistro,self).__init__()
 
 ############################################################    
 #	UbuntuDistro
