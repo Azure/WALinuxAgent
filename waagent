@@ -623,21 +623,21 @@ class AbstractDistro(object):
     def getInterfaceNameByMac(self, mac):
         ret, output = RunGetOutput("ifconfig -a")
         if ret != 0:
-            return Exception("Failed to get network interface info")
+            raise Exception("Failed to get network interface info")
         match = re.search(r"(eth\d)[^\n]+HWaddr {0}".format(mac), output)
         if match is None:
-            return Exception("Failed to get ifname with mac: {0}".format(mac))
+            raise Exception("Failed to get ifname with mac: {0}".format(mac))
         return match.group(1)
 
     def configIpV4(self, ifName, addr):
         ret, output = RunGetOutput("ifconfig {0} up".format(ifName))
         if ret != 0:
-            Error("Failed to bring up {0}: {1}".format(ifName, output))
-            return
+            raise Exception("Failed to bring up {0}: {1}".format(ifName, 
+                                                                 output))
         ret, output = RunGetOutput("ifconfig {0} {1}/24".format(ifName, addr))
         if ret != 0:
-            Error("Failed to config ipv4 for {0}: {1}".format(ifName, output))
-            return
+            raise Exception("Failed to config ipv4 for {0}: {1}".format(ifName, 
+                                                                        output))
 
 ############################################################
 #	GentooDistro
@@ -3267,9 +3267,12 @@ class SharedConfig(object):
                     c.write(data)
             except IOError, e:
                 Error("Error writing {0}, {1}".format(dev, e))
-        
-        ifName = MyDistro.getInterfaceNameByMac(self.RdmaMacAddress)
-        MyDistro.configIpV4(ifName, self.RdmaIPv4Address)
+            
+            try:
+                ifName = MyDistro.getInterfaceNameByMac(self.RdmaMacAddress)
+                MyDistro.configIpV4(ifName, self.RdmaIPv4Address)
+            except Exception as e:
+                Error("Failed to config rdma device: {0}".format(e))
 
     def InvokeTopologyConsumer(self):
         program = Config.get("Role.TopologyConsumer")

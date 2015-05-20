@@ -16,6 +16,12 @@
 import unittest
 from env import waagent
 
+class MockDistro(object):
+    def getInterfaceNameByMac(self, mac):
+        pass
+
+    def configIpV4(self, ifName, addr):
+        pass
 
 class TestSharedConfig(unittest.TestCase):
     
@@ -29,6 +35,7 @@ class TestSharedConfig(unittest.TestCase):
 
     def test_config_rdma(self):
         #waagent.LoggerInit("/dev/stdout", "/dev/null", verbose=True)
+        waagent.MyDistro= MockDistro()
         testDev = "/tmp/hvnd_rdma"
         waagent.SetFileContents(testDev, "")
         conf = self.test_parse_shared_config()
