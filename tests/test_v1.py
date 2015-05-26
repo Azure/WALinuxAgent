@@ -35,6 +35,9 @@ from test_sharedconfig import SharedConfigSample
 from test_certificates import CertificatesSample, TransportCert
 from test_extensionsconfig import ExtensionsConfigSample, ManifestSample
 
+#logger.LoggerInit("/dev/stdout", "/dev/null", verbose=True)
+#logger.LoggerInit("/dev/stdout", "/dev/null", verbose=False)
+
 def MockFetchUri(url, headers=None):
     content = None
     if "versions" in url:
@@ -81,7 +84,7 @@ def MockFetchCache(filePath):
     return content
 
 class TestWireClint(unittest.TestCase):
-    
+
     @Mockup(v1, '_fetchCache', MockFetchCache)
     def testGet(self):
         os.chdir('/tmp')
@@ -117,6 +120,10 @@ class TestWireClint(unittest.TestCase):
         extensionsConfig = client.getExtensionsConfig()
         self.assertNotEquals(None, extensionsConfig)
 
+class MockResp(object):
+    def __init__(self):
+        self.status = httplib.OK
+
 class TestStatusBlob(unittest.TestCase):
     def testToJson(self):
         statusBlob = v1.StatusBlob()
@@ -124,6 +131,13 @@ class TestStatusBlob(unittest.TestCase):
         statusBlob.setExtensionStatus("Extension", "1.1", 
                                       {"status":"success"})
         self.assertNotEquals(None, statusBlob.toJson())
+
+    @Mockup(v1.restutil, 'HttpPut', MockFunc(retval=MockResp()))
+    @Mockup(v1.restutil, 'HttpHead', MockFunc(retval=MockResp()))
+    def test_put_page_blob(self):
+        statusBlob = v1.StatusBlob()
+        data = ['a'] * 100
+        statusBlob.putPageBlob("http://foo.bar", data)
 
 if __name__ == '__main__':
     unittest.main()

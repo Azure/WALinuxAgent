@@ -315,6 +315,95 @@ class StatusBlob(object):
         }
         return json.dumps(report)
 
+    __StorageVersion="2014-02-14"
+
+    def upload(self, url):
+        logger.Info("Upload status blob")
+        blobType = GetBlobType(url) 
+        
+        data = self.toJson()
+        if blobType == "BlockBlob":
+            PutBlockBlob(url, data)    
+        elif blobType == "PageBlob":
+            PutPageBlob(url, data)    
+        else:
+            raise ProtocolError("Unknown blob type: {0}".format(blobType))
+
+    def getBlobType(self, url):
+        #Check blob type
+        logger.Verbose("Check blob type.")
+        timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        resp = restutil.HttpHead(url, {
+            "x-ms-date" :  timestamp,
+            'x-ms-version' : self.__class__.__StorageVersion
+        });
+        if resp is None or resp.status != httplib.OK:
+            raise ProtocolError(("Failed to get status blob type: {0}"
+                                 "").format(resp.status))
+
+        blobType = blobPropResp.getheader("x-ms-blob-type")
+        logger.Verbose("Blob type={0}".format(blobType))
+        return blobType
+
+    def putBlockBlob(url, data):
+        logger.Verbose("Upload block blob")
+        timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        resp = restutil.HttpPut(url, data, {
+            "x-ms-date" :  timestamp,
+            "x-ms-blob-type" : "BlockBlob",
+            "Content-Length": str(len(data)),
+            "x-ms-version" : self.__class__.__StorageVersion
+        })
+        if resp is None or resp.status != httplib.OK:
+            raise ProtocolError(("Failed to upload block blob: {0}"
+                                 "").format(resp.status))
+
+    def putPageBlob(self, url, data):
+        logger.Verbose("Replace old page blob")
+        timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        #Align to 512 bytes
+        pageBlobSize = ((len(data) + 511) / 512) * 512
+        resp = restutil.HttpPut(url, "", {
+            "x-ms-date" :  timestamp,
+            "x-ms-blob-type" : "PageBlob",
+            "Content-Length": "0",
+            "x-ms-blob-content-length" : str(pageBlobSize),
+            "x-ms-version" : self.__class__.__StorageVersion
+        })
+        if resp is None or resp.status != httplib.OK:
+            raise ProtocolError(("Failed to clean up page blob: {0}"
+                                 "").format(resp.status))
+            
+        if '?' in url < 0:
+            url = "{0}?comp=page".format(url)
+        else:
+            url = "{0}&comp=page".format(url)
+       
+        logger.Verbose("Upload page blob")
+        pageMax = 4 * 1024 * 1024 #Max page size: 4MB
+        start = 0
+        end = 0
+        while end < len(data):
+            end = min(len(data), start + pageMax)
+            contentSize = end - start
+            #Align to 512 bytes
+            pageEnd = ((end + 511) / 512) * 512
+            bufSize = pageEnd - start
+            buf = bytearray(bufSize)
+            buf[0 : contentSize] = data[start : end]
+            resp = restutil.HttpPut(url, buf, {
+                "x-ms-date" :  timestamp,
+                "x-ms-range" : "bytes={0}-{1}".format(start, pageEnd - 1),
+                "x-ms-page-write" : "update",
+                "x-ms-version" : self.__class__.__StorageVersion,
+                "Content-Length": str(pageEnd - start)
+            })
+            if resp is None or resp.status != httplib.OK:
+                raise ProtocolError(("Failed to upload page blob: {0}"
+                                     "").format(resp.status))
+            start = end
+
+
 class WireClient(object):
     def __init__(self, endpoint):
         self.endpoint = endpoint
@@ -459,17 +548,7 @@ class WireClient(object):
 
     def uploadStatusBlob(self):
         extensionsConfig = self.getExtensionsConfig()
-        #TODO support page blob. Porting code change from 2.0.12
-        data = self.statusBlob.toJson()
-        headers = {
-             "x-ms-blob-type" : "BlockBlob", 
-             "x-ms-date" : time.strftime("%Y-%M-%dT%H:%M:%SZ", time.gmtime()) ,
-             "Content-Length": str(len(data))
-        }
-        restutil.HttpPut(extensionsConfig.getStatusUploadBlob(),
-                         data,
-                         headers)
-
+        UploadStatusBlob(extensionsConfig.getStatusUploadBlob(), data)
 
     def reportRoleProperties(self, thumbprint):
         goalState = self.getGoalState()

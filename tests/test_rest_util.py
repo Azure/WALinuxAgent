@@ -19,7 +19,7 @@
 # http://msdn.microsoft.com/en-us/library/cc227259%28PROT.13%29.aspx
 
 import env
-import tests.tools as tools
+from tests.tools import *
 import uuid
 import unittest
 import os
@@ -28,14 +28,9 @@ import test
 import socket
 import azureguestagent.logger as logger
 
-class TestHttpOperations(unittest.TestCase):
+#logger.LoggerInit("/dev/stdout", "/dev/null", verbose=True)
 
-    def _setUp(self):
-       logger.AddLoggerAppender(logger.AppenderConfig({
-           "type":"CONSOLE",
-           "level":"VERBOSE",
-           "console_path":"/dev/stdout"
-       }))
+class TestHttpOperations(unittest.TestCase):
 
     def test_parse_url(self):
         host, action, secure = restutil._ParseUrl("http://abc.def/ghi?jkl=mn")
@@ -62,6 +57,6 @@ class TestHttpOperations(unittest.TestCase):
     def test_https_get(self):
         resp = restutil.HttpGet("https://httpbin.org/get").read()
         self.assertNotEquals(None, resp)
-
+    
 if __name__ == '__main__':
     unittest.main()

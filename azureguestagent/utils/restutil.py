@@ -89,6 +89,9 @@ def HttpRequest(method, url, data, headers=None,  maxRetry=3):
 def HttpGet(url, headers=None, maxRetry=3):
     return HttpRequest("GET", url, None, headers, maxRetry)
     
+def HttpHead(url, headers=None, maxRetry=3):
+    return HttpRequest("HEAD", url, None, headers, maxRetry)
+    
 def HttpPost(url, data, headers=None, maxRetry=3):
     return HttpRequest("POST", url, data, headers, maxRetry)
 
@@ -97,13 +100,5 @@ def HttpPut(url, data, headers=None, maxRetry=3):
 
 def HttpDelete(url, headers=None, maxRetry=3):
     return HttpRequest("DELETE", url, None, headers, maxRetry)
-   
-def HttpPutBlockBlob(url, data, maxRetry=3):
-    headers = {
-        "x-ms-blob-type" : "BlockBlob", 
-        "x-ms-date" : time.strftime("%Y-%M-%dT%H:%M:%SZ", time.gmtime()),
-        "Content-Length": str(len(data))
-    }
-    return HttpPut(url, data, headers, maxRetry)
 
 #End REST api util functions
