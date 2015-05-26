@@ -43,6 +43,8 @@ for all distros. Each concrete distro classes could overwrite default behavior
 if needed.
 """
 
+class OSUtilError(Exception):
+    pass
 
 class DefaultOSUtil(object):
 
@@ -308,7 +310,7 @@ class DefaultOSUtil(object):
         #TODO Why do we need to load atapiix?
         #self.LoadAtapiixModule()
         mountlist = shellutil.RunGetOutput("mount")[1]
-        existing = self._GetMountPoint(mountlist, dvd)
+        existing = self.GetMountPoint(mountlist, dvd)
         if existing is not None: #Already mounted
             return
         if not os.path.isdir(mountPoint):
@@ -558,7 +560,7 @@ class DefaultOSUtil(object):
                 logger.Info("Set block dev timeout: {0} with timeout: {1}",
                             dev,
                             timeout)
-    def _GetMountPoint(self, mountlist, device):
+    def GetMountPoint(self, mountlist, device):
         """
         Example of mountlist:
             /dev/sda1 on / type ext4 (rw)
@@ -577,34 +579,7 @@ class DefaultOSUtil(object):
                     #Return the 3rd column of this line
                     return tokens[2] if len(tokens) > 2 else None
         return None
-
-    def MountResourceDisk(self, mountpoint, fs):
-        device = self.DeviceForIdePort(1)
-        if device is None:
-            logger.Error("Activate resource disk failed: "
-                         "unable to detect disk topology")
-            return None
-        device = "/dev/" + device
-        mountlist = shellutil.RunGetOutput("mount")[1]
-        existing = self._GetMountPoint(mountlist, device)
-        if(existing):
-            logger.Info("Resource disk {0} is already mounted", device)
-            return existing
-
-        fileutil.CreateDir(mountpoint, mode=0755)  
-        output = shellutil.RunGetOutput("sfdisk -q -c {0} 1".format(device))
-        if output[1].rstrip() == "7" and fs != "ntfs":
-            shellutil.Run("sfdisk -c {0} 1 83".format(device))
-            shellutil.Run("mkfs.{0} {1}1".format(fs, device))
-        ret = shellutil.Run("mount {0}1 {1}".format(device, mountpoint))
-        if ret:
-            logger.Error("Failed to mount resource disk ({0})".format(device))
-            raise Exception("Failed to mount resource disk")
-        else:
-            logger.Info(("Resource disk ({0}) is mounted at {1} "
-                         "with fstype {2}").format(device, mountpoint, fs))
-            return mountpoint
-
+    
     def DeviceForIdePort(self, n):
         """
         Return device name attached to ide port 'n'.
@@ -618,8 +593,7 @@ class DefaultOSUtil(object):
         device = None
         path = "/sys/bus/vmbus/devices/"
         for vmbus in os.listdir(path):
-            deviceid = fileutil.GetFileContents(os.path.join(path, 
-                                                             vmbus, 
+            deviceid = fileutil.GetFileContents(os.path.join(path, vmbus, 
                                                              "device_id"))
             guid = deviceid.lstrip('{').split('-')
             if guid[0] == g0 and guid[1] == "000" + str(n):
@@ -635,22 +609,6 @@ class DefaultOSUtil(object):
                 break
         return device
 
-
-    def CreateSwapSpace(self, mountpoint, sizeMB):
-        sizeKB = sizeMB * 1024
-        size = sizeKB * 1024
-        swapfile = os.path.join(mountpoint, 'swapfile')
-        if os.path.isfile(swapfile) and os.path.getsize(swapfile) != size:
-            os.remove(swapfile)
-        if not os.path.isfile(swapfile):
-            shellutil.Run(("dd if=/dev/zero of={0} bs=1024 "
-                           "count={1}").format(swapfile, sizeKB))
-            shellutil.Run("mkswap {0}".format(swapfile))
-        if shellutil.Run("swapon {0}".format(swapfile)):
-            logger.Error("Failed to activate swap at: {0}".format(swapfile))
-        else:
-            logger.Info("Enabled {0}KB of swap at {1}".format(sizeKB, swapfile))
-
     def DeleteAccount(self, userName):
         if self._IsSysUser(userName):
             logger.Error("{0} is a system user. Will not delete it.", userName)
@@ -660,17 +618,7 @@ class DefaultOSUtil(object):
         sudoers = fileutil.GetFileContents("/etc/sudoers.d/waagent").split("\n")
         sudoers = filter(lambda x : userName not in x, sudoers)
         fileutil.SetFileContents("/etc/sudoers.d/waagent", "\n".join(sudoers))
-
-    def OnDeprovisionStart(self):
-        print ("WARNING! Nameserver configuration in "
-               "/etc/resolv.conf will be deleted.")
-
-    def OnDeprovision(self):
-        """
-        OSUtil specific clean up work during deprovision
-        """
-        fileutil.RemoveFiles('/etc/resolv.conf')
-
+  
     def TranslateCustomData(self, data):
         return data
 
@@ -680,11 +628,11 @@ class DefaultOSUtil(object):
         if ret[0] == 0:
             return int(ret[1])/1024
         else:
-            raise Exception("Failed to get total memory: {0}".format(ret[1]))
+            raise OSUtilError("Failed to get total memory: {0}".format(ret[1]))
 
     def GetProcessorCores(self):
         ret = shellutil.RunGetOutput("grep 'processor.*:' /proc/cpuinfo |wc -l")
         if ret[0] == 0:
             return int(ret[1])
         else:
-            raise Exception("Failed to get procerssor cores")
+            raise OSUtilError("Failed to get procerssor cores")

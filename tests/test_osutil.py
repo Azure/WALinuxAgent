@@ -154,18 +154,8 @@ class TestCurrOS(unittest.TestCase):
     def test_mount(self):
         CurrOSUtil.MountDvd()
         CurrOSUtil.UmountDvd()
-        mountPoint = CurrOSUtil._GetMountPoint(MountlistSample, '/dev/sda')
+        mountPoint = CurrOSUtil.GetMountPoint(MountlistSample, '/dev/sda')
         self.assertNotEquals(None, mountPoint)
-
-    @Mockup(shellutil, 'RunGetOutput', MockFunc(retval=[0, '']))
-    @Mockup(fileutil, 'CreateDir', MockFunc())
-    @Mockup(CurrOSUtil, 'DeviceForIdePort', MockFunc(retval='api'))
-    def test_resource_disk(self):
-        CurrOSUtil.MountResourceDisk('/tmp/resource', 'ext3')
-
-    @Mockup(shellutil, 'RunGetOutput', MockFunc(retval=[0, '']))
-    def test_swap(self):
-        CurrOSUtil.CreateSwapSpace('/tmp', 1024)    
 
     def test_getdvd(self):
         CurrOSUtil.GetDvdDevice()

@@ -17,7 +17,7 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 import azureguestagent.osinfo as osinfo
-from default import DefaultOSUtil
+from default import DefaultOSUtil, OSUtilError
 from debian import DebianOSUtil
 from ubuntu import UbuntuOSUtil, Ubuntu1204OSUtil
 from redhat import RedhatOSUtil, RedhatOSUtil

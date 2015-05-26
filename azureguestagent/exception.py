@@ -51,5 +51,11 @@ When provision failed
 """
 class ProvisionError(AgentError):
     def __init__(self, msg):
-        super(ExtensionError, self).__init__('000004', msg)
+        super(ProvisionError, self).__init__('000004', msg)
+"""
+Mount resource disk failed
+"""
+class ResourceDiskError(AgentError):
+    def __init__(self, msg):
+        super(ResourceDiskError, self).__init__('000005', msg)
 
