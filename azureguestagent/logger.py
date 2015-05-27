@@ -57,11 +57,11 @@ class Logger(object):
         appender = CreateLoggerAppender(appender_config)
         self.appenders.append(appender)
 
-class AppenderConfig():
+class AppenderConfig(object):
     def __init__(self, properties = {}):
         self.properties = properties
 
-class ConsoleAppender():
+class ConsoleAppender(object):
     def __init__(self, appender_config):
         self.level = appender_config.properties['level']
         self.console_path = appender_config.properties['console_path']
@@ -78,7 +78,7 @@ class ConsoleAppender():
             except IOError as e:
                 pass
             
-class FileAppender():
+class FileAppender(object):
     def __init__(self, appender_config):
         self.level = appender_config.properties['level']
         self.file_path = appender_config.properties['file_path']

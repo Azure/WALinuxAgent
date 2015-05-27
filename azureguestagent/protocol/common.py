@@ -25,14 +25,14 @@ from azureguestagent.utils.osutil import CurrOSUtil
 from azureguestagent.utils.textutil import GetNodeTextData
 import azureguestagent.utils.fileutil as fileutil
 
-class VmInfo():
+class VmInfo(object):
     def getSubscriptionId(self):
         raise NotImplementedError()
 
     def getVmName(self):
         raise NotImplementedError()
 
-class CertInfo():
+class CertInfo(object):
     def getName(self):
         raise NotImplementedError()
 
@@ -219,7 +219,7 @@ class ProtocolError(Exception):
 class ProtocolNotFound(Exception):
     pass
 
-class Protocol():
+class Protocol(object):
     def initialize(self):
         raise NotImplementedError()
 

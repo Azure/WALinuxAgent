@@ -46,7 +46,7 @@ def Mockup(target, name, mock):
         return Wrapper
     return Decorator
 
-class MockFunc():
+class MockFunc(object):
     def __init__(self, name='', retval=None):
         self.name = name
         self.retval = retval

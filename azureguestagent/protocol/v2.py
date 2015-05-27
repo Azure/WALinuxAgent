@@ -19,7 +19,7 @@
 import azureguestagent.utils.restutil as restutil
 from azureguestagent.protocol.common import *
 
-class VmInfoV2():
+class VmInfoV2(object):
     def __init__(self, data):
         self.data = data
 
@@ -29,7 +29,7 @@ class VmInfoV2():
     def getVmName(self):
         return self.data["vmName"]
 
-class CertInfoV2():
+class CertInfoV2(object):
     def __init__(self, data):
         self.data = data
 

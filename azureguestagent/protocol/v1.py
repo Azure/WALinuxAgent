@@ -54,7 +54,7 @@ TransportPrivateFile = "TransportPrivate.pem"
 ProtocolVersion = "2012-11-30"
 
 
-class VmInfoV1():
+class VmInfoV1(object):
     def __init__(self, subscriptionId, vmName):
         self.subscriptionId = subscriptionId
         self.vmName = vmName
@@ -65,7 +65,7 @@ class VmInfoV1():
     def getVmName(self):
         return self.vmName
 
-class CertInfoV1():
+class CertInfoV1(object):
     def __init__(self, name, thumbprint):
         self.name = name
         self.thumbprint = thumbprint
@@ -606,7 +606,7 @@ class WireClient(object):
             "x-ms-guest-agent-public-x509-cert":cert
         }
 
-class VersionInfo():
+class VersionInfo(object):
     def __init__(self, xmlText):
         """
         Query endpoint server for wire protocol version.
