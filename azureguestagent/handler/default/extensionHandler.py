@@ -204,7 +204,7 @@ class ExtensionInstance(object):
         package = None
         for uri in uris:
             try:
-                resp = restutil.HttpGet(uri)
+                resp = restutil.HttpGet(uri, chkProxy=True)
                 package = resp.read()
                 break
             except restutil.HttpError as e:

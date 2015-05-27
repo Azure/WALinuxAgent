@@ -33,16 +33,16 @@ import azureguestagent.logger as logger
 class TestHttpOperations(unittest.TestCase):
 
     def test_parse_url(self):
-        host, action, secure = restutil._ParseUrl("http://abc.def/ghi?jkl=mn")
+        host, port, secure, relativeUrl = restutil._ParseUrl("http://abc.def/ghi#hash?jkl=mn")
         self.assertEquals("abc.def", host)
-        self.assertEquals("/ghi?jkl=mn", action)
+        self.assertEquals("/ghi#hash?jkl=mn", relativeUrl)
 
-        host, action, secure = restutil._ParseUrl("http://abc.def/")
+        host, port, secure, relativeUrl = restutil._ParseUrl("http://abc.def/")
         self.assertEquals("abc.def", host)
-        self.assertEquals("/", action)
+        self.assertEquals("/", relativeUrl)
         self.assertEquals(False, secure)
 
-        host, action, secure = restutil._ParseUrl("https://abc.def/ghi?jkl=mn")
+        host, port, secure, relativeUrl = restutil._ParseUrl("https://abc.def/ghi?jkl=mn")
         self.assertEquals(True, secure)
 
     def test_http_get(self):

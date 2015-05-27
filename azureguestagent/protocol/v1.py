@@ -207,8 +207,8 @@ def _fetchCache(localFile):
         raise ProtocolError("{0} is missing.".format(localFile))
     return fileutil.GetFileContents(path)
 
-def _fetchUri(uri, headers):
-    resp = restutil.HttpGet(uri, header)
+def _fetchUri(uri, headers, chkProxy=False):
+    resp = restutil.HttpGet(uri, header, chkProxy=chkProxy)
     if(resp.status == httplib.GONE):
         raise WireProtocolResourceGone(uri)
     if(resp.status != httplib.OK):
@@ -218,7 +218,7 @@ def _fetchUri(uri, headers):
 def _fetchManifest(uris):
     for uri in uris:
         try:
-            xmlText = _fetchUri(uri, None)
+            xmlText = _fetchUri(uri, None, chkProxy=True)
             return xmlText
         except IOError, e:
             logger.Warn("Failed to fetch ExtensionManifest: {0}, {1}",
@@ -529,7 +529,7 @@ class WireClient(object):
 
     def checkWireProtocolVersion(self):
         uri = VersionInfoUri.format(self.endpoint)
-        versionInfoXml = restutil.HttpGet(uri).read()
+        versionInfoXml = _fetchUri(uri, None)
         self.versionInfo = VersionInfo(versionInfoXml)
 
         preferred = self.versionInfo.getPreferred()

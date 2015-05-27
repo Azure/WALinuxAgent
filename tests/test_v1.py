@@ -38,7 +38,7 @@ from test_extensionsconfig import ExtensionsConfigSample, ManifestSample
 #logger.LoggerInit("/dev/stdout", "/dev/null", verbose=True)
 #logger.LoggerInit("/dev/stdout", "/dev/null", verbose=False)
 
-def MockFetchUri(url, headers=None):
+def MockFetchUri(url, headers=None, chkProxy=False):
     content = None
     if "versions" in url:
         content = VersionInfoSample
