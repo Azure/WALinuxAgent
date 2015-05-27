@@ -204,6 +204,8 @@ LBProbeResponder=y
 Logs.Verbose=n
 OS.RootDeviceScsiTimeout=300
 OS.OpensslPath=None
+HttpProxy.Host=None
+HttpProxy.Port=None
 
 The various configuration options are described in detail below. Configuration
 options are of three types : Boolean, String or Integer. The Boolean
@@ -351,6 +353,11 @@ Type: String Default: None
 This can be used to specify an alternate path for the openssl binary to use for
 cryptographic operations.
 
+HttpProxy.Host=None
+HttpProxy.Port=None
+Type: String Default: None
+
+If set, agent will use proxy server to access internet
 
 APPENDIX
 

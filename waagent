@@ -2630,16 +2630,9 @@ class Util(object):
         Get http_proxy and https_proxy from environment variables.
         Username and password is not supported now.
         """
-        envName = "https_proxy" if secure else "http_proxy"
-        for key in os.environ:
-            if key.lower() == envName:
-                proxyUrl = os.environ[key]
-                try:
-                    host, port, _, _= self._ParseUrl(proxyUrl)
-                    return host, port
-                except ValueError, e:
-                    Error("Failed to parse http proxy url:{0}".format(proxyUrl))
-        return (None, None) 
+        host = Config.get("HttpProxy.Host")
+        port = Config.get("HttpProxy.Port")
+        return (host, port) 
 
     def _HttpRequest(self, method, host, path, port=None, data=None, secure=False, 
                      headers=None, proxyHost=None, proxyPort=None):
@@ -2675,7 +2668,7 @@ class Util(object):
         return resp
 
     def HttpRequest(self, method, url, data=None, 
-                    headers=None, maxRetry=3, chkProxy=True):
+                    headers=None, maxRetry=3, chkProxy=False):
         """
         Sending http request to server
         On error, sleep 10 and maxRetry times.
@@ -2740,29 +2733,29 @@ class Util(object):
 
         return None
 
-    def HttpGet(self, url, headers=None, maxRetry=3, chkProxy=True):
+    def HttpGet(self, url, headers=None, maxRetry=3, chkProxy=False):
         return self.HttpRequest("GET", url, None, headers, maxRetry, chkProxy)
         
-    def HttpHead(self, url, headers=None, maxRetry=3, chkProxy=True):
+    def HttpHead(self, url, headers=None, maxRetry=3, chkProxy=False):
         return self.HttpRequest("HEAD", url, None, headers, maxRetry, chkProxy)
         
-    def HttpPost(self, url, data, headers=None, maxRetry=3, chkProxy=True):
+    def HttpPost(self, url, data, headers=None, maxRetry=3, chkProxy=False):
         return self.HttpRequest("POST", url, data, headers, maxRetry, chkProxy)
 
-    def HttpPut(self, url, data, headers=None, maxRetry=3, chkProxy=True):
+    def HttpPut(self, url, data, headers=None, maxRetry=3, chkProxy=False):
         return self.HttpRequest("PUT", url, data, headers, maxRetry, chkProxy)
 
-    def HttpDelete(self, url, headers=None, maxRetry=3, chkProxy=True):
+    def HttpDelete(self, url, headers=None, maxRetry=3, chkProxy=False):
         return self.HttpRequest("DELETE", url, None, headers, maxRetry, chkProxy)
     
-    def HttpGetWithoutHeaders(self, url, maxRetry=3, chkProxy=True):
+    def HttpGetWithoutHeaders(self, url, maxRetry=3, chkProxy=False):
         """
         Return data from an HTTP get on 'url'.
         """
         resp = self.HttpGet(url, None, maxRetry, chkProxy)
         return resp.read() if resp is not None else None
 
-    def HttpGetWithHeaders(self, url, maxRetry=3):
+    def HttpGetWithHeaders(self, url, maxRetry=3, chkProxy=False):
         """
         Return data from an HTTP get on 'url' with
         x-ms-agent-name and x-ms-version
@@ -2771,10 +2764,11 @@ class Util(object):
         resp = self.HttpGet(url, {
             "x-ms-agent-name": GuestAgentName, 
             "x-ms-version": ProtocolVersion
-        }, maxRetry, chkProxy=False)
+        }, maxRetry, chkProxy)
         return resp.read() if resp is not None else None
 
-    def HttpSecureGetWithHeaders(self, url, transportCert, maxRetry=3):
+    def HttpSecureGetWithHeaders(self, url, transportCert, maxRetry=3, 
+                                 chkProxy=False):
         """
         Return output of get using ssl cert.
         """
@@ -2783,16 +2777,16 @@ class Util(object):
             "x-ms-version": ProtocolVersion,
             "x-ms-cipher-name": "DES_EDE3_CBC",
             "x-ms-guest-agent-public-x509-cert": transportCert
-        }, maxRetry, chkProxy=False)
+        }, maxRetry, chkProxy)
         return resp.read() if resp is not None else None
 
-    def HttpPostWithHeaders(self, url, data, maxRetry=3):
+    def HttpPostWithHeaders(self, url, data, maxRetry=3, chkProxy=False):
         header = {
             "x-ms-agent-name": GuestAgentName,
             "Content-Type": "text/xml; charset=utf-8",
             "x-ms-version": ProtocolVersion
         }
-        return self.HttpPost(url, data, header, maxRetry, chkProxy=False)
+        return self.HttpPost(url, data, header, maxRetry, chkProxy)
 
 __StorageVersion="2014-02-14"
 
@@ -2804,7 +2798,7 @@ def GetBlobType(url):
     blobPropResp = restutil.HttpHead(url, {
         "x-ms-date" :  timestamp,
         'x-ms-version' : __StorageVersion
-    });
+    }, chkProxy=True);
     blobType = None
     if blobPropResp is None:
         Error("Can't get status blob type.")
@@ -2822,7 +2816,7 @@ def PutBlockBlob(url, data):
         "x-ms-blob-type" : "BlockBlob",
         "Content-Length": str(len(data)),
         "x-ms-version" : __StorageVersion
-    })
+    }, chkProxy=True)
     if ret is None:
         Error("Failed to upload block blob for status.")
 
@@ -2838,7 +2832,7 @@ def PutPageBlob(url, data):
         "Content-Length": "0",
         "x-ms-blob-content-length" : str(pageBlobSize),
         "x-ms-version" : __StorageVersion
-    })
+    }, chkProxy=True)
     if ret is None:
         Error("Failed to clean up page blob for status")
         return
@@ -2866,7 +2860,7 @@ def PutPageBlob(url, data):
             "x-ms-page-write" : "update",
             "x-ms-version" : __StorageVersion,
             "Content-Length": str(pageEnd - start)
-        })
+        }, chkProxy=True)
         if ret is None:
             Error("Failed to upload page blob for status")
             return
@@ -3400,7 +3394,7 @@ class ExtensionsConfig(object):
                 Log("Plugin server is: " +  self.Util.Endpoint)
                 SimpleLog(p.plugin_log,"Plugin server is: " +  self.Util.Endpoint)
 
-                manifest=self.Util.HttpGetWithoutHeaders(location)
+                manifest=self.Util.HttpGetWithoutHeaders(location, chkProxy=True)
                 if manifest == None:
                     Error("Unable to download plugin manifest" + name + " from primary location.  Attempting with failover location.")
                     SimpleLog(p.plugin_log,"Unable to download plugin manifest" + name + " from primary location.  Attempting with failover location.")
@@ -3409,7 +3403,7 @@ class ExtensionsConfig(object):
                     Log("Plugin failover server is: " +  self.Util.Endpoint)
                     SimpleLog(p.plugin_log,"Plugin failover server is: " +  self.Util.Endpoint)
 
-                    manifest=self.Util.HttpGetWithoutHeaders(failoverlocation)
+                    manifest=self.Util.HttpGetWithoutHeaders(failoverlocation, chkProxy=True)
                 #if failoverlocation also fail what to do then?
                 if manifest == None:
                     AddExtensionEvent(name,WALAEventOperation.Download,False,0,version,"Download mainfest fail "+failoverlocation)
@@ -3443,7 +3437,7 @@ class ExtensionsConfig(object):
                 SimpleLog(p.plugin_log,"Bundle URI = " + bundle_uri)
 
                 # Download the zipfile archive and save as '.zip'
-                bundle=self.Util.HttpGetWithoutHeaders(bundle_uri)
+                bundle=self.Util.HttpGetWithoutHeaders(bundle_uri, chkProxy=True)
                 if bundle == None:
                     AddExtensionEvent(name,WALAEventOperation.Download,True,0,version,"Download zip fail "+bundle_uri)
                     Error("Unable to download plugin bundle" + bundle_uri )
@@ -5771,7 +5765,7 @@ def Deprovision(force, deluser):
     ovfxml = GetFileContents(LibDir+"/ovf-env.xml")
     ovfobj = None
     if ovfxml != None:
-        ovfobj = OvfEnv().Parse(ovfxml, true)
+        ovfobj = OvfEnv().Parse(ovfxml, True)
 
     print("WARNING! The waagent service will be stopped.")
     print("WARNING! All SSH host key pairs will be deleted.")
