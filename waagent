@@ -1042,7 +1042,7 @@ class CoreOSDistro(AbstractDistro):
         self.dhcp_client_name='systemd-networkd'
         self.getpidcmd='pidof '
         self.shadow_file_mode=0640
-        self.waagent_path='/usr/share/oem/waagent/bin'
+        self.waagent_path='/usr/share/oem/bin'
         self.python_path='/usr/share/oem/python/bin'
         self.dhcp_enabled=True
         if 'PATH' in os.environ:
