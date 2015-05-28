@@ -37,21 +37,16 @@ def GetFileContents(filepath, asbin=False, removeBom=False):
     mode='r'
     if asbin:
         mode+='b'
-    try:
-        with open(filepath, mode) as F :
-            c=F.read()
-        if (not asbin) and removeBom:
-            c = textutil.RemoveBom(c)
-        return c
-    except IOError, e:
-        logger.Error('Reading from file {0} Exception is {1}', filepath, e)
-        raise e
+    with open(filepath, mode) as F :
+        c=F.read()
+    if (not asbin) and removeBom:
+        c = textutil.RemoveBom(c)
+    return c
 
-def SetFileContents(filepath, contents, append=False):
+def SetFileContents(filepath, contents):
     """
     Write 'contents' to 'filepath'.
     """
-    mode = "ab+" if append else "wb+"
     if type(contents) == str :
         contents=contents.encode('latin-1', 'ignore')
     with open(filepath, "wb+") as F :
@@ -63,13 +58,8 @@ def AppendFileContents(filepath, contents):
     """
     if type(contents) == str :
         contents=contents.encode('latin-1')
-    try: 
-        with open(filepath, "a+") as F :
-            F.write(contents)
-    except IOError, e:
-        logger.Error('Appending to file {0} Exception is {1}', filepath, e)
-        return 1
-    return 0
+    with open(filepath, "a+") as F :
+        F.write(contents)
 
 def ReplaceFileContentsAtomic(filepath, contents):
     """

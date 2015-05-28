@@ -66,11 +66,11 @@ class TestCurrOS(unittest.TestCase):
         CurrOSUtil.DeleteAccount('api')
 
     @Mockup(fileutil, 'GetFileContents', MockFunc(retval='root::::'))
-    @Mockup(fileutil, 'ReplaceFileContentsAtomic', MockFunc())
+    @Mockup(fileutil, 'SetFileContents', MockFunc())
     def test_delete_root_password(self):
         CurrOSUtil.DeleteRootPassword()
         self.assertEquals('root:*LOCK*:14600::::::',
-                          fileutil.ReplaceFileContentsAtomic.args[1])
+                          fileutil.SetFileContents.args[1])
  
     def test_cert_operation(self):
         if os.path.isfile('/tmp/test.prv'):

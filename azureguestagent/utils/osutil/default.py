@@ -28,7 +28,7 @@ import array
 import struct
 import fcntl
 import time
-import base64
+import string
 import azureguestagent.logger as logger
 import azureguestagent.utils.fileutil as fileutil
 import azureguestagent.utils.shellutil as shellutil
@@ -98,9 +98,6 @@ class DefaultOSUtil(object):
         if userentry is None:
             self._CreateUserAccount(userName, expiration)
             
-        if password is not None:
-            self.ChangePassword(userName, password)
-        
         self.ConfigSudoer(userName, password is None)
 
     def GetUserEntry(self, userName):
@@ -125,28 +122,37 @@ class DefaultOSUtil(object):
             return False
    
     def _CreateUserAccount(self, userName, expiration=None):
-        cmd = "useradd -m {0}".format(userName)
         if expiration is not None:
-            cmd = "{0} -e {1}".format(cmd, expiration)
+            cmd = "useradd -m {0} -e {1}".format(userName, expiration)
+        else:
+            cmd = "useradd -m {0}".format(userName)
         retcode, out = shellutil.RunGetOutput(cmd)
         if retcode != 0:
-            raise Exception(("Failed to create user account:{0}, "
-                             "retcode:{1}, "
-                             "output:{2}").format(userName, retcode, out))
+            raise OSUtilError(("Failed to create user account:{0}, "
+                               "retcode:{1}, "
+                               "output:{2}").format(userName, retcode, out))
 
-    def ChangePassword(self, userName, password):
-        shellutil.RunSendStdin("chpasswd", 
-                               "{0}:{1}\n".format(userName, password))
-            
+    def ChangePassword(self, userName, password, useSalt=True, saltType=6, 
+                       saltLength=10):
+        passwdHash = textutil.GetPasswordHash(passwdHash, useSalt, saltType, saltLength)
+        try:
+            passwdContent = fileutil.GetFileContents(self.passwdPath)
+            passwd = passwdContent.split("\n") 
+            newPasswd = filter(lambda x : not x.startswith(userName, passwd))
+            newPasswd.append("{0}:{1}:14600::::::".format(userName, passwdHash))
+            fileutil.SetFileContents(self.passwdPath, "\n".join(newPasswd))
+        except IOError as e:
+            raise OSUtilError(("Failed to set password for {0}: {1}"
+                               "").format(userName, e))
+
     def ConfigSudoer(self, userName, nopasswd):
         # for older distros create sudoers.d
         if not os.path.isdir('/etc/sudoers.d/'):
             # create the /etc/sudoers.d/ directory
             os.mkdir('/etc/sudoers.d/')
             # add the include of sudoers.d to the /etc/sudoers
-            sudoers = fileutil.GetFileContents('/etc/sudoers')
-            sudoers = sudoers + '\n' + '#includedir /etc/sudoers.d/\n'
-            fileutil.SetFileContents('/etc/sudoers', sudoers)
+            sudoers = '\n' + '#includedir /etc/sudoers.d/\n'
+            fileutil.SetFileContents('/etc/sudoers', sudoers, append=True)
         sudoer = None
         if nopasswd:
             sudoer = "{0} ALL = (ALL) NOPASSWD\n".format(userName)
@@ -156,13 +162,14 @@ class DefaultOSUtil(object):
         fileutil.ChangeMod('/etc/sudoers.d/waagent', 0440)
 
     def DeleteRootPassword(self):
-        passwdContent = fileutil.GetFileContents(self.passwdPath)
-        if passwdContent is None:
-            raise Exception("Failed to delete root password.")
-        passwd = passwdContent.split('\n')
-        newPasswd = filter(lambda x : not x.startswith("root:"), passwd)
-        newPasswd.insert(0, "root:*LOCK*:14600::::::")
-        fileutil.ReplaceFileContentsAtomic(self.passwdPath, "\n".join(newPasswd))
+        try:
+            passwdContent = fileutil.GetFileContents(self.passwdPath)
+            passwd = passwdContent.split('\n')
+            newPasswd = filter(lambda x : not x.startswith("root:"), passwd)
+            newPasswd.insert(0, "root:*LOCK*:14600::::::")
+            fileutil.SetFileContents(self.passwdPath, "\n".join(newPasswd))
+        except IOError as e:
+            raise OSUtilError("Failed to delete root password:{0}".format(e))
 
     def GetHome(self):
         return self.home

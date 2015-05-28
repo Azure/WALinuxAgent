@@ -81,6 +81,11 @@ class ProvisionHandler(object):
         CurrOSUtil.PublishHostname(ovfenv.getComputerName())
         CurrOSUtil.UpdateUserAccount(ovfenv.getUserName(), password)
 
+        if password is not None:
+            userSalt = conf.GetSwitch("Provision.UseSalt", True)
+            saltType = conf.GetSwitch("Provision.SaltType", 6)
+            CurrOSUtil.ChangePassword(ovfenv.getUserName(), password)
+
         CurrOSUtil.ConfigSshd(ovfenv.getDisableSshPasswordAuthentication())
 
         #Disable selinux temporary

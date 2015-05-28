@@ -15,6 +15,8 @@
 # limitations under the License.
 #
 # Requires Python 2.4+ and Openssl 1.0+
+import crypt
+import random
 import string
 import struct
 
@@ -153,7 +155,6 @@ def Ascii(val):
     else:
         return uni.encode('ascii', 'backslashreplace')
 
-
 def HexStringToByteArray(a):
     """
     Return hex string packed into a binary struct.
@@ -180,3 +181,12 @@ def RemoveBom(c):
     if ord(c[0]) > 128 and ord(c[1]) > 128 and ord(c[2]) > 128:
         c = c[3:]
     return c
+
+def GetPasswordHash(password, useSalt, saltType, saltLength):
+        salt="$6$" 
+        if useSalt:
+            collection = string.ascii_letters + string.digits
+            salt = ''.join(random.choice(collection) for _ in range(saltLength))
+            salt = "${0}${1}".format(saltType, salt)
+        return crypt.crypt(password, salt)
+
