@@ -1,5 +1,13 @@
 WALinuxAgent                                                          Changelog
 |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+1 Jun 2015, WALinuxAgent 2.0.13
+   . Handle http 410 returned by host
+   . Add support for http proxy
+   . Add support to execute CustomData after provisioning
+   . Add a udev rule for product-uuid
+   . Fix agent path for CoreOS
+   . Update service start/stop command for Ubuntu
+
 15 Jan 2015, WALinuxAgent 2.0.12
    . Add support for page blob status report
 
