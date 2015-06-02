@@ -2526,7 +2526,8 @@ def GetFirstActiveNetworkInterfaceNonLoopback():
     """
     iface=''
     expected=16 # how many devices should I expect...
-    struct_size=40 # for 64bit the size is 40 bytes
+    is_64bits = sys.maxsize > 2**32
+    struct_size=if is_64bits 40 else 32 # for 64bit the size is 40 bytes, for32 bits it is 32 bytes.
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     buff=array.array('B', b'\0' * (expected*struct_size))
     retsize=(struct.unpack('iL', fcntl.ioctl(s.fileno(), 0x8912, struct.pack('iL',expected*struct_size,buff.buffer_info()[0]))))[0]
