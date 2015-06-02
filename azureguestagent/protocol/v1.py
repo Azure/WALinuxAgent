@@ -921,7 +921,7 @@ class ExtensionManifest(object):
     def parse(self, xmlText):
         logger.Verbose("Extension manifest:{0}", xmlText)
         xmlDoc = ET.fromstring(xmlText.strip())
-        packages = FindAllNodes(xmlDoc, ".//Plugins/Plugin")
+        packages = FindAllNodes(xmlDoc, ".//Plugin")
         for package in packages:
             version = FindFirstNode(package, "Version").text
             uris = FindAllNodes(package, "Uris/Uri")

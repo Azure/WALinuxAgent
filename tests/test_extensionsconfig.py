@@ -77,21 +77,28 @@ ExtensionsConfigSample="""\
 ManifestSample="""\
 <?xml version="1.0" encoding="utf-8"?>
 <PluginVersionManifest xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
-<Plugins>
-<Plugin>
-<Version>1.0</Version>
-<Uris>
-<Uri>http://blahblah</Uri>
-</Uris>
-</Plugin>
-<Plugin>
-<Version>1.1</Version>
-<Uris>
-<Uri>http://blahblah</Uri>
-</Uris>
-</Plugin>
-</Plugins>
-<InternalPlugins />
+    <Plugins>
+        <Plugin>
+            <Version>1.0</Version>
+            <Uris>
+                <Uri>http://blahblah</Uri>
+            </Uris>
+        </Plugin>
+        <Plugin>
+            <Version>1.1</Version>
+            <Uris>
+                <Uri>http://blahblah</Uri>
+            </Uris>
+        </Plugin>
+    </Plugins>
+    <InternalPlugins>
+        <Plugin>
+            <Version>1.2</Version>
+            <Uris>
+                <Uri>http://blahblah</Uri>
+            </Uris>
+    </Plugin>
+</InternalPlugins>
 </PluginVersionManifest>
 """
 
@@ -113,6 +120,10 @@ class TestExtensionsConfig(unittest.TestCase):
         self.assertEquals("MIICWgYJK", extension.getProtectedSettings())
         self.assertEquals(json.loads('{"foo":"bar"}'), 
                           extension.getPublicSettings())
+
+        man = v1.ExtensionManifest(ManifestSample)
+        self.assertNotEquals(None, man.versionUris)
+        self.assertEquals(3, len(man.versionUris))
 
    
 if __name__ == '__main__':
