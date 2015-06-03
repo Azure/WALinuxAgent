@@ -16,6 +16,9 @@
 #
 
 import os
+import sys
+import traceback
+import atexit
 import xml.sax.saxutils
 import time
 import threading
@@ -119,22 +122,6 @@ class WALAEventOperation:
     Upgrade = "Upgrade"
     Update = "Update"           
 
-def AddExtensionEvent(name, op, isSuccess, duration=0, version="1.0", 
-                      message="", evtType="", isInternal=False):
-    event = ExtensionEvent()
-    event.Name=name 
-    event.Version=version 
-    event.IsInternal=isInternal
-    event.Operation=op
-    event.OperationSuccess=isSuccess
-    event.Message=message 
-    event.Duration=duration
-    event.ExtensionType=evtType
-    try:
-        event.save()
-    except EventError as e:
-        logger.Error("{0}", e)
-    
 class ExtensionEvent(WALAEvent):
     def __init__(self):
         super(WALAEvent, self).__init__()
@@ -299,4 +286,30 @@ class WALAEventMonitor(object):
 
         return  eventObject.toxml()            
 
+def AddExtensionEvent(name, op, isSuccess, duration=0, version="1.0", 
+                      message="", evtType="", isInternal=False):
+    event = ExtensionEvent()
+    event.Name=name 
+    event.Version=version 
+    event.IsInternal=isInternal
+    event.Operation=op
+    event.OperationSuccess=isSuccess
+    event.Message=message 
+    event.Duration=duration
+    event.ExtensionType=evtType
+    try:
+        event.save()
+    except EventError as e:
+        logger.Error("{0}", e)
+
+def DumpUnhandledError(name):
+    if hasattr(sys, 'last_type') and hasattr(sys, 'last_value') and \
+            hasattr(sys, 'last_traceback'):
+        error = traceback.format_exception(sys.last_type, sys.last_value,
+                                           sys.last_traceback)
+        AddExtensionEvent(name, op='Unhandled Error', isSuccess=False, 
+                          message="".join(error))
+
+def EnableUnhandledErrorDump(name):
+    atexit.register(DumpUnhandledError, name)
 
