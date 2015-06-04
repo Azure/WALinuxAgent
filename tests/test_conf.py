@@ -23,9 +23,9 @@ import env
 import uuid
 import unittest
 import tests.tools as tools
-import azureguestagent.utils.fileutil as fileutil
-import azureguestagent.conf as conf
-from azureguestagent.exception import *
+import azurelinuxagent.utils.fileutil as fileutil
+import azurelinuxagent.conf as conf
+from azurelinuxagent.exception import *
 
 TestConf="""\
 #

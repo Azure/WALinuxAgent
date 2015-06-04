@@ -21,8 +21,8 @@ import uuid
 import unittest
 import os
 import json
-import azureguestagent.utils.fileutil as fileutil
-from azureguestagent.handler.default.provisionHandler import ProvisionHandler
+import azurelinuxagent.utils.fileutil as fileutil
+from azurelinuxagent.handler.default.provisionHandler import ProvisionHandler
 
 class TestProvision(unittest.TestCase):
 

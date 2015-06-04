@@ -23,10 +23,10 @@ from tests.tools import *
 import uuid
 import unittest
 import os
-import azureguestagent.utils.restutil as restutil
+import azurelinuxagent.utils.restutil as restutil
 import test
 import socket
-import azureguestagent.logger as logger
+import azurelinuxagent.logger as logger
 
 #logger.LoggerInit("/dev/stdout", "/dev/null", verbose=True)
 

@@ -21,7 +21,7 @@
 import env
 from tests.tools import *
 import unittest
-from azureguestagent.handler import CurrOSHandlerFactory
+from azurelinuxagent.handler import CurrOSHandlerFactory
 
 class TestOSHandlerFactory(unittest.TestCase):
     def test_curr_os_handler_factory(self):

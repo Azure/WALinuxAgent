@@ -21,9 +21,9 @@
 import env
 from tests.tools import *
 import unittest
-import azureguestagent.handler.default.resourceDiskHandler as rdh
-import azureguestagent.logger as logger
-from azureguestagent.utils.osutil import CurrOSUtil
+import azurelinuxagent.handler.default.resourceDiskHandler as rdh
+import azurelinuxagent.logger as logger
+from azurelinuxagent.utils.osutil import CurrOSUtil
 
 #logger.LoggerInit("/dev/null", "/dev/stdout")
 

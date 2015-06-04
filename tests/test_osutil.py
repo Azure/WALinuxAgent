@@ -25,11 +25,11 @@ import unittest
 import os
 import shutil
 import time
-import azureguestagent.utils.fileutil as fileutil
-import azureguestagent.utils.shellutil as shellutil
-import azureguestagent.utils.osutil as osutil
-from azureguestagent.utils.osutil import CurrOSUtil
-import azureguestagent.conf as conf
+import azurelinuxagent.utils.fileutil as fileutil
+import azurelinuxagent.utils.shellutil as shellutil
+import azurelinuxagent.utils.osutil as osutil
+from azurelinuxagent.utils.osutil import CurrOSUtil
+import azurelinuxagent.conf as conf
 import test
 
 class TestCurrOSUtil(unittest.TestCase):

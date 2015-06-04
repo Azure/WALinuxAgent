@@ -24,11 +24,11 @@ import uuid
 import unittest
 import os
 import json
-import azureguestagent.logger as logger
-import azureguestagent.utils.fileutil as fileutil
-import azureguestagent.protocol.v2 as prot
-import azureguestagent.handler.default.extensionHandler as ext
-from azureguestagent.utils.osutil import CurrOSUtil
+import azurelinuxagent.logger as logger
+import azurelinuxagent.utils.fileutil as fileutil
+import azurelinuxagent.protocol.v2 as prot
+import azurelinuxagent.handler.default.extensionHandler as ext
+from azurelinuxagent.utils.osutil import CurrOSUtil
 
 settingJson = {
     "name":"TestExt",

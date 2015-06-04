@@ -23,7 +23,7 @@ import tests.tools as tools
 import uuid
 import unittest
 import os
-import azureguestagent.utils.shellutil as shellutil
+import azurelinuxagent.utils.shellutil as shellutil
 import test
 
 class TestRunCmd(unittest.TestCase):

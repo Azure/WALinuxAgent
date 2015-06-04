@@ -21,7 +21,7 @@
 import env
 from tests.tools import *
 import unittest
-from azureguestagent.osinfo import CurrOSInfo
+from azurelinuxagent.osinfo import CurrOSInfo
 
 class TestOSInfo(unittest.TestCase):
     def test_curr_os_info(self):

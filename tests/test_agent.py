@@ -24,8 +24,8 @@ import uuid
 import unittest
 import os
 import json
-import azureguestagent.utils.fileutil as fileutil
-import azureguestagent.agent as agent
+import azurelinuxagent.utils.fileutil as fileutil
+import azurelinuxagent.agent as agent
 
 class TestAgent(unittest.TestCase):
     def test_parse_args(self):

@@ -23,7 +23,7 @@ from tools import *
 import uuid
 import unittest
 import os
-import azureguestagent.utils.textutil as textutil
+import azurelinuxagent.utils.textutil as textutil
 import test
 
 class TestTextUtil(unittest.TestCase):

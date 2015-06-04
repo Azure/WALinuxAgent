@@ -17,54 +17,60 @@
 # limitations under the License.
 #
 
+from azurelinuxagent.agent import GuestAgentName, GuestAgentVersion
+from azurelinuxagent.osinfo import CurrOSInfo
+from azurelinuxagent.utils.osutil import CurrOSUtil
 from distutils.core import setup
-from azurelinuxagent.utils.osutil import CurrOS, CurrOSInfo
-import azurelinuxagent.agent as agent
+from setuptools import find_packages
 
-name = CurrOSInfo[0]
-version = CurrOSInfo[1]
-codeName = CurrOSInfo[2]
-data_files=[]
+def get_data_files():
+    name = CurrOSInfo[0]
+    version = CurrOSInfo[1]
+    codeName = CurrOSInfo[2]
+    data_files=[]
+    if name == 'ubuntu':
+        data_files.extend([
+            ('/usr/sbin', ['bin/waagent']),
+            ('/etc/logrotate.d', ['config/waagent.logrotate']),
+            ('/etc', ['config/ubuntu/waagent.conf']),
+            ('/etc/init', ['config/ubuntu/init/waagent.conf']),
+        ])
+    elif name == 'redhat' or name == 'centos':
+        data_files.extend([
+            ('/usr/sbin', ['bin/waagent']),
+            ('/etc/logrotate.d', ['config/waagent.logrotate']),
+            ('/etc', ['config/redhat/waagent.conf']),
+            ('/etc/init.d', ['config/redhat/init.d/waagent.conf']),
+        ])
+    elif name == 'coreos':
+        data_files.extend([
+            ('/usr/share/oem/bin', ['bin/waagent']),
+            ('/usr/share/oem/waagent.conf', ['config/coreos/waagent.conf']),
+            ('/etc/systemd/system/', ['config/coreos/waagent.service']),
+        ])
+    elif name == 'suse':
+        data_files.extend([
+            ('/usr/sbin', ['bin/waagent']),
+            ('/etc/logrotate.d', ['config/waagent.logrotate']),
+            ('/etc', ['config/suse/waagent.conf']),
+            ('/etc/init.d', ['config/suse/init.d/waagent.conf']),
+        ])
+    else:
+        print "NOT support: {0} {1} {2}".format(name, version, codeName)
+        sys.exit(-1)
+    return data_files
 
-if name == 'ubuntu':
-    data_files.extend([
-        ('/usr/sbin', ['bin/waagent']),
-        ('/etc/logrotate.d', ['config/waagent.logrotate']),
-        ('/etc', ['config/ubuntu/waagent.conf']),
-        ('/etc/init', ['config/ubuntu/init/waagent.conf']),
-    ])
-elif name == 'redhat' or name == 'centos':
-    data_files.extend([
-        ('/usr/sbin', ['bin/waagent']),
-        ('/etc/logrotate.d', ['config/waagent.logrotate']),
-        ('/etc', ['config/redhat/waagent.conf']),
-        ('/etc/init.d', ['config/redhat/init.d/waagent.conf']),
-    ])
-elif name == 'coreos':
-    data_files.extend([
-        ('/usr/share/oem/bin', ['bin/waagent']),
-        ('/usr/share/oem/waagent.conf', ['config/coreos/waagent.conf']),
-        ('/etc/systemd/system/', ['config/coreos/waagent.service']),
-    ])
-elif name == 'suse':
-    data_files.extend([
-        ('/usr/sbin', ['bin/waagent']),
-        ('/etc/logrotate.d', ['config/waagent.logrotate']),
-        ('/etc', ['config/suse/waagent.conf']),
-        ('/etc/init.d', ['config/suse/init.d/waagent.conf']),
-    ])
-else:
-    print "NOT support: {0} {1} {2}".format(name, version, codeName)
-    sys.exit(-1)
+def readme():
+    with open('README') as f:
+        return f.read()
 
-setup(name=agent.GuestAgentName,
-      version=agent.GuestAgentVersion,
-      description=agent.GuestAgentLongVersion,
-      author=agent.GuestAgentAuthor,
-      url=agent.GuestAgentUri,
-      packages=['azurelinuxagent', 
-                'azurelinuxagent.utils', 
-                'azurelinuxagent.protocol'],
-      data_files=data_files)
-
-CurrOS.RegisterAgentService()
+setup(name=GuestAgentName,
+      version=GuestAgentVersion,
+      description=readme(),
+      author= 'Yue Zhang, Stephen Zarkos, Eric Gable',
+      author_email = 'walinuxagent@microsoft.com',
+      platforms = 'Linux',
+      url='https://github.com/Azure/WALinuxAgent',
+      license = 'Apache License Version 2.0',
+      packages=find_packages(), 
+      data_files=get_data_files())

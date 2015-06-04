@@ -24,8 +24,8 @@ import uuid
 import unittest
 import os
 import json
-import azureguestagent.utils.fileutil as fileutil
-import azureguestagent.handler.default.dhcpHandler as dhcpHandler
+import azurelinuxagent.utils.fileutil as fileutil
+import azurelinuxagent.handler.default.dhcpHandler as dhcpHandler
 
 SampleDhcpResponse = None
 with open(os.path.join(env.test_root, "dhcp")) as F:

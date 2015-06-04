@@ -24,8 +24,8 @@ import uuid
 import unittest
 import os
 import shutil
-import azureguestagent.utils.fileutil as fileutil
-import azureguestagent.event as evt
+import azurelinuxagent.utils.fileutil as fileutil
+import azurelinuxagent.event as evt
 
 class MockInstanceMetadata(object):
     def getDeploymentName(self): return "foo"

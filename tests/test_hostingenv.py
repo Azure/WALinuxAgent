@@ -23,7 +23,7 @@ import tests.tools as tools
 import uuid
 import unittest
 import os
-import azureguestagent.protocol.v1 as v1
+import azurelinuxagent.protocol.v1 as v1
 
 HostingEnvSample="""
  <HostingEnvironmentConfig version="1.0.0.0" goalStateIncarnation="1">

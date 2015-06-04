@@ -22,7 +22,7 @@ import env
 import tests.tools as tools
 import uuid
 import unittest
-import azureguestagent.logger as logger
+import azurelinuxagent.logger as logger
 import test
 
 class TestLogger(unittest.TestCase):

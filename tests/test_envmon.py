@@ -22,8 +22,8 @@ import env
 from tests.tools import *
 import unittest
 import time
-from azureguestagent.utils.osutil import CurrOSUtil
-from azureguestagent.handler.default.envHandler import EnvMonitor
+from azurelinuxagent.utils.osutil import CurrOSUtil
+from azurelinuxagent.handler.default.envHandler import EnvMonitor
 
 class MockDhcpHandler(object):
     def configRoutes(self):

@@ -23,7 +23,7 @@ from tests.tools import *
 import uuid
 import unittest
 import os
-import azureguestagent.protocol as protocol
+import azurelinuxagent.protocol as protocol
 
 class TestWireProtocolEndpoint(unittest.TestCase):
     def test_get_wire_protocol_endpoint(self):

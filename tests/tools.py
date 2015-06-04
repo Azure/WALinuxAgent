@@ -21,7 +21,7 @@
 
 import os
 import sys
-from azureguestagent.utils.osutil import CurrOSUtil
+from azurelinuxagent.utils.osutil import CurrOSUtil
 
 parent = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(parent)

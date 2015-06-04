@@ -23,10 +23,10 @@ import env
 import uuid
 import unittest
 import tests.tools as tools
-import azureguestagent.utils.fileutil as fileutil
-import azureguestagent.conf as conf
-from azureguestagent.handler import CurrOSHandlerFactory
-from azureguestagent.exception import *
+import azurelinuxagent.utils.fileutil as fileutil
+import azurelinuxagent.conf as conf
+from azurelinuxagent.handler import CurrOSHandlerFactory
+from azurelinuxagent.exception import *
 
 class TestScvmmHandler(unittest.TestCase):
     def test_get_scvmm_handler(self):
