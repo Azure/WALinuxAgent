@@ -22,41 +22,14 @@ import azurelinuxagent.utils.fileutil as fileutil
 from azurelinuxagent.exception import *
 from azurelinuxagent.utils.osutil import CurrOSUtil
 
-def LoadConfiguration(confFilePath):
-    if os.path.isfile(confFilePath) == False:
-        raise AgentConfigError("Missing configuration in {0}", confFilePath)
-    try:
-        content = fileutil.GetFileContents(confFilePath)
-        __Config__ = ConfigurationProvider(content)
-        return __Config__
-    except IOError, e:
-        raise AgentConfigError("Failed to load conf file:{0}", confFilePath)
-
-__Config__ = None
-def Get(key, defaultValue=None):
-    if __Config__ is not None:
-        return __Config__.get(key, defaultValue)
-    else:
-        return defaultValue
- 
-def GetSwitch(key, defaultValue=None):
-     if __Config__ is not None:
-         return __Config__.getSwitch(key, defaultValue)
-     else:
-         return defaultValue
-
-def GetInt(key, defaultValue=None):
-    if __Config__ is not None:
-        return __Config__.getInt(key, defaultValue)
-    else:
-        return defaultValue
-
 class ConfigurationProvider(object):
     """
     Parse amd store key:values in /etc/waagent.conf.
     """
-    def __init__(self, content):
+    def __init__(self):
         self.values = dict()
+
+    def load(self, content):
         if not content:
             raise AgentConfigError("Can't not parse empty configuration")
         for line in content.split('\n'):
@@ -81,5 +54,35 @@ class ConfigurationProvider(object):
             return int(self.values.get(key))
         except:
             return defaultValue
+
+
+__Config__ = ConfigurationProvider()
+
+def LoadConfiguration(confFilePath, conf=__Config__):
+    if os.path.isfile(confFilePath) == False:
+        raise AgentConfigError("Missing configuration in {0}", confFilePath)
+    try:
+        content = fileutil.GetFileContents(confFilePath)
+        conf.load(content)
+    except IOError, e:
+        raise AgentConfigError("Failed to load conf file:{0}", confFilePath)
+
+def Get(key, defaultValue=None, conf=__Config__):
+    if conf is not None:
+        return conf.get(key, defaultValue)
+    else:
+        return defaultValue
+ 
+def GetSwitch(key,  defaultValue=None, conf=__Config__):
+     if conf is not None:
+         return conf.getSwitch(key, defaultValue)
+     else:
+         return defaultValue
+
+def GetInt(key, defaultValue=None, conf=__Config__):
+    if conf is not None:
+        return conf.getInt(key, defaultValue)
+    else:
+        return defaultValue
 
 

@@ -47,8 +47,8 @@ def SetFileContents(filepath, contents):
     """
     Write 'contents' to 'filepath'.
     """
-    if type(contents) == str :
-        contents=contents.encode('latin-1', 'ignore')
+    #if type(contents) == str :
+        #contents=contents.encode('latin-1', 'ignore')
     with open(filepath, "wb+") as F :
         F.write(contents)
 
@@ -56,8 +56,8 @@ def AppendFileContents(filepath, contents):
     """
     Append 'contents' to 'filepath'.
     """
-    if type(contents) == str :
-        contents=contents.encode('latin-1')
+    #if type(contents) == str :
+        #contents=contents.encode('latin-1')
     with open(filepath, "a+") as F :
         F.write(contents)
 
@@ -66,8 +66,8 @@ def ReplaceFileContentsAtomic(filepath, contents):
     Write 'contents' to 'filepath' by creating a temp file, and replacing original.
     """
     handle, temp = tempfile.mkstemp(dir = os.path.dirname(filepath))
-    if type(contents) == str :
-        contents=contents.encode('latin-1')
+    #if type(contents) == str :
+        #contents=contents.encode('latin-1')
     try:
         os.write(handle, contents)
     except IOError, e:

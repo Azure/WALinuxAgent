@@ -26,7 +26,7 @@ LogFilePath = '/var/log/waagent.log'
 ConsoleFilePath = '/dev/console'
 
 class Logger(object):
-    def __init__(self, logger=None, prefix=""):
+    def __init__(self, logger=None, prefix=None):
         self.appenders = []
         if logger is not None:
             self.appenders.extend(logger.appenders)
@@ -47,9 +47,15 @@ class Logger(object):
     def log(self, level, msg_format, *args):
         msg_format = textutil.Ascii(msg_format) 
         args = map(lambda x : textutil.Ascii(x), args)
-        msg = msg_format.format(*args)
+        if(len(args) > 0):
+            msg = msg_format.format(*args)
+        else:
+            msg = msg_format
         time = datetime.now().strftime('%Y/%m/%d %H:%M:%S.%f')
-        logItem = "{0} {1} {2} {3}".format(time, self.prefix, level, msg)
+        if self.prefix is not None:
+            logItem = "{0} {1} {2} {3}".format(time, level, self.prefix, msg)
+        else:
+            logItem = "{0} {1} {2}".format(time, level, msg)
         for appender in self.appenders:
             appender.write(level, logItem)
 

@@ -83,16 +83,9 @@ class CertInfoV1(object):
         return "{0}.prv".format(thumbprint)
 
 class ExtensionInfoV1(ExtensionInfo):
-    def __init__(self, 
-                 name=None,
-                 version=None,
-                 manifestUris=None,
-                 upgradePolicy=None,
-                 state=None,
-                 seqNo=None,
-                 publicSettings=None,
-                 protectedSettings=None,
-                 thumbprint=None):
+    def __init__(self, name=None, version=None, manifestUris=None, 
+                 upgradePolicy=None, state=None, seqNo=None, 
+                 settings=None):
         super(ExtensionInfoV1, self).__init__()
         self.name = name
         self.version = version
@@ -100,9 +93,10 @@ class ExtensionInfoV1(ExtensionInfo):
         self.upgradePolicy = upgradePolicy
         self.state = state
         self.seqNo = seqNo
-        self.publicSettings = publicSettings
-        self.protectedSettings = protectedSettings
-        self.thumbprint = thumbprint
+        self.settings = settings
+        runtimeSettings = settings["runtimeSettings"][0]
+        handlerSettings = runtimeSettings["handlerSettings"]
+        self.handlerSettings = handlerSettings
         self.versionUris = None
 
     def getName(self):
@@ -120,14 +114,20 @@ class ExtensionInfoV1(ExtensionInfo):
     def getSeqNo(self):
         return self.seqNo
 
+    def getSettings(self):
+        return self.settings
+    
+    def getHandlerSettings(self):
+        return self.handlerSettings
+    
     def getPublicSettings(self):
-        return self.publicSettings
+        return self.handlerSettings['publicSettings']
 
     def getProtectedSettings(self):
-        return self.protectedSettings
+        return self.handlerSettings['protectedSettings']
 
     def getCertificateThumbprint(self):
-        return self.thumbprint
+        return self.handlerSettings['protectedSettingsCertThumbprint']
 
     def getVersionUris(self):
         return self.versionUris
@@ -160,7 +160,7 @@ class ProtocolV1(Protocol):
    
     def initialize(self):
         self.client.checkWireProtocolVersion()
-        self.client.updateGoalState()
+        self.client.updateGoalState(forced=True)
 
     def getVmInfo(self):
         hostingEnv = self.client.getHostingEnv()
@@ -205,10 +205,10 @@ class ProtocolV1(Protocol):
 def _fetchCache(localFile):
     if not os.path.isfile(localFile):
         raise ProtocolError("{0} is missing.".format(localFile))
-    return fileutil.GetFileContents(path)
+    return fileutil.GetFileContents(localFile)
 
 def _fetchUri(uri, headers, chkProxy=False):
-    resp = restutil.HttpGet(uri, header, chkProxy=chkProxy)
+    resp = restutil.HttpGet(uri, headers, chkProxy=chkProxy)
     if(resp.status == httplib.GONE):
         raise WireProtocolResourceGone(uri)
     if(resp.status != httplib.OK):
@@ -319,13 +319,13 @@ class StatusBlob(object):
 
     def upload(self, url):
         logger.Info("Upload status blob")
-        blobType = GetBlobType(url) 
+        blobType = self.getBlobType(url) 
         
         data = self.toJson()
         if blobType == "BlockBlob":
-            PutBlockBlob(url, data)    
+            self.putBlockBlob(url, data)    
         elif blobType == "PageBlob":
-            PutPageBlob(url, data)    
+            self.putPageBlob(url, data)    
         else:
             raise ProtocolError("Unknown blob type: {0}".format(blobType))
 
@@ -341,11 +341,11 @@ class StatusBlob(object):
             raise ProtocolError(("Failed to get status blob type: {0}"
                                  "").format(resp.status))
 
-        blobType = blobPropResp.getheader("x-ms-blob-type")
+        blobType = resp.getheader("x-ms-blob-type")
         logger.Verbose("Blob type={0}".format(blobType))
         return blobType
 
-    def putBlockBlob(url, data):
+    def putBlockBlob(self, url, data):
         logger.Verbose("Upload block blob")
         timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         resp = restutil.HttpPut(url, data, {
@@ -354,7 +354,7 @@ class StatusBlob(object):
             "Content-Length": str(len(data)),
             "x-ms-version" : self.__class__.__StorageVersion
         })
-        if resp is None or resp.status != httplib.OK:
+        if resp is None or resp.status != httplib.CREATED:
             raise ProtocolError(("Failed to upload block blob: {0}"
                                  "").format(resp.status))
 
@@ -370,7 +370,7 @@ class StatusBlob(object):
             "x-ms-blob-content-length" : str(pageBlobSize),
             "x-ms-version" : self.__class__.__StorageVersion
         })
-        if resp is None or resp.status != httplib.OK:
+        if resp is None or resp.status != httplib.CREATED:
             raise ProtocolError(("Failed to clean up page blob: {0}"
                                  "").format(resp.status))
             
@@ -398,7 +398,7 @@ class StatusBlob(object):
                 "x-ms-version" : self.__class__.__StorageVersion,
                 "Content-Length": str(pageEnd - start)
             })
-            if resp is None or resp.status != httplib.OK:
+            if resp is None or resp.status != httplib.CREATED:
                 raise ProtocolError(("Failed to upload page blob: {0}"
                                      "").format(resp.status))
             start = end
@@ -448,20 +448,22 @@ class WireClient(object):
         localFile = ManifestFile.format(extension.name, 
                                         goalState.getIncarnation())
         xmlText = _fetchManifest(extension.manifestUris)
-        fileutil.SetFileContents(localFile, fileutil)
+        fileutil.SetFileContents(localFile, xmlText)
         return ExtensionManifest(xmlText)
 
-    def updateGoalState(self, maxRetry=3):
-        xmlText = _fetchUri(GoalStateUri, self.getHeader())
+    def updateGoalState(self, forced=False, maxRetry=3):
+        uri = GoalStateUri.format(self.endpoint)
+        xmlText = _fetchUri(uri, self.getHeader())
         goalState = GoalState(xmlText)
         
-        lastIncarnation = None
-        if(os.path.isfile(IncarnationFile)):
-            lastIncarnation = fileutil.GetFileContents(IncarnationFile)
-        newIncarnation = goalState.getIncarnation()
-        if(lastIncarnation is not None and lastIncarnation == newIncarnation):
-            #Goalstate is not updated.
-            return
+        if not forced:
+            lastIncarnation = None
+            if(os.path.isfile(IncarnationFile)):
+                lastIncarnation = fileutil.GetFileContents(IncarnationFile)
+            newIncarnation = goalState.getIncarnation()
+            if lastIncarnation is not None and lastIncarnation == newIncarnation:
+                #Goalstate is not updated.
+                return
         
         #Start updating goalstate, retry on 410
         for retry in range(0, maxRetry):
@@ -548,7 +550,7 @@ class WireClient(object):
 
     def uploadStatusBlob(self):
         extensionsConfig = self.getExtensionsConfig()
-        UploadStatusBlob(extensionsConfig.getStatusUploadBlob(), data)
+        self.statusBlob.upload(extensionsConfig.getStatusUploadBlob())
 
     def reportRoleProperties(self, thumbprint):
         goalState = self.getGoalState()
@@ -612,6 +614,7 @@ class VersionInfo(object):
         Query endpoint server for wire protocol version.
         Fail if our desired protocol version is not seen.
         """
+        logger.Verbose(xmlText)
         self.parse(xmlText)
    
     def parse(self, xmlText):
@@ -638,6 +641,7 @@ class GoalState(object):
     def __init__(self, xmlText):
         if xmlText is None:
             raise ValueError("GoalState.xml is None")
+        logger.Verbose(xmlText)
         self.incarnation = None
         self.expectedState = None
         self.hostingEnvUri = None
@@ -711,6 +715,7 @@ class HostingEnv(object):
     def __init__(self, xmlText):
         if xmlText is None:
             raise ValueError("HostingEnvironmentConfig.xml is None")
+        logger.Verbose(xmlText)
         self.parse(xmlText)
 
     def getVmName(self):
@@ -739,6 +744,7 @@ class SharedConfig(object):
     parse role endpoint server and goal state config.
     """
     def __init__(self, xmlText):
+        logger.Verbose(xmlText)
         self.parse(xmlText)
 
     def parse(self, xmlText):
@@ -756,6 +762,7 @@ class Certificates(object):
     def __init__(self, xmlText=None):
         if xmlText is None:
             raise ValueError("Certificates.xml is None")
+        logger.Verbose(xmlText)
         self.libDir = CurrOSUtil.GetLibDir()
         self.opensslCmd = CurrOSUtil.GetOpensslCmd()
         self.certs = []
@@ -856,6 +863,7 @@ class ExtensionsConfig(object):
     def __init__(self, xmlText):
         if xmlText is None:
             raise ValueError("ExtensionsConfig is None")
+        logger.Verbose(xmlText)
         self.extensions = []
         self.statusUploadBlob = None
         self.parse(xmlText)
@@ -890,22 +898,13 @@ class ExtensionsConfig(object):
             runtimeSettingsNode = FindFirstNode(settings[0], ("RuntimeSettings"))
             seqNo = runtimeSettingsNode.attrib["seqNo"]
             runtimeSettingsStr = runtimeSettingsNode.text
-            runtimeSettingsDataList = json.loads(runtimeSettingsStr)
-            runtimeSettingsData = runtimeSettingsDataList["runtimeSettings"][0]
-            handlerSettingsData = runtimeSettingsData["handlerSettings"]
-            publicSettings = handlerSettingsData["publicSettings"]
-            protectedSettings = handlerSettingsData["protectedSettings"]
-            thumbprint = handlerSettingsData["protectedSettingsCertThumbprint"]
+            settings = json.loads(runtimeSettingsStr)
            
-            extInfo = ExtensionInfoV1(name=name,
-                                      version=version,
+            extInfo = ExtensionInfoV1(name=name, version=version,
                                       manifestUris=(location, failoverLocation),
-                                      upgradePolicy=upgradePolicy,
-                                      state=state,
-                                      seqNo=seqNo,
-                                      publicSettings=publicSettings,
-                                      protectedSettings=protectedSettings,
-                                      thumbprint=thumbprint)
+                                      upgradePolicy=upgradePolicy, state=state,
+                                      seqNo=seqNo, 
+                                      settings = settings)
             self.extensions.append(extInfo)
         self.statusUploadBlob = (FindFirstNode(xmlDoc,"StatusUploadBlob")).text
         return self
@@ -914,6 +913,7 @@ class ExtensionManifest(object):
     def __init__(self, xmlText):
         if xmlText is None:
             raise ValueError("ExtensionManifest is None")
+        logger.Verbose(xmlText)
         self.xmlText = xmlText
         self.versionUris = []
         self.parse(xmlText)

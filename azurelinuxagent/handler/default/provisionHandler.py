@@ -19,6 +19,8 @@ import os
 import traceback
 import azurelinuxagent.logger as logger
 import azurelinuxagent.conf as conf
+from azurelinuxagent.exception import *
+import azurelinuxagent.protocol as prot
 from azurelinuxagent.utils.osutil import CurrOSUtil
 import azurelinuxagent.utils.shellutil as shellutil
 import azurelinuxagent.utils.fileutil as fileutil
@@ -32,7 +34,7 @@ class ProvisionHandler(object):
             logger.Info("Provisioning is disabled. Skip.")
             return
 
-        provisoned = os.path.join(CurrOSUtil.GetLibDir(), "provisioned")
+        provisioned = os.path.join(CurrOSUtil.GetLibDir(), "provisioned")
         if os.path.isfile(provisioned):
             return
         
@@ -44,8 +46,8 @@ class ProvisionHandler(object):
                                            "Provisioning", 
                                            "Starting")
             self.provision()
-            fileutil.SetFileContents(provisoned, "")
-            thumbprint = self.regenerateSshHostKey(keyPairType)
+            fileutil.SetFileContents(provisioned, "")
+            thumbprint = self.regenerateSshHostKey()
             protocol.reportProvisionStatus(status="Ready",
                                            thumbprint = thumbprint)
         except ProvisionError as e:
@@ -55,7 +57,7 @@ class ProvisionHandler(object):
     
     def regenerateSshHostKey(self):
         keyPairType = conf.Get("Provisioning.SshHostKeyPairType", "rsa")
-        if self.config.getSwitch("Provisioning.RegenerateSshHostKeyPair"):
+        if conf.GetSwitch("Provisioning.RegenerateSshHostKeyPair"):
             shellutil.Run("rm -f /etc/ssh/ssh_host_*key*")
             shellutil.Run(("ssh-keygen -N '' -t {0} -f /etc/ssh/ssh_host_{1}_key"
                            "").format(keyPairType, keyPairType))
@@ -73,7 +75,8 @@ class ProvisionHandler(object):
             
 
     def provision(self):
-        ovfenv = self.copyOvf()
+        protocol = prot.GetDefaultProtocol()
+        ovfenv = protocol.copyOvf()
         password = ovfenv.getUserPassword()
         ovfenv.clearUserPassword()
 
@@ -102,28 +105,8 @@ class ProvisionHandler(object):
 
         CurrOSUtil.RestartSshService()
 
-        if self.config.getSwitch("Provisioning.DeleteRootPassword"):
+        if conf.GetSwitch("Provisioning.DeleteRootPassword"):
             CurrOSUtil.DeleteRootPassword()
-
-    def copyOvf(self):
-        """
-        Copy ovf env file from dvd to hard disk. 
-        Remove password before save it to the disk
-        """
-        CurrOSUtil.MountDvd()
-
-        ovfFile = CurrOSUtil.GetOvfEnvPathOnDvd()
-        if not os.path.isfile(ovfFile):
-            raise ProvisionError("Missing ovf-env.xml")
-
-        ovfxml = fileutil.GetFileContents(ovfFile, removeBom=True)
-        ovfenv = OvfEnv(ovfxml)
-        ovfxml = re.sub("<UserPassword>.*?<", "<UserPassword>*<", ovfxml)
-        ovfFilePath = os.path.join(CurrOSUtil.GetLibDir(), OvfFileName)
-        fileutil.SetFileContents(ovfFilePath, ovfxml)
-
-        CurrOSUtil.UmountDvd()
-        return ovfenv
 
     def saveCustomData(self, ovfenv):
         customData = ovfenv.getCustomData()

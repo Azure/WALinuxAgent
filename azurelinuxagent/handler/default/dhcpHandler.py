@@ -28,7 +28,7 @@ import azurelinuxagent.utils.fileutil as fileutil
 import azurelinuxagent.utils.shellutil as shellutil
 from azurelinuxagent.utils.textutil import *
 
-WireProtocolAddrFile="WireProtocol"
+WireServerAddrFile="WireServer"
 class DhcpHandler(object):
     def __init__(self):
         self.endpoint = None
@@ -51,7 +51,7 @@ class DhcpHandler(object):
         endpoint, gateway, routes = ParseDhcpResponse(resp)
         self.endpoint = endpoint
         if endpoint is not None:
-            path = os.path.join(CurrOSUtil.GetLibDir(), WireProtocolAddrFile)
+            path = os.path.join(CurrOSUtil.GetLibDir(), WireServerAddrFile)
             fileutil.SetFileContents(path, endpoint)
         self.gateway = gateway
         self.routes = routes

@@ -17,6 +17,7 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 import os
+import shlex
 import traceback
 import zipfile
 import json
@@ -26,6 +27,7 @@ import azurelinuxagent.protocol as prot
 from azurelinuxagent.exception import ExtensionError
 import azurelinuxagent.utils.fileutil as fileutil
 import azurelinuxagent.utils.restutil as restutil
+import azurelinuxagent.utils.shellutil as shellutil
 from azurelinuxagent.utils.osutil import CurrOSUtil
 
 ValidExtensionStatus = ['transitioning', 'error', 'success', 'warning']
@@ -68,7 +70,7 @@ class ExtensionHandler(object):
                 "code" : -1, 
                 "formattedMessage": {
                     "lang":"en-US",
-                    "message": e.msg
+                    "message": str(e)
                 }
             });
         protocol.reportExtensionStatus(setting.getName(), 
@@ -218,6 +220,8 @@ class ExtensionInstance(object):
                                    os.path.basename(uri) + ".zip")
         fileutil.SetFileContents(packageFile, bytearray(package))
         zipfile.ZipFile(packageFile).extractall(self.getBaseDir())
+        chmod = "find {0} -type f | xargs chmod u+x".format(self.getBaseDir())
+        shellutil.Run(chmod)
     
     def initExtensionDir(self):
         self.logger.info("Initialize extension directory")
@@ -298,6 +302,7 @@ class ExtensionInstance(object):
         aggStatus = HandlerStatusToAggStatus[handlerStatus]
 
         man = self.loadManifest() 
+        heartbeat=None
         if man.isReportHeartbeat():
             heartbeat = self.getHeartbeat()
             self.validateHeartbeat(heartbeat)
@@ -321,22 +326,24 @@ class ExtensionInstance(object):
         #Check extension status format
         if 'status' not in extStatus:
             raise ExtensionError("Malformed status file: missing 'status'");
-        if 'operation' not in extStatus:
-            raise ExtensionError("Malformed status file: missing 'operation'");
-        if 'code' not in extStatus:
-            raise ExtensionError("Malformed status file: missing 'code'");
-        if 'name' not in extStatus:
-            raise ExtensionError("Malformed status file: missing 'name'");
-        if 'formattedMessage' not in extStatus:
-            raise ExtensionError("Malformed status file: missing 'name'");
-        if 'lang' not in extStatus['formattedMessage']:
-            raise ExtensionError("Malformed status file: missing 'lang'");
-        if 'message' not in extStatus['formattedMessage']:
-            raise ExtensionError("Malformed status file: missing 'message'");
-        if extStatus['status'] not in ValidExtensionStatus:
-            raise ExtensionError("Malformed status file: invalid 'status'");
-        if type(extStatus['code']) != int:
-            raise ExtensionError("Malformed status file: 'code' must be int");
+        if 'status' not in extStatus['status']:
+            raise ExtensionError("Malformed status file: missing 'status.status'");
+        if 'operation' not in extStatus['status']:
+            raise ExtensionError("Malformed status file: missing 'status.operation'");
+        if 'code' not in extStatus['status']:
+            raise ExtensionError("Malformed status file: missing 'status.code'");
+        if 'name' not in extStatus['status']:
+            raise ExtensionError("Malformed status file: missing 'status.name'");
+        if 'formattedMessage' not in extStatus['status']:
+            raise ExtensionError("Malformed status file: missing 'status.formattedMessage'");
+        if 'lang' not in extStatus['status']['formattedMessage']:
+            raise ExtensionError("Malformed status file: missing 'status.formattedMessage.lang'");
+        if 'message' not in extStatus['status']['formattedMessage']:
+            raise ExtensionError("Malformed status file: missing 'status.formattedMessage.message'");
+        if extStatus['status']['status'] not in ValidExtensionStatus:
+            raise ExtensionError("Malformed status file: invalid 'status.status'");
+        #if type(extStatus['status']['code']) != int:
+        #    raise ExtensionError("Malformed status file: 'status.code' must be int");
    
     def getHandlerStatus(self):
         handlerStatus = "NotInstalled"
@@ -394,18 +401,16 @@ class ExtensionInstance(object):
 
     def launchCommand(self, cmd, timeout=300):
         self.logger.info("Launch command:{0}", cmd)
-        cmdPath = os.path.join(baseDir, cmd)
-        os.chmod(cmdPath, "0100")
+        baseDir = self.getBaseDir()
         self.updateSetting()
         try:
             devnull = open(os.devnull, 'w')
-            child = subprocess.Popen([cmd], shell=True, 
+            child = subprocess.Popen(baseDir + "/" + cmd, shell=True,
                                      cwd=baseDir, stdout=devnull)
         except Exception as e:
             #TODO do not catch all exception
             raise ExtensionError("Failed to launch: {0}, {1}".format(cmd, e))
     
-        timeout = 300 
         retry = timeout / 5
         while retry > 0 and child.poll == None:
             time.sleep(5)
@@ -416,8 +421,6 @@ class ExtensionInstance(object):
 
         ret = child.wait()
         if ret == None or ret != 0:
-            self.logger.error("Command {0} returned non-zero exit code: "
-                              "({1})", cmd, ret)
             raise ExtensionError("Non-zero exit code: {0}, {1}".format(ret, cmd))
     
     def loadManifest(self):
@@ -434,11 +437,12 @@ class ExtensionInstance(object):
 
     def updateSetting(self):
         #TODO clear old .settings file
-        fileutil.SetFileContents(self.setting.getSettingsFile(),
+        fileutil.SetFileContents(self.getSettingsFile(),
                                  json.dumps(self.setting.getSettings()))
 
     def createHandlerEnvironment(self):
         env = [{
+            "name": self.setting.getName(),
             "version" : self.setting.getVersion(),
             "handlerEnvironment" : {
                 "logFolder" : self.getLogDir(),
@@ -472,7 +476,7 @@ class ExtensionInstance(object):
         return versionUris[0]['version']
 
     def getPackageUris(self):
-        versionUris = self.setting.getVersion()
+        version = self.setting.getVersion()
         versionUris = self.setting.getVersionUris()
         if versionUris is None:
             raise ExtensionError("Package uris is None.")
@@ -573,12 +577,12 @@ class HandlerManifest(object):
         #TODO handle reboot after install
         if "rebootAfterInstall" not in self.data['handlerManifest']:
             return False
-        return self.data['handlerManifest']["rebootAfterInstall"].lower() == "true"
+        return self.data['handlerManifest']["rebootAfterInstall"]
 
     def isReportHeartbeat(self):
         if "reportHeartbeat" not in self.data['handlerManifest']:
             return False
-        return self.data['handlerManifest']["reportHeartbeat"].lower() == "true"
+        return self.data['handlerManifest']["reportHeartbeat"]
 
     def isUpdateWithInstall(self):
         if "updateMode" not in self.data['handlerManifest']:

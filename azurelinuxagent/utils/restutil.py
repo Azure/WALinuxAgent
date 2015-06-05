@@ -44,9 +44,9 @@ def _ParseUrl(url):
     secure = False
     if o.scheme.lower() == "https":
         secure = True
-    return o.netloc, o.port, secure, relativeUrl
+    return o.hostname, o.port, secure, relativeUrl
 
-def GetHttpProxy(self):
+def GetHttpProxy():
     """
     Get http_proxy and https_proxy from environment variables.
     Username and password is not supported now.
@@ -97,7 +97,7 @@ def HttpRequest(method, url, data, headers=None, maxRetry=3, chkProxy=False):
     #Check proxy
     proxyHost, proxyPort = (None, None)
     if chkProxy:
-        proxyHost, proxyPort = self.GetHttpProxy()
+        proxyHost, proxyPort = GetHttpProxy()
 
     #If httplib module is not built with ssl support. Fallback to http
     if secure and not hasattr(httplib, "HTTPSConnection"):
@@ -118,7 +118,6 @@ def HttpRequest(method, url, data, headers=None, maxRetry=3, chkProxy=False):
                                 secure, headers, proxyHost, proxyPort)
             logger.Verbose("HTTP Resp: Status={0}", resp.status)
             logger.Verbose("    Header={0}", resp.getheaders())
-            logger.Verbose("    Body={0}", resp.read())
             return resp
         except httplib.HTTPException as e:
             logger.Warn('HTTPException {0}, args:{1}', e, repr(e.args))

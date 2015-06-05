@@ -40,6 +40,7 @@ class TestLogger(unittest.TestCase):
         _logger.info("This is an exception {0}", Exception("Test"))
         _logger.info("This is an number {0}", 0)
         _logger.info("This is an boolean {0}", True)
+        _logger.verbose("{0}")
         _logger.verbose("{0} {1}", 0, 1)
         _logger.info("{0} {1}", 0, 1)
         _logger.warn("{0} {1}", 0, 1)

@@ -134,11 +134,11 @@ class DefaultOSUtil(object):
 
     def ChangePassword(self, userName, password, useSalt=True, saltType=6, 
                        saltLength=10):
-        passwdHash = textutil.GetPasswordHash(passwdHash, useSalt, saltType, saltLength)
+        passwdHash = textutil.GetPasswordHash(password, useSalt, saltType, saltLength)
         try:
             passwdContent = fileutil.GetFileContents(self.passwdPath)
             passwd = passwdContent.split("\n") 
-            newPasswd = filter(lambda x : not x.startswith(userName, passwd))
+            newPasswd = filter(lambda x : not x.startswith(userName), passwd)
             newPasswd.append("{0}:{1}:14600::::::".format(userName, passwdHash))
             fileutil.SetFileContents(self.passwdPath, "\n".join(newPasswd))
         except IOError as e:
@@ -152,13 +152,13 @@ class DefaultOSUtil(object):
             os.mkdir('/etc/sudoers.d/')
             # add the include of sudoers.d to the /etc/sudoers
             sudoers = '\n' + '#includedir /etc/sudoers.d/\n'
-            fileutil.SetFileContents('/etc/sudoers', sudoers, append=True)
+            fileutil.AppendFileContents('/etc/sudoers', sudoers)
         sudoer = None
         if nopasswd:
             sudoer = "{0} ALL = (ALL) NOPASSWD\n".format(userName)
         else:
             sudoer = "{0} ALL = (ALL) ALL\n".format(userName)
-        fileutil.SetFileContents('/etc/sudoers.d/waagent', sudoer, append=True)
+        fileutil.AppendFileContents('/etc/sudoers.d/waagent', sudoer)
         fileutil.ChangeMod('/etc/sudoers.d/waagent', 0440)
 
     def DeleteRootPassword(self):

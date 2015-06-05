@@ -24,6 +24,7 @@ import shutil
 import time
 import traceback
 import threading
+import subprocess
 import azurelinuxagent.logger as logger
 import azurelinuxagent.conf as conf
 import azurelinuxagent.protocol as prot
@@ -47,19 +48,19 @@ def Init():
     logger.LoggerInit('/var/log/waagent.log', '/dev/console', verbose=verbose)
     
     #Create lib dir
-    fileutil.CreateDir(CurrOSUtil.GetLibDir(), mode='0700')
+    fileutil.CreateDir(CurrOSUtil.GetLibDir(), mode=0700)
     os.chdir(CurrOSUtil.GetLibDir())
 
 def Run():
     fileutil.SetFileContents(CurrOSUtil.GetAgentPidPath(), 
                              str(os.getpid()))
 
-    scvmmHandler = CurrOSHandlerFactory.GetScvmmHandler()
+    scvmmHandler = CurrOSHandlerFactory.getScvmmHandler()
     if scvmmHandler.detectScvmmEnv():
         scvmmHandler.startScvmmAgent()
         return
     
-    dhcpHandler = CurrOSHandlerFactory.GetDhcpHandler()
+    dhcpHandler = CurrOSHandlerFactory.getDhcpHandler()
     dhcpHandler.probe()
 
     prot.DetectDefaultProtocol()
@@ -67,11 +68,11 @@ def Run():
     provisionHandler = CurrOSHandlerFactory.getProvisionHandler()
     provisionHandler.process()
 
-    if conf.getSwitch("ResourceDisk.Format", False):
-        rdHandler = CurrOSHandlerFactory.GetResourceDiskHandler()
+    if conf.GetSwitch("ResourceDisk.Format", False):
+        rdHandler = CurrOSHandlerFactory.getResourceDiskHandler()
         rdHandler.startActivateResourceDisk()
     
-    envHandler = CurrOSHandlerFactory.GetEnvHandler()
+    envHandler = CurrOSHandlerFactory.getEnvHandler()
     envHandler.startMonitor()
 
     #TODO Start load balancer
@@ -80,7 +81,7 @@ def Run():
     protocol = prot.GetDefaultProtocol()
     while True:
         #Handle extensions
-        extHandler = CurrOSHandlerFactory.GetExtensionHandler()
+        extHandler = CurrOSHandlerFactory.getExtensionHandler()
         extHandler.process()
         
         #Report status
@@ -92,7 +93,7 @@ def Run():
         time.sleep(25)
 
 def Deprovision(force=False, deluser=False):
-    deprovisionHandler = CurrOSHandlerFactory.GetDeprovisionHandler()
+    deprovisionHandler = CurrOSHandlerFactory.getDeprovisionHandler()
     deprovisionHandler.deprovision(force=force, deluser=deluser)
         
 def ParseArgs(sysArgv):
@@ -133,6 +134,7 @@ def Usage():
 
 def Daemon():
     print "Start daemon in backgroud"
+    devnull = open(os.devnull, 'w')
     subprocess.Popen([sys.argv[0], "run"], stdout=devnull, stderr=devnull)
 
 def Main():

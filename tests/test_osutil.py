@@ -59,6 +59,7 @@ class TestCurrOS(unittest.TestCase):
     @Mockup(shellutil, 'RunGetOutput', MockFunc(retval=[0, '']))
     @Mockup(shellutil, 'RunSendStdin', MockFunc(retval=[0, '']))
     @Mockup(fileutil, 'SetFileContents', MockFunc())
+    @Mockup(fileutil, 'AppendFileContents', MockFunc())
     @Mockup(fileutil, 'GetFileContents', MockFunc(retval=''))
     @Mockup(fileutil, 'ChangeMod', MockFunc())
     def test_update_user_account(self):

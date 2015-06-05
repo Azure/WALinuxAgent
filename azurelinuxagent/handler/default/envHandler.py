@@ -45,10 +45,11 @@ class EnvHandler(object):
 class EnvMonitor(object):
 
     def __init__(self, dhcpHandler):
-        self.stopped = False
+        self.stopped = True
         self.dhcpHandler = dhcpHandler
         self.hostname = socket.gethostname()
         self.dhcpid = CurrOSUtil.GetDhcpProcessId()
+        self.server_thread=None
     
     def start(self):
         if not self.stopped:
@@ -107,5 +108,6 @@ class EnvMonitor(object):
         Stop server comminucation and join the thread to main thread.
         """
         self.stopped = True
-        self.server_thread.join()
+        if self.server_thread is not None:
+            self.server_thread.join()
 

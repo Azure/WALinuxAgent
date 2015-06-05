@@ -65,6 +65,12 @@ class ExtensionInfo(object):
     def getSeqNo(self):
         raise NotImplementedError()
 
+    def getSettings(self):
+        raise NotImplementedError()
+    
+    def getHandlerSettings(self):
+        raise NotImplementedError()
+    
     def getPublicSettings(self):
         raise NotImplementedError()
 
@@ -245,6 +251,26 @@ class Protocol(object):
             return OvfEnv(xmlText)
         else:
             return None
+
+    def copyOvf(self):
+        """
+        Copy ovf env file from dvd to hard disk. 
+        Remove password before save it to the disk
+        """
+        CurrOSUtil.MountDvd()
+
+        ovfFile = CurrOSUtil.GetOvfEnvPathOnDvd()
+        if not os.path.isfile(ovfFile):
+            raise ProvisionError("Missing ovf-env.xml")
+
+        ovfxml = fileutil.GetFileContents(ovfFile, removeBom=True)
+        ovfenv = OvfEnv(ovfxml)
+        ovfxml = re.sub("<UserPassword>.*?<", "<UserPassword>*<", ovfxml)
+        ovfFilePath = os.path.join(CurrOSUtil.GetLibDir(), OvfFileName)
+        fileutil.SetFileContents(ovfFilePath, ovfxml)
+
+        CurrOSUtil.UmountDvd()
+        return ovfenv
 
     def reportProvisionStatus(self, status, subStatus, description, thumbprint):
         raise NotImplementedError()

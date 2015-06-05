@@ -40,7 +40,8 @@ foo.bar.int=300
 
 class TestConfiguration(unittest.TestCase):
     def test_parse_conf(self):
-        config = conf.ConfigurationProvider(TestConf)
+        config = conf.ConfigurationProvider()
+        config.load(TestConf)
         self.assertEquals(True, config.getSwitch("foo.bar.switch"))
         self.assertEquals(False, config.getSwitch("foo.bar.switch2"))
         self.assertEquals(False, config.getSwitch("foo.bar.switch3"))
@@ -53,15 +54,17 @@ class TestConfiguration(unittest.TestCase):
 
     def test_parse_malformed_conf(self):
         with self.assertRaises(AgentConfigError) as cm:
-            conf.ConfigurationProvider(None)
+            config = conf.ConfigurationProvider()
+            config.load(None)
 
     def test_load_conf_file(self):
         with open('/tmp/test_conf', 'w') as F:
             F.write(TestConf)
             F.close()
         
-        config = conf.LoadConfiguration('/tmp/test_conf')
-        self.assertNotEquals(None, config)
+        config = conf.ConfigurationProvider()
+        conf.LoadConfiguration('/tmp/test_conf', conf=config)
+        self.assertEquals(True, config.getSwitch("foo.bar.switch"), False)
 
 if __name__ == '__main__':
     unittest.main()

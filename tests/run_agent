@@ -30,7 +30,10 @@ test_root = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(test_root)
 sys.path.insert(0, project_root)
 
-import walinuxagent.agent as agent
+import azurelinuxagent.logger as logger
+import azurelinuxagent.agent as agent
+
+logger.LoggerInit("/dev/null", "/dev/stdout", verbose=True)
 
 if __name__ == '__main__':
     agent.Main()

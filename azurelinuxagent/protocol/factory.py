@@ -28,8 +28,8 @@ from azurelinuxagent.protocol.v1 import ProtocolV1
 from azurelinuxagent.protocol.v2 import ProtocolV2
 
 WireServerAddrFile = "WireServer" 
-ProtocolV1 = "ProtocolV1"
-ProtocolV2 = "ProtocolV2"
+WireProtocol = "WireProtocol"
+MetaDataProtocol = "MetaDataProtocol"
 
 def GetWireProtocolEndpoint():
     path = os.path.join(CurrOSUtil.GetLibDir(), WireServerAddrFile)
@@ -50,7 +50,7 @@ def DetectV1():
     protocol = ProtocolV1(endpoint)
     protocol.initialize()
 
-    path = os.path.join(CurrOSUtil.GetLibDir(), ProtocolV1)
+    path = os.path.join(CurrOSUtil.GetLibDir(), WireProtocol)
     fileutil.SetFileContents(path, "")
     return protocol
 
@@ -64,7 +64,7 @@ def DetectAvailableProtocols(probeFuncs=[DetectV1, DetectV2]):
             protocol = probeFunc()
             availableProtocols.append(protocol)
         except ProtocolNotFound as e:
-            log.Info(str(e))
+            logger.Info(str(e))
     return availableProtocols
 
 def DetectDefaultProtocol():
@@ -78,8 +78,8 @@ def ChooseDefaultProtocol(availableProtocols):
         raise ProtocolNotFound("No available protocol detected.")
 
 def GetV1():
-    path = os.path.join(CurrOSUtil.GetLibDir(), ProtocolV1)
-    if os.path.isfile(path):
+    path = os.path.join(CurrOSUtil.GetLibDir(), WireProtocol)
+    if not os.path.isfile(path):
         raise ProtocolNotFound("Protocol V1 not found")
         
     endpoint = GetWireProtocolEndpoint() 

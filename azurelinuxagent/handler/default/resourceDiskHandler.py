@@ -19,6 +19,7 @@
 
 import os
 import re
+import threading
 import azurelinuxagent.logger as logger
 import azurelinuxagent.conf as conf
 from azurelinuxagent.utils.osutil import CurrOSUtil
@@ -56,7 +57,10 @@ class ResourceDiskHandler(object):
             fs = conf.Get("ResourceDisk.Filesystem", "ext3")
             mountpoint = self.mountResourceDisk(mountpoint, fs)
             warningFile = os.path.join(mountpoint, DataLossWarningFile)
-            fileutil.SetFileContents(warningFile, DataLossWarning)
+            try:
+                fileutil.SetFileContents(warningFile, DataLossWarning)
+            except IOError as e:
+                logger.Warn("Failed to write data loss warnning:{0}", e)
         except ResourceDiskError as e:
             logger.Error("Failed to mount resource disk {0}", e)
     
