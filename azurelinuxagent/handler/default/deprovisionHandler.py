@@ -18,6 +18,7 @@
 #
 
 import azurelinuxagent.conf as conf
+import azurelinuxagent.protocol.ovfenv as ovf
 from azurelinuxagent.utils.osutil import CurrOSUtil
 import azurelinuxagent.utils.fileutil as fileutil
 
@@ -39,14 +40,13 @@ class DeprovisionHandler(object):
         actions.append(DeprovisionAction(CurrOSUtil.DeleteRootPassword))
     
     def deleteUser(self, warnings, actions):
-        protocol = proto.GetDefaultProtocol()
-        ovf = protocol.getOvf()
-        if ovf is None:
+        ovfenv = ovf.GetOvfEnv()
+        if ovfenv is None:
             warnings.append("WARNING! ovf-env.xml is not found.")
             warnings.append("WARNING! Skip delete user.")
             return
 
-        userName = ovf.getUserName()
+        userName = ovfenv.getUserName()
         warnings.append(("WARNING! {0} account and entire home directory "
                          "will be deleted.").format(userName))
         actions.append(DeprovisionAction(CurrOSUtil.DeleteAccount, [userName]))
@@ -63,13 +63,16 @@ class DeprovisionHandler(object):
         warnings.append("WARNING! The waagent service will be stopped.")
         actions.append(DeprovisionAction(CurrOSUtil.StopAgentService))
         filesToDel = ['/root/.bash_history', '/var/log/waagent.log']
-        actions.append(DeprovisionAction(fileutil.RemoveFiles, [filesToDel]))
+        actions.append(DeprovisionAction(fileutil.RemoveFiles, filesToDel))
 
     def deleteDhcpLease(self, warnings, actions):
         warnings.append("WARNING! Cached DHCP leases will be deleted.")
-        dirsToDel = [CurrOSUtil.GetLibDir(), "/var/lib/dhclient", 
-                     "/var/lib/dhcpcd", "/var/lib/dhcp"]
-        actions.append(DeprovisionAction(fileutil.CleanupDirs, [dirsToDel]))
+        dirsToDel = ["/var/lib/dhclient", "/var/lib/dhcpcd", "/var/lib/dhcp"]
+        actions.append(DeprovisionAction(fileutil.CleanupDirs, dirsToDel))
+
+    def deleteLibDir(self, warnings, actions):
+        dirsToDel = [CurrOSUtil.GetLibDir()]
+        actions.append(DeprovisionAction(fileutil.CleanupDirs, dirsToDel))
 
     def setUp(self, deluser):
         warnings = []
@@ -86,6 +89,8 @@ class DeprovisionHandler(object):
 
         if deluser:
             self.deleteUser(warnings, actions)
+        
+        self.deleteLibDir(warnings, actions)
 
         return warnings, actions
         
@@ -103,6 +108,3 @@ class DeprovisionHandler(object):
             action.invoke()
     
     
-    def cleanup(self):
-        fileutil.CleanupDirs()
-

@@ -17,11 +17,15 @@
 # limitations under the License.
 #
 
+import os
 from azurelinuxagent.agent import GuestAgentName, GuestAgentVersion
 from azurelinuxagent.osinfo import CurrOSInfo
 from azurelinuxagent.utils.osutil import CurrOSUtil
 from distutils.core import setup
 from setuptools import find_packages
+
+root_dir = os.path.dirname(os.path.abspath(__file__))
+os.chdir(root_dir)
 
 def get_data_files():
     name = CurrOSInfo[0]

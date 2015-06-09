@@ -45,19 +45,21 @@ class EnvHandler(object):
 class EnvMonitor(object):
 
     def __init__(self, dhcpHandler):
-        self.stopped = True
         self.dhcpHandler = dhcpHandler
-        self.hostname = socket.gethostname()
-        self.dhcpid = CurrOSUtil.GetDhcpProcessId()
+        self.stopped = True
+        self.hostname = None
+        self.dhcpid = None
         self.server_thread=None
     
     def start(self):
         if not self.stopped:
             logger.Info("Stop existing env monitor service.")
             self.stop()
-            self.stopped = False
 
+        self.stopped = False
         logger.Info("Start env monitor service.")
+        self.hostname = socket.gethostname()
+        self.dhcpid = CurrOSUtil.GetDhcpProcessId()
         self.server_thread = threading.Thread(target = self.monitor)
         self.server_thread.setDaemon(True)
         self.server_thread.start()

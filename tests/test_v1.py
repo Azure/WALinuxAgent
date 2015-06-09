@@ -121,8 +121,8 @@ class TestWireClint(unittest.TestCase):
         self.assertNotEquals(None, extensionsConfig)
 
 class MockResp(object):
-    def __init__(self):
-        self.status = httplib.OK
+    def __init__(self, status):
+        self.status = status
 
 class TestStatusBlob(unittest.TestCase):
     def testToJson(self):
@@ -132,8 +132,8 @@ class TestStatusBlob(unittest.TestCase):
                                       {"status":"success"})
         self.assertNotEquals(None, statusBlob.toJson())
 
-    @Mockup(v1.restutil, 'HttpPut', MockFunc(retval=MockResp()))
-    @Mockup(v1.restutil, 'HttpHead', MockFunc(retval=MockResp()))
+    @Mockup(v1.restutil, 'HttpPut', MockFunc(retval=MockResp(httplib.CREATED)))
+    @Mockup(v1.restutil, 'HttpHead', MockFunc(retval=MockResp(httplib.OK)))
     def test_put_page_blob(self):
         statusBlob = v1.StatusBlob()
         data = ['a'] * 100

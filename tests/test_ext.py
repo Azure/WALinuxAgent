@@ -95,7 +95,7 @@ class TestExtensions(unittest.TestCase):
         self.assertEqual("/tmp/TestExt-2.0/status", testExt.getStatusDir())
         self.assertEqual("/tmp/TestExt-2.0/status/0.status", 
                          testExt.getStatusFile())
-        self.assertEqual("/tmp/TestExt-2.0/status/HandlerState", 
+        self.assertEqual("/tmp/TestExt-2.0/config/HandlerState", 
                          testExt.getHandlerStateFile())
         self.assertEqual("/tmp/TestExt-2.0/config", testExt.getConfigDir())
         self.assertEqual("/tmp/TestExt-2.0/config/0.settings", 

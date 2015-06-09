@@ -88,15 +88,15 @@ class DefaultOSUtil(object):
         New account will be created if not exists.
         """
         if userName is None:
-            raise Exception("User name is empty")
+            raise OSUtilError("User name is empty")
 
-        if self._IsSysUser(userName):
-            raise Exception(("User {0} is a system user. "
-                             "Will not set passwd.").format(userName))
+        if self.IsSysUser(userName):
+            raise OSUtilError(("User {0} is a system user. "
+                               "Will not set passwd.").format(userName))
 
         userentry = self.GetUserEntry(userName)
         if userentry is None:
-            self._CreateUserAccount(userName, expiration)
+            self.CreateUserAccount(userName, expiration)
             
         self.ConfigSudoer(userName, password is None)
 
@@ -106,13 +106,14 @@ class DefaultOSUtil(object):
         except KeyError:
             return None
 
-    def _IsSysUser(self, userName):
+    def IsSysUser(self, userName):
         userentry = self.GetUserEntry(userName)
         uidmin = None
         try:
-            uidminDef = GetLineStartingWith("UID_MIN", "/etc/login.defs")
-            uidmin = int(uidminDef.split()[1])
-        except:
+            uidminDef = fileutil.GetLineStartingWith("UID_MIN", "/etc/login.defs")
+            if uidminDef is not None:
+                uidmin = int(uidminDef.split()[1])
+        except IOError as e:
             pass
         if uidmin == None:
             uidmin = 100
@@ -121,7 +122,7 @@ class DefaultOSUtil(object):
         else:
             return False
    
-    def _CreateUserAccount(self, userName, expiration=None):
+    def CreateUserAccount(self, userName, expiration=None):
         if expiration is not None:
             cmd = "useradd -m {0} -e {1}".format(userName, expiration)
         else:
@@ -134,7 +135,8 @@ class DefaultOSUtil(object):
 
     def ChangePassword(self, userName, password, useSalt=True, saltType=6, 
                        saltLength=10):
-        passwdHash = textutil.GetPasswordHash(password, useSalt, saltType, saltLength)
+        passwdHash = textutil.GetPasswordHash(password, useSalt, saltType, 
+                                              saltLength)
         try:
             passwdContent = fileutil.GetFileContents(self.passwdPath)
             passwd = passwdContent.split("\n") 
@@ -216,10 +218,14 @@ class DefaultOSUtil(object):
         pubPath = path + '.pub'
         pub = self.GetPubKeyFromPrv(prvPath)
         fileutil.SetFileContents(pubPath, pub)
-        self.SetSelinuxContext(path, 'unconfined_u:object_r:ssh_home_t:s')
-        self.SetSelinuxContext(pubPath, 'unconfined_u:object_r:ssh_home_t:s')
-        os.chmod(path, 0600)
+        self.SetSelinuxContext(pubPath, 'unconfined_u:object_r:ssh_home_t:s0')
+        self.SetSelinuxContext(path, 'unconfined_u:object_r:ssh_home_t:s0')
+        os.chmod(path, 0644)
         os.chmod(pubPath, 0600)
+
+    def OpenSslToOpenSsh(self, inputFile, outputFile):
+        shellutil.Run("ssh-keygen -i -m PKCS8 -f {0} >> {1}".format(inputFile,
+                                                                    outputFile))
 
     def DeploySshPublicKey(self, userName, thumbprint, path):
         """
@@ -237,13 +243,12 @@ class DefaultOSUtil(object):
         pubPath = os.path.join(libDir, thumbprint + '.pub')
         pub = self.GetPubKeyFromCrt(crtPath)
         fileutil.SetFileContents(pubPath, pub)
-        self.SetSelinuxContext(pubPath, 'unconfined_u:object_r:ssh_home_t:s')
-        #TODO some distros doesn't support PKCS8. Need to figure out.
-        shellutil.Run("ssh-keygen -i -m PKCS8 -f {0} >> {1}".format(pubPath, 
-                                                                    path))
-        self.SetSelinuxContext(path, 'unconfined_u:object_r:ssh_home_t:s')
-        os.chmod(path, 0600)
-        os.chmod(pubPath, 0600)
+        self.SetSelinuxContext(pubPath, 'unconfined_u:object_r:ssh_home_t:s0')
+        self.OpenSslToOpenSsh(pubPath, path)
+        self.SetSelinuxContext(path, 'unconfined_u:object_r:ssh_home_t:s0')
+        fileutil.ChangeOwner(path, userName)
+        fileutil.ChangeMod(path, 0644)
+        fileutil.ChangeMod(pubPath, 0600)
             
     def IsSelinuxSystem(self):
         """
@@ -309,7 +314,7 @@ class DefaultOSUtil(object):
         for dvd in [re.match(patten, dev) for dev in os.listdir(devDir)]:
             if dvd is not None:
                 return "/dev/{0}".format(dvd.group(0))
-        return None
+        raise OSUtilError("Failed to get dvd device")
 
     def MountDvd(self, maxRetry=6, chk_err=True):
         dvd = self.GetDvdDevice()
@@ -319,26 +324,29 @@ class DefaultOSUtil(object):
         mountlist = shellutil.RunGetOutput("mount")[1]
         existing = self.GetMountPoint(mountlist, dvd)
         if existing is not None: #Already mounted
+            logger.Info("{0} is already mounted at {1}", dvd, existing)
             return
         if not os.path.isdir(mountPoint):
             os.makedirs(mountPoint)
-        retcode = self.Mount(dvd, mountPoint, chk_err)
+        
         for retry in range(0, maxRetry):
+            retcode = self.Mount(dvd, mountPoint, option="-o ro -t iso9660", 
+                                 chk_err=chk_err)
             if retcode == 0:
                 logger.Info("Successfully mounted provision dvd")
                 return
-            else:
-                logger.Warn("Mount dvd failed: retry={0}, ret={1}", 
-                            retry, 
+            if retry < maxRetry - 1:
+                logger.Warn("Mount dvd failed: retry={0}, ret={1}", retry, 
                             retcode)
-            time.sleep(5)
-            self.Mount(dvd, mountPoint, chk_err)
+                time.sleep(5)
         if chk_err:
-            raise Exception("Failed to mount provision dvd")
+            raise OSUtilError("Failed to mount dvd.")
 
-    def UmountDvd(self):
+    def UmountDvd(self, chk_err=True):
         mountPoint = self.GetDvdMountPoint()
-        self.Umount(mountPoint)
+        retcode = self.Umount(mountPoint, chk_err=chk_err)
+        if chk_err and retcode != 0:
+            raise OSUtilError("Failed to umount dvd.")
 
     def LoadAtapiixModule(self):
         if self.IsAtaPiixModuleLoaded():
@@ -364,15 +372,16 @@ class DefaultOSUtil(object):
             if ret == 0:
                 logger.Info("Module driver for ATAPI CD-ROM is already present.")
                 return True
-            time.sleep(1)
+            if retry < maxRetry - 1:
+                time.sleep(1)
         return False
  
-    def Mount(self, dvd, mountPoint, chk_err=True):
-        return shellutil.RunGetOutput("mount {0} {1}".format(dvd, mountPoint), 
-                                      chk_err)[0]
+    def Mount(self, dvd, mountPoint, option="", chk_err=True):
+        cmd = "mount {0} {1} {2}".format(dvd, option,  mountPoint)
+        return shellutil.RunGetOutput(cmd, chk_err)[0]
 
-    def Umount(self, mountPoint):
-        return shellutil.Run("umount {0}".format(mountPoint))
+    def Umount(self, mountPoint, chk_err=True):
+        return shellutil.Run("umount {0}".format(mountPoint), chk_err=chk_err)
 
     def OpenPortForDhcp(self):
         #Open DHCP port if iptables is enabled.
@@ -561,12 +570,14 @@ class DefaultOSUtil(object):
     def SetBlockDeviceTimeout(self, dev, timeout):
         if dev is not None and timeout is not None:
             filePath = "/sys/block/{0}/device/timeout".format(dev)
-            original = fileutil.GetFileContents(filePath).splitlines()[0].rstrip()
+            content = fileutil.GetFileContents(filePath)
+            original = content.splitlines()[0].rstrip()
             if original != timeout:
                 fileutil.SetFileContents(filePath, timeout)
                 logger.Info("Set block dev timeout: {0} with timeout: {1}",
                             dev,
                             timeout)
+
     def GetMountPoint(self, mountlist, device):
         """
         Example of mountlist:
@@ -617,7 +628,7 @@ class DefaultOSUtil(object):
         return device
 
     def DeleteAccount(self, userName):
-        if self._IsSysUser(userName):
+        if self.IsSysUser(userName):
             logger.Error("{0} is a system user. Will not delete it.", userName)
         shellutil.Run("> /var/run/utmp")
         shellutil.Run("userdel -f -r " + userName)

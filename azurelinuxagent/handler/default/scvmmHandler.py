@@ -19,6 +19,7 @@
 
 import os
 from azurelinuxagent.utils.osutil import CurrOSUtil
+import azurelinuxagent.logger as logger
 import azurelinuxagent.utils.fileutil as fileutil
 
 VmmConfigFileName = "linuxosconfiguration.xml"
@@ -27,9 +28,15 @@ VmmStartupScriptName= "install"
 class ScvmmHandler(object):
         
     def detectScvmmEnv(self):
-        CurrOSUtil.MountDvd(maxRetry=0, chk_err=False)
+        logger.Info("Detecting Microsoft System Center VMM Environment")
+        CurrOSUtil.MountDvd(maxRetry=1, chk_err=False)
         mountPoint = CurrOSUtil.GetDvdMountPoint()
-        return os.path.isfile(os.path.join(mountPoint, VmmConfigFileName))
+        found = os.path.isfile(os.path.join(mountPoint, VmmConfigFileName))
+        if found: 
+            self.startScvmmAgent()
+        else:
+            CurrOSUtil.UmountDvd(chk_err=False)
+        return found
 
     def startScvmmAgent(self):
         logger.Info("Starting Microsoft System Center VMM Initialization "

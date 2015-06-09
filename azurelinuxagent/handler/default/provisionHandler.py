@@ -16,11 +16,12 @@
 #
 
 import os
-import traceback
 import azurelinuxagent.logger as logger
 import azurelinuxagent.conf as conf
+from azurelinuxagent.event import AddExtensionEvent, WALAEventOperation
 from azurelinuxagent.exception import *
 import azurelinuxagent.protocol as prot
+import azurelinuxagent.protocol.ovfenv as ovf
 from azurelinuxagent.utils.osutil import CurrOSUtil
 import azurelinuxagent.utils.shellutil as shellutil
 import azurelinuxagent.utils.fileutil as fileutil
@@ -41,18 +42,20 @@ class ProvisionHandler(object):
         logger.Info("Start provisioning.")
         protocol = prot.GetDefaultProtocol()
         try:
-            logger.Info("Provisioning image started")
-            protocol.reportProvisionStatus("NotReady", 
-                                           "Provisioning", 
+            protocol.reportProvisionStatus("NotReady", "Provisioning", 
                                            "Starting")
             self.provision()
             fileutil.SetFileContents(provisioned, "")
             thumbprint = self.regenerateSshHostKey()
             protocol.reportProvisionStatus(status="Ready",
                                            thumbprint = thumbprint)
+            AddExtensionEvent(name="WALA", isSuccess=True, message="",
+                              op=WALAEventOperation.Provision)
         except ProvisionError as e:
             logger.Error("Provision failed: {0}", e)
             protocol.reportProvisionStatus(status="NotReady", subStatus=str(e))
+            AddExtensionEvent(name="WALA", isSuccess=False, message=str(e),
+                              op=WALAEventOperation.Provision)
 
     
     def regenerateSshHostKey(self):
@@ -75,8 +78,11 @@ class ProvisionHandler(object):
             
 
     def provision(self):
-        protocol = prot.GetDefaultProtocol()
-        ovfenv = protocol.copyOvf()
+        try:
+            ovfenv = ovf.CopyOvfEnv()
+        except prot.ProtocolError as e:
+            raise ProvisionError("Failed to copy ovf-env.xml: {0}".format(e))
+
         password = ovfenv.getUserPassword()
         ovfenv.clearUserPassword()
 
@@ -87,7 +93,8 @@ class ProvisionHandler(object):
         if password is not None:
             userSalt = conf.GetSwitch("Provision.UseSalt", True)
             saltType = conf.GetSwitch("Provision.SaltType", 6)
-            CurrOSUtil.ChangePassword(ovfenv.getUserName(), password)
+            CurrOSUtil.ChangePassword(ovfenv.getUserName(), password, userSalt,
+                                      saltType)
 
         CurrOSUtil.ConfigSshd(ovfenv.getDisableSshPasswordAuthentication())
 
@@ -107,6 +114,7 @@ class ProvisionHandler(object):
 
         if conf.GetSwitch("Provisioning.DeleteRootPassword"):
             CurrOSUtil.DeleteRootPassword()
+
 
     def saveCustomData(self, ovfenv):
         customData = ovfenv.getCustomData()

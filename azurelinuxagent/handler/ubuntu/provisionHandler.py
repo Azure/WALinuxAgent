@@ -24,6 +24,7 @@ import azurelinuxagent.conf as conf
 from azurelinuxagent.utils.osutil import CurrOSUtil
 import azurelinuxagent.utils.shellutil as shellutil
 import azurelinuxagent.utils.fileutil as fileutil
+from azurelinuxagent.handler.default.provisionHandler import ProvisionHandler
 
 """
 On ubuntu image, provision could be disabled.

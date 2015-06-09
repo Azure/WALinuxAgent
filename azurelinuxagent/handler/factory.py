@@ -19,6 +19,7 @@
 
 from azurelinuxagent.osinfo import CurrOSInfo
 from azurelinuxagent.handler.default.handlerFactory import DefaultHandlerFactory
+from azurelinuxagent.handler.ubuntu.handlerFactory import UbuntuHandlerFactory
 
 def GetOSHandlerFactory(osInfo):
     """
@@ -29,8 +30,11 @@ def GetOSHandlerFactory(osInfo):
     codeName = osInfo[2]
     fullName = osInfo[3]
     
-    #Return default implementation 
-    return DefaultHandlerFactory()
+    if name == 'ubuntu':
+        return UbuntuHandlerFactory()
+    else:
+        #Return default implementation 
+        return DefaultHandlerFactory()
 
 CurrOSHandlerFactory = GetOSHandlerFactory(CurrOSInfo)
 

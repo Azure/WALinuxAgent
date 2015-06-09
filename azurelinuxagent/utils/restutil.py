@@ -124,8 +124,10 @@ def HttpRequest(method, url, data, headers=None, maxRetry=3, chkProxy=False):
         except IOError as e:
             logger.Warn('Socket IOError {0}, args:{1}', e, repr(e.args)) 
 
-        logger.Info("Retry={0}, {1} {2}", retry, method, url)
-        time.sleep(__RetryWaitingInterval)
+        if retry < maxRetry - 1:
+            logger.Info("Retry={0}, {1} {2}", retry, method, url)
+            time.sleep(__RetryWaitingInterval)
+
     raise HttpError("HTTP Err: {0} {1}".format(method, url))
 
 def HttpGet(url, headers=None, maxRetry=3, chkProxy=False):

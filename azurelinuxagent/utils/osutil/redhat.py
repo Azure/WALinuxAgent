@@ -34,6 +34,7 @@ import azurelinuxagent.utils.fileutil as fileutil
 import azurelinuxagent.utils.shellutil as shellutil
 import azurelinuxagent.utils.textutil as textutil
 from azurelinuxagent.utils.osutil.default import DefaultOSUtil
+from azurelinuxagent.utils.osutil.default import OSUtilError
 
 class RedhatOSUtil(DefaultOSUtil):
     def __init__(self):
@@ -54,6 +55,38 @@ class RedhatOSUtil(DefaultOSUtil):
 
     def StartAgentService(self):
         return shellutil.Run("/sbin/service waagent start", chk_err=False)
+
+    def RsaPublicKeyToSshRsa(self, publicKey):
+        lines = publicKey.split("\n")
+        lines = filter(lambda x : not x.startswith("----"), lines)
+        base64Encoded = "".join(lines)
+        try:
+            #TODO remove pyasn1 dependency
+            from pyasn1.codec.der import decoder as der_decoder
+            derEncoded = base64.b64decode(base64Encoded)
+            derEncoded = der_decoder.decode(derEncoded)[0][1]
+            k = der_decoder.decode(textutil.BitsToString(derEncoded))[0]
+            n=k[0]
+            e=k[1]
+            keydata=""
+            keydata += struct.pack('>I',len("ssh-rsa"))
+            keydata += "ssh-rsa"
+            keydata += struct.pack('>I',len(textutil.NumberToBytes(e)))
+            keydata += textutil.NumberToBytes(e)
+            keydata += struct.pack('>I',len(textutil.NumberToBytes(n)) + 1)
+            keydata += "\0"
+            keydata += textutil.NumberToBytes(n)
+            return "ssh-rsa " + base64.b64encode(keydata) + "\n"
+        except ImportError as e:
+            raise OSUtilError("Failed to load pyasn1.codec.der")
+        except Exception as e:
+            raise OSUtilError(("Failed to convert public key: {0} {1}"
+                               "").format(type(e).__name__, e))
+
+    def OpenSslToOpenSsh(self, inputFile, outputFile):
+        publicKey = fileutil.GetFileContents(inputFile)
+        sshRsaPublicKey = self.RsaPublicKeyToSshRsa(publicKey)
+        fileutil.SetFileContents(outputFile, sshRsaPublicKey)
 
     #Override
     def GetDhcpProcessId(self):

@@ -151,7 +151,7 @@ def Ascii(val):
     else:
         uni = unicode(val)
     if uni is None:
-        return '<Unsupported charset>'
+        raise ValueError('<Unsupported charset>')
     else:
         return uni.encode('ascii', 'backslashreplace')
 
@@ -189,4 +189,31 @@ def GetPasswordHash(password, useSalt, saltType, saltLength):
             salt = ''.join(random.choice(collection) for _ in range(saltLength))
             salt = "${0}${1}".format(saltType, salt)
         return crypt.crypt(password, salt)
+
+def NumberToBytes(i):
+        """
+        Pack number into bytes.  Retun as string.
+        """
+        result = []
+        while i:
+            result.append(chr(i & 0xFF))
+            i >>= 8
+        result.reverse()
+        return ''.join(result)
+
+def BitsToString(a):
+    """
+    Return string representation of bits in a.
+    """
+    index=7
+    s = ""
+    c = 0
+    for bit in a:
+        c = c | (bit << index)
+        index = index - 1
+        if index == -1:
+            s = s + struct.pack('>B', c)
+            c = 0
+            index = 7
+    return s
 

@@ -22,6 +22,7 @@ import re
 import threading
 import azurelinuxagent.logger as logger
 import azurelinuxagent.conf as conf
+from azurelinuxagent.event import AddExtensionEvent, WALAEventOperation
 from azurelinuxagent.utils.osutil import CurrOSUtil
 import azurelinuxagent.utils.fileutil as fileutil
 import azurelinuxagent.utils.shellutil as shellutil
@@ -45,13 +46,15 @@ class ResourceDiskHandler(object):
         diskThread.start()
     
     def run(self):
-        self.activateResourceDisk()
-        self.enableSwap()
+        mountpoint = None
+        if conf.GetSwitch("ResourceDisk.Format", False):
+            mountpoint = self.activateResourceDisk()
+        if mountpoint is not None and \
+                conf.GetSwitch("ResourceDisk.EnableSwap", False):
+            self.enableSwap(mountpoint)
 
     def activateResourceDisk(self):
-        if not conf.GetSwitch("ResourceDisk.Format", False):
-            return
-
+        logger.Info("Activate resource disk")
         try:
             mountpoint = conf.Get("ResourceDisk.MountPoint", "/mnt/resource")
             fs = conf.Get("ResourceDisk.Filesystem", "ext3")
@@ -61,15 +64,16 @@ class ResourceDiskHandler(object):
                 fileutil.SetFileContents(warningFile, DataLossWarning)
             except IOError as e:
                 logger.Warn("Failed to write data loss warnning:{0}", e)
+            return mountpoint
         except ResourceDiskError as e:
             logger.Error("Failed to mount resource disk {0}", e)
+            AddExtensionEvent(name="WALA", isSuccess=False, message=str(e),
+                              op=WALAEventOperation.ActivateResourceDisk)
     
-    def enableSwap(self):
-        if not conf.GetSwitch("ResourceDisk.EnabledSwap", False):
-            return 
-
+    def enableSwap(self, mountpoint):
+        logger.Info("Enable swap")
         try:
-            sizeMB = conf.getInt("ResourceDisk.SwapSizeMB", 0)
+            sizeMB = conf.GetInt("ResourceDisk.SwapSizeMB", 0)
             self.createSwapSpace(mountpoint, sizeMB)
         except ResourceDiskError as e:
             logger.Error("Failed to enable swap {0}", e)
@@ -140,8 +144,15 @@ class ResourceDiskHandler(object):
         sizeKB = sizeMB * 1024
         size = sizeKB * 1024
         swapfile = os.path.join(mountpoint, 'swapfile')
+        swapList = shellutil.RunGetOutput("swapon -s")[1]
+
+        if swapfile in swapList and os.path.getsize(swapfile) == size:
+            logger.Info("Swap already enabled") 
+            return 
+
         if os.path.isfile(swapfile) and os.path.getsize(swapfile) != size:
             logger.Info("Remove old swap file")
+            shellutil.Run("swapoff -a", chk_err=False)
             os.remove(swapfile)
 
         if not os.path.isfile(swapfile):

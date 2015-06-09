@@ -53,6 +53,6 @@ class DefaultHandlerFactory(object):
     def getExtensionHandler(self):
         return self.extensionHandler
 
-    def getDeprovionHandler(self):
+    def getDeprovisionHandler(self):
         return self.deprovisionHandler
 

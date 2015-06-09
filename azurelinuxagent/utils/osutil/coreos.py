@@ -40,7 +40,7 @@ class CoreOSOSUtil(DefaultOSUtil):
         super(CoreOSOSUtil, self).__init__()
         self.configPath = '/usr/share/oem/waagent.conf'
 
-    def _IsSysUser(self, userName):
+    def IsSysUser(self, userName):
        #User 'core' is not a sysuser
        if userName == 'core':
            return False

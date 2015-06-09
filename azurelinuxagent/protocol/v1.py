@@ -76,10 +76,10 @@ class CertInfoV1(object):
     def getThumbprint(self):
         return self.thumbprint
 
-    def getCrtFile(self):
+    def getCrtFile(self, thumbprint):
         return "{0}.crt".format(thumbprint)
 
-    def getPrvFile(self):
+    def getPrvFile(self, thumbprint):
         return "{0}.prv".format(thumbprint)
 
 class ExtensionInfoV1(ExtensionInfo):
@@ -539,7 +539,7 @@ class WireClient(object):
             logger.Info("Wire protocol version:{0}", ProtocolVersion)
         elif ProtocolVersion in self.versionInfo.getSupported():
             logger.Info("Wire protocol version:{0}", ProtocolVersion)
-            logger.Warn("Server prefered version:{0}", prefered)
+            logger.Warn("Server prefered version:{0}", preferred)
         else:
             error = ("Agent supported wire protocol version: {0} was not "
                      "advised by Fabric.").format(ProtocolVersion)
@@ -614,6 +614,7 @@ class VersionInfo(object):
         Query endpoint server for wire protocol version.
         Fail if our desired protocol version is not seen.
         """
+        logger.Verbose("Load Version.xml")
         logger.Verbose(xmlText)
         self.parse(xmlText)
    
@@ -641,6 +642,7 @@ class GoalState(object):
     def __init__(self, xmlText):
         if xmlText is None:
             raise ValueError("GoalState.xml is None")
+        logger.Verbose("Load GoalState.xml")
         logger.Verbose(xmlText)
         self.incarnation = None
         self.expectedState = None
@@ -687,7 +689,6 @@ class GoalState(object):
         """
         Request configuration data from endpoint server.
         """
-        logger.Verbose(xmlText)
         self.xmlText = xmlText
         xmlDoc = ET.fromstring(xmlText.strip())
         self.incarnation = (FindFirstNode(xmlDoc, ".//Incarnation")).text
@@ -715,6 +716,7 @@ class HostingEnv(object):
     def __init__(self, xmlText):
         if xmlText is None:
             raise ValueError("HostingEnvironmentConfig.xml is None")
+        logger.Verbose("Load HostingEnvironmentConfig.xml")
         logger.Verbose(xmlText)
         self.parse(xmlText)
 
@@ -744,6 +746,7 @@ class SharedConfig(object):
     parse role endpoint server and goal state config.
     """
     def __init__(self, xmlText):
+        logger.Verbose("Load SharedConfig.xml")
         logger.Verbose(xmlText)
         self.parse(xmlText)
 
@@ -762,7 +765,7 @@ class Certificates(object):
     def __init__(self, xmlText=None):
         if xmlText is None:
             raise ValueError("Certificates.xml is None")
-        logger.Verbose(xmlText)
+        logger.Verbose("Load Certificates.xml")
         self.libDir = CurrOSUtil.GetLibDir()
         self.opensslCmd = CurrOSUtil.GetOpensslCmd()
         self.certs = []
@@ -863,6 +866,7 @@ class ExtensionsConfig(object):
     def __init__(self, xmlText):
         if xmlText is None:
             raise ValueError("ExtensionsConfig is None")
+        logger.Verbose("Load ExtensionsConfig.xml")
         logger.Verbose(xmlText)
         self.extensions = []
         self.statusUploadBlob = None
@@ -898,13 +902,13 @@ class ExtensionsConfig(object):
             runtimeSettingsNode = FindFirstNode(settings[0], ("RuntimeSettings"))
             seqNo = runtimeSettingsNode.attrib["seqNo"]
             runtimeSettingsStr = runtimeSettingsNode.text
-            settings = json.loads(runtimeSettingsStr)
+            runtimeSettings = json.loads(runtimeSettingsStr)
            
             extInfo = ExtensionInfoV1(name=name, version=version,
                                       manifestUris=(location, failoverLocation),
                                       upgradePolicy=upgradePolicy, state=state,
                                       seqNo=seqNo, 
-                                      settings = settings)
+                                      settings = runtimeSettings)
             self.extensions.append(extInfo)
         self.statusUploadBlob = (FindFirstNode(xmlDoc,"StatusUploadBlob")).text
         return self
@@ -913,6 +917,7 @@ class ExtensionManifest(object):
     def __init__(self, xmlText):
         if xmlText is None:
             raise ValueError("ExtensionManifest is None")
+        logger.Verbose("Load ExtensionManifest.xml")
         logger.Verbose(xmlText)
         self.xmlText = xmlText
         self.versionUris = []

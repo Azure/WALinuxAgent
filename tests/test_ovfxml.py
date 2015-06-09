@@ -24,7 +24,7 @@ import uuid
 import unittest
 import os
 import json
-import azurelinuxagent.protocol.v1 as v1
+import azurelinuxagent.protocol.ovfenv as ovfenv
 
 ExtensionsConfigSample="""
  <Environment xmlns="http://schemas.dmtf.org/ovf/environment/1" xmlns:oe="http://schemas.dmtf.org/ovf/environment/1" xmlns:wa="http://schemas.microsoft.com/windowsazure" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
@@ -58,7 +58,7 @@ ExtensionsConfigSample="""
 
 class TestOvf(unittest.TestCase):
     def test_ovf(self):
-        config = v1.OvfEnv(ExtensionsConfigSample)
+        config = ovfenv.OvfEnv(ExtensionsConfigSample)
         self.assertEquals(1, config.getMajorVersion())
         self.assertEquals(0, config.getMinorVersion())
         self.assertEquals("HostName", config.getComputerName())

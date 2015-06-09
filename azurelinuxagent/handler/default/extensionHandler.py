@@ -24,6 +24,7 @@ import json
 import subprocess
 import azurelinuxagent.logger as logger
 import azurelinuxagent.protocol as prot
+from azurelinuxagent.event import AddExtensionEvent, WALAEventOperation
 from azurelinuxagent.exception import ExtensionError
 import azurelinuxagent.utils.fileutil as fileutil
 import azurelinuxagent.utils.restutil as restutil
@@ -73,6 +74,8 @@ class ExtensionHandler(object):
                     "message": str(e)
                 }
             });
+            AddExtensionEvent(name=setting.getName(), isSuccess=False,
+                              op=ext.getCurrOperation(), message = str(e))
         protocol.reportExtensionStatus(setting.getName(), 
                                        setting.getVersion(),
                                        aggStatus)
@@ -180,6 +183,7 @@ class ExtensionInstance(object):
         self.logger.info("Upgrade from: {0} to {1}", 
                          self.setting.getVersion(),
                          targetVersion)
+        self.currOperation=WALAEventOperation.Upgrade
         old = self
         new = ExtensionInstance(self.setting, targetVersion)
         self.logger.info("Download new extension package")
@@ -198,10 +202,12 @@ class ExtensionInstance(object):
             new.install()
         self.logger.info("Enable new extension")
         new.enable()
+        AddExtensionEvent(name=self.setting.getName(), isSuccess=True,
+                          op=ext.WALAEventOperation.Upgrade, message="")
 
     def download(self):
         self.logger.info("Download extension package")
-        self.currOperation="Install"
+        self.currOperation=WALAEventOperation.Download
         uris = self.getPackageUris()
         package = None
         for uri in uris:
@@ -222,6 +228,8 @@ class ExtensionInstance(object):
         zipfile.ZipFile(packageFile).extractall(self.getBaseDir())
         chmod = "find {0} -type f | xargs chmod u+x".format(self.getBaseDir())
         shellutil.Run(chmod)
+        AddExtensionEvent(name=self.setting.getName(), isSuccess=True,
+                          op=self.currOperation, message="")
     
     def initExtensionDir(self):
         self.logger.info("Initialize extension directory")
@@ -245,37 +253,47 @@ class ExtensionInstance(object):
 
     def enable(self):
         self.logger.info("Enable extension.")
-        self.currOperation="Enable"
+        self.currOperation=WALAEventOperation.Enable
         man = self.loadManifest()
         self.launchCommand(man.getEnableCommand())
         self.setHandlerStatus("enabled")
+        AddExtensionEvent(name=self.setting.getName(), isSuccess=True,
+                          op=self.currOperation, message="")
 
     def disable(self):
         self.logger.info("Disable extension.")
-        self.currOperation="Disable"
+        self.currOperation=WALAEventOperation.Disable
         man = self.loadManifest()
         self.launchCommand(man.getDisableCommand(), timeout=900)
         self.setHandlerStatus("disabled")
+        AddExtensionEvent(name=self.setting.getName(), isSuccess=True,
+                          op=self.currOperation, message="")
 
     def install(self):
         self.logger.info("Install extension.")
-        self.currOperation="Install"
+        self.currOperation=WALAEventOperation.Install
         man = self.loadManifest()
         self.launchCommand(man.getInstallCommand(), timeout=900)
         self.setHandlerStatus("installed")
+        AddExtensionEvent(name=self.setting.getName(), isSuccess=True,
+                          op=self.currOperation, message="")
 
     def uninstall(self):
         self.logger.info("Uninstall extension.")
-        self.currOperation="Uninstall"
+        self.currOperation=WALAEventOperation.UnInstall
         man = self.loadManifest()
         self.launchCommand(man.getUninstallCommand())
         self.setHandlerStatus("uninstalled")
+        AddExtensionEvent(name=self.setting.getName(), isSuccess=True,
+                          op=self.currOperation, message="")
 
     def update(self):
         self.logger.info("Update extension.")
-        self.currOperation="Update"
+        self.currOperation=WALAEventOperation.Update
         man = self.loadManifest()
         self.launchCommand(man.getUpdateCommand(), timeout=900)
+        AddExtensionEvent(name=self.setting.getName(), isSuccess=True,
+                          op=self.currOperation, message="")
     
     def createAggStatus(self, aggStatus, extStatus, heartbeat=None):
         aggregatedStatus = {
@@ -511,7 +529,7 @@ class ExtensionInstance(object):
                             "{0}.settings".format(self.setting.getSeqNo()))
 
     def getHandlerStateFile(self):
-        return os.path.join(self.getStatusDir(), 'HandlerState')
+        return os.path.join(self.getConfigDir(), 'HandlerState')
 
     def getHeartbeatFile(self):
         return os.path.join(self.getBaseDir(), 'heartbeat.log')

@@ -24,11 +24,9 @@ import time
 import threading
 import platform
 import azurelinuxagent.logger as logger
-import azurelinuxagent.conf as conf
 import azurelinuxagent.protocol as prot
 from azurelinuxagent.osinfo import CurrOSInfo
 from azurelinuxagent.utils.osutil import CurrOSUtil
-import azurelinuxagent.utils.restutil as restutil
 
 class EventError(Exception):
     pass
@@ -121,6 +119,8 @@ class WALAEventOperation:
     Download = "Download"
     Upgrade = "Upgrade"
     Update = "Update"           
+    ActivateResourceDisk="ActivateResourceDisk"
+    UnhandledError="UnhandledError"
 
 class ExtensionEvent(WALAEvent):
     def __init__(self):
@@ -137,7 +137,7 @@ class ExtensionEvent(WALAEvent):
         self.Duration=0
                		           
 class WALAEventMonitor(object):
-    def __init__(self, gaVersion):
+    def __init__(self, gaVersion=""):
         self.sysInfo={}
         self.eventCount = 0
         self.gaVersion = gaVersion
@@ -193,8 +193,11 @@ class WALAEventMonitor(object):
             self.eventCount = 0
             time.sleep(15)
        
-        protocol = prot.GetDefaultProtocol()
-        protocol.reportEvent(data)
+        try:
+            protocol = prot.GetDefaultProtocol()
+            protocol.reportEvent(data)
+        except prot.ProtocolError as e:
+            logger.Error("Failed  to send events:{0}", e)
     
     def collectEvent(self, eventFilePath):
         try:
@@ -302,13 +305,17 @@ def AddExtensionEvent(name, op, isSuccess, duration=0, version="1.0",
     except EventError as e:
         logger.Error("{0}", e)
 
-def DumpUnhandledError(name):
+def DumpUnhandledError(name, gaVersion=""):
     if hasattr(sys, 'last_type') and hasattr(sys, 'last_value') and \
             hasattr(sys, 'last_traceback'):
         error = traceback.format_exception(sys.last_type, sys.last_value,
                                            sys.last_traceback)
-        AddExtensionEvent(name, op='Unhandled Error', isSuccess=False, 
-                          message="".join(error))
+        message= "".join(error)
+        logger.Error(message)
+        AddExtensionEvent(name, isSuccess=False, message=message,
+                          op=WALAEventOperation.UnhandledError)
+        WALAEventMonitor(gaVersion=gaVersion).collectAndSendWALAEvents()
+
 
 def EnableUnhandledErrorDump(name):
     atexit.register(DumpUnhandledError, name)
