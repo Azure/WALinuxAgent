@@ -1315,6 +1315,18 @@ class debianDistro(AbstractDistro):
             return 0
         
 ############################################################    
+#	KaliDistro - WIP
+#       Functioning on Kali 1.1.0a so far
+############################################################ 
+class KaliDistro(debianDistro):
+    """
+    Kali Distro concrete class
+    Put Kali specific behavior here...
+    """
+    def __init__(self):
+        super(KaliDistro,self).__init__()
+
+############################################################    
 #	UbuntuDistro
 ############################################################    
 ubuntu_upstart_file = """\
