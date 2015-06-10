@@ -5880,7 +5880,7 @@ def main():
     if len(sys.argv) == 1:
         sys.exit(Usage())
 
-    LoggerInit('/dev/stdout',None)
+    LoggerInit('/var/log/waagent.log','/dev/console')
     global LinuxDistro
     LinuxDistro=DistInfo()[0]
     
@@ -5922,8 +5922,8 @@ def main():
     if logfile is not None:
         myLogger.file_path = logfile
     logconsole = Config.get("Logs.Console")
-    if logconsole is not None and logconsole.lower().startswith("y"):
-        myLogger.con_path = "/dev/console"
+    if logconsole is not None and logconsole.lower().startswith("n"):
+        myLogger.con_path = None
     verbose = Config.get("Logs.Verbose")
     if verbose != None and verbose.lower().startswith("y"):
         myLogger.verbose=True
