@@ -2546,11 +2546,14 @@ def GetFirstActiveNetworkInterfaceNonLoopback():
     if retsize == (expected*struct_size) :
         Warn('SIOCGIFCONF returned more than ' + str(expected) + ' up network interfaces.')
     s=buff.tostring()
+    preferred_nic = Config.get("Network.Interface")
     for i in range(0,struct_size*expected,struct_size):
         iface=s[i:i+16].split(b'\0', 1)[0]
         if iface == b'lo':
             continue
-        else :
+        elif preferred_nic is None:
+            break
+        elif iface == preferred_nic:
             break
     return iface.decode('latin-1'), socket.inet_ntoa(s[i+20:i+24])
 
@@ -2969,12 +2972,13 @@ class ConfigurationProvider(object):
     """
     Parse amd store key:values in waagent.conf
     """
-    def __init__(self):
+    def __init__(self, walaConfigFile):
         self.values = dict()
         if 'MyDistro' not in globals():
             global MyDistro
             MyDistro = GetMyDistro()
-        walaConfigFile = MyDistro.getConfigurationPath()
+        if walaConfigFile is None:
+            walaConfigFile = MyDistro.getConfigurationPath()
         if os.path.isfile(walaConfigFile) == False:
             raise Exception("Missing configuration in {0}".format(walaConfigFile))
         try:
@@ -5897,6 +5901,7 @@ def main():
     if MyDistro == None :
         sys.exit(1)
     args = []
+    conf_file = None
     global force
     force = False
     for a in sys.argv[1:]:
@@ -5909,6 +5914,8 @@ def main():
             myLogger.verbose = True
         elif re.match("^([-/]*)force", a):
             force = True
+        elif re.match("^(?:[-/]*)conf=.+", a):
+            conf_file = re.match("^(?:[-/]*)conf=(.+)", a).groups()[0]
         elif re.match("^([-/]*)(setup|install)", a):
             sys.exit(MyDistro.Install())
         elif re.match("^([-/]*)(uninstall)", a):
@@ -5916,8 +5923,14 @@ def main():
         else:
             args.append(a)
     global Config
-    Config = ConfigurationProvider()
+    Config = ConfigurationProvider(conf_file)
     
+    logfile = Config.get("Logs.File")
+    if logfile is not None:
+        myLogger.file_path = logfile
+    logconsole = Config.get("Logs.Console")
+    if logconsole is not None and logconsole.lower().startswith("n"):
+        myLogger.con_path = None
     verbose = Config.get("Logs.Verbose")
     if verbose != None and verbose.lower().startswith("y"):
         myLogger.verbose=True

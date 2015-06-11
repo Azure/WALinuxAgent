@@ -128,6 +128,10 @@ Flags:
 
   -force: Skip interactive confirmation for some commands
 
+Options:
+
+  -conf=/path/to/file.conf: Specify configuration file to use instead of default one.
+
 Commands:
 
   -help: Lists the supported commands and flags.
@@ -203,6 +207,8 @@ ResourceDisk.MountPoint=/mnt/resource
 ResourceDisk.EnableSwap=n
 ResourceDisk.SwapSizeMB=0
 LBProbeResponder=y
+Logs.File=/var/log/waagent.log
+Logs.Console=y
 Logs.Verbose=n
 OS.RootDeviceScsiTimeout=300
 OS.OpensslPath=None
@@ -337,11 +343,23 @@ Type: Boolean Default: y
 If set, waagent will respond to load balancer probes from the platform (if
 present).
 
+Logs.File:
+Type: String Default: /dev/stdout
+
+If set, logs are appended to this file (instead of stdout). Bundled
+config (config/waagent.conf) sets this to '/var/log/waagent.log'.
+
+Logs.Console:
+Type: Boolean Default: n
+
+If set, waagent also logs to serial console. Bundled config (config/waagent.conf)
+sets this to 'y'.
+
 Logs.Verbose:
 Type: Boolean Default: n
 
-If set, log verbosity is boosted. Waagent logs to /var/log/waagent.log and
-leverages the system logrotate functionality to rotate logs.
+If set, log verbosity is boosted. When waagent logs to file it can
+leverage the system logrotate functionality to rotate logs.
 
 OS.RootDeviceScsiTimeout:
 Type: Integer Default: 300
