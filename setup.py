@@ -49,7 +49,7 @@ def get_data_files():
     elif name == 'coreos':
         data_files.extend([
             ('/usr/share/oem/bin', ['bin/waagent']),
-            ('/usr/share/oem/waagent.conf', ['config/coreos/waagent.conf']),
+            ('/usr/share/oem', ['config/coreos/waagent.conf']),
             ('/etc/systemd/system/', ['config/coreos/waagent.service']),
         ])
     elif name == 'suse':
@@ -76,5 +76,5 @@ setup(name=GuestAgentName,
       platforms = 'Linux',
       url='https://github.com/Azure/WALinuxAgent',
       license = 'Apache License Version 2.0',
-      packages=find_packages(), 
+      packages=find_packages(exclude=["*.tests", "*.tests.*", "tests.*", "tests"]), 
       data_files=get_data_files())
