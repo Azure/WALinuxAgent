@@ -50,7 +50,6 @@ def get_data_files():
         data_files.extend([
             ('/usr/share/oem/bin', ['bin/waagent']),
             ('/usr/share/oem', ['config/coreos/waagent.conf']),
-            ('/etc/systemd/system/', ['config/coreos/waagent.service']),
         ])
     elif name == 'suse':
         data_files.extend([

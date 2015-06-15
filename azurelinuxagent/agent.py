@@ -53,9 +53,9 @@ def Init(verbose):
     fileutil.CreateDir(CurrOSUtil.GetLibDir(), mode=0700)
     os.chdir(CurrOSUtil.GetLibDir())
 
+def Run():
     event.EnableUnhandledErrorDump("WALA")
 
-def Run():
     logger.Info("{0} Version:{1}", GuestAgentLongName, GuestAgentVersion) 
     logger.Info("OS: {0} {1}", CurrOSInfo[0], CurrOSInfo[1])
     fileutil.SetFileContents(CurrOSUtil.GetAgentPidPath(), 

@@ -93,6 +93,17 @@ class ExtensionInfoV1(ExtensionInfo):
         self.upgradePolicy = upgradePolicy
         self.state = state
         self.seqNo = seqNo
+        #TODO There is probabaly a bug on RDFE which will pass empty settings in
+        if settings is None:
+            settings = {
+                'runtimeSettings':[{
+                    'handlerSettings':{
+                        'protectedSettingsCertThumbprint': None,
+                        'protectedSettings': None,
+                        'publicSettings': None
+                    }
+                }]
+            }
         self.settings = settings
         runtimeSettings = settings["runtimeSettings"][0]
         handlerSettings = runtimeSettings["handlerSettings"]
@@ -895,14 +906,18 @@ class ExtensionsConfig(object):
             autoUpgrade = extension.attrib["autoUpgrade"]
             upgradePolicy = "auto" if autoUpgrade == "true" else "manual"
             state = extension.attrib["state"]
-            setting = filter(lambda x: x.attrib["name"] == name 
-                             and x.attrib["version"] == version,
-                             settings)
-
-            runtimeSettingsNode = FindFirstNode(settings[0], ("RuntimeSettings"))
-            seqNo = runtimeSettingsNode.attrib["seqNo"]
-            runtimeSettingsStr = runtimeSettingsNode.text
-            runtimeSettings = json.loads(runtimeSettingsStr)
+            pluginSetting = filter(lambda x: x.attrib["name"] == name 
+                                   and x.attrib["version"] == version,
+                                   settings)
+            
+            runtimeSettings = None
+            seqNo=0
+            if pluginSetting is not None and  len(pluginSetting) > 0:
+                runtimeSettingsNode = FindFirstNode(pluginSetting[0], 
+                                                    "RuntimeSettings")
+                seqNo = runtimeSettingsNode.attrib["seqNo"]
+                runtimeSettingsStr = runtimeSettingsNode.text
+                runtimeSettings = json.loads(runtimeSettingsStr)
            
             extInfo = ExtensionInfoV1(name=name, version=version,
                                       manifestUris=(location, failoverLocation),

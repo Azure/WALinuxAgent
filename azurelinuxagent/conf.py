@@ -60,12 +60,12 @@ __Config__ = ConfigurationProvider()
 
 def LoadConfiguration(confFilePath, conf=__Config__):
     if os.path.isfile(confFilePath) == False:
-        raise AgentConfigError("Missing configuration in {0}", confFilePath)
+        raise AgentConfigError("Missing configuration in {0}".format(confFilePath))
     try:
         content = fileutil.GetFileContents(confFilePath)
         conf.load(content)
     except IOError, e:
-        raise AgentConfigError("Failed to load conf file:{0}", confFilePath)
+        raise AgentConfigError("Failed to load conf file:{0}".format(confFilePath))
 
 def Get(key, defaultValue=None, conf=__Config__):
     if conf is not None:

@@ -102,6 +102,15 @@ ManifestSample="""\
 </PluginVersionManifest>
 """
 
+EmptySettings="""\
+<Extensions>
+    <Plugins>
+        <Plugin name="OSTCExtensions.ExampleHandlerLinux" version="1.4" location="http://rdfepirv2hknprdstr03.blob.core.windows.net/b01058962be54ceca550a390fa5ff064/Microsoft.OSTCExtensions_CustomScriptForLinuxTest_asiaeast_manifest.xml" config="" state="enabled" autoUpgrade="true" failoverlocation="http://rdfepirv2hknprdstr04.blob.core.windows.net/b01058962be54ceca550a390fa5ff064/Microsoft.OSTCExtensions_CustomScriptForLinuxTest_asiaeast_manifest.xml" runAsStartupTask="false" isJson="true" />
+    </Plugins>
+  <StatusUploadBlob>https://yuezhatest.blob.core.windows.net/vhds/test-cs12.test-cs12.test-cs12.status?sr=b&amp;sp=rw&amp;se=9999-01-01&amp;sk=key1&amp;sv=2014-02-14&amp;sig=hfRh7gzUE7sUtYwke78IOlZOrTRCYvkec4hGZ9zZzXo%3D</StatusUploadBlob>
+</Extensions>
+"""
+
 class TestExtensionsConfig(unittest.TestCase):
     def test_extensions_config(self):
         config = v1.ExtensionsConfig(ExtensionsConfigSample)
@@ -124,7 +133,9 @@ class TestExtensionsConfig(unittest.TestCase):
         man = v1.ExtensionManifest(ManifestSample)
         self.assertNotEquals(None, man.versionUris)
         self.assertEquals(3, len(man.versionUris))
-
+    
+    def test_empty_settings(self):
+        config = v1.ExtensionsConfig(EmptySettings)
    
 if __name__ == '__main__':
     unittest.main()

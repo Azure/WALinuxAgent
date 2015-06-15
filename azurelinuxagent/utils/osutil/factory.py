@@ -49,8 +49,6 @@ def GetOSUtil(osInfo):
         return DebianOSUtil()
     elif name == 'coreos':
         return CoreOSOSUtil()
-    elif name == 'gentoo':
-        return CoreOSOSUtil()
     elif name == 'suse':
         if fullName == 'SUSE Linux Enterprise Server' and version < '12' \
                 or fullName == 'openSUSE' and version < '13.2':

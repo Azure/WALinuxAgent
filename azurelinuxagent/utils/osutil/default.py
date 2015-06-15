@@ -330,7 +330,7 @@ class DefaultOSUtil(object):
             os.makedirs(mountPoint)
         
         for retry in range(0, maxRetry):
-            retcode = self.Mount(dvd, mountPoint, option="-o ro -t iso9660", 
+            retcode = self.Mount(dvd, mountPoint, option="-o ro -t iso9660,udf", 
                                  chk_err=chk_err)
             if retcode == 0:
                 logger.Info("Successfully mounted provision dvd")

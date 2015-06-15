@@ -36,7 +36,7 @@ import azurelinuxagent.utils.textutil as textutil
 from azurelinuxagent.utils.osutil.default import DefaultOSUtil
 
 class CoreOSOSUtil(DefaultOSUtil):
-    def __init(self):
+    def __init__(self):
         super(CoreOSOSUtil, self).__init__()
         self.configPath = '/usr/share/oem/waagent.conf'
 
@@ -44,7 +44,7 @@ class CoreOSOSUtil(DefaultOSUtil):
        #User 'core' is not a sysuser
        if userName == 'core':
            return False
-       return super(CoreOSOSUtil, self).isSysUser(userName)
+       return super(CoreOSOSUtil, self).IsSysUser(userName)
 
     def IsDhcpEnabled(self):
         return True
@@ -53,7 +53,7 @@ class CoreOSOSUtil(DefaultOSUtil):
         return shellutil.Run("systemctl start systemd-networkd", chk_err=False)
         
     def RestartInterface(self, iface):
-        Run("systemctl restart systemd-networkd")
+        shellutil.Run("systemctl restart systemd-networkd")
 
     def RestartSshService(self):
         return shellutil.Run("systemctl restart sshd", chk_err=False)
@@ -64,16 +64,16 @@ class CoreOSOSUtil(DefaultOSUtil):
     def StartDhcpService(self):
         return shellutil.Run("systemctl start systemd-networkd", chk_err=False)
 
+    def StartAgentService(self):
+        return shellutil.Run("systemctl start wagent", chk_err=False)
+
+    def StopAgentService(self):
+        return shellutil.Run("systemctl stop wagent", chk_err=False)
+
     def GetDhcpProcessId(self):
         ret= shellutil.RunGetOutput("pidof systemd-networkd")
         return ret[1] if ret[0] == 0 else None
-    
-    def OnDeprovisionStart(self):
-        print "WARNING! /etc/machine-id will be removed."
-
-    def OnDeprovision(self):
-        fileutil.RemoveFiles('/etc/machine-id')
-
+   
     def TranslateCustomData(self, data):
         return base64.b64decode(data)
 

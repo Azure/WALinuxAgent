@@ -21,6 +21,7 @@ import traceback
 import atexit
 import xml.sax.saxutils
 import time
+import datetime
 import threading
 import platform
 import azurelinuxagent.logger as logger
@@ -87,7 +88,7 @@ class WALAEvent(object):
                                                     strMtFloat)
             else:
                 raise EventError(("Event property not supported: {0}:{1}:{2}"
-                                  "").format(attrName, attrValue, attType))
+                                  "").format(attrName, attrValue, attrType))
 
         return u"<Data>{0}{1}{2}</Data>".format(strproviderId, streventId,
                                                 strEvtDta)
@@ -201,7 +202,7 @@ class WALAEventMonitor(object):
     
     def collectEvent(self, eventFilePath):
         try:
-            with open(eventFile, "rb") as hfile:
+            with open(eventFilePath, "rb") as hfile:
             #if fail to open or delete the file, throw exception 
                 xmlStr = hfile.read().decode("utf-8",'ignore')
             os.remove(eventFilePath)
@@ -237,8 +238,8 @@ class WALAEventMonitor(object):
                        <![CDATA[{1}]]>\
                      </Event>'.format(eventId, params)
         
-        if len(eventstr) >= 63*1024:
-            raise EventError("Signle event too large abort " + eventstr[:300])
+        if len(eventStr) >= 63*1024:
+            raise EventError("Signle event too large abort " + eventStr[:300])
 
         return providerId, eventStr
 
@@ -256,7 +257,7 @@ class WALAEventMonitor(object):
 
             eventFilePath = os.path.join(self.eventDir, eventFile)
             try:
-                eventStr = self.collectEvent(eventFilePath) 
+                providerId, eventStr = self.collectEvent(eventFilePath) 
                 if not buf.get(providerId):
                     buf[providerId]= ""
                 
@@ -272,7 +273,7 @@ class WALAEventMonitor(object):
         
         #Send out all events left in buffer.
         for providerId in buf.keys():
-            if len(events[key]) > 0:
+            if len(buf[providerId]) > 0:
                 self.sendEvent(providerId, buf[providerId])
                 
 

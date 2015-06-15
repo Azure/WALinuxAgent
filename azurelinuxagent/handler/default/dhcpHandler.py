@@ -22,6 +22,7 @@ import socket
 import array
 import time
 import azurelinuxagent.logger as logger
+from azurelinuxagent.exception import AgentNetworkError
 from azurelinuxagent.utils.osutil import CurrOSUtil
 import azurelinuxagent.utils.restutil as restutil
 import azurelinuxagent.utils.fileutil as fileutil
@@ -231,7 +232,7 @@ def SendDhcpRequest(request):
             response = SocketSend(request)
             ValidateDhcpResponse(request, response)
             return response
-        except Exception, e:
+        except AgentNetworkError as e:
             logger.Error("Failed to send DHCP request: {0}", e)
             return None
         finally:
