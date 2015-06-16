@@ -19,96 +19,19 @@ import os
 import sys
 import traceback
 import atexit
-import xml.sax.saxutils
+import json
 import time
 import datetime
 import threading
 import platform
 import azurelinuxagent.logger as logger
 import azurelinuxagent.protocol as prot
-from azurelinuxagent.metadata import DistroName, DistroVersion, DistroCodeName
+from azurelinuxagent.metadata import DistroName, DistroVersion, DistroCodeName,\
+                                     GuestAgentVersion
 from azurelinuxagent.utils.osutil import OSUtil
 
 class EventError(Exception):
     pass
-
-class WALAEvent(object):   
-    def __init__(self):
-            
-        self.providerId=""
-        self.eventId=1
-        
-        self.OpcodeName=""
-        self.KeywordName=""
-        self.TaskName=""
-        self.TenantName=""
-        self.RoleName=""
-        self.RoleInstanceName=""
-        self.ContainerId=""
-        self.ExecutionMode="IAAS"
-        self.OSVersion=""
-        self.GAVersion=""
-        self.RAM=0
-        self.Processors=0
-
-
-    def toXml(self):
-        streventId=u'<Event id="{0}"/>'.format(self.eventId)
-        strproviderId=u'<Provider id="{0}"/>'.format(self.providerId)
-        strRecordFormat = u'<Param Name="{0}" Value="{1}" T="{2}" />'
-        strRecordNoQuoteFormat = u'<Param Name="{0}" Value={1} T="{2}" />'
-        strMtStr=u'mt:wstr'
-        strMtUInt64=u'mt:uint64'
-        strMtBool=u'mt:bool'
-        strMtFloat=u'mt:float64'
-        strEvtDta=u""
-
-        for attrName in  self.__dict__:
-            if attrName in ["eventId","filedCount","providerId"]:
-                continue
-            
-            attrValue = self.__dict__[attrName]
-            attrType = type(attrValue)
-            if attrType is int:
-                strEvtDta += strRecordFormat.format(attrName, attrValue,
-                                                    strMtUInt64)
-            elif attrType is str:
-                attrValue = xml.sax.saxutils.quoteattr(attrValue)
-                strEvtDta += strRecordNoQuoteFormat.format(attrName, attrValue,
-                                                           strMtStr)
-            elif str(attrType).count("'unicode'") >0 :
-                attrValue = xml.sax.saxutils.quoteattr(attrValue)			 
-                strEvtDta += strRecordNoQuoteFormat.format(attrName, attrValue,
-                                                           strMtStr)
-            elif attrType is bool:
-                strEvtDta += strRecordFormat.format(attrName, attrValue,
-                                                    strMtBool)
-            elif attrType is float:
-                strEvtDta += strRecordFormat.format(attrName,attrValue,
-                                                    strMtFloat)
-            else:
-                raise EventError(("Event property not supported: {0}:{1}:{2}"
-                                  "").format(attrName, attrValue, attrType))
-
-        return u"<Data>{0}{1}{2}</Data>".format(strproviderId, streventId,
-                                                strEvtDta)
-
-    def save(self):
-        eventfolder = os.path.join(OSUtil.GetLibDir(), 'events')
-        if not os.path.exists(eventfolder):
-            os.mkdir(eventfolder)
-            os.chmod(eventfolder,0700)
-
-        if len(os.listdir(eventfolder)) > 1000:
-            raise EventError("Too many files under: {0}", eventfolder)
-    
-        filename = os.path.join(eventfolder, str(int(time.time()*1000000)))
-        try:
-            with open(filename+".tmp",'wb+') as hfile:
-                hfile.write(self.toXml().encode("utf-8"))
-            os.rename(filename+".tmp", filename+".tld")
-        except IOError as e:
-            raise EventError("Failed to write events to file:{0}", e)
 
 class WALAEventOperation:
     HeartBeat="HeartBeat"
@@ -122,26 +45,10 @@ class WALAEventOperation:
     Update = "Update"           
     ActivateResourceDisk="ActivateResourceDisk"
     UnhandledError="UnhandledError"
-
-class ExtensionEvent(WALAEvent):
-    def __init__(self):
-        super(ExtensionEvent, self).__init__()
-        self.eventId=1
-        self.providerId="69B669B9-4AF8-4C50-BDC4-6006FA76E975"
-        self.Name=""
-        self.Version=""
-        self.IsInternal=False
-        self.Operation=""
-        self.OperationSuccess=True
-        self.ExtensionType=""
-        self.Message=""
-        self.Duration=0
                		           
-class WALAEventMonitor(object):
-    def __init__(self, gaVersion=""):
-        self.sysInfo={}
-        self.eventCount = 0
-        self.gaVersion = gaVersion
+class EventMonitor(object):
+    def __init__(self):
+        self.sysInfo = []
         self.eventDir = os.path.join(OSUtil.GetLibDir(), "events")
         self.initSystemInfo()
 
@@ -151,172 +58,130 @@ class WALAEventMonitor(object):
                                                  DistroVersion,
                                                  DistroCodeName,
                                                  platform.release())
-        self.sysInfo["OSVersion"] = osversion
-        self.sysInfo["GAVersion"] = self.gaVersion
-        self.sysInfo["RAM"] = OSUtil.GetTotalMemory()
-        self.sysInfo["Processors"]= OSUtil.GetProcessorCores()
-        protocol = prot.GetDefaultProtocol()
+        self.sysInfo.append(prot.TelemetryEventParam("OSVersion", osversion))
+        self.sysInfo.append(prot.TelemetryEventParam("GAVersion", 
+                                                     GuestAgentVersion))
+        self.sysInfo.append(prot.TelemetryEventParam("RAM", 
+                                                     OSUtil.GetTotalMemory()))
+        self.sysInfo.append(prot.TelemetryEventParam("Processors", 
+                                                     OSUtil.GetProcessorCores()))
+        protocol = prot.Factory.getDefaultProtocol()
         metadata = protocol.getInstanceMetadata()
-        self.sysInfo["TenantName"] = metadata.getDeploymentName()
-        self.sysInfo["RoleName"] = metadata.getRoleName() 
-        self.sysInfo["RoleInstanceName"] = metadata.getRoleInstanceId()
-        self.sysInfo["ContainerId"] = metadata.getContainerId() 
+        self.sysInfo.append(prot.TelemetryEventParam("TenantName",
+                                                     metadata.deploymentName))
+        self.sysInfo.append(prot.TelemetryEventParam("RoleName",
+                                                     metadata.roleName))
+        self.sysInfo.append(prot.TelemetryEventParam("RoleInstanceName",
+                                                     metadata.roleInstanceId))
+        self.sysInfo.append(prot.TelemetryEventParam("ContainerId",
+                                                     metadata.containerId))
 
     def startEventsLoop(self):
         eventThread = threading.Thread(target = self.eventsLoop)
         eventThread.setDaemon(True)
         eventThread.start()
-        
+
+    def collectEvent(self, eventFilePath):
+        try:
+            with open(eventFilePath, "rb") as hfile:
+            #if fail to open or delete the file, throw exception
+                jsonStr = hfile.read().decode("utf-8",'ignore')
+            os.remove(eventFilePath)
+            return jsonStr
+        except IOError as e:
+            msg = "Failed to process {0}, {1}".format(eventFilePath, e)
+            raise EventError(msg)
+
+    def collectAndSendEvents(self):
+        eventList = prot.TelemetryEventList()
+        eventFiles = os.listdir(self.eventDir)
+        for eventFile in eventFiles:
+            if not eventFile.endswith(".tld"):
+                continue
+            eventFilePath = os.path.join(self.eventDir, eventFile)
+            try:
+                dataStr = self.collectEvent(eventFilePath)
+            except EventError as e:
+                logger.Error("{0}", e)
+                continue
+            try:
+                data = json.loads(dataStr)
+            except ValueError as e:
+                logger.Error("{0}", e)
+                continue
+
+            event = prot.TelemetryEvent()
+            prot.set_properties(event, data)
+            event.parameters.extend(self.sysInfo)
+            eventList.events.append(event)
+        if len(eventList.events) == 0:
+            return
+
+        try:
+            protocol = prot.Factory.getDefaultProtocol()
+            protocol.reportEvent(eventList)
+        except prot.ProtocolError as e:
+            logger.Error("{0}", e)
+
     def eventsLoop(self):
         lastHeatbeat = datetime.datetime.min
         period = datetime.timedelta(hours = 12)
         while(True):
-            try:
-                if (datetime.datetime.now()-lastHeatbeat) > period:
-                    lastHeatbeat = datetime.datetime.now()
-                    AddExtensionEvent(op=WALAEventOperation.HeartBeat,
-                                      name="WALA",isSuccess=True)
-                self.collectAndSendWALAEvents()
-                time.sleep(60)
-            except EventError as e:
-                logger.Error("{0}", e)
-			     		    		
-    def sendEvent(self, providerId, events):
-        dataFormat = u'<?xml version="1.0"?>\
-                       <TelemetryData version="1.0">\
-                         <Provider id="{0}">{1}\
-                         </Provider>\
-                       </TelemetryData>'
-        data = dataFormat.format(providerId, events)
-        self.eventCount += 1
-        if self.eventCount % 3 == 0:
-            logger.Info("Sleep 15 before sending event to avoid throttling.")
-            self.eventCount = 0
-            time.sleep(15)
-       
-        try:
-            protocol = prot.GetDefaultProtocol()
-            protocol.reportEvent(data)
-        except prot.ProtocolError as e:
-            logger.Error("Failed  to send events:{0}", e)
-    
-    def collectEvent(self, eventFilePath):
-        try:
-            with open(eventFilePath, "rb") as hfile:
-            #if fail to open or delete the file, throw exception 
-                xmlStr = hfile.read().decode("utf-8",'ignore')
-            os.remove(eventFilePath)
-        except IOError as e:
-            raise EventError("Failed to process: {0}".format(e))
-
-        params=""
-        eventId=""
-        providerId=""
-        #if exception happen during process an event, catch it and continue
-        try:
-            xmlStr = self.addSystemInfo(xmlStr)
-            doc = xml.dom.minidom.parseString(xmlStr.encode("utf-8"))
-            for node in doc.childNodes[0].childNodes:
-                if node.tagName == "Param":
-                    params += node.toxml()
-                if node.tagName == "Event":
-                    eventId = node.getAttribute("id")
-                if node.tagName == "Provider":
-                    providerId = node.getAttribute("id")
-        #TODO do not catch all exception
-        except Exception as e:
-            raise EventError("Failed to parse event xml: {0}".format(e))
-
-        if len(params)==0:
-            raise EventError("Param list is empty.")
-        if len(eventId)==0:
-            raise EventError("EventId is empty.")
-        if len(providerId)==0:
-            raise EventError("ProviderId is empty.")
-
-        eventStr = u'<Event id="{0}">\
-                       <![CDATA[{1}]]>\
-                     </Event>'.format(eventId, params)
+            if (datetime.datetime.now()-lastHeatbeat) > period:
+                lastHeatbeat = datetime.datetime.now()
+                AddExtensionEvent(op=WALAEventOperation.HeartBeat,
+                                  name="WALA",isSuccess=True)
+            self.collectAndSendEvents()
+            time.sleep(60)
         
-        if len(eventStr) >= 63*1024:
-            raise EventError("Signle event too large abort " + eventStr[:300])
+def SaveEvent(data):
+    eventfolder = os.path.join(OSUtil.GetLibDir(), 'events')
+    if not os.path.exists(eventfolder):
+        os.mkdir(eventfolder)
+        os.chmod(eventfolder,0700)
+    if len(os.listdir(eventfolder)) > 1000:
+        raise EventError("Too many files under: {0}", eventfolder)
 
-        return providerId, eventStr
+    filename = os.path.join(eventfolder, str(int(time.time()*1000000)))
+    try:
+        with open(filename+".tmp",'wb+') as hfile:
+            hfile.write(data.encode("utf-8"))
+        os.rename(filename+".tmp", filename+".tld")
+    except IOError as e:
+        raise EventError("Failed to write events to file:{0}", e)
 
-    def collectAndSendWALAEvents(self):        
-        if not os.path.exists(self.eventDir):
-            return
-        
-        #Buffer events with the same provider id and send out in batch
-        buf = {}
-
-        eventFiles = os.listdir(self.eventDir)
-        for eventFile in eventFiles:
-            if not eventFile.endswith(".tld"):
-                continue      
-
-            eventFilePath = os.path.join(self.eventDir, eventFile)
-            try:
-                providerId, eventStr = self.collectEvent(eventFilePath) 
-                if not buf.get(providerId):
-                    buf[providerId]= ""
-                
-                #Buffer will exceed max length, send events and clear buffer
-                if len(buf.get(providerId) + eventStr)>= 63*1024:
-                    self.sendEvent(providerId, buf.get(providerId))
-                    buf[providerId]=""
-
-                buf[providerId]=buf.get(providerId) + eventStr
-
-            except EventError as e:
-                logger.Warn("Failed to collect event:{0}, {1}", eventFilePath, e)
-        
-        #Send out all events left in buffer.
-        for providerId in buf.keys():
-            if len(buf[providerId]) > 0:
-                self.sendEvent(providerId, buf[providerId])
-                
-
-    def addSystemInfo(self, eventData):
-        #TODO why need to encode
-        doc = xml.dom.minidom.parseString(eventData.encode("utf-8"))
-        eventObject = doc.childNodes[0]
-        for node in eventObject.childNodes:
-            if node.tagName == "Param":
-                name = node.getAttribute("Name")
-                if self.sysInfo.get(name):
-                    value = xml.sax.saxutils.escape(str(self.sysInfo[name]))
-                    node.setAttribute("Value", value)
-
-        return  eventObject.toxml()            
 
 def AddExtensionEvent(name, op, isSuccess, duration=0, version="1.0", 
                       message="", evtType="", isInternal=False):
-    event = ExtensionEvent()
-    event.Name=name 
-    event.Version=version 
-    event.IsInternal=isInternal
-    event.Operation=op
-    event.OperationSuccess=isSuccess
-    event.Message=message 
-    event.Duration=duration
-    event.ExtensionType=evtType
+    event = prot.TelemetryEvent(1, "69B669B9-4AF8-4C50-BDC4-6006FA76E975")
+    event.parameters.append(prot.TelemetryEventParam('Name', name)) 
+    event.parameters.append(prot.TelemetryEventParam('Version', version)) 
+    event.parameters.append(prot.TelemetryEventParam('IsInternal', isInternal)) 
+    event.parameters.append(prot.TelemetryEventParam('Operation', op)) 
+    event.parameters.append(prot.TelemetryEventParam('OperationSuccess', 
+                                                     isSuccess)) 
+    event.parameters.append(prot.TelemetryEventParam('Message', message)) 
+    event.parameters.append(prot.TelemetryEventParam('Duration', duration)) 
+    event.parameters.append(prot.TelemetryEventParam('ExtensionType', evtType)) 
+    
+    data = prot.get_properties(event)
     try:
-        event.save()
+        SaveEvent(json.dumps(data))
     except EventError as e:
         logger.Error("{0}", e)
 
-def DumpUnhandledError(name, gaVersion=""):
+def DumpUnhandledError(name):
     if hasattr(sys, 'last_type') and hasattr(sys, 'last_value') and \
             hasattr(sys, 'last_traceback'):
-        error = traceback.format_exception(sys.last_type, sys.last_value,
-                                           sys.last_traceback)
+        last_type = getattr(sys, 'last_type')
+        last_value = getattr(sys, 'last_value')
+        last_traceback = getattr(sys, 'last_traceback')
+        error = traceback.format_exception(last_type, last_value, 
+                                           last_traceback)
         message= "".join(error)
         logger.Error(message)
         AddExtensionEvent(name, isSuccess=False, message=message,
                           op=WALAEventOperation.UnhandledError)
-        WALAEventMonitor(gaVersion=gaVersion).collectAndSendWALAEvents()
-
 
 def EnableUnhandledErrorDump(name):
     atexit.register(DumpUnhandledError, name)

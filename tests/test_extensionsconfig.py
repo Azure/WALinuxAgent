@@ -114,25 +114,26 @@ EmptySettings="""\
 class TestExtensionsConfig(unittest.TestCase):
     def test_extensions_config(self):
         config = v1.ExtensionsConfig(ExtensionsConfigSample)
-        extensions = config.getExtensions()
+        extensions = config.extList.extensions
         self.assertNotEquals(None, extensions)
         self.assertEquals(1, len(extensions))
         self.assertNotEquals(None, extensions[0])
         extension = extensions[0]
         self.assertEquals("OSTCExtensions.ExampleHandlerLinux", 
-                          extension.getName())
-        self.assertEquals("1.4", extension.getVersion())
-        self.assertEquals('auto', extension.getUpgradePolicy())
-        self.assertEquals("enabled", extension.getState())
+                          extension.name)
+        self.assertEquals("1.4", extension.properties.version)
+        self.assertEquals('auto', extension.properties.upgradePolicy)
+        self.assertEquals("enabled", extension.properties.state)
+        settings = extension.properties.extensions[0]
         self.assertEquals("4037FBF5F1F3014F99B5D6C7799E9B20E6871CB3", 
-                          extension.getCertificateThumbprint())
-        self.assertEquals("MIICWgYJK", extension.getProtectedSettings())
+                          settings.certificateThumbprint)
+        self.assertEquals("MIICWgYJK", settings.privateSettings)
         self.assertEquals(json.loads('{"foo":"bar"}'), 
-                          extension.getPublicSettings())
+                          settings.publicSettings)
 
         man = v1.ExtensionManifest(ManifestSample)
-        self.assertNotEquals(None, man.versionUris)
-        self.assertEquals(3, len(man.versionUris))
+        self.assertNotEquals(None, man.packageList)
+        self.assertEquals(3, len(man.packageList.versions))
     
     def test_empty_settings(self):
         config = v1.ExtensionsConfig(EmptySettings)

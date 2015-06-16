@@ -41,7 +41,7 @@ class ProvisionHandler(object):
             return
         
         logger.Info("Start provisioning.")
-        protocol = prot.GetDefaultProtocol()
+        protocol = prot.Factory.getDefaultProtocol()
         try:
             protocol.reportProvisionStatus("NotReady", "Provisioning", 
                                            "Starting")

@@ -48,13 +48,21 @@ def DetectV1():
     OSUtil.GenerateTransportCert()
     protocol = ProtocolV1(endpoint)
     protocol.initialize()
-
+    
+    logger.Info("Protocol V1 found.")
     path = os.path.join(OSUtil.GetLibDir(), WireProtocol)
+
     fileutil.SetFileContents(path, "")
     return protocol
 
 def DetectV2():
-    raise ProtocolNotFound("Not implemented")
+    protocol = ProtocolV2()
+    protocol.initialize()
+
+    logger.Info("Protocol V2 found.")
+    path = os.path.join(OSUtil.GetLibDir(), MetaDataProtocol)
+    fileutil.SetFileContents(path, "")
+    return protocol
 
 def DetectAvailableProtocols(probeFuncs=[DetectV1, DetectV2]):
     availableProtocols = []
@@ -72,7 +80,7 @@ def DetectDefaultProtocol():
 
 def ChooseDefaultProtocol(availableProtocols):
     if len(availableProtocols) > 0:
-        return availableProtocols[-1]
+        return availableProtocols[0]
     else:
         raise ProtocolNotFound("No available protocol detected.")
 
@@ -85,7 +93,10 @@ def GetV1():
     return ProtocolV1(endpoint)
 
 def GetV2():
-    raise ProtocolNotFound("Protocol V2 not implemented")
+    path = os.path.join(OSUtil.GetLibDir(), MetaDataProtocol)
+    if not os.path.isfile(path):
+        raise ProtocolNotFound("Protocol V2 not found")
+    return ProtocolV2()
 
 def GetAvailableProtocols(getters=[GetV1, GetV2]):
     availableProtocols = []
@@ -97,18 +108,19 @@ def GetAvailableProtocols(getters=[GetV1, GetV2]):
             logger.Info(str(e))
     return availableProtocols
 
-__DefaultProtocol__ = None
-__InstanceLock__ = threading.Lock()
+class ProtocolFactory(object):
+    def __init__(self):
+        self._protocol = None
+        self._lock = threading.Lock()
 
-def GetDefaultProtocol():
-    global __DefaultProtocol__
-    global __InstanceLock__
+    def getDefaultProtocol(self):
+        if self._protocol is None:
+            self._lock.acquire()
+            if self._protocol is None:
+                availableProtocols = GetAvailableProtocols()
+                self._protocol = ChooseDefaultProtocol(availableProtocols)
+            self._lock.release()
 
-    if __DefaultProtocol__ is None:
-        __InstanceLock__.acquire()
-        if __DefaultProtocol__ is None:
-            availableProtocols = GetAvailableProtocols()
-            __DefaultProtocol__ = ChooseDefaultProtocol(availableProtocols)
-        __InstanceLock__.release()
-    return __DefaultProtocol__
+        return self._protocol
 
+Factory = ProtocolFactory()

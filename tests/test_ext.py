@@ -27,22 +27,20 @@ import json
 import azurelinuxagent.logger as logger
 from azurelinuxagent.utils.osutil import OSUtil
 import azurelinuxagent.utils.fileutil as fileutil
-import azurelinuxagent.protocol.v2 as prot
+import azurelinuxagent.protocol as prot
 import azurelinuxagent.distro.default.extension as ext
 
-settingJson = {
+extensionData = {
     "name":"TestExt",
     "properties":{
         "version":"2.0",
         "state":"enabled",
-        "upgrade-policy":"auto",
-        "runtimeSettings":[{
-            "handlerSettings":{
-                "sequenceNumber": 0,
-                "publicSettings": "",
-                "protectedSettings": "",
-                "certificateThumbprint": "",
-            }
+        "upgradePolicy":"auto",
+        "extensions":[{
+            "sequenceNumber": 0,
+            "publicSettings": "",
+            "protectedSettings": "",
+            "certificateThumbprint": ""
         }],
         "versionUris":[{
             "version":"2.1",
@@ -53,7 +51,24 @@ settingJson = {
         }]
     }
 }
-setting = prot.ExtensionInfoV2(settingJson)
+extension = prot.Extension()
+prot.set_properties(extension, extensionData)
+
+packageListData={
+    "versions": [{
+        "version": "2.0",
+        "uris":[{
+            "uri":"http://foo.bar"
+         }]
+    },{
+        "version": "2.1",
+        "uris":[{
+            "uri":"http://foo.bar"
+         }]
+    }]
+}
+packageList = prot.ExtensionPackageList()
+prot.set_properties(packageList, packageListData)
 
 manJson = {
     "handlerManifest":{
@@ -83,14 +98,16 @@ class TestExtensions(unittest.TestCase):
         libDir = OSUtil.GetLibDir()
         testExt1 = os.path.join(libDir, 'TestExt-1.0')
         testExt2 = os.path.join(libDir, 'TestExt-2.0')
+        testExt2 = os.path.join(libDir, 'TestExt-2.1')
         for path in [testExt1, testExt2]:
             if not os.path.isdir(path):
                 os.mkdir(path)
-        testExt = ext.LoadExtensionInstance(setting)
-        self.assertNotEqual(None, testExt)
+        testExt = ext.GetInstalledExtensionVersion('TestExt')
+        self.assertEqual('2.1', testExt)
 
     def test_getters(self):
-        testExt = ext.ExtensionInstance(setting, setting.getVersion())
+        testExt = ext.ExtensionInstance(extension, packageList, 
+                                        extension.properties.version, False)
         self.assertEqual("/tmp/TestExt-2.0", testExt.getBaseDir())
         self.assertEqual("/tmp/TestExt-2.0/status", testExt.getStatusDir())
         self.assertEqual("/tmp/TestExt-2.0/status/0.status", 
@@ -108,7 +125,7 @@ class TestExtensions(unittest.TestCase):
                          testExt.getEnvironmentFile())
         self.assertEqual("/tmp/log/TestExt/2.0", testExt.getLogDir())
 
-        testExt = ext.ExtensionInstance(setting, "2.1")
+        testExt = ext.ExtensionInstance(extension, packageList, "2.1", False)
         self.assertEqual("/tmp/TestExt-2.1", testExt.getBaseDir())
         self.assertEqual("2.1", testExt.getTargetVersion())
    
@@ -118,17 +135,19 @@ class TestExtensions(unittest.TestCase):
     def test_handle_uninstall(self):
         MockLaunchCommand.args = None
         MockSetHandlerStatus.args = None
-        testExt = ext.ExtensionInstance(setting, setting.getVersion(), False)
+        testExt = ext.ExtensionInstance(extension, packageList, 
+                                        extension.properties.version, False)
         testExt.handleUninstall()
         self.assertEqual(None, MockLaunchCommand.args)
         self.assertEqual(None, MockSetHandlerStatus.args)
         self.assertEqual(None, testExt.getCurrOperation())
 
-        testExt = ext.ExtensionInstance(setting, setting.getVersion(), True)
+        testExt = ext.ExtensionInstance(extension, packageList, 
+                                        extension.properties.version, True)
         testExt.handleUninstall()
         self.assertEqual(man.getUninstallCommand(), MockLaunchCommand.args[0])
         self.assertEqual("UnInstall", testExt.getCurrOperation())
-        self.assertEqual("uninstalled", MockSetHandlerStatus.args[0])
+        self.assertEqual("NotReady", MockSetHandlerStatus.args[0])
 
     @Mockup(ext.ExtensionInstance, 'loadManifest', MockLoadManifest)
     @Mockup(ext.ExtensionInstance, 'launchCommand', MockLaunchCommand)
@@ -137,13 +156,15 @@ class TestExtensions(unittest.TestCase):
     @Mockup(ext.ExtensionInstance, 'setHandlerStatus', MockSetHandlerStatus)
     def test_handle(self):
         #Test enable
-        testExt = ext.ExtensionInstance(setting, setting.getVersion(), False)
+        testExt = ext.ExtensionInstance(extension, packageList, 
+                                        extension.properties.version, False)
         testExt.initLog()
         self.assertEqual(1, len(testExt.logger.appenders) - len(logger.DefaultLogger.appenders))
         testExt.handle()
         
         #Test upgrade 
-        testExt = ext.ExtensionInstance(setting, setting.getVersion(), True)
+        testExt = ext.ExtensionInstance(extension, packageList, 
+                                        extension.properties.version, False)
         testExt.initLog()
         self.assertEqual(1, len(testExt.logger.appenders) - len(logger.DefaultLogger.appenders))
         testExt.handle()

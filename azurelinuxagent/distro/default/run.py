@@ -36,10 +36,11 @@ class RunHandler(object):
     def run(self):
         logger.Info("{0} Version:{1}", GuestAgentLongName, GuestAgentVersion) 
         logger.Info("OS: {0} {1}", DistroName, DistroVersion)
-        event.EnableUnhandledErrorDump("WALA")
+
+        event.EnableUnhandledErrorDump("Azure Linux Agent")
         fileutil.SetFileContents(OSUtil.GetAgentPidPath(), 
                                  str(os.getpid()))
-
+        
         if self.handlers.scvmmHandler.detectScvmmEnv():
             return
         
@@ -47,6 +48,8 @@ class RunHandler(object):
 
         prot.DetectDefaultProtocol()
         
+        event.EventMonitor().startEventsLoop()
+
         self.handlers.provisionHandler.process()
 
         if conf.GetSwitch("ResourceDisk.Format", False):
@@ -54,16 +57,20 @@ class RunHandler(object):
         
         self.handlers.envHandler.startMonitor()
 
-        protocol = prot.GetDefaultProtocol()
+        protocol = prot.Factory.getDefaultProtocol()
         while True:
+
             #Handle extensions
-            self.handlers.extensionHandler.process()
-            
+            handlerStatusList = self.handlers.extensionHandler.process()
+
             #Report status
-            agentStatus = "Ready"
-            agentStatusDetail = "Guest Agent is running"
-            protocol.reportAgentStatus(GuestAgentVersion, 
-                                       agentStatus,
-                                       agentStatusDetail)
+            vmStatus = prot.VMStatus()
+            vmStatus.vmAgent.agentVersion = GuestAgentVersion
+            vmStatus.vmAgent.status = "Ready"
+            vmStatus.vmAgent.message = "Guest Agent is running"
+            for handlerStatus in handlerStatusList:
+                vmStatus.extensionHandlers.append(handlerStatus)
+            protocol.reportStatus(vmStatus)
+
             time.sleep(25)
 

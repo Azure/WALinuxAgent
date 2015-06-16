@@ -126,18 +126,40 @@ class MockResp(object):
 
 class TestStatusBlob(unittest.TestCase):
     def testToJson(self):
-        statusBlob = v1.StatusBlob()
-        statusBlob.setAgentStatus("1.0", "Hehe", "Haha")
-        statusBlob.setExtensionStatus("Extension", "1.1", 
-                                      {"status":"success"})
+        vmStatus = v1.VMStatus()
+        statusBlob = v1.StatusBlob(vmStatus)
         self.assertNotEquals(None, statusBlob.toJson())
 
     @Mockup(v1.restutil, 'HttpPut', MockFunc(retval=MockResp(httplib.CREATED)))
     @Mockup(v1.restutil, 'HttpHead', MockFunc(retval=MockResp(httplib.OK)))
     def test_put_page_blob(self):
-        statusBlob = v1.StatusBlob()
+        vmStatus = v1.VMStatus()
+        statusBlob = v1.StatusBlob(vmStatus)
         data = ['a'] * 100
         statusBlob.putPageBlob("http://foo.bar", data)
+
+class TestConvert(unittest.TestCase):
+    def test_status(self):
+        substatus = v1.ExtensionSubStatus()
+
+        extStatus = v1.ExtensionStatus()
+        extStatus.substatusList.append(substatus)
+
+        handlerStatus = v1.ExtensionHandlerStatus()
+        handlerStatus.extensionStatusList.append(extStatus)
+
+        vmStatus = v1.VMStatus() 
+        vmStatus.extensionHandlers.append(handlerStatus)
+
+        data = v1.vm_status_to_v1(vmStatus)
+
+    def test_param(self):
+        param = v1.TelemetryEventParam()
+        event = v1.TelemetryEvent()
+        event.parameters.append(param)
+        
+        data = v1.event_to_xml(event)
+        print data
 
 if __name__ == '__main__':
     unittest.main()

@@ -44,7 +44,7 @@ class UbuntuProvisionHandler(ProvisionHandler):
             return
 
         logger.Info("Waiting cloud-init to finish provisioning.")
-        protocol = prot.GetDefaultProtocol()
+        protocol = prot.Factory.getDefaultProtocol()
         try:
             thumbprint = self.waitForSshHostKey()
             protocol.reportProvisionStatus(status="Ready",

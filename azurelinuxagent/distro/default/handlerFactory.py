@@ -23,7 +23,7 @@ from dhcp import DhcpHandler
 from env import EnvHandler
 from provision import ProvisionHandler
 from resourceDisk import ResourceDiskHandler
-from extension import ExtensionHandler
+from extension import ExtensionsHandler
 from deprovision import DeprovisionHandler
     
 class DefaultHandlerFactory(object):
@@ -35,6 +35,6 @@ class DefaultHandlerFactory(object):
         self.envHandler = EnvHandler(self)
         self.provisionHandler = ProvisionHandler()
         self.resourceDiskHandler = ResourceDiskHandler()
-        self.extensionHandler = ExtensionHandler()
+        self.extensionHandler = ExtensionsHandler()
         self.deprovisionHandler = DeprovisionHandler()
 

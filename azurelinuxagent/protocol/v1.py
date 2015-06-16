@@ -22,6 +22,7 @@ import re
 import time
 import traceback
 import httplib
+import xml.sax.saxutils as saxutils
 import xml.etree.ElementTree as ET
 import azurelinuxagent.logger as logger
 import azurelinuxagent.utils.restutil as restutil
@@ -54,114 +55,6 @@ TransportPrivateFile = "TransportPrivate.pem"
 
 ProtocolVersion = "2012-11-30"
 
-
-class VmInfoV1(object):
-    def __init__(self, subscriptionId, vmName):
-        self.subscriptionId = subscriptionId
-        self.vmName = vmName
-
-    def getSubscriptionId(self):
-        return self.subscriptionId
-
-    def getVmName(self):
-        return self.vmName
-
-class CertInfoV1(object):
-    def __init__(self, name, thumbprint):
-        self.name = name
-        self.thumbprint = thumbprint
-
-    def getName(self):
-        return self.name
-
-    def getThumbprint(self):
-        return self.thumbprint
-
-    def getCrtFile(self, thumbprint):
-        return "{0}.crt".format(thumbprint)
-
-    def getPrvFile(self, thumbprint):
-        return "{0}.prv".format(thumbprint)
-
-class ExtensionInfoV1(ExtensionInfo):
-    def __init__(self, name=None, version=None, manifestUris=None, 
-                 upgradePolicy=None, state=None, seqNo=None, 
-                 settings=None):
-        super(ExtensionInfoV1, self).__init__()
-        self.name = name
-        self.version = version
-        self.manifestUris = manifestUris
-        self.upgradePolicy = upgradePolicy
-        self.state = state
-        self.seqNo = seqNo
-        #TODO There is probabaly a bug on RDFE which will pass empty settings in
-        if settings is None:
-            settings = {
-                'runtimeSettings':[{
-                    'handlerSettings':{
-                        'protectedSettingsCertThumbprint': None,
-                        'protectedSettings': None,
-                        'publicSettings': None
-                    }
-                }]
-            }
-        self.settings = settings
-        runtimeSettings = settings["runtimeSettings"][0]
-        handlerSettings = runtimeSettings["handlerSettings"]
-        self.handlerSettings = handlerSettings
-        self.versionUris = None
-
-    def getName(self):
-        return self.name
-
-    def getVersion(self):
-        return self.version
-   
-    def getUpgradePolicy(self):
-        return self.upgradePolicy
-
-    def getState(self):
-        return self.state
-
-    def getSeqNo(self):
-        return self.seqNo
-
-    def getSettings(self):
-        return self.settings
-    
-    def getHandlerSettings(self):
-        return self.handlerSettings
-    
-    def getPublicSettings(self):
-        return self.handlerSettings['publicSettings']
-
-    def getProtectedSettings(self):
-        return self.handlerSettings['protectedSettings']
-
-    def getCertificateThumbprint(self):
-        return self.handlerSettings['protectedSettingsCertThumbprint']
-
-    def getVersionUris(self):
-        return self.versionUris
-
-class InstanceMetadataV1(object):
-    def __init__(self, goalState, hostingEnv, sharedConfig):
-        self.goalState = goalState
-        self.hostingEnv = hostingEnv
-        self.sharedConfig = sharedConfig
-
-    def getDeploymentName(self):
-        return self.hostingEnv.getDeploymentName()
-        
-    def getRoleName(self):
-        return self.hostingEnv.getRoleName()
-        
-    def getRoleInstanceId(self):
-        return self.goalState.getRoleInstanceId()
-        
-    def getContainerId(self):
-        return self.goalState.getContainerId()
-
 class WireProtocolResourceGone(ProtocolError):
     pass
 
@@ -176,8 +69,10 @@ class ProtocolV1(Protocol):
 
     def getVmInfo(self):
         hostingEnv = self.client.getHostingEnv()
-        vmName = hostingEnv.getVmName()
-        return VmInfoV1(None, vmName)
+        vmInfo = VmInfo()
+        vmInfo.subscriptionId = None
+        vmInfo.vmName = hostingEnv.getVmName()
+        return vmInfo
 
     def getCerts(self):
         certificates = self.client.getCertificates()
@@ -187,32 +82,40 @@ class ProtocolV1(Protocol):
         #Update goal state to get latest extensions config
         self.client.updateGoalState()
         extensionsConfig = self.client.getExtensionsConfig()
-        return extensionsConfig.getExtensions()
-  
+        return extensionsConfig.extList
+    
+    def getExtensionPackages(self, extension):
+        goalState = self.client.getGoalState()
+        man = self.client.getExtensionManifest(extension, goalState)
+        return man.packageList
+
     def getInstanceMetadata(self):
         goalState = self.client.getGoalState()
         hostingEnv = self.client.getHostingEnv()
-        sharedConfig = self.client.getSharedConfig()
-        return InstanceMetadataV1(goalState, hostingEnv, sharedConfig)
+        metadata = InstanceMetadata()
+        metadata.deploymentName = hostingEnv.getDeploymentName()
+        metadata.roleName = hostingEnv.getRoleName()
+        metadata.roleInstanceId = goalState.getRoleInstanceId()
+        metadata.containerId = goalState.getContainerId()
+        return metadata
     
-    def reportProvisionStatus(self, status=None, subStatus=None, 
-                              description='', thumbprint=None):
-        if status is not None:
-            self.client.reportHealth(status, subStatus, description)
-        if thumbprint is not None:
-            self.client.reportRoleProperties(thumbprint)
-    
-    def reportAgentStatus(self, version, agentStatus, agentMessage):
-        statusBlob = self.client.getStatusBlob()
-        statusBlob.setAgentStatus(version, agentStatus, agentMessage)
-        self.client.uploadStatusBlob()
-        
-    def reportExtensionStatus(self, name, version, status):
-        statusBlob = self.client.getStatusBlob()
-        statusBlob.setExtensionStatus(name, version, status)
+    def reportProvisionStatus(self, provisionStatus):
+        validata_param("provisionStatus", provisionStatus, ProvisionStatus)
 
-    def reportEvent(self, eventData):
-        self.client.reportEvent(eventData)
+        if provisionStatus.status is not None:
+            self.client.reportHealth(provisionStatus.status, 
+                                     provisionStatus.subStatus, 
+                                     provisionStatus.description)
+        if provisionStatus.thumbprint is not None:
+            self.client.reportRoleProperties(provisionStatus.thumbprint)
+
+    def reportStatus(self, vmStatus):
+        validata_param("vmStatus", vmStatus, VMStatus)
+        self.client.uploadStatusBlob(vmStatus)
+
+    def reportEvent(self, events):
+        validata_param("events", events, TelemetryEventList)
+        self.client.reportEvent(events)
 
 def _fetchCache(localFile):
     if not os.path.isfile(localFile):
@@ -220,21 +123,24 @@ def _fetchCache(localFile):
     return fileutil.GetFileContents(localFile)
 
 def _fetchUri(uri, headers, chkProxy=False):
-    resp = restutil.HttpGet(uri, headers, chkProxy=chkProxy)
+    try:
+        resp = restutil.HttpGet(uri, headers, chkProxy=chkProxy)
+    except restutil.HttpError as e:
+        raise ProtocolError(str(e))
+
     if(resp.status == httplib.GONE):
         raise WireProtocolResourceGone(uri)
     if(resp.status != httplib.OK):
         raise ProtocolError("{0} - {1}".format(resp.status, uri))
     return resp.read()
 
-def _fetchManifest(uris):
-    for uri in uris:
+def _fetchManifest(versionUris):
+    for versionUri in versionUris:
         try:
-            xmlText = _fetchUri(uri, None, chkProxy=True)
+            xmlText = _fetchUri(versionUri.uri, None, chkProxy=True)
             return xmlText
         except IOError, e:
-            logger.Warn("Failed to fetch ExtensionManifest: {0}, {1}",
-                        e, 
+            logger.Warn("Failed to fetch ExtensionManifest: {0}, {1}", e, 
                         uri)
     raise ProtocolError("Failed to fetch ExtensionManifest from all sources")
 
@@ -289,42 +195,89 @@ def _buildHealthReport(incarnation, containerId, roleInstanceId,
                        detail)
     return xml
 
+"""
+Convert VMStatus object to status blob format
+"""
+def vm_agent_status_to_v1(vmAgent):
+    formattedMessage = {
+        'lang' : 'en-US',
+        'message' : vmAgent.message
+    }
+    guestAgentStatus = {
+        'version' : vmAgent.agentVersion,
+        'status' : vmAgent.status,
+        'formattedMessage' : formattedMessage
+    }
+    return guestAgentStatus
+
+def extension_substatus_to_v1(substatusList):
+    statusList = [] 
+    for substatus in substatusList:
+        status = {
+            "name": substatus.name,
+            "status": substatus.status,
+            "code": substatus.code,
+            "formattedMessage":{
+                "lang": "en-US",
+                "message": substatus.message
+            }
+        }
+        statusList.append(status)
+    return statusList
+
+def extension_handler_status_to_v1(extensionHandlerStatus):
+    extensionStatus = extensionHandlerStatus.extensionStatusList[0]
+    substatus = extension_substatus_to_v1(extensionStatus.substatusList)
+    settingsStatus={
+        "status":{
+            "name": extensionStatus.name,
+            "configurationAppliedTime": extensionStatus.configurationAppliedTime,
+            "operation": extensionStatus.operation,
+            "status": extensionStatus.status,
+            "code": extensionStatus.code,
+            "substatus": substatus
+        }
+    }
+
+    handlerAggStatus = {
+        'handlerVersion' : extensionHandlerStatus.handlerVersion,
+        'handlerName' : extensionHandlerStatus.handlerName,
+        'status' : extensionHandlerStatus.status,
+        'runtimeSettingsStatus' : {
+            'settingsStatus' : settingsStatus,
+            'sequenceNumber' : extensionStatus.sequenceNumber
+        }
+    }
+    return handlerAggStatus
+
+
+def vm_status_to_v1(vmStatus):
+    tstamp=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+    guestAgentStatus = vm_agent_status_to_v1(vmStatus.vmAgent)
+    handlerAggStatusList = []
+    for extensionHandlerStatus in vmStatus.extensionHandlers:
+        handlerAggStatus = extension_handler_status_to_v1(extensionHandlerStatus)
+        handlerAggStatusList.append(handlerAggStatus)
+
+    aggregateStatus = {
+        'guestAgentStatus': guestAgentStatus,
+        'handlerAggregateStatus' : handlerAggStatusList
+    }
+    report = {
+        'version' : '1.0',
+        'timestampUTC' : tstamp,
+        'aggregateStatus' : aggregateStatus
+    }
+    return report
+
+
 class StatusBlob(object):
-    def __init__(self):
-        self.agentVersion = None
-        self.agentStatus = None
-        self.agentMessage = None
-        self.extensionsStatus = {}
-
-    def setAgentStatus(self, agentVersion, agentStatus, agentMessage):
-        self.agentVersion = agentVersion
-        self.agentStatus = agentStatus
-        self.agentMessage = agentMessage
-
-    def setExtensionStatus(self, name, version, status):
-        #TODO validate status format
-        self.extensionsStatus[name] = status
-
+    def __init__(self, vmStatus):
+        self.vmStatus = vmStatus
+    
     def toJson(self):
-        tstamp=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-        formattedMessage = {
-            'lang' : 'en-Us',
-            'message' : self.agentMessage
-        }
-        guestAgentStatus = {
-            'version' : self.agentVersion,
-            'status' : self.agentStatus,
-            'formattedMessage' : formattedMessage
-        }
-        aggregateStatus = {
-            'guestAgentStatus': guestAgentStatus,
-            'handlerAggregateStatus' : self.extensionsStatus.values()
-        }
-        report = {
-            'version' : '1.0',
-            'timestampUTC' : tstamp,
-            'aggregateStatus' : aggregateStatus
-        }
+        report = vm_status_to_v1(self.vmStatus)
         return json.dumps(report)
 
     __StorageVersion="2014-02-14"
@@ -415,6 +368,31 @@ class StatusBlob(object):
                                      "").format(resp.status))
             start = end
 
+def param_to_xml(param):
+    paramFormat = u'<Param Name="{0}" Value={1} T="{2}" />'
+    paramType = type(param.value)
+    attrType = ""
+    if paramType is int:
+        attrType = u'mt:uint64'
+    elif paramType is str:
+        attrType = u'mt:wstr'
+    elif str(paramType).count("'unicode'") > 0:
+        attrType = u'mt:wstr'
+    elif paramType is bool:
+        attrType=u'mt:bool'
+    elif paramType is float:
+        attrType=u'mt:float64'
+    return paramFormat.format(param.name, saxutils.quoteattr(str(param.value)),
+                              attrType)
+
+def event_to_xml(event):
+    params = ""
+    for param in event.parameters:
+        params += param_to_xml(param)
+    eventStr = (u'<Event id="{0}">'
+                  u'<![CDATA[{1}]]>'
+                u'</Event>').format(event.eventId, params)
+    return eventStr
 
 class WireClient(object):
     def __init__(self, endpoint):
@@ -425,7 +403,7 @@ class WireClient(object):
         self.sharedConfig = None
         self.certificates = None
         self.extensionsConfig = None
-        self.statusBlob = StatusBlob()
+        self.requestCount = 0
    
     def updateHostingEnv(self, goalState):
         localFile = HostingEnvFile
@@ -453,15 +431,14 @@ class WireClient(object):
                             self.getHeader())
         fileutil.SetFileContents(localFile, xmlText)
         self.extensionsConfig = ExtensionsConfig(xmlText)
-        for extension in self.extensionsConfig.getExtensions():
+        for extension in self.extensionsConfig.extList.extensions:
             self.updateExtensionManifest(extension, goalState)
     
     def updateExtensionManifest(self, extension, goalState):
         localFile = ManifestFile.format(extension.name, 
                                         goalState.getIncarnation())
-        xmlText = _fetchManifest(extension.manifestUris)
+        xmlText = _fetchManifest(extension.versionUris)
         fileutil.SetFileContents(localFile, xmlText)
-        return ExtensionManifest(xmlText)
 
     def updateGoalState(self, forced=False, maxRetry=3):
         uri = GoalStateUri.format(self.endpoint)
@@ -529,10 +506,6 @@ class WireClient(object):
             localFile = ExtensionsConfigFile.format(goalState.getIncarnation())
             xmlText = _fetchCache(localFile)
             self.extensionsConfig = ExtensionsConfig(xmlText)
-            extensions = self.extensionsConfig.getExtensions()
-            for extension in extensions:
-                man = self.getExtensionManifest(extension, goalState)
-                extension.versionUris = man.versionUris
         return self.extensionsConfig
     
     def getExtensionManifest(self, extension, goalState):
@@ -557,12 +530,10 @@ class WireClient(object):
                      "advised by Fabric.").format(ProtocolVersion)
             raise ProtocolNotFound(error)
 
-    def getStatusBlob(self):
-        return self.statusBlob
-
-    def uploadStatusBlob(self):
+    def uploadStatusBlob(self, vmStatus):
         extensionsConfig = self.getExtensionsConfig()
-        self.statusBlob.upload(extensionsConfig.getStatusUploadBlob())
+        statusBlob = StatusBlob(vmStatus)
+        statusBlob.upload(extensionsConfig.getStatusUploadBlob())
 
     def reportRoleProperties(self, thumbprint):
         goalState = self.getGoalState()
@@ -588,12 +559,51 @@ class WireClient(object):
         resp = restutil.HttpPost(healthReportUri, 
                                  healthReport,
                                  headers=headers)
+    def preventThrottling(self):
+        self.requestCount += 1
+        if self.requestCount % 3 == 0:
+            logger.Info("Sleep 15 before sending event to avoid throttling.")
+            self.requestCount = 0
+            time.sleep(15)
 
-    def reportEvent(self, eventData):
+    def sendEvent(self, providerId, eventStr):
         uri = TelemetryUri.format(self.endpoint)
-        #TODO handle throttling
-        restutil.HttpPost(uri, eventData)
+        dataFormat = (u'<?xml version="1.0"?>'
+                      u'<TelemetryData version="1.0">'
+                         u'<Provider id="{0}">{1}'
+                         u'</Provider>'
+                      u'</TelemetryData>')
+        data = dataFormat.format(providerId, eventStr)
+        try:
+            self.preventThrottling()
+            resp = restutil.HttpPost(uri, data)
+        except restutil.HttpError as e:
+            raise ProtocolError("Failed to send events:{0}".format(e))
+        
+        if resp.status != httplib.OK:
+            logger.Verbose(resp.read())
+            raise ProtocolError("Failed to send events:{0}".format(resp.status))
 
+    def reportEvent(self, eventList):
+        buf = {} 
+        #Group events by providerId
+        for event in eventList.events:
+            if event.providerId not in buf:
+                buf[event.providerId] = ""
+            eventStr = event_to_xml(event)
+            if len(eventStr) >= 63 * 1024:
+                logger.Warn("Single event too large: {0}", eventStr[300:])
+                continue
+            if len(buf[event.providerId] + eventStr) >= 63 * 1024:
+                self.sendEvent(event.providerId, buf[event.providerId])
+                buf[event.providerId]=""
+            buf[event.providerId]=buf[event.providerId] + eventStr
+
+        #Send out all events left in buffer.
+        for providerId in buf.keys():
+            if len(buf[providerId]) > 0:
+                self.sendEvent(providerId, buf[providerId])
+                
     def getHeader(self):
         return {
             "x-ms-agent-name":"WALinuxAgent",
@@ -627,7 +637,6 @@ class VersionInfo(object):
         Fail if our desired protocol version is not seen.
         """
         logger.Verbose("Load Version.xml")
-        logger.Verbose(xmlText)
         self.parse(xmlText)
    
     def parse(self, xmlText):
@@ -655,7 +664,6 @@ class GoalState(object):
         if xmlText is None:
             raise ValueError("GoalState.xml is None")
         logger.Verbose("Load GoalState.xml")
-        logger.Verbose(xmlText)
         self.incarnation = None
         self.expectedState = None
         self.hostingEnvUri = None
@@ -726,7 +734,6 @@ class HostingEnv(object):
         if xmlText is None:
             raise ValueError("HostingEnvironmentConfig.xml is None")
         logger.Verbose("Load HostingEnvironmentConfig.xml")
-        logger.Verbose(xmlText)
         self.parse(xmlText)
 
     def getVmName(self):
@@ -756,7 +763,6 @@ class SharedConfig(object):
     """
     def __init__(self, xmlText):
         logger.Verbose("Load SharedConfig.xml")
-        logger.Verbose(xmlText)
         self.parse(xmlText)
 
     def parse(self, xmlText):
@@ -777,7 +783,7 @@ class Certificates(object):
         logger.Verbose("Load Certificates.xml")
         self.libDir = OSUtil.GetLibDir()
         self.opensslCmd = OSUtil.GetOpensslCmd()
-        self.certs = []
+        self.certs = CertList()
         self.parse(xmlText)
 
     def parse(self, xmlText):
@@ -854,7 +860,9 @@ class Certificates(object):
                               certs)[0]
 
         for cert in certs:
-            self.certs.append(CertInfoV1(cert["name"], cert["thumbprint"]))
+            certInfo = Cert()
+            set_properties(certInfo, cert)
+            self.certs.certificates.append(certInfo)
 
     def getCerts(self):
         return self.certs
@@ -876,14 +884,10 @@ class ExtensionsConfig(object):
         if xmlText is None:
             raise ValueError("ExtensionsConfig is None")
         logger.Verbose("Load ExtensionsConfig.xml")
-        logger.Verbose(xmlText)
-        self.extensions = []
+        self.extList = ExtensionList()
         self.statusUploadBlob = None
         self.parse(xmlText)
 
-    def getExtensions(self):
-        return self.extensions
-   
     def getStatusUploadBlob(self):
         return self.statusUploadBlob
     
@@ -891,61 +895,81 @@ class ExtensionsConfig(object):
         """
         Write configuration to file ExtensionsConfig.xml.
         """
-        logger.Verbose("Extensions Config: {0}", xmlText)
         xmlDoc = ET.fromstring(xmlText.strip())
-        extensions = FindAllNodes(xmlDoc, ".//Plugins/Plugin")      
+        plugins = FindAllNodes(xmlDoc, ".//Plugins/Plugin")      
         settings = FindAllNodes(xmlDoc, ".//PluginSettings/Plugin")
 
-        for extension in extensions:
-            name = extension.attrib["name"]
-            version = extension.attrib["version"]
-            location = extension.attrib["location"]
-            failoverLocation = extension.attrib["failoverlocation"]
-            autoUpgrade = extension.attrib["autoUpgrade"]
-            upgradePolicy = "auto" if autoUpgrade == "true" else "manual"
-            state = extension.attrib["state"]
-            pluginSetting = filter(lambda x: x.attrib["name"] == name 
-                                   and x.attrib["version"] == version,
-                                   settings)
-            
+        for plugin in plugins:
+            ext = Extension()
+            ext.name = plugin.attrib["name"]
+            ext.properties.version = plugin.attrib["version"]
+            ext.properties.state = plugin.attrib["state"]
+
+            autoUpgrade = plugin.attrib["autoUpgrade"]
+            if autoUpgrade == "true":
+                ext.properties.upgradePolicy = "auto"
+            else:
+                ext.properties.upgradePolicy = "manual"
+
+            location = plugin.attrib["location"]
+            failoverLocation = plugin.attrib["failoverlocation"]
+            for uri in [location, failoverLocation]:
+                versionUri = ExtensionVersionUri() 
+                versionUri.uri = uri
+                ext.versionUris.append(versionUri)
+
+            name = ext.name
+            version = ext.properties.version
+            pluginSettings = filter(lambda x: x.attrib["name"] == name 
+                                    and x.attrib["version"] == version,
+                                    settings)
+            if pluginSettings is None or len(pluginSettings) == 0 :
+                continue
+
             runtimeSettings = None
-            seqNo=0
-            if pluginSetting is not None and  len(pluginSetting) > 0:
-                runtimeSettingsNode = FindFirstNode(pluginSetting[0], 
-                                                    "RuntimeSettings")
-                seqNo = runtimeSettingsNode.attrib["seqNo"]
-                runtimeSettingsStr = runtimeSettingsNode.text
+            runtimeSettingsNode = FindFirstNode(pluginSettings[0], 
+                                                "RuntimeSettings")
+            seqNo = runtimeSettingsNode.attrib["seqNo"]
+            runtimeSettingsStr = runtimeSettingsNode.text
+            try:
                 runtimeSettings = json.loads(runtimeSettingsStr)
-           
-            extInfo = ExtensionInfoV1(name=name, version=version,
-                                      manifestUris=(location, failoverLocation),
-                                      upgradePolicy=upgradePolicy, state=state,
-                                      seqNo=seqNo, 
-                                      settings = runtimeSettings)
-            self.extensions.append(extInfo)
+            except ValueError as e:
+                raise ProtocolError("Invalid extension settings")
+            
+            for settings in runtimeSettings["runtimeSettings"]:
+                hSettings = settings["handlerSettings"]
+                extSettings = ExtensionSettings()
+                extSettings.sequenceNumber = seqNo
+                extSettings.publicSettings = hSettings["publicSettings"]
+                extSettings.privateSettings = hSettings["protectedSettings"]
+                thumbprint = hSettings["protectedSettingsCertThumbprint"]
+                extSettings.certificateThumbprint = thumbprint
+                ext.properties.extensions.append(extSettings)
+
+            self.extList.extensions.append(ext)
         self.statusUploadBlob = (FindFirstNode(xmlDoc,"StatusUploadBlob")).text
-        return self
 
 class ExtensionManifest(object):
     def __init__(self, xmlText):
         if xmlText is None:
             raise ValueError("ExtensionManifest is None")
         logger.Verbose("Load ExtensionManifest.xml")
-        logger.Verbose(xmlText)
         self.xmlText = xmlText
-        self.versionUris = []
+        self.packageList = ExtensionPackageList()
         self.parse(xmlText)
 
     def parse(self, xmlText):
-        logger.Verbose("Extension manifest:{0}", xmlText)
         xmlDoc = ET.fromstring(xmlText.strip())
         packages = FindAllNodes(xmlDoc, ".//Plugin")
         for package in packages:
             version = FindFirstNode(package, "Version").text
             uris = FindAllNodes(package, "Uris/Uri")
             uris = map(lambda x : x.text, uris)
-            self.versionUris.append({
-                "version":version,
-                "uris":uris
-            })
+            package = ExtensionPackage() 
+            package.version = version
+            for uri in uris:
+                packageUri = ExtensionPackageUri()
+                packageUri.uri = uri
+                package.uris.append(packageUri)
+            self.packageList.versions.append(package)
 

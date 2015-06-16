@@ -31,68 +31,127 @@ import azurelinuxagent.utils.restutil as restutil
 import azurelinuxagent.utils.shellutil as shellutil
 
 ValidExtensionStatus = ['transitioning', 'error', 'success', 'warning']
-ValidAggStatus = ['Installing', 'Ready', 'NotReady', 'Unresponsive']
 
-#TODO when extension is disabled. Ready or NotReady?
-HandlerStatusToAggStatus = {
-        "uninstalled":"NotReady", 
-        "installed":"Installing", 
-        "disabled":"Ready",
-        "enabled":"Ready"
-}
+def validate_has_key(obj, key, fullName):
+    if key not in obj:
+        raise ExtensionError("Missing: {0}".format(fullName))
 
-class ExtensionHandler(object):
+def validate_in_range(val, validRange, name):
+    if val not in validRange:
+        raise ExtensionError("Invalid {0}: {1}".format(name, val))
+
+def try_get(dictionary, key, default=None):
+    try:
+        return dictionary[key]
+    except KeyError:
+        return default
+
+def extension_sub_status_to_v2(substatus):
+    #Check extension sub status format
+    validate_has_key(substatus, 'name', 'substatus/name')
+    validate_has_key(substatus, 'status', 'substatus/status')
+    validate_has_key(substatus, 'code', 'substatus/code')
+    validate_has_key(substatus, 'formattedMessage', 'substatus/formattedMessage')
+    validate_has_key(substatus['formattedMessage'], 'lang', 
+                     'substatus/formattedMessage/lang')
+    validate_has_key(substatus['formattedMessage'], 'message', 
+                     'substatus/formattedMessage/message')
+
+    validate_in_range(substatus['status'], ValidExtensionStatus, 
+                      'substatus/status')
+    status = prot.ExtensionSubStatus()
+    status.name = try_get(substatus, 'name')
+    status.status = try_get(substatus, 'status')
+    status.code = try_get(substatus, 'code')
+    status.message = try_get(substatus['formattedMessage'], 'message')
+
+def extension_status_to_v2(extStatus, seqNo):
+    #Check extension status format
+    validate_has_key(extStatus, 'status', 'status')
+    validate_has_key(extStatus['status'], 'status', 'status/status')
+    validate_has_key(extStatus['status'], 'operation', 'status/operation')
+    validate_has_key(extStatus['status'], 'code', 'status/code')
+    #TODO are those fields all mandatory
+    validate_has_key(extStatus['status'], 'name', 'status/name')
+    validate_has_key(extStatus['status'], 'formattedMessage', 
+                     'status/formattedMessage')
+    validate_has_key(extStatus['status']['formattedMessage'], 'lang', 
+                     'status/formattedMessage/lang')
+    validate_has_key(extStatus['status']['formattedMessage'], 'message', 
+                     'status/formattedMessage/message')
+
+    validate_in_range(extStatus['status']['status'], ValidExtensionStatus,
+                      'status/status')
+    
+    status = prot.ExtensionStatus()
+    status.name = try_get(extStatus['status'], 'name')
+    status.configurationAppliedTime = try_get(extStatus['status'], 
+                                              'configurationAppliedTime')
+    status.operation = try_get(extStatus['status'], 'operation')
+    status.status = try_get(extStatus['status'], 'status')
+    status.code = try_get(extStatus['status'], 'code')
+    status.message = try_get(extStatus['status']['formattedMessage'], 'message')
+    status.sequenceNumber = seqNo
+
+    substatusList = try_get(extStatus['status'], 'substatus', [])
+    for substatus in substatusList:
+        status.substatusList.extend(extension_sub_status_to_v2(substatus))
+
+class ExtensionsHandler(object):
 
     def process(self):
-        protocol = prot.GetDefaultProtocol()
-
-        extSettings = protocol.getExtensions()
-        for setting in extSettings:
+        protocol = prot.Factory.getDefaultProtocol()
+        extList = protocol.getExtensions()
+        
+        handlerStatusList = []
+        for extension in extList.extensions:
             #TODO handle extension in parallel
-            self.processExtension(protocol, setting) 
+            packageList = protocol.getExtensionPackages(extension)
+            handlerStatus = self.processExtension(extension, packageList) 
+            handlerStatusList.append(handlerStatus)
+
+        return handlerStatusList
     
-    def processExtension(self, protocol, setting):
-        ext = LoadExtensionInstance(setting)
-        if ext is None:
-            ext = ExtensionInstance(setting, setting.getVersion())
+    def processExtension(self, extension, packageList):
+        installedVersion = GetInstalledExtensionVersion(extension.name)
+        if installedVersion is not None:
+            ext = ExtensionInstance(extension, packageList,
+                                    installedVersion, installed=True)
+        else:
+            ext = ExtensionInstance(extension, packageList, 
+                                    extension.properties.version)
         try:
             ext.initLog()
             ext.handle()
-            aggStatus = ext.getAggStatus()
+            status = ext.collectHandlerStatus()
         except ExtensionError as e:
             logger.Error("Failed to handle extension: {0}-{1}\n {2}", 
-                         setting.getName(),
-                         setting.getVersion(),
-                         e)
-            aggStatus = ext.createAggStatus("NotReady", {
-                "status": "error",
-                "operation": ext.getCurrOperation(), 
-                "code" : -1, 
-                "formattedMessage": {
-                    "lang":"en-US",
-                    "message": str(e)
-                }
-            });
-            AddExtensionEvent(name=setting.getName(), isSuccess=False,
+                         ext.getName(), ext.getVersion(), e)
+            AddExtensionEvent(name=ext.getName(), isSuccess=False,
                               op=ext.getCurrOperation(), message = str(e))
-        protocol.reportExtensionStatus(setting.getName(), 
-                                       setting.getVersion(),
-                                       aggStatus)
-
+            extStatus = prot.ExtensionStatus()
+            extStatus.status = 'error'
+            extStatus.code = -1
+            extStatus.operation = ext.getCurrOperation()
+            extStatus.message = str(e)
+            extStatus.sequenceNumber = ext.getSeqNo()
+            status = ext.createHandlerStatus(extStatus)
+        return status
 
 def ParseExtensionDirName(dirName):
+    """
+    Parse installed extension dir name. Sample: ExtensionName-Version/
+    """
     seprator = dirName.rfind('-')
     if seprator < 0:
         raise ExtensionError("Invalid extenation dir name")
     return dirName[0:seprator], dirName[seprator + 1:]
 
-def LoadExtensionInstance(setting):
+def GetInstalledExtensionVersion(targetName):
     """
     Return the highest version instance with the same name
     """
-    targetName = setting.getName()
     installedVersion = None
-    ext = None
     libDir = OSUtil.GetLibDir()
     for dirName in os.listdir(libDir):
         path = os.path.join(libDir, dirName)
@@ -102,18 +161,23 @@ def LoadExtensionInstance(setting):
             if name == targetName:
                 if installedVersion is None or installedVersion < version:
                     installedVersion = version
-    if installedVersion is not None:
-        ext = ExtensionInstance(setting, installedVersion, installed=True)
-    return ext
+    return installedVersion
 
 class ExtensionInstance(object):
-    def __init__(self, setting, currVersion, installed=False):
-        self.setting = setting
+    def __init__(self, extension, packageList, currVersion, installed=False):
+        self.extension = extension
+        self.packageList = packageList
         self.currVersion = currVersion
         self.libDir = OSUtil.GetLibDir()
         self.installed = installed
+        self.settings = None
+        
+        #Extension will have no more than 1 settings instance
+        if len(extension.properties.extensions) > 0:
+            self.settings = extension.properties.extensions[0]
         self.enabled = False
         self.currOperation = None
+
         prefix = "[{0}]".format(self.getFullName())
         self.logger = logger.Logger(logger.DefaultLogger, prefix)
     
@@ -129,15 +193,15 @@ class ExtensionInstance(object):
  
     def handle(self):
         self.logger.info("Process extension settings:")
-        self.logger.info("  Name: {0}", self.setting.getName())
-        self.logger.info("  Version: {0}", self.setting.getVersion())
+        self.logger.info("  Name: {0}", self.getName())
+        self.logger.info("  Version: {0}", self.getVersion())
         
         if self.installed:
             self.logger.info("Installed version:{0}", self.currVersion)
             handlerStatus = self.getHandlerStatus() 
-            self.enabled = handlerStatus == "enabled"
+            self.enabled = (handlerStatus == "Ready")
             
-        state = self.setting.getState()
+        state = self.getState()
         if state == 'enabled':
             self.handleEnable()
         elif state == 'disabled':
@@ -159,7 +223,7 @@ class ExtensionInstance(object):
                 #TODO downgrade is not allowed?
                 raise ExtensionError("A newer version has already been installed")
         else:
-            if targetVersion > self.setting.getVersion():
+            if targetVersion > self.getVersion():
                 #This will happen when auto upgrade policy is enabled
                 self.logger.info("Auto upgrade to new version:{0}", 
                                  targetVersion)
@@ -180,12 +244,11 @@ class ExtensionInstance(object):
         self.uninstall()
 
     def upgrade(self, targetVersion):
-        self.logger.info("Upgrade from: {0} to {1}", 
-                         self.setting.getVersion(),
+        self.logger.info("Upgrade from: {0} to {1}", self.getVersion(),
                          targetVersion)
         self.currOperation=WALAEventOperation.Upgrade
         old = self
-        new = ExtensionInstance(self.setting, targetVersion, self.libDir)
+        new = ExtensionInstance(self.extension, targetVersion)
         self.logger.info("Download new extension package")
         new.initLog()
         new.download()
@@ -202,8 +265,8 @@ class ExtensionInstance(object):
             new.install()
         self.logger.info("Enable new extension")
         new.enable()
-        AddExtensionEvent(name=self.setting.getName(), isSuccess=True,
-                          op=WALAEventOperation.Upgrade, message="")
+        AddExtensionEvent(name=self.getName(), isSuccess=True,
+                          op=self.currOperation, message="")
 
     def download(self):
         self.logger.info("Download extension package")
@@ -222,13 +285,12 @@ class ExtensionInstance(object):
             raise ExtensionError("Download extension failed")
         
         self.logger.info("Unpack extension package")
-        packageFile = os.path.join(self.libDir,
-                                   os.path.basename(uri) + ".zip")
-        fileutil.SetFileContents(packageFile, bytearray(package))
-        zipfile.ZipFile(packageFile).extractall(self.getBaseDir())
+        pkgFile = os.path.join(self.libDir, os.path.basename(uri) + ".zip")
+        fileutil.SetFileContents(pkgFile, bytearray(package))
+        zipfile.ZipFile(pkgFile).extractall(self.getBaseDir())
         chmod = "find {0} -type f | xargs chmod u+x".format(self.getBaseDir())
         shellutil.Run(chmod)
-        AddExtensionEvent(name=self.setting.getName(), isSuccess=True,
+        AddExtensionEvent(name=self.getName(), isSuccess=True,
                           op=self.currOperation, message="")
     
     def initExtensionDir(self):
@@ -246,7 +308,7 @@ class ExtensionInstance(object):
         fileutil.CreateDir(configDir, mode=0700)
         
         #Init handler state to uninstall
-        self.setHandlerStatus("uninstalled")
+        self.setHandlerStatus("NotReady")
 
         #Save HandlerEnvironment.json
         self.createHandlerEnvironment()
@@ -256,8 +318,8 @@ class ExtensionInstance(object):
         self.currOperation=WALAEventOperation.Enable
         man = self.loadManifest()
         self.launchCommand(man.getEnableCommand())
-        self.setHandlerStatus("enabled")
-        AddExtensionEvent(name=self.setting.getName(), isSuccess=True,
+        self.setHandlerStatus("Ready")
+        AddExtensionEvent(name=self.getName(), isSuccess=True,
                           op=self.currOperation, message="")
 
     def disable(self):
@@ -265,17 +327,17 @@ class ExtensionInstance(object):
         self.currOperation=WALAEventOperation.Disable
         man = self.loadManifest()
         self.launchCommand(man.getDisableCommand(), timeout=900)
-        self.setHandlerStatus("disabled")
-        AddExtensionEvent(name=self.setting.getName(), isSuccess=True,
+        self.setHandlerStatus("NotReady")
+        AddExtensionEvent(name=self.getName(), isSuccess=True,
                           op=self.currOperation, message="")
 
     def install(self):
         self.logger.info("Install extension.")
         self.currOperation=WALAEventOperation.Install
         man = self.loadManifest()
+        self.setHandlerStatus("Installing")
         self.launchCommand(man.getInstallCommand(), timeout=900)
-        self.setHandlerStatus("installed")
-        AddExtensionEvent(name=self.setting.getName(), isSuccess=True,
+        AddExtensionEvent(name=self.getName(), isSuccess=True,
                           op=self.currOperation, message="")
 
     def uninstall(self):
@@ -283,8 +345,8 @@ class ExtensionInstance(object):
         self.currOperation=WALAEventOperation.UnInstall
         man = self.loadManifest()
         self.launchCommand(man.getUninstallCommand())
-        self.setHandlerStatus("uninstalled")
-        AddExtensionEvent(name=self.setting.getName(), isSuccess=True,
+        self.setHandlerStatus("NotReady")
+        AddExtensionEvent(name=self.getName(), isSuccess=True,
                           op=self.currOperation, message="")
 
     def update(self):
@@ -292,79 +354,41 @@ class ExtensionInstance(object):
         self.currOperation=WALAEventOperation.Update
         man = self.loadManifest()
         self.launchCommand(man.getUpdateCommand(), timeout=900)
-        AddExtensionEvent(name=self.setting.getName(), isSuccess=True,
+        AddExtensionEvent(name=self.getName(), isSuccess=True,
                           op=self.currOperation, message="")
     
-    def createAggStatus(self, aggStatus, extStatus, heartbeat=None):
-        aggregatedStatus = {
-            'handlerVersion' : self.setting.getVersion(),
-            'handlerName' : self.setting.getName(),
-            'status' : aggStatus,
-            'runtimeSettingsStatus' : {
-                'settingsStatus' : extStatus,
-                'sequenceNumber' : self.setting.getSeqNo()
-            }
-        }
-        if heartbeat is not None:
-            aggregatedStatus['code'] = heartbeat['code']
-            aggregatedStatus['Message'] = heartbeat['Message']
-        return aggregatedStatus
+    def createHandlerStatus(self, extStatus, heartbeat=None):
+        status = prot.ExtensionHandlerStatus()
+        status.handlerName = self.getName()
+        status.handlerVersion = self.getVersion()
+        status.status = self.getHandlerStatus()
+        status.extensionStatusList.append(extStatus)
+        return status 
 
-    def getAggStatus(self):
-        self.logger.info("Collect extension status")
-        extStatus = self.getExtensionStatus()
-        self.validateExtensionStatus(extStatus) 
-
-        self.logger.info("Collect handler status")
-        handlerStatus = self.getHandlerStatus()
-        aggStatus = HandlerStatusToAggStatus[handlerStatus]
-
+    def collectHandlerStatus(self):
         man = self.loadManifest() 
         heartbeat=None
         if man.isReportHeartbeat():
             heartbeat = self.getHeartbeat()
-            self.validateHeartbeat(heartbeat)
-            aggStatus = heartbeat["status"]
-
-        self.validateAggStatus(aggStatus)
-        return self.createAggStatus(aggStatus, extStatus, heartbeat)
+        extStatus = self.getExtensionStatus()
+        status= self.createHandlerStatus(extStatus, heartbeat) 
+        if heartbeat is not None:
+            status.status = heartbeat['status']
+        return status
 
     def getExtensionStatus(self):
         extStatusFile = self.getStatusFile()
         try:
             extStatusJson = fileutil.GetFileContents(extStatusFile)
-            extStatus = json.loads(extStatusJson)[0]
-            return extStatus
+            extStatus = json.loads(extStatusJson)
         except IOError as e:
             raise ExtensionError("Failed to get status file: {0}".format(e))
         except ValueError as e:
             raise ExtensionError("Malformed status file: {0}".format(e))
-
-    def validateExtensionStatus(self, extStatus):
-        #Check extension status format
-        if 'status' not in extStatus:
-            raise ExtensionError("Malformed status file: missing 'status'");
-        if 'status' not in extStatus['status']:
-            raise ExtensionError("Malformed status file: missing 'status.status'");
-        if 'operation' not in extStatus['status']:
-            raise ExtensionError("Malformed status file: missing 'status.operation'");
-        if 'code' not in extStatus['status']:
-            raise ExtensionError("Malformed status file: missing 'status.code'");
-        if 'name' not in extStatus['status']:
-            raise ExtensionError("Malformed status file: missing 'status.name'");
-        if 'formattedMessage' not in extStatus['status']:
-            raise ExtensionError("Malformed status file: missing 'status.formattedMessage'");
-        if 'lang' not in extStatus['status']['formattedMessage']:
-            raise ExtensionError("Malformed status file: missing 'status.formattedMessage.lang'");
-        if 'message' not in extStatus['status']['formattedMessage']:
-            raise ExtensionError("Malformed status file: missing 'status.formattedMessage.message'");
-        if extStatus['status']['status'] not in ValidExtensionStatus:
-            raise ExtensionError("Malformed status file: invalid 'status.status'");
-        #if type(extStatus['status']['code']) != int:
-        #    raise ExtensionError("Malformed status file: 'status.code' must be int");
+        return extension_status_to_v2(extStatus, self.settings.sequenceNumber)
    
     def getHandlerStatus(self):
-        handlerStatus = "NotInstalled"
+        handlerStatus = "uninstalled"
         handlerStatusFile = self.getHandlerStateFile()
         try:
             handlerStatus = fileutil.GetFileContents(handlerStatusFile)
@@ -379,11 +403,6 @@ class ExtensionInstance(object):
         except IOError as e:
             raise ExtensionError("Failed to set handler status: {0}".format(e))
 
-    def validateAggStatus(self, aggStatus):
-        if aggStatus not in ValidAggStatus:
-            raise ExtensionError(("Invalid aggretated status: "
-                                  "{0}").format(aggStatus))
-
     def getHeartbeat(self):
         self.logger.info("Collect heart beat")
         heartbeatFile = os.path.join(OSUtil.GetLibDir(), 
@@ -394,7 +413,7 @@ class ExtensionInstance(object):
             return {
                     "status": "Unresponsive",
                     "code": -1,
-                    "Message": "Extension heartbeat is not responsive"
+                    "message": "Extension heartbeat is not responsive"
             }    
         try:
             heartbeatJson = fileutil.GetFileContents(heartbeatFile)
@@ -405,14 +424,6 @@ class ExtensionInstance(object):
             raise ExtensionError("Malformed heartbeat file: {0}".format(e))
         return heartbeat
 
-    def validateHeartbeat(self, heartbeat):
-        if "status" not in heartbeat:
-            raise ExtensionError("Malformed heartbeat file: missing 'status'")
-        if "code" not in heartbeat:
-            raise ExtensionError("Malformed heartbeat file: missing 'code'")
-        if "Message" not in heartbeat:
-            raise ExtensionError("Malformed heartbeat file: missing 'Message'")
-       
     def isResponsive(self, heartbeatFile):
         lastUpdate=int(time.time()-os.stat(heartbeatFile).st_mtime)
         return  lastUpdate > 600    # not updated for more than 10 min
@@ -420,7 +431,7 @@ class ExtensionInstance(object):
     def launchCommand(self, cmd, timeout=300):
         self.logger.info("Launch command:{0}", cmd)
         baseDir = self.getBaseDir()
-        self.updateSetting()
+        self.updateSettings()
         try:
             devnull = open(os.devnull, 'w')
             child = subprocess.Popen(baseDir + "/" + cmd, shell=True,
@@ -453,15 +464,30 @@ class ExtensionInstance(object):
         return HandlerManifest(data[0])
 
 
-    def updateSetting(self):
-        #TODO clear old .settings file
-        fileutil.SetFileContents(self.getSettingsFile(),
-                                 json.dumps(self.setting.getSettings()))
+    def updateSettings(self):
+        if self.settings is None:
+            self.logger.verbose("Extension has no settings")
+            return
+
+        handlerSettings = {
+            'publicSettings': self.settings.publicSettings,
+            'protectedSettings': self.settings.privateSettings,
+            'protectedSettingsCertThumbprint': self.settings.certificateThumbprint
+        }
+        extSettings = {
+            "runtimeSettings":[{
+                "handlerSettings": handlerSettings
+            }]
+        }
+        fileutil.SetFileContents(self.getSettingsFile(), json.dumps(extSettings))
+
+        latest = os.path.join(self.getConfigDir(), "latest")
+        fileutil.SetFileContents(latest, self.settings.sequenceNumber)
 
     def createHandlerEnvironment(self):
         env = [{
-            "name": self.setting.getName(),
-            "version" : self.setting.getVersion(),
+            "name": self.getName(),
+            "version" : self.getVersion(),
             "handlerEnvironment" : {
                 "logFolder" : self.getLogDir(),
                 "configFolder" : self.getConfigDir(),
@@ -473,8 +499,8 @@ class ExtensionInstance(object):
                                  json.dumps(env))
 
     def getTargetVersion(self):
-        version = self.setting.getVersion()
-        updatePolicy = self.setting.getUpgradePolicy()
+        version = self.getVersion()
+        updatePolicy = self.getUpgradePolicy()
         if updatePolicy is None or updatePolicy.lower() != 'auto':
             return version
          
@@ -482,34 +508,46 @@ class ExtensionInstance(object):
         if major is None:
             raise ExtensionError("Wrong version format: {0}".format(version))
 
-        versionUris = self.setting.getVersionUris()
-        versionUris = filter(lambda x : x["version"].startswith(major + "."), 
-                             versionUris)
-        versionUris = sorted(versionUris, 
-                             key=lambda x: x["version"], 
-                             reverse=True)
-        if len(versionUris) <= 0:
+        packages = filter(lambda x : x.version.startswith(major + "."), 
+                          self.packageList.versions)
+        packages = sorted(packages, key=lambda x: x.version, reverse=True)
+        if len(packages) <= 0:
             raise ExtensionError("Can't find version: {0}.*".format(major))
 
-        return versionUris[0]['version']
+        return packages[0].version
 
     def getPackageUris(self):
-        version = self.setting.getVersion()
-        versionUris = self.setting.getVersionUris()
-        if versionUris is None:
+        version = self.getVersion()
+        packages = self.packageList.versions
+        if packages is None:
             raise ExtensionError("Package uris is None.")
         
-        for versionUri in versionUris:
-            if versionUri['version']== version:
-                return versionUri['uris']
+        for package in packages:
+            if package.version == version:
+                return package.uris
 
         raise ExtensionError("Can't get package uris for {0}.".format(version))
     
     def getCurrOperation(self):
         return self.currOperation
+    
+    def getName(self):
+        return self.extension.name
 
+    def getVersion(self):
+        return self.extension.properties.version
+
+    def getState(self):
+        return self.extension.properties.state
+
+    def getSeqNo(self):
+        return self.settings.sequenceNumber
+    
+    def getUpgradePolicy(self):
+        return self.extension.properties.upgradePolicy
+    
     def getFullName(self):
-        return "{0}-{1}".format(self.setting.getName(), self.currVersion)
+        return "{0}-{1}".format(self.getName(), self.currVersion)
 
     def getBaseDir(self):
         return os.path.join(OSUtil.GetLibDir(), self.getFullName()) 
@@ -519,14 +557,14 @@ class ExtensionInstance(object):
 
     def getStatusFile(self):
         return os.path.join(self.getStatusDir(), 
-                            "{0}.status".format(self.setting.getSeqNo()))
+                            "{0}.status".format(self.settings.sequenceNumber))
 
     def getConfigDir(self):
         return os.path.join(self.getBaseDir(), 'config')
 
     def getSettingsFile(self):
         return os.path.join(self.getConfigDir(), 
-                            "{0}.settings".format(self.setting.getSeqNo()))
+                            "{0}.settings".format(self.settings.sequenceNumber))
 
     def getHandlerStateFile(self):
         return os.path.join(self.getConfigDir(), 'HandlerState')
@@ -541,8 +579,7 @@ class ExtensionInstance(object):
         return os.path.join(self.getBaseDir(), 'HandlerEnvironment.json')
 
     def getLogDir(self):
-        return os.path.join(OSUtil.GetExtLogDir(), 
-                            self.setting.getName(), 
+        return os.path.join(OSUtil.GetExtLogDir(), self.getName(), 
                             self.currVersion)
 
 class HandlerEnvironment(object):

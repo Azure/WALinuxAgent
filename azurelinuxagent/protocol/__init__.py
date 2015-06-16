@@ -18,5 +18,6 @@
 #
 
 from azurelinuxagent.protocol.common import *
-from azurelinuxagent.protocol.factory import *
+from azurelinuxagent.protocol.protocolFactory import Factory, \
+                                                     DetectDefaultProtocol
 

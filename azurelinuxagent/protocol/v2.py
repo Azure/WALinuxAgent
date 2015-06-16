@@ -16,107 +16,93 @@
 #
 # Requires Python 2.4+ and Openssl 1.0+
 
+import httplib
+import json
 import azurelinuxagent.utils.restutil as restutil
 from azurelinuxagent.protocol.common import *
 
-class VmInfoV2(object):
-    def __init__(self, data):
-        self.data = data
-
-    def getSubscriptionId(self):
-        return self.data["subscriptionId"]
-
-    def getVmName(self):
-        return self.data["vmName"]
-
-class CertInfoV2(object):
-    def __init__(self, data):
-        self.data = data
-
-    def getName(self):
-        return self.data["name"]
-
-    def getThumbprint(self):
-        return self.data["thumbprint"]
-
-    def getCrtFile(self):
-        return self.data["crt"]
-
-    def getPrvFile(self):
-        return self.data["prv"]
-
-
-class ExtensionInfoV2(ExtensionInfo):
-    def __init__(self, data):
-        self.data = data
-
-    def getName(self):
-        return self.data["name"]
-
-    def getVersion(self):
-        return self.data["properties"]["version"]
-
-    def setVersion(self, version):
-        self.data["properties"]["version"] = version
-
-    def getVersionUris(self):
-        #TODO download version json
-        return self.data["properties"]["versionUris"]
-
-    def getUpgradePolicy(self):
-        return self.data["properties"]["upgrade-policy"]
-
-    def getState(self):
-        return self.data["properties"]["state"]
-
-    def getSeqNo(self):
-        settings = self.data["properties"]["runtimeSettings"][0]
-        return settings["handlerSettings"]["sequenceNumber"]
-
-    def getPublicSettings(self):
-        settings = self.data["properties"]["runtimeSettings"][0]
-        return settings["handlerSettings"]["publicSettings"]
-
-    def getProtectedSettings(self):
-        settings = self.data["properties"]["runtimeSettings"][0]
-        return settings["handlerSettings"]["privateSettings"]
-
-    def getCertificateThumbprint(self):
-        settings = self.data["properties"]["runtimeSettings"][0]
-        return settings["handlerSettings"]["certificateThumbprint"]
+DefaultEndpoint='169.254.169.254'
+DefaultApiVersion='2015-01-01'
+BaseUri = "https://{0}/Microsoft.Computer/{1}?$api-version={{{2}}}{3}" 
 
 class ProtocolV2(Protocol):
 
-    __MetadataServerAddr='169.254.169.254'
-    __ApiVersion='2015-01-01'
-    __IdentityService=("https://{0}/identity?$get-children=true&"
-                       "api-version={{{1}}}").format(__MetadataServerAddr, 
-                                                  __ApiVersion)
+    def __init__(self, apiVersion=DefaultApiVersion, endpoint=DefaultEndpoint):
+        self.apiVersion = apiVersion
+        self.endpoint = endpoint
+        self.identityUri = BaseUri.format(self.endpoint, "identity",
+                                          self.apiVersion, "&expand=*")
+        self.certUri = BaseUri.format(self.endpoint, "certificates",
+                                      self.apiVersion, "&expand=*")
+        self.certUri = BaseUri.format(self.endpoint, "certificates",
+                                      self.apiVersion, "&expand=*")
+        self.extUri = BaseUri.format(self.endpoint, "extensionHandlers",
+                                     self.apiVersion, "&expand=*")
+        self.provisionStatusUri = BaseUri.format(self.endpoint, 
+                                                 "provisionStatus",
+                                                 self.apiVersion, "")
+        self.statusUri = BaseUri.format(self.endpoint, "status",
+                                        self.apiVersion, "")
+        self.eventUri = BaseUri.format(self.endpoint, "status/telemetry",
+                                       self.apiVersion, "")
 
-    def __init__(self):
-        raise NotImplementedError()
+    def _getData(self, dataType, url, headers=None):
+        try:
+            resp = restutil.HttpGet(url, headers)
+        except restutil.HttpError as e:
+            raise ProtocolError(str(e))
 
+        if resp.status != httplib.OK:
+            raise ProtocolError("{0} - GET: {1}".format(resp.status, url))
+        try:
+            data = json.loads(resp.read())
+        except ValueError as e:
+            raise ProtocolError(str(e))
+        obj = dataType()
+        set_properties(obj, data)
+        return obj
+
+    def _putData(self, url, obj, headers=None):
+        data = get_properties(obj)
+        try:
+            resp = restutil.HttpPut(url, json.dumps(data))
+        except restutil.HttpError as e:
+            raise ProtocolError(str(e))
+        if resp.status != httplib.OK:
+            raise ProtocolError("{0} - PUT: {1}".format(resp.status, url))
+
+    def _postData(self, url, obj, headers=None):
+        data = get_properties(obj)
+        try:
+            resp = restutil.HttpPost(url, json.dumps(data))
+        except restutil.HttpError as e:
+            raise ProtocolError(str(e))
+        if resp.status != httplib.CREATED:
+            raise ProtocolError("{0} - POST: {1}".format(resp.status, url))
+
+    def initialize(self):
+        pass
+        
     def getVmInfo(self):
-        raise NotImplementedError()
+        return self._getData(VmInfo, self.identityUri)
 
     def getCerts(self):
-        raise NotImplementedError()
+        certs = self._getData(CertList, self.certUri)
+        #TODO download pfx and convert to pem
+        return certs
 
     def getExtensions(self):
-        raise NotImplementedError()
+        return self._getData(ExtensionList, self.extUri)
 
-    def getOvf(self):
-        raise NotImplementedError()
-
-    def reportProvisionStatus(self, status, subStatus, description, thumbprint):
-        raise NotImplementedError()
-
-    def reportAgentStatus(self, version, status, message):
-        raise NotImplementedError()
-
-    def reportExtensionStatus(self, name, version, statusJson):
-        raise NotImplementedError()
+    def reportProvisionStatus(self, status):
+        validata_param('status', status, ProvisionStatus)
+        self._putData(self.provisionStatusUri, status)
+        
+    def reportStatus(self, status):
+        validata_param('status', status, VMStatus)
+        self._putData(self.statusUri, status)
     
-    def reportEvent(self):
-        raise NotImplementedError()
+    def reportEvent(self, events):
+        validata_param('events', events, TelemetryEventList)
+        self._postData(self.eventUri, events)
 

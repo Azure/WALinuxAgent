@@ -191,9 +191,9 @@ class TestCertificates(unittest.TestCase):
         self.assertTrue(os.path.isfile(prv2))
 
         certs = config.getCerts()
-        self.assertNotEquals(0, len(certs))
-        cert = certs[0]
-        self.assertNotEquals(None, cert.getThumbprint())
+        self.assertNotEquals(0, len(certs.certificates))
+        cert = certs.certificates[0]
+        self.assertNotEquals(None, cert.thumbprint)
    
 if __name__ == '__main__':
     unittest.main()
