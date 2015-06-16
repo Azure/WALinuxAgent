@@ -1,16 +1,16 @@
 #!/bin/bash
 #
-# Init file for WindowsAzureLinuxAgent.
+# Init file for AzureLinuxAgent.
 #
 # chkconfig: 2345 60 80
-# description: WindowsAzureLinuxAgent
+# description: AzureLinuxAgent
 #
 
 # source function library
 . /etc/rc.d/init.d/functions
 
 RETVAL=0
-FriendlyName="WindowsAzureLinuxAgent"
+FriendlyName="AzureLinuxAgent"
 WAZD_BIN=/usr/sbin/waagent
 
 start()

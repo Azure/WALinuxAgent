@@ -1,0 +1,52 @@
+#cloud-config
+
+coreos:
+  units:
+    - name: etcd.service
+      runtime: true
+      drop-ins:
+        - name: 10-oem.conf
+          content: |
+            [Service]
+            Environment=ETCD_PEER_ELECTION_TIMEOUT=1200
+
+    - name: etcd2.service
+      runtime: true
+      drop-ins:
+        - name: 10-oem.conf
+          content: |
+            [Service]
+            Environment=ETCD_ELECTION_TIMEOUT=1200
+
+    - name: waagent.service
+      command: start
+      runtime: true
+      content: |
+        [Unit]
+        Description=Microsoft Azure Agent
+        Wants=network-online.target sshd-keygen.service
+        After=network-online.target sshd-keygen.service
+
+        [Service]
+        Type=simple
+        Restart=always
+        RestartSec=5s
+        ExecStart=/usr/share/oem/python/bin/python /usr/share/oem/bin/waagent -daemon
+
+    - name: oem-cloudinit.service
+      command: restart
+      runtime: yes
+      content: |
+        [Unit]
+        Description=Cloudinit from Azure metadata
+
+        [Service]
+        Type=oneshot
+        ExecStart=/usr/bin/coreos-cloudinit --oem=azure
+
+  oem:
+    id: azure
+    name: Microsoft Azure
+    version-id: 2.1.0
+    home-url: https://azure.microsoft.com/
+    bug-report-url: https://github.com/coreos/bugs/issues

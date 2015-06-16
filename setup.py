@@ -21,59 +21,96 @@ import os
 from azurelinuxagent.agent import GuestAgentName, GuestAgentVersion
 from azurelinuxagent.osinfo import CurrOSInfo
 from azurelinuxagent.utils.osutil import CurrOSUtil
-from distutils.core import setup
+
+import setuptools
 from setuptools import find_packages
+from setuptools.command.install import install
 
 root_dir = os.path.dirname(os.path.abspath(__file__))
 os.chdir(root_dir)
 
-def get_data_files():
-    name = CurrOSInfo[0]
-    version = CurrOSInfo[1]
-    codeName = CurrOSInfo[2]
+def get_data_files(name, version, init_system):
+    """
+    Determine data_files according to distro name, version and init system type
+    """
     data_files=[]
-    if name == 'ubuntu':
-        data_files.extend([
-            ('/usr/sbin', ['bin/waagent']),
-            ('/etc/logrotate.d', ['config/waagent.logrotate']),
-            ('/etc', ['config/ubuntu/waagent.conf']),
-            ('/etc/init', ['config/ubuntu/init/waagent.conf']),
-        ])
-    elif name == 'redhat' or name == 'centos':
-        data_files.extend([
-            ('/usr/sbin', ['bin/waagent']),
-            ('/etc/logrotate.d', ['config/waagent.logrotate']),
-            ('/etc', ['config/redhat/waagent.conf']),
-            ('/etc/init.d', ['config/redhat/init.d/waagent.conf']),
-        ])
-    elif name == 'coreos':
-        data_files.extend([
-            ('/usr/share/oem/bin', ['bin/waagent']),
-            ('/usr/share/oem', ['config/coreos/waagent.conf']),
-        ])
+
+    #Script file
+    script_dest = '/usr/sbin'
+    script_src = ['bin/waagent', 'bin/alagent']
+    if name == 'coreos':
+        script_dest = '/usr/share/oem/bin'
+    data_files.append((script_dest, script_src))
+
+    #Config file
+    conf_dest = '/etc'
+    conf_src = ['config/waagent.conf']
+    if name == 'suse':
+        conf_src = ['config/suse/waagent.conf']
+    data_files.append((conf_dest, conf_src))
+    
+    #logrotate config file
+    logrotate_dest = '/etc/logrotate.d'
+    logrotate_src = ['config/waagent.logrotate']
+    data_files.append((logrotate_dest, logrotate_src))
+
+    #init script file
+    init_dest = '/etc/systemd'
+    init_src = ['init/waagent.service']
+
+    if name == 'redhat' or name == 'centos':
+        init_dest = '/etc/rc.d/init.d'
+        init_src = ['init/waagent.sysV']
     elif name == 'suse':
-        data_files.extend([
-            ('/usr/sbin', ['bin/waagent']),
-            ('/etc/logrotate.d', ['config/waagent.logrotate']),
-            ('/etc', ['config/suse/waagent.conf']),
-            ('/etc/init.d', ['config/suse/init.d/waagent.conf']),
-        ])
-    else:
-        print "NOT support: {0} {1} {2}".format(name, version, codeName)
-        sys.exit(-1)
+        init_dest = '/etc/init.d'
+        init_src = ['init/waagent.sysV']
+    elif name == 'coreos':
+        init_dest = '/usr/share/oem'
+        init_src = ['init/coreos/cloud-config.yml']
+    elif init_system == 'sysV':
+        init_dest = '/etc/init.d'
+        init_src = ['init/waagent.sysV']
+
+    data_files.append((init_dest, init_src))
+
     return data_files
+
+class InstallData(install):
+    user_options = install.user_options + [
+        # This will magically show up in member variable 'init_system'
+        ('init-system=', None, 'init system to configure [default: sysV]'),
+        ('lnx-distro=', None, 'target Linux distribution'),
+        ('lnx-distro-version=', None, 'target Linux distribution version'),
+    ]
+
+    def initialize_options(self):
+        install.initialize_options(self)
+        self.init_system = 'sysV'
+        self.lnx_distro = CurrOSInfo[0]
+        self.lnx_distro_version = CurrOSInfo[1]
+
+    def finalize_options(self):
+        install.finalize_options(self)
+        data_files = get_data_files(self.lnx_distro, self.lnx_distro_version,
+                                    self.init_system)
+        print data_files
+        self.distribution.data_files = data_files
+        self.distribution.reinitialize_command('install_data', True)
+
 
 def readme():
     with open('README') as f:
         return f.read()
 
-setup(name=GuestAgentName,
-      version=GuestAgentVersion,
-      description=readme(),
-      author= 'Yue Zhang, Stephen Zarkos, Eric Gable',
-      author_email = 'walinuxagent@microsoft.com',
-      platforms = 'Linux',
-      url='https://github.com/Azure/WALinuxAgent',
-      license = 'Apache License Version 2.0',
-      packages=find_packages(exclude=["*.tests", "*.tests.*", "tests.*", "tests"]), 
-      data_files=get_data_files())
+setuptools.setup(name=GuestAgentName,
+                 version=GuestAgentVersion,
+                 description=readme(),
+                 author= 'Yue Zhang, Stephen Zarkos, Eric Gable',
+                 author_email = 'walinuxagent@microsoft.com',
+                 platforms = 'Linux',
+                 url='https://github.com/Azure/WALinuxAgent',
+                 license = 'Apache License Version 2.0',
+                 packages=find_packages(exclude=["tests"]),
+                 cmdclass = {
+                     'install': InstallData,
+                 })
