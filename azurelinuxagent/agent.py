@@ -26,77 +26,22 @@ import traceback
 import threading
 import subprocess
 import azurelinuxagent.logger as logger
-import azurelinuxagent.conf as conf
-import azurelinuxagent.protocol as prot
-import azurelinuxagent.event as event
-from azurelinuxagent.osinfo import CurrOSInfo
-from azurelinuxagent.handler import CurrOSHandlerFactory
-from azurelinuxagent.utils.osutil import CurrOSUtil
+from azurelinuxagent.metadata import GuestAgentLongVersion, \
+                                     DistroName, DistroVersion, DistroFullName
+from azurelinuxagent.utils.osutil import OSUtil
+from azurelinuxagent.handler import Handlers
 import azurelinuxagent.utils.shellutil as shellutil
 import azurelinuxagent.utils.fileutil as fileutil
 
-GuestAgentName = "AzureLinuxAgent"
-GuestAgentLongName = "Azure Linux Agent"
-GuestAgentVersion='2.1.0-pre'
-GuestAgentLongVersion = "{0}-{1}".format(GuestAgentName, GuestAgentVersion)
 
 def Init(verbose):
-    #Init config
-    configPath = CurrOSUtil.GetConfigurationPath()
-    conf.LoadConfiguration(configPath)
+    Handlers.initHandler.init(verbose)
     
-    #Init log
-    verbose = verbose or conf.GetSwitch("Logs.Verbose", False)
-    logger.LoggerInit('/var/log/waagent.log', '/dev/console', verbose=verbose)
-    
-    #Create lib dir
-    fileutil.CreateDir(CurrOSUtil.GetLibDir(), mode=0700)
-    os.chdir(CurrOSUtil.GetLibDir())
-
 def Run():
-    event.EnableUnhandledErrorDump("WALA")
-
-    logger.Info("{0} Version:{1}", GuestAgentLongName, GuestAgentVersion) 
-    logger.Info("OS: {0} {1}", CurrOSInfo[0], CurrOSInfo[1])
-    fileutil.SetFileContents(CurrOSUtil.GetAgentPidPath(), 
-                             str(os.getpid()))
-
-    scvmmHandler = CurrOSHandlerFactory.getScvmmHandler()
-    if scvmmHandler.detectScvmmEnv():
-        return
+    Handlers.runHandler.run()
     
-    dhcpHandler = CurrOSHandlerFactory.getDhcpHandler()
-    dhcpHandler.probe()
-
-    prot.DetectDefaultProtocol()
-    
-    provisionHandler = CurrOSHandlerFactory.getProvisionHandler()
-    provisionHandler.process()
-
-    if conf.GetSwitch("ResourceDisk.Format", False):
-        rdHandler = CurrOSHandlerFactory.getResourceDiskHandler()
-        rdHandler.startActivateResourceDisk()
-    
-    envHandler = CurrOSHandlerFactory.getEnvHandler()
-    envHandler.startMonitor()
-
-    protocol = prot.GetDefaultProtocol()
-    while True:
-        #Handle extensions
-        extHandler = CurrOSHandlerFactory.getExtensionHandler()
-        extHandler.process()
-        
-        #Report status
-        agentStatus = "Ready"
-        agentStatusDetail = "Guest Agent is running"
-        protocol.reportAgentStatus(GuestAgentVersion, 
-                                   agentStatus,
-                                   agentStatusDetail)
-        time.sleep(25)
-
 def Deprovision(force=False, deluser=False):
-    deprovisionHandler = CurrOSHandlerFactory.getDeprovisionHandler()
-    deprovisionHandler.deprovision(force=force, deluser=deluser)
+    Handlers.deprovisionHandler.deprovision(force=force, deluser=deluser)
         
 def ParseArgs(sysArgv):
     cmd = "help"
@@ -109,8 +54,8 @@ def ParseArgs(sysArgv):
             cmd = "deprovision"
         elif re.match("^([-/]*)daemon", a):
             cmd = "daemon"
-        elif re.match("^([-/]*)run", a):
-            cmd = "run"
+        elif re.match("^([-/]*)start", a):
+            cmd = "start"
         elif re.match("^([-/]*)version", a):
             cmd = "version"
         elif re.match("^([-/]*)serialconsole", a):
@@ -127,9 +72,8 @@ def ParseArgs(sysArgv):
     return cmd, force, verbose
 
 def Version():
-    print("{0} running on {1} {2}".format(GuestAgentLongVersion, 
-                                          CurrOSInfo[0], 
-                                          CurrOSInfo[1]))
+    print("{0} running on {1} {2}".format(GuestAgentLongVersion, DistroName,
+                                          DistroVersion))
 def Usage():
     print("")
     print(("usage: {0} [-verbose] [-force] "
@@ -137,9 +81,9 @@ def Usage():
            "").format(sys.argv[0]))
     print("")
 
-def Daemon():
+def Start():
     devnull = open(os.devnull, 'w')
-    subprocess.Popen([sys.argv[0], "run"], stdout=devnull, stderr=devnull)
+    subprocess.Popen([sys.argv[0], "-daemon"], stdout=devnull, stderr=devnull)
 
 def Main():
     command, force, verbose = ParseArgs(sys.argv[1:])
@@ -148,8 +92,8 @@ def Main():
         Version()
     elif command == "help":
         Usage()
-    elif command == "daemon":
-        Daemon()
+    elif command == "start":
+        Start()
     else: 
         Init(verbose)
         if command == "serialconsole":
@@ -159,5 +103,5 @@ def Main():
             Deprovision(force, deluser=True)
         elif command == "deprovision":
             Deprovision(force, deluser=False)
-        elif command == "run":
+        elif command == "daemon":
             Run()

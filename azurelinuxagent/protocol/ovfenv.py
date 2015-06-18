@@ -18,10 +18,11 @@
 #
 
 from azurelinuxagent.protocol.common import *
-from azurelinuxagent.utils.osutil import CurrOSUtil, OSUtilError
+
+from azurelinuxagent.utils.osutil import OSUtil, OSUtilError
 
 def GetOvfEnv():
-    ovfFilePath = os.path.join(CurrOSUtil.GetLibDir(), OvfFileName)
+    ovfFilePath = os.path.join(OSUtil.GetLibDir(), OvfFileName)
     if os.path.isfile(ovfFilePath):
         xmlText = fileutil.GetFileContents(ovfFilePath)        
         return OvfEnv(xmlText)
@@ -34,15 +35,15 @@ def CopyOvfEnv():
     Remove password before save it to the disk
     """
     try:
-        CurrOSUtil.MountDvd()
-        ovfFile = CurrOSUtil.GetOvfEnvPathOnDvd()
+        OSUtil.MountDvd()
+        ovfFile = OSUtil.GetOvfEnvPathOnDvd()
 
         ovfxml = fileutil.GetFileContents(ovfFile, removeBom=True)
         ovfenv = OvfEnv(ovfxml)
         ovfxml = re.sub("<UserPassword>.*?<", "<UserPassword>*<", ovfxml)
-        ovfFilePath = os.path.join(CurrOSUtil.GetLibDir(), OvfFileName)
+        ovfFilePath = os.path.join(OSUtil.GetLibDir(), OvfFileName)
         fileutil.SetFileContents(ovfFilePath, ovfxml)
-        CurrOSUtil.UmountDvd()
+        OSUtil.UmountDvd()
     except IOError as e:
         raise ProtocolError(str(e))
     except OSUtilError as e:
@@ -114,7 +115,7 @@ class OvfEnv(object):
         self.reinitialize()
         dom = xml.dom.minidom.parseString(xmlText)
         if len(dom.getElementsByTagNameNS(self.OvfNs, "Environment")) != 1:
-            Error("Unable to parse OVF XML.")
+            logger.Error("Unable to parse OVF XML.")
         section = None
         newer = False
         for p in dom.getElementsByTagNameNS(self.WaNs, "ProvisioningSection"):

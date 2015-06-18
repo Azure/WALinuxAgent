@@ -21,7 +21,7 @@
 import env
 from tests.tools import *
 import unittest
-import azurelinuxagent.utils.osutil.redhat as redhat
+from azurelinuxagent.distro.redhat.osutil import RedhatOSUtil
 
 TestPublicKey="""\
 -----BEGIN PUBLIC KEY-----
@@ -41,8 +41,8 @@ ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAQEA2wo22vf1N8NWE+5lLfitT7uzkfwqdw0IAoHZ0l2BtP0a
 
 class TestRedhat(unittest.TestCase):
     def test_RsaPublicKeyToSshRsa(self):
-        osutil = redhat.RedhatOSUtil()
-        sshRsaPublicKey = osutil.RsaPublicKeyToSshRsa(TestPublicKey)
+        OSUtil = RedhatOSUtil()
+        sshRsaPublicKey = OSUtil.RsaPublicKeyToSshRsa(TestPublicKey)
         self.assertEquals(Expected, sshRsaPublicKey)
 
 if __name__ == '__main__':

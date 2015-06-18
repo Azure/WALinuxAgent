@@ -21,7 +21,7 @@
 
 import os
 import sys
-from azurelinuxagent.utils.osutil import CurrOSUtil
+from azurelinuxagent.utils.osutil import OSUtil
 
 parent = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(parent)
@@ -60,6 +60,6 @@ class MockFunc(object):
 def Dummy():
     pass
 
-#Mock CurrOS so that the test of other part will be os unrelated
-CurrOSUtil.GetLibDir = MockFunc(retval='/tmp')
-CurrOSUtil.GetExtLogDir = MockFunc(retval='/tmp/log')
+#Mock osutil so that the test of other part will be os unrelated
+OSUtil.GetLibDir = MockFunc(retval='/tmp')
+OSUtil.GetExtLogDir = MockFunc(retval='/tmp/log')

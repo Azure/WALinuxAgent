@@ -26,8 +26,8 @@ import threading
 import platform
 import azurelinuxagent.logger as logger
 import azurelinuxagent.protocol as prot
-from azurelinuxagent.osinfo import CurrOSInfo
-from azurelinuxagent.utils.osutil import CurrOSUtil
+from azurelinuxagent.metadata import DistroName, DistroVersion, DistroCodeName
+from azurelinuxagent.utils.osutil import OSUtil
 
 class EventError(Exception):
     pass
@@ -94,7 +94,7 @@ class WALAEvent(object):
                                                 strEvtDta)
 
     def save(self):
-        eventfolder = os.path.join(CurrOSUtil.GetLibDir(), 'events')
+        eventfolder = os.path.join(OSUtil.GetLibDir(), 'events')
         if not os.path.exists(eventfolder):
             os.mkdir(eventfolder)
             os.chmod(eventfolder,0700)
@@ -114,7 +114,7 @@ class WALAEventOperation:
     HeartBeat="HeartBeat"
     Provision = "Provision"
     Install = "Install"
-    UnIsntall = "UnInstall"
+    UnInstall = "UnInstall"
     Disable = "Disable"
     Enable = "Enable"
     Download = "Download"
@@ -125,7 +125,7 @@ class WALAEventOperation:
 
 class ExtensionEvent(WALAEvent):
     def __init__(self):
-        super(WALAEvent, self).__init__()
+        super(ExtensionEvent, self).__init__()
         self.eventId=1
         self.providerId="69B669B9-4AF8-4C50-BDC4-6006FA76E975"
         self.Name=""
@@ -142,19 +142,19 @@ class WALAEventMonitor(object):
         self.sysInfo={}
         self.eventCount = 0
         self.gaVersion = gaVersion
-        self.eventDir = os.path.join(CurrOSUtil.GetLibDir(), "events")
+        self.eventDir = os.path.join(OSUtil.GetLibDir(), "events")
         self.initSystemInfo()
 
     def initSystemInfo(self):
         osversion = "{0}:{1}-{2}-{3}:{4}".format(platform.system(), 
-                                                 CurrOSInfo[0],
-                                                 CurrOSInfo[1], 
-                                                 CurrOSInfo[2],
+                                                 DistroName,
+                                                 DistroVersion,
+                                                 DistroCodeName,
                                                  platform.release())
         self.sysInfo["OSVersion"] = osversion
         self.sysInfo["GAVersion"] = self.gaVersion
-        self.sysInfo["RAM"] = CurrOSUtil.GetTotalMemory()
-        self.sysInfo["Processors"]= CurrOSUtil.GetProcessorCores()
+        self.sysInfo["RAM"] = OSUtil.GetTotalMemory()
+        self.sysInfo["Processors"]= OSUtil.GetProcessorCores()
         protocol = prot.GetDefaultProtocol()
         metadata = protocol.getInstanceMetadata()
         self.sysInfo["TenantName"] = metadata.getDeploymentName()

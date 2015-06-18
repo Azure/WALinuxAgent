@@ -25,7 +25,8 @@ import httplib
 import xml.etree.ElementTree as ET
 import azurelinuxagent.logger as logger
 import azurelinuxagent.utils.restutil as restutil
-from azurelinuxagent.utils.osutil import CurrOSUtil
+
+from azurelinuxagent.utils.osutil import OSUtil
 import azurelinuxagent.utils.fileutil as fileutil
 import azurelinuxagent.utils.shellutil as shellutil
 from azurelinuxagent.utils.textutil import *
@@ -692,10 +693,7 @@ class GoalState(object):
 
     def getLoadBalancerProbePort(self):
         return self.loadBalancerProbePort
-    
-    def isUpdated(self):
-        return self.updated
-
+   
     def parse(self, xmlText):
         """
         Request configuration data from endpoint server.
@@ -777,8 +775,8 @@ class Certificates(object):
         if xmlText is None:
             raise ValueError("Certificates.xml is None")
         logger.Verbose("Load Certificates.xml")
-        self.libDir = CurrOSUtil.GetLibDir()
-        self.opensslCmd = CurrOSUtil.GetOpensslCmd()
+        self.libDir = OSUtil.GetLibDir()
+        self.opensslCmd = OSUtil.GetOpensslCmd()
         self.certs = []
         self.parse(xmlText)
 
@@ -824,15 +822,15 @@ class Certificates(object):
                     beginCrt = True
                 elif re.match(r'[-]+END.*KEY[-]+', line):
                     tmpFile = self.writeToTempFile(index, 'prv', buf)
-                    pub = CurrOSUtil.GetPubKeyFromPrv(tmpFile)
+                    pub = OSUtil.GetPubKeyFromPrv(tmpFile)
                     prvs[pub] = tmpFile
                     buf = []
                     index += 1
                     beginPrv = False
                 elif re.match(r'[-]+END.*CERTIFICATE[-]+', line):
                     tmpFile = self.writeToTempFile(index, 'crt', buf)
-                    pub = CurrOSUtil.GetPubKeyFromCrt(tmpFile)
-                    thumbprint = CurrOSUtil.GetThumbprintFromCrt(tmpFile)
+                    pub = OSUtil.GetPubKeyFromCrt(tmpFile)
+                    thumbprint = OSUtil.GetThumbprintFromCrt(tmpFile)
                     thumbprints[pub] = thumbprint
                     #Rename crt with thumbprint as the file name 
                     crt = "{0}.crt".format(thumbprint)

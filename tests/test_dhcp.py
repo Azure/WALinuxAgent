@@ -25,7 +25,7 @@ import unittest
 import os
 import json
 import azurelinuxagent.utils.fileutil as fileutil
-import azurelinuxagent.handler.default.dhcpHandler as dhcpHandler
+import azurelinuxagent.distro.default.dhcp as dhcpHandler
 
 SampleDhcpResponse = None
 with open(os.path.join(env.test_root, "dhcp")) as F:
@@ -50,7 +50,7 @@ class TestdhcpHandler(unittest.TestCase):
 
     @Mockup(dhcpHandler, "SocketSend", MockSocketSend)
     @Mockup(dhcpHandler, "GenTransactionId", MockGenTransactionId)
-    @Mockup(dhcpHandler.CurrOSUtil, "GetMacAddress", MockGetMacAddress)
+    @Mockup(dhcpHandler.OSUtil, "GetMacAddress", MockGetMacAddress)
     def test_handle_dhcp(self):
         dh = dhcpHandler.DhcpHandler()
         dh.probe()

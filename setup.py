@@ -18,9 +18,8 @@
 #
 
 import os
-from azurelinuxagent.agent import GuestAgentName, GuestAgentVersion
-from azurelinuxagent.osinfo import CurrOSInfo
-from azurelinuxagent.utils.osutil import CurrOSUtil
+from azurelinuxagent.metadata import GuestAgentName, GuestAgentVersion, \
+                                     DistroName, DistroVersion, DistroFullName
 
 import setuptools
 from setuptools import find_packages
@@ -37,7 +36,7 @@ def get_data_files(name, version, init_system):
 
     #Script file
     script_dest = '/usr/sbin'
-    script_src = ['bin/waagent', 'bin/alagent']
+    script_src = ['bin/waagent', 'bin/azurela']
     if name == 'coreos':
         script_dest = '/usr/share/oem/bin'
     data_files.append((script_dest, script_src))
@@ -47,6 +46,8 @@ def get_data_files(name, version, init_system):
     conf_src = ['config/waagent.conf']
     if name == 'suse':
         conf_src = ['config/suse/waagent.conf']
+    if name == 'ubuntu':
+        conf_src = ['config/ubuntu/waagent.conf']
     data_files.append((conf_dest, conf_src))
     
     #logrotate config file
@@ -55,21 +56,28 @@ def get_data_files(name, version, init_system):
     data_files.append((logrotate_dest, logrotate_src))
 
     #init script file
-    init_dest = '/etc/systemd'
-    init_src = ['init/waagent.service']
+    init_dest = '/etc/init.d'
+    init_src = ['init/waagent.sysV']
 
     if name == 'redhat' or name == 'centos':
-        init_dest = '/etc/rc.d/init.d'
-        init_src = ['init/waagent.sysV']
+        if version < "7.0":
+            init_dest = '/etc/rc.d/init.d'
+            init_src = ['init/waagent.sysV']
+        else:
+            init_dest = '/etc/init.d'
+            init_src = ['init/waagent.service']
     elif name == 'suse':
         init_dest = '/etc/init.d'
         init_src = ['init/waagent.sysV']
     elif name == 'coreos':
         init_dest = '/usr/share/oem'
         init_src = ['init/coreos/cloud-config.yml']
-    elif init_system == 'sysV':
-        init_dest = '/etc/init.d'
-        init_src = ['init/waagent.sysV']
+    elif name == 'ubuntu':
+        init_dest = '/etc/init'
+        init_src = ['init/ubuntu/walinuxagent.conf']
+    elif init_system == 'systemd':
+        init_dest = '/etc/systemd'
+        init_src = ['init/waagent.service']
 
     data_files.append((init_dest, init_src))
 
@@ -86,8 +94,8 @@ class InstallData(install):
     def initialize_options(self):
         install.initialize_options(self)
         self.init_system = 'sysV'
-        self.lnx_distro = CurrOSInfo[0]
-        self.lnx_distro_version = CurrOSInfo[1]
+        self.lnx_distro = DistroName
+        self.lnx_distro_version = DistroVersion
 
     def finalize_options(self):
         install.finalize_options(self)

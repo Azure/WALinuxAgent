@@ -48,7 +48,7 @@ class TestHttpOperations(unittest.TestCase):
         host, port, secure, relativeUrl = restutil._ParseUrl("http://abc.def:80/")
         self.assertEquals("abc.def", host)
 
-    def test_http_get(self):
+    def _test_http_get(self):
         resp = restutil.HttpGet("http://httpbin.org/get").read()
         self.assertNotEquals(None, resp)
        
@@ -57,7 +57,7 @@ class TestHttpOperations(unittest.TestCase):
         self.assertNotEquals(None, resp)
         self.assertTrue(msg in resp)
 
-    def test_https_get(self):
+    def _test_https_get(self):
         resp = restutil.HttpGet("https://httpbin.org/get").read()
         self.assertNotEquals(None, resp)
     

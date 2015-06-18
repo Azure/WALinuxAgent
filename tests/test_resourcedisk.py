@@ -21,9 +21,9 @@
 import env
 from tests.tools import *
 import unittest
-import azurelinuxagent.handler.default.resourceDiskHandler as rdh
+import azurelinuxagent.distro.default.resourceDisk as rdh
 import azurelinuxagent.logger as logger
-from azurelinuxagent.utils.osutil import CurrOSUtil
+from azurelinuxagent.utils.osutil import OSUtil
 
 #logger.LoggerInit("/dev/null", "/dev/stdout")
 
@@ -40,14 +40,14 @@ Number  Start   End     Size    Type     File system  Flags
 
 class TestResourceDisk(unittest.TestCase):
 
-    @Mockup(rdh.CurrOSUtil, 'DeviceForIdePort', MockFunc(retval='foo'))
+    @Mockup(rdh.OSUtil, 'DeviceForIdePort', MockFunc(retval='foo'))
     @Mockup(rdh.shellutil, 'RunGetOutput', MockFunc(retval=(0, MockGPTOutput)))
     @Mockup(rdh.shellutil, 'Run', MockFunc(retval=0))
     def test_mountGPT(self):
         handler = rdh.ResourceDiskHandler()
         handler.mountResourceDisk('/tmp/foo', 'ext4')
 
-    @Mockup(rdh.CurrOSUtil, 'DeviceForIdePort', MockFunc(retval='foo'))
+    @Mockup(rdh.OSUtil, 'DeviceForIdePort', MockFunc(retval='foo'))
     @Mockup(rdh.shellutil, 'RunGetOutput', MockFunc(retval=(0, "")))
     @Mockup(rdh.shellutil, 'Run', MockFunc(retval=0))
     def test_mountMBR(self):

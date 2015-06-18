@@ -25,10 +25,10 @@ import unittest
 import os
 import json
 import azurelinuxagent.logger as logger
+from azurelinuxagent.utils.osutil import OSUtil
 import azurelinuxagent.utils.fileutil as fileutil
 import azurelinuxagent.protocol.v2 as prot
-import azurelinuxagent.handler.default.extensionHandler as ext
-from azurelinuxagent.utils.osutil import CurrOSUtil
+import azurelinuxagent.distro.default.extension as ext
 
 settingJson = {
     "name":"TestExt",
@@ -80,7 +80,7 @@ def MockDownload(self):
 class TestExtensions(unittest.TestCase):
 
     def test_load_ext(self):
-        libDir = CurrOSUtil.GetLibDir()
+        libDir = OSUtil.GetLibDir()
         testExt1 = os.path.join(libDir, 'TestExt-1.0')
         testExt2 = os.path.join(libDir, 'TestExt-2.0')
         for path in [testExt1, testExt2]:
@@ -127,7 +127,7 @@ class TestExtensions(unittest.TestCase):
         testExt = ext.ExtensionInstance(setting, setting.getVersion(), True)
         testExt.handleUninstall()
         self.assertEqual(man.getUninstallCommand(), MockLaunchCommand.args[0])
-        self.assertEqual("Uninstall", testExt.getCurrOperation())
+        self.assertEqual("UnInstall", testExt.getCurrOperation())
         self.assertEqual("uninstalled", MockSetHandlerStatus.args[0])
 
     @Mockup(ext.ExtensionInstance, 'loadManifest', MockLoadManifest)

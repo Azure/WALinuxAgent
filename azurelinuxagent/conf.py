@@ -20,7 +20,6 @@
 import os
 import azurelinuxagent.utils.fileutil as fileutil
 from azurelinuxagent.exception import *
-from azurelinuxagent.utils.osutil import CurrOSUtil
 
 class ConfigurationProvider(object):
     """

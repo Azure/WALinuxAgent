@@ -21,7 +21,7 @@
 import env
 from tests.tools import *
 import unittest
-import azurelinuxagent.handler.default.deprovisionHandler as deprovisionHandler
+import azurelinuxagent.distro.default.deprovision as deprovisionHandler
 
 def MockAction(param):
     #print param

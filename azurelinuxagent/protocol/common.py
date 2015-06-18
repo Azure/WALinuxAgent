@@ -21,7 +21,6 @@ import copy
 import re
 import xml.dom.minidom
 import azurelinuxagent.logger as logger
-from azurelinuxagent.utils.osutil import CurrOSUtil
 from azurelinuxagent.utils.textutil import GetNodeTextData
 import azurelinuxagent.utils.fileutil as fileutil
 

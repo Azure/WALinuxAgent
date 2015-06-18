@@ -22,8 +22,8 @@ import env
 from tests.tools import *
 import unittest
 import time
-from azurelinuxagent.utils.osutil import CurrOSUtil
-from azurelinuxagent.handler.default.envHandler import EnvMonitor
+from azurelinuxagent.utils.osutil import OSUtil
+from azurelinuxagent.distro.default.env import EnvMonitor
 
 class MockDhcpHandler(object):
     def configRoutes(self):
@@ -35,12 +35,12 @@ def MockDhcpProcessIdChange():
 
 class TestEnvMonitor(unittest.TestCase):
 
-    @Mockup(CurrOSUtil, 'GetDhcpProcessId', MockDhcpProcessIdNotChange)
+    @Mockup(OSUtil, 'GetDhcpProcessId', MockDhcpProcessIdNotChange)
     def test_dhcpProcessIdNotChange(self):
         monitor = EnvMonitor(MockDhcpHandler())
         monitor.handleDhcpClientRestart()
 
-    @Mockup(CurrOSUtil, 'GetDhcpProcessId', MockDhcpProcessIdChange)
+    @Mockup(OSUtil, 'GetDhcpProcessId', MockDhcpProcessIdChange)
     def test_dhcpProcessIdChange(self):
         monitor = EnvMonitor(MockDhcpHandler())
         monitor.handleDhcpClientRestart()
