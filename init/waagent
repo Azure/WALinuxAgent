@@ -16,7 +16,7 @@ WAZD_BIN=/usr/sbin/waagent
 start()
 {
     echo -n $"Starting $FriendlyName: "
-    $WAZD_BIN -daemon &
+    $WAZD_BIN start &
 }
 
 stop()

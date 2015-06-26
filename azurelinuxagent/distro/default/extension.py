@@ -184,12 +184,9 @@ class ExtensionInstance(object):
     def initLog(self):
         #Init logger appender for extension
         fileutil.CreateDir(self.getLogDir(), mode=0700)
-        self.logger.addLoggerAppender(logger.AppenderConfig({
-            'type' : 'FILE',
-            'level' : 'INFO',
-            'file_path' : os.path.join(self.getLogDir(), 
-                                       "CommandExecution.log")
-        }))
+        logFile = os.path.join(self.getLogDir(), "CommandExecution.log")
+        self.logger.addLoggerAppender(logger.AppenderType.FILE,
+                                      logger.LogLevel.INFO, logFile)
  
     def handle(self):
         self.logger.info("Process extension settings:")

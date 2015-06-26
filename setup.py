@@ -57,18 +57,15 @@ def get_data_files(name, version, init_system):
 
     #init script file
     init_dest = '/etc/init.d'
-    init_src = ['init/waagent.sysV']
+    init_src = ['init/waagent']
 
     if name == 'redhat' or name == 'centos':
         if version < "7.0":
             init_dest = '/etc/rc.d/init.d'
-            init_src = ['init/waagent.sysV']
+            init_src = ['init/waagent']
         else:
             init_dest = '/etc/init.d'
             init_src = ['init/waagent.service']
-    elif name == 'suse':
-        init_dest = '/etc/init.d'
-        init_src = ['init/waagent.sysV']
     elif name == 'coreos':
         init_dest = '/usr/share/oem'
         init_src = ['init/coreos/cloud-config.yml']

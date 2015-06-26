@@ -50,13 +50,10 @@ class TestLogger(unittest.TestCase):
         _logger.info("this is a gbk {0}", 0xff )
 
     def test_file_appender(self):
-        appender_config = logger.AppenderConfig({
-            'type':'FILE', 
-            'level':'INFO', 
-            'file_path':'/tmp/testlog'
-        })
         _logger = logger.Logger()
-        _logger.addLoggerAppender(appender_config)
+        _logger.addLoggerAppender(logger.AppenderType.FILE,
+                                  logger.LogLevel.INFO,
+                                  '/tmp/testlog')
 
         msg = str(uuid.uuid4())
         _logger.info("Test logger: {0}", msg)
@@ -70,23 +67,18 @@ class TestLogger(unittest.TestCase):
         _logger.info("this is a utf-8 {0}", u'\u6211'.encode('utf-8'))
         _logger.info("this is a gbk {0}", 0xff)
 
-    def test_logger_init(self):
-        _logger = logger.Logger()
-        logger.LoggerInit('/tmp/testlog1', '/tmp/testconsole', logger = _logger)
-        self.assertEquals(2, len(_logger.appenders))
-
-        msg = str(uuid.uuid4())
-        _logger.info("Test logger: {0}", msg)
-        self.assertTrue(tools.simple_file_grep('/tmp/testlog1', msg))
-
     def test_log_to_non_exists_dev(self):
         _logger = logger.Logger()
-        logger.LoggerInit('/tmp/testlog2', '/dev/nonexists', logger = _logger)
+        _logger.addLoggerAppender(logger.AppenderType.CONSOLE,
+                                  logger.LogLevel.INFO,
+                                  '/dev/nonexists')
         _logger.info("something")
 
     def test_log_to_non_exists_file(self):
         _logger = logger.Logger()
-        logger.LoggerInit('/tmp/nonexists', '/tmp/testconsole', logger = _logger)
+        _logger.addLoggerAppender(logger.AppenderType.FILE,
+                                  logger.LogLevel.INFO,
+                                  '/tmp/nonexists')
         _logger.info("something")
 
 

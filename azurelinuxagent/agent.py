@@ -24,7 +24,6 @@ import shutil
 import time
 import traceback
 import threading
-import subprocess
 import azurelinuxagent.logger as logger
 from azurelinuxagent.metadata import GuestAgentLongVersion, \
                                      DistroName, DistroVersion, DistroFullName
@@ -83,17 +82,16 @@ def Usage():
 
 def Start():
     devnull = open(os.devnull, 'w')
-    subprocess.Popen([sys.argv[0], "-daemon"], stdout=devnull, stderr=devnull)
+    sys.stdout = devnull
+    sys.stderr = devnull
+    Run()
 
 def Main():
     command, force, verbose = ParseArgs(sys.argv[1:])
-    logger.LoggerInit("/dev/stdout", None, verbose)
     if command == "version":
         Version()
     elif command == "help":
         Usage()
-    elif command == "start":
-        Start()
     else: 
         Init(verbose)
         if command == "serialconsole":
@@ -103,5 +101,7 @@ def Main():
             Deprovision(force, deluser=True)
         elif command == "deprovision":
             Deprovision(force, deluser=False)
+        elif command == "start":
+            Start()
         elif command == "daemon":
             Run()

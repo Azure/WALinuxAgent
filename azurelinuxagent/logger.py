@@ -18,12 +18,10 @@
 # http://msdn.microsoft.com/en-us/library/cc227282%28PROT.10%29.aspx
 # http://msdn.microsoft.com/en-us/library/cc227259%28PROT.13%29.aspx
 
+import sys
 import traceback
 import azurelinuxagent.utils.textutil as textutil
 from datetime import datetime
-
-LogFilePath = '/var/log/waagent.log'
-ConsoleFilePath = '/dev/console'
 
 class Logger(object):
     def __init__(self, logger=None, prefix=None):
@@ -33,16 +31,16 @@ class Logger(object):
         self.prefix = prefix
 
     def verbose(self, msg_format, *args):
-        self.log("VERBOSE", msg_format, *args)
+        self.log(LogLevel.VERBOSE, msg_format, *args)
 
     def info(self, msg_format, *args):
-        self.log("INFO", msg_format, *args)
+        self.log(LogLevel.INFO, msg_format, *args)
 
     def warn(self, msg_format, *args):
-        self.log("WARNING", msg_format, *args)
+        self.log(LogLevel.WARNING, msg_format, *args)
 
     def error(self, msg_format, *args):
-        self.log("ERROR", msg_format, *args)
+        self.log(LogLevel.ERROR, msg_format, *args)
 
     def log(self, level, msg_format, *args):
         msg_format = textutil.Ascii(msg_format) 
@@ -52,88 +50,80 @@ class Logger(object):
         else:
             msg = msg_format
         time = datetime.now().strftime('%Y/%m/%d %H:%M:%S.%f')
+        levelStr = LogLevel.STRINGS[level]
         if self.prefix is not None:
-            logItem = "{0} {1} {2} {3}".format(time, level, self.prefix, msg)
+            logItem = "{0} {1} {2} {3}".format(time, levelStr, self.prefix, msg)
         else:
-            logItem = "{0} {1} {2}".format(time, level, msg)
+            logItem = "{0} {1} {2}".format(time, levelStr, msg)
         for appender in self.appenders:
             appender.write(level, logItem)
 
-    def addLoggerAppender(self, appender_config):
-        appender = CreateLoggerAppender(appender_config)
+    def addLoggerAppender(self, appenderType, level, path):
+        appender = CreateLoggerAppender(appenderType, level, path)
         self.appenders.append(appender)
 
-class AppenderConfig(object):
-    def __init__(self, properties = {}):
-        self.properties = properties
-
 class ConsoleAppender(object):
-    def __init__(self, appender_config):
-        self.level = appender_config.properties['level']
-        self.console_path = appender_config.properties['console_path']
-        if not self.level:
-            raise ValueError("Log level is not specified.")
-        if not self.console_path:
-            raise ValueError("Console path is not specified.")
-
+    def __init__(self, level, path):
+        self.level = LogLevel.INFO
+        if level >= LogLevel.INFO:
+            self.level = level
+        self.path = path
+       
     def write(self, level, msg):
-        if _MatchLogLevel(self.level, level):
+        if self.level <= level:
             try:
-                with open(self.console_path, "w") as console :
+                with open(self.path, "w") as console :
                     console.write(msg.encode('ascii','ignore') + "\n")
             except IOError as e:
                 pass
             
 class FileAppender(object):
-    def __init__(self, appender_config):
-        self.level = appender_config.properties['level']
-        self.file_path = appender_config.properties['file_path']
-        if not self.level:
-            raise ValueError("Log level is not specified.")
-        if not self.file_path:
-            raise ValueError("File path is not specified.")
+    def __init__(self, level, path):
+        self.level = level
+        self.path = path
 
     def write(self, level, msg):
-        if _MatchLogLevel(self.level, level):
+        if self.level <= level:
             try:
-                with open(self.file_path, "a+") as log_file:
+                with open(self.path, "a+") as log_file:
                     log_file.write(msg.encode('ascii','ignore') + "\n")
             except IOError as e:
                 pass
 
+class StdoutAppender(object):
+    def __init__(self, level):
+        self.level = level
+
+    def write(self, level, msg):
+        if self.level <= level:
+            try:
+                sys.stdout.write(msg.encode('ascii','ignore') + "\n")
+            except IOError as e:
+                pass
+
+
 #Initialize logger instance
 DefaultLogger = Logger()
 
-__log_level = {"VERBOSE" : 0, "INFO": 1, "WARNING": 2, "ERROR" : 3}        
+class LogLevel(object):
+    VERBOSE = 0
+    INFO = 1
+    WARNING = 2
+    ERROR = 3
+    STRINGS = [
+        "VERBOSE",
+        "INFO",
+        "WARNING",
+        "ERROR"
+    ]
 
-def _MatchLogLevel(expected, actual):
-    return __log_level[actual] >= __log_level[expected]
+class AppenderType(object):
+    FILE=0
+    CONSOLE=1
+    STDOUT=2
 
-
-def LoggerInit(log_file_path, log_console_path,
-               verbose=False, logger=DefaultLogger):
-    if log_file_path:
-        file_appender_config = AppenderConfig({
-            "type":"FILE", 
-            "level" : "INFO", 
-            "file_path" : log_file_path
-        })
-        
-        #File appender will log verbose log if the switch is on
-        if verbose: 
-            file_appender_config.properties['level'] = "VERBOSE"
-        logger.addLoggerAppender(file_appender_config)
-
-    if log_console_path:
-        console_appender_config = AppenderConfig({
-            "type":"CONSOLE", 
-            "level" : "INFO", 
-            "console_path" : log_console_path
-        })
-        logger.addLoggerAppender(console_appender_config)
-
-def AddLoggerAppender(appender_config):
-    DefaultLogger.addLoggerAppender(appender_config)
+def AddLoggerAppender(appenderType, level=LogLevel.INFO, path=None):
+    DefaultLogger.addLoggerAppender(appenderType, level, path)
 
 def Verbose(msg_format, *args):
     DefaultLogger.verbose(msg_format, *args)
@@ -150,11 +140,13 @@ def Error(msg_format, *args):
 def Log(level, msg_format, *args):
     DefaultLogger.log(level, msg_format, args)
 
-def CreateLoggerAppender(appender_config):
-    if appender_config.properties['type'] == 'CONSOLE' :
-        return ConsoleAppender(appender_config)
-    elif appender_config.properties['type'] == 'FILE' :
-        return FileAppender(appender_config)
+def CreateLoggerAppender(appenderType, level=LogLevel.INFO, path=None):
+    if appenderType == AppenderType.CONSOLE :
+        return ConsoleAppender(level, path)
+    elif appenderType == AppenderType.FILE :
+        return FileAppender(level, path)
+    elif appenderType == AppenderType.STDOUT :
+        return StdoutAppender(level)
     else:
         raise ValueError("Unknown appender type")
 

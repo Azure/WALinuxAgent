@@ -26,14 +26,21 @@ import azurelinuxagent.utils.fileutil as fileutil
 
 class InitHandler(object):
     def init(self, verbose):
+        #Init stdout log
+        level = logger.LogLevel.VERBOSE if verbose else logger.LogLevel.INFO
+        logger.AddLoggerAppender(logger.AppenderType.STDOUT, level)
+
         #Init config
         configPath = OSUtil.GetConfigurationPath()
         conf.LoadConfiguration(configPath)
         
         #Init log
         verbose = verbose or conf.GetSwitch("Logs.Verbose", False)
-        logger.LoggerInit('/var/log/waagent.log', '/dev/console', 
-                          verbose=verbose)
+        level = logger.LogLevel.VERBOSE if verbose else logger.LogLevel.INFO
+        logger.AddLoggerAppender(logger.AppenderType.FILE, level,
+                                 path="/var/log/waagent.log")
+        logger.AddLoggerAppender(logger.AppenderType.CONSOLE, level,
+                                 path="/dev/console")
         
         #Create lib dir
         fileutil.CreateDir(OSUtil.GetLibDir(), mode=0700)
