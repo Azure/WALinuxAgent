@@ -19,6 +19,6 @@
 
 
 def GetOSUtil():
-    from osutil import DebianOSUtil
+    from azurelinuxagent.distro.debian.osutil import DebianOSUtil
     return DebianOSUtil()
 

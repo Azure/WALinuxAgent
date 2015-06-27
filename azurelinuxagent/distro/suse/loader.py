@@ -20,7 +20,7 @@
 from azurelinuxagent.metadata import DistroName, DistroVersion, DistroFullName
 
 def GetOSUtil():
-    from osutil import SUSE11OSUtil, SUSEOSUtil
+    from azurelinuxagent.distro.suse.osutil import SUSE11OSUtil, SUSEOSUtil
     if DistroFullName=='SUSE Linux Enterprise Server' and DistroVersion < '12' \
             or DistroFullName == 'openSUSE' and DistroVersion < '13.2':
         return SUSE11OSUtil()

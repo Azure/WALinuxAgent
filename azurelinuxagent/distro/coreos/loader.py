@@ -19,10 +19,10 @@
 
 
 def GetOSUtil():
-    from osutil import CoreOSUtil
+    from azurelinuxagent.distro.coreos.osutil import CoreOSUtil
     return CoreOSUtil()
 
 def GetHandlers():
-    from handlerFactory import CoreOSHandlerFactory
+    from azurelinuxagent.distro.coreos.handlerFactory import CoreOSHandlerFactory
     return CoreOSHandlerFactory()
 

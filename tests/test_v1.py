@@ -140,26 +140,26 @@ class TestStatusBlob(unittest.TestCase):
 
 class TestConvert(unittest.TestCase):
     def test_status(self):
-        substatus = v1.ExtensionSubStatus()
-
-        extStatus = v1.ExtensionStatus()
-        extStatus.substatusList.append(substatus)
-
-        handlerStatus = v1.ExtensionHandlerStatus()
-        handlerStatus.extensionStatusList.append(extStatus)
-
         vmStatus = v1.VMStatus() 
-        vmStatus.extensionHandlers.append(handlerStatus)
+        handlerStatus = v1.ExtensionHandlerStatus()
+        substatus = v1.ExtensionSubStatus()
+        extStatus = v1.ExtensionStatus()
 
-        data = v1.vm_status_to_v1(vmStatus)
+        vmStatus.extensionHandlers.append(handlerStatus)
+        v1.vm_status_to_v1(vmStatus)
+
+        handlerStatus.extensionStatusList.append(extStatus)
+        v1.vm_status_to_v1(vmStatus)
+
+        extStatus.substatusList.append(substatus)
+        v1.vm_status_to_v1(vmStatus)
 
     def test_param(self):
         param = v1.TelemetryEventParam()
         event = v1.TelemetryEvent()
         event.parameters.append(param)
         
-        data = v1.event_to_xml(event)
-        print data
+        v1.event_to_xml(event)
 
 if __name__ == '__main__':
     unittest.main()

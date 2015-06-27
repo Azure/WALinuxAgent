@@ -43,13 +43,19 @@ class ProvisionHandler(object):
         logger.Info("Start provisioning.")
         protocol = prot.Factory.getDefaultProtocol()
         try:
-            protocol.reportProvisionStatus("NotReady", "Provisioning", 
-                                           "Starting")
+            status = prot.ProvisionStatus(status="NotReady", 
+                                          subStatus="ProvisionStatus")
+            protocol.reportProvisionStatus(status)
+
             self.provision()
             fileutil.SetFileContents(provisioned, "")
             thumbprint = self.regenerateSshHostKey()
-            protocol.reportProvisionStatus(status="Ready",
-                                           thumbprint = thumbprint)
+            
+            logger.Info("Finished provisioning")
+            status = prot.ProvisionStatus(status="Ready")
+            status.properties.certificateThumbprint = thumbprint
+            protocol.reportProvisionStatus(status)
+
             AddExtensionEvent(name="WALA", isSuccess=True, message="",
                               op=WALAEventOperation.Provision)
         except ProvisionError as e:

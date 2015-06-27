@@ -65,7 +65,7 @@ class RunHandler(object):
 
             #Report status
             vmStatus = prot.VMStatus()
-            vmStatus.vmAgent.agentVersion = GuestAgentVersion
+            vmStatus.vmAgent.agentVersion = GuestAgentLongName
             vmStatus.vmAgent.status = "Ready"
             vmStatus.vmAgent.message = "Guest Agent is running"
             for handlerStatus in handlerStatusList:

@@ -169,5 +169,10 @@ class TestExtensions(unittest.TestCase):
         self.assertEqual(1, len(testExt.logger.appenders) - len(logger.DefaultLogger.appenders))
         testExt.handle()
 
+    def test_status_convert(self):
+        extStatus = json.loads('[{"status": {"status": "success", "formattedMessage": {"lang": "en-US", "message": "Script is finished"}, "operation": "Enable", "code": "0", "name": "Microsoft.OSTCExtensions.CustomScriptForLinux"}, "version": "1.0", "timestampUTC": "2015-06-27T08:34:50Z"}]')
+        ext.extension_status_to_v2(extStatus[0], 0)
+
+
 if __name__ == '__main__':
     unittest.main()

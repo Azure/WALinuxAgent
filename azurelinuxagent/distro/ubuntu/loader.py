@@ -20,13 +20,13 @@
 from azurelinuxagent.metadata import DistroName, DistroVersion
 
 def GetOSUtil():
-    from  osutil import Ubuntu1204OSUtil, UbuntuOSUtil
+    from  azurelinuxagent.distro.ubuntu.osutil import Ubuntu1204OSUtil, UbuntuOSUtil
     if DistroVersion == "12.04":
         return Ubuntu1204OSUtil()
     else:
         return UbuntuOSUtil()
 
 def GetHandlers():
-    from handlerFactory import UbuntuHandlerFactory
+    from azurelinuxagent.distro.ubuntu.handlerFactory import UbuntuHandlerFactory
     return UbuntuHandlerFactory()
      

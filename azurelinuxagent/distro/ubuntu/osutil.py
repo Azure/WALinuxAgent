@@ -37,21 +37,7 @@ class UbuntuOSUtil(DebianOSUtil):
 
     def StartNetwork(self):
         return shellutil.Run("service networking start", chk_err=False)
-    
-    #TODO move to deprovision handler
-    def OnDeprovisionStart(self):
-        print("WARNING! Nameserver configuration in "
-              "/etc/resolvconf/resolv.conf.d/{tail,originial} will be deleted.")
-
-    def OnDeprovision(self):
-        if os.path.realpath('/etc/resolv.conf') != '/run/resolvconf/resolv.conf':
-            logger.Info("resolvconf is not configured. Removing /etc/resolv.conf")
-            fileutil.RemoveFiles('/etc/resolv.conf')
-        else:
-            logger.Info("resolvconf is enabled; leaving /etc/resolv.conf intact")
-            fileutil.RemoveFiles('/etc/resolvconf/resolv.conf.d/tail',
-                                 '/etc/resolvconf/resolv.conf.d/originial')
-
+   
 class Ubuntu1204OSUtil(UbuntuOSUtil):
     def __init__(self):
         super(Ubuntu1204OSUtil, self).__init__()

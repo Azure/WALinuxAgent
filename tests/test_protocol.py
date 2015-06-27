@@ -68,12 +68,11 @@ class TestProtocolContract(unittest.TestCase):
         data = get_properties(InstanceMetadata())
         data = get_properties(VMStatus())
         data = get_properties(TelemetryEventList())
-        data = get_properties(Extension())
+        data = get_properties(Extension(name="hehe"))
         self.assertTrue("name" in data)
         self.assertTrue("properties" in data)
         self.assertEquals(dict, type(data["properties"]))
-        self.assertTrue("versionUris" in data)
-        self.assertEquals(list, type(data["versionUris"]))
+        self.assertTrue("versionUris" not in data)
 
     def test_set_properties(self):
         data = json.loads(extensionDataStr)

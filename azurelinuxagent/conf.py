@@ -42,11 +42,15 @@ class ConfigurationProvider(object):
 
     def get(self, key, defaultValue=None):
         val = self.values.get(key)
-        return val if val else defaultValue
+        return val if val is not None else defaultValue
 
     def getSwitch(self, key, defaultValue=False):
         val = self.values.get(key)
-        return True if (val and val.lower() == 'y') else defaultValue
+        if val is not None and val.lower() == 'y':
+            return True
+        elif val is not None and val.lower() == 'n':
+            return False
+        return defaultValue
 
     def getInt(self, key, defaultValue=-1):
         try:

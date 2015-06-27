@@ -106,8 +106,9 @@ class ProtocolV1(Protocol):
             self.client.reportHealth(provisionStatus.status, 
                                      provisionStatus.subStatus, 
                                      provisionStatus.description)
-        if provisionStatus.thumbprint is not None:
-            self.client.reportRoleProperties(provisionStatus.thumbprint)
+        if provisionStatus.properties.certificateThumbprint is not None:
+            thumbprint = provisionStatus.properties.certificateThumbprint
+            self.client.reportRoleProperties(thumbprint)
 
     def reportStatus(self, vmStatus):
         validata_param("vmStatus", vmStatus, VMStatus)
@@ -141,7 +142,7 @@ def _fetchManifest(versionUris):
             return xmlText
         except IOError, e:
             logger.Warn("Failed to fetch ExtensionManifest: {0}, {1}", e, 
-                        uri)
+                        versionUri.uri)
     raise ProtocolError("Failed to fetch ExtensionManifest from all sources")
 
 def _buildRoleProperties(containerId, roleInstanceId, thumbprint):
@@ -225,39 +226,49 @@ def extension_substatus_to_v1(substatusList):
         statusList.append(status)
     return statusList
 
-def extension_handler_status_to_v1(extensionHandlerStatus):
-    extensionStatus = extensionHandlerStatus.extensionStatusList[0]
-    substatus = extension_substatus_to_v1(extensionStatus.substatusList)
+def extension_handler_status_to_v1(handlerStatus, timestamp):
+    if handlerStatus is None or len(handlerStatus.extensionStatusList) == 0:
+        return
+    extStatus = handlerStatus.extensionStatusList[0]
+    substatus = extension_substatus_to_v1(extStatus.substatusList)
     settingsStatus={
         "status":{
-            "name": extensionStatus.name,
-            "configurationAppliedTime": extensionStatus.configurationAppliedTime,
-            "operation": extensionStatus.operation,
-            "status": extensionStatus.status,
-            "code": extensionStatus.code,
-            "substatus": substatus
-        }
+            "name": extStatus.name,
+            "configurationAppliedTime": extStatus.configurationAppliedTime,
+            "operation": extStatus.operation,
+            "status": extStatus.status,
+            "code": extStatus.code,
+            "formattedMessage": {
+                "lang":"en-US",
+                "message": extStatus.message
+            }
+        },
+        "timestampUTC": timestamp
     }
+    
+    if len(settingsStatus) == 0:
+        settingsStatus['substatus'] = substatus
 
     handlerAggStatus = {
-        'handlerVersion' : extensionHandlerStatus.handlerVersion,
-        'handlerName' : extensionHandlerStatus.handlerName,
-        'status' : extensionHandlerStatus.status,
+        'handlerVersion' : handlerStatus.handlerVersion,
+        'handlerName' : handlerStatus.handlerName,
+        'status' : handlerStatus.status,
         'runtimeSettingsStatus' : {
             'settingsStatus' : settingsStatus,
-            'sequenceNumber' : extensionStatus.sequenceNumber
+            'sequenceNumber' : extStatus.sequenceNumber
         }
     }
     return handlerAggStatus
 
 
 def vm_status_to_v1(vmStatus):
-    tstamp=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    timestamp=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
     guestAgentStatus = vm_agent_status_to_v1(vmStatus.vmAgent)
     handlerAggStatusList = []
     for extensionHandlerStatus in vmStatus.extensionHandlers:
-        handlerAggStatus = extension_handler_status_to_v1(extensionHandlerStatus)
+        handlerAggStatus = extension_handler_status_to_v1(extensionHandlerStatus,
+                                                          timestamp)
         handlerAggStatusList.append(handlerAggStatus)
 
     aggregateStatus = {
@@ -266,7 +277,7 @@ def vm_status_to_v1(vmStatus):
     }
     report = {
         'version' : '1.0',
-        'timestampUTC' : tstamp,
+        'timestampUTC' : timestamp,
         'aggregateStatus' : aggregateStatus
     }
     return report

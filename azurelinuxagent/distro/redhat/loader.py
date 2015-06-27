@@ -20,7 +20,7 @@
 from azurelinuxagent.metadata import DistroName, DistroVersion
 
 def GetOSUtil():
-    from osutil import Redhat6xOSUtil, RedhatOSUtil
+    from azurelinuxagent.distro.redhat.osutil import Redhat6xOSUtil, RedhatOSUtil
     if DistroVersion < "7":
         return Redhat6xOSUtil()
     else:

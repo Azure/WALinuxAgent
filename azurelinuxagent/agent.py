@@ -76,7 +76,7 @@ def Version():
 def Usage():
     print("")
     print(("usage: {0} [-verbose] [-force] "
-           "[-help|-deprovision[+user]|-version|-serialconsole|-daemon|-run]"
+           "[-help|-deprovision[+user]|-version|-serialconsole|-daemon|-start]"
            "").format(sys.argv[0]))
     print("")
 

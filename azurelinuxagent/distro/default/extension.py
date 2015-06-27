@@ -64,6 +64,7 @@ def extension_sub_status_to_v2(substatus):
     status.status = try_get(substatus, 'status')
     status.code = try_get(substatus, 'code')
     status.message = try_get(substatus['formattedMessage'], 'message')
+    return status
 
 def extension_status_to_v2(extStatus, seqNo):
     #Check extension status format
@@ -96,6 +97,7 @@ def extension_status_to_v2(extStatus, seqNo):
     substatusList = try_get(extStatus['status'], 'substatus', [])
     for substatus in substatusList:
         status.substatusList.extend(extension_sub_status_to_v2(substatus))
+    return status
 
 class ExtensionsHandler(object):
 
@@ -129,13 +131,12 @@ class ExtensionsHandler(object):
                          ext.getName(), ext.getVersion(), e)
             AddExtensionEvent(name=ext.getName(), isSuccess=False,
                               op=ext.getCurrOperation(), message = str(e))
-            extStatus = prot.ExtensionStatus()
-            extStatus.status = 'error'
-            extStatus.code = -1
-            extStatus.operation = ext.getCurrOperation()
-            extStatus.message = str(e)
-            extStatus.sequenceNumber = ext.getSeqNo()
+            extStatus = prot.ExtensionStatus(status='error', code='-1', 
+                                             operation = ext.getCurrOperation(),
+                                             message = str(e),
+                                             sequenceNumber = ext.getSeqNo())
             status = ext.createHandlerStatus(extStatus)
+            status.status = "NotReady"
         return status
 
 def ParseExtensionDirName(dirName):
@@ -272,17 +273,17 @@ class ExtensionInstance(object):
         package = None
         for uri in uris:
             try:
-                resp = restutil.HttpGet(uri, chkProxy=True)
+                resp = restutil.HttpGet(uri.uri, chkProxy=True)
                 package = resp.read()
                 break
             except restutil.HttpError as e:
-                self.logger.warn("Failed download extension from: {0}", uri)
+                self.logger.warn("Failed download extension from: {0}", uri.uri)
 
         if package is None:
             raise ExtensionError("Download extension failed")
         
         self.logger.info("Unpack extension package")
-        pkgFile = os.path.join(self.libDir, os.path.basename(uri) + ".zip")
+        pkgFile = os.path.join(self.libDir, os.path.basename(uri.uri) + ".zip")
         fileutil.SetFileContents(pkgFile, bytearray(package))
         zipfile.ZipFile(pkgFile).extractall(self.getBaseDir())
         chmod = "find {0} -type f | xargs chmod u+x".format(self.getBaseDir())
@@ -324,7 +325,7 @@ class ExtensionInstance(object):
         self.currOperation=WALAEventOperation.Disable
         man = self.loadManifest()
         self.launchCommand(man.getDisableCommand(), timeout=900)
-        self.setHandlerStatus("NotReady")
+        self.setHandlerStatus("Ready")
         AddExtensionEvent(name=self.getName(), isSuccess=True,
                           op=self.currOperation, message="")
 
@@ -334,6 +335,7 @@ class ExtensionInstance(object):
         man = self.loadManifest()
         self.setHandlerStatus("Installing")
         self.launchCommand(man.getInstallCommand(), timeout=900)
+        self.setHandlerStatus("Ready")
         AddExtensionEvent(name=self.getName(), isSuccess=True,
                           op=self.currOperation, message="")
 
@@ -369,8 +371,10 @@ class ExtensionInstance(object):
             heartbeat = self.getHeartbeat()
         extStatus = self.getExtensionStatus()
         status= self.createHandlerStatus(extStatus, heartbeat) 
+        status.status = self.getHandlerStatus()
         if heartbeat is not None:
             status.status = heartbeat['status']
+        status.extensionStatusList.append(extStatus)
         return status
 
     def getExtensionStatus(self):
@@ -382,7 +386,8 @@ class ExtensionInstance(object):
             raise ExtensionError("Failed to get status file: {0}".format(e))
         except ValueError as e:
             raise ExtensionError("Malformed status file: {0}".format(e))
-        return extension_status_to_v2(extStatus, self.settings.sequenceNumber)
+        return extension_status_to_v2(extStatus[0], 
+                                      self.settings.sequenceNumber)
    
     def getHandlerStatus(self):
         handlerStatus = "uninstalled"

@@ -18,11 +18,11 @@
 #
 
 def GetOSUtil():
-    from osutil import DefaultOSUtil
+    from azurelinuxagent.distro.default.osutil import DefaultOSUtil
     return DefaultOSUtil()
 
 def GetHandlers():
-    from handlerFactory import DefaultHandlerFactory
+    from azurelinuxagent.distro.default.handlerFactory import DefaultHandlerFactory
     return DefaultHandlerFactory()
      
    

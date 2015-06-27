@@ -33,9 +33,9 @@ On ubuntu image, provision could be disabled.
 """
 class UbuntuProvisionHandler(ProvisionHandler):
     def process(self):
-        
+        logger.Info("Run ubuntu provision handler") 
         #If provision is enabled, run default provision handler
-        if conf.GetSwitch("Provisioning.Enabled", True):
+        if conf.GetSwitch("Provisioning.Enabled", False):
             super(UbuntuProvisionHandler, self).process()
             return
 
@@ -47,9 +47,13 @@ class UbuntuProvisionHandler(ProvisionHandler):
         protocol = prot.Factory.getDefaultProtocol()
         try:
             thumbprint = self.waitForSshHostKey()
-            protocol.reportProvisionStatus(status="Ready",
-                                           thumbprint = thumbprint)
             fileutil.SetFileContents(provisioned, "")
+
+            logger.Info("Finished provisioning")
+            status = prot.ProvisionStatus(status="Ready")
+            status.properties.certificateThumbprint = thumbprint
+            protocol.reportProvisionStatus(status)
+
         except ProvisionError as e:
             logger.Error("Provision failed: {0}", e)
             protocol.reportProvisionStatus(status="NotReady", subStatus=str(e))

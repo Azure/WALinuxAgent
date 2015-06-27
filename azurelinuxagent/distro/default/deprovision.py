@@ -88,11 +88,11 @@ class DeprovisionHandler(object):
         if conf.GetSwitch("Provisioning.DeleteRootPassword", False):
             self.deleteRootPassword(warnings, actions)
 
+        self.deleteLibDir(warnings, actions)
+
         if deluser:
             self.deleteUser(warnings, actions)
         
-        self.deleteLibDir(warnings, actions)
-
         return warnings, actions
         
     def deprovision(self, force=False, deluser=False):

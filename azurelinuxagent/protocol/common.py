@@ -69,11 +69,13 @@ def get_properties(obj):
         if isinstance(val, DataContract):
             data[name] = get_properties(val)
         elif isinstance(val, DataContractList):
+            if len(val) == 0:
+                continue
             data[name] = []
             for item in val:
                 dataItem = get_properties(item)
                 data[name].append(dataItem)
-        else:
+        elif val is not None:
             data[name] = val
     return data
 
@@ -177,12 +179,13 @@ class ExtensionSubStatus(DataContract):
 
 class ExtensionStatus(DataContract):
     def __init__(self, name=None, configurationAppliedTime=None, operation=None,
-                 status=None, code=None, sequenceNumber=None):
+                 status=None, code=None, message=None, sequenceNumber=None):
         self.name = name
         self.configurationAppliedTime = configurationAppliedTime
         self.operation = operation
         self.status = status
         self.code = code
+        self.message = message
         self.sequenceNumber = sequenceNumber
         self.substatusList = DataContractList(ExtensionSubStatus)
 
