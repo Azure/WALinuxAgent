@@ -107,7 +107,8 @@ class EventMonitor(object):
             try:
                 data = json.loads(dataStr)
             except ValueError as e:
-                logger.Error("{0}", e)
+                logger.Verbose(dataStr)
+                logger.Error("Failed to decode json event file{0}", e)
                 continue
 
             event = prot.TelemetryEvent()

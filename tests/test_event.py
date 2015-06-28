@@ -46,7 +46,7 @@ class TestEvent(unittest.TestCase):
     @Mockup(evt.prot.Factory, 'getDefaultProtocol', 
             MockFunc(retval=MockProtocol()))
     def test_initSystemInfo(self):
-        monitor = evt.WALAEventMonitor()
+        monitor = evt.EventMonitor()
         self.assertNotEquals(0, len(monitor.sysInfo))
         
 if __name__ == '__main__':

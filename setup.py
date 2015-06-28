@@ -21,6 +21,7 @@ import os
 from azurelinuxagent.metadata import GuestAgentName, GuestAgentVersion, \
                                      DistroName, DistroVersion, DistroFullName
 
+from azurelinuxagent.utils.osutil import OSUtil
 import setuptools
 from setuptools import find_packages
 from setuptools.command.install import install
@@ -48,6 +49,8 @@ def get_data_files(name, version, init_system):
         conf_src = ['config/suse/waagent.conf']
     if name == 'ubuntu':
         conf_src = ['config/ubuntu/waagent.conf']
+    if name == 'coreos':
+        conf_dest = '/usr/share/oem/'
     data_files.append((conf_dest, conf_src))
     
     #logrotate config file
@@ -56,15 +59,12 @@ def get_data_files(name, version, init_system):
     data_files.append((logrotate_dest, logrotate_src))
 
     #init script file
-    init_dest = '/etc/init.d'
+    init_dest = '/etc/rc.d/init.d'
     init_src = ['init/waagent']
 
     if name == 'redhat' or name == 'centos':
-        if version < "7.0":
-            init_dest = '/etc/rc.d/init.d'
-            init_src = ['init/waagent']
-        else:
-            init_dest = '/etc/init.d'
+        if version >= "7.0":
+            init_dest = '/etc/systemd/system'
             init_src = ['init/waagent.service']
     elif name == 'coreos':
         init_dest = '/usr/share/oem'
@@ -73,7 +73,7 @@ def get_data_files(name, version, init_system):
         init_dest = '/etc/init'
         init_src = ['init/ubuntu/walinuxagent.conf']
     elif init_system == 'systemd':
-        init_dest = '/etc/systemd'
+        init_dest = '/etc/systemd/system'
         init_src = ['init/waagent.service']
 
     data_files.append((init_dest, init_src))
@@ -86,6 +86,7 @@ class InstallData(install):
         ('init-system=', None, 'init system to configure [default: sysV]'),
         ('lnx-distro=', None, 'target Linux distribution'),
         ('lnx-distro-version=', None, 'target Linux distribution version'),
+        ('register-service=', None, 'register as startup service'),
     ]
 
     def initialize_options(self):
@@ -93,6 +94,7 @@ class InstallData(install):
         self.init_system = 'sysV'
         self.lnx_distro = DistroName
         self.lnx_distro_version = DistroVersion
+        self.register_service = False
 
     def finalize_options(self):
         install.finalize_options(self)
@@ -102,6 +104,11 @@ class InstallData(install):
         self.distribution.data_files = data_files
         self.distribution.reinitialize_command('install_data', True)
 
+    def run(self):
+        install.run(self)
+        if self.register_service:
+            print "Register agent service"
+            OSUtil.RegisterAgentService()
 
 def readme():
     with open('README') as f:

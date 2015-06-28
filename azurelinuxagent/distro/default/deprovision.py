@@ -19,6 +19,7 @@
 
 import azurelinuxagent.conf as conf
 from azurelinuxagent.utils.osutil import OSUtil
+import azurelinuxagent.protocol as prot
 import azurelinuxagent.protocol.ovfenv as ovf
 import azurelinuxagent.utils.fileutil as fileutil
 import azurelinuxagent.utils.shellutil as shellutil
@@ -41,8 +42,10 @@ class DeprovisionHandler(object):
         actions.append(DeprovisionAction(OSUtil.DeleteRootPassword))
     
     def deleteUser(self, warnings, actions):
-        ovfenv = ovf.GetOvfEnv()
-        if ovfenv is None:
+        
+        try:
+            ovfenv = ovf.GetOvfEnv()
+        except prot.ProtocolError:
             warnings.append("WARNING! ovf-env.xml is not found.")
             warnings.append("WARNING! Skip delete user.")
             return
@@ -104,7 +107,7 @@ class DeprovisionHandler(object):
             confirm = raw_input("Do you want to proceed (y/n)")
             if not confirm.lower().startswith('y'):
                 return
-
+        
         for action in actions:
             action.invoke()
     

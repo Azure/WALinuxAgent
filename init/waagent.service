@@ -1,25 +1,13 @@
-#walinuxagent - start Windows Azure agent
+[Unit]
+Description=Azure Linux Agent
+After=network.target
+After=sshd.service
+ConditionFileIsExecutable=/usr/sbin/waagent
+ConditionPathExists=/etc/waagent.conf
 
-description "walinuxagent"
-author "Ben Howard <ben.howard@canonical.com>"
+[Service]
+Type=simple
+ExecStart=/usr/sbin/waagent -daemon
 
-start on (filesystem and started rsyslog)
-
-pre-start script
-
-	WALINUXAGENT_ENABLED=1
-    [ -r /etc/default/walinuxagent ] && . /etc/default/walinuxagent
-
-    if [ "$WALINUXAGENT_ENABLED" != "1" ]; then
-        exit 1
-    fi
-
-    if [ ! -x /usr/sbin/waagent ]; then
-        exit 1
-    fi
-
-    #Load the udf module
-    modprobe -b udf
-end script
-
-exec /usr/sbin/waagent -daemon
+[Install]
+WantedBy=multi-user.target

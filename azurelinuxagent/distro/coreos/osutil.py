@@ -37,7 +37,7 @@ class CoreOSUtil(DefaultOSUtil):
         super(CoreOSUtil, self).__init__()
         self.waagent_path='/usr/share/oem/bin/waagent'
         self.python_path='/usr/share/oem/python/bin'
-        self.configPath = '/etc/waagent.conf'
+        self.configPath = '/usr/share/oem/waagent.conf'
         if 'PATH' in os.environ:
             path = "{0}:{1}".format(os.environ['PATH'], self.python_path)
         else:
@@ -80,7 +80,7 @@ class CoreOSUtil(DefaultOSUtil):
 
     def StopAgentService(self):
         return shellutil.Run("systemctl stop wagent", chk_err=False)
-
+    
     def GetDhcpProcessId(self):
         ret= shellutil.RunGetOutput("pidof systemd-networkd")
         return ret[1] if ret[0] == 0 else None

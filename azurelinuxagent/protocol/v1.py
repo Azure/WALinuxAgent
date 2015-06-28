@@ -587,7 +587,8 @@ class WireClient(object):
         data = dataFormat.format(providerId, eventStr)
         try:
             self.preventThrottling()
-            resp = restutil.HttpPost(uri, data)
+            header = self.getHeaderWithContentTypeXml()
+            resp = restutil.HttpPost(uri, data, header)
         except restutil.HttpError as e:
             raise ProtocolError("Failed to send events:{0}".format(e))
         

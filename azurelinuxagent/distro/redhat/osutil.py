@@ -52,6 +52,12 @@ class Redhat6xOSUtil(OSUtil):
     def StartAgentService(self):
         return shellutil.Run("/sbin/service waagent start", chk_err=False)
 
+    def RegisterAgentService(self):
+        return shellutil.Run("chkconfig --add waagent", chk_err=False)
+    
+    def UnregisterAgentService(self):
+        return shellutil.Run("chkconfig --del waagent", chk_err=False)
+
     def RsaPublicKeyToSshRsa(self, publicKey):
         lines = publicKey.split("\n")
         lines = filter(lambda x : not x.startswith("----"), lines)
@@ -105,5 +111,11 @@ class RedhatOSUtil(Redhat6xOSUtil):
         fileutil.UpdateConfigFile(filepath,
                                   'DHCP_HOSTNAME',
                                   'DHCP_HOSTNAME={0}'.format(hostname))
+
+    def RegisterAgentService(self):
+        return shellutil.Run("systemctl enable waagent", chk_err=False)
+    
+    def UnregisterAgentService(self):
+        return shellutil.Run("systemctrl disable waagent", chk_err=False)
 
 

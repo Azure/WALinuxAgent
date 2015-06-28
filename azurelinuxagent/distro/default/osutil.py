@@ -498,28 +498,28 @@ class DefaultOSUtil(object):
         return False
 
     def StopDhcpService(self):
-        raise NotImplementedError('StopDhcpService method missing')
+        pass
 
     def StartDhcpService(self):
-        raise NotImplementedError('StartDhcpService method missing')
+        pass
 
     def StartNetwork(self):
-        raise NotImplementedError('StartNetwork method missing')
+        pass
 
     def StartAgentService(self):
-        raise NotImplementedError('StartAgentService method missing')
+        pass
 
     def StopAgentService(self):
-        raise NotImplementedError('StopAgentService method missing')
+        pass
 
     def RegisterAgentService(self):
-        self.StartAgentService()
+        pass
 
     def UnregisterAgentService(self):
-        self.StopAgentService()
+        pass
 
     def RestartSshService(self):
-        raise NotImplementedError('RestartSshService method missing')
+        pass
     
     def RouteAdd(self, net, mask, gateway):
         """
