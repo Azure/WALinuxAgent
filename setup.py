@@ -19,12 +19,14 @@
 
 import os
 from azurelinuxagent.metadata import GuestAgentName, GuestAgentVersion, \
+                                     GuestAgentDescription, \
                                      DistroName, DistroVersion, DistroFullName
 
 from azurelinuxagent.utils.osutil import OSUtil
 import setuptools
 from setuptools import find_packages
-from setuptools.command.install import install
+from setuptools.command.install import install as  _install
+from setuptools.command.sdist import sdist as _sdist
 
 root_dir = os.path.dirname(os.path.abspath(__file__))
 os.chdir(root_dir)
@@ -80,8 +82,8 @@ def get_data_files(name, version, init_system):
 
     return data_files
 
-class InstallData(install):
-    user_options = install.user_options + [
+class install(_install):
+    user_options = _install.user_options + [
         # This will magically show up in member variable 'init_system'
         ('init-system=', None, 'init system to configure [default: sysV]'),
         ('lnx-distro=', None, 'target Linux distribution'),
@@ -90,33 +92,34 @@ class InstallData(install):
     ]
 
     def initialize_options(self):
-        install.initialize_options(self)
+        _install.initialize_options(self)
         self.init_system = 'sysV'
         self.lnx_distro = DistroName
         self.lnx_distro_version = DistroVersion
         self.register_service = False
-
+        
     def finalize_options(self):
-        install.finalize_options(self)
+        _install.finalize_options(self)
         data_files = get_data_files(self.lnx_distro, self.lnx_distro_version,
                                     self.init_system)
-        print data_files
         self.distribution.data_files = data_files
         self.distribution.reinitialize_command('install_data', True)
 
     def run(self):
-        install.run(self)
+        _install.run(self)
         if self.register_service:
             print "Register agent service"
             OSUtil.RegisterAgentService()
 
-def readme():
-    with open('README') as f:
-        return f.read()
+class sdist(_sdist):
+    def run(self):
+        _sdist.run(self)
+        #self.copy_tree('config', os.path.join(self.dist_dir, 'config'))
+        #self.copy_tree('init', os.path.join(self.dist_dir, 'init'))
 
 setuptools.setup(name=GuestAgentName,
                  version=GuestAgentVersion,
-                 description=readme(),
+                 long_description=GuestAgentDescription,
                  author= 'Yue Zhang, Stephen Zarkos, Eric Gable',
                  author_email = 'walinuxagent@microsoft.com',
                  platforms = 'Linux',
@@ -124,5 +127,6 @@ setuptools.setup(name=GuestAgentName,
                  license = 'Apache License Version 2.0',
                  packages=find_packages(exclude=["tests"]),
                  cmdclass = {
-                     'install': InstallData,
+                     'install': install,
+                     'sdist': sdist
                  })

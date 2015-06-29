@@ -39,11 +39,15 @@ GuestAgentName = "AzureLinuxAgent"
 GuestAgentLongName = "Azure Linux Agent"
 GuestAgentVersion='2.1.0-pre'
 GuestAgentLongVersion = "{0}-{1}".format(GuestAgentName, GuestAgentVersion)
+GuestAgentDescription = """\
+The Azure Linux Agent supports the provisioning and running of Linux
+VMs in the Azure cloud. This package should be installed on Linux disk
+images that are built to run in the Azure environment.
+"""
 
 __DistroInfo = GetDistroInfo()
 DistroName = __DistroInfo[0]
 DistroVersion = __DistroInfo[1]
 DistroCodeName = __DistroInfo[2]
 DistroFullName = __DistroInfo[3]
-
 

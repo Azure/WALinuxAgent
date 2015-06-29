@@ -1,0 +1,3 @@
+recursive-include bin *
+recursive-include init *
+recursive-include config *
