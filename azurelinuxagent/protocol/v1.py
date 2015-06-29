@@ -367,7 +367,7 @@ class StatusBlob(object):
             bufSize = pageEnd - start
             buf = bytearray(bufSize)
             buf[0 : contentSize] = data[start : end]
-            resp = restutil.HttpPut(url, buf, {
+            resp = restutil.HttpPut(url, buffer(buf), {
                 "x-ms-date" :  timestamp,
                 "x-ms-range" : "bytes={0}-{1}".format(start, pageEnd - 1),
                 "x-ms-page-write" : "update",
