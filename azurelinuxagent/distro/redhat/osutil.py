@@ -116,6 +116,6 @@ class RedhatOSUtil(Redhat6xOSUtil):
         return shellutil.Run("systemctl enable waagent", chk_err=False)
     
     def UnregisterAgentService(self):
-        return shellutil.Run("systemctrl disable waagent", chk_err=False)
+        return shellutil.Run("systemctl disable waagent", chk_err=False)
 
 

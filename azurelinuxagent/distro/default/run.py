@@ -70,7 +70,10 @@ class RunHandler(object):
             vmStatus.vmAgent.message = "Guest Agent is running"
             for handlerStatus in handlerStatusList:
                 vmStatus.extensionHandlers.append(handlerStatus)
-            protocol.reportStatus(vmStatus)
+            try:
+                protocol.reportStatus(vmStatus)
+            except prot.ProtocolError as e:
+                logger.Error("Failed to report vm status: {0}", status)
 
             time.sleep(25)
 
