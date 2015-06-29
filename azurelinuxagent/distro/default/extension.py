@@ -242,11 +242,11 @@ class ExtensionInstance(object):
         self.uninstall()
 
     def upgrade(self, targetVersion):
-        self.logger.info("Upgrade from: {0} to {1}", self.getVersion(),
+        self.logger.info("Upgrade from: {0} to {1}", self.currVersion,
                          targetVersion)
         self.currOperation=WALAEventOperation.Upgrade
         old = self
-        new = ExtensionInstance(self.extension, targetVersion)
+        new = ExtensionInstance(self.extension, self.packageList, targetVersion)
         self.logger.info("Download new extension package")
         new.initLog()
         new.download()
