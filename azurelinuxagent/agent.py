@@ -24,6 +24,7 @@ import shutil
 import time
 import traceback
 import threading
+import subprocess
 import azurelinuxagent.logger as logger
 from azurelinuxagent.metadata import GuestAgentLongVersion, \
                                      DistroName, DistroVersion, DistroFullName
@@ -82,9 +83,7 @@ def Usage():
 
 def Start():
     devnull = open(os.devnull, 'w')
-    sys.stdout = devnull
-    sys.stderr = devnull
-    Run()
+    subprocess.Popen([sys.argv[0], '-daemon'], stdout=devnull, stderr=devnull)
 
 def Main():
     command, force, verbose = ParseArgs(sys.argv[1:])
