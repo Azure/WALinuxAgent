@@ -69,10 +69,10 @@ class SUSE11OSUtil(DefaultOSUtil):
         return shellutil.Run("/sbin/service waagent start", chk_err=False)
     
     def RegisterAgentService(self):
-        return shellutil.Run("insserv waagent", chk_err=False)
+        return shellutil.Run("/sbin/insserv waagent", chk_err=False)
     
     def UnregisterAgentService(self):
-        return shellutil.Run("insserv -r waagent", chk_err=False)
+        return shellutil.Run("/sbin/insserv -r waagent", chk_err=False)
 
 class SUSEOSUtil(SUSE11OSUtil):
     def __init__(self):
