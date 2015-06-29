@@ -79,3 +79,10 @@ class SUSEOSUtil(SUSE11OSUtil):
         super(SUSEOSUtil, self).__init__()
         self.dhcpClientName = 'wickedd-dhcp4'
 
+    def RegisterAgentService(self):
+        return shellutil.Run("systemctl enable waagent", chk_err=False)
+    
+    def UnregisterAgentService(self):
+        return shellutil.Run("systemctl disable waagent", chk_err=False)
+
+

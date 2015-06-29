@@ -73,7 +73,7 @@ class RunHandler(object):
             try:
                 protocol.reportStatus(vmStatus)
             except prot.ProtocolError as e:
-                logger.Error("Failed to report vm status: {0}", status)
+                logger.Error("Failed to report vm status: {0}", e)
 
             time.sleep(25)
 

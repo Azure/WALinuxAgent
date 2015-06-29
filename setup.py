@@ -115,6 +115,8 @@ class install(_install):
         if self.register_service:
             print "Register agent service"
             OSUtil.RegisterAgentService()
+            print "Start agent service"
+            OSUtil.StartAgentService()
 
 setuptools.setup(name=GuestAgentName,
                  version=GuestAgentVersion,
