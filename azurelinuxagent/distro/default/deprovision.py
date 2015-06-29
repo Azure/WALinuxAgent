@@ -66,6 +66,8 @@ class DeprovisionHandler(object):
     def stopAgentService(self, warnings, actions):
         warnings.append("WARNING! The waagent service will be stopped.")
         actions.append(DeprovisionAction(OSUtil.StopAgentService))
+
+    def deleteFiles(self, warnings, actions):
         filesToDel = ['/root/.bash_history', '/var/log/waagent.log']
         actions.append(DeprovisionAction(fileutil.RemoveFiles, filesToDel))
 
@@ -92,6 +94,7 @@ class DeprovisionHandler(object):
             self.deleteRootPassword(warnings, actions)
 
         self.deleteLibDir(warnings, actions)
+        self.deleteFiles(warnings, actions)
 
         if deluser:
             self.deleteUser(warnings, actions)
