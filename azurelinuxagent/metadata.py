@@ -17,6 +17,7 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
+import os
 import re
 import platform
 
@@ -30,6 +31,12 @@ def GetDistroInfo():
         osInfo.append(fullName)
     else:
         osInfo = platform.dist()
+
+    #The platform.py lib has issue with detecting oracle linux distribution.
+    #Merge the following patch provided by oracle as a temparory fix.
+    if os.path.exists("/etc/oracle-release"): 
+        osInfo[2]="oracle" 
+        osInfo[3]="Oracle Linux" 
 
     #Remove trailing whitespace and quote in distro name
     osInfo[0] = osInfo[0].strip('"').strip(' ').lower() 
