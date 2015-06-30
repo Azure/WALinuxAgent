@@ -2889,7 +2889,7 @@ def PutPageBlob(url, data):
         bufSize = pageEnd - start
         buf = bytearray(bufSize)
         buf[0 : contentSize] = data[start : end]
-        ret = restutil.HttpPut(url, buf, {
+        ret = restutil.HttpPut(url, buffer(buf), {
             "x-ms-date" :  timestamp,
             "x-ms-range" : "bytes={0}-{1}".format(start, pageEnd - 1),
             "x-ms-page-write" : "update",
