@@ -26,7 +26,7 @@ import traceback
 import threading
 import subprocess
 import azurelinuxagent.logger as logger
-from azurelinuxagent.metadata import GuestAgentLongVersion, \
+from azurelinuxagent.metadata import GuestAgentName, GuestAgentLongVersion, \
                                      DistroName, DistroVersion, DistroFullName
 from azurelinuxagent.utils.osutil import OSUtil
 from azurelinuxagent.handler import Handlers
@@ -56,6 +56,8 @@ def ParseArgs(sysArgv):
             cmd = "daemon"
         elif re.match("^([-/]*)start", a):
             cmd = "start"
+        elif re.match("^([-/]*)register-service", a):
+            cmd = "register-service"
         elif re.match("^([-/]*)version", a):
             cmd = "version"
         elif re.match("^([-/]*)verbose", a):
@@ -74,14 +76,20 @@ def Version():
                                           DistroVersion))
 def Usage():
     print("")
-    print(("usage: {0} [-verbose] [-force] "
-           "[-help|-deprovision[+user]|-version|-daemon|-start]"
+    print(("usage: {0} [-verbose] [-force] [-help]"
+           "-deprovision[+user]|-register-service|-version|-daemon|-start]"
            "").format(sys.argv[0]))
     print("")
 
 def Start():
     devnull = open(os.devnull, 'w')
     subprocess.Popen([sys.argv[0], '-daemon'], stdout=devnull, stderr=devnull)
+
+def RegisterService():
+    print "Register {0} service".format(GuestAgentName)
+    OSUtil.RegisterAgentService()
+    print "Start {0} service".format(GuestAgentName)
+    OSUtil.StartAgentService()
 
 def Main():
     command, force, verbose = ParseArgs(sys.argv[1:])
@@ -97,5 +105,7 @@ def Main():
             Deprovision(force, deluser=False)
         elif command == "start":
             Start()
+        elif command == "register-service":
+            RegisterService()
         elif command == "daemon":
             Run()

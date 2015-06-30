@@ -23,6 +23,7 @@ from azurelinuxagent.metadata import GuestAgentName, GuestAgentVersion, \
                                      DistroName, DistroVersion, DistroFullName
 
 from azurelinuxagent.utils.osutil import OSUtil
+import azurelinuxagent.agent as agent
 import setuptools
 from setuptools import find_packages
 from setuptools.command.install import install as  _install
@@ -117,10 +118,7 @@ class install(_install):
     def run(self):
         _install.run(self)
         if self.register_service:
-            print "Register agent service"
-            OSUtil.RegisterAgentService()
-            print "Start agent service"
-            OSUtil.StartAgentService()
+            agent.RegisterService()
 
 setuptools.setup(name=GuestAgentName,
                  version=GuestAgentVersion,
