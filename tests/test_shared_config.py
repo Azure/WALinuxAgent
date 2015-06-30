@@ -13,6 +13,8 @@
 # limitations under the License.
 #
 
+import os
+import re
 import unittest
 from env import waagent
 
@@ -24,6 +26,16 @@ class MockDistro(object):
         pass
 
 class TestSharedConfig(unittest.TestCase):
+
+    def test_reg(self):
+        mac = "00:15:5D:34:00:08"
+        output = Ifconfig_Out
+        output = output.replace('\n', '')
+        reg = r"(eth\d).*(HWaddr|ether) {0}".format(mac)
+        match = re.search(reg, output, re.IGNORECASE)
+        output = match.group(0)
+        eths = re.findall(r"eth\d", output)
+        self.assertNotEquals(0, len(eths))
     
     def test_parse_shared_config(self):
         conf = waagent.SharedConfig().Parse(SharedConfigText)
@@ -34,15 +46,32 @@ class TestSharedConfig(unittest.TestCase):
         return conf
 
     def test_config_rdma(self):
-        #waagent.LoggerInit("/dev/stdout", "/dev/null", verbose=True)
         waagent.MyDistro= MockDistro()
-        testDev = "/tmp/hvnd_rdma"
-        waagent.SetFileContents(testDev, "")
+        waagent.LibDir="/tmp"
+
+        test_dev = "/tmp/hvnd_rdma"
+        test_dat_conf_files = ["/tmp/dat.conf"]
+        if os.path.isfile("/tmp/rdmaconfiged"):
+            os.remove("/tmp/rdmaconfiged")
+        waagent.SetFileContents(test_dev, "")
+        old = ("ofa-v2-ib0 u2.0 nonthreadsafe default libdaplofa.so.2 "
+               "dapl.2.0 \"oldip 0\"")
+        waagent.SetFileContents(test_dat_conf_files[0], old)
         conf = self.test_parse_shared_config()
-        conf.ConfigRdma(dev=testDev)
-        rdmaConf = waagent.GetFileContents(testDev)
-        self.assertNotEquals(None, rdmaConf)
-        self.assertNotEquals("", rdmaConf)
+        handler = waagent.RdmaHandler(conf.RdmaMacAddress, conf.RdmaIPv4Address,
+                                      test_dev, test_dat_conf_files)
+        handler.set_dat_conf()
+        handler.set_rdma_dev()
+
+        rdma_conf = waagent.GetFileContents(test_dev)
+        self.assertNotEquals(None, rdma_conf)
+        self.assertNotEquals(0, rdma_conf.count(conf.RdmaIPv4Address))
+        self.assertNotEquals(0, rdma_conf.count(conf.RdmaMacAddress))
+
+        dat_conf = waagent.GetFileContents(test_dat_conf_files[0])
+        self.assertNotEquals(None, dat_conf)
+        self.assertNotEquals(0, dat_conf.count(conf.RdmaIPv4Address))
+        self.assertEquals(0, dat_conf.count("oldip"))
 
 SharedConfigText="""\
 <?xml version="1.0" encoding="utf-8"?>
@@ -87,6 +116,32 @@ SharedConfigText="""\
     </Instance>
   </Instances>
 </SharedConfig>
+"""
+Ifconfig_Out="""\
+eth0: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500
+inet 100.74.52.8  netmask 255.255.255.0  broadcast 100.74.52.255
+inet6 fe80::20d:3aff:fe10:672f  prefixlen 64  scopeid 0x20<link>
+ether 00:0d:3a:10:67:2f  txqueuelen 1000  (Ethernet)
+RX packets 9911  bytes 4451278 (4.2 MiB)
+RX errors 0  dropped 0  overruns 0  frame 0
+TX packets 10505  bytes 1643251 (1.5 MiB)
+TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0
+
+eth1: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500
+inet6 fe80::215:5dff:fe34:8  prefixlen 64  scopeid 0x20<link>
+ether 00:15:5d:34:00:08  txqueuelen 1000  (Ethernet)
+RX packets 16  bytes 672 (672.0 B)
+RX errors 0  dropped 0  overruns 0  frame 0
+TX packets 16  bytes 2544 (2.4 KiB)
+TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0
+
+lo: flags=73<UP,LOOPBACK,RUNNING>  mtu 65536
+inet 127.0.0.1  netmask 255.0.0.0
+inet6 ::1  prefixlen 128  scopeid 0x10<host>
+loop  txqueuelen 0  (Local Loopback)
+RX packets 0  bytes 0 (0.0 B)
+RX errors 0  dropped 0  overruns 0  frame 0
+TX packets 0  bytes 0 (0.0 B)
 """
 
 if __name__ == '__main__':
