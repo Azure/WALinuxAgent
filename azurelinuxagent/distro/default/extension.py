@@ -136,7 +136,7 @@ class ExtensionsHandler(object):
                                              message = str(e),
                                              sequenceNumber = ext.getSeqNo())
             status = ext.createHandlerStatus(extStatus)
-            status.status = "NotReady"
+            status.status = "Ready"
         return status
 
 def ParseExtensionDirName(dirName):
