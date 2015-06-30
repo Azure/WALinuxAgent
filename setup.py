@@ -93,7 +93,7 @@ class install(_install):
         ('lnx-distro=', None, 'target Linux distribution'),
         ('lnx-distro-version=', None, 'target Linux distribution version'),
         ('lnx-distro-fullname=', None, 'target Linux distribution full name'),
-        ('register-service=', None, 'register as startup service'),
+        ('register-service', None, 'register as startup service'),
     ]
 
     def initialize_options(self):
