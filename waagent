@@ -2738,8 +2738,9 @@ class Util(object):
             secure = False
             proxyHost, proxyPort = self.GetHttpProxy(secure)
 
-        resp = self._HttpRequest(method, host, path, port, data, 
-                                 secure, headers, proxyHost, proxyPort)
+        resp = self._HttpRequest(method, host, path, port=port, data=data, 
+                                 secure=secure, headers=headers,
+                                 proxyHost=proxyHost, proxyPort=proxyPort)
         for retry in range(0, maxRetry):
             if resp is not None and \
                    (resp.status == httplib.OK or \
@@ -2763,31 +2764,38 @@ class Util(object):
                 Error("HTTP Err: Body={0}".format(resp.read()))
 
             time.sleep(self.__class__.RetryWaitingInterval)
-            resp = self._HttpRequest(method, host, path, data, secure, 
-                                     headers, proxyHost, proxyPort)
+            resp = self._HttpRequest(method, host, path, port=port, data=data, 
+                                     secure=secure, headers=headers,
+                                     proxyHost=proxyHost, proxyPort=proxyPort)
 
         return None
 
     def HttpGet(self, url, headers=None, maxRetry=3, chkProxy=False):
-        return self.HttpRequest("GET", url, None, headers, maxRetry, chkProxy)
+        return self.HttpRequest("GET", url, headers=headers, 
+                                maxRetry=maxRetry, chkProxy=chkProxy)
         
     def HttpHead(self, url, headers=None, maxRetry=3, chkProxy=False):
-        return self.HttpRequest("HEAD", url, None, headers, maxRetry, chkProxy)
+        return self.HttpRequest("HEAD", url, headers=headers, 
+                                maxRetry=maxRetry, chkProxy=chkProxy)
         
     def HttpPost(self, url, data, headers=None, maxRetry=3, chkProxy=False):
-        return self.HttpRequest("POST", url, data, headers, maxRetry, chkProxy)
+        return self.HttpRequest("POST", url, data=data, headers=headers, 
+                                maxRetry=maxRetry, chkProxy=chkProxy)
 
     def HttpPut(self, url, data, headers=None, maxRetry=3, chkProxy=False):
-        return self.HttpRequest("PUT", url, data, headers, maxRetry, chkProxy)
+        return self.HttpRequest("PUT", url, data=data, headers=headers, 
+                                maxRetry=maxRetry, chkProxy=chkProxy)
 
     def HttpDelete(self, url, headers=None, maxRetry=3, chkProxy=False):
-        return self.HttpRequest("DELETE", url, None, headers, maxRetry, chkProxy)
+        return self.HttpRequest("DELETE", url, headers=headers, 
+                                maxRetry=maxRetry, chkProxy=chkProxy)
     
     def HttpGetWithoutHeaders(self, url, maxRetry=3, chkProxy=False):
         """
         Return data from an HTTP get on 'url'.
         """
-        resp = self.HttpGet(url, None, maxRetry, chkProxy)
+        resp = self.HttpGet(url, headers=None, maxRetry=maxRetry, 
+                            chkProxy=chkProxy)
         return resp.read() if resp is not None else None
 
     def HttpGetWithHeaders(self, url, maxRetry=3, chkProxy=False):
@@ -2796,10 +2804,10 @@ class Util(object):
         x-ms-agent-name and x-ms-version
         headers.
         """
-        resp = self.HttpGet(url, {
+        resp = self.HttpGet(url, headers={
             "x-ms-agent-name": GuestAgentName, 
             "x-ms-version": ProtocolVersion
-        }, maxRetry, chkProxy)
+        }, maxRetry=maxRetry, chkProxy=chkProxy)
         return resp.read() if resp is not None else None
 
     def HttpSecureGetWithHeaders(self, url, transportCert, maxRetry=3, 
@@ -2807,21 +2815,22 @@ class Util(object):
         """
         Return output of get using ssl cert.
         """
-        resp = self.HttpGet(url, {
+        resp = self.HttpGet(url, headers={
             "x-ms-agent-name": GuestAgentName,
             "x-ms-version": ProtocolVersion,
             "x-ms-cipher-name": "DES_EDE3_CBC",
             "x-ms-guest-agent-public-x509-cert": transportCert
-        }, maxRetry, chkProxy)
+        }, maxRetry=maxRetry, chkProxy=chkProxy)
         return resp.read() if resp is not None else None
 
     def HttpPostWithHeaders(self, url, data, maxRetry=3, chkProxy=False):
-        header = {
+        headers = {
             "x-ms-agent-name": GuestAgentName,
             "Content-Type": "text/xml; charset=utf-8",
             "x-ms-version": ProtocolVersion
         }
-        return self.HttpPost(url, data, header, maxRetry, chkProxy)
+        return self.HttpPost(url, data=data, headers=headers, 
+                             maxRetry=maxRetry, chkProxy=chkProxy)
 
 __StorageVersion="2014-02-14"
 
