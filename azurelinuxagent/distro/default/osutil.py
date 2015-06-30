@@ -622,9 +622,15 @@ class DefaultOSUtil(object):
         shellutil.Run("> /var/run/utmp")
         shellutil.Run("userdel -f -r " + userName)
         #Remove user from suders
-        sudoers = fileutil.GetFileContents("/etc/sudoers.d/waagent").split("\n")
-        sudoers = filter(lambda x : userName not in x, sudoers)
-        fileutil.SetFileContents("/etc/sudoers.d/waagent", "\n".join(sudoers))
+        if os.path.isfile("/etc/suders.d/waagent"):
+            try:
+                content = fileutil.GetFileContents("/etc/sudoers.d/waagent")
+                sudoers = content.split("\n")
+                sudoers = filter(lambda x : userName not in x, sudoers)
+                fileutil.SetFileContents("/etc/sudoers.d/waagent", 
+                                         "\n".join(sudoers))
+            except IOError as e:
+                raise OSUtilError("Failed to remove sudoer: {0}".format(e))
   
     def TranslateCustomData(self, data):
         return data
