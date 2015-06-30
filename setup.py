@@ -71,8 +71,12 @@ def get_data_files(name, version, fullname):
         init_dest = '/usr/share/oem'
         init_src = ['init/coreos/cloud-config.yml']
     elif name == 'ubuntu':
-        init_dest = '/etc/init'
-        init_src = ['init/ubuntu/walinuxagent.conf']
+        if version >= "15.04":
+            init_dest = '/lib/systemd/system'
+            init_src = ['init/ubuntu/walinuxagent.service']
+        else:
+            init_dest = '/etc/init'
+            init_src = ['init/ubuntu/walinuxagent.conf']
     elif name == 'suse':
         if fullname == 'SUSE Linux Enterprise Server' and version >= '12' or \
                 fullname == 'openSUSE' and version >= '13.2':

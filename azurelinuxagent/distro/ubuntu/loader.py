@@ -20,9 +20,13 @@
 from azurelinuxagent.metadata import DistroName, DistroVersion
 
 def GetOSUtil():
-    from  azurelinuxagent.distro.ubuntu.osutil import Ubuntu1204OSUtil, UbuntuOSUtil
+    from  azurelinuxagent.distro.ubuntu.osutil import Ubuntu1204OSUtil, \
+                                                      UbuntuOSUtil, \
+                                                      Ubuntu14xOSUtil
     if DistroVersion == "12.04":
         return Ubuntu1204OSUtil()
+    elif DistroVersion == "14.04" 0r DistroVersion == "14.10":
+        return Ubuntu14xOSUtil()
     else:
         return UbuntuOSUtil()
 
