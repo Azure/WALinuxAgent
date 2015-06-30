@@ -72,7 +72,6 @@ def extension_status_to_v2(extStatus, seqNo):
     validate_has_key(extStatus['status'], 'status', 'status/status')
     validate_has_key(extStatus['status'], 'operation', 'status/operation')
     validate_has_key(extStatus['status'], 'code', 'status/code')
-    #TODO are those fields all mandatory
     validate_has_key(extStatus['status'], 'name', 'status/name')
     validate_has_key(extStatus['status'], 'formattedMessage', 
                      'status/formattedMessage')
@@ -218,7 +217,6 @@ class ExtensionInstance(object):
             elif targetVersion == self.currVersion:
                 self.enable()
             else:
-                #TODO downgrade is not allowed?
                 raise ExtensionError("A newer version has already been installed")
         else:
             if targetVersion > self.getVersion():

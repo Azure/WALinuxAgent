@@ -75,6 +75,7 @@ def DetectAvailableProtocols(probeFuncs=[DetectV1, DetectV2]):
     return availableProtocols
 
 def DetectDefaultProtocol():
+    logger.Info("Detect default protocol.")
     availableProtocols = DetectAvailableProtocols()
     return ChooseDefaultProtocol(availableProtocols)
 

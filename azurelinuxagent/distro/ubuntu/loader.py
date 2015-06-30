@@ -25,7 +25,7 @@ def GetOSUtil():
                                                       Ubuntu14xOSUtil
     if DistroVersion == "12.04":
         return Ubuntu1204OSUtil()
-    elif DistroVersion == "14.04" 0r DistroVersion == "14.10":
+    elif DistroVersion == "14.04" or DistroVersion == "14.10":
         return Ubuntu14xOSUtil()
     else:
         return UbuntuOSUtil()

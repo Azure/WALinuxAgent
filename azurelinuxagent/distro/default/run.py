@@ -40,9 +40,10 @@ class RunHandler(object):
         event.EnableUnhandledErrorDump("Azure Linux Agent")
         fileutil.SetFileContents(OSUtil.GetAgentPidPath(), 
                                  str(os.getpid()))
-        
-        if self.handlers.scvmmHandler.detectScvmmEnv():
-            return
+
+        if conf.GetSwitch("DetectScvmmEnv", False):
+            if self.handlers.scvmmHandler.detectScvmmEnv():
+                return
         
         self.handlers.dhcpHandler.probe()
 
@@ -71,6 +72,7 @@ class RunHandler(object):
             for handlerStatus in handlerStatusList:
                 vmStatus.extensionHandlers.append(handlerStatus)
             try:
+                logger.Info("Report vm status")
                 protocol.reportStatus(vmStatus)
             except prot.ProtocolError as e:
                 logger.Error("Failed to report vm status: {0}", e)

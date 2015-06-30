@@ -823,7 +823,6 @@ class Certificates(object):
         shellutil.Run(cmd)
        
         #The parsing process use public key to match prv and crt.
-        #TODO: Is there any way better to do so?
         buf = []
         beginCrt = False
         beginPrv = False

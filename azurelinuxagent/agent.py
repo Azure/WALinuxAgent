@@ -58,8 +58,6 @@ def ParseArgs(sysArgv):
             cmd = "start"
         elif re.match("^([-/]*)version", a):
             cmd = "version"
-        elif re.match("^([-/]*)serialconsole", a):
-            cmd = "serialconsole" 
         elif re.match("^([-/]*)verbose", a):
             verbose = True
         elif re.match("^([-/]*)force", a):
@@ -77,7 +75,7 @@ def Version():
 def Usage():
     print("")
     print(("usage: {0} [-verbose] [-force] "
-           "[-help|-deprovision[+user]|-version|-serialconsole|-daemon|-start]"
+           "[-help|-deprovision[+user]|-version|-daemon|-start]"
            "").format(sys.argv[0]))
     print("")
 
@@ -93,9 +91,6 @@ def Main():
         Usage()
     else: 
         Init(verbose)
-        if command == "serialconsole":
-            #TODO
-            pass
         if command == "deprovision+user":
             Deprovision(force, deluser=True)
         elif command == "deprovision":

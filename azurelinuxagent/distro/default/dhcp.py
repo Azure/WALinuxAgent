@@ -42,12 +42,16 @@ class DhcpHandler(object):
             ipv4 = OSUtil.GetIpv4Address()
 
     def probe(self):
+        logger.Info("Send dhcp request")
         self.waitForNetwork()
         macAddress = OSUtil.GetMacAddress()
         req = BuildDhcpRequest(macAddress)
         resp = SendDhcpRequest(req)
         endpoint, gateway, routes = ParseDhcpResponse(resp)
         self.endpoint = endpoint
+        logger.Info("Wire server endpoint:{0}", endpoint)
+        logger.Info("Gateway:{0}", gateway)
+        logger.Info("Routes:{0}", routes)
         if endpoint is not None:
             path = os.path.join(OSUtil.GetLibDir(), WireServerAddrFile)
             fileutil.SetFileContents(path, endpoint)
@@ -59,6 +63,7 @@ class DhcpHandler(object):
         return self.endpoint
 
     def configRoutes(self):
+        logger.Info("Configure routes")
         #Add default gateway
         if self.gateway is not None:
             OSUtil.RouteAdd(0 , 0, self.gateway)
@@ -246,8 +251,8 @@ def SocketSend(request):
     sock.bind(("0.0.0.0", 68)) 
     sock.sendto(request, ("<broadcast>", 67))
     sock.settimeout(10)
-    logger.Info("Send DHCP request: Setting socket.timeout=10, "
-                "entering recv")
+    logger.Verbose("Send DHCP request: Setting socket.timeout=10, "
+                   "entering recv")
     response = sock.recv(1024)
     return response
 

@@ -33,12 +33,12 @@ On ubuntu image, provision could be disabled.
 """
 class UbuntuProvisionHandler(ProvisionHandler):
     def process(self):
-        logger.Info("Run ubuntu provision handler") 
         #If provision is enabled, run default provision handler
         if conf.GetSwitch("Provisioning.Enabled", False):
             super(UbuntuProvisionHandler, self).process()
             return
 
+        logger.Info("Run Ubuntu provision handler") 
         provisioned = os.path.join(OSUtil.GetLibDir(), "provisioned")
         if os.path.isfile(provisioned):
             return
@@ -46,6 +46,7 @@ class UbuntuProvisionHandler(ProvisionHandler):
         logger.Info("Waiting cloud-init to finish provisioning.")
         protocol = prot.Factory.getDefaultProtocol()
         try:
+            logger.Info("Wait for ssh host key to be generated.")
             thumbprint = self.waitForSshHostKey()
             fileutil.SetFileContents(provisioned, "")
 

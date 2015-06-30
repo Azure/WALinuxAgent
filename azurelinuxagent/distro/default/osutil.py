@@ -315,8 +315,6 @@ class DefaultOSUtil(object):
     def MountDvd(self, maxRetry=6, chk_err=True):
         dvd = self.GetDvdDevice()
         mountPoint = self.GetDvdMountPoint()
-        #TODO Why do we need to load atapiix?
-        #self.LoadAtapiixModule()
         mountlist = shellutil.RunGetOutput("mount")[1]
         existing = self.GetMountPoint(mountlist, dvd)
         if existing is not None: #Already mounted
@@ -329,7 +327,7 @@ class DefaultOSUtil(object):
             retcode = self.Mount(dvd, mountPoint, option="-o ro -t iso9660,udf", 
                                  chk_err=chk_err)
             if retcode == 0:
-                logger.Info("Successfully mounted provision dvd")
+                logger.Info("Successfully mounted dvd")
                 return
             if retry < maxRetry - 1:
                 logger.Warn("Mount dvd failed: retry={0}, ret={1}", retry, 
@@ -417,10 +415,6 @@ class DefaultOSUtil(object):
             if os.path.isfile(src):
                 logger.Warn("Move rules file {0} to {1}", fileName, dest)
                 shutil.move(src, dest)
-
-    def CheckDependencies(self):
-        #TODO Add dependency check
-        pass
 
     def GetMacAddress(self):
         """
@@ -571,8 +565,7 @@ class DefaultOSUtil(object):
             if original != timeout:
                 fileutil.SetFileContents(filePath, timeout)
                 logger.Info("Set block dev timeout: {0} with timeout: {1}",
-                            dev,
-                            timeout)
+                            dev, timeout)
 
     def GetMountPoint(self, mountlist, device):
         """

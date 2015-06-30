@@ -17,6 +17,9 @@ start()
 {
     echo -n $"Starting $FriendlyName: "
     $WAZD_BIN -start
+    RETVAL=$?
+    echo
+    return $RETVAL
 }
 
 stop()

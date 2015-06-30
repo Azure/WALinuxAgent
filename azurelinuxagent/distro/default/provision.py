@@ -40,7 +40,7 @@ class ProvisionHandler(object):
         if os.path.isfile(provisioned):
             return
         
-        logger.Info("Start provisioning.")
+        logger.Info("Run provision handler.")
         protocol = prot.Factory.getDefaultProtocol()
         try:
             status = prot.ProvisionStatus(status="NotReady", 
@@ -85,6 +85,7 @@ class ProvisionHandler(object):
             
 
     def provision(self):
+        logger.Info("Copy ovf-env.xml.")
         try:
             ovfenv = ovf.CopyOvfEnv()
         except prot.ProtocolError as e:
@@ -92,24 +93,29 @@ class ProvisionHandler(object):
 
         password = ovfenv.getUserPassword()
         ovfenv.clearUserPassword()
-
+        
+        logger.Info("Set host name.")
         OSUtil.SetHostname(ovfenv.getComputerName())
+        logger.Info("Publish host name.")
         OSUtil.PublishHostname(ovfenv.getComputerName())
+        logger.Info("Create user account.")
         OSUtil.UpdateUserAccount(ovfenv.getUserName(), password)
 
         if password is not None:
             userSalt = conf.GetSwitch("Provision.UseSalt", True)
             saltType = conf.GetSwitch("Provision.SaltType", 6)
+            logger.Info("Set user password.")
             OSUtil.ChangePassword(ovfenv.getUserName(), password, userSalt,
                                       saltType)
 
+        logger.Info("Configure sshd.")
         OSUtil.ConfigSshd(ovfenv.getDisableSshPasswordAuthentication())
 
         #Disable selinux temporary
         sel = OSUtil.IsSelinuxRunning()
         if sel:
             OSUtil.SetSelinuxEnforce(0)
-
+        
         self.deploySshPublicKeys(ovfenv)
         self.deploySshKeyPairs(ovfenv)
         self.saveCustomData(ovfenv)
@@ -124,19 +130,21 @@ class ProvisionHandler(object):
 
 
     def saveCustomData(self, ovfenv):
+        logger.Info("Save custom data")
         customData = ovfenv.getCustomData()
         if customData is None:
             return
-        #TODO  port Abel's fix to decoding custom data
         libDir = OSUtil.GetLibDir()
         fileutil.SetFileContents(os.path.join(libDir, CustomDataFile), 
                                  OSUtil.TranslateCustomData(customData))
 
     def deploySshPublicKeys(self, ovfenv):
         for thumbprint, path in ovfenv.getSshPublicKeys():
+            logger.Info("Deploy ssh public key.")
             OSUtil.DeploySshPublicKey(ovfenv.getUserName(), thumbprint, path)
     
     def deploySshKeyPairs(self, ovfenv):
         for thumbprint, path in ovfenv.getSshKeyPairs():
+            logger.Info("Deploy ssh key pairs.")
             OSUtil.DeploySshKeyPair(ovfenv.getUserName(), thumbprint, path)
    
