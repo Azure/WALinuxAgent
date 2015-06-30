@@ -44,7 +44,7 @@ def GetDistroInfo():
 
 GuestAgentName = "AzureLinuxAgent"
 GuestAgentLongName = "Azure Linux Agent"
-GuestAgentVersion='2.1.0-pre'
+GuestAgentVersion='2.1.0'
 GuestAgentLongVersion = "{0}-{1}".format(GuestAgentName, GuestAgentVersion)
 GuestAgentDescription = """\
 The Azure Linux Agent supports the provisioning and running of Linux
