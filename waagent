@@ -635,12 +635,13 @@ class AbstractDistro(object):
             raise Exception("Failed to get ifname with mac: {0}".format(mac))
         return eths[-1]
 
-    def configIpV4(self, ifName, addr):
+    def configIpV4(self, ifName, addr, netmask=24):
         ret, output = RunGetOutput("ifconfig {0} up".format(ifName))
         if ret != 0:
             raise Exception("Failed to bring up {0}: {1}".format(ifName, 
                                                                  output))
-        ret, output = RunGetOutput("ifconfig {0} {1}/24".format(ifName, addr))
+        ret, output = RunGetOutput("ifconfig {0} {1}/{2}".format(ifName, addr,
+                                                                 netmask))
         if ret != 0:
             raise Exception("Failed to config ipv4 for {0}: {1}".format(ifName, 
                                                                         output))
@@ -3364,7 +3365,7 @@ class RdmaHandler(object):
         Log("Wait for /dev/hvnd_rdma")
         retry = 0
         while retry < 120:
-            if os.path.isfile(self.dev):
+            if os.path.exists(self.dev):
                 return
             time.sleep(1)
             retry += 1
@@ -3374,7 +3375,8 @@ class RdmaHandler(object):
         Log("Set ip addr for rdma")
         try:
             if_name = MyDistro.getInterfaceNameByMac(self.mac)
-            MyDistro.configIpV4(if_name, self.ip_addr)
+            #Azure is using 12 bits network mask for infiniband.
+            MyDistro.configIpV4(if_name, self.ip_addr, 12)
         except Exception as e:
             raise RdmaError("Failed to config rdma device: {0}".format(e))
 
