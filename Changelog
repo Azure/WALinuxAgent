@@ -1,5 +1,10 @@
 WALinuxAgent                                                          Changelog
 |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+1 Jul 2015, WALinuxAgent 2.0.14
+   . Fix rdma config
+   . Fix page blob uploading for python 2.6
+   . Fix http request error handling
+
 1 Jun 2015, WALinuxAgent 2.0.13
    . Handle http 410 returned by host
    . Add support for http proxy
