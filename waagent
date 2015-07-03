@@ -1029,6 +1029,19 @@ class centosDistro(redhatDistro):
         super(centosDistro,self).__init__()
 
 
+############################################################    
+#	asianuxDistro
+############################################################    
+
+class asianuxDistro(redhatDistro):
+    """
+    Asianux Distro concrete class
+    Put Asianux specific behavior here...
+    """
+    def __init__(self):
+        super(asianuxDistro,self).__init__()
+
+
 ############################################################
 #   CoreOSDistro
 ############################################################
