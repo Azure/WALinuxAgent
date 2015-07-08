@@ -20,14 +20,10 @@ BuildArch:      noarch
 Vendor:         Microsoft Corporation
 Packager:       Microsoft Corporation <walinuxagent@microsoft.com>
 
-%if 0%{?rhel} < 7
-Conflicts:      NetworkManager
-%endif
-
 %description
 The Windows Azure Linux Agent supports the provisioning and running of Linux
-VMs in the Windows Azure cloud. This package should be installed on Linux disk
-images that are built to run in the Windows Azure environment.
+VMs in the Microsoft Azure cloud. This package should be installed on Linux disk
+images that are built to run in the Microsoft Azure environment.
 
 %prep
 %setup -q

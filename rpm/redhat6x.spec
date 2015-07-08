@@ -19,10 +19,7 @@ BuildRoot:      %{_tmppath}/%{name}-%{version}-build
 BuildArch:      noarch
 Vendor:         Microsoft Corporation
 Packager:       Microsoft Corporation <walinuxagent@microsoft.com>
-
-%if 0%{?rhel} < 7
 Conflicts:      NetworkManager
-%endif
 
 %description
 The Azure Linux Agent supports the provisioning and running of Linux
