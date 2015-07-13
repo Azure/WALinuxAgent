@@ -1,31 +1,28 @@
 #===============================================================================
-# Name: walinuxagent.spec
+# Name: redhat6x.spec
 #-------------------------------------------------------------------------------
 # Purpose : RPM Spec file for Python script packaging
-# Version : 2.0.13
+# Version : 2.0.15
 # Created : April 20 2012
 #===============================================================================
 
 Name:           WALinuxAgent
-Summary:        The Windows Azure Linux Agent
-Version:        2.0.13
+Summary:        The Azure Linux Agent
+Version:        %{_agentversion}
 Release:        1
 License:        Apache License Version 2.0
 Group:          System/Daemons
 Url:            http://go.microsoft.com/fwlink/?LinkId=250998
-Source0:        WALinuxAgent-2.0.13.tar.gz
+Source0:        WALinuxAgent-%{_agentversion}.tar.gz
 Requires:       python python-pyasn1 openssh openssl util-linux sed grep sudo iptables parted
 BuildRoot:      %{_tmppath}/%{name}-%{version}-build
 BuildArch:      noarch
 Vendor:         Microsoft Corporation
 Packager:       Microsoft Corporation <walinuxagent@microsoft.com>
-
-%if 0%{?rhel} < 7
 Conflicts:      NetworkManager
-%endif
 
 %description
-The Windows Azure Linux Agent supports the provisioning and running of Linux
+The Azure Linux Agent supports the provisioning and running of Linux
 VMs in the Windows Azure cloud. This package should be installed on Linux disk
 images that are built to run in the Windows Azure environment.
 
@@ -73,6 +70,9 @@ fi
 
 
 %changelog
+* Wed Jul 08 2015 - walinuxagent@microsoft.com
+- Rename spec for redhat6x
+
 * Thu Sep 18 2014 - walinuxagent@microsoft.com
 - Remove NetworkManager conflict for EL7+
 
