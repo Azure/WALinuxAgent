@@ -235,9 +235,6 @@ class Protocol(DataContract):
     def get_extension_pkgs(self, extension):
         raise NotImplementedError()
 
-    def get_instance_metadata(self):
-        raise NotImplementedError()
-
     def report_provision_status(self, status):
         raise NotImplementedError()
 

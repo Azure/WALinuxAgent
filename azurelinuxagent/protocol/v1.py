@@ -87,17 +87,7 @@ class WireProtocol(Protocol):
         goal_state = self.client.get_goal_state()
         man = self.client.get_ext_manifest(extension, goal_state)
         return man.pkg_list
-
-    def get_instance_metadata(self):
-        goal_state = self.client.get_goal_state()
-        hosting_env = self.client.get_hosting_env()
-        metadata = InstanceMetadata()
-        metadata.deploymentName = hosting_env.deployment_name
-        metadata.roleName = hosting_env.role_name
-        metadata.roleInstanceId = goal_state.role_instance_id
-        metadata.containerId = goal_state.container_id
-        return metadata
-
+   
     def report_provision_status(self, provisionStatus):
         validata_param("provisionStatus", provisionStatus, ProvisionStatus)
 

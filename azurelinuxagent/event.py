@@ -58,6 +58,7 @@ class EventMonitor(object):
                                                  DISTRO_VERSION,
                                                  DISTRO_CODE_NAME,
                                                  platform.release())
+
         self.sysinfo.append(prot.TelemetryEventParam("OSVersion", osversion))
         self.sysinfo.append(prot.TelemetryEventParam("GAVersion",
                                                      AGENT_VERSION))
@@ -66,16 +67,11 @@ class EventMonitor(object):
         self.sysinfo.append(prot.TelemetryEventParam("Processors",
                                                      OSUTIL.get_processor_cores()))
         protocol = prot.FACTORY.get_default_protocol()
-        metadata = protocol.get_instance_metadata()
-        self.sysinfo.append(prot.TelemetryEventParam("TenantName",
-                                                     metadata.deploymentName))
-        self.sysinfo.append(prot.TelemetryEventParam("RoleName",
-                                                     metadata.roleName))
-        self.sysinfo.append(prot.TelemetryEventParam("RoleInstanceName",
-                                                     metadata.roleInstanceId))
-        self.sysinfo.append(prot.TelemetryEventParam("ContainerId",
-                                                     metadata.containerId))
-
+        vminfo = protocol.get_vminfo()
+        self.sysinfo.append(prot.TelemetryEventParam("VMName",
+                                                     vminfo.vmName))
+        #TODO add other system info like, subscription id, etc.
+       
     def start(self):
         event_thread = threading.Thread(target = self.run)
         event_thread.setDaemon(True)
