@@ -53,9 +53,8 @@ class TestConfiguration(unittest.TestCase):
         self.assertEquals(-1, config.getInt("foo.bar.str"))
 
     def test_parse_malformed_conf(self):
-        with self.assertRaises(AgentConfigError) as cm:
-            config = conf.ConfigurationProvider()
-            config.load(None)
+        config = conf.ConfigurationProvider()
+        self.assertRaises(AgentConfigError, config.load, None)
 
     def test_load_conf_file(self):
         with open('/tmp/test_conf', 'w') as F:
