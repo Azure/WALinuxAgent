@@ -66,11 +66,14 @@ class EventMonitor(object):
                                                      OSUTIL.get_total_mem()))
         self.sysinfo.append(prot.TelemetryEventParam("Processors",
                                                      OSUTIL.get_processor_cores()))
-        protocol = prot.FACTORY.get_default_protocol()
-        vminfo = protocol.get_vminfo()
-        self.sysinfo.append(prot.TelemetryEventParam("VMName",
-                                                     vminfo.vmName))
-        #TODO add other system info like, subscription id, etc.
+        try:
+            protocol = prot.FACTORY.get_default_protocol()
+            vminfo = protocol.get_vminfo()
+            self.sysinfo.append(prot.TelemetryEventParam("VMName",
+                                                         vminfo.vmName))
+            #TODO add other system info like, subscription id, etc.
+        except prot.ProtocolError as e:
+            logger.warn("Failed to get vm info: {0}", e)
        
     def start(self):
         event_thread = threading.Thread(target = self.run)
@@ -113,7 +116,7 @@ class EventMonitor(object):
             event_list.events.append(event)
         if len(event_list.events) == 0:
             return
-
+        
         try:
             protocol = prot.FACTORY.get_default_protocol()
             protocol.report_event(event_list)
