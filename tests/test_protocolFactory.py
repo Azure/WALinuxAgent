@@ -28,8 +28,8 @@ import azurelinuxagent.protocol.protocolFactory as protocolFactory
 
 class TestWireProtocolEndpoint(unittest.TestCase):
     def test_get_available_protocol(self):
-        with self.assertRaises(protocol.ProtocolNotFound):
-            protocol.Factory.getDefaultProtocol()
+        self.assertRaises(protocol.ProtocolNotFound,
+                          protocol.Factory.getDefaultProtocol)
 
     def test_get_available_protocols(self):
         mockGetV1 = MockFunc(retval="Mock protocol")
