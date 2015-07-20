@@ -21,61 +21,61 @@ import os
 import time
 import azurelinuxagent.logger as logger
 import azurelinuxagent.conf as conf
-from azurelinuxagent.metadata import GuestAgentLongName, GuestAgentVersion, \
-                                     DistroName, DistroVersion, DistroFullName
+from azurelinuxagent.metadata import agent_long_name, AGENT_VERSION, \
+                                     DISTRO_NAME, DISTRO_VERSION, DISTRO_FULL_NAME
 import azurelinuxagent.protocol as prot
 import azurelinuxagent.event as event
-from azurelinuxagent.utils.osutil import OSUtil
+from azurelinuxagent.utils.osutil import OSUTIL
 import azurelinuxagent.utils.fileutil as fileutil
 
 
-class RunHandler(object):
+class MainHandler(object):
     def __init__(self, handlers):
         self.handlers = handlers
 
     def run(self):
-        logger.Info("{0} Version:{1}", GuestAgentLongName, GuestAgentVersion) 
-        logger.Info("OS: {0} {1}", DistroName, DistroVersion)
+        logger.info("{0} Version:{1}", agent_long_name, AGENT_VERSION)
+        logger.info("OS: {0} {1}", DISTRO_NAME, DISTRO_VERSION)
 
-        event.EnableUnhandledErrorDump("Azure Linux Agent")
-        fileutil.SetFileContents(OSUtil.GetAgentPidPath(), 
+        event.enable_unhandled_err_dump("Azure Linux Agent")
+        fileutil.write_file(OSUTIL.get_agent_pid_file_path(),
                                  str(os.getpid()))
 
-        if conf.GetSwitch("DetectScvmmEnv", False):
-            if self.handlers.scvmmHandler.detectScvmmEnv():
+        if conf.get_switch("DetectScvmmEnv", False):
+            if self.handlers.scvmm_handler.detect_scvmm_env():
                 return
-        
-        self.handlers.dhcpHandler.probe()
 
-        prot.DetectDefaultProtocol()
-        
-        event.EventMonitor().startEventsLoop()
+        self.handlers.dhcp_handler.probe()
 
-        self.handlers.provisionHandler.process()
+        prot.detect_default_protocol()
 
-        if conf.GetSwitch("ResourceDisk.Format", False):
-            self.handlers.resourceDiskHandler.startActivateResourceDisk()
-        
-        self.handlers.envHandler.startMonitor()
+        event.EventMonitor().start()
 
-        protocol = prot.Factory.getDefaultProtocol()
+        self.handlers.provision_handler.process()
+
+        if conf.get_switch("ResourceDisk.Format", False):
+            self.handlers.resource_disk_handler.start_activate_resource_disk()
+
+        self.handlers.env_handler.start()
+
+        protocol = prot.Factory.get_default_protocol()
         while True:
 
             #Handle extensions
-            handlerStatusList = self.handlers.extensionHandler.process()
+            h_status_list = self.handlers.extension_handler.process()
 
             #Report status
-            vmStatus = prot.VMStatus()
-            vmStatus.vmAgent.agentVersion = GuestAgentLongName
-            vmStatus.vmAgent.status = "Ready"
-            vmStatus.vmAgent.message = "Guest Agent is running"
-            for handlerStatus in handlerStatusList:
-                vmStatus.extensionHandlers.append(handlerStatus)
+            vm_status = prot.VMStatus()
+            vm_status.vmAgent.agentVersion = agent_long_name
+            vm_status.vmAgent.status = "Ready"
+            vm_status.vmAgent.message = "Guest Agent is running"
+            for h_status in h_status_list:
+                vm_status.extensionHandlers.append(h_status)
             try:
-                logger.Info("Report vm status")
-                protocol.reportStatus(vmStatus)
+                logger.info("Report vm status")
+                protocol.report_status(vm_status)
             except prot.ProtocolError as e:
-                logger.Error("Failed to report vm status: {0}", e)
+                logger.error("Failed to report vm status: {0}", e)
 
             time.sleep(25)
 

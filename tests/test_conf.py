@@ -42,15 +42,15 @@ class TestConfiguration(unittest.TestCase):
     def test_parse_conf(self):
         config = conf.ConfigurationProvider()
         config.load(TestConf)
-        self.assertEquals(True, config.getSwitch("foo.bar.switch"))
-        self.assertEquals(False, config.getSwitch("foo.bar.switch2"))
-        self.assertEquals(False, config.getSwitch("foo.bar.switch3"))
-        self.assertEquals(True, config.getSwitch("foo.bar.switch4", True))
+        self.assertEquals(True, config.get_switch("foo.bar.switch"))
+        self.assertEquals(False, config.get_switch("foo.bar.switch2"))
+        self.assertEquals(False, config.get_switch("foo.bar.switch3"))
+        self.assertEquals(True, config.get_switch("foo.bar.switch4", True))
         self.assertEquals("foobar", config.get("foo.bar.str"))
         self.assertEquals("foobar1", config.get("foo.bar.str1", "foobar1"))
-        self.assertEquals(300, config.getInt("foo.bar.int"))
-        self.assertEquals(-1, config.getInt("foo.bar.int2"))
-        self.assertEquals(-1, config.getInt("foo.bar.str"))
+        self.assertEquals(300, config.get_int("foo.bar.int"))
+        self.assertEquals(-1, config.get_int("foo.bar.int2"))
+        self.assertEquals(-1, config.get_int("foo.bar.str"))
 
     def test_parse_malformed_conf(self):
         with self.assertRaises(AgentConfigError) as cm:
@@ -63,8 +63,8 @@ class TestConfiguration(unittest.TestCase):
             F.close()
         
         config = conf.ConfigurationProvider()
-        conf.LoadConfiguration('/tmp/test_conf', conf=config)
-        self.assertEquals(True, config.getSwitch("foo.bar.switch"), False)
+        conf.load_conf('/tmp/test_conf', conf=config)
+        self.assertEquals(True, config.get_switch("foo.bar.switch"), False)
 
 if __name__ == '__main__':
     unittest.main()

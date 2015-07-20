@@ -17,11 +17,13 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
-from  provision import UbuntuProvisionHandler
+from azurelinuxagent.distro.ubuntu.provision import UbuntuProvisionHandler
+from azurelinuxagent.distro.ubuntu.deprovision import UbuntuDeprovisionHandler
 from azurelinuxagent.distro.default.handlerFactory import DefaultHandlerFactory
 
 class UbuntuHandlerFactory(DefaultHandlerFactory):
     def __init__(self):
         super(UbuntuHandlerFactory, self).__init__()
-        self.provisionHandler = UbuntuProvisionHandler()
+        self.provision_handler = UbuntuProvisionHandler()
+        self.deprovision_handler = UbuntuDeprovisionHandler()
 

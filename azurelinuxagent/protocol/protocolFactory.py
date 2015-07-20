@@ -21,19 +21,19 @@ import traceback
 import threading
 import azurelinuxagent.logger as logger
 import azurelinuxagent.utils.fileutil as fileutil
-from azurelinuxagent.utils.osutil import OSUtil
+from azurelinuxagent.utils.osutil import OSUTIL
 from azurelinuxagent.protocol.common import *
-from azurelinuxagent.protocol.v1 import ProtocolV1
-from azurelinuxagent.protocol.v2 import ProtocolV2
+from azurelinuxagent.protocol.v1 import WIRE_PROTOCOL
+from azurelinuxagent.protocol.v2 import MetadataProtocol
 
-WireServerAddrFile = "WireServer" 
-WireProtocol = "WireProtocol"
-MetaDataProtocol = "MetaDataProtocol"
+WIRE_SERVER_ADDR_FILE_NAME = "WireServer"
+WIRE_PROTOCOL = "WireProtocol"
+METADATA_PROTOCOL = "MetaDataProtocol"
 
-def GetWireProtocolEndpoint():
-    path = os.path.join(OSUtil.GetLibDir(), WireServerAddrFile)
+def get_wire_protocol_endpoint():
+    path = os.path.join(OSUTIL.get_lib_dir(), WIRE_SERVER_ADDR_FILE_NAME)
     try:
-        endpoint = fileutil.GetFileContents(path)
+        endpoint = fileutil.read_file(path)
     except IOError as e:
         raise ProtocolNotFound("Wire server endpoint not found: {0}".format(e))
 
@@ -42,84 +42,84 @@ def GetWireProtocolEndpoint():
 
     return endpoint
 
-def DetectV1():
-    endpoint = GetWireProtocolEndpoint() 
+def detect_wire_protocol():
+    endpoint = get_wire_protocol_endpoint()
 
-    OSUtil.GenerateTransportCert()
-    protocol = ProtocolV1(endpoint)
-    protocol.initialize()
-    
-    logger.Info("Protocol V1 found.")
-    path = os.path.join(OSUtil.GetLibDir(), WireProtocol)
-
-    fileutil.SetFileContents(path, "")
-    return protocol
-
-def DetectV2():
-    protocol = ProtocolV2()
+    OSUTIL.gen_transport_cert()
+    protocol = WIRE_PROTOCOL(endpoint)
     protocol.initialize()
 
-    logger.Info("Protocol V2 found.")
-    path = os.path.join(OSUtil.GetLibDir(), MetaDataProtocol)
-    fileutil.SetFileContents(path, "")
+    logger.info("Protocol V1 found.")
+    path = os.path.join(OSUTIL.get_lib_dir(), WIRE_PROTOCOL)
+
+    fileutil.write_file(path, "")
     return protocol
 
-def DetectAvailableProtocols(probeFuncs=[DetectV1, DetectV2]):
-    availableProtocols = []
-    for probeFunc in probeFuncs:
+def detect_metadata_protocol():
+    protocol = MetadataProtocol()
+    protocol.initialize()
+
+    logger.info("Protocol V2 found.")
+    path = os.path.join(OSUTIL.get_lib_dir(), METADATA_PROTOCOL)
+    fileutil.write_file(path, "")
+    return protocol
+
+def detect_available_protocols(prob_funcs=[detect_wire_protocol, detect_metadata_protocol]):
+    available_protocols = []
+    for probe_func in prob_funcs:
         try:
-            protocol = probeFunc()
-            availableProtocols.append(protocol)
+            protocol = probe_func()
+            available_protocols.append(protocol)
         except ProtocolNotFound as e:
-            logger.Info(str(e))
-    return availableProtocols
+            logger.info(str(e))
+    return available_protocols
 
-def DetectDefaultProtocol():
-    logger.Info("Detect default protocol.")
-    availableProtocols = DetectAvailableProtocols()
-    return ChooseDefaultProtocol(availableProtocols)
+def detect_default_protocol():
+    logger.info("Detect default protocol.")
+    available_protocols = detect_available_protocols()
+    return choose_default_protocol(available_protocols)
 
-def ChooseDefaultProtocol(availableProtocols):
-    if len(availableProtocols) > 0:
-        return availableProtocols[0]
+def choose_default_protocol(protocols):
+    if len(protocols) > 0:
+        return protocols[0]
     else:
         raise ProtocolNotFound("No available protocol detected.")
 
-def GetV1():
-    path = os.path.join(OSUtil.GetLibDir(), WireProtocol)
+def get_wire_protocol():
+    path = os.path.join(OSUTIL.get_lib_dir(), WIRE_PROTOCOL)
     if not os.path.isfile(path):
         raise ProtocolNotFound("Protocol V1 not found")
-        
-    endpoint = GetWireProtocolEndpoint() 
-    return ProtocolV1(endpoint)
 
-def GetV2():
-    path = os.path.join(OSUtil.GetLibDir(), MetaDataProtocol)
+    endpoint = get_wire_protocol_endpoint()
+    return WIRE_PROTOCOL(endpoint)
+
+def get_metadata_protocol():
+    path = os.path.join(OSUTIL.get_lib_dir(), METADATA_PROTOCOL)
     if not os.path.isfile(path):
         raise ProtocolNotFound("Protocol V2 not found")
-    return ProtocolV2()
+    return MetadataProtocol()
 
-def GetAvailableProtocols(getters=[GetV1, GetV2]):
-    availableProtocols = []
+def get_available_protocols(getters=[get_wire_protocol, get_metadata_protocol]):
+    available_protocols = []
     for getter in getters:
         try:
             protocol = getter()
-            availableProtocols.append(protocol)
+            available_protocols.append(protocol)
         except ProtocolNotFound as e:
-            logger.Info(str(e))
-    return availableProtocols
+            logger.info(str(e))
+    return available_protocols
 
 class ProtocolFactory(object):
     def __init__(self):
         self._protocol = None
         self._lock = threading.Lock()
 
-    def getDefaultProtocol(self):
+    def get_default_protocol(self):
         if self._protocol is None:
             self._lock.acquire()
             if self._protocol is None:
-                availableProtocols = GetAvailableProtocols()
-                self._protocol = ChooseDefaultProtocol(availableProtocols)
+                available_protocols = get_available_protocols()
+                self._protocol = choose_default_protocol(available_protocols)
             self._lock.release()
 
         return self._protocol

@@ -17,20 +17,20 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
-from azurelinuxagent.metadata import DistroName, DistroVersion
+from azurelinuxagent.metadata import DISTRO_NAME, DISTRO_VERSION
 
-def GetOSUtil():
+def get_osutil():
     from  azurelinuxagent.distro.ubuntu.osutil import Ubuntu1204OSUtil, \
                                                       UbuntuOSUtil, \
                                                       Ubuntu14xOSUtil
-    if DistroVersion == "12.04":
+    if DISTRO_VERSION == "12.04":
         return Ubuntu1204OSUtil()
-    elif DistroVersion == "14.04" or DistroVersion == "14.10":
+    elif DISTRO_VERSION == "14.04" or DISTRO_VERSION == "14.10":
         return Ubuntu14xOSUtil()
     else:
         return UbuntuOSUtil()
 
-def GetHandlers():
+def get_handlers():
     from azurelinuxagent.distro.ubuntu.handlerFactory import UbuntuHandlerFactory
     return UbuntuHandlerFactory()
-     
+

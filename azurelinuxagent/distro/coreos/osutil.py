@@ -37,7 +37,7 @@ class CoreOSUtil(DefaultOSUtil):
         super(CoreOSUtil, self).__init__()
         self.waagent_path='/usr/share/oem/bin/waagent'
         self.python_path='/usr/share/oem/python/bin'
-        self.configPath = '/usr/share/oem/waagent.conf'
+        self.conf_path = '/usr/share/oem/waagent.conf'
         if 'PATH' in os.environ:
             path = "{0}:{1}".format(os.environ['PATH'], self.python_path)
         else:
@@ -51,40 +51,40 @@ class CoreOSUtil(DefaultOSUtil):
             py_path = self.waagent_path
         os.environ['PYTHONPATH'] = py_path
 
-    def IsSysUser(self, userName):
+    def is_sys_user(self, username):
        #User 'core' is not a sysuser
-       if userName == 'core':
+       if username == 'core':
            return False
-       return super(CoreOSUtil, self).IsSysUser(userName)
+       return super(CoreOSUtil, self).IsSysUser(username)
 
-    def IsDhcpEnabled(self):
+    def is_dhcp_enabled(self):
         return True
-    
-    def StartNetwork(self) :
-        return shellutil.Run("systemctl start systemd-networkd", chk_err=False)
-        
-    def RestartInterface(self, iface):
-        shellutil.Run("systemctl restart systemd-networkd")
 
-    def RestartSshService(self):
-        return shellutil.Run("systemctl restart sshd", chk_err=False)
+    def start_network(self) :
+        return shellutil.run("systemctl start systemd-networkd", chk_err=False)
 
-    def StopDhcpService(self):
-        return shellutil.Run("systemctl stop systemd-networkd", chk_err=False)
+    def restart_if(self, iface):
+        shellutil.run("systemctl restart systemd-networkd")
 
-    def StartDhcpService(self):
-        return shellutil.Run("systemctl start systemd-networkd", chk_err=False)
+    def restart_ssh_service(self):
+        return shellutil.run("systemctl restart sshd", chk_err=False)
 
-    def StartAgentService(self):
-        return shellutil.Run("systemctl start wagent", chk_err=False)
+    def stop_dhcp_service(self):
+        return shellutil.run("systemctl stop systemd-networkd", chk_err=False)
 
-    def StopAgentService(self):
-        return shellutil.Run("systemctl stop wagent", chk_err=False)
-    
-    def GetDhcpProcessId(self):
-        ret= shellutil.RunGetOutput("pidof systemd-networkd")
+    def start_dhcp_service(self):
+        return shellutil.run("systemctl start systemd-networkd", chk_err=False)
+
+    def start_agent_service(self):
+        return shellutil.run("systemctl start wagent", chk_err=False)
+
+    def stop_agent_service(self):
+        return shellutil.run("systemctl stop wagent", chk_err=False)
+
+    def get_dhcp_pid(self):
+        ret= shellutil.run_get_output("pidof systemd-networkd")
         return ret[1] if ret[0] == 0 else None
-   
-    def TranslateCustomData(self, data):
+
+    def decode_customdata(self, data):
         return base64.b64decode(data)
 

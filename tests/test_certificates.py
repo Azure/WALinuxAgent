@@ -27,7 +27,7 @@ import json
 import azurelinuxagent.utils.fileutil as fileutil
 import azurelinuxagent.protocol.v1 as v1
 
-CertificatesSample="""\
+certs_sample="""\
 <?xml version="1.0" encoding="utf-8"?>
 <CertificateFile xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="certificates10.xsd">
   <Version>2012-11-30</Version>
@@ -111,7 +111,7 @@ h+249Wj0Bw==
 </CertificateFile>
 """
 
-TransportCert="""\
+transport_cert="""\
 -----BEGIN CERTIFICATE-----
 MIIDBzCCAe+gAwIBAgIJANujJuVt5eC8MA0GCSqGSIb3DQEBCwUAMBkxFzAVBgNV
 BAMMDkxpbnV4VHJhbnNwb3J0MCAXDTE0MTAyNDA3MjgwN1oYDzIxMDQwNzEyMDcy
@@ -133,7 +133,7 @@ DsfY6XGSEIhZnA4=
 -----END CERTIFICATE-----
 """
 
-TransportPrivate="""\
+transport_private="""\
 -----BEGIN PRIVATE KEY-----
 MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDT3CQJHeleTXqI
 EioyHk1zlguccyk8riT7eGGTFUqLFNJSOmtMB6foNnz9ts61bMFvkCc+gFVqIyBK
@@ -180,19 +180,18 @@ class TestCertificates(unittest.TestCase):
             os.remove(crt2)
         if os.path.isfile(prv2):
             os.remove(prv2)
-        fileutil.SetFileContents(os.path.join('/tmp', v1.TransportCertFile), 
-                                 TransportCert)
-        fileutil.SetFileContents(os.path.join('/tmp', v1.TransportPrivateFile), 
-                                 TransportPrivate)
-        config = v1.Certificates(CertificatesSample)
+        fileutil.write_file(os.path.join('/tmp', "TransportCert.pem"), 
+                            transport_cert)
+        fileutil.write_file(os.path.join('/tmp', "TransportPrivate.pem"), 
+                            transport_private)
+        config = v1.Certificates(certs_sample)
         self.assertNotEquals(None, config)
         self.assertTrue(os.path.isfile(crt1))
         self.assertTrue(os.path.isfile(crt2))
         self.assertTrue(os.path.isfile(prv2))
 
-        certs = config.getCerts()
-        self.assertNotEquals(0, len(certs.certificates))
-        cert = certs.certificates[0]
+        self.assertNotEquals(0, len(config.cert_list.certificates))
+        cert = config.cert_list.certificates[0]
         self.assertNotEquals(None, cert.thumbprint)
    
 if __name__ == '__main__':

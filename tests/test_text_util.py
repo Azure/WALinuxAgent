@@ -27,9 +27,9 @@ import azurelinuxagent.utils.textutil as textutil
 import test
 
 class TestTextUtil(unittest.TestCase):
-    def test_GetPasswordHash(self):
-        passwdHash = textutil.GetPasswordHash("asdf", True, 6, 10)
-        self.assertNotEquals(None, passwdHash)
+    def test_get_password_hash(self):
+        password_hash = textutil.gen_password_hash("asdf", True, 6, 10)
+        self.assertNotEquals(None, password_hash)
    
 if __name__ == '__main__':
     unittest.main()

@@ -54,3 +54,6 @@ docs/_build/
 target/
 
 waagentc
+*.pyproj
+*.sln
+*.suo

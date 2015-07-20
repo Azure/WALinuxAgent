@@ -25,12 +25,12 @@ import unittest
 import os
 import json
 import azurelinuxagent.logger as logger
-from azurelinuxagent.utils.osutil import OSUtil
+from azurelinuxagent.utils.osutil import OSUTIL
 import azurelinuxagent.utils.fileutil as fileutil
 import azurelinuxagent.protocol as prot
 import azurelinuxagent.distro.default.extension as ext
 
-extensionData = {
+ext_sample_json = {
     "name":"TestExt",
     "properties":{
         "version":"2.0",
@@ -51,10 +51,10 @@ extensionData = {
         }]
     }
 }
-extension = prot.Extension()
-prot.set_properties(extension, extensionData)
+ext_sample = prot.Extension()
+prot.set_properties(ext_sample, ext_sample_json)
 
-packageListData={
+pkd_list_sample_str={
     "versions": [{
         "version": "2.0",
         "uris":[{
@@ -67,10 +67,10 @@ packageListData={
          }]
     }]
 }
-packageList = prot.ExtensionPackageList()
-prot.set_properties(packageList, packageListData)
+pkg_list_sample = prot.ExtensionPackageList()
+prot.set_properties(pkg_list_sample, pkd_list_sample_str)
 
-manJson = {
+manifest_sample_str = {
     "handlerManifest":{
         "installCommand": "echo 'install'",
         "uninstallCommand": "echo 'uninstall'",
@@ -79,99 +79,99 @@ manJson = {
         "disableCommand": "echo 'disable'",
     }
 }
-man = ext.HandlerManifest(manJson)
+manifest_sample = ext.HandlerManifest(manifest_sample_str)
 
-def MockLoadManifest(self):
-    return man
+def mock_load_manifest(self):
+    return manifest_sample
 
-MockLaunchCommand = MockFunc()
-MockSetHandlerStatus = MockFunc()
+mock_launch_command = MockFunc()
+mock_set_handler_status = MockFunc()
 
-def MockDownload(self):
-    fileutil.CreateDir(self.getBaseDir())
-    fileutil.SetFileContents(self.getManifestFile(), json.dumps(manJson))
+def mock_download(self):
+    fileutil.mkdir(self.get_base_dir())
+    fileutil.write_file(self.get_manifest_file(), json.dumps(manifest_sample_str))
 
 #logger.LoggerInit("/dev/null", "/dev/stdout")
 class TestExtensions(unittest.TestCase):
 
     def test_load_ext(self):
-        libDir = OSUtil.GetLibDir()
-        testExt1 = os.path.join(libDir, 'TestExt-1.0')
-        testExt2 = os.path.join(libDir, 'TestExt-2.0')
-        testExt2 = os.path.join(libDir, 'TestExt-2.1')
-        for path in [testExt1, testExt2]:
+        libDir = OSUTIL.get_lib_dir()
+        test_ext1 = os.path.join(libDir, 'TestExt-1.0')
+        test_ext2 = os.path.join(libDir, 'TestExt-2.0')
+        test_ext2 = os.path.join(libDir, 'TestExt-2.1')
+        for path in [test_ext1, test_ext2]:
             if not os.path.isdir(path):
                 os.mkdir(path)
-        testExt = ext.GetInstalledExtensionVersion('TestExt')
-        self.assertEqual('2.1', testExt)
+        test_ext = ext.get_installed_version('TestExt')
+        self.assertEqual('2.1', test_ext)
 
     def test_getters(self):
-        testExt = ext.ExtensionInstance(extension, packageList, 
-                                        extension.properties.version, False)
-        self.assertEqual("/tmp/TestExt-2.0", testExt.getBaseDir())
-        self.assertEqual("/tmp/TestExt-2.0/status", testExt.getStatusDir())
+        test_ext = ext.ExtensionInstance(ext_sample, pkg_list_sample, 
+                                        ext_sample.properties.version, False)
+        self.assertEqual("/tmp/TestExt-2.0", test_ext.get_base_dir())
+        self.assertEqual("/tmp/TestExt-2.0/status", test_ext.get_status_dir())
         self.assertEqual("/tmp/TestExt-2.0/status/0.status", 
-                         testExt.getStatusFile())
+                         test_ext.get_status_file())
         self.assertEqual("/tmp/TestExt-2.0/config/HandlerState", 
-                         testExt.getHandlerStateFile())
-        self.assertEqual("/tmp/TestExt-2.0/config", testExt.getConfigDir())
+                         test_ext.get_handler_state_file())
+        self.assertEqual("/tmp/TestExt-2.0/config", test_ext.get_conf_dir())
         self.assertEqual("/tmp/TestExt-2.0/config/0.settings", 
-                         testExt.getSettingsFile())
+                         test_ext.get_settings_file())
         self.assertEqual("/tmp/TestExt-2.0/heartbeat.log", 
-                         testExt.getHeartbeatFile())
+                         test_ext.get_heartbeat_file())
         self.assertEqual("/tmp/TestExt-2.0/HandlerManifest.json", 
-                         testExt.getManifestFile())
+                         test_ext.get_manifest_file())
         self.assertEqual("/tmp/TestExt-2.0/HandlerEnvironment.json", 
-                         testExt.getEnvironmentFile())
-        self.assertEqual("/tmp/log/TestExt/2.0", testExt.getLogDir())
+                         test_ext.get_env_file())
+        self.assertEqual("/tmp/log/TestExt/2.0", test_ext.get_log_dir())
 
-        testExt = ext.ExtensionInstance(extension, packageList, "2.1", False)
-        self.assertEqual("/tmp/TestExt-2.1", testExt.getBaseDir())
-        self.assertEqual("2.1", testExt.getTargetVersion())
+        test_ext = ext.ExtensionInstance(ext_sample, pkg_list_sample, "2.1", False)
+        self.assertEqual("/tmp/TestExt-2.1", test_ext.get_base_dir())
+        self.assertEqual("2.1", test_ext.get_target_version())
    
-    @Mockup(ext.ExtensionInstance, 'loadManifest', MockLoadManifest)
-    @Mockup(ext.ExtensionInstance, 'launchCommand', MockLaunchCommand)
-    @Mockup(ext.ExtensionInstance, 'setHandlerStatus', MockSetHandlerStatus)
+    @mock(ext.ExtensionInstance, 'load_manifest', mock_load_manifest)
+    @mock(ext.ExtensionInstance, 'launch_command', mock_launch_command)
+    @mock(ext.ExtensionInstance, 'set_handler_status', mock_set_handler_status)
     def test_handle_uninstall(self):
-        MockLaunchCommand.args = None
-        MockSetHandlerStatus.args = None
-        testExt = ext.ExtensionInstance(extension, packageList, 
-                                        extension.properties.version, False)
-        testExt.handleUninstall()
-        self.assertEqual(None, MockLaunchCommand.args)
-        self.assertEqual(None, MockSetHandlerStatus.args)
-        self.assertEqual(None, testExt.getCurrOperation())
+        mock_launch_command.args = None
+        mock_set_handler_status.args = None
+        test_ext = ext.ExtensionInstance(ext_sample, pkg_list_sample, 
+                                        ext_sample.properties.version, False)
+        test_ext.handle_uninstall()
+        self.assertEqual(None, mock_launch_command.args)
+        self.assertEqual(None, mock_set_handler_status.args)
+        self.assertEqual(None, test_ext.get_curr_op())
 
-        testExt = ext.ExtensionInstance(extension, packageList, 
-                                        extension.properties.version, True)
-        testExt.handleUninstall()
-        self.assertEqual(man.getUninstallCommand(), MockLaunchCommand.args[0])
-        self.assertEqual("UnInstall", testExt.getCurrOperation())
-        self.assertEqual("NotReady", MockSetHandlerStatus.args[0])
+        test_ext = ext.ExtensionInstance(ext_sample, pkg_list_sample, 
+                                        ext_sample.properties.version, True)
+        test_ext.handle_uninstall()
+        self.assertEqual(manifest_sample.get_uninstall_command(), mock_launch_command.args[0])
+        self.assertEqual("UnInstall", test_ext.get_curr_op())
+        self.assertEqual("NotReady", mock_set_handler_status.args[0])
 
-    @Mockup(ext.ExtensionInstance, 'loadManifest', MockLoadManifest)
-    @Mockup(ext.ExtensionInstance, 'launchCommand', MockLaunchCommand)
-    @Mockup(ext.ExtensionInstance, 'download', MockDownload)
-    @Mockup(ext.ExtensionInstance, 'getHandlerStatus', MockFunc(retval="enabled"))
-    @Mockup(ext.ExtensionInstance, 'setHandlerStatus', MockSetHandlerStatus)
+    @mock(ext.ExtensionInstance, 'load_manifest', mock_load_manifest)
+    @mock(ext.ExtensionInstance, 'launch_command', mock_launch_command)
+    @mock(ext.ExtensionInstance, 'download', mock_download)
+    @mock(ext.ExtensionInstance, 'get_handler_status', MockFunc(retval="enabled"))
+    @mock(ext.ExtensionInstance, 'set_handler_status', mock_set_handler_status)
     def test_handle(self):
         #Test enable
-        testExt = ext.ExtensionInstance(extension, packageList, 
-                                        extension.properties.version, False)
-        testExt.initLog()
-        self.assertEqual(1, len(testExt.logger.appenders) - len(logger.DefaultLogger.appenders))
-        testExt.handle()
+        test_ext = ext.ExtensionInstance(ext_sample, pkg_list_sample, 
+                                        ext_sample.properties.version, False)
+        test_ext.init_logger()
+        self.assertEqual(1, len(test_ext.logger.appenders) - len(logger.default_logger.appenders))
+        test_ext.handle()
         
         #Test upgrade 
-        testExt = ext.ExtensionInstance(extension, packageList, 
-                                        extension.properties.version, False)
-        testExt.initLog()
-        self.assertEqual(1, len(testExt.logger.appenders) - len(logger.DefaultLogger.appenders))
-        testExt.handle()
+        test_ext = ext.ExtensionInstance(ext_sample, pkg_list_sample, 
+                                        ext_sample.properties.version, False)
+        test_ext.init_logger()
+        self.assertEqual(1, len(test_ext.logger.appenders) - len(logger.default_logger.appenders))
+        test_ext.handle()
 
     def test_status_convert(self):
-        extStatus = json.loads('[{"status": {"status": "success", "formattedMessage": {"lang": "en-US", "message": "Script is finished"}, "operation": "Enable", "code": "0", "name": "Microsoft.OSTCExtensions.CustomScriptForLinux"}, "version": "1.0", "timestampUTC": "2015-06-27T08:34:50Z"}]')
-        ext.extension_status_to_v2(extStatus[0], 0)
+        ext_status = json.loads('[{"status": {"status": "success", "formattedMessage": {"lang": "en-US", "message": "Script is finished"}, "operation": "Enable", "code": "0", "name": "Microsoft.OSTCExtensions.CustomScriptForLinux"}, "version": "1.0", "timestampUTC": "2015-06-27T08:34:50Z"}]')
+        ext.ext_status_to_v2(ext_status[0], 0)
 
 
 if __name__ == '__main__':

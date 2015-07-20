@@ -62,7 +62,7 @@ extensionDataStr = """
 
 class TestProtocolContract(unittest.TestCase):
     def test_get_properties(self):
-        data = get_properties(VmInfo())
+        data = get_properties(VMInfo())
         data = get_properties(Cert())
         data = get_properties(ExtensionPackageList())
         data = get_properties(InstanceMetadata())

@@ -29,14 +29,14 @@ import azurelinuxagent.agent as agent
 
 class TestAgent(unittest.TestCase):
     def test_parse_args(self):
-        cmd, force, verbose = agent.ParseArgs(["deprovision+user", 
+        cmd, force, verbose = agent.parse_args(["deprovision+user", 
                                                "-force", 
                                                "/verbose"])
         self.assertEquals("deprovision+user", cmd)
         self.assertTrue(force)
         self.assertTrue(verbose)
 
-        cmd, force, verbose = agent.ParseArgs(["wrong cmd"])
+        cmd, force, verbose = agent.parse_args(["wrong cmd"])
         self.assertEquals("help", cmd)
         self.assertFalse(force)
         self.assertFalse(verbose)

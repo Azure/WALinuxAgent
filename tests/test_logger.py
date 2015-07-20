@@ -51,7 +51,7 @@ class TestLogger(unittest.TestCase):
 
     def test_file_appender(self):
         _logger = logger.Logger()
-        _logger.addLoggerAppender(logger.AppenderType.FILE,
+        _logger.add_appender(logger.AppenderType.FILE,
                                   logger.LogLevel.INFO,
                                   '/tmp/testlog')
 
@@ -69,14 +69,14 @@ class TestLogger(unittest.TestCase):
 
     def test_log_to_non_exists_dev(self):
         _logger = logger.Logger()
-        _logger.addLoggerAppender(logger.AppenderType.CONSOLE,
+        _logger.add_appender(logger.AppenderType.CONSOLE,
                                   logger.LogLevel.INFO,
                                   '/dev/nonexists')
         _logger.info("something")
 
     def test_log_to_non_exists_file(self):
         _logger = logger.Logger()
-        _logger.addLoggerAppender(logger.AppenderType.FILE,
+        _logger.add_appender(logger.AppenderType.FILE,
                                   logger.LogLevel.INFO,
                                   '/tmp/nonexists')
         _logger.info("something")

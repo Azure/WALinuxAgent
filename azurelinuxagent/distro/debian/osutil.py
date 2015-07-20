@@ -30,18 +30,18 @@ import azurelinuxagent.logger as logger
 import azurelinuxagent.utils.fileutil as fileutil
 import azurelinuxagent.utils.shellutil as shellutil
 import azurelinuxagent.utils.textutil as textutil
-from azurelinuxagent.distro.default.osutil import OSUtil
+from azurelinuxagent.distro.default.osutil import DefaultOSUtil
 
-class DebianOSUtil(OSUtil):
+class DebianOSUtil(DefaultOSUtil):
     def __init__(self):
         super(DebianOSUtil, self).__init__()
 
-    def RestartSshService(self):
-        return shellutil.Run("service sshd restart", chk_err=False)
+    def restart_ssh_service(self):
+        return shellutil.run("service sshd restart", chk_err=False)
 
-    def StopAgentService(self):
-        return shellutil.Run("service azurelinuxagent stop", chk_err=False)
+    def stop_agent_service(self):
+        return shellutil.run("service azurelinuxagent stop", chk_err=False)
 
-    def StartAgentService(self):
-        return shellutil.Run("service azurelinuxagent start", chk_err=False)
+    def start_agent_service(self):
+        return shellutil.run("service azurelinuxagent start", chk_err=False)
 

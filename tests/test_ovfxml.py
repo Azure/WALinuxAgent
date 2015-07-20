@@ -59,17 +59,17 @@ ExtensionsConfigSample="""
 class TestOvf(unittest.TestCase):
     def test_ovf(self):
         config = ovfenv.OvfEnv(ExtensionsConfigSample)
-        self.assertEquals(1, config.getMajorVersion())
-        self.assertEquals(0, config.getMinorVersion())
-        self.assertEquals("HostName", config.getComputerName())
-        self.assertEquals("UserName", config.getUserName())
-        self.assertEquals("UserPassword", config.getUserPassword())
-        self.assertEquals(False, config.getDisableSshPasswordAuthentication())
-        self.assertEquals("CustomData", config.getCustomData())
-        self.assertNotEquals(None, config.getSshPublicKeys())
-        self.assertEquals(1, len(config.getSshPublicKeys()))
-        self.assertNotEquals(None, config.getSshKeyPairs())
-        self.assertEquals(1, len(config.getSshKeyPairs()))
+        self.assertEquals(1, config.get_major_version())
+        self.assertEquals(0, config.get_minor_version())
+        self.assertEquals("HostName", config.get_computer_name())
+        self.assertEquals("UserName", config.get_username())
+        self.assertEquals("UserPassword", config.get_user_password())
+        self.assertEquals(False, config.get_disable_ssh_password_auth())
+        self.assertEquals("CustomData", config.get_customdata())
+        self.assertNotEquals(None, config.get_ssh_pubkeys())
+        self.assertEquals(1, len(config.get_ssh_pubkeys()))
+        self.assertNotEquals(None, config.get_ssh_keypairs())
+        self.assertEquals(1, len(config.get_ssh_keypairs()))
         
 if __name__ == '__main__':
     unittest.main()

@@ -22,28 +22,30 @@ import env
 from tests.tools import *
 import unittest
 import time
-from azurelinuxagent.utils.osutil import OSUtil
+from azurelinuxagent.utils.osutil import OSUTIL
 from azurelinuxagent.distro.default.env import EnvMonitor
 
 class MockDhcpHandler(object):
-    def configRoutes(self):
+    def conf_routes(self):
         pass
 
-MockDhcpProcessIdNotChange = MockFunc(retval="1234")
-def MockDhcpProcessIdChange():
+def mock_get_dhcp_pid():
+    return "1234"
+
+def mock_dhcp_pid_change():
     return str(time.time())
 
 class TestEnvMonitor(unittest.TestCase):
 
-    @Mockup(OSUtil, 'GetDhcpProcessId', MockDhcpProcessIdNotChange)
-    def test_dhcpProcessIdNotChange(self):
+    @mock(OSUTIL, 'get_dhcp_pid', mock_get_dhcp_pid)
+    def test_dhcp_pid_not_change(self):
         monitor = EnvMonitor(MockDhcpHandler())
-        monitor.handleDhcpClientRestart()
+        monitor.handle_dhclient_restart()
 
-    @Mockup(OSUtil, 'GetDhcpProcessId', MockDhcpProcessIdChange)
-    def test_dhcpProcessIdChange(self):
+    @mock(OSUTIL, 'get_dhcp_pid', mock_dhcp_pid_change)
+    def test_dhcp_pid_change(self):
         monitor = EnvMonitor(MockDhcpHandler())
-        monitor.handleDhcpClientRestart()
+        monitor.handle_dhclient_restart()
 
 if __name__ == '__main__':
     unittest.main()

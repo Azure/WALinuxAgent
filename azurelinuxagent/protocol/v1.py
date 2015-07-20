@@ -27,105 +27,104 @@ import xml.etree.ElementTree as ET
 import azurelinuxagent.logger as logger
 import azurelinuxagent.utils.restutil as restutil
 
-from azurelinuxagent.utils.osutil import OSUtil
+from azurelinuxagent.utils.osutil import OSUTIL
 import azurelinuxagent.utils.fileutil as fileutil
 import azurelinuxagent.utils.shellutil as shellutil
 from azurelinuxagent.utils.textutil import *
 from azurelinuxagent.protocol.common import *
 
-VersionInfoUri = "http://{0}/?comp=versions"
-GoalStateUri = "http://{0}/machine/?comp=goalstate"
-HealthReportUri="http://{0}/machine?comp=health"
-RolePropUri="http://{0}/machine?comp=roleProperties"
-TelemetryUri="http://{0}/machine?comp=telemetrydata"
+VERSION_INFO_URI = "http://{0}/?comp=versions"
+GOAL_STATE_URI = "http://{0}/machine/?comp=goalstate"
+HEALTH_REPORT_URI = "http://{0}/machine?comp=health"
+ROLE_PROP_URI = "http://{0}/machine?comp=roleProperties"
+TELEMETRY_URI = "http://{0}/machine?comp=telemetrydata"
 
-WireServerAddrFile = "WireServer"
-IncarnationFile = "Incarnation"
-GoalStateFile = "GoalState.{0}.xml"
-HostingEnvFile = "HostingEnvironmentConfig.xml"
-SharedConfigFile = "SharedConfig.xml"
-CertificatesFile = "Certificates.xml"
-CertJsonFile = "Certificates.json"
-P7MFile="Certificates.p7m"
-PEMFile="Certificates.pem"
-ExtensionsConfigFile = "ExtensionsConfig.{0}.xml"
-ManifestFile="{0}.{1}.manifest.xml"
-TransportCertFile = "TransportCert.pem"
-TransportPrivateFile = "TransportPrivate.pem"
+WIRE_SERVER_ADDR_FILE_NAME = "WireServer"
+INCARNATION_FILE_NAME = "Incarnation"
+GOAL_STATE_FILE_NAME = "GoalState.{0}.xml"
+HOSTING_ENV_FILE_NAME = "HostingEnvironmentConfig.xml"
+SHARED_CONF_FILE_NAME = "SharedConfig.xml"
+CERTS_FILE_NAME = "Certificates.xml"
+P7M_FILE_NAME = "Certificates.p7m"
+PEM_FILE_NAME = "Certificates.pem"
+EXT_CONF_FILE_NAME = "ExtensionsConfig.{0}.xml"
+MANIFEST_FILE_NAME = "{0}.{1}.manifest.xml"
+TRANSPORT_CERT_FILE_NAME = "TransportCert.pem"
+TRANSPORT_PRV_FILE_NAME = "TransportPrivate.pem"
 
-ProtocolVersion = "2012-11-30"
+PROTOCOL_VERSION = "2012-11-30"
 
 class WireProtocolResourceGone(ProtocolError):
     pass
 
-class ProtocolV1(Protocol):
- 
+class WIRE_PROTOCOL(Protocol):
+
     def __init__(self, endpoint):
         self.client = WireClient(endpoint)
-   
+
     def initialize(self):
-        self.client.checkWireProtocolVersion()
-        self.client.updateGoalState(forced=True)
+        self.client.check_wire_protocol_version()
+        self.client.update_goal_state(forced=True)
 
-    def getVmInfo(self):
-        hostingEnv = self.client.getHostingEnv()
-        vmInfo = VmInfo()
-        vmInfo.subscriptionId = None
-        vmInfo.vmName = hostingEnv.getVmName()
-        return vmInfo
+    def get_vminfo(self):
+        hosting_env = self.client.get_hosting_env()
+        vminfo = VMInfo()
+        vminfo.subscriptionId = None
+        vminfo.vmName = hosting_env.vm_name
+        return vminfo
 
-    def getCerts(self):
-        certificates = self.client.getCertificates()
-        return certificates.getCerts()
-       
-    def getExtensions(self):
+    def get_certs(self):
+        certificates = self.client.get_certs()
+        return certificates.cert_list
+
+    def get_extensions(self):
         #Update goal state to get latest extensions config
-        self.client.updateGoalState()
-        extensionsConfig = self.client.getExtensionsConfig()
-        return extensionsConfig.extList
-    
-    def getExtensionPackages(self, extension):
-        goalState = self.client.getGoalState()
-        man = self.client.getExtensionManifest(extension, goalState)
-        return man.packageList
+        self.client.update_goal_state()
+        ext_conf = self.client.get_ext_conf()
+        return ext_conf.ext_list
 
-    def getInstanceMetadata(self):
-        goalState = self.client.getGoalState()
-        hostingEnv = self.client.getHostingEnv()
+    def get_extension_pkgs(self, extension):
+        goal_state = self.client.get_goal_state()
+        man = self.client.get_ext_manifest(extension, goal_state)
+        return man.pkg_list
+
+    def get_instance_metadata(self):
+        goal_state = self.client.get_goal_state()
+        hosting_env = self.client.get_hosting_env()
         metadata = InstanceMetadata()
-        metadata.deploymentName = hostingEnv.getDeploymentName()
-        metadata.roleName = hostingEnv.getRoleName()
-        metadata.roleInstanceId = goalState.getRoleInstanceId()
-        metadata.containerId = goalState.getContainerId()
+        metadata.deploymentName = hosting_env.deployment_name
+        metadata.roleName = hosting_env.role_name
+        metadata.roleInstanceId = goal_state.role_instance_id
+        metadata.containerId = goal_state.container_id
         return metadata
-    
-    def reportProvisionStatus(self, provisionStatus):
+
+    def report_provision_status(self, provisionStatus):
         validata_param("provisionStatus", provisionStatus, ProvisionStatus)
 
         if provisionStatus.status is not None:
-            self.client.reportHealth(provisionStatus.status, 
-                                     provisionStatus.subStatus, 
+            self.client.report_health(provisionStatus.status,
+                                     provisionStatus.subStatus,
                                      provisionStatus.description)
         if provisionStatus.properties.certificateThumbprint is not None:
             thumbprint = provisionStatus.properties.certificateThumbprint
-            self.client.reportRoleProperties(thumbprint)
+            self.client.report_role_prop(thumbprint)
 
-    def reportStatus(self, vmStatus):
+    def report_status(self, vmStatus):
         validata_param("vmStatus", vmStatus, VMStatus)
-        self.client.uploadStatusBlob(vmStatus)
+        self.client.upload_status_blob(vmStatus)
 
-    def reportEvent(self, events):
+    def report_event(self, events):
         validata_param("events", events, TelemetryEventList)
-        self.client.reportEvent(events)
+        self.client.report_event(events)
 
-def _fetchCache(localFile):
-    if not os.path.isfile(localFile):
-        raise ProtocolError("{0} is missing.".format(localFile))
-    return fileutil.GetFileContents(localFile)
+def _fetch_cache(local_file):
+    if not os.path.isfile(local_file):
+        raise ProtocolError("{0} is missing.".format(local_file))
+    return fileutil.read_file(local_file)
 
-def _fetchUri(uri, headers, chkProxy=False):
+def _fetch_uri(uri, headers, chk_proxy=False):
     try:
-        resp = restutil.HttpGet(uri, headers, chkProxy=chkProxy)
+        resp = restutil.http_get(uri, headers, chk_proxy=chk_proxy)
     except restutil.HttpError as e:
         raise ProtocolError(str(e))
 
@@ -135,17 +134,17 @@ def _fetchUri(uri, headers, chkProxy=False):
         raise ProtocolError("{0} - {1}".format(resp.status, uri))
     return resp.read()
 
-def _fetchManifest(versionUris):
-    for versionUri in versionUris:
+def _fetchManifest(version_uris):
+    for versionUri in version_uris:
         try:
-            xmlText = _fetchUri(versionUri.uri, None, chkProxy=True)
-            return xmlText
+            xml_text = _fetch_uri(versionUri.uri, None, chk_proxy=True)
+            return xml_text
         except IOError, e:
-            logger.Warn("Failed to fetch ExtensionManifest: {0}, {1}", e, 
+            logger.warn("Failed to fetch ExtensionManifest: {0}, {1}", e,
                         versionUri.uri)
     raise ProtocolError("Failed to fetch ExtensionManifest from all sources")
 
-def _buildRoleProperties(containerId, roleInstanceId, thumbprint):
+def _build_role_properties(container_id, role_instance_id, thumbprint):
     xml = (u"<?xml version=\"1.0\" encoding=\"utf-8\"?>"
             "<RoleProperties>"
             "<Container>"
@@ -160,10 +159,10 @@ def _buildRoleProperties(containerId, roleInstanceId, thumbprint):
             "</RoleInstances>"
             "</Container>"
             "</RoleProperties>"
-            "").format(containerId, roleInstanceId,thumbprint)
+            "").format(container_id, role_instance_id, thumbprint)
     return xml
 
-def _buildHealthReport(incarnation, containerId, roleInstanceId, 
+def _buildHealthReport(incarnation, container_id, role_instance_id,
                        status, subStatus, description):
     detail = ''
     if subStatus is not None:
@@ -190,30 +189,30 @@ def _buildHealthReport(incarnation, containerId, roleInstanceId,
             "</Container>"
             "</Health>"
             "").format(incarnation,
-                       containerId, 
-                       roleInstanceId,
-                       status, 
+                       container_id,
+                       role_instance_id,
+                       status,
                        detail)
     return xml
 
 """
 Convert VMStatus object to status blob format
 """
-def vm_agent_status_to_v1(vmAgent):
-    formattedMessage = {
+def guest_agent_status_to_v1(ga_status):
+    formatted_msg = {
         'lang' : 'en-US',
-        'message' : vmAgent.message
+        'message' : ga_status.message
     }
-    guestAgentStatus = {
-        'version' : vmAgent.agentVersion,
-        'status' : vmAgent.status,
-        'formattedMessage' : formattedMessage
+    v1_ga_status = {
+        'version' : ga_status.agentVersion,
+        'status' : ga_status.status,
+        'formattedMessage' : formatted_msg
     }
-    return guestAgentStatus
+    return v1_ga_status
 
-def extension_substatus_to_v1(substatusList):
-    statusList = [] 
-    for substatus in substatusList:
+def extension_substatus_to_v1(sub_status_list):
+    status_list = []
+    for substatus in sub_status_list:
         status = {
             "name": substatus.name,
             "status": substatus.status,
@@ -223,155 +222,155 @@ def extension_substatus_to_v1(substatusList):
                 "message": substatus.message
             }
         }
-        statusList.append(status)
-    return statusList
+        status_list.append(status)
+    return status_list
 
-def extension_handler_status_to_v1(handlerStatus, timestamp):
-    if handlerStatus is None or len(handlerStatus.extensionStatusList) == 0:
+def extension_handler_status_to_v1(handler_status, timestamp):
+    if handler_status is None or len(handler_status.extensionStatusList) == 0:
         return
-    extStatus = handlerStatus.extensionStatusList[0]
-    substatus = extension_substatus_to_v1(extStatus.substatusList)
-    settingsStatus={
+    ext_status = handler_status.extensionStatusList[0]
+    sub_status = extension_substatus_to_v1(ext_status.substatusList)
+    ext_in_status = {
         "status":{
-            "name": extStatus.name,
-            "configurationAppliedTime": extStatus.configurationAppliedTime,
-            "operation": extStatus.operation,
-            "status": extStatus.status,
-            "code": extStatus.code,
+            "name": ext_status.name,
+            "configurationAppliedTime": ext_status.configurationAppliedTime,
+            "operation": ext_status.operation,
+            "status": ext_status.status,
+            "code": ext_status.code,
             "formattedMessage": {
                 "lang":"en-US",
-                "message": extStatus.message
+                "message": ext_status.message
             }
         },
         "timestampUTC": timestamp
     }
-    
-    if len(settingsStatus) == 0:
-        settingsStatus['substatus'] = substatus
 
-    handlerAggStatus = {
-        'handlerVersion' : handlerStatus.handlerVersion,
-        'handlerName' : handlerStatus.handlerName,
-        'status' : handlerStatus.status,
+    if len(sub_status) != 0:
+        ext_in_status['substatus'] = sub_status
+
+    v1_handler_status = {
+        'handlerVersion' : handler_status.handlerVersion,
+        'handlerName' : handler_status.handlerName,
+        'status' : handler_status.status,
         'runtimeSettingsStatus' : {
-            'settingsStatus' : settingsStatus,
-            'sequenceNumber' : extStatus.sequenceNumber
+            'settingsStatus' : ext_in_status,
+            'sequenceNumber' : ext_status.sequenceNumber
         }
     }
-    return handlerAggStatus
+    return v1_handler_status
 
 
-def vm_status_to_v1(vmStatus):
-    timestamp=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+def vm_status_to_v1(vm_status):
+    timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
-    guestAgentStatus = vm_agent_status_to_v1(vmStatus.vmAgent)
-    handlerAggStatusList = []
-    for extensionHandlerStatus in vmStatus.extensionHandlers:
-        handlerAggStatus = extension_handler_status_to_v1(extensionHandlerStatus,
+    v1_ga_status = guest_agent_status_to_v1(vm_status.vmAgent)
+    v1_handler_status_list = []
+    for v1_handler_status in vm_status.extensionHandlers:
+        handlerAggStatus = extension_handler_status_to_v1(v1_handler_status,
                                                           timestamp)
-        handlerAggStatusList.append(handlerAggStatus)
+        v1_handler_status_list.append(handlerAggStatus)
 
-    aggregateStatus = {
-        'guestAgentStatus': guestAgentStatus,
-        'handlerAggregateStatus' : handlerAggStatusList
+    v1_agg_status = {
+        'guestAgentStatus': v1_ga_status,
+        'handlerAggregateStatus' : v1_handler_status_list
     }
-    report = {
+    v1_vm_status = {
         'version' : '1.0',
         'timestampUTC' : timestamp,
-        'aggregateStatus' : aggregateStatus
+        'aggregateStatus' : v1_agg_status
     }
-    return report
+    return v1_vm_status
 
 
 class StatusBlob(object):
-    def __init__(self, vmStatus):
-        self.vmStatus = vmStatus
-    
+    def __init__(self, vm_status):
+        self.vm_status = vm_status
+
     def toJson(self):
-        report = vm_status_to_v1(self.vmStatus)
+        report = vm_status_to_v1(self.vm_status)
         return json.dumps(report)
 
-    __StorageVersion="2014-02-14"
+    __storage_version__ = "2014-02-14"
 
     def upload(self, url):
-        logger.Info("Upload status blob")
-        blobType = self.getBlobType(url) 
-        
-        data = self.toJson()
-        if blobType == "BlockBlob":
-            self.putBlockBlob(url, data)    
-        elif blobType == "PageBlob":
-            self.putPageBlob(url, data)    
-        else:
-            raise ProtocolError("Unknown blob type: {0}".format(blobType))
+        logger.info("Upload status blob")
+        blob_type = self.get_blob_type(url)
 
-    def getBlobType(self, url):
+        data = self.toJson()
+        if blob_type == "BlockBlob":
+            self.put_block_blob(url, data)
+        elif blob_type == "PageBlob":
+            self.put_page_blob(url, data)
+        else:
+            raise ProtocolError("Unknown blob type: {0}".format(blob_type))
+
+    def get_blob_type(self, url):
         #Check blob type
-        logger.Verbose("Check blob type.")
+        logger.verb("Check blob type.")
         timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-        resp = restutil.HttpHead(url, {
+        resp = restutil.http_head(url, {
             "x-ms-date" :  timestamp,
-            'x-ms-version' : self.__class__.__StorageVersion
-        });
+            'x-ms-version' : self.__class__.__storage_version__
+        })
         if resp is None or resp.status != httplib.OK:
             raise ProtocolError(("Failed to get status blob type: {0}"
                                  "").format(resp.status))
 
-        blobType = resp.getheader("x-ms-blob-type")
-        logger.Verbose("Blob type={0}".format(blobType))
-        return blobType
+        blob_type = resp.getheader("x-ms-blob-type")
+        logger.verb("Blob type={0}".format(blob_type))
+        return blob_type
 
-    def putBlockBlob(self, url, data):
-        logger.Verbose("Upload block blob")
+    def put_block_blob(self, url, data):
+        logger.verb("Upload block blob")
         timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-        resp = restutil.HttpPut(url, data, {
+        resp = restutil.http_put(url, data, {
             "x-ms-date" :  timestamp,
             "x-ms-blob-type" : "BlockBlob",
             "Content-Length": str(len(data)),
-            "x-ms-version" : self.__class__.__StorageVersion
+            "x-ms-version" : self.__class__.__storage_version__
         })
         if resp is None or resp.status != httplib.CREATED:
             raise ProtocolError(("Failed to upload block blob: {0}"
                                  "").format(resp.status))
 
-    def putPageBlob(self, url, data):
-        logger.Verbose("Replace old page blob")
+    def put_page_blob(self, url, data):
+        logger.verb("Replace old page blob")
         timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         #Align to 512 bytes
-        pageBlobSize = ((len(data) + 511) / 512) * 512
-        resp = restutil.HttpPut(url, "", {
+        page_blob_size = ((len(data) + 511) / 512) * 512
+        resp = restutil.http_put(url, "", {
             "x-ms-date" :  timestamp,
             "x-ms-blob-type" : "PageBlob",
             "Content-Length": "0",
-            "x-ms-blob-content-length" : str(pageBlobSize),
-            "x-ms-version" : self.__class__.__StorageVersion
+            "x-ms-blob-content-length" : str(page_blob_size),
+            "x-ms-version" : self.__class__.__storage_version__
         })
         if resp is None or resp.status != httplib.CREATED:
             raise ProtocolError(("Failed to clean up page blob: {0}"
                                  "").format(resp.status))
-            
+
         if '?' in url < 0:
             url = "{0}?comp=page".format(url)
         else:
             url = "{0}&comp=page".format(url)
-       
-        logger.Verbose("Upload page blob")
-        pageMax = 4 * 1024 * 1024 #Max page size: 4MB
+
+        logger.verb("Upload page blob")
+        page_max = 4 * 1024 * 1024 #Max page size: 4MB
         start = 0
         end = 0
         while end < len(data):
-            end = min(len(data), start + pageMax)
-            contentSize = end - start
+            end = min(len(data), start + page_max)
+            content_size = end - start
             #Align to 512 bytes
             pageEnd = ((end + 511) / 512) * 512
-            bufSize = pageEnd - start
-            buf = bytearray(bufSize)
-            buf[0 : contentSize] = data[start : end]
-            resp = restutil.HttpPut(url, buffer(buf), {
+            buf_size = pageEnd - start
+            buf = bytearray(buf_size)
+            buf[0 : content_size] = data[start : end]
+            resp = restutil.http_put(url, buffer(buf), {
                 "x-ms-date" :  timestamp,
                 "x-ms-range" : "bytes={0}-{1}".format(start, pageEnd - 1),
                 "x-ms-page-write" : "update",
-                "x-ms-version" : self.__class__.__StorageVersion,
+                "x-ms-version" : self.__class__.__storage_version__,
                 "Content-Length": str(pageEnd - start)
             })
             if resp is None or resp.status != httplib.CREATED:
@@ -379,405 +378,371 @@ class StatusBlob(object):
                                      "").format(resp.status))
             start = end
 
-def param_to_xml(param):
-    paramFormat = u'<Param Name="{0}" Value={1} T="{2}" />'
-    paramType = type(param.value)
-    attrType = ""
-    if paramType is int:
-        attrType = u'mt:uint64'
-    elif paramType is str:
-        attrType = u'mt:wstr'
-    elif str(paramType).count("'unicode'") > 0:
-        attrType = u'mt:wstr'
-    elif paramType is bool:
-        attrType=u'mt:bool'
-    elif paramType is float:
-        attrType=u'mt:float64'
-    return paramFormat.format(param.name, saxutils.quoteattr(str(param.value)),
-                              attrType)
+def event_param_to_v1(param):
+    param_format = u'<Param Name="{0}" Value={1} T="{2}" />'
+    param_type = type(param.value)
+    attr_type = ""
+    if param_type is int:
+        attr_type = u'mt:uint64'
+    elif param_type is str:
+        attr_type = u'mt:wstr'
+    elif str(param_type).count("'unicode'") > 0:
+        attr_type = u'mt:wstr'
+    elif param_type is bool:
+        attr_type = u'mt:bool'
+    elif param_type is float:
+        attr_type = u'mt:float64'
+    return param_format.format(param.name, saxutils.quoteattr(str(param.value)),
+                               attr_type)
 
-def event_to_xml(event):
+def event_to_v1(event):
     params = ""
     for param in event.parameters:
-        params += param_to_xml(param)
-    eventStr = (u'<Event id="{0}">'
-                  u'<![CDATA[{1}]]>'
-                u'</Event>').format(event.eventId, params)
-    return eventStr
+        params += event_param_to_v1(param)
+    event_str = (u'<Event id="{0}">'
+                 u'<![CDATA[{1}]]>'
+                 u'</Event>').format(event.eventId, params)
+    return event_str
 
 class WireClient(object):
     def __init__(self, endpoint):
         self.endpoint = endpoint
-        self.goalState = None
+        self.goal_state = None
         self.updated = None
-        self.hostingEnv = None
-        self.sharedConfig = None
-        self.certificates = None
-        self.extensionsConfig = None
-        self.requestCount = 0
-   
-    def updateHostingEnv(self, goalState):
-        localFile = HostingEnvFile
-        xmlText = _fetchUri(goalState.getHostingEnvUri(), self.getHeader())
-        fileutil.SetFileContents(localFile, xmlText)
-        self.hostingEnv = HostingEnv(xmlText)
-  
-    def updateSharedConfig(self, goalState):
-        localFile = SharedConfigFile
-        xmlText = _fetchUri(goalState.getSharedConfigUri(), self.getHeader())
-        fileutil.SetFileContents(localFile, xmlText)
-        self.sharedConfig = SharedConfig(xmlText)
-    
-    def updateCertificates(self, goalState):
-        localFile = CertificatesFile
-        xmlText = _fetchUri(goalState.getCertificatesUri(), 
-                            self.getHeaderWithCert())
-        fileutil.SetFileContents(localFile, xmlText)
-        self.certificates = Certificates(xmlText)
+        self.hosting_env = None
+        self.shared_conf = None
+        self.certs = None
+        self.ext_conf = None
+        self.req_count = 0
 
-    def updateExtensionsConfig(self, goalState):
-        incarnation = goalState.getIncarnation()
-        localFile = ExtensionsConfigFile.format(incarnation)
-        xmlText = _fetchUri(goalState.getExtensionsUri(), 
-                            self.getHeader())
-        fileutil.SetFileContents(localFile, xmlText)
-        self.extensionsConfig = ExtensionsConfig(xmlText)
-        for extension in self.extensionsConfig.extList.extensions:
-            self.updateExtensionManifest(extension, goalState)
-    
-    def updateExtensionManifest(self, extension, goalState):
-        localFile = ManifestFile.format(extension.name, 
-                                        goalState.getIncarnation())
-        xmlText = _fetchManifest(extension.versionUris)
-        fileutil.SetFileContents(localFile, xmlText)
+    def update_hosting_env(self, goal_state):
+        local_file = HOSTING_ENV_FILE_NAME
+        xml_text = _fetch_uri(goal_state.hosting_env_uri, self.get_header())
+        fileutil.write_file(local_file, xml_text)
+        self.hosting_env = HostingEnv(xml_text)
 
-    def updateGoalState(self, forced=False, maxRetry=3):
-        uri = GoalStateUri.format(self.endpoint)
-        xmlText = _fetchUri(uri, self.getHeader())
-        goalState = GoalState(xmlText)
-        
+    def update_shared_conf(self, goal_state):
+        local_file = SHARED_CONF_FILE_NAME
+        xml_text = _fetch_uri(goal_state.shared_conf_uri, self.get_header())
+        fileutil.write_file(local_file, xml_text)
+        self.shared_conf = SharedConfig(xml_text)
+
+    def update_certs(self, goal_state):
+        local_file = CERTS_FILE_NAME
+        xml_text = _fetch_uri(goal_state.certs_uri, self.get_header_for_cert())
+        fileutil.write_file(local_file, xml_text)
+        self.certs = Certificates(xml_text)
+
+    def update_ext_conf(self, goal_state):
+        incarnation = goal_state.incarnation
+        local_file = EXT_CONF_FILE_NAME.format(incarnation)
+        xml_text = _fetch_uri(goal_state.ext_uri,
+                            self.get_header())
+        fileutil.write_file(local_file, xml_text)
+        self.ext_conf = ExtensionsConfig(xml_text)
+        for extension in self.ext_conf.ext_list.extensions:
+            self.update_ext_manifest(extension, goal_state)
+
+    def update_ext_manifest(self, extension, goal_state):
+        local_file = MANIFEST_FILE_NAME.format(extension.name,
+                                        goal_state.incarnation)
+        xml_text = _fetchManifest(extension.versionUris)
+        fileutil.write_file(local_file, xml_text)
+
+    def update_goal_state(self, forced=False, max_retry=3):
+        uri = GOAL_STATE_URI.format(self.endpoint)
+        xml_text = _fetch_uri(uri, self.get_header())
+        goal_state = GoalState(xml_text)
+
         if not forced:
-            lastIncarnation = None
-            if(os.path.isfile(IncarnationFile)):
-                lastIncarnation = fileutil.GetFileContents(IncarnationFile)
-            newIncarnation = goalState.getIncarnation()
-            if lastIncarnation is not None and lastIncarnation == newIncarnation:
+            last_incarnation = None
+            if(os.path.isfile(INCARNATION_FILE_NAME)):
+                last_incarnation = fileutil.read_file(INCARNATION_FILE_NAME)
+            new_incarnation = goal_state.incarnation
+            if last_incarnation is not None and last_incarnation == new_incarnation:
                 #Goalstate is not updated.
                 return
-        
+
         #Start updating goalstate, retry on 410
-        for retry in range(0, maxRetry):
+        for retry in range(0, max_retry):
             try:
-                self.goalState = goalState
-                goalStateFile = GoalStateFile.format(goalState.getIncarnation())
-                fileutil.SetFileContents(goalStateFile, xmlText)
-                fileutil.SetFileContents(IncarnationFile, 
-                                         goalState.getIncarnation())
-                self.updateHostingEnv(goalState)
-                self.updateSharedConfig(goalState)
-                self.updateCertificates(goalState)
-                self.updateExtensionsConfig(goalState)
+                self.goal_state = goal_state
+                goal_state_file = GOAL_STATE_FILE_NAME.format(goal_state.incarnation)
+                fileutil.write_file(goal_state_file, xml_text)
+                fileutil.write_file(INCARNATION_FILE_NAME,
+                                         goal_state.incarnation)
+                self.update_hosting_env(goal_state)
+                self.update_shared_conf(goal_state)
+                self.update_certs(goal_state)
+                self.update_ext_conf(goal_state)
                 return
             except WireProtocolResourceGone:
-                logger.Info("Incarnation is out of date. Update goalstate.")
-                xmlText = _fetchUri(GoalStateUri, self.getHeader())
-                goalState = GoalState(xmlText)
+                logger.info("Incarnation is out of date. Update goalstate.")
+                xml_text = _fetch_uri(GOAL_STATE_URI, self.get_header())
+                goal_state = GoalState(xml_text)
 
         raise ProtocolError("Exceeded max retry updating goal state")
-  
-    def getGoalState(self):
-        if(self.goalState is None):
-            incarnation = _fetchCache(IncarnationFile)
-            goalStateFile = GoalStateFile.format(incarnation)
-            xmlText = _fetchCache(goalStateFile)
-            self.goalState = GoalState(xmlText)
-        return self.goalState
 
-    def getHostingEnv(self):
-        if(self.hostingEnv is None):
-            xmlText = _fetchCache(HostingEnvFile)
-            self.hostingEnv = HostingEnv(xmlText)
-        return self.hostingEnv
-    
-    def getSharedConfig(self):
-        if(self.sharedConfig is None):
-            xmlText = _fetchCache(SharedConfigFile)
-            self.sharedConfig = SharedConfig(xmlText)
-        return self.sharedConfig
+    def get_goal_state(self):
+        if(self.goal_state is None):
+            incarnation = _fetch_cache(INCARNATION_FILE_NAME)
+            goal_state_file = GOAL_STATE_FILE_NAME.format(incarnation)
+            xml_text = _fetch_cache(goal_state_file)
+            self.goal_state = GoalState(xml_text)
+        return self.goal_state
 
-    def getCertificates(self):
-        if(self.certificates is None):
-            xmlText = _fetchCache(Certificates)
-            self.certificates = Certificates(xmlText)
-        return self.certificates
-    
-    def getExtensionsConfig(self):
-        if(self.extensionsConfig is None):
-            goalState = self.getGoalState()
-            localFile = ExtensionsConfigFile.format(goalState.getIncarnation())
-            xmlText = _fetchCache(localFile)
-            self.extensionsConfig = ExtensionsConfig(xmlText)
-        return self.extensionsConfig
-    
-    def getExtensionManifest(self, extension, goalState):
-        localFile = ManifestFile.format(extension.name, 
-                                        goalState.getIncarnation())
-        xmlText = _fetchCache(localFile)
-        return ExtensionManifest(xmlText)
+    def get_hosting_env(self):
+        if(self.hosting_env is None):
+            xml_text = _fetch_cache(HOSTING_ENV_FILE_NAME)
+            self.hosting_env = HostingEnv(xml_text)
+        return self.hosting_env
 
-    def checkWireProtocolVersion(self):
-        uri = VersionInfoUri.format(self.endpoint)
-        versionInfoXml = _fetchUri(uri, None)
-        self.versionInfo = VersionInfo(versionInfoXml)
+    def get_shared_conf(self):
+        if(self.shared_conf is None):
+            xml_text = _fetch_cache(SHARED_CONF_FILE_NAME)
+            self.shared_conf = SharedConfig(xml_text)
+        return self.shared_conf
 
-        preferred = self.versionInfo.getPreferred()
-        if ProtocolVersion == preferred:
-            logger.Info("Wire protocol version:{0}", ProtocolVersion)
-        elif ProtocolVersion in self.versionInfo.getSupported():
-            logger.Info("Wire protocol version:{0}", ProtocolVersion)
-            logger.Warn("Server prefered version:{0}", preferred)
+    def get_certs(self):
+        if(self.certs is None):
+            xml_text = _fetch_cache(Certificates)
+            self.certs = Certificates(xml_text)
+        return self.certs
+
+    def get_ext_conf(self):
+        if(self.ext_conf is None):
+            goal_state = self.get_goal_state()
+            local_file = EXT_CONF_FILE_NAME.format(goal_state.incarnation)
+            xml_text = _fetch_cache(local_file)
+            self.ext_conf = ExtensionsConfig(xml_text)
+        return self.ext_conf
+
+    def get_ext_manifest(self, extension, goal_state):
+        local_file = MANIFEST_FILE_NAME.format(extension.name,
+                                        goal_state.incarnation)
+        xml_text = _fetch_cache(local_file)
+        return ExtensionManifest(xml_text)
+
+    def check_wire_protocol_version(self):
+        uri = VERSION_INFO_URI.format(self.endpoint)
+        version_info_xml = _fetch_uri(uri, None)
+        version_info = VersionInfo(version_info_xml)
+
+        preferred = version_info.get_preferred()
+        if PROTOCOL_VERSION == preferred:
+            logger.info("Wire protocol version:{0}", PROTOCOL_VERSION)
+        elif PROTOCOL_VERSION in version_info.get_supported():
+            logger.info("Wire protocol version:{0}", PROTOCOL_VERSION)
+            logger.warn("Server prefered version:{0}", preferred)
         else:
             error = ("Agent supported wire protocol version: {0} was not "
-                     "advised by Fabric.").format(ProtocolVersion)
+                     "advised by Fabric.").format(PROTOCOL_VERSION)
             raise ProtocolNotFound(error)
 
-    def uploadStatusBlob(self, vmStatus):
-        extensionsConfig = self.getExtensionsConfig()
-        statusBlob = StatusBlob(vmStatus)
-        statusBlob.upload(extensionsConfig.getStatusUploadBlob())
+    def upload_status_blob(self, vm_status):
+        ext_conf = self.get_ext_conf()
+        status_blob = StatusBlob(vm_status)
+        status_blob.upload(ext_conf.status_upload_blob)
 
-    def reportRoleProperties(self, thumbprint):
-        goalState = self.getGoalState()
-        roleProp = _buildRoleProperties(goalState.getContainerId(),
-                                        goalState.getRoleInstanceId(),
-                                        thumbprint)
-        rolePropUri = RolePropUri.format(self.endpoint)
-        ret = restutil.HttpPost(rolePropUri, 
-                                roleProp,
-                                headers=self.getHeaderWithContentTypeXml())
+    def report_role_prop(self, thumbprint):
+        goal_state = self.get_goal_state()
+        role_prop = _build_role_properties(goal_state.container_id,
+                                           goal_state.role_instance_id,
+                                           thumbprint)
+        role_prop_uri = ROLE_PROP_URI.format(self.endpoint)
+        ret = restutil.http_post(role_prop_uri,
+                                 role_prop,
+                                 headers=self.get_header_for_xml_content())
 
-    
-    def reportHealth(self, status, subStatus, description):
-        goalState = self.getGoalState()
-        healthReport = _buildHealthReport(goalState.getIncarnation(),
-                                          goalState.getContainerId(),
-                                          goalState.getRoleInstanceId(),
-                                          status, 
-                                          subStatus, 
-                                          description)
-        healthReportUri = HealthReportUri.format(self.endpoint)
-        headers=self.getHeaderWithContentTypeXml()
-        resp = restutil.HttpPost(healthReportUri, 
-                                 healthReport,
-                                 headers=headers)
-    def preventThrottling(self):
-        self.requestCount += 1
-        if self.requestCount % 3 == 0:
-            logger.Info("Sleep 15 before sending event to avoid throttling.")
-            self.requestCount = 0
+
+    def report_health(self, status, substatus, description):
+        goal_state = self.get_goal_state()
+        health_report = _buildHealthReport(goal_state.incarnation,
+                                           goal_state.container_id,
+                                           goal_state.role_instance_id,
+                                           status,
+                                           substatus,
+                                           description)
+        health_report_uri = HEALTH_REPORT_URI.format(self.endpoint)
+        headers = self.get_header_for_xml_content()
+        resp = restutil.http_post(health_report_uri,
+                                  health_report,
+                                  headers=headers)
+    def prevent_throttling(self):
+        self.req_count += 1
+        if self.req_count % 3 == 0:
+            logger.info("Sleep 15 before sending event to avoid throttling.")
+            self.req_count = 0
             time.sleep(15)
 
-    def sendEvent(self, providerId, eventStr):
-        uri = TelemetryUri.format(self.endpoint)
-        dataFormat = (u'<?xml version="1.0"?>'
-                      u'<TelemetryData version="1.0">'
-                         u'<Provider id="{0}">{1}'
-                         u'</Provider>'
-                      u'</TelemetryData>')
-        data = dataFormat.format(providerId, eventStr)
+    def send_event(self, provider_id, event_str):
+        uri = TELEMETRY_URI.format(self.endpoint)
+        data_format = (u'<?xml version="1.0"?>'
+                       u'<TelemetryData version="1.0">'
+                          u'<Provider id="{0}">{1}'
+                          u'</Provider>'
+                       u'</TelemetryData>')
+        data = data_format.format(provider_id, event_str)
         try:
-            self.preventThrottling()
-            header = self.getHeaderWithContentTypeXml()
-            resp = restutil.HttpPost(uri, data, header)
+            self.prevent_throttling()
+            header = self.get_header_for_xml_content()
+            resp = restutil.http_post(uri, data, header)
         except restutil.HttpError as e:
             raise ProtocolError("Failed to send events:{0}".format(e))
-        
+
         if resp.status != httplib.OK:
-            logger.Verbose(resp.read())
+            logger.verb(resp.read())
             raise ProtocolError("Failed to send events:{0}".format(resp.status))
 
-    def reportEvent(self, eventList):
-        buf = {} 
+    def report_event(self, event_list):
+        buf = {}
         #Group events by providerId
-        for event in eventList.events:
+        for event in event_list.events:
             if event.providerId not in buf:
                 buf[event.providerId] = ""
-            eventStr = event_to_xml(event)
-            if len(eventStr) >= 63 * 1024:
-                logger.Warn("Single event too large: {0}", eventStr[300:])
+            event_str = event_to_v1(event)
+            if len(event_str) >= 63 * 1024:
+                logger.warn("Single event too large: {0}", event_str[300:])
                 continue
-            if len(buf[event.providerId] + eventStr) >= 63 * 1024:
-                self.sendEvent(event.providerId, buf[event.providerId])
-                buf[event.providerId]=""
-            buf[event.providerId]=buf[event.providerId] + eventStr
+            if len(buf[event.providerId] + event_str) >= 63 * 1024:
+                self.send_event(event.providerId, buf[event.providerId])
+                buf[event.providerId] = ""
+            buf[event.providerId] = buf[event.providerId] + event_str
 
         #Send out all events left in buffer.
-        for providerId in buf.keys():
-            if len(buf[providerId]) > 0:
-                self.sendEvent(providerId, buf[providerId])
-                
-    def getHeader(self):
+        for provider_id in buf.keys():
+            if len(buf[provider_id]) > 0:
+                self.send_event(provider_id, buf[provider_id])
+
+    def get_header(self):
         return {
             "x-ms-agent-name":"WALinuxAgent",
-            "x-ms-version":ProtocolVersion
+            "x-ms-version":PROTOCOL_VERSION
         }
 
-    def getHeaderWithContentTypeXml(self):
+    def get_header_for_xml_content(self):
         return {
             "x-ms-agent-name":"WALinuxAgent",
-            "x-ms-version":ProtocolVersion,
+            "x-ms-version":PROTOCOL_VERSION,
             "Content-Type":"text/xml;charset=utf-8"
         }
 
-    def getHeaderWithCert(self):
+    def get_header_for_cert(self):
         cert = ""
-        content = _fetchCache(TransportCertFile)
+        content = _fetch_cache(TRANSPORT_CERT_FILE_NAME)
         for line in content.split('\n'):
             if "CERTIFICATE" not in line:
                 cert += line.rstrip()
         return {
             "x-ms-agent-name":"WALinuxAgent",
-            "x-ms-version":ProtocolVersion,
+            "x-ms-version":PROTOCOL_VERSION,
             "x-ms-cipher-name": "DES_EDE3_CBC",
             "x-ms-guest-agent-public-x509-cert":cert
         }
 
 class VersionInfo(object):
-    def __init__(self, xmlText):
+    def __init__(self, xml_text):
         """
         Query endpoint server for wire protocol version.
         Fail if our desired protocol version is not seen.
         """
-        logger.Verbose("Load Version.xml")
-        self.parse(xmlText)
-   
-    def parse(self, xmlText):
-        xmlDoc = ET.fromstring(xmlText.strip())
-        self.preferred = FindFirstNode(xmlDoc, ".//Preferred/Version").text
-        logger.Info("Fabric preferred wire protocol version:{0}", self.preferred)
+        logger.verb("Load Version.xml")
+        self.parse(xml_text)
+
+    def parse(self, xml_text):
+        xml_doc = ET.fromstring(xml_text.strip())
+        self.preferred = find_first_node(xml_doc, ".//Preferred/Version").text
+        logger.info("Fabric preferred wire protocol version:{0}", self.preferred)
 
         self.supported = []
-        nodes = FindAllNodes(xmlDoc, ".//Supported/Version")
+        nodes = find_all_nodes(xml_doc, ".//Supported/Version")
         for node in nodes:
             version = node.text
-            logger.Verbose("Fabric supported wire protocol version:{0}", version)
+            logger.verb("Fabric supported wire protocol version:{0}", version)
             self.supported.append(version)
 
-    def getPreferred(self):
+    def get_preferred(self):
         return self.preferred
 
-    def getSupported(self):
+    def get_supported(self):
         return self.supported
 
- 
+
 class GoalState(object):
-    
-    def __init__(self, xmlText):
-        if xmlText is None:
+
+    def __init__(self, xml_text):
+        if xml_text is None:
             raise ValueError("GoalState.xml is None")
-        logger.Verbose("Load GoalState.xml")
+        logger.verb("Load GoalState.xml")
         self.incarnation = None
-        self.expectedState = None
-        self.hostingEnvUri = None
-        self.sharedConfigUri = None
-        self.certificatesUri = None
-        self.extensionsUri = None
-        self.roleInstanceId = None
-        self.containerId = None
-        self.loadBalancerProbePort = None
-        self.parse(xmlText)
-        
-    def getIncarnation(self):
-        return self.incarnation
-    
-    def getExpectedState(self):
-        return self.expectedState
-    
-    def getHostingEnvUri(self):
-        return self.hostingEnvUri
-    
-    def getSharedConfigUri(self):
-        return self.sharedConfigUri
-    
-    def getCertificatesUri(self):
-        return self.certificatesUri
+        self.expected_state = None
+        self.hosting_env_uri = None
+        self.shared_conf_uri = None
+        self.certs_uri = None
+        self.ext_uri = None
+        self.role_instance_id = None
+        self.container_id = None
+        self.load_balancer_probe_port = None
+        self.parse(xml_text)
 
-    def getExtensionsUri(self):
-        return self.extensionsUri
-
-    def getRoleInstanceId(self):
-        return self.roleInstanceId
-
-    def getContainerId(self):
-        return self.containerId
-
-    def getLoadBalancerProbePort(self):
-        return self.loadBalancerProbePort
-   
-    def parse(self, xmlText):
+    def parse(self, xml_text):
         """
         Request configuration data from endpoint server.
         """
-        self.xmlText = xmlText
-        xmlDoc = ET.fromstring(xmlText.strip())
-        self.incarnation = (FindFirstNode(xmlDoc, ".//Incarnation")).text
-        self.expectedState = (FindFirstNode(xmlDoc, ".//ExpectedState")).text
-        self.hostingEnvUri = (FindFirstNode(xmlDoc, 
+        self.xml_text = xml_text
+        xml_doc = ET.fromstring(xml_text.strip())
+        self.incarnation = (find_first_node(xml_doc, ".//Incarnation")).text
+        self.expected_state = (find_first_node(xml_doc, ".//ExpectedState")).text
+        self.hosting_env_uri = (find_first_node(xml_doc,
                                             ".//HostingEnvironmentConfig")).text
-        self.sharedConfigUri = (FindFirstNode(xmlDoc, ".//SharedConfig")).text
-        node = (FindFirstNode(xmlDoc, ".//Certificates"))
-        self.certificatesUri = node.text if node is not None else None
-        self.extensionsUri = (FindFirstNode(xmlDoc, ".//ExtensionsConfig")).text
-        self.roleInstanceId = (FindFirstNode(xmlDoc, 
+        self.shared_conf_uri = (find_first_node(xml_doc, ".//SharedConfig")).text
+        node = (find_first_node(xml_doc, ".//Certificates"))
+        self.certs_uri = node.text if node is not None else None
+        self.ext_uri = (find_first_node(xml_doc, ".//ExtensionsConfig")).text
+        self.role_instance_id = (find_first_node(xml_doc,
                                              ".//RoleInstance/InstanceId")).text
-        self.containerId = (FindFirstNode(xmlDoc, 
+        self.container_id = (find_first_node(xml_doc,
                                              ".//Container/ContainerId")).text
-        self.loadBalancerProbePort = (FindFirstNode(xmlDoc, 
+        self.load_balancer_probe_port = (find_first_node(xml_doc,
                                                     ".//LBProbePorts/Port")).text
         return self
-        
+
 
 class HostingEnv(object):
     """
     parse Hosting enviromnet config and store in
     HostingEnvironmentConfig.xml
     """
-    def __init__(self, xmlText):
-        if xmlText is None:
+    def __init__(self, xml_text):
+        if xml_text is None:
             raise ValueError("HostingEnvironmentConfig.xml is None")
-        logger.Verbose("Load HostingEnvironmentConfig.xml")
-        self.parse(xmlText)
+        logger.verb("Load HostingEnvironmentConfig.xml")
+        self.vm_name = None
+        self.role_name = None
+        self.deployment_name = None
+        self.parse(xml_text)
 
-    def getVmName(self):
-        return self.vmName
-
-    def getRoleName(self):
-        return self.roleName
-
-    def getDeploymentName(self):
-        return self.deploymentName
-
-    def parse(self, xmlText):
+    def parse(self, xml_text):
         """
         parse and create HostingEnvironmentConfig.xml.
         """
-        self.xmlText = xmlText
-        xmlDoc = ET.fromstring(xmlText.strip())
-        self.vmName = FindFirstNode(xmlDoc, ".//Incarnation").attrib["instance"]
-        self.roleName = FindFirstNode(xmlDoc, ".//Role").attrib["name"]
-        deployment = FindFirstNode(xmlDoc, ".//Deployment")
-        self.deploymentName = deployment.attrib["name"]
+        self.xml_text = xml_text
+        xml_doc = ET.fromstring(xml_text.strip())
+        self.vm_name = find_first_node(xml_doc, ".//Incarnation").attrib["instance"]
+        self.role_name = find_first_node(xml_doc, ".//Role").attrib["name"]
+        deployment = find_first_node(xml_doc, ".//Deployment")
+        self.deployment_name = deployment.attrib["name"]
         return self
 
 class SharedConfig(object):
     """
     parse role endpoint server and goal state config.
     """
-    def __init__(self, xmlText):
-        logger.Verbose("Load SharedConfig.xml")
-        self.parse(xmlText)
+    def __init__(self, xml_text):
+        logger.verb("Load SharedConfig.xml")
+        self.parse(xml_text)
 
-    def parse(self, xmlText):
+    def parse(self, xml_text):
         """
         parse and write configuration to file SharedConfig.xml.
         """
@@ -789,100 +754,95 @@ class Certificates(object):
     """
     Object containing certificates of host and provisioned user.
     """
-    def __init__(self, xmlText=None):
-        if xmlText is None:
+    def __init__(self, xml_text=None):
+        if xml_text is None:
             raise ValueError("Certificates.xml is None")
-        logger.Verbose("Load Certificates.xml")
-        self.libDir = OSUtil.GetLibDir()
-        self.opensslCmd = OSUtil.GetOpensslCmd()
-        self.certs = CertList()
-        self.parse(xmlText)
+        logger.verb("Load Certificates.xml")
+        self.lib_dir = OSUTIL.get_lib_dir()
+        self.openssl_cmd = OSUTIL.get_openssl_cmd()
+        self.cert_list = CertList()
+        self.parse(xml_text)
 
-    def parse(self, xmlText):
+    def parse(self, xml_text):
         """
         Parse multiple certificates into seperate files.
         """
-        xmlDoc = ET.fromstring(xmlText.strip())
-        dataNode = FindFirstNode(xmlDoc, ".//Data")
-        if dataNode is None:
-            return 
+        xml_doc = ET.fromstring(xml_text.strip())
+        data_node = find_first_node(xml_doc, ".//Data")
+        if data_node is None:
+            return
 
         p7m = ("MIME-Version:1.0\n"
                "Content-Disposition: attachment; filename=\"{0}\"\n"
                "Content-Type: application/x-pkcs7-mime; name=\"{1}\"\n"
                "Content-Transfer-Encoding: base64\n"
                "\n"
-               "{2}").format(P7MFile, P7MFile, dataNode.text)
-        
-        fileutil.SetFileContents(os.path.join(self.libDir, P7MFile), p7m)
+               "{2}").format(P7M_FILE_NAME, P7M_FILE_NAME, data_node.text)
+
+        fileutil.write_file(os.path.join(self.lib_dir, P7M_FILE_NAME), p7m)
         #decrypt certificates
         cmd = ("{0} cms -decrypt -in {1} -inkey {2} -recip {3}"
                "| {4} pkcs12 -nodes -password pass: -out {5}"
-               "").format(self.opensslCmd, P7MFile, TransportPrivateFile, 
-                               TransportCertFile, self.opensslCmd, PEMFile)
-        shellutil.Run(cmd)
-       
+               "").format(self.openssl_cmd, P7M_FILE_NAME, TRANSPORT_PRV_FILE_NAME,
+                               TRANSPORT_CERT_FILE_NAME, self.openssl_cmd, PEM_FILE_NAME)
+        shellutil.run(cmd)
+
         #The parsing process use public key to match prv and crt.
         buf = []
-        beginCrt = False
-        beginPrv = False
+        begin_crt = False
+        begin_prv = False
         prvs = {}
         thumbprints = {}
         index = 0
-        certs = []
-        with open(PEMFile) as pem:
+        v1_cert_list = []
+        with open(PEM_FILE_NAME) as pem:
             for line in pem.readlines():
                 buf.append(line)
                 if re.match(r'[-]+BEGIN.*KEY[-]+', line):
-                    beginPrv = True
+                    begin_prv = True
                 elif re.match(r'[-]+BEGIN.*CERTIFICATE[-]+', line):
-                    beginCrt = True
+                    begin_crt = True
                 elif re.match(r'[-]+END.*KEY[-]+', line):
-                    tmpFile = self.writeToTempFile(index, 'prv', buf)
-                    pub = OSUtil.GetPubKeyFromPrv(tmpFile)
-                    prvs[pub] = tmpFile
+                    tmp_file = self.write_to_tmp_file(index, 'prv', buf)
+                    pub = OSUTIL.get_pubkey_from_prv(tmp_file)
+                    prvs[pub] = tmp_file
                     buf = []
                     index += 1
-                    beginPrv = False
+                    begin_prv = False
                 elif re.match(r'[-]+END.*CERTIFICATE[-]+', line):
-                    tmpFile = self.writeToTempFile(index, 'crt', buf)
-                    pub = OSUtil.GetPubKeyFromCrt(tmpFile)
-                    thumbprint = OSUtil.GetThumbprintFromCrt(tmpFile)
+                    tmp_file = self.write_to_tmp_file(index, 'crt', buf)
+                    pub = OSUTIL.get_pubkey_from_crt(tmp_file)
+                    thumbprint = OSUTIL.get_thumbprint_from_crt(tmp_file)
                     thumbprints[pub] = thumbprint
-                    #Rename crt with thumbprint as the file name 
+                    #Rename crt with thumbprint as the file name
                     crt = "{0}.crt".format(thumbprint)
-                    certs.append({
+                    v1_cert_list.append({
                         "name":None,
                         "thumbprint":thumbprint
                     })
-                    os.rename(tmpFile, os.path.join(self.libDir, crt))
+                    os.rename(tmp_file, os.path.join(self.lib_dir, crt))
                     buf = []
                     index += 1
-                    beginCrt = False
+                    begin_crt = False
 
         #Rename prv key with thumbprint as the file name
         for pubkey in prvs:
             thumbprint = thumbprints[pubkey]
             if thumbprint:
-                tmpFile = prvs[pubkey]
+                tmp_file = prvs[pubkey]
                 prv = "{0}.prv".format(thumbprint)
-                os.rename(tmpFile, os.path.join(self.libDir, prv))
-                cert = filter(lambda x : x["thumbprint"] == thumbprint, 
-                              certs)[0]
+                os.rename(tmp_file, os.path.join(self.lib_dir, prv))
 
-        for cert in certs:
-            certInfo = Cert()
-            set_properties(certInfo, cert)
-            self.certs.certificates.append(certInfo)
+        for v1_cert in v1_cert_list:
+            cert = Cert()
+            set_properties(cert, v1_cert)
+            self.cert_list.certificates.append(cert)
 
-    def getCerts(self):
-        return self.certs
-
-    def writeToTempFile(self, index, suffix, buf):
-        fileName = os.path.join(self.libDir, "{0}.{1}".format(index, suffix))
-        with open(fileName, 'w') as tmp:
+    def write_to_tmp_file(self, index, suffix, buf):
+        file_name = os.path.join(self.lib_dir, "{0}.{1}".format(index, suffix))
+        with open(file_name, 'w') as tmp:
             tmp.writelines(buf)
-        return fileName
+        return file_name
 
 
 class ExtensionsConfig(object):
@@ -891,24 +851,21 @@ class ExtensionsConfig(object):
     Install if <enabled>true</enabled>, remove if it is set to false.
     """
 
-    def __init__(self, xmlText):
-        if xmlText is None:
+    def __init__(self, xml_text):
+        if xml_text is None:
             raise ValueError("ExtensionsConfig is None")
-        logger.Verbose("Load ExtensionsConfig.xml")
-        self.extList = ExtensionList()
-        self.statusUploadBlob = None
-        self.parse(xmlText)
+        logger.verb("Load ExtensionsConfig.xml")
+        self.ext_list = ExtensionList()
+        self.status_upload_blob = None
+        self.parse(xml_text)
 
-    def getStatusUploadBlob(self):
-        return self.statusUploadBlob
-    
-    def parse(self, xmlText):
+    def parse(self, xml_text):
         """
         Write configuration to file ExtensionsConfig.xml.
         """
-        xmlDoc = ET.fromstring(xmlText.strip())
-        plugins = FindAllNodes(xmlDoc, ".//Plugins/Plugin")      
-        settings = FindAllNodes(xmlDoc, ".//PluginSettings/Plugin")
+        xml_doc = ET.fromstring(xml_text.strip())
+        plugins = find_all_nodes(xml_doc, ".//Plugins/Plugin")
+        settings = find_all_nodes(xml_doc, ".//PluginSettings/Plugin")
 
         for plugin in plugins:
             ext = Extension()
@@ -925,28 +882,27 @@ class ExtensionsConfig(object):
             location = plugin.attrib["location"]
             failoverLocation = plugin.attrib["failoverlocation"]
             for uri in [location, failoverLocation]:
-                versionUri = ExtensionVersionUri() 
+                versionUri = ExtensionVersionUri()
                 versionUri.uri = uri
                 ext.versionUris.append(versionUri)
 
             name = ext.name
             version = ext.properties.version
-            pluginSettings = filter(lambda x: x.attrib["name"] == name 
-                                    and x.attrib["version"] == version,
+            pluginSettings = filter(lambda x: x.attrib["name"] == name and x.attrib["version"] == version,
                                     settings)
             if pluginSettings is None or len(pluginSettings) == 0 :
                 continue
 
             runtimeSettings = None
-            runtimeSettingsNode = FindFirstNode(pluginSettings[0], 
-                                                "RuntimeSettings")
+            runtimeSettingsNode = find_first_node(pluginSettings[0],
+                                                "runtimeSettings")
             seqNo = runtimeSettingsNode.attrib["seqNo"]
             runtimeSettingsStr = runtimeSettingsNode.text
             try:
                 runtimeSettings = json.loads(runtimeSettingsStr)
             except ValueError as e:
                 raise ProtocolError("Invalid extension settings")
-            
+
             for settings in runtimeSettings["runtimeSettings"]:
                 hSettings = settings["handlerSettings"]
                 extSettings = ExtensionSettings()
@@ -957,30 +913,29 @@ class ExtensionsConfig(object):
                 extSettings.certificateThumbprint = thumbprint
                 ext.properties.extensions.append(extSettings)
 
-            self.extList.extensions.append(ext)
-        self.statusUploadBlob = (FindFirstNode(xmlDoc,"StatusUploadBlob")).text
+            self.ext_list.extensions.append(ext)
+        self.status_upload_blob = (find_first_node(xml_doc,"StatusUploadBlob")).text
 
 class ExtensionManifest(object):
-    def __init__(self, xmlText):
-        if xmlText is None:
+    def __init__(self, xml_text):
+        if xml_text is None:
             raise ValueError("ExtensionManifest is None")
-        logger.Verbose("Load ExtensionManifest.xml")
-        self.xmlText = xmlText
-        self.packageList = ExtensionPackageList()
-        self.parse(xmlText)
+        logger.verb("Load ExtensionManifest.xml")
+        self.pkg_list = ExtensionPackageList()
+        self.parse(xml_text)
 
-    def parse(self, xmlText):
-        xmlDoc = ET.fromstring(xmlText.strip())
-        packages = FindAllNodes(xmlDoc, ".//Plugin")
+    def parse(self, xml_text):
+        xml_doc = ET.fromstring(xml_text.strip())
+        packages = find_all_nodes(xml_doc, ".//Plugin")
         for package in packages:
-            version = FindFirstNode(package, "Version").text
-            uris = FindAllNodes(package, "Uris/Uri")
+            version = find_first_node(package, "Version").text
+            uris = find_all_nodes(package, "Uris/Uri")
             uris = map(lambda x : x.text, uris)
-            package = ExtensionPackage() 
+            package = ExtensionPackage()
             package.version = version
             for uri in uris:
                 packageUri = ExtensionPackageUri()
                 packageUri.uri = uri
                 package.uris.append(packageUri)
-            self.packageList.versions.append(package)
+            self.pkg_list.versions.append(package)
 

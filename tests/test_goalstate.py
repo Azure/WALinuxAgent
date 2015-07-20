@@ -26,7 +26,7 @@ import os
 import test
 import azurelinuxagent.protocol.v1 as v1
 
-GoalStateSample="""
+goal_state_sample="""
 <?xml version="1.0" encoding="utf-8"?>
 <GoalState xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="goalstate10.xsd">
    <Version>2010-12-15</Version>
@@ -58,15 +58,15 @@ GoalStateSample="""
 
 class TestGoalState(unittest.TestCase):
     def test_goal_state(self):
-        goalState = v1.GoalState(GoalStateSample)
-        self.assertEquals('1', goalState.getIncarnation())
-        self.assertNotEquals(None, goalState.getExpectedState())
-        self.assertNotEquals(None, goalState.getHostingEnvUri())
-        self.assertNotEquals(None, goalState.getSharedConfigUri())
-        self.assertNotEquals(None, goalState.getCertificatesUri())
-        self.assertNotEquals(None, goalState.getExtensionsUri())
-        self.assertNotEquals(None, goalState.getRoleInstanceId())
-        self.assertNotEquals(None, goalState.getContainerId())
+        goal_state = v1.GoalState(goal_state_sample)
+        self.assertEquals('1', goal_state.incarnation)
+        self.assertNotEquals(None, goal_state.expected_state)
+        self.assertNotEquals(None, goal_state.hosting_env_uri)
+        self.assertNotEquals(None, goal_state.shared_conf_uri)
+        self.assertNotEquals(None, goal_state.certs_uri)
+        self.assertNotEquals(None, goal_state.ext_uri)
+        self.assertNotEquals(None, goal_state.role_instance_id)
+        self.assertNotEquals(None, goal_state.container_id)
 
 if __name__ == '__main__':
     unittest.main()

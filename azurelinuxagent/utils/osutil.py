@@ -23,5 +23,5 @@ Load OSUtil implementation from azurelinuxagent.distro
 from azurelinuxagent.distro.default.osutil import OSUtilError
 import azurelinuxagent.distro.loader as loader
 
-OSUtil = loader.GetOSUtil()
+OSUTIL = loader.get_osutil()
 

@@ -17,9 +17,12 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
+"""
+Module conf loads and parses configuration file
+"""
 import os
 import azurelinuxagent.utils.fileutil as fileutil
-from azurelinuxagent.exception import *
+from azurelinuxagent.exception import AgentConfigError
 
 class ConfigurationProvider(object):
     """
@@ -40,52 +43,67 @@ class ConfigurationProvider(object):
                 else:
                     self.values[parts[0]] = None
 
-    def get(self, key, defaultValue=None):
+    def get(self, key, default_val=None):
         val = self.values.get(key)
-        return val if val is not None else defaultValue
+        return val if val is not None else default_val
 
-    def getSwitch(self, key, defaultValue=False):
+    def get_switch(self, key, default_val=False):
         val = self.values.get(key)
         if val is not None and val.lower() == 'y':
             return True
         elif val is not None and val.lower() == 'n':
             return False
-        return defaultValue
+        return default_val
 
-    def getInt(self, key, defaultValue=-1):
+    def get_int(self, key, default_val=-1):
         try:
             return int(self.values.get(key))
-        except:
-            return defaultValue
+        except TypeError:
+            return default_val
+        except ValueError:
+            return default_val
 
 
-__Config__ = ConfigurationProvider()
+__config__ = ConfigurationProvider()
 
-def LoadConfiguration(confFilePath, conf=__Config__):
-    if os.path.isfile(confFilePath) == False:
-        raise AgentConfigError("Missing configuration in {0}".format(confFilePath))
+def load_conf(conf_file_path, conf=__config__):
+    """
+    Load conf file from: conf_file_path
+    """
+    if os.path.isfile(conf_file_path) == False:
+        raise AgentConfigError(("Missing configuration in {0}"
+                                "").format(conf_file_path))
     try:
-        content = fileutil.GetFileContents(confFilePath)
+        content = fileutil.read_file(conf_file_path)
         conf.load(content)
-    except IOError, e:
-        raise AgentConfigError("Failed to load conf file:{0}".format(confFilePath))
+    except IOError as err:
+        raise AgentConfigError(("Failed to load conf file:{0}, {1}"
+                                "").format(conf_file_path, err))
 
-def Get(key, defaultValue=None, conf=__Config__):
+def get(key, default_val=None, conf=__config__):
+    """
+    Get option value by key, return default_val if not found
+    """
     if conf is not None:
-        return conf.get(key, defaultValue)
+        return conf.get(key, default_val)
     else:
-        return defaultValue
- 
-def GetSwitch(key,  defaultValue=None, conf=__Config__):
-     if conf is not None:
-         return conf.getSwitch(key, defaultValue)
-     else:
-         return defaultValue
+        return default_val
 
-def GetInt(key, defaultValue=None, conf=__Config__):
+def get_switch(key, default_val=None, conf=__config__):
+    """
+    Get bool option value by key, return default_val if not found
+    """
     if conf is not None:
-        return conf.getInt(key, defaultValue)
+        return conf.get_switch(key, default_val)
     else:
-        return defaultValue
+        return default_val
 
+def get_int(key, default_val=None, conf=__config__):
+    """
+    Get int option value by key, return default_val if not found
+    """
+    if conf is not None:
+        return conf.get_int(key, default_val)
+    else:
+        return default_val
 

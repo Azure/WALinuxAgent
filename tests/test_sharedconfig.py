@@ -25,7 +25,7 @@ import unittest
 import os
 import azurelinuxagent.protocol.v1 as v1
 
-SharedConfigSample="""
+shared_config_sample="""
 
  <SharedConfig version="1.0.0.0" goalStateIncarnation="1">
    <Deployment name="db00a7755a5e4e8a8fe4b19bc3b330c3" guid="{ce5a036f-5c93-40e7-8adf-2613631008ab}" incarnation="2">
@@ -73,7 +73,7 @@ SharedConfigSample="""
 
 class TestSharedConfig(unittest.TestCase):
     def test_sharedconfig(self):
-        sharedconfig = v1.SharedConfig(SharedConfigSample)
+        shared_conf = v1.SharedConfig(shared_config_sample)
    
 if __name__ == '__main__':
     unittest.main()

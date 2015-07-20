@@ -21,22 +21,22 @@
 import env
 from tests.tools import *
 import unittest
-from azurelinuxagent.utils.osutil import OSUtil, OSUtilError
-from azurelinuxagent.handler import Handlers
+from azurelinuxagent.utils.osutil import OSUTIL, OSUtilError
+from azurelinuxagent.handler import HANDLERS
 import azurelinuxagent.distro.default.osutil as osutil
 
 class TestDistroLoader(unittest.TestCase):
     def test_loader(self):
-        self.assertNotEquals(osutil.DefaultOSUtil, type(OSUtil))
-        self.assertNotEquals(None, Handlers.initHandler)
-        self.assertNotEquals(None, Handlers.runHandler)
-        self.assertNotEquals(None, Handlers.scvmmHandler)
-        self.assertNotEquals(None, Handlers.dhcpHandler)
-        self.assertNotEquals(None, Handlers.envHandler)
-        self.assertNotEquals(None, Handlers.provisionHandler)
-        self.assertNotEquals(None, Handlers.resourceDiskHandler)
-        self.assertNotEquals(None, Handlers.envHandler)
-        self.assertNotEquals(None, Handlers.deprovisionHandler)
+        self.assertNotEquals(osutil.DefaultOSUtil, type(OSUTIL))
+        self.assertNotEquals(None, HANDLERS.init_handler)
+        self.assertNotEquals(None, HANDLERS.main_handler)
+        self.assertNotEquals(None, HANDLERS.scvmm_handler)
+        self.assertNotEquals(None, HANDLERS.dhcp_handler)
+        self.assertNotEquals(None, HANDLERS.env_handler)
+        self.assertNotEquals(None, HANDLERS.provision_handler)
+        self.assertNotEquals(None, HANDLERS.resource_disk_handler)
+        self.assertNotEquals(None, HANDLERS.env_handler)
+        self.assertNotEquals(None, HANDLERS.deprovision_handler)
 
 if __name__ == '__main__':
     unittest.main()

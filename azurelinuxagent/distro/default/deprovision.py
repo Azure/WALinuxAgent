@@ -18,7 +18,7 @@
 #
 
 import azurelinuxagent.conf as conf
-from azurelinuxagent.utils.osutil import OSUtil
+from azurelinuxagent.utils.osutil import OSUTIL
 import azurelinuxagent.protocol as prot
 import azurelinuxagent.protocol.ovfenv as ovf
 import azurelinuxagent.utils.fileutil as fileutil
@@ -35,74 +35,74 @@ class DeprovisionAction(object):
 
 class DeprovisionHandler(object):
 
-    def deleteRootPassword(self, warnings, actions):
+    def del_root_password(self, warnings, actions):
         warnings.append("WARNING! root password will be disabled. "
                         "You will not be able to login as root.")
 
-        actions.append(DeprovisionAction(OSUtil.DeleteRootPassword))
-    
-    def deleteUser(self, warnings, actions):
-        
+        actions.append(DeprovisionAction(OSUTIL.del_root_password))
+
+    def del_user(self, warnings, actions):
+
         try:
-            ovfenv = ovf.GetOvfEnv()
+            ovfenv = ovf.get_ovf_env()
         except prot.ProtocolError:
             warnings.append("WARNING! ovf-env.xml is not found.")
             warnings.append("WARNING! Skip delete user.")
             return
 
-        userName = ovfenv.getUserName()
+        username = ovfenv.get_username()
         warnings.append(("WARNING! {0} account and entire home directory "
-                         "will be deleted.").format(userName))
-        actions.append(DeprovisionAction(OSUtil.DeleteAccount, [userName]))
+                         "will be deleted.").format(username))
+        actions.append(DeprovisionAction(OSUTIL.del_account, [username]))
 
 
-    def regenerateHostKeyPair(self, warnings, actions):
+    def regen_ssh_host_key(self, warnings, actions):
         warnings.append("WARNING! All SSH host key pairs will be deleted.")
-        actions.append(DeprovisionAction(OSUtil.SetHostname, 
+        actions.append(DeprovisionAction(OSUTIL.set_hostname,
                                          ['localhost.localdomain']))
-        actions.append(DeprovisionAction(shellutil.Run, 
+        actions.append(DeprovisionAction(shellutil.run,
                                          ['rm -f /etc/ssh/ssh_host_*key*']))
-    
-    def stopAgentService(self, warnings, actions):
+
+    def stop_agent_service(self, warnings, actions):
         warnings.append("WARNING! The waagent service will be stopped.")
-        actions.append(DeprovisionAction(OSUtil.StopAgentService))
+        actions.append(DeprovisionAction(OSUTIL.stop_agent_service))
 
-    def deleteFiles(self, warnings, actions):
-        filesToDel = ['/root/.bash_history', '/var/log/waagent.log']
-        actions.append(DeprovisionAction(fileutil.RemoveFiles, filesToDel))
+    def del_files(self, warnings, actions):
+        files_to_del = ['/root/.bash_history', '/var/log/waagent.log']
+        actions.append(DeprovisionAction(fileutil.rm_files, files_to_del))
 
-    def deleteDhcpLease(self, warnings, actions):
+    def del_dhcp_lease(self, warnings, actions):
         warnings.append("WARNING! Cached DHCP leases will be deleted.")
-        dirsToDel = ["/var/lib/dhclient", "/var/lib/dhcpcd", "/var/lib/dhcp"]
-        actions.append(DeprovisionAction(fileutil.CleanupDirs, dirsToDel))
+        dirs_to_del = ["/var/lib/dhclient", "/var/lib/dhcpcd", "/var/lib/dhcp"]
+        actions.append(DeprovisionAction(fileutil.rm_dirs, dirs_to_del))
 
-    def deleteLibDir(self, warnings, actions):
-        dirsToDel = [OSUtil.GetLibDir()]
-        actions.append(DeprovisionAction(fileutil.CleanupDirs, dirsToDel))
+    def del_lib_dir(self, warnings, actions):
+        dirs_to_del = [OSUTIL.get_lib_dir()]
+        actions.append(DeprovisionAction(fileutil.rm_dirs, dirs_to_del))
 
-    def setUp(self, deluser):
+    def setup(self, deluser):
         warnings = []
         actions = []
 
-        self.stopAgentService(warnings, actions)
-        if conf.GetSwitch("Provisioning.RegenerateSshHostkey", False):
-            self.regenerateHostKeyPair(warnings, actions)
-        
-        self.deleteDhcpLease(warnings, actions)
+        self.stop_agent_service(warnings, actions)
+        if conf.get_switch("Provisioning.RegenerateSshHostkey", False):
+            self.regen_ssh_host_key(warnings, actions)
 
-        if conf.GetSwitch("Provisioning.DeleteRootPassword", False):
-            self.deleteRootPassword(warnings, actions)
+        self.del_dhcp_lease(warnings, actions)
 
-        self.deleteLibDir(warnings, actions)
-        self.deleteFiles(warnings, actions)
+        if conf.get_switch("Provisioning.DeleteRootPassword", False):
+            self.del_root_password(warnings, actions)
+
+        self.del_lib_dir(warnings, actions)
+        self.del_files(warnings, actions)
 
         if deluser:
-            self.deleteUser(warnings, actions)
-        
+            self.del_user(warnings, actions)
+
         return warnings, actions
-        
+
     def deprovision(self, force=False, deluser=False):
-        warnings, actions = self.setUp(deluser)
+        warnings, actions = self.setup(deluser)
         for warning in warnings:
             print warning
 
@@ -110,8 +110,8 @@ class DeprovisionHandler(object):
             confirm = raw_input("Do you want to proceed (y/n)")
             if not confirm.lower().startswith('y'):
                 return
-        
+
         for action in actions:
             action.invoke()
-    
-    
+
+

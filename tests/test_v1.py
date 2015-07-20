@@ -29,96 +29,96 @@ import httplib
 import azurelinuxagent.logger as logger
 import azurelinuxagent.protocol.v1 as v1
 from test_version import VersionInfoSample
-from test_goalstate import GoalStateSample
-from test_hostingenv import HostingEnvSample
-from test_sharedconfig import SharedConfigSample
-from test_certificates import CertificatesSample, TransportCert
-from test_extensionsconfig import ExtensionsConfigSample, ManifestSample
+from test_goalstate import goal_state_sample
+from test_hostingenv import hosting_env_sample
+from test_sharedconfig import shared_config_sample
+from test_certificates import certs_sample, transport_cert
+from test_extensionsconfig import ext_conf_sample, manifest_sample
 
 #logger.LoggerInit("/dev/stdout", "/dev/null", verbose=True)
 #logger.LoggerInit("/dev/stdout", "/dev/null", verbose=False)
 
-def MockFetchUri(url, headers=None, chkProxy=False):
+def mock_fetch_uri(url, headers=None, chk_proxy=False):
     content = None
     if "versions" in url:
         content = VersionInfoSample
     elif "goalstate" in url:
-        content = GoalStateSample
+        content = goal_state_sample
     elif "hostingenvuri" in url:
-        content = HostingEnvSample
+        content = hosting_env_sample
     elif "sharedconfiguri" in url:
-        content = SharedConfigSample
+        content = shared_config_sample
     elif "certificatesuri" in url:
-        content = CertificatesSample
+        content = certs_sample
     elif "extensionsconfiguri" in url:
-        content = ExtensionsConfigSample
+        content = ext_conf_sample
     elif "manifest.xml" in url:
-        content = ManifestSample
+        content = manifest_sample
     else:
         raise Exception("Bad url {0}".format(url))
     return content
 
-def MockFetchManifest(uris):
-    return ManifestSample
+def mock_fetch_manifest(uris):
+    return manifest_sample
 
-def MockFetchCache(filePath):
+def mock_fetch_cache(file_path):
     content = None
-    if "Incarnation" in filePath:
+    if "Incarnation" in file_path:
         content = 1
-    elif "GoalState" in filePath:
-        content = GoalStateSample
-    elif "HostingEnvironmentConfig" in filePath:
-        content = HostingEnvSample
-    elif "SharedConfig" in filePath:
-        content = SharedConfigSample
-    elif "Certificates" in filePath:
-        content = CertificatesSample
-    elif "TransportCert" in filePath:
-        content = TransportCert
-    elif "ExtensionsConfig" in filePath:
-        content = ExtensionsConfigSample
-    elif "manifest" in filePath:
-        content = ManifestSample
+    elif "GoalState" in file_path:
+        content = goal_state_sample
+    elif "HostingEnvironmentConfig" in file_path:
+        content = hosting_env_sample
+    elif "SharedConfig" in file_path:
+        content = shared_config_sample
+    elif "Certificates" in file_path:
+        content = certs_sample
+    elif "TransportCert" in file_path:
+        content = transport_cert
+    elif "ExtensionsConfig" in file_path:
+        content = ext_conf_sample
+    elif "manifest" in file_path:
+        content = manifest_sample
     else:
-        raise Exception("Bad filepath {0}".format(filePath))
+        raise Exception("Bad filepath {0}".format(file_path))
     return content
 
 class TestWireClint(unittest.TestCase):
 
-    @Mockup(v1, '_fetchCache', MockFetchCache)
-    def testGet(self):
+    @mock(v1, '_fetch_cache', mock_fetch_cache)
+    def test_get(self):
         os.chdir('/tmp')
         client = v1.WireClient("foobar")
-        goalState = client.getGoalState()
+        goalState = client.get_goal_state()
         self.assertNotEquals(None, goalState)
-        hostingEnv = client.getHostingEnv()
+        hostingEnv = client.get_hosting_env()
         self.assertNotEquals(None, hostingEnv)
-        sharedConfig = client.getSharedConfig()
+        sharedConfig = client.get_shared_conf()
         self.assertNotEquals(None, sharedConfig)
-        extensionsConfig = client.getExtensionsConfig()
+        extensionsConfig = client.get_ext_conf()
         self.assertNotEquals(None, extensionsConfig)
    
     
-    @Mockup(v1, '_fetchCache', MockFetchCache)
-    def testGetHeaderWithCert(self):
+    @mock(v1, '_fetch_cache', mock_fetch_cache)
+    def test_get_head_for_cert(self):
         client = v1.WireClient("foobar")
-        header = client.getHeaderWithCert()
+        header = client.get_header_for_cert()
         self.assertNotEquals(None, header)
 
-    @Mockup(v1.WireClient, 'getHeaderWithCert', MockFunc()) 
-    @Mockup(v1, '_fetchUri', MockFetchUri)
-    @Mockup(v1.fileutil, 'SetFileContents', MockFunc())
-    def testUpdateGoalState(self):
+    @mock(v1.WireClient, 'get_header_for_cert', MockFunc()) 
+    @mock(v1, '_fetch_uri', mock_fetch_uri)
+    @mock(v1.fileutil, 'write_file', MockFunc())
+    def test_update_goal_state(self):
         client = v1.WireClient("foobar")
-        client.updateGoalState()
-        goalState = client.getGoalState()
-        self.assertNotEquals(None, goalState)
-        hostingEnv = client.getHostingEnv()
-        self.assertNotEquals(None, hostingEnv)
-        sharedConfig = client.getSharedConfig()
-        self.assertNotEquals(None, sharedConfig)
-        extensionsConfig = client.getExtensionsConfig()
-        self.assertNotEquals(None, extensionsConfig)
+        client.update_goal_state()
+        goal_state = client.get_goal_state()
+        self.assertNotEquals(None, goal_state)
+        hosting_env = client.get_hosting_env()
+        self.assertNotEquals(None, hosting_env)
+        shared_config = client.get_shared_conf()
+        self.assertNotEquals(None, shared_config)
+        ext_conf = client.get_ext_conf()
+        self.assertNotEquals(None, ext_conf)
 
 class MockResp(object):
     def __init__(self, status):
@@ -126,40 +126,40 @@ class MockResp(object):
 
 class TestStatusBlob(unittest.TestCase):
     def testToJson(self):
-        vmStatus = v1.VMStatus()
-        statusBlob = v1.StatusBlob(vmStatus)
-        self.assertNotEquals(None, statusBlob.toJson())
+        vm_status = v1.VMStatus()
+        status_blob = v1.StatusBlob(vm_status)
+        self.assertNotEquals(None, status_blob.toJson())
 
-    @Mockup(v1.restutil, 'HttpPut', MockFunc(retval=MockResp(httplib.CREATED)))
-    @Mockup(v1.restutil, 'HttpHead', MockFunc(retval=MockResp(httplib.OK)))
+    @mock(v1.restutil, 'http_put', MockFunc(retval=MockResp(httplib.CREATED)))
+    @mock(v1.restutil, 'http_head', MockFunc(retval=MockResp(httplib.OK)))
     def test_put_page_blob(self):
-        vmStatus = v1.VMStatus()
-        statusBlob = v1.StatusBlob(vmStatus)
+        vm_status = v1.VMStatus()
+        status_blob = v1.StatusBlob(vm_status)
         data = ['a'] * 100
-        statusBlob.putPageBlob("http://foo.bar", data)
+        status_blob.put_page_blob("http://foo.bar", data)
 
 class TestConvert(unittest.TestCase):
     def test_status(self):
-        vmStatus = v1.VMStatus() 
-        handlerStatus = v1.ExtensionHandlerStatus()
+        vm_status = v1.VMStatus() 
+        handler_status = v1.ExtensionHandlerStatus()
         substatus = v1.ExtensionSubStatus()
-        extStatus = v1.ExtensionStatus()
+        ext_status = v1.ExtensionStatus()
 
-        vmStatus.extensionHandlers.append(handlerStatus)
-        v1.vm_status_to_v1(vmStatus)
+        vm_status.extensionHandlers.append(handler_status)
+        v1.vm_status_to_v1(vm_status)
 
-        handlerStatus.extensionStatusList.append(extStatus)
-        v1.vm_status_to_v1(vmStatus)
+        handler_status.extensionStatusList.append(ext_status)
+        v1.vm_status_to_v1(vm_status)
 
-        extStatus.substatusList.append(substatus)
-        v1.vm_status_to_v1(vmStatus)
+        ext_status.substatusList.append(substatus)
+        v1.vm_status_to_v1(vm_status)
 
     def test_param(self):
         param = v1.TelemetryEventParam()
         event = v1.TelemetryEvent()
         event.parameters.append(param)
         
-        v1.event_to_xml(event)
+        v1.event_to_v1(event)
 
 if __name__ == '__main__':
     unittest.main()

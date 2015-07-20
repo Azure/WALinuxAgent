@@ -21,7 +21,7 @@
 import env
 from tests.tools import *
 import unittest
-import azurelinuxagent.distro.default.deprovision as deprovisionHandler
+import azurelinuxagent.distro.default.deprovision as deprovision_handler
 
 def MockAction(param):
     #print param
@@ -30,24 +30,24 @@ def MockAction(param):
 def MockSetup(self, deluser):
     warnings = ["Print warning to console"]
     actions = [
-        deprovisionHandler.DeprovisionAction(MockAction, ['Take action'])
+        deprovision_handler.DeprovisionAction(MockAction, ['Take action'])
     ]
     return warnings, actions
 
 class TestDeprovisionHandler(unittest.TestCase):
-    def test_setUp(self):
-        handler = deprovisionHandler.DeprovisionHandler()
-        warnings, actions = handler.setUp(False)
+    def test_setup(self):
+        handler = deprovision_handler.DeprovisionHandler()
+        warnings, actions = handler.setup(False)
         self.assertNotEquals(None, warnings)
         self.assertNotEquals(0, len(warnings))
         self.assertNotEquals(None, actions)
         self.assertNotEquals(0, len(actions))
-        self.assertEquals(deprovisionHandler.DeprovisionAction, type(actions[0]))
+        self.assertEquals(deprovision_handler.DeprovisionAction, type(actions[0]))
 
     
-    @Mockup(deprovisionHandler.DeprovisionHandler, 'setUp', MockSetup)
+    @mock(deprovision_handler.DeprovisionHandler, 'setup', MockSetup)
     def test_deprovision(self):
-        handler = deprovisionHandler.DeprovisionHandler()
+        handler = deprovision_handler.DeprovisionHandler()
         handler.deprovision(force=True)
 
 if __name__ == '__main__':

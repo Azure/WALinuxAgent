@@ -23,7 +23,7 @@ import threading
 import time
 import azurelinuxagent.logger as logger
 import azurelinuxagent.conf as conf
-from azurelinuxagent.utils.osutil import OSUtil
+from azurelinuxagent.utils.osutil import OSUTIL
 
 class EnvHandler(object):
     """
@@ -31,35 +31,35 @@ class EnvHandler(object):
     If dhcp clinet process re-start has occurred, reset routes, dhcp with fabric.
 
     Monitor scsi disk.
-    If new scsi disk found, set 
+    If new scsi disk found, set
     """
     def __init__(self, handlers):
-        self.monitor = EnvMonitor(handlers.dhcpHandler)
+        self.monitor = EnvMonitor(handlers.dhcp_handler)
 
-    def startMonitor(self):
+    def start(self):
         self.monitor.start()
 
-    def stopMonitor(self):
+    def stop(self):
         self.monitor.stop()
 
 class EnvMonitor(object):
 
-    def __init__(self, dhcpHandler):
-        self.dhcpHandler = dhcpHandler
+    def __init__(self, dhcp_handler):
+        self.dhcp_handler = dhcp_handler
         self.stopped = True
         self.hostname = None
         self.dhcpid = None
         self.server_thread=None
-    
+
     def start(self):
         if not self.stopped:
-            logger.Info("Stop existing env monitor service.")
+            logger.info("Stop existing env monitor service.")
             self.stop()
 
         self.stopped = False
-        logger.Info("Start env monitor service.")
+        logger.info("Start env monitor service.")
         self.hostname = socket.gethostname()
-        self.dhcpid = OSUtil.GetDhcpProcessId()
+        self.dhcpid = OSUTIL.get_dhcp_pid()
         self.server_thread = threading.Thread(target = self.monitor)
         self.server_thread.setDaemon(True)
         self.server_thread.start()
@@ -70,39 +70,39 @@ class EnvMonitor(object):
         If dhcp clinet process re-start has occurred, reset routes.
         """
         while not self.stopped:
-            OSUtil.RemoveRulesFiles()
-            timeout = conf.Get("OS.RootDeviceScsiTimeout", None)
+            OSUTIL.remove_rules_files()
+            timeout = conf.get("OS.RootDeviceScsiTimeout", None)
             if timeout is not None:
-                OSUtil.SetScsiDiskTimeout(timeout)
-            if conf.GetSwitch("Provisioning.MonitorHostName", False):
-                self.handleHostnameUpdate()
-            self.handleDhcpClientRestart()
+                OSUTIL.set_scsi_disks_timeout(timeout)
+            if conf.get_switch("Provisioning.MonitorHostName", False):
+                self.handle_hostname_update()
+            self.handle_dhclient_restart()
             time.sleep(5)
 
-    def handleHostnameUpdate(self):
-        currHostname = socket.gethostname()
-        if currHostname != self.hostname:
-            logger.Info("EnvMonitor: Detected host name change: {0} -> {1}",
-                        self.hostname, currHostname)
-            OSUtil.SetHostname(currHostname)
-            OSUtil.PublishHostname(currHostname)
-            self.hostname = currHostname
+    def handle_hostname_update(self):
+        curr_hostname = socket.gethostname()
+        if curr_hostname != self.hostname:
+            logger.info("EnvMonitor: Detected host name change: {0} -> {1}",
+                        self.hostname, curr_hostname)
+            OSUTIL.set_hostname(curr_hostname)
+            OSUTIL.publish_hostname(curr_hostname)
+            self.hostname = curr_hostname
 
-    def handleDhcpClientRestart(self):
+    def handle_dhclient_restart(self):
         if self.dhcpid is None:
-            logger.Warn("Dhcp client is not running. ")
-            self.dhcpid = OSUtil.GetDhcpProcessId()
+            logger.warn("Dhcp client is not running. ")
+            self.dhcpid = OSUTIL.get_dhcp_pid()
             return
-       
+
         #The dhcp process hasn't changed since last check
         if os.path.isdir(os.path.join('/proc', self.dhcpid.strip())):
             return
-        
-        newpid = OSUtil.GetDhcpProcessId()
+
+        newpid = OSUTIL.get_dhcp_pid()
         if newpid is not None and newpid != self.dhcpid:
-           logger.Info("EnvMonitor: Detected dhcp client restart. "
+           logger.info("EnvMonitor: Detected dhcp client restart. "
                        "Restoring routing table.")
-           self.dhcpHandler.configRoutes()
+           self.dhcp_handler.conf_routes()
            self.dhcpid = newpid
 
     def stop(self):

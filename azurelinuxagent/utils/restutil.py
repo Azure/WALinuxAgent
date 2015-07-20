@@ -29,54 +29,54 @@ from urlparse import urlparse
 """
 REST api util functions
 """
-__RetryWaitingInterval=10
+RETRY_WAITING_INTERVAL = 10
 
 class HttpError(Exception):
     pass
 
-def _ParseUrl(url):
+def _parse_url(url):
     o = urlparse(url)
-    relativeUrl = o.path
+    rel_uri = o.path
     if o.fragment:
-        relativeUrl = "{0}#{1}".format(relativeUrl, o.fragment)
+        rel_uri = "{0}#{1}".format(rel_uri, o.fragment)
     if o.query:
-        relativeUrl = "{0}?{1}".format(relativeUrl, o.query)
+        rel_uri = "{0}?{1}".format(rel_uri, o.query)
     secure = False
     if o.scheme.lower() == "https":
         secure = True
-    return o.hostname, o.port, secure, relativeUrl
+    return o.hostname, o.port, secure, rel_uri
 
-def GetHttpProxy():
+def get_http_proxy():
     """
     Get http_proxy and https_proxy from environment variables.
     Username and password is not supported now.
     """
-    host = conf.Get("HttpProxy.Host", None)
-    port = conf.Get("HttpProxy.Port", None)
-    return (host, port) 
+    host = conf.get("HttpProxy.Host", None)
+    port = conf.get("HttpProxy.Port", None)
+    return (host, port)
 
-def _HttpRequest(method, host, relativeUrl, port=None, data=None, secure=False, 
-                 headers=None, proxyHost=None, proxyPort=None):
+def _http_request(method, host, rel_uri, port=None, data=None, secure=False,
+                 headers=None, proxy_host=None, proxy_port=None):
     url, conn = None, None
     if secure:
         port = 443 if port is None else port
-        if proxyHost is not None and proxyPort is not None:
-            conn = httplib.HTTPSConnection(proxyHost, proxyPort)
+        if proxy_host is not None and proxy_port is not None:
+            conn = httplib.HTTPSConnection(proxy_host, proxy_port)
             conn.set_tunnel(host, port)
             #If proxy is used, full url is needed.
-            url = "https://{0}:{1}{2}".format(host, port, relativeUrl)
+            url = "https://{0}:{1}{2}".format(host, port, rel_uri)
         else:
             conn = httplib.HTTPSConnection(host, port)
-            url = relativeUrl
+            url = rel_uri
     else:
         port = 80 if port is None else port
-        if proxyHost is not None and proxyPort is not None:
-            conn = httplib.HTTPConnection(proxyHost, proxyPort)
+        if proxy_host is not None and proxy_port is not None:
+            conn = httplib.HTTPConnection(proxy_host, proxy_port)
             #If proxy is used, full url is needed.
-            url = "http://{0}:{1}{2}".format(host, port, relativeUrl)
+            url = "http://{0}:{1}{2}".format(host, port, rel_uri)
         else:
             conn = httplib.HTTPConnection(host, port)
-            url = relativeUrl
+            url = rel_uri
     if headers == None:
         conn.request(method, url, data)
     else:
@@ -84,65 +84,65 @@ def _HttpRequest(method, host, relativeUrl, port=None, data=None, secure=False,
     resp = conn.getresponse()
     return resp
 
-def HttpRequest(method, url, data, headers=None, maxRetry=3, chkProxy=False):
+def http_request(method, url, data, headers=None, max_retry=3, chk_proxy=False):
     """
     Sending http request to server
-    On error, sleep 10 and retry maxRetry times.
+    On error, sleep 10 and retry max_retry times.
     """
-    logger.Verbose("HTTP Req: {0} {1}", method, url)
-    logger.Verbose("    Data={0}", data)
-    logger.Verbose("    Header={0}", headers)
-    host, port, secure, relativeUrl = _ParseUrl(url)
+    logger.verb("HTTP Req: {0} {1}", method, url)
+    logger.verb("    Data={0}", data)
+    logger.verb("    Header={0}", headers)
+    host, port, secure, rel_uri = _parse_url(url)
 
     #Check proxy
-    proxyHost, proxyPort = (None, None)
-    if chkProxy:
-        proxyHost, proxyPort = GetHttpProxy()
+    proxy_host, proxy_port = (None, None)
+    if chk_proxy:
+        proxy_host, proxy_port = get_http_proxy()
 
     #If httplib module is not built with ssl support. Fallback to http
     if secure and not hasattr(httplib, "HTTPSConnection"):
-        logger.Warn("httplib is not built with ssl support")
+        logger.warn("httplib is not built with ssl support")
         secure = False
-    
+
     #If httplib module doesn't support https tunnelling. Fallback to http
     if secure and \
-            proxyHost is not None and \
-            proxyPort is not None and \
+            proxy_host is not None and \
+            proxy_port is not None and \
             not hasattr(httplib.HTTPSConnection, "set_tunnel"):
-        logger.Warn("httplib doesn't support https tunnelling(new in python 2.7)")
+        logger.warn("httplib doesn't support https tunnelling(new in python 2.7)")
         secure = False
 
-    for retry in range(0, maxRetry):
+    for retry in range(0, max_retry):
         try:
-            resp = _HttpRequest(method, host, relativeUrl, port, data, 
-                                secure, headers, proxyHost, proxyPort)
-            logger.Verbose("HTTP Resp: Status={0}", resp.status)
-            logger.Verbose("    Header={0}", resp.getheaders())
+            resp = _http_request(method, host, rel_uri, port=port, data=data, secure=secure,
+                                 headers=headers, proxy_host=proxy_host, proxy_port=proxy_port)
+            logger.verb("HTTP Resp: Status={0}", resp.status)
+            logger.verb("    Header={0}", resp.getheaders())
             return resp
         except httplib.HTTPException as e:
-            logger.Warn('HTTPException {0}, args:{1}', e, repr(e.args))
+            logger.warn('HTTPException {0}, args:{1}', e, repr(e.args))
         except IOError as e:
-            logger.Warn('Socket IOError {0}, args:{1}', e, repr(e.args)) 
+            logger.warn('Socket IOError {0}, args:{1}', e, repr(e.args))
 
-        if retry < maxRetry - 1:
-            logger.Info("Retry={0}, {1} {2}", retry, method, url)
-            time.sleep(__RetryWaitingInterval)
+        if retry < max_retry - 1:
+            logger.info("Retry={0}, {1} {2}", retry, method, url)
+            time.sleep(RETRY_WAITING_INTERVAL)
 
     raise HttpError("HTTP Err: {0} {1}".format(method, url))
 
-def HttpGet(url, headers=None, maxRetry=3, chkProxy=False):
-    return HttpRequest("GET", url, None, headers, maxRetry, chkProxy)
-    
-def HttpHead(url, headers=None, maxRetry=3, chkProxy=False):
-    return HttpRequest("HEAD", url, None, headers, maxRetry, chkProxy)
-    
-def HttpPost(url, data, headers=None, maxRetry=3, chkProxy=False):
-    return HttpRequest("POST", url, data, headers, maxRetry, chkProxy)
+def http_get(url, headers=None, max_retry=3, chk_proxy=False):
+    return http_request("GET", url, data=None, headers=headers, max_retry=max_retry, chk_proxy=chk_proxy)
 
-def HttpPut(url, data, headers=None, maxRetry=3, chkProxy=False):
-    return HttpRequest("PUT", url, data, headers, maxRetry, chkProxy)
+def http_head(url, headers=None, max_retry=3, chk_proxy=False):
+    return http_request("HEAD", url, None, headers=headers, max_retry=max_retry, chk_proxy=chk_proxy)
 
-def HttpDelete(url, headers=None, maxRetry=3, chkProxy=False):
-    return HttpRequest("DELETE", url, None, headers, maxRetry, chkProxy)
+def http_post(url, data, headers=None, max_retry=3, chk_proxy=False):
+    return http_request("POST", url, data, headers=headers, max_retry=max_retry, chk_proxy=chk_proxy)
+
+def http_put(url, data, headers=None, max_retry=3, chk_proxy=False):
+    return http_request("PUT", url, data, headers=headers, max_retry=max_retry, chk_proxy=chk_proxy)
+
+def http_delete(url, headers=None, max_retry=3, chk_proxy=False):
+    return http_request("DELETE", url, None, headers=headers, max_retry=max_retry, chk_proxy=chk_proxy)
 
 #End REST api util functions

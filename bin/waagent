@@ -2,7 +2,7 @@
 #
 # Windows Azure Linux Agent
 #
-# Copyright 2014 Microsoft Corporation
+# Copyright 2015 Microsoft Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# Requires Python 2.4+ and Openssl 1.0+
+# Requires Python 2.6+ and Openssl 1.0+
 #
 # Implements parts of RFC 2131, 1541, 1497 and
 # http://msdn.microsoft.com/en-us/library/cc227282%28PROT.10%29.aspx
@@ -26,7 +26,7 @@
 if __name__ == '__main__' :
     import sys
     import azurelinuxagent.agent as agent
-    agent.Main()
+    agent.main()
     sys.exit()
 
 import array
@@ -57,6 +57,7 @@ import json
 import datetime
 import xml.sax.saxutils
 
+
 if not hasattr(subprocess,'check_output'):
     def check_output(*popenargs, **kwargs):
         r"""Backport from subprocess module from python 2.7"""
@@ -86,7 +87,7 @@ if not hasattr(subprocess,'check_output'):
     
 GuestAgentName = "WALinuxAgent"
 GuestAgentLongName = "Windows Azure Linux Agent"
-GuestAgentVersion = "WALinuxAgent-2.0.8"
+GuestAgentVersion = "WALinuxAgent-2.0.14"
 ProtocolVersion = "2012-11-30" #WARNING this value is used to confirm the correct fabric protocol.
 
 Config = None
@@ -179,12 +180,13 @@ class AbstractDistro(object):
         self.ssh_config_file='/etc/ssh/sshd_config'
         self.hostname_file_path='/etc/hostname'
         self.dhcp_client_name='dhclient'
-        self.requiredDeps = [ 'route', 'shutdown', 'ssh-keygen', 'useradd'
-                              , 'openssl', 'sfdisk', 'fdisk', 'mkfs', 'chpasswd', 'sed', 'grep', 'sudo' ]
+        self.requiredDeps = [ 'route', 'shutdown', 'ssh-keygen', 'useradd', 
+                              'openssl', 'sfdisk', 'fdisk', 'mkfs', 'chpasswd', 
+                              'sed', 'grep', 'sudo', 'parted' ]
         self.init_script_file='/etc/init.d/waagent'
         self.agent_package_name='WALinuxAgent'
         self.fileBlackList = [ "/root/.bash_history", "/var/log/waagent.log",'/etc/resolv.conf' ]        
-        self.agent_files_to_uninstall = ["/etc/waagent.conf", "/etc/logrotate.d/waagent", "/etc/sudoers.d/waagent"]
+        self.agent_files_to_uninstall = ["/etc/waagent.conf", "/etc/logrotate.d/waagent"]
         self.grubKernelBootOptionsFile = '/etc/default/grub'
         self.grubKernelBootOptionsLine = 'GRUB_CMDLINE_LINUX_DEFAULT='
         self.getpidcmd = 'pidof'
@@ -481,13 +483,37 @@ class AbstractDistro(object):
             fs = Config.get("ResourceDisk.Filesystem")
             if fs == None:
                 fs = "ext3"
-            if RunGetOutput("sfdisk -q -c " + device + " 1")[1].rstrip() == "7" and fs != "ntfs":
-                Run("sfdisk -c " + device + " 1 83")
-                Run("mkfs." + fs + " " + device + "1")
-            if Run("mount " + device + "1 " + mountpoint):
-                Error("ActivateResourceDisk: Failed to mount resource disk (" + device + "1).")
-                return
-            Log("Resource disk (" + device + "1) is mounted at " + mountpoint + " with fstype " + fs)
+
+            partition = device + "1"
+
+            #Check partition type
+            Log("Detect GPT...")
+            ret = RunGetOutput("parted {0} print".format(device))
+            if ret[0] == 0 and "gpt" in ret[1]:
+                Log("GPT detected.")
+                #GPT(Guid Partition Table) is used.
+                #Get partitions.
+                parts = filter(lambda x : re.match("^\s*[0-9]+", x), ret[1].split("\n"))
+                #If there are more than 1 partitions, remove all partitions 
+                #and create a new one using the entire disk space.
+                if len(parts) > 1:
+                    for i in range(1, len(parts) + 1):
+                        Run("parted {0} rm {1}".format(device, i))
+                    Run("parted {0} mkpart primary 0% 100%".format(device))
+                    Run("mkfs." + fs + " " + partition + " -F")
+            else:
+                existingFS = RunGetOutput("sfdisk -q -c " + device + " 1", chk_err=False)[1].rstrip()
+                if existingFS == "7" and fs != "ntfs":
+                    Run("sfdisk -c " + device + " 1 83")
+                    Run("mkfs." + fs + " " + partition)
+            if Run("mount " + partition + " " + mountpoint, chk_err=False):
+                #If mount failed, try to format the partition and mount again
+                Warn("Failed to mount resource disk. Retry mounting.")            
+                Run("mkfs." + fs + " " + partition + " -F")
+                if Run("mount " + partition + " " + mountpoint):
+                    Error("ActivateResourceDisk: Failed to mount resource disk (" + partition + ").")
+                    return
+            Log("Resource disk (" + partition + ") is mounted at " + mountpoint + " with fstype " + fs)
 
         #Create README file under the root of resource disk
         SetFileContents(os.path.join(mountpoint,README_FILENAME), README_FILECONTENT)
@@ -570,7 +596,7 @@ class AbstractDistro(object):
 
     def stopDHCP(self):
         """
-        Stop the system DHCP client so that tha agent can bind on its port. If
+        Stop the system DHCP client so that the agent can bind on its port. If
         the distro has set dhcp_enabled to True, it will need to provide an
         implementation of this method.
         """
@@ -587,10 +613,45 @@ class AbstractDistro(object):
         """
         Translate the custom data from a Base64 encoding. Default to no-op.
         """
+        decodeCustomData = Config.get("Provisioning.DecodeCustomData")
+        if decodeCustomData != None and decodeCustomData.lower().startswith("y"):
+            return base64.b64decode(data)
         return data
 
     def getConfigurationPath(self):
         return "/etc/waagent.conf"
+    
+    def getProcessorCores(self):
+        return int(RunGetOutput("grep 'processor.*:' /proc/cpuinfo |wc -l")[1])
+    
+    def getTotalMemory(self):
+        return int(RunGetOutput("grep MemTotal /proc/meminfo |awk '{print $2}'")[1])/1024
+    
+    def getInterfaceNameByMac(self, mac):
+        ret, output = RunGetOutput("ifconfig -a")
+        if ret != 0:
+            raise Exception("Failed to get network interface info")
+        output = output.replace('\n', '')
+        match = re.search(r"(eth\d).*(HWaddr|ether) {0}".format(mac), 
+                          output, re.IGNORECASE)
+        if match is None:
+            raise Exception("Failed to get ifname with mac: {0}".format(mac))
+        output = match.group(0)
+        eths = re.findall(r"eth\d", output)
+        if eths is None or len(eths) == 0:
+            raise Exception("Failed to get ifname with mac: {0}".format(mac))
+        return eths[-1]
+
+    def configIpV4(self, ifName, addr, netmask=24):
+        ret, output = RunGetOutput("ifconfig {0} up".format(ifName))
+        if ret != 0:
+            raise Exception("Failed to bring up {0}: {1}".format(ifName, 
+                                                                 output))
+        ret, output = RunGetOutput("ifconfig {0} {1}/{2}".format(ifName, addr,
+                                                                 netmask))
+        if ret != 0:
+            raise Exception("Failed to config ipv4 for {0}: {1}".format(ifName, 
+                                                                        output))
 
 ############################################################
 #	GentooDistro
@@ -796,7 +857,8 @@ class SuSEDistro(AbstractDistro):
         self.requiredDeps += [ "/sbin/insserv" ]
         self.init_file=suse_init_file
         self.dhcp_client_name='dhcpcd'
-        if (DistInfo(fullname=1)[0] == 'SUSE Linux Enterprise Server') and (DistInfo()[1] >= '12'):
+        if ((DistInfo(fullname=1)[0] == 'SUSE Linux Enterprise Server' and DistInfo()[1] >= '12') or \
+            (DistInfo(fullname=1)[0] == 'openSUSE'                     and DistInfo()[1] >= '13.2')):
             self.dhcp_client_name='wickedd-dhcp4'
         self.grubKernelBootOptionsFile = '/boot/grub/menu.lst'
         self.grubKernelBootOptionsLine = 'kernel'
@@ -994,7 +1056,7 @@ class CoreOSDistro(AbstractDistro):
         self.dhcp_client_name='systemd-networkd'
         self.getpidcmd='pidof '
         self.shadow_file_mode=0640
-        self.waagent_path='/usr/share/oem/waagent/bin'
+        self.waagent_path='/usr/share/oem/bin'
         self.python_path='/usr/share/oem/python/bin'
         self.dhcp_enabled=True
         if 'PATH' in os.environ:
@@ -1035,12 +1097,9 @@ class CoreOSDistro(AbstractDistro):
 
     def restartSshService(self):
         """
-        Service call to re(start) the SSH service
+        SSH is socket activated on CoreOS. No need to restart it.
         """
-        retcode = Run("systemctl restart sshd")
-        if retcode > 0:
-            Error("Failed to restart SSH service with return code:" + str(retcode))
-        return retcode
+        return 0
 
     def sshDeployPublicKey(self,fprint,path):
         """
@@ -1270,6 +1329,18 @@ class debianDistro(AbstractDistro):
             return 0
         
 ############################################################    
+#	KaliDistro - WIP
+#       Functioning on Kali 1.1.0a so far
+############################################################ 
+class KaliDistro(debianDistro):
+    """
+    Kali Distro concrete class
+    Put Kali specific behavior here...
+    """
+    def __init__(self):
+        super(KaliDistro,self).__init__()
+
+############################################################    
 #	UbuntuDistro
 ############################################################    
 ubuntu_upstart_file = """\
@@ -1315,18 +1386,6 @@ class UbuntuDistro(debianDistro):
 
     def registerAgentService(self):
         return self.installAgentServiceScriptFiles()
-
-    def startAgentService(self):
-        """
-        Use upstart syntax.
-        """
-        return Run('start ' + self.agent_service_name)
-        
-    def stopAgentService(self):
-        """
-        Use upstart syntax.
-        """
-        return Run('stop ' + self.agent_service_name)
     
     def uninstallAgentService(self):
         """
@@ -1349,7 +1408,7 @@ class UbuntuDistro(debianDistro):
         """
         Ubuntu specific warning string from Deprovision.
         """
-        print("WARNING! Nameserver configuration in /etc/resolvconf/resolv.conf.d/{tail,originial} will be deleted.")
+        print("WARNING! Nameserver configuration in /etc/resolvconf/resolv.conf.d/{tail,original} will be deleted.")
 
     def deprovisionDeleteFiles(self):
         """
@@ -1363,7 +1422,7 @@ class UbuntuDistro(debianDistro):
         else:
             Log("resolvconf is enabled; leaving /etc/resolv.conf intact")
             resolvConfD = '/etc/resolvconf/resolv.conf.d/'
-            self.fileBlackList.extend([resolvConfD + 'tail', resolvConfD + 'originial'])
+            self.fileBlackList.extend([resolvConfD + 'tail', resolvConfD + 'original'])
         for f in os.listdir(LibDir)+self.fileBlackList:
             try:
                 os.remove(f)
@@ -1617,6 +1676,7 @@ if Run("mount " + device + "s1 " + mountpoint):
     waagent.Error("ActivateResourceDisk: Failed to mount resource disk (" + device + "s1).")
     sys.exit(0)
 waagent.Log("Resource disk (" + device + "s1) is mounted at " + mountpoint + " with fstype " + fs)
+waagent.SetFileContents(os.path.join(mountpoint,waagent.README_FILENAME), waagent.README_FILECONTENT)
 swap = Config.get("ResourceDisk.EnableSwap")
 if swap == None or swap.lower().startswith("n"):
     sys.exit(0)
@@ -1654,7 +1714,7 @@ class FreeBSDDistro(AbstractDistro):
         self.init_file=bsd_init_file
         self.agent_package_name='WALinuxAgent'
         self.fileBlackList = [ "/root/.bash_history", "/var/log/waagent.log",'/etc/resolv.conf' ]        
-        self.agent_files_to_uninstall = ["/etc/waagent.conf", "/usr/local/etc/sudoers.d/waagent"]
+        self.agent_files_to_uninstall = ["/etc/waagent.conf"]
         self.grubKernelBootOptionsFile = '/boot/loader.conf'
         self.grubKernelBootOptionsLine = ''
         self.getpidcmd = 'pgrep -n'
@@ -1762,7 +1822,7 @@ class FreeBSDDistro(AbstractDistro):
         code,output=RunGetOutput("ifconfig",chk_err=False)
         Log(output)
         retries=10
-        cmd='ifconfig | grep -A1 -B2 ether | grep -B3 inet | grep -A3 UP '
+        cmd='ifconfig | grep -A2 -B2 ether | grep -B3 inet | grep -A4 UP '
         code=1
 
         while code > 0 :
@@ -1808,7 +1868,8 @@ class FreeBSDDistro(AbstractDistro):
             pass
         uidmin = None
         try:
-            uidmin = int(GetLineStartingWith("UID_MIN", "/etc/login.defs").split()[1])
+            if os.path.isfile("/etc/login.defs"):
+                uidmin = int(GetLineStartingWith("UID_MIN", "/etc/login.defs").split()[1])
         except:
             pass
         if uidmin == None:
@@ -1875,7 +1936,8 @@ class FreeBSDDistro(AbstractDistro):
             return
         uidmin = None
         try:
-            uidmin = int(GetLineStartingWith("UID_MIN", "/etc/login.defs").split()[1])
+            if os.path.isfile("/etc/login.defs"):
+                uidmin = int(GetLineStartingWith("UID_MIN", "/etc/login.defs").split()[1])
         except:
             pass
         if uidmin == None:
@@ -1884,7 +1946,7 @@ class FreeBSDDistro(AbstractDistro):
             Error("DeleteAccount: " + user + " is a system user. Will not delete account.")
             return
         Run("> /var/run/utmp") #Delete utmp to prevent error if we are the 'user' deleted
-        Run("rmuser -y " + user)
+        pid = subprocess.Popen(['rmuser', '-y', user], stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE).pid
         try:
             os.remove(MyDistro.sudoers_dir_base+"/sudoers.d/waagent")
         except:
@@ -1986,6 +2048,12 @@ class FreeBSDDistro(AbstractDistro):
     def setBlockDeviceTimeout(self, device, timeout):
         return
 
+    def getProcessorCores(self):
+        return int(RunGetOutput("sysctl hw.ncpu | awk '{print $2}'")[1])
+    
+    def getTotalMemory(self):
+        return int(RunGetOutput("sysctl hw.realmem | awk '{print $2}'")[1])/1024
+        
 ############################################################
 # END DISTRO CLASS DEFS
 ############################################################  
@@ -2484,18 +2552,22 @@ def GetFirstActiveNetworkInterfaceNonLoopback():
     """
     iface=''
     expected=16 # how many devices should I expect...
-    struct_size=40 # for 64bit the size is 40 bytes
+    is_64bits = sys.maxsize > 2**32
+    struct_size=40 if is_64bits else 32 # for 64bit the size is 40 bytes, for 32bits it is 32 bytes.
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     buff=array.array('B', b'\0' * (expected*struct_size))
     retsize=(struct.unpack('iL', fcntl.ioctl(s.fileno(), 0x8912, struct.pack('iL',expected*struct_size,buff.buffer_info()[0]))))[0]
     if retsize == (expected*struct_size) :
         Warn('SIOCGIFCONF returned more than ' + str(expected) + ' up network interfaces.')
     s=buff.tostring()
+    preferred_nic = Config.get("Network.Interface")
     for i in range(0,struct_size*expected,struct_size):
         iface=s[i:i+16].split(b'\0', 1)[0]
         if iface == b'lo':
             continue
-        else :
+        elif preferred_nic is None:
+            break
+        elif iface == preferred_nic:
             break
     return iface.decode('latin-1'), socket.inet_ntoa(s[i+20:i+24])
 
@@ -2554,145 +2626,316 @@ def DeviceForIdePort(n):
             break
     return device
 
+class HttpResourceGoneError(Exception):
+    pass
+
 class Util(object):
     """
     Http communication class.
     Base of GoalState, and Agent classes.
     """
-    def _HttpGet(self, url, headers):
+    RetryWaitingInterval=10
+
+    def __init__(self):
+        self.Endpoint = None
+
+    def _ParseUrl(self, url):
+        secure = False
+        host = self.Endpoint
+        path = url
+        port = None
+        
+        #"http[s]://hostname[:port][/]"
+        if url.startswith("http://"):
+            url = url[7:]
+            if "/" in url:
+                host = url[0: url.index("/")]
+                path = url[url.index("/"):]
+            else:
+                host = url
+                path = "/"
+        elif url.startswith("https://"):
+            secure = True
+            url = url[8:]
+            if "/" in url:
+                host = url[0: url.index("/")]
+                path = url[url.index("/"):]
+            else:
+                host = url
+                path = "/"
+
+        if host is None:
+            raise ValueError("Host is invalid:{0}".format(url))
+        
+        if(":" in host):
+            pos = host.rfind(":")
+            port = int(host[pos + 1:])
+            host = host[0:pos]
+        
+        return host, port, secure, path
+
+    def GetHttpProxy(self, secure):
         """
-        Do HTTP get on 'url' with 'headers'.
+        Get http_proxy and https_proxy from environment variables.
+        Username and password is not supported now.
+        """
+        host = Config.get("HttpProxy.Host")
+        port = Config.get("HttpProxy.Port")
+        return (host, port) 
+
+    def _HttpRequest(self, method, host, path, port=None, data=None, secure=False, 
+                     headers=None, proxyHost=None, proxyPort=None):
+        resp = None
+        conn = None
+        try:
+            if secure:
+                port = 443 if port is None else port
+                if proxyHost is not None and proxyPort is not None:
+                    conn = httplib.HTTPSConnection(proxyHost, proxyPort)
+                    conn.set_tunnel(host, port)
+                    #If proxy is used, full url is needed.
+                    path = "https://{0}:{1}{2}".format(host, port, path)
+                else:
+                    conn = httplib.HTTPSConnection(host, port)
+            else:
+                port = 80 if port is None else port
+                if proxyHost is not None and proxyPort is not None:
+                    conn = httplib.HTTPConnection(proxyHost, proxyPort)
+                    #If proxy is used, full url is needed.
+                    path = "http://{0}:{1}{2}".format(host, port, path)
+                else:
+                    conn = httplib.HTTPConnection(host, port)
+            if headers == None:
+                conn.request(method, path, data)
+            else:
+                conn.request(method, path, data, headers)
+            resp = conn.getresponse()
+        except httplib.HTTPException, e:
+            Error('HTTPException {0}, args:{1}'.format(e, repr(e.args)))
+        except IOError, e:
+            Error('Socket IOError {0}, args:{1}'.format(e, repr(e.args)))
+        return resp
+
+    def HttpRequest(self, method, url, data=None, 
+                    headers=None, maxRetry=3, chkProxy=False):
+        """
+        Sending http request to server
         On error, sleep 10 and maxRetry times.
         Return the output buffer or None.
         """
-        LogIfVerbose("HttpGet(" + url + ")")
-        maxRetry = 2
-        if url.startswith("http://"):
-            url = url[7:]
-            url = url[url.index("/"):]
-        for retry in range(0, maxRetry + 1):
-            strRetry = str(retry)
-            log = [NoLog, Error][retry > 0]
-            log("retry HttpGet(" + url + "),retry=" + strRetry)
-            response = None
-            strStatus = "None"
-            try:
-                httpConnection = httplib.HTTPConnection(self.Endpoint)
-                if headers == None:
-                    request = httpConnection.request("GET", url)
-                else:
-                    request = httpConnection.request("GET", url, None, headers)
-                response = httpConnection.getresponse()
-                strStatus = str(response.status)
-            except httplib.HTTPException, e:
-                Error('HTTPException ' + e.message + ' args: ' + repr(e.args))
-            except IOError, e:
-                Error('socket IOError ' + e.message + ' args: ' + repr(e.args))
-            log("response HttpGet(" + url + "),retry=" + strRetry + ",status=" + strStatus)
-            if response == None or response.status != httplib.OK:
-                Error("HttpGet(" + url + "),retry=" + strRetry + ",status=" + strStatus)
-                if retry == maxRetry:
-                    Error("return HttpGet(" + url + "),retry=" + strRetry + ",status=" + strStatus)
-                    return None
-                else:
-                    Error("sleep 10 seconds HttpGet(" + url + "),retry=" + strRetry + ",status=" + strStatus)
-                    time.sleep(10)
-            else:
-                log("return HttpGet(" + url + "),retry=" + strRetry + ",status=" + strStatus)
-                return response.read()
+        LogIfVerbose("HTTP Req: {0} {1}".format(method, url))
+        LogIfVerbose("HTTP Req: Data={0}".format(data))
+        LogIfVerbose("HTTP Req: Header={0}".format(headers))
+        try:
+            host, port, secure, path = self._ParseUrl(url)
+        except ValueError, e:
+            Error("Failed to parse url:{0}".format(url))
+            return None
 
-    def HttpGetWithoutHeaders(self, url):
+        #Check proxy
+        proxyHost, proxyPort = (None, None)
+        if chkProxy:
+            proxyHost, proxyPort = self.GetHttpProxy(secure)
+
+        #If httplib module is not built with ssl support. Fallback to http
+        if secure and not hasattr(httplib, "HTTPSConnection"):
+            Warn("httplib is not built with ssl support")
+            secure = False
+            proxyHost, proxyPort = self.GetHttpProxy(secure)
+        
+        #If httplib module doesn't support https tunnelling. Fallback to http
+        if secure and \
+                proxyHost is not None and \
+                proxyPort is not None and \
+                not hasattr(httplib.HTTPSConnection, "set_tunnel"):
+            Warn("httplib doesn't support https tunnelling(new in python 2.7)")
+            secure = False
+            proxyHost, proxyPort = self.GetHttpProxy(secure)
+
+        resp = self._HttpRequest(method, host, path, port=port, data=data, 
+                                 secure=secure, headers=headers,
+                                 proxyHost=proxyHost, proxyPort=proxyPort)
+        for retry in range(0, maxRetry):
+            if resp is not None and \
+                   (resp.status == httplib.OK or \
+                    resp.status == httplib.CREATED or \
+                    resp.status == httplib.ACCEPTED):
+                return resp;
+
+            if resp is not None and resp.status == httplib.GONE:
+                raise HttpResourceGoneError("Http resource gone.")
+
+            Error("Retry={0}".format(retry))
+            Error("HTTP Req: {0} {1}".format(method, url))
+            Error("HTTP Req: Data={0}".format(data))
+            Error("HTTP Req: Header={0}".format(headers))
+            if resp is None:
+                Error("HTTP Err: response is empty.".format(retry))
+            else:
+                Error("HTTP Err: Status={0}".format(resp.status))
+                Error("HTTP Err: Reason={0}".format(resp.reason))
+                Error("HTTP Err: Header={0}".format(resp.getheaders()))
+                Error("HTTP Err: Body={0}".format(resp.read()))
+
+            time.sleep(self.__class__.RetryWaitingInterval)
+            resp = self._HttpRequest(method, host, path, port=port, data=data, 
+                                     secure=secure, headers=headers,
+                                     proxyHost=proxyHost, proxyPort=proxyPort)
+
+        return None
+
+    def HttpGet(self, url, headers=None, maxRetry=3, chkProxy=False):
+        return self.HttpRequest("GET", url, headers=headers, 
+                                maxRetry=maxRetry, chkProxy=chkProxy)
+        
+    def HttpHead(self, url, headers=None, maxRetry=3, chkProxy=False):
+        return self.HttpRequest("HEAD", url, headers=headers, 
+                                maxRetry=maxRetry, chkProxy=chkProxy)
+        
+    def HttpPost(self, url, data, headers=None, maxRetry=3, chkProxy=False):
+        return self.HttpRequest("POST", url, data=data, headers=headers, 
+                                maxRetry=maxRetry, chkProxy=chkProxy)
+
+    def HttpPut(self, url, data, headers=None, maxRetry=3, chkProxy=False):
+        return self.HttpRequest("PUT", url, data=data, headers=headers, 
+                                maxRetry=maxRetry, chkProxy=chkProxy)
+
+    def HttpDelete(self, url, headers=None, maxRetry=3, chkProxy=False):
+        return self.HttpRequest("DELETE", url, headers=headers, 
+                                maxRetry=maxRetry, chkProxy=chkProxy)
+    
+    def HttpGetWithoutHeaders(self, url, maxRetry=3, chkProxy=False):
         """
         Return data from an HTTP get on 'url'.
         """
-        return self._HttpGet(url, None)
+        resp = self.HttpGet(url, headers=None, maxRetry=maxRetry, 
+                            chkProxy=chkProxy)
+        return resp.read() if resp is not None else None
 
-    def HttpGetWithHeaders(self, url):
+    def HttpGetWithHeaders(self, url, maxRetry=3, chkProxy=False):
         """
         Return data from an HTTP get on 'url' with
         x-ms-agent-name and x-ms-version
         headers.
         """
-        return self._HttpGet(url, {"x-ms-agent-name": GuestAgentName, "x-ms-version": ProtocolVersion})
+        resp = self.HttpGet(url, headers={
+            "x-ms-agent-name": GuestAgentName, 
+            "x-ms-version": ProtocolVersion
+        }, maxRetry=maxRetry, chkProxy=chkProxy)
+        return resp.read() if resp is not None else None
 
-    def HttpSecureGetWithHeaders(self, url, transportCert):
+    def HttpSecureGetWithHeaders(self, url, transportCert, maxRetry=3, 
+                                 chkProxy=False):
         """
         Return output of get using ssl cert.
         """
-        return self._HttpGet(url, {"x-ms-agent-name": GuestAgentName,
-                                   "x-ms-version": ProtocolVersion,
-                                   "x-ms-cipher-name": "DES_EDE3_CBC",
-                                   "x-ms-guest-agent-public-x509-cert": transportCert})
+        resp = self.HttpGet(url, headers={
+            "x-ms-agent-name": GuestAgentName,
+            "x-ms-version": ProtocolVersion,
+            "x-ms-cipher-name": "DES_EDE3_CBC",
+            "x-ms-guest-agent-public-x509-cert": transportCert
+        }, maxRetry=maxRetry, chkProxy=chkProxy)
+        return resp.read() if resp is not None else None
 
-    def HttpPost(self, url, data):
-        """
-        Send http POST to server, sleeping 10 retrying maxRetry times upon error.
-        """
-        LogIfVerbose("HttpPost(" + url + ")")
-        maxRetry = 2
-        for retry in range(0, maxRetry + 1):
-            strRetry = str(retry)
-            log = [NoLog, Error][retry > 0]
-            log("retry HttpPost(" + url + "),retry=" + strRetry)
-            response = None
-            strStatus = "None"
-            try:
-                httpConnection = httplib.HTTPConnection(self.Endpoint)
-                request = httpConnection.request("POST", url, data, {"x-ms-agent-name": GuestAgentName,
-                                                                     "Content-Type": "text/xml; charset=utf-8",
-                                                                     "x-ms-version": ProtocolVersion})
-                response = httpConnection.getresponse()
-                strStatus = str(response.status)
-            except httplib.HTTPException, e:
-                Error('HTTPException ' + e.message + ' args: ' + repr(e.args))
-            except IOError, e:
-                Error('socket IOError ' + e.message + ' args: ' + repr(e.args))
-            log("response HttpPost(" + url + "),retry=" + strRetry + ",status=" + strStatus)
-            if response == None or (response.status != httplib.OK and response.status != httplib.ACCEPTED):
-                Error("HttpPost(" + url + "),retry=" + strRetry + ",status=" + strStatus)
-                if retry == maxRetry:
-                    Error("return HttpPost(" + url + "),retry=" + strRetry + ",status=" + strStatus)
-                    return None
-                else:
-                    Error("sleep 10 seconds HttpPost(" + url + "),retry=" + strRetry + ",status=" + strStatus)
-                    time.sleep(10)
-            else:
-                log("return HttpPost(" + url + "),retry=" + strRetry + ",status=" + strStatus)
-                return response
+    def HttpPostWithHeaders(self, url, data, maxRetry=3, chkProxy=False):
+        headers = {
+            "x-ms-agent-name": GuestAgentName,
+            "Content-Type": "text/xml; charset=utf-8",
+            "x-ms-version": ProtocolVersion
+        }
+        return self.HttpPost(url, data=data, headers=headers, 
+                             maxRetry=maxRetry, chkProxy=chkProxy)
 
-    def HttpPutBlockBlob(self, url, data):
-        """
-        Send http PUT to server, sleeping 10 retrying maxRetry times upon error.
-        """
-        LogIfVerbose("HttpPutBlockBlob(" + url + ")")
-        maxRetry = 2
-        for retry in range(0, maxRetry + 1):
-            strRetry = str(retry)
-            log = [NoLog, Error][retry > 0]
-            log("retry HttpPutBlockBlob(" + url + "),retry=" + strRetry)
-            response = None
-            strStatus = "None"
-            try:
-                httpConnection = httplib.HTTPConnection(self.Endpoint)
-                request = httpConnection.request("PUT", url, data, {"x-ms-blob-type" : "BlockBlob", "x-ms-date" : time.strftime("%Y-%M-%dT%H:%M:%SZ", time.gmtime()) ,"Content-Length": str(len(data))} )
-                response = httpConnection.getresponse()
-                strStatus = str(response.status)
-            except httplib.HTTPException, e:
-                Error('HTTPException ' + e.message + ' args: ' + repr(e.args))
-            except IOError, e:
-                Error('socket IOError ' + e.message + ' args: ' + repr(e.args))
-            log("response HttpPutBlockBlob(" + url + "),retry=" + strRetry + ",status=" + strStatus)
-            if response == None or (response.status != httplib.OK and response.status != httplib.CREATED):
-                Error("HttpPutBlockBlob(" + url + "),retry=" + strRetry + ",status=" + strStatus)
-                if retry == maxRetry:
-                    Error("return HttpPutBlockBlob(" + url + "),retry=" + strRetry + ",status=" + strStatus)
-                    return None
-                else:
-                    Error("sleep 10 seconds HttpPutBlockBlob(" + url + "),retry=" + strRetry + ",status=" + strStatus)
-                    time.sleep(10)
-            else:
-                log("return HttpPutBlockBlob(" + url + "),retry=" + strRetry + ",status=" + strStatus)
-                return response
+__StorageVersion="2014-02-14"
+
+def GetBlobType(url):
+    restutil = Util()
+    #Check blob type
+    LogIfVerbose("Check blob type.")
+    timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    blobPropResp = restutil.HttpHead(url, {
+        "x-ms-date" :  timestamp,
+        'x-ms-version' : __StorageVersion
+    }, chkProxy=True);
+    blobType = None
+    if blobPropResp is None:
+        Error("Can't get status blob type.")
+        return None
+    blobType = blobPropResp.getheader("x-ms-blob-type")
+    LogIfVerbose("Blob type={0}".format(blobType))
+    return blobType
+
+def PutBlockBlob(url, data):
+    restutil = Util()
+    LogIfVerbose("Upload block blob")
+    timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    ret = restutil.HttpPut(url, data, {
+        "x-ms-date" :  timestamp,
+        "x-ms-blob-type" : "BlockBlob",
+        "Content-Length": str(len(data)),
+        "x-ms-version" : __StorageVersion
+    }, chkProxy=True)
+    if ret is None:
+        Error("Failed to upload block blob for status.")
+
+def PutPageBlob(url, data):
+    restutil = Util()
+    LogIfVerbose("Replace old page blob")
+    timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    #Align to 512 bytes
+    pageBlobSize = ((len(data) + 511) / 512) * 512
+    ret = restutil.HttpPut(url, "", {
+        "x-ms-date" :  timestamp,
+        "x-ms-blob-type" : "PageBlob",
+        "Content-Length": "0",
+        "x-ms-blob-content-length" : str(pageBlobSize),
+        "x-ms-version" : __StorageVersion
+    }, chkProxy=True)
+    if ret is None:
+        Error("Failed to clean up page blob for status")
+        return
+        
+    if url.index('?') < 0:
+        url = "{0}?comp=page".format(url)
+    else:
+        url = "{0}&comp=page".format(url)
+   
+    LogIfVerbose("Upload page blob")
+    pageMax = 4 * 1024 * 1024 #Max page size: 4MB
+    start = 0
+    end = 0
+    while end < len(data):
+        end = min(len(data), start + pageMax)
+        contentSize = end - start
+        #Align to 512 bytes
+        pageEnd = ((end + 511) / 512) * 512
+        bufSize = pageEnd - start
+        buf = bytearray(bufSize)
+        buf[0 : contentSize] = data[start : end]
+        ret = restutil.HttpPut(url, buffer(buf), {
+            "x-ms-date" :  timestamp,
+            "x-ms-range" : "bytes={0}-{1}".format(start, pageEnd - 1),
+            "x-ms-page-write" : "update",
+            "x-ms-version" : __StorageVersion,
+            "Content-Length": str(pageEnd - start)
+        }, chkProxy=True)
+        if ret is None:
+            Error("Failed to upload page blob for status")
+            return
+        start = end
+
+def UploadStatusBlob(url, data):
+    LogIfVerbose("Upload status blob")
+    LogIfVerbose("Status={0}".format(data))
+    blobType = GetBlobType(url) 
+
+    if blobType == "BlockBlob":
+        PutBlockBlob(url, data)    
+    elif blobType == "PageBlob":
+        PutPageBlob(url, data)    
+    else:
+        Error("Unknown blob type: {0}".format(blobType))
+        return None
 
 class TCPHandler(SocketServer.BaseRequestHandler):
     """
@@ -2752,9 +2995,13 @@ class ConfigurationProvider(object):
     """
     Parse amd store key:values in waagent.conf
     """
-    def __init__(self):
+    def __init__(self, walaConfigFile):
         self.values = dict()
-        walaConfigFile = MyDistro.getConfigurationPath()
+        if 'MyDistro' not in globals():
+            global MyDistro
+            MyDistro = GetMyDistro()
+        if walaConfigFile is None:
+            walaConfigFile = MyDistro.getConfigurationPath()
         if os.path.isfile(walaConfigFile) == False:
             raise Exception("Missing configuration in {0}".format(walaConfigFile))
         try:
@@ -2792,7 +3039,7 @@ class EnvMonitor(object):
         Monitor dhcp client pid and hostname.
         If dhcp clinet process re-start has occurred, reset routes, dhcp with fabric.
         """
-        publish = ConfigurationProvider().get("Provisioning.MonitorHostName")
+        publish = Config.get("Provisioning.MonitorHostName")
         dhcpcmd = MyDistro.getpidcmd+ ' ' + MyDistro.getDhcpClientName()
         dhcppid = RunGetOutput(dhcpcmd)[1]
         while not self.shutdown:
@@ -2995,36 +3242,150 @@ class SharedConfig(object):
         """
         Reset members.
         """
-        self.Deployment = None
-        self.Incarnation = None
-        self.Role = None
-        self.LoadBalancerSettings = None
-        self.OutputEndpoints = None
-        self.Instances = None
+        self.RdmaMacAddress = None
+        self.RdmaIPv4Address = None
+        self.xmlText = None
 
     def Parse(self, xmlText):
         """
         Parse and write configuration to file SharedConfig.xml.
         """
+        LogIfVerbose(xmlText)
         self.reinitialize()
-        SetFileContents("SharedConfig.xml", xmlText)
+        self.xmlText = xmlText
         dom = xml.dom.minidom.parseString(xmlText)
         for a in [ "SharedConfig", "Deployment", "Service",
                    "ServiceInstance", "Incarnation", "Role", ]:
             if not dom.getElementsByTagName(a):
                 Error("SharedConfig.Parse: Missing " + a)
-                return None
+
         node = dom.childNodes[0]
         if node.localName != "SharedConfig":
             Error("SharedConfig.Parse: root not SharedConfig")
-            return None
+
+        nodes = dom.getElementsByTagName("Instance")
+        if nodes is not None and len(nodes) != 0:
+            node = nodes[0]
+            if node.hasAttribute("rdmaMacAddress"):
+                addr = node.getAttribute("rdmaMacAddress")
+                self.RdmaMacAddress = addr[0:2]
+                for i in range(1, 6):
+                    self.RdmaMacAddress += ":" + addr[2 * i : 2 *i + 2]
+            if node.hasAttribute("rdmaIPv4Address"):
+                self.RdmaIPv4Address = node.getAttribute("rdmaIPv4Address")
+        return self
+    
+    def Save(self):
+        LogIfVerbose("Save SharedConfig.xml")
+        SetFileContents("SharedConfig.xml", self.xmlText)
+
+    def InvokeTopologyConsumer(self):
         program = Config.get("Role.TopologyConsumer")
         if program != None:
             try:
                 Children.append(subprocess.Popen([program, LibDir + "/SharedConfig.xml"]))
             except OSError, e :
                 ErrorWithPrefix('Agent.Run','Exception: '+ str(e) +' occured launching ' + program )
-        return self
+
+    def Process(self):
+        global rdma_configured
+        if not rdma_configured and self.RdmaMacAddress is not None and self.RdmaIPv4Address is not None:
+            handler = RdmaHandler(self.RdmaMacAddress, self.RdmaIPv4Address)
+            handler.start()
+            rdma_configured = True
+        self.InvokeTopologyConsumer()
+
+rdma_configured = False
+
+class RdmaError(Exception):
+    pass
+
+class RdmaHandler(object):
+    """
+    Handle rdma configuration.
+    """
+
+    def __init__(self, mac, ip_addr, dev="/dev/hvnd_rdma",
+                 dat_conf_files=['/etc/dat.conf', '/etc/rdma/dat.conf',
+                                 '/usr/local/etc/dat.conf']):
+        self.mac = mac
+        self.ip_addr = ip_addr
+        self.dev = dev
+        self.dat_conf_files = dat_conf_files
+        self.data = ('rdmaMacAddress="{0}" rdmaIPv4Address="{1}"'
+                     '').format(self.mac, self.ip_addr)
+
+    def start(self):
+        """
+        Start a new thread to process rdma
+        """
+        threading.Thread(target=self.process).start()
+
+    def process(self):
+        try:
+            self.set_dat_conf()
+            self.set_rdma_dev()
+            self.set_rdma_ip()
+        except RdmaError as e:
+            Error("Failed to config rdma device: {0}".format(e))
+
+    def set_dat_conf(self):
+        """
+        Agent needs to search all possible locations for dat.conf
+        """
+        Log("Set dat.conf")
+        for dat_conf_file in self.dat_conf_files:
+            if not os.path.isfile(dat_conf_file):
+                continue
+            try:
+                self.write_dat_conf(dat_conf_file)
+            except IOError as e:
+                raise RdmaError("Failed to write to dat.conf: {0}".format(e))
+
+    def write_dat_conf(self, dat_conf_file):
+        Log("Write config to {0}".format(dat_conf_file))
+        old = ("ofa-v2-ib0 u2.0 nonthreadsafe default libdaplofa.so.2 "
+               "dapl.2.0 \"\S+ 0\"")
+        new = ("ofa-v2-ib0 u2.0 nonthreadsafe default libdaplofa.so.2 "
+               "dapl.2.0 \"{0} 0\"").format(self.ip_addr)
+        lines = GetFileContents(dat_conf_file)
+        lines = re.sub(old, new, lines)
+        SetFileContents(dat_conf_file, lines)
+
+    def set_rdma_dev(self):
+        """
+        Write config string to /dev/hvnd_rdma
+        """
+        Log("Set /dev/hvnd_rdma")
+        self.wait_rdma_dev()
+        self.write_rdma_dev_conf()
+
+    def write_rdma_dev_conf(self):
+        Log("Write rdma config to {0}: {1}".format(self.dev, self.data))
+        try:
+            with open(self.dev, "w") as c:
+                c.write(self.data)
+        except IOError, e:
+            raise RdmaError("Error writing {0}, {1}".format(self.dev, e))
+
+    def wait_rdma_dev(self):
+        Log("Wait for /dev/hvnd_rdma")
+        retry = 0
+        while retry < 120:
+            if os.path.exists(self.dev):
+                return
+            time.sleep(1)
+            retry += 1
+        raise RdmaError("The device doesn't show up in 120 seconds")
+
+    def set_rdma_ip(self):
+        Log("Set ip addr for rdma")
+        try:
+            if_name = MyDistro.getInterfaceNameByMac(self.mac)
+            #Azure is using 12 bits network mask for infiniband.
+            MyDistro.configIpV4(if_name, self.ip_addr, 12)
+        except Exception as e:
+            raise RdmaError("Failed to config rdma device: {0}".format(e))
 
 class ExtensionsConfig(object):
     """
@@ -3094,11 +3455,14 @@ class ExtensionsConfig(object):
         try:
             self.Extensions=dom.getElementsByTagName("Extensions")
             pg = dom.getElementsByTagName("Plugins")
-            self.Plugins = pg[0].getElementsByTagName("Plugin")
+            if len(pg) > 0:
+                self.Plugins = pg[0].getElementsByTagName("Plugin")
+            else:
+                self.Plugins = []
             incarnation=self.Extensions[0].getAttribute("goalStateIncarnation")
             SetFileContents('ExtensionsConfig.'+incarnation+'.xml', xmlText)
-        except:
-            LogIfVerbose('ERROR:  Error parsing ExtensionsConfig.')
+        except Exception, e:
+            Error('ERROR:  Error parsing ExtensionsConfig: {0}.'.format(e))
             return None
         for p in self.Plugins:
             if len(p.getAttribute("location"))<1:  # this plugin is inside the PluginSettings
@@ -3176,7 +3540,7 @@ class ExtensionsConfig(object):
                 Log("Plugin server is: " +  self.Util.Endpoint)
                 SimpleLog(p.plugin_log,"Plugin server is: " +  self.Util.Endpoint)
 
-                manifest=self.Util.HttpGetWithoutHeaders(location)
+                manifest=self.Util.HttpGetWithoutHeaders(location, chkProxy=True)
                 if manifest == None:
                     Error("Unable to download plugin manifest" + name + " from primary location.  Attempting with failover location.")
                     SimpleLog(p.plugin_log,"Unable to download plugin manifest" + name + " from primary location.  Attempting with failover location.")
@@ -3185,12 +3549,12 @@ class ExtensionsConfig(object):
                     Log("Plugin failover server is: " +  self.Util.Endpoint)
                     SimpleLog(p.plugin_log,"Plugin failover server is: " +  self.Util.Endpoint)
 
-                    manifest=self.Util.HttpGetWithoutHeaders(failoverlocation)
+                    manifest=self.Util.HttpGetWithoutHeaders(failoverlocation, chkProxy=True)
                 #if failoverlocation also fail what to do then?
                 if manifest == None:
                     AddExtensionEvent(name,WALAEventOperation.Download,False,0,version,"Download mainfest fail "+failoverlocation)
-                    Log("Plugin manifest" + name + "downloaded successfully length = " + str(len(manifest)))
-                    SimpleLog(p.plugin_log,"Plugin manifest" + name + "downloaded successfully length = " + str(len(manifest)))
+                    Log("Plugin manifest " + name + " downloading failed from failover location.")
+                    SimpleLog(p.plugin_log,"Plugin manifest " + name + " downloading failed from failover location.")
 
                 filepath=LibDir+"/" + name + '.' + incarnation + '.manifest'
                 if os.path.splitext(location)[-1] == '.xml' : #if this is an xml file we may have a BOM
@@ -3219,7 +3583,7 @@ class ExtensionsConfig(object):
                 SimpleLog(p.plugin_log,"Bundle URI = " + bundle_uri)
 
                 # Download the zipfile archive and save as '.zip'
-                bundle=self.Util.HttpGetWithoutHeaders(bundle_uri)
+                bundle=self.Util.HttpGetWithoutHeaders(bundle_uri, chkProxy=True)
                 if bundle == None:
                     AddExtensionEvent(name,WALAEventOperation.Download,True,0,version,"Download zip fail "+bundle_uri)
                     Error("Unable to download plugin bundle" + bundle_uri )
@@ -3571,8 +3935,8 @@ class ExtensionsConfig(object):
         except:
             Error('Error parsing ExtensionsConfig.  Unable to send status reports')
             return None
-        self.Util.Endpoint=uri.split('/')[2]
-        self.Util.HttpPutBlockBlob(uri, status)
+
+        UploadStatusBlob(uri, status.encode("utf-8"))
         LogIfVerbose('Status report '+status+' sent to ' + uri)
         return True
 
@@ -3930,6 +4294,7 @@ class GoalState(Util):
                                                                 LogIfVerbose("SharedConfigUrl:" + self.SharedConfigUrl)
                                                                 self.SharedConfigXml = self.HttpGetWithHeaders(self.SharedConfigUrl)
                                                                 self.SharedConfig = SharedConfig().Parse(self.SharedConfigXml)
+                                                                self.SharedConfig.Save()
                                                             elif e.localName == "ExtensionsConfig":
                                                                 self.ExtensionsConfigUrl = GetNodeTextData(e)
                                                                 LogIfVerbose("ExtensionsConfigUrl:" + self.ExtensionsConfigUrl)
@@ -3958,7 +4323,9 @@ class GoalState(Util):
         """
         Calls HostingEnvironmentConfig.Process()
         """
+        LogIfVerbose("Process goalstate")
         self.HostingEnvironmentConfig.Process()
+        self.SharedConfig.Process()
         
 class OvfEnv(object):
     """
@@ -4013,13 +4380,13 @@ class OvfEnv(object):
         self.SshPublicKeys = []
         self.SshKeyPairs = []
 
-    def Parse(self, xmlText):
+    def Parse(self, xmlText, isDeprovision = False):
         """
         Parse xml tree, retreiving user and ssh key information.
         Return self.
         """
         self.reinitialize()
-        LogIfVerbose(xmlText)
+        LogIfVerbose(re.sub("<UserPassword>.*?<", "<UserPassword>*<", xmlText))
         dom = xml.dom.minidom.parseString(xmlText)
         if len(dom.getElementsByTagNameNS(self.OvfNs, "Environment")) != 1:
             Error("Unable to parse OVF XML.")
@@ -4045,6 +4412,8 @@ class OvfEnv(object):
             return None
         self.ComputerName = GetNodeTextData(section.getElementsByTagNameNS(self.WaNs, "HostName")[0])
         self.UserName = GetNodeTextData(section.getElementsByTagNameNS(self.WaNs, "UserName")[0])
+        if isDeprovision == True:
+          return self
         try:
             self.UserPassword = GetNodeTextData(section.getElementsByTagNameNS(self.WaNs, "UserPassword")[0])
         except:
@@ -4293,7 +4662,7 @@ class WALAEvent(object):
             os.mkdir(eventfolder)
             os.chmod(eventfolder,0700)
         if len(os.listdir(eventfolder)) > 1000:
-            raise Exception("WriteToFolder:Too many file under "+datafolder+" exit")
+            raise Exception("WriteToFolder:Too many file under "+eventfolder+" exit")
     
         filename = os.path.join(eventfolder,str(int(time.time()*1000000)))
         with open(filename+".tmp",'wb+') as hfile:
@@ -4374,7 +4743,7 @@ class WALAEventMonitor(WALAEvent):
         dataFormat = u'<?xml version="1.0"?><TelemetryData version="1.0"><Provider id="{0}">{1}'\
         '</Provider></TelemetryData>'
         data = dataFormat.format(providerid,events)
-        self.post("/machine/?comp=telemetrydata",data)
+        self.post("/machine/?comp=telemetrydata", data)
 
     def CollectAndSendWALAEvents(self):        
         if not os.path.exists(self.eventdir):
@@ -4437,10 +4806,10 @@ class WALAEventMonitor(WALAEvent):
         if not self.issysteminfoinitilized:
             self.issysteminfoinitilized=True
             try:
-                self.sysInfo["OSVersion"]=platform.system()+":"+"-".join(DistInfo())+":"+platform.release()
+                self.sysInfo["OSVersion"]=platform.system()+":"+"-".join(DistInfo(1))+":"+platform.release()
                 self.sysInfo["GAVersion"]=GuestAgentVersion
-                self.sysInfo["RAM"]=int(RunGetOutput("grep MemTotal /proc/meminfo |awk '{print $2}'")[1])/1024
-                self.sysInfo["Processors"]=int(RunGetOutput("grep 'processor.*:' /proc/cpuinfo |wc -l")[1])
+                self.sysInfo["RAM"]=MyDistro.getTotalMemory()
+                self.sysInfo["Processors"]=MyDistro.getProcessorCores()
                 sharedConfig = xml.dom.minidom.parse("/var/lib/waagent/SharedConfig.xml").childNodes[0]
                 hostEnvConfig= xml.dom.minidom.parse("/var/lib/waagent/HostingEnvironmentConfig.xml").childNodes[0]
                 gfiles = RunGetOutput("ls -t /var/lib/waagent/GoalState.*.xml")[1]
@@ -4856,7 +5225,7 @@ class Agent(Util):
                         + "</ContainerId><RoleInstanceList><Role><InstanceId>"
                         + self.GoalState.RoleInstanceId
                         + "</InstanceId><Health><State>Ready</State></Health></Role></RoleInstanceList></Container></Health>")
-        a = self.HttpPost("/machine?comp=health", healthReport)
+        a = self.HttpPostWithHeaders("/machine?comp=health", healthReport)
         if a != None:
             return a.getheader("x-ms-latest-goal-state-incarnation-number")
         return None
@@ -4875,7 +5244,7 @@ class Agent(Util):
                         + "</InstanceId><Health><State>NotReady</State>"
                         + "<Details><SubStatus>" + status + "</SubStatus><Description>" + desc + "</Description></Details>"
                         + "</Health></Role></RoleInstanceList></Container></Health>")
-        a = self.HttpPost("/machine?comp=health", healthReport)
+        a = self.HttpPostWithHeaders("/machine?comp=health", healthReport)
         if a != None:
             return a.getheader("x-ms-latest-goal-state-incarnation-number")
         return None
@@ -4890,7 +5259,8 @@ class Agent(Util):
                         + "<Id>" + self.GoalState.RoleInstanceId + "</Id>"
                         + "<Properties><Property name=\"CertificateThumbprint\" value=\"" + thumbprint + "\" /></Properties>"
                         + "</RoleInstance></RoleInstances></Container></RoleProperties>")
-        a = self.HttpPost("/machine?comp=roleProperties", roleProperties)
+        a = self.HttpPostWithHeaders("/machine?comp=roleProperties", 
+                                     roleProperties)
         Log("Posted Role Properties. CertificateThumbprint=" + thumbprint)
         return a
 
@@ -5188,9 +5558,17 @@ class Agent(Util):
             lbProbeResponder = False
         while True:
             if (goalState == None) or (incarnation == None) or (goalState.Incarnation != incarnation):
-                goalState = self.UpdateGoalState()
-                if goalState == None :
+                try:
+                    goalState = self.UpdateGoalState()
+                except HttpResourceGoneError as e:
+                    Warn("Incarnation is out of date:{0}".format(e))
+                    incarnation = None
                     continue
+
+                if goalState == None :
+                    Warn("Failed to fetch goalstate")
+                    continue
+
                 if provisioned == False:
                     self.ReportNotReady("Provisioning", "Starting")
 
@@ -5201,11 +5579,24 @@ class Agent(Util):
                     if provisionError == None :
                         provisioned = True
                         SetFileContents(LibDir + "/provisioned", "")
-                        lastCtime = os.path.getctime("/etc/waagent.conf")
+                        lastCtime = "NOTFIND"
+                        try:
+                            walaConfigFile = MyDistro.getConfigurationPath()
+                            lastCtime = time.ctime(os.path.getctime(walaConfigFile))
+                        except:
+                            pass
                         #Get Ctime of wala config, can help identify the base image of this VM
                         AddExtensionEvent(name="WALA",op=WALAEventOperation.Provision,isSuccess=True,
-                                              message="WALA Config Ctime:"+time.ctime(lastCtime))
-                        
+                                              message="WALA Config Ctime:"+lastCtime)
+
+                        executeCustomData = Config.get("Provisioning.ExecuteCustomData")
+                        if executeCustomData != None and executeCustomData.lower().startswith("y"):
+                          if os.path.exists(LibDir + '/CustomData'):
+                            Run('chmod +x ' + LibDir + '/CustomData')
+                            Run(LibDir + '/CustomData')
+                          else:
+                            Error(LibDir + '/CustomData does not exist.')
+
                 #
                 # only one port supported
                 # restart server if new port is different than old port
@@ -5213,13 +5604,17 @@ class Agent(Util):
                 #
                 goalPort = goalState.LoadBalancerProbePort
                 if currentPort != goalPort:
-                    self.LoadBalancerProbeServer_Shutdown()
-                    currentPort = goalPort
-                    if currentPort != None and lbProbeResponder == True:
-                        self.LoadBalancerProbeServer = LoadBalancerProbeServer(currentPort)
-                        if self.LoadBalancerProbeServer == None :
-                            lbProbeResponder = False
-                            Log("Unable to create LBProbeResponder.")
+                    try:
+                        self.LoadBalancerProbeServer_Shutdown()
+                        currentPort = goalPort
+                        if currentPort != None and lbProbeResponder == True:
+                            self.LoadBalancerProbeServer = LoadBalancerProbeServer(currentPort)
+                            if self.LoadBalancerProbeServer == None :
+                                lbProbeResponder = False
+                                Log("Unable to create LBProbeResponder.")
+                    except Exception, e:
+                        Error("Failed to launch LBProbeResponder: {0}".format(e))
+                        currentPort = None
 
                 # Report SSH key fingerprint
                 type = Config.get("Provisioning.SshHostKeyPairType")
@@ -5253,10 +5648,10 @@ class Agent(Util):
                 goalState.ExtensionsConfig.ReportHandlerStatus()
             
             if not eventMonitor:
-                eventMonitor = WALAEventMonitor(self.HttpPost)
+                eventMonitor = WALAEventMonitor(self.HttpPostWithHeaders)
                 eventMonitor.StartEventsLoop()
 
-            time.sleep(25 - sleepToReduceAccessDenied)	
+            time.sleep(25 - sleepToReduceAccessDenied)
 
             
 WaagentLogrotate = """\
@@ -5350,14 +5745,14 @@ def ReplaceStringInFile(fname,src,repl):
     """
     Replace 'src' with 'repl' in file.
     """
-    updated=''
     try:
         sr=re.compile(src)
         if FindStringInFile(fname,src):
+            updated=''
             for l in (open(fname,'r')).readlines():
                 n=re.sub(sr,repl,l)
                 updated+=n
-        ReplaceFileContentsAtomic(fname,updated)
+            ReplaceFileContentsAtomic(fname,updated)
     except :
         raise
     return
@@ -5456,6 +5851,7 @@ def DistInfo(fullname=0):
         release = re.sub('\-.*\Z', '', str(platform.release()))
         distinfo = ['FreeBSD', release]
         return distinfo
+    
     if 'linux_distribution' in dir(platform):
         distinfo = list(platform.linux_distribution(full_distribution_name=fullname))
         distinfo[0] = distinfo[0].strip() # remove trailing whitespace in distro name
@@ -5510,13 +5906,13 @@ def Deprovision(force, deluser):
     """
     
     #Append blank line at the end of file, so the ctime of this file is changed every time
-    Run("echo ''>>"+"/etc/waagent.conf")
+    Run("echo ''>>"+ MyDistro.getConfigurationPath())
 
     SwitchCwd()
     ovfxml = GetFileContents(LibDir+"/ovf-env.xml")
     ovfobj = None
     if ovfxml != None:
-        ovfobj = OvfEnv().Parse(ovfxml)
+        ovfobj = OvfEnv().Parse(ovfxml, True)
 
     print("WARNING! The waagent service will be stopped.")
     print("WARNING! All SSH host key pairs will be deleted.")
@@ -5533,8 +5929,6 @@ def Deprovision(force, deluser):
         return 1
 
     MyDistro.stopAgentService()
-    if deluser == True:
-        MyDistro.DeleteAccount(ovfobj.UserName)
 
     # Remove SSH host keys
     regenerateKeys = Config.get("Provisioning.RegenerateSshHostKeyPair")
@@ -5548,6 +5942,8 @@ def Deprovision(force, deluser):
 
     MyDistro.publishHostname('localhost.localdomain')
     MyDistro.deprovisionDeleteFiles()
+    if deluser == True:
+        MyDistro.DeleteAccount(ovfobj.UserName)
     return 0
 
 def SwitchCwd():
@@ -5584,20 +5980,32 @@ def main():
     LoggerInit('/var/log/waagent.log','/dev/console')
     global LinuxDistro
     LinuxDistro=DistInfo()[0]
+    
+    #The platform.py lib has issue with detecting oracle linux distribution.
+    #Merge the following patch provided by oracle as a temparory fix.
+    if os.path.exists("/etc/oracle-release"): 
+        LinuxDistro="Oracle Linux" 
+
     global MyDistro
     MyDistro=GetMyDistro()
     if MyDistro == None :
         sys.exit(1)
     args = []
+    conf_file = None
     global force
     force = False
     for a in sys.argv[1:]:
         if re.match("^([-/]*)(help|usage|\?)", a):
             sys.exit(Usage())
+        elif re.match("^([-/]*)version", a):
+            print(GuestAgentVersion + " running on " + LinuxDistro)
+            sys.exit(0)
         elif re.match("^([-/]*)verbose", a):
             myLogger.verbose = True
         elif re.match("^([-/]*)force", a):
             force = True
+        elif re.match("^(?:[-/]*)conf=.+", a):
+            conf_file = re.match("^(?:[-/]*)conf=(.+)", a).groups()[0]
         elif re.match("^([-/]*)(setup|install)", a):
             sys.exit(MyDistro.Install())
         elif re.match("^([-/]*)(uninstall)", a):
@@ -5605,8 +6013,14 @@ def main():
         else:
             args.append(a)
     global Config
-    Config = ConfigurationProvider()
+    Config = ConfigurationProvider(conf_file)
     
+    logfile = Config.get("Logs.File")
+    if logfile is not None:
+        myLogger.file_path = logfile
+    logconsole = Config.get("Logs.Console")
+    if logconsole is not None and logconsole.lower().startswith("n"):
+        myLogger.con_path = None
     verbose = Config.get("Logs.Verbose")
     if verbose != None and verbose.lower().startswith("y"):
         myLogger.verbose=True
@@ -5619,9 +6033,6 @@ def main():
             sys.exit(Deprovision(force, False))
         elif re.match("^([-/]*)daemon", a):
             daemon = True
-        elif re.match("^([-/]*)version", a):
-            print(GuestAgentVersion + " running on " + LinuxDistro)
-            sys.exit(0)
         elif re.match("^([-/]*)serialconsole", a):
             AppendToLinuxKernelCmdline("console=ttyS0 earlyprintk=ttyS0")
             Log("Configured kernel to use ttyS0 as the boot console.")
@@ -5647,3 +6058,5 @@ def main():
         Error("Exception: " + str(e))
         sys.exit(1)
     
+if __name__ == '__main__' :
+    main()

@@ -1,7 +1,3 @@
-#!/usr/bin/env python
-#
-# Windows Azure Linux Agent
-#
 # Copyright 2014 Microsoft Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,21 +14,8 @@
 #
 # Requires Python 2.4+ and Openssl 1.0+
 #
-# Implements parts of RFC 2131, 1541, 1497 and
-# http://msdn.microsoft.com/en-us/library/cc227282%28PROT.10%29.aspx
-# http://msdn.microsoft.com/en-us/library/cc227259%28PROT.13%29.aspx
-#
-
-import os
-import sys
-
-test_root = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.dirname(test_root)
-sys.path.insert(0, project_root)
 
 import azurelinuxagent.agent as agent
 
-if __name__ == '__main__':
-    agent.Main()
-
-
+print "hehe"
+agent.main()

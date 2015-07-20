@@ -29,60 +29,60 @@ import azurelinuxagent.logger as logger
 import azurelinuxagent.utils.fileutil as fileutil
 import azurelinuxagent.utils.shellutil as shellutil
 import azurelinuxagent.utils.textutil as textutil
-from azurelinuxagent.metadata import DistroName, DistroVersion, DistroFullName
+from azurelinuxagent.metadata import DISTRO_NAME, DISTRO_VERSION, DISTRO_FULL_NAME
 from azurelinuxagent.distro.default.osutil import DefaultOSUtil
 
 class SUSE11OSUtil(DefaultOSUtil):
     def __init__(self):
         super(SUSE11OSUtil, self).__init__()
-        self.dhcpClientName='dhcpcd'
+        self.dhclient_name='dhcpcd'
 
-    def SetHostname(self, hostname):
-        fileutil.SetFileContents('/etc/HOSTNAME', hostname)
-        shellutil.Run("hostname {0}".format(hostname), chk_err=False)
+    def set_hostname(self, hostname):
+        fileutil.write_file('/etc/HOSTNAME', hostname)
+        shellutil.run("hostname {0}".format(hostname), chk_err=False)
 
-    def GetDhcpProcessId(self):
-        ret= shellutil.RunGetOutput("pidof {0}".format(self.dhcpClientName))
+    def get_dhcp_pid(self):
+        ret= shellutil.run_get_output("pidof {0}".format(self.dhclient_name))
         return ret[1] if ret[0] == 0 else None
-    
-    def IsDhcpEnabled(self):
+
+    def is_dhcp_enabled(self):
         return True
 
-    def StopDhcpService(self):
-        cmd = "/sbin/service {0} stop".format(self.dhcpClientName)
-        return shellutil.Run(cmd, chk_err=False)
+    def stop_dhcp_service(self):
+        cmd = "/sbin/service {0} stop".format(self.dhclient_name)
+        return shellutil.run(cmd, chk_err=False)
 
-    def StartDhcpService(self):
-        cmd = "/sbin/service {0} start".format(self.dhcpClientName)
-        return shellutil.Run(cmd, chk_err=False)
+    def start_dhcp_service(self):
+        cmd = "/sbin/service {0} start".format(self.dhclient_name)
+        return shellutil.run(cmd, chk_err=False)
 
-    def StartNetwork(self) :
-        return shellutil.Run("/sbin/service start network", chk_err=False)
+    def start_network(self) :
+        return shellutil.run("/sbin/service start network", chk_err=False)
 
-    def RestartSshService(self):
-        return shellutil.Run("/sbin/service sshd restart", chk_err=False)
+    def restart_ssh_service(self):
+        return shellutil.run("/sbin/service sshd restart", chk_err=False)
 
-    def StopAgentService(self):
-        return shellutil.Run("/sbin/service waagent stop", chk_err=False)
+    def stop_agent_service(self):
+        return shellutil.run("/sbin/service waagent stop", chk_err=False)
 
-    def StartAgentService(self):
-        return shellutil.Run("/sbin/service waagent start", chk_err=False)
-    
-    def RegisterAgentService(self):
-        return shellutil.Run("/sbin/insserv waagent", chk_err=False)
-    
-    def UnregisterAgentService(self):
-        return shellutil.Run("/sbin/insserv -r waagent", chk_err=False)
+    def start_agent_service(self):
+        return shellutil.run("/sbin/service waagent start", chk_err=False)
+
+    def register_agent_service(self):
+        return shellutil.run("/sbin/insserv waagent", chk_err=False)
+
+    def unregister_agent_service(self):
+        return shellutil.run("/sbin/insserv -r waagent", chk_err=False)
 
 class SUSEOSUtil(SUSE11OSUtil):
     def __init__(self):
         super(SUSEOSUtil, self).__init__()
-        self.dhcpClientName = 'wickedd-dhcp4'
+        self.dhclient_name = 'wickedd-dhcp4'
 
-    def RegisterAgentService(self):
-        return shellutil.Run("systemctl enable waagent", chk_err=False)
-    
-    def UnregisterAgentService(self):
-        return shellutil.Run("systemctl disable waagent", chk_err=False)
+    def register_agent_service(self):
+        return shellutil.run("systemctl enable waagent", chk_err=False)
+
+    def unregister_agent_service(self):
+        return shellutil.run("systemctl disable waagent", chk_err=False)
 
 

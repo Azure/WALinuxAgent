@@ -22,15 +22,15 @@ import re
 import threading
 import azurelinuxagent.logger as logger
 import azurelinuxagent.conf as conf
-from azurelinuxagent.utils.osutil import OSUtil
-from azurelinuxagent.event import AddExtensionEvent, WALAEventOperation
+from azurelinuxagent.utils.osutil import OSUTIL
+from azurelinuxagent.event import add_event, WALAEventOperation
 import azurelinuxagent.utils.fileutil as fileutil
 import azurelinuxagent.utils.shellutil as shellutil
 from azurelinuxagent.exception import ResourceDiskError
 
-DataLossWarningFile="DATALOSS_WARNING_README.txt"
-DataLossWarning="""\
-WARNING: THIS IS A TEMPORARY DISK. 
+DATALOSS_WARNING_FILE_NAME="DATALOSS_WARNING_README.txt"
+DATA_LOSS_WARNING="""\
+WARNING: THIS IS A TEMPORARY DISK.
 
 Any data stored on this drive is SUBJECT TO LOSS and THERE IS NO WAY TO RECOVER IT.
 
@@ -41,126 +41,126 @@ For additional details to please refer to the MSDN documentation at : http://msd
 
 class ResourceDiskHandler(object):
 
-    def startActivateResourceDisk(self):
-        diskThread = threading.Thread(target = self.run)
-        diskThread.start()
-    
+    def start_activate_resource_disk(self):
+        disk_thread = threading.Thread(target = self.run)
+        disk_thread.start()
+
     def run(self):
-        mountpoint = None
-        if conf.GetSwitch("ResourceDisk.Format", False):
-            mountpoint = self.activateResourceDisk()
-        if mountpoint is not None and \
-                conf.GetSwitch("ResourceDisk.EnableSwap", False):
-            self.enableSwap(mountpoint)
+        mount_point = None
+        if conf.get_switch("ResourceDisk.Format", False):
+            mount_point = self.activate_resource_disk()
+        if mount_point is not None and \
+                conf.get_switch("ResourceDisk.EnableSwap", False):
+            self.enable_swap(mount_point)
 
-    def activateResourceDisk(self):
-        logger.Info("Activate resource disk")
+    def activate_resource_disk(self):
+        logger.info("Activate resource disk")
         try:
-            mountpoint = conf.Get("ResourceDisk.MountPoint", "/mnt/resource")
-            fs = conf.Get("ResourceDisk.Filesystem", "ext3")
-            mountpoint = self.mountResourceDisk(mountpoint, fs)
-            warningFile = os.path.join(mountpoint, DataLossWarningFile)
+            mount_point = conf.get("ResourceDisk.MountPoint", "/mnt/resource")
+            fs = conf.get("ResourceDisk.Filesystem", "ext3")
+            mount_point = self.mount_resource_disk(mount_point, fs)
+            warning_file = os.path.join(mount_point, DATALOSS_WARNING_FILE_NAME)
             try:
-                fileutil.SetFileContents(warningFile, DataLossWarning)
+                fileutil.write_file(warning_file, DATA_LOSS_WARNING)
             except IOError as e:
-                logger.Warn("Failed to write data loss warnning:{0}", e)
-            return mountpoint
+                logger.warn("Failed to write data loss warnning:{0}", e)
+            return mount_point
         except ResourceDiskError as e:
-            logger.Error("Failed to mount resource disk {0}", e)
-            AddExtensionEvent(name="WALA", isSuccess=False, message=str(e),
+            logger.error("Failed to mount resource disk {0}", e)
+            add_event(name="WALA", is_success=False, message=str(e),
                               op=WALAEventOperation.ActivateResourceDisk)
-    
-    def enableSwap(self, mountpoint):
-        logger.Info("Enable swap")
-        try:
-            sizeMB = conf.GetInt("ResourceDisk.SwapSizeMB", 0)
-            self.createSwapSpace(mountpoint, sizeMB)
-        except ResourceDiskError as e:
-            logger.Error("Failed to enable swap {0}", e)
 
-    def mountResourceDisk(self, mountpoint, fs):
-        device = OSUtil.DeviceForIdePort(1)
+    def enable_swap(self, mount_point):
+        logger.info("Enable swap")
+        try:
+            size_mb = conf.get_int("ResourceDisk.SwapSizeMB", 0)
+            self.create_swap_space(mount_point, size_mb)
+        except ResourceDiskError as e:
+            logger.error("Failed to enable swap {0}", e)
+
+    def mount_resource_disk(self, mount_point, fs):
+        device = OSUTIL.device_for_ide_port(1)
         if device is None:
             raise ResourceDiskError("unable to detect disk topology")
 
         device = "/dev/" + device
-        mountlist = shellutil.RunGetOutput("mount")[1]
-        existing = OSUtil.GetMountPoint(mountlist, device)
+        mountlist = shellutil.run_get_output("mount")[1]
+        existing = OSUTIL.get_mount_point(mountlist, device)
 
         if(existing):
-            logger.Info("Resource disk {0}1 is already mounted", device)
+            logger.info("Resource disk {0}1 is already mounted", device)
             return existing
 
-        fileutil.CreateDir(mountpoint, mode=0755)  
-    
-        logger.Info("Detect GPT...")
+        fileutil.mkdir(mount_point, mode=0755)
+
+        logger.info("Detect GPT...")
         partition = device + "1"
-        ret = shellutil.RunGetOutput("parted {0} print".format(device))
+        ret = shellutil.run_get_output("parted {0} print".format(device))
         if ret[0]:
             raise ResourceDiskError("({0}) {1}".format(device, ret[1]))
-        
+
         if "gpt" in ret[1]:
-            logger.Info("GPT detected")
-            logger.Info("Get GPT partitions")
-            parts = filter(lambda x : re.match("^\s*[0-9]+", x), 
+            logger.info("GPT detected")
+            logger.info("Get GPT partitions")
+            parts = filter(lambda x : re.match("^\s*[0-9]+", x),
                            ret[1].split("\n"))
-            logger.Info("Found more than {0} GPT partitions.", len(parts))
+            logger.info("Found more than {0} GPT partitions.", len(parts))
             if len(parts) > 1:
-                logger.Info("Remove old GPT partitions")
+                logger.info("Remove old GPT partitions")
                 for i in range(1, len(parts) + 1):
-                    logger.Info("Remove partition: {0}", i)
-                    shellutil.Run("parted {0} rm {1}".format(device, i))
+                    logger.info("Remove partition: {0}", i)
+                    shellutil.run("parted {0} rm {1}".format(device, i))
 
-                logger.Info("Create a new GPT partition using entire disk space")
-                shellutil.Run("parted {0} mkpart primary 0% 100%".format(device))
-                
-                logger.Info("Format partition: {0} with fstype {1}",partition,fs)
-                shellutil.Run("mkfs." + fs + " " + partition + " -F")
+                logger.info("Create a new GPT partition using entire disk space")
+                shellutil.run("parted {0} mkpart primary 0% 100%".format(device))
+
+                logger.info("Format partition: {0} with fstype {1}",partition,fs)
+                shellutil.run("mkfs." + fs + " " + partition + " -F")
         else:
-            logger.Info("GPT not detected")
-            logger.Info("Check fstype")
-            ret = shellutil.RunGetOutput("sfdisk -q -c {0} 1".format(device))
+            logger.info("GPT not detected")
+            logger.info("Check fstype")
+            ret = shellutil.run_get_output("sfdisk -q -c {0} 1".format(device))
             if ret[1].rstrip() == "7" and fs != "ntfs":
-                logger.Info("The partition is formatted with ntfs")
-                logger.Info("Format partition: {0} with fstype {1}",partition,fs)
-                shellutil.Run("sfdisk -c {0} 1 83".format(device))
-                shellutil.Run("mkfs." + fs + " " + partition + " -F")
+                logger.info("The partition is formatted with ntfs")
+                logger.info("Format partition: {0} with fstype {1}",partition,fs)
+                shellutil.run("sfdisk -c {0} 1 83".format(device))
+                shellutil.run("mkfs." + fs + " " + partition + " -F")
 
-        logger.Info("Mount resource disk")
-        retCode = shellutil.Run("mount {0} {1}".format(partition, mountpoint), 
+        logger.info("Mount resource disk")
+        ret = shellutil.run("mount {0} {1}".format(partition, mount_point),
                                 chk_err=False)
-        if retCode:
-            logger.Warn("Failed to mount resource disk. Retry mounting")
-            shellutil.Run("mkfs." + fs + " " + partition + " -F")
-            retCode = shellutil.Run("mount {0} {1}".format(partition, mountpoint))
-            if retCode:
-                raise ResourceDiskError("({0}) {1}".format(partition, retCode))
+        if ret:
+            logger.warn("Failed to mount resource disk. Retry mounting")
+            shellutil.run("mkfs." + fs + " " + partition + " -F")
+            ret = shellutil.run("mount {0} {1}".format(partition, mount_point))
+            if ret:
+                raise ResourceDiskError("({0}) {1}".format(partition, ret))
 
-        logger.Info("Resource disk ({0}) is mounted at {1} with fstype {2}",
-                    device, mountpoint, fs)
-        return mountpoint
+        logger.info("Resource disk ({0}) is mounted at {1} with fstype {2}",
+                    device, mount_point, fs)
+        return mount_point
 
-    def createSwapSpace(self, mountpoint, sizeMB):
-        sizeKB = sizeMB * 1024
-        size = sizeKB * 1024
-        swapfile = os.path.join(mountpoint, 'swapfile')
-        swapList = shellutil.RunGetOutput("swapon -s")[1]
+    def create_swap_space(self, mount_point, size_mb):
+        size_kb = size_mb * 1024
+        size = size_kb * 1024
+        swapfile = os.path.join(mount_point, 'swapfile')
+        swaplist = shellutil.run_get_output("swapon -s")[1]
 
-        if swapfile in swapList and os.path.getsize(swapfile) == size:
-            logger.Info("Swap already enabled") 
-            return 
+        if swapfile in swaplist and os.path.getsize(swapfile) == size:
+            logger.info("Swap already enabled")
+            return
 
         if os.path.isfile(swapfile) and os.path.getsize(swapfile) != size:
-            logger.Info("Remove old swap file")
-            shellutil.Run("swapoff -a", chk_err=False)
+            logger.info("Remove old swap file")
+            shellutil.run("swapoff -a", chk_err=False)
             os.remove(swapfile)
 
         if not os.path.isfile(swapfile):
-            logger.Info("Create swap file")
-            shellutil.Run(("dd if=/dev/zero of={0} bs=1024 "
-                           "count={1}").format(swapfile, sizeKB))
-            shellutil.Run("mkswap {0}".format(swapfile))
-        if shellutil.Run("swapon {0}".format(swapfile)):
+            logger.info("Create swap file")
+            shellutil.run(("dd if=/dev/zero of={0} bs=1024 "
+                           "count={1}").format(swapfile, size_kb))
+            shellutil.run("mkswap {0}".format(swapfile))
+        if shellutil.run("swapon {0}".format(swapfile)):
             raise ResourceDiskError("{0}".format(swapfile))
-        logger.Info("Enabled {0}KB of swap at {1}".format(sizeKB, swapfile))
+        logger.info("Enabled {0}KB of swap at {1}".format(size_kb, swapfile))
 

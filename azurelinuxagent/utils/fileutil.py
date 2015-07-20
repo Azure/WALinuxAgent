@@ -17,163 +17,160 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
-import platform
+"""
+File operation util functions
+"""
+
 import os
 import re
 import shutil
 import pwd
 import tempfile
-import subprocess
 import azurelinuxagent.logger as logger
 import azurelinuxagent.utils.textutil as textutil
 
-"""
-File operation util functions
-"""
-def GetFileContents(filepath, asbin=False, removeBom=False):
+def read_file(filepath, asbin=False, remove_bom=False):
     """
     Read and return contents of 'filepath'.
     """
-    mode='r'
+    mode = 'r'
     if asbin:
-        mode+='b'
-    with open(filepath, mode) as F :
-        c=F.read()
-    if (not asbin) and removeBom:
-        c = textutil.RemoveBom(c)
-    return c
+        mode += 'b'
+    with open(filepath, mode) as in_file:
+        contents = in_file.read()
+    if (not asbin) and remove_bom:
+        contents = textutil.remove_bom(contents)
+    return contents
 
-def SetFileContents(filepath, contents):
+def write_file(filepath, contents):
     """
     Write 'contents' to 'filepath'.
     """
-    #if type(contents) == str :
-        #contents=contents.encode('latin-1', 'ignore')
-    with open(filepath, "wb+") as F :
-        F.write(contents)
+    with open(filepath, "wb") as out_file:
+        out_file.write(contents)
 
-def AppendFileContents(filepath, contents):
+def append_file(filepath, contents):
     """
     Append 'contents' to 'filepath'.
     """
-    #if type(contents) == str :
-        #contents=contents.encode('latin-1')
-    with open(filepath, "a+") as F :
-        F.write(contents)
+    with open(filepath, "a+") as out_file:
+        out_file.write(contents)
 
-def ReplaceFileContentsAtomic(filepath, contents):
+def replace_file(filepath, contents):
     """
-    Write 'contents' to 'filepath' by creating a temp file, and replacing original.
+    Write 'contents' to 'filepath' by creating a temp file,
+    and replacing original.
     """
-    handle, temp = tempfile.mkstemp(dir = os.path.dirname(filepath))
-    #if type(contents) == str :
+    handle, temp = tempfile.mkstemp(dir=os.path.dirname(filepath))
+    #if type(contents) == str:
         #contents=contents.encode('latin-1')
     try:
         os.write(handle, contents)
-    except IOError, e:
-        logger.Error('Write to file {0}, Exception is {1}', filepath, e)
+    except IOError as err:
+        logger.error('Write to file {0}, Exception is {1}', filepath, err)
         return 1
     finally:
         os.close(handle)
 
     try:
         os.rename(temp, filepath)
-    except IOError, e:
-        logger.Info('Rename {0} to {1}, Exception is {2}',temp,  filepath, e)
-        logger.Info('Remove original file and retry')
+    except IOError as err:
+        logger.info('Rename {0} to {1}, Exception is {2}', temp, filepath, err)
+        logger.info('Remove original file and retry')
         try:
             os.remove(filepath)
-        except IOError, e:
-            logger.Error('Remove {0}, Exception is {1}',temp,  filepath, e)
+        except IOError as err:
+            logger.error('Remove {0}, Exception is {1}', temp, filepath, err)
 
         try:
             os.rename(temp, filepath)
-        except IOError, e:
-            logger.Error('Rename {0} to {1}, Exception is {2}',temp, filepath, e)
+        except IOError, err:
+            logger.error('Rename {0} to {1}, Exception is {2}', temp, filepath,
+                         err)
             return 1
     return 0
 
-def GetLastPathElement(path):
+def base_name(path):
     head, tail = os.path.split(path)
     return tail
 
-def GetLineStartingWith(prefix, filepath):
+def get_line_startingwith(prefix, filepath):
     """
     Return line from 'filepath' if the line startswith 'prefix'
     """
-    for line in GetFileContents(filepath).split('\n'):
+    for line in read_file(filepath).split('\n'):
         if line.startswith(prefix):
             return line
     return None
 
 #End File operation util functions
 
-def CreateDir(dirpath, mode=None, owner=None):
+def mkdir(dirpath, mode=None, owner=None):
     if not os.path.isdir(dirpath):
         os.makedirs(dirpath)
     if mode is not None:
-        ChangeMod(dirpath, mode)
+        chmod(dirpath, mode)
     if owner is not None:
-        ChangeOwner(dirpath, owner)
+        chowner(dirpath, owner)
 
-def ChangeOwner(path, owner):
-    ownerInfo = pwd.getpwnam(owner)
-    os.chown(path, ownerInfo[2], ownerInfo[3])   
+def chowner(path, owner):
+    owner_info = pwd.getpwnam(owner)
+    os.chown(path, owner_info[2], owner_info[3])
 
-def ChangeMod(path, mode):
+def chmod(path, mode):
     os.chmod(path, mode)
 
-def RemoveFiles(*args, **kwargs):
+def rm_files(*args):
     for path in args:
         if os.path.isfile(path):
             os.remove(path)
 
-def CleanupDirs(*args, **kwargs):
+def rm_dirs(*args):
     """
     Remove all the contents under the directry
     """
-    for dirName in args:
-        if os.path.isdir(dirName):
-            for item in os.listdir(dirName):
-                path = os.path.join(dirName, item)
+    for dir_name in args:
+        if os.path.isdir(dir_name):
+            for item in os.listdir(dir_name):
+                path = os.path.join(dir_name, item)
                 if os.path.isfile(path):
                     os.remove(path)
                 elif os.path.isdir(path):
                     shutil.rmtree(path)
 
-def UpdateConfigFile(path, lineStart, val, chk_err=False):
-    config = []
+def update_conf_file(path, line_start, val, chk_err=False):
+    conf = []
     if not os.path.isfile(path) and chk_err:
         raise Exception("Can't find config file:{0}".format(path))
-    config = GetFileContents(path).split('\n')
-    config = filter(lambda x : not x.startswith(lineStart), config)
-    config.append(val)
-    ReplaceFileContentsAtomic(path, '\n'.join(config))
+    conf = read_file(path).split('\n')
+    conf = filter(lambda x: not x.startswith(line_start), conf)
+    conf.append(val)
+    replace_file(path, '\n'.join(conf))
 
-def SearchForFile(dirName, fileName):
-    for root, dirs, files in os.walk(dirName):
-        for f in files:
-            if f == fileName:
-                return os.path.join(root, f)
+def search_file(target_dir_name, target_file_name):
+    for root, dirs, files in os.walk(target_dir_name):
+        for file_name in files:
+            if file_name == target_file_name:
+                return os.path.join(root, file_name)
     return None
 
-def ChangeTreeMod(path, mode):
+def chmod_tree(path, mode):
     for root, dirs, files in os.walk(path):
-        for f in files:
-            os.chmod(os.path.join(root, f), mode)
+        for file_name in files:
+            os.chmod(os.path.join(root, file_name), mode)
 
-def FindStringInFile(fname, matchs):
+def findstr_in_file(file_path, pattern_str):
     """
     Return match object if found in file.
     """
     try:
-        ms=re.compile(matchs)
-        for l in (open(fname,'r')).readlines():
-            m=re.search(ms,l)
-            if m:
-                return m
+        pattern = re.compile(pattern_str)
+        for line in (open(file_path, 'r')).readlines():
+            match = re.search(pattern, line)
+            if match:
+                return match
     except:
         raise
-    
+
     return None
 

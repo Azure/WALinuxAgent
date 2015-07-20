@@ -16,31 +16,31 @@
 #
 
 import azurelinuxagent.logger as logger
-from azurelinuxagent.metadata import DistroName
-import azurelinuxagent.distro.default.loader as defaultLoader
+from azurelinuxagent.metadata import DISTRO_NAME
+import azurelinuxagent.distro.default.loader as default_loader
 
 
-def GetDistroLoader():
+def get_distro_loader():
     try:
-        logger.Verbose("Loading distro implemetation from: {0}", DistroName)
-        pkgName = "azurelinuxagent.distro.{0}.loader".format(DistroName)
-        return __import__(pkgName, fromlist="loader")
+        logger.verb("Loading distro implemetation from: {0}", DISTRO_NAME)
+        pkg_name = "azurelinuxagent.distro.{0}.loader".format(DISTRO_NAME)
+        return __import__(pkg_name, fromlist="loader")
     except ImportError as e:
-        logger.Warn("Unable to load distro implemetation for {0}.", DistroName)
-        logger.Warn("Use default distro implemetation instead.")
-        return defaultLoader
+        logger.warn("Unable to load distro implemetation for {0}.", DISTRO_NAME)
+        logger.warn("Use default distro implemetation instead.")
+        return default_loader
 
-distroLoader = GetDistroLoader()
+DISTRO_LOADER = get_distro_loader()
 
-def GetOSUtil():
+def get_osutil():
     try:
-        return distroLoader.GetOSUtil()
+        return DISTRO_LOADER.get_osutil()
     except AttributeError:
-        return defaultLoader.GetOSUtil()
+        return default_loader.get_osutil()
 
-def GetHandlers():
+def get_handlers():
     try:
-        return distroLoader.GetHandlers()
+        return DISTRO_LOADER.get_handlers()
     except AttributeError:
-        return defaultLoader.GetHandlers()
+        return default_loader.get_handlers()
 

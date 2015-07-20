@@ -23,7 +23,7 @@ import azurelinuxagent.logger as logger
 import azurelinuxagent.conf as conf
 import azurelinuxagent.protocol as prot
 from azurelinuxagent.exception import *
-from azurelinuxagent.utils.osutil import OSUtil
+from azurelinuxagent.utils.osutil import OSUTIL
 import azurelinuxagent.utils.shellutil as shellutil
 import azurelinuxagent.utils.fileutil as fileutil
 from azurelinuxagent.distro.default.provision import ProvisionHandler
@@ -34,38 +34,38 @@ On ubuntu image, provision could be disabled.
 class UbuntuProvisionHandler(ProvisionHandler):
     def process(self):
         #If provision is enabled, run default provision handler
-        if conf.GetSwitch("Provisioning.Enabled", False):
+        if conf.get_switch("Provisioning.Enabled", False):
             super(UbuntuProvisionHandler, self).process()
             return
 
-        logger.Info("Run Ubuntu provision handler") 
-        provisioned = os.path.join(OSUtil.GetLibDir(), "provisioned")
+        logger.info("run Ubuntu provision handler")
+        provisioned = os.path.join(OSUTIL.get_lib_dir(), "provisioned")
         if os.path.isfile(provisioned):
             return
 
-        logger.Info("Waiting cloud-init to finish provisioning.")
-        protocol = prot.Factory.getDefaultProtocol()
+        logger.info("Waiting cloud-init to finish provisioning.")
+        protocol = prot.Factory.get_default_protocol()
         try:
-            logger.Info("Wait for ssh host key to be generated.")
-            thumbprint = self.waitForSshHostKey()
-            fileutil.SetFileContents(provisioned, "")
+            logger.info("Wait for ssh host key to be generated.")
+            thumbprint = self.wait_for_ssh_host_key()
+            fileutil.write_file(provisioned, "")
 
-            logger.Info("Finished provisioning")
+            logger.info("Finished provisioning")
             status = prot.ProvisionStatus(status="Ready")
             status.properties.certificateThumbprint = thumbprint
-            protocol.reportProvisionStatus(status)
+            protocol.report_provision_status(status)
 
         except ProvisionError as e:
-            logger.Error("Provision failed: {0}", e)
-            protocol.reportProvisionStatus(status="NotReady", subStatus=str(e))
+            logger.error("Provision failed: {0}", e)
+            protocol.report_provision_status(status="NotReady", subStatus=str(e))
 
-    def waitForSshHostKey(self, maxRetry=60):
-        keyPairType = conf.Get("Provisioning.SshHostKeyPairType", "rsa")
-        path = '/etc/ssh/ssh_host_{0}_key'.format(keyPairType)
-        for retry in range(0, maxRetry):
+    def wait_for_ssh_host_key(self, max_retry=60):
+        kepair_type = conf.get("Provisioning.SshHostKeyPairType", "rsa")
+        path = '/etc/ssh/ssh_host_{0}_key'.format(kepair_type)
+        for retry in range(0, max_retry):
             if os.path.isfile(path):
-                return self.getSshHostKeyThumbprint(keyPairType)
-            if retry < maxRetry - 1:
-                logger.Info("Wait for ssh host key be generated: {0}", path)
+                return self.get_ssh_host_key_thumbprint(kepair_type)
+            if retry < max_retry - 1:
+                logger.info("Wait for ssh host key be generated: {0}", path)
                 time.sleep(5)
         raise ProvisionError("Ssh hsot key is not generated.")

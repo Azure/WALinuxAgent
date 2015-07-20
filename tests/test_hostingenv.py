@@ -25,7 +25,7 @@ import unittest
 import os
 import azurelinuxagent.protocol.v1 as v1
 
-HostingEnvSample="""
+hosting_env_sample="""
  <HostingEnvironmentConfig version="1.0.0.0" goalStateIncarnation="1">
    <StoredCertificates>
      <StoredCertificate name="Stored0Microsoft.WindowsAzure.Plugins.RemoteAccess.PasswordEncryption" certificateId="sha1:C093FA5CD3AAE057CB7C4E04532B2E16E07C26CA" storeName="My" configurationLevel="System" />
@@ -36,7 +36,7 @@ HostingEnvSample="""
    </Deployment>
    <Incarnation number="1" instance="MachineRole_IN_0" guid="{a0faca35-52e5-4ec7-8fd1-63d2bc107d9b}" />
    <Role guid="{73d95f1c-6472-e58e-7a1a-523554e11d46}" name="MachineRole" hostingEnvironmentVersion="1" software="" softwareType="ApplicationPackage" entryPoint="" parameters="" settleTimeSeconds="10" />
-   <HostingEnvironmentSettings name="full" Runtime="rd_fabric_stable.110217-1402.RuntimePackage_1.0.0.8.zip">
+   <HostingEnvironmentSettings name="full" runtime="rd_fabric_stable.110217-1402.runtimePackage_1.0.0.8.zip">
      <CAS mode="full" />
      <PrivilegeLevel mode="max" />
      <AdditionalProperties><CgiHandlers></CgiHandlers></AdditionalProperties>
@@ -53,13 +53,13 @@ HostingEnvSample="""
 """
 
 class TestHostingEvn(unittest.TestCase):
-    def test_hostingenv(self):
-        hostingenv = v1.HostingEnv(HostingEnvSample)
-        self.assertNotEquals(None, hostingenv)
-        self.assertEquals("MachineRole_IN_0", hostingenv.getVmName())
-        self.assertEquals("MachineRole", hostingenv.getRoleName())
+    def test_hosting_env(self):
+        hosting_env = v1.HostingEnv(hosting_env_sample)
+        self.assertNotEquals(None, hosting_env)
+        self.assertEquals("MachineRole_IN_0", hosting_env.vm_name)
+        self.assertEquals("MachineRole", hosting_env.role_name)
         self.assertEquals("db00a7755a5e4e8a8fe4b19bc3b330c3", 
-                          hostingenv.getDeploymentName())
+                          hosting_env.deployment_name)
 
    
 if __name__ == '__main__':
