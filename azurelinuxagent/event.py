@@ -50,7 +50,6 @@ class EventMonitor(object):
     def __init__(self):
         self.sysinfo = []
         self.event_dir = os.path.join(OSUTIL.get_lib_dir(), "events")
-        self.init_sysinfo()
 
     def init_sysinfo(self):
         osversion = "{0}:{1}-{2}-{3}:{4}".format(platform.system(),
@@ -124,6 +123,7 @@ class EventMonitor(object):
             logger.error("{0}", e)
 
     def run(self):
+        self.init_sysinfo()
         last_heartbeat = datetime.datetime.min
         period = datetime.timedelta(hours = 12)
         while(True):
@@ -149,7 +149,6 @@ def save_event(data):
         os.rename(filename+".tmp", filename+".tld")
     except IOError as e:
         raise EventError("Failed to write events to file:{0}", e)
-
 
 def add_event(name, op, is_success, duration=0, version="1.0",
               message="", evt_type="", is_internal=False):

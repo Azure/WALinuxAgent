@@ -22,8 +22,15 @@ import azurelinuxagent.utils.restutil as restutil
 from azurelinuxagent.protocol.common import *
 
 ENDPOINT='169.254.169.254'
-APIVERSION='2015-01-01'
-BASE_URI = "https://{0}/Microsoft.Computer/{1}?$api-version={{{2}}}{3}"
+APIVERSION='2015-05-01-preview'
+#TODO use http for azure pack test
+BASE_URI = "http://{0}/Microsoft.Compute/{1}?api-version={{{2}}}{3}"
+
+def _add_content_type(headers):
+    if headers is None:
+        headers = {}
+    headers["contents-type"] = "application/json"
+    return headers
 
 class MetadataProtocol(Protocol):
 
@@ -31,13 +38,13 @@ class MetadataProtocol(Protocol):
         self.apiversion = apiversion
         self.endpoint = endpoint
         self.identity_uri = BASE_URI.format(self.endpoint, "identity",
-                                            self.apiversion, "&expand=*")
+                                            self.apiversion, "&$expand=*")
         self.cert_uri = BASE_URI.format(self.endpoint, "certificates",
-                                        self.apiversion, "&expand=*")
+                                        self.apiversion, "&$expand=*")
         self.ext_uri = BASE_URI.format(self.endpoint, "extensionHandlers",
-                                       self.apiversion, "&expand=*")
+                                       self.apiversion, "&$expand=*")
         self.provision_status_uri = BASE_URI.format(self.endpoint,
-                                                    "provisionStatus",
+                                                    "provisioningStatus",
                                                     self.apiversion, "")
         self.status_uri = BASE_URI.format(self.endpoint, "status",
                                           self.apiversion, "")
@@ -46,7 +53,7 @@ class MetadataProtocol(Protocol):
 
     def _get_data(self, data_type, url, headers=None):
         try:
-            resp = restutil.http_get(url, headers)
+            resp = restutil.http_get(url, headers=headers)
         except restutil.HttpError as e:
             raise ProtocolError(str(e))
 
@@ -61,18 +68,20 @@ class MetadataProtocol(Protocol):
         return obj
 
     def _put_data(self, url, obj, headers=None):
+        headers = _add_content_type(headers) 
         data = get_properties(obj)
         try:
-            resp = restutil.http_put(url, json.dumps(data))
+            resp = restutil.http_put(url, json.dumps(data), headers=headers)
         except restutil.HttpError as e:
             raise ProtocolError(str(e))
         if resp.status != httplib.OK:
             raise ProtocolError("{0} - PUT: {1}".format(resp.status, url))
 
     def _post_data(self, url, obj, headers=None):
+        headers = _add_content_type(headers) 
         data = get_properties(obj)
         try:
-            resp = restutil.http_post(url, json.dumps(data))
+            resp = restutil.http_post(url, json.dumps(data), headers=headers)
         except restutil.HttpError as e:
             raise ProtocolError(str(e))
         if resp.status != httplib.CREATED:
@@ -85,6 +94,9 @@ class MetadataProtocol(Protocol):
         return self._get_data(VMInfo, self.identity_uri)
 
     def get_certs(self):
+        #TODO walk arround for azure pack test
+        return CertList()
+
         certs = self._get_data(CertList, self.cert_uri)
         #TODO download pfx and convert to pem
         return certs
