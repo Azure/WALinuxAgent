@@ -15,12 +15,16 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
+"""
+Provision handler
+"""
+
 import os
 import azurelinuxagent.logger as logger
 import azurelinuxagent.conf as conf
 from azurelinuxagent.event import add_event, WALAEventOperation
 from azurelinuxagent.exception import *
-from azurelinuxagent.utils.osutil import OSUTIL
+from azurelinuxagent.utils.osutil import OSUTIL, OSUtilError
 import azurelinuxagent.protocol as prot
 import azurelinuxagent.protocol.ovfenv as ovf
 import azurelinuxagent.utils.shellutil as shellutil
@@ -66,7 +70,6 @@ class ProvisionHandler(object):
             add_event(name="WALA", is_success=False, message=str(e),
                               op=WALAEventOperation.Provision)
 
-
     def reg_ssh_host_key(self):
         keypair_type = conf.get("Provisioning.SshHostKeyPairType", "rsa")
         if conf.get_switch("Provisioning.RegenerateSshHostKeyPair"):
@@ -92,26 +95,40 @@ class ProvisionHandler(object):
             ovfenv = ovf.copy_ovf_env()
         except prot.ProtocolError as e:
             raise ProvisionError("Failed to copy ovf-env.xml: {0}".format(e))
+    
+        logger.info("Handle ovf-env.xml.")
+        try:
+            logger.info("Set host name.")
+            OSUTIL.set_hostname(ovfenv.hostname)
 
-        password = ovfenv.get_user_password()
-        ovfenv.clear_user_password()
+            logger.info("Publish host name.")
+            OSUTIL.publish_hostname(ovfenv.hostname)
 
-        logger.info("Set host name.")
-        OSUTIL.set_hostname(ovfenv.get_computer_name())
-        logger.info("Publish host name.")
-        OSUTIL.publish_hostname(ovfenv.get_computer_name())
-        logger.info("Create user account.")
-        OSUTIL.set_user_account(ovfenv.get_username(), password)
+            self.config_user_account(ovfenv)
 
-        if password is not None:
+            self.save_customdata(ovfenv)
+
+            if conf.get_switch("Provisioning.DeleteRootPassword"):
+                OSUTIL.del_root_password()
+        except OSUtilError as e:
+            raise ProvisionError("Failed to handle ovf-env.xml: {0}".format(e))
+        
+    def config_user_account(self, ovfenv):
+        logger.info("Create user account if not exists")
+        OSUTIL.useradd(ovfenv.username)
+
+        if ovfenv.user_password is not None:
+            logger.info("Set user password.")
             use_salt = conf.get_switch("Provision.UseSalt", True)
             salt_type = conf.get_switch("Provision.SaltType", 6)
-            logger.info("Set user password.")
-            OSUTIL.chpasswd(ovfenv.get_username(), password, use_salt,
-                            salt_type)
+            OSUTIL.chpasswd(ovfenv.username, ovfenv.user_password, 
+                            use_salt,salt_type)
+         
+        logger.info("Configure sudoer")
+        OSUTIL.conf_sudoer(ovfenv.username, ovfenv.user_password is None)
 
-        logger.info("Configure sshd.")
-        OSUTIL.conf_sshd(ovfenv.get_disable_ssh_password_auth())
+        logger.info("Configure sshd")
+        OSUTIL.conf_sshd(ovfenv.disable_ssh_password_auth)
 
         #Disable selinux temporary
         sel = OSUTIL.is_selinux_enforcing()
@@ -120,20 +137,15 @@ class ProvisionHandler(object):
 
         self.deploy_ssh_pubkeys(ovfenv)
         self.deploy_ssh_keypairs(ovfenv)
-        self.save_customdata(ovfenv)
 
         if sel:
             OSUTIL.set_selinux_enforce(1)
 
         OSUTIL.restart_ssh_service()
 
-        if conf.get_switch("Provisioning.DeleteRootPassword"):
-            OSUTIL.del_root_password()
-
-
     def save_customdata(self, ovfenv):
         logger.info("Save custom data")
-        customdata = ovfenv.get_customdata()
+        customdata = ovfenv.customdata
         if customdata is None:
             return
         lib_dir = OSUTIL.get_lib_dir()
@@ -141,12 +153,12 @@ class ProvisionHandler(object):
                             OSUTIL.decode_customdata(customdata))
 
     def deploy_ssh_pubkeys(self, ovfenv):
-        for thumbprint, path in ovfenv.get_ssh_pubkeys():
+        for pubkey in ovfenv.ssh_pubkeys:
             logger.info("Deploy ssh public key.")
-            OSUTIL.deploy_ssh_pubkey(ovfenv.get_username(), thumbprint, path)
+            OSUTIL.deploy_ssh_pubkey(ovfenv.username, pubkey)
 
     def deploy_ssh_keypairs(self, ovfenv):
-        for thumbprint, path in ovfenv.get_ssh_keypairs():
+        for keypair in ovfenv.ssh_keypairs:
             logger.info("Deploy ssh key pairs.")
-            OSUTIL.deploy_ssh_keypair(ovfenv.get_username(), thumbprint, path)
+            OSUTIL.deploy_ssh_keypair(ovfenv.username, keypair)
 

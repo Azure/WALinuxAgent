@@ -78,24 +78,6 @@ class DefaultOSUtil(object):
     def get_openssl_cmd(self):
         return self.openssl_cmd
 
-    def set_user_account(self, username, password, expiration=None):
-        """
-        Update password and ssh key for user account.
-        New account will be created if not exists.
-        """
-        if username is None:
-            raise OSUtilError("User name is empty")
-
-        if self.is_sys_user(username):
-            raise OSUtilError(("User {0} is a system user. "
-                               "Will not set passwd.").format(username))
-
-        userentry = self.get_userentry(username)
-        if userentry is None:
-            self.useradd(username, expiration)
-
-        self.conf_sudoer(username, password is None)
-
     def get_userentry(self, username):
         try:
             return pwd.getpwnam(username)
@@ -106,7 +88,8 @@ class DefaultOSUtil(object):
         userentry = self.get_userentry(username)
         uidmin = None
         try:
-            uidmin_def = fileutil.get_line_startingwith("UID_MIN", "/etc/login.defs")
+            uidmin_def = fileutil.get_line_startingwith("UID_MIN", 
+                                                        "/etc/login.defs")
             if uidmin_def is not None:
                 uidmin = int(uidmin_def.split()[1])
         except IOError as e:
@@ -119,6 +102,10 @@ class DefaultOSUtil(object):
             return False
 
     def useradd(self, username, expiration=None):
+        """
+        Update password and ssh key for user account.
+        New account will be created if not exists.
+        """
         if expiration is not None:
             cmd = "useradd -m {0} -e {1}".format(username, expiration)
         else:
@@ -130,7 +117,10 @@ class DefaultOSUtil(object):
                                "output:{2}").format(username, retcode, out))
 
     def chpasswd(self, username, password, use_salt=True, salt_type=6,
-                       salt_len=10):
+                 salt_len=10):
+        if self.is_sys_user(username):
+            raise OSUtilError(("User {0} is a system user. "
+                               "Will not set passwd.").format(username))
         passwd_hash = textutil.gen_password_hash(password, use_salt, salt_type,
                                                  salt_len)
         try:
@@ -197,19 +187,18 @@ class DefaultOSUtil(object):
         thumbprint = thumbprint.rstrip().split('=')[1].replace(':', '').upper()
         return thumbprint
 
-    def deploy_ssh_keypair(self, username, thumbprint, path):
+    def deploy_ssh_keypair(self, username, keypair):
         """
         Deploy id_rsa and id_rsa.pub
         """
+        path, thumbprint = keypair
         path = self._norm_path(path)
         dir_path = os.path.dirname(path)
         fileutil.mkdir(dir_path, mode=0700, owner=username)
         lib_dir = self.get_lib_dir()
         prv_path = os.path.join(lib_dir, thumbprint + '.prv')
         if not os.path.isfile(prv_path):
-            logger.error("Failed to deploy key pair, thumbprint: {0}",
-                         thumbprint)
-            return
+            raise OSUtilError("Can't find {0}.prv".format(thumbprint))
         shutil.copyfile(prv_path, path)
         pub_path = path + '.pub'
         pub = self.get_pubkey_from_prv(prv_path)
@@ -223,28 +212,39 @@ class DefaultOSUtil(object):
         shellutil.run("ssh-keygen -i -m PKCS8 -f {0} >> {1}".format(input_file,
                                                                     output_file))
 
-    def deploy_ssh_pubkey(self, username, thumbprint, path):
+    def deploy_ssh_pubkey(self, username, pubkey):
         """
         Deploy authorized_key
         """
+        path, thumbprint, value = pubkey
+        if path is None:
+            raise OSUtilError("Publich key path is None")
+
         path = self._norm_path(path)
         dir_path = os.path.dirname(path)
         fileutil.mkdir(dir_path, mode=0700, owner=username)
-        lib_dir = self.get_lib_dir()
-        crt_path = os.path.join(lib_dir, thumbprint + '.crt')
-        if not os.path.isfile(crt_path):
-            logger.error("Failed to deploy public key, thumbprint: {0}",
-                         thumbprint)
-            return
-        pub_path = os.path.join(lib_dir, thumbprint + '.pub')
-        pub = self.get_pubkey_from_crt(crt_path)
-        fileutil.write_file(pub_path, pub)
-        self.set_selinux_context(pub_path, 'unconfined_u:object_r:ssh_home_t:s0')
-        self.openssl_to_openssh(pub_path, path)
+        if value is not None:
+            if not value.startswith("ssh-"):
+                raise OSUtilError("Bad public key: {0}".format(value))
+            fileutil.write_file(path, value)
+        elif thumbprint is not None:
+            lib_dir = self.get_lib_dir()
+            crt_path = os.path.join(lib_dir, thumbprint + '.crt')
+            if not os.path.isfile(crt_path):
+                raise OSUtilError("Can't find {0}.crt".format(thumbprint))
+            pub_path = os.path.join(lib_dir, thumbprint + '.pub')
+            pub = self.get_pubkey_from_crt(crt_path)
+            fileutil.write_file(pub_path, pub)
+            self.set_selinux_context(pub_path, 
+                                     'unconfined_u:object_r:ssh_home_t:s0')
+            self.openssl_to_openssh(pub_path, path)
+            fileutil.chmod(pub_path, 0600)
+        else:
+            raise OSUtilError("SSH public key Fingerprint and Value are None")
+
         self.set_selinux_context(path, 'unconfined_u:object_r:ssh_home_t:s0')
         fileutil.chowner(path, username)
         fileutil.chmod(path, 0644)
-        fileutil.chmod(pub_path, 0600)
 
     def is_selinux_system(self):
         """

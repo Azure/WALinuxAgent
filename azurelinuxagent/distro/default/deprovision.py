@@ -50,7 +50,7 @@ class DeprovisionHandler(object):
             warnings.append("WARNING! Skip delete user.")
             return
 
-        username = ovfenv.get_username()
+        username = ovfenv.username
         warnings.append(("WARNING! {0} account and entire home directory "
                          "will be deleted.").format(username))
         actions.append(DeprovisionAction(OSUTIL.del_account, [username]))

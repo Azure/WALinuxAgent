@@ -21,6 +21,7 @@
 
 import os
 import sys
+from functools import wraps
 from azurelinuxagent.utils.osutil import OSUTIL
 
 parent = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -33,6 +34,7 @@ def simple_file_grep(file_path, search_str):
 
 def mock(target, name, mock):
     def decorator(func):
+        @wraps(func)
         def wrapper(*args, **kwargs):
             origin = getattr(target, name)
             setattr(target, name, mock)

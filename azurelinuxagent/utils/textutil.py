@@ -21,14 +21,21 @@ import random
 import string
 import struct
 
-def find_first_node(xml_doc, selector):
-    nodes = find_all_nodes(xml_doc, selector)
+def find_first_node(xml_doc, selector, ns=None):
+    nodes = find_all_nodes(xml_doc, selector, ns=ns)
     if len(nodes) > 0:
         return nodes[0]
 
-def find_all_nodes(xml_doc, selector):
-    nodes = xml_doc.findall(selector)
+def find_all_nodes(xml_doc, selector, ns=None):
+    nodes = xml_doc.findall(selector, ns)
     return nodes
+
+def find_text(root, selector, ns=None, default=None):
+    element = root.find(selector, ns)
+    if element is not None:
+        return element.text
+    else:
+        return default
 
 def get_node_text(a):
     """
