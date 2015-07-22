@@ -157,7 +157,7 @@ class TestCurrOS(unittest.TestCase):
         mount_point = OSUTIL.get_mount_point(mount_list_sample, '/dev/sda')
         self.assertNotEquals(None, mount_point)
 
-    def test_getdvd(self):
+    def _test_getdvd(self):
         OSUTIL.get_dvd_device()
 
 if __name__ == '__main__':

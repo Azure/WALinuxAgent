@@ -40,14 +40,14 @@ Number  Start   End     Size    Type     File system  Flags
 
 class TestResourceDisk(unittest.TestCase):
 
-    @mock(rdh.OSUtil, 'device_for_ide_port', MockFunc(retval='foo'))
+    @mock(rdh.OSUTIL, 'device_for_ide_port', MockFunc(retval='foo'))
     @mock(rdh.shellutil, 'run_get_output', MockFunc(retval=(0, gpt_output_sample)))
     @mock(rdh.shellutil, 'run', MockFunc(retval=0))
     def test_mountGPT(self):
         handler = rdh.ResourceDiskHandler()
         handler.mount_resource_disk('/tmp/foo', 'ext4')
 
-    @mock(rdh.OSUtil, 'device_for_ide_port', MockFunc(retval='foo'))
+    @mock(rdh.OSUTIL, 'device_for_ide_port', MockFunc(retval='foo'))
     @mock(rdh.shellutil, 'run_get_output', MockFunc(retval=(0, "")))
     @mock(rdh.shellutil, 'run', MockFunc(retval=0))
     def test_mountMBR(self):
