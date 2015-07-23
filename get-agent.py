@@ -57,7 +57,7 @@ def upgrade(account='Azure', ref='2.0'):
     print "Upgrade WAAgent"
 
     shutil.copyfile("waagent", agent_file)
-    os.chmod(agent_file, 0700)
+    os.chmod(agent_file, 0755)
 
     job = subprocess.Popen(cmd)
     job.wait()
