@@ -73,12 +73,12 @@ def run_get_output(cmd, chk_err=True):
     logger.verb("run cmd '{0}'", cmd)
     try:
         output=subprocess.check_output(cmd,stderr=subprocess.STDOUT,shell=True)
-    except subprocess.CalledProcessError,e :
+    except subprocess.CalledProcessError as e :
         if chk_err :
             logger.error("run cmd '{0}' failed", e.cmd)
             logger.error("Error Code:{0}", e.returncode)
             logger.error("Result:{0}", e.output[:-1].decode('latin-1'))
         return e.returncode, e.output.decode('latin-1')
-    return 0, output
+    return 0, str(output, encoding="utf-8")
 
 #End shell command util functions

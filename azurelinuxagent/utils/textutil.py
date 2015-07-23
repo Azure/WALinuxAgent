@@ -188,9 +188,10 @@ def int_to_ip4_addr(a):
 def ascii(val):
     uni = None
     if type(val) == str:
-        uni = unicode(val, 'utf-8', errors='ignore')
+        pass
+        #uni = str(val, 'utf-8', errors='ignore')
     else:
-        uni = unicode(val)
+        uni = str(val)
     if uni is None:
         raise ValueError('<Unsupported charset>')
     else:
@@ -224,37 +225,11 @@ def remove_bom(c):
     return c
 
 def gen_password_hash(password, use_salt, salt_type, salt_len):
-        salt="$6$"
-        if use_salt:
-            collection = string.ascii_letters + string.digits
-            salt = ''.join(random.choice(collection) for _ in range(salt_len))
-            salt = "${0}${1}".format(salt_type, salt)
-        return crypt.crypt(password, salt)
+    salt="$6$"
+    if use_salt:
+        collection = string.ascii_letters + string.digits
+        salt = ''.join(random.choice(collection) for _ in range(salt_len))
+        salt = "${0}${1}".format(salt_type, salt)
+    return crypt.crypt(password, salt)
 
-def num_to_bytes(i):
-        """
-        Pack number into bytes.  Retun as string.
-        """
-        result = []
-        while i:
-            result.append(chr(i & 0xFF))
-            i >>= 8
-        result.reverse()
-        return ''.join(result)
-
-def bits_to_str(a):
-    """
-    Return string representation of bits in a.
-    """
-    index=7
-    s = ""
-    c = 0
-    for bit in a:
-        c = c | (bit << index)
-        index = index - 1
-        if index == -1:
-            s = s + struct.pack('>B', c)
-            c = 0
-            index = 7
-    return s
 

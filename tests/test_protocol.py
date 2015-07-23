@@ -18,15 +18,15 @@
 # http://msdn.microsoft.com/en-us/library/cc227282%28PROT.10%29.aspx
 # http://msdn.microsoft.com/en-us/library/cc227259%28PROT.13%29.aspx
 
-import env
+from . import env
 import tests.tools as tools
-from tools import *
+from .tools import *
 import uuid
 import unittest
 import os
 import time
 import json
-import httplib
+import http.client
 from azurelinuxagent.protocol.common import *
 
 extensionDataStr = """

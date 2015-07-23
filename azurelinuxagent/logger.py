@@ -48,13 +48,11 @@ class Logger(object):
         self.log(LogLevel.ERROR, msg_format, *args)
 
     def log(self, level, msg_format, *args):
-        msg_format = textutil.ascii(msg_format)
-        args = map(lambda x: textutil.ascii(x), args)
         if len(args) > 0:
             msg = msg_format.format(*args)
         else:
             msg = msg_format
-        time = datetime.now().strftime('%Y/%m/%d %H:%M:%S.%f')
+        time = datetime.now().strftime('%Y/%m/%d %H:%M:%S.%f\n')
         level_str = LogLevel.STRINGS[level]
         if self.prefix is not None:
             log_item = "{0} {1} {2} {3}".format(time, level_str, self.prefix,
@@ -79,7 +77,7 @@ class ConsoleAppender(object):
         if self.level <= level:
             try:
                 with open(self.path, "w") as console:
-                    console.write(msg.encode('ascii', 'ignore') + "\n")
+                    console.write(msg)
             except IOError:
                 pass
 
@@ -92,7 +90,7 @@ class FileAppender(object):
         if self.level <= level:
             try:
                 with open(self.path, "a+") as log_file:
-                    log_file.write(msg.encode('ascii', 'ignore') + "\n")
+                    log_file.write(msg)
             except IOError:
                 pass
 
@@ -103,7 +101,7 @@ class StdoutAppender(object):
     def write(self, level, msg):
         if self.level <= level:
             try:
-                sys.stdout.write(msg.encode('ascii', 'ignore') + "\n")
+                sys.stdout.write(msg)
             except IOError:
                 pass
 

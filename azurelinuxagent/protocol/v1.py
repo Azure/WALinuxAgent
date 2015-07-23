@@ -21,7 +21,7 @@ import json
 import re
 import time
 import traceback
-import httplib
+import http.client
 import xml.sax.saxutils as saxutils
 import xml.etree.ElementTree as ET
 import azurelinuxagent.logger as logger
@@ -118,24 +118,24 @@ def _fetch_uri(uri, headers, chk_proxy=False):
     except restutil.HttpError as e:
         raise ProtocolError(str(e))
 
-    if(resp.status == httplib.GONE):
+    if(resp.status == http.client.GONE):
         raise WireProtocolResourceGone(uri)
-    if(resp.status != httplib.OK):
+    if(resp.status != http.client.OK):
         raise ProtocolError("{0} - {1}".format(resp.status, uri))
-    return resp.read()
+    return str(resp.read(), encoding='utf-8')
 
 def _fetch_manifest(version_uris):
     for version_uri in version_uris:
         try:
             xml_text = _fetch_uri(version_uri.uri, None, chk_proxy=True)
             return xml_text
-        except IOError, e:
+        except IOError as e:
             logger.warn("Failed to fetch ExtensionManifest: {0}, {1}", e,
                         version_uri.uri)
     raise ProtocolError("Failed to fetch ExtensionManifest from all sources")
 
 def _build_role_properties(container_id, role_instance_id, thumbprint):
-    xml = (u"<?xml version=\"1.0\" encoding=\"utf-8\"?>"
+    xml = ("<?xml version=\"1.0\" encoding=\"utf-8\"?>"
             "<RoleProperties>"
             "<Container>"
             "<ContainerId>{0}</ContainerId>"
@@ -160,7 +160,7 @@ def _build_health_report(incarnation, container_id, role_instance_id,
                   "<SubStatus>{0}</SubStatus>"
                   "<Description>{1}</Description>"
                   "</Details>").format(substatus, description)
-    xml = (u"<?xml version=\"1.0\" encoding=\"utf-8\"?>"
+    xml = ("<?xml version=\"1.0\" encoding=\"utf-8\"?>"
             "<Health "
             "xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\""
             " xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\">"
@@ -302,7 +302,7 @@ class StatusBlob(object):
             "x-ms-date" :  timestamp,
             'x-ms-version' : self.__class__.__storage_version__
         })
-        if resp is None or resp.status != httplib.OK:
+        if resp is None or resp.status != http.client.OK:
             raise ProtocolError(("Failed to get status blob type: {0}"
                                  "").format(resp.status))
 
@@ -319,7 +319,7 @@ class StatusBlob(object):
             "Content-Length": str(len(data)),
             "x-ms-version" : self.__class__.__storage_version__
         })
-        if resp is None or resp.status != httplib.CREATED:
+        if resp is None or resp.status != http.client.CREATED:
             raise ProtocolError(("Failed to upload block blob: {0}"
                                  "").format(resp.status))
 
@@ -335,7 +335,7 @@ class StatusBlob(object):
             "x-ms-blob-content-length" : str(page_blob_size),
             "x-ms-version" : self.__class__.__storage_version__
         })
-        if resp is None or resp.status != httplib.CREATED:
+        if resp is None or resp.status != http.client.CREATED:
             raise ProtocolError(("Failed to clean up page blob: {0}"
                                  "").format(resp.status))
 
@@ -352,36 +352,36 @@ class StatusBlob(object):
             end = min(len(data), start + page_max)
             content_size = end - start
             #Align to 512 bytes
-            page_end = ((end + 511) / 512) * 512
+            page_end = int((end + 511) / 512) * 512
             buf_size = page_end - start
-            buf = bytearray(buf_size)
-            buf[0 : content_size] = data[start : end]
-            resp = restutil.http_put(url, buffer(buf), {
+            buf = bytearray(source=data[start:end], encoding="utf-8")
+            #TODO buffer is not defined in python3, however we need this to make httplib to work on python 2.6
+            resp = restutil.http_put(url, buf, {
                 "x-ms-date" :  timestamp,
                 "x-ms-range" : "bytes={0}-{1}".format(start, page_end - 1),
                 "x-ms-page-write" : "update",
                 "x-ms-version" : self.__class__.__storage_version__,
                 "Content-Length": str(page_end - start)
             })
-            if resp is None or resp.status != httplib.CREATED:
+            if resp is None or resp.status != http.client.CREATED:
                 raise ProtocolError(("Failed to upload page blob: {0}"
                                      "").format(resp.status))
             start = end
 
 def event_param_to_v1(param):
-    param_format = u'<Param Name="{0}" Value={1} T="{2}" />'
+    param_format = '<Param Name="{0}" Value={1} T="{2}" />'
     param_type = type(param.value)
     attr_type = ""
     if param_type is int:
-        attr_type = u'mt:uint64'
+        attr_type = 'mt:uint64'
     elif param_type is str:
-        attr_type = u'mt:wstr'
+        attr_type = 'mt:wstr'
     elif str(param_type).count("'unicode'") > 0:
-        attr_type = u'mt:wstr'
+        attr_type = 'mt:wstr'
     elif param_type is bool:
-        attr_type = u'mt:bool'
+        attr_type = 'mt:bool'
     elif param_type is float:
-        attr_type = u'mt:float64'
+        attr_type = 'mt:float64'
     return param_format.format(param.name, saxutils.quoteattr(str(param.value)),
                                attr_type)
 
@@ -389,9 +389,9 @@ def event_to_v1(event):
     params = ""
     for param in event.parameters:
         params += event_param_to_v1(param)
-    event_str = (u'<Event id="{0}">'
-                 u'<![CDATA[{1}]]>'
-                 u'</Event>').format(event.eventId, params)
+    event_str = ('<Event id="{0}">'
+                 '<![CDATA[{1}]]>'
+                 '</Event>').format(event.eventId, params)
     return event_str
 
 class WireClient(object):
@@ -568,11 +568,11 @@ class WireClient(object):
 
     def send_event(self, provider_id, event_str):
         uri = TELEMETRY_URI.format(self.endpoint)
-        data_format = (u'<?xml version="1.0"?>'
-                       u'<TelemetryData version="1.0">'
-                          u'<Provider id="{0}">{1}'
-                          u'</Provider>'
-                       u'</TelemetryData>')
+        data_format = ('<?xml version="1.0"?>'
+                       '<TelemetryData version="1.0">'
+                          '<Provider id="{0}">{1}'
+                          '</Provider>'
+                       '</TelemetryData>')
         data = data_format.format(provider_id, event_str)
         try:
             self.prevent_throttling()
@@ -581,7 +581,7 @@ class WireClient(object):
         except restutil.HttpError as e:
             raise ProtocolError("Failed to send events:{0}".format(e))
 
-        if resp.status != httplib.OK:
+        if resp.status != http.client.OK:
             logger.verb(resp.read())
             raise ProtocolError("Failed to send events:{0}".format(resp.status))
 
@@ -601,7 +601,7 @@ class WireClient(object):
             buf[event.providerId] = buf[event.providerId] + event_str
 
         #Send out all events left in buffer.
-        for provider_id in buf.keys():
+        for provider_id in list(buf.keys()):
             if len(buf[provider_id]) > 0:
                 self.send_event(provider_id, buf[provider_id])
 
@@ -896,9 +896,9 @@ class ExtensionsConfig(object):
 
         name = ext.name
         version = ext.properties.version
-        settings = filter(lambda x: getattrib(x, "name") == name and \
-                                    getattrib(x ,"version") == version,
-                                    plugin_settings)
+        settings = [x for x in plugin_settings \
+                          if getattrib(x, "name") == name and \
+                             getattrib(x ,"version") == version]
 
         if settings is None or len(settings) == 0:
             return
@@ -938,7 +938,7 @@ class ExtensionManifest(object):
             version = findtext(package, "Version")
             uris = find(package, "Uris")
             uri_list = findall(uris, "Uri")
-            uri_list = map(lambda x : gettext(x), uri_list)
+            uri_list = [gettext(x) for x in uri_list]
             package = ExtensionPackage()
             package.version = version
             for uri in uri_list:

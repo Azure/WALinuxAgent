@@ -17,7 +17,7 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
-from deprovision import CoreOSDeprovisionHandler
+from .deprovision import CoreOSDeprovisionHandler
 from azurelinuxagent.distro.default.handlerFactory import DefaultHandlerFactory
 
 class CoreOSHandlerFactory(DefaultHandlerFactory):

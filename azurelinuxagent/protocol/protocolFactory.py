@@ -46,11 +46,7 @@ def detect_wire_protocol():
     OSUTIL.gen_transport_cert()
     protocol = WireProtocol(endpoint)
     protocol.initialize()
-
     logger.info("Protocol V1 found.")
-    path = os.path.join(OSUTIL.get_lib_dir(), WireProtocol)
-
-    fileutil.write_file(path, "")
     return protocol
 
 def detect_metadata_protocol():

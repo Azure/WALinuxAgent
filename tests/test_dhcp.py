@@ -18,8 +18,8 @@
 # http://msdn.microsoft.com/en-us/library/cc227282%28PROT.10%29.aspx
 # http://msdn.microsoft.com/en-us/library/cc227259%28PROT.13%29.aspx
 
-import env
-from tools import *
+from . import env
+from .tools import *
 import uuid
 import unittest
 import os
@@ -28,7 +28,7 @@ import azurelinuxagent.utils.fileutil as fileutil
 import azurelinuxagent.distro.default.dhcp as dhcp_handler
 
 SampleDhcpResponse = None
-with open(os.path.join(env.test_root, "dhcp")) as F:
+with open(os.path.join(env.test_root, "dhcp"), 'rb') as F:
      SampleDhcpResponse = F.read()
         
 mock_socket_send = MockFunc('socket_send', SampleDhcpResponse)

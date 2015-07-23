@@ -18,7 +18,7 @@
 # http://msdn.microsoft.com/en-us/library/cc227282%28PROT.10%29.aspx
 # http://msdn.microsoft.com/en-us/library/cc227259%28PROT.13%29.aspx
 
-import env
+from . import env
 import tests.tools as tools
 import uuid
 import unittest
@@ -45,8 +45,8 @@ class TestLogger(unittest.TestCase):
         _logger.info("{0} {1}", 0, 1)
         _logger.warn("{0} {1}", 0, 1)
         _logger.error("{0} {1}", 0, 1)
-        _logger.info("this is a unicode {0}", u'\u6211')
-        _logger.info("this is a utf-8 {0}", u'\u6211'.encode('utf-8'))
+        _logger.info("this is a unicode {0}", '\u6211')
+        _logger.info("this is a utf-8 {0}", '\u6211'.encode('utf-8'))
         _logger.info("this is a gbk {0}", 0xff )
 
     def test_file_appender(self):
@@ -63,9 +63,24 @@ class TestLogger(unittest.TestCase):
         _logger.verbose("Verbose should not be logged: {0}", msg)
         self.assertFalse(tools.simple_file_grep('/tmp/testlog', msg))
 
-        _logger.info("this is a unicode {0}", u'\u6211')
-        _logger.info("this is a utf-8 {0}", u'\u6211'.encode('utf-8'))
+        _logger.info("this is a unicode {0}", '\u6211')
+        _logger.info("this is a utf-8 {0}", '\u6211'.encode('utf-8'))
         _logger.info("this is a gbk {0}", 0xff)
+
+    def test_concole_appender(self):
+        _logger = logger.Logger()
+        _logger.add_appender(logger.AppenderType.CONSOLE,
+                                  logger.LogLevel.VERBOSE,
+                                  '/tmp/testlog')
+
+        msg = str(uuid.uuid4())
+        _logger.info("Test logger: {0}", msg)
+        self.assertTrue(tools.simple_file_grep('/tmp/testlog', msg))
+
+        msg = str(uuid.uuid4())
+        _logger.verbose("Test logger: {0}", msg)
+        self.assertFalse(tools.simple_file_grep('/tmp/testlog', msg))
+
 
     def test_log_to_non_exists_dev(self):
         _logger = logger.Logger()

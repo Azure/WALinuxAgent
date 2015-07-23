@@ -91,7 +91,7 @@ class ResourceDiskHandler(object):
             logger.info("Resource disk {0}1 is already mounted", device)
             return existing
 
-        fileutil.mkdir(mount_point, mode=0755)
+        fileutil.mkdir(mount_point, mode=0o755)
 
         logger.info("Detect GPT...")
         partition = device + "1"
@@ -102,8 +102,7 @@ class ResourceDiskHandler(object):
         if "gpt" in ret[1]:
             logger.info("GPT detected")
             logger.info("Get GPT partitions")
-            parts = filter(lambda x : re.match("^\s*[0-9]+", x),
-                           ret[1].split("\n"))
+            parts = [x for x in ret[1].split("\n") if re.match("^\s*[0-9]+", x)]
             logger.info("Found more than {0} GPT partitions.", len(parts))
             if len(parts) > 1:
                 logger.info("Remove old GPT partitions")

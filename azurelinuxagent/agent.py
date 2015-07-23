@@ -85,16 +85,16 @@ def version():
     """
     Show agent version
     """
-    print("{0} running on {1} {2}".format(AGENT_LONG_VERSION, DISTRO_NAME,
-                                          DISTRO_VERSION))
+    print(("{0} running on {1} {2}".format(AGENT_LONG_VERSION, DISTRO_NAME,
+                                          DISTRO_VERSION)))
 def usage():
     """
     Show agent usage
     """
     print("")
-    print(("usage: {0} [-verbose] [-force] [-help]"
+    print((("usage: {0} [-verbose] [-force] [-help]"
            "-deprovision[+user]|-register-service|-version|-daemon|-start]"
-           "").format(sys.argv[0]))
+           "").format(sys.argv[0])))
     print("")
 
 def start():
@@ -109,9 +109,9 @@ def register_service():
     """
     Register agent as a service
     """
-    print "Register {0} service".format(AGENT_NAME)
+    print("Register {0} service".format(AGENT_NAME))
     OSUTIL.register_agent_service()
-    print "Start {0} service".format(AGENT_NAME)
+    print("Start {0} service".format(AGENT_NAME))
     OSUTIL.start_agent_service()
 
 def main():

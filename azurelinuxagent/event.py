@@ -138,7 +138,7 @@ def save_event(data):
     event_dir = os.path.join(OSUTIL.get_lib_dir(), 'events')
     if not os.path.exists(event_dir):
         os.mkdir(event_dir)
-        os.chmod(event_dir,0700)
+        os.chmod(event_dir,0o700)
     if len(os.listdir(event_dir)) > 1000:
         raise EventError("Too many files under: {0}", event_dir)
 

@@ -1,4 +1,8 @@
-# Copyright 2014 Microsoft Corporation
+#!/usr/bin/env python
+#
+# Windows Azure Linux Agent
+#
+# Copyright 2015 Microsoft Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,28 +16,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# Requires Python 2.4+ and Openssl 1.0+
+# Requires Python 2.6+ and Openssl 1.0+
 #
 # Implements parts of RFC 2131, 1541, 1497 and
 # http://msdn.microsoft.com/en-us/library/cc227282%28PROT.10%29.aspx
 # http://msdn.microsoft.com/en-us/library/cc227259%28PROT.13%29.aspx
+#
 
-from . import env
-import tests.tools as tools
-import uuid
-import unittest
-import os
-import azurelinuxagent.utils.shellutil as shellutil
-import test
+if __name__ == '__main__' :
+    import sys
+    import azurelinuxagent.agent as agent
+    agent.main()
+    sys.exit()
 
-class TestrunCmd(unittest.TestCase):
-    def test_run_get_output(self):
-        output = shellutil.run_get_output("ls /")
-        self.assertNotEquals(None, output)
-        self.assertEquals(0, output[0])
-
-        err = shellutil.run_get_output("ls /not-exists")
-        self.assertNotEquals(0, err[0])
-            
-if __name__ == '__main__':
-    unittest.main()

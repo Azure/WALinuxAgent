@@ -18,38 +18,41 @@
 # http://msdn.microsoft.com/en-us/library/cc227282%28PROT.10%29.aspx
 # http://msdn.microsoft.com/en-us/library/cc227259%28PROT.13%29.aspx
 
-import env
+import tests.env
 import tests.tools as tools
 import uuid
 import unittest
 import os
+import sys
 import azurelinuxagent.utils.fileutil as fileutil
-import test
 
 class TestFileOperations(unittest.TestCase):
-    def test_get_set_file_contents(self):
+    def test_read_write_file(self):
         test_file='/tmp/test_file'
         content = str(uuid.uuid4())
         fileutil.write_file(test_file, content)
         self.assertTrue(tools.simple_file_grep(test_file, content))
-        self.assertEquals(content, fileutil.read_file('/tmp/test_file'))
+
+        content_read = fileutil.read_file('/tmp/test_file')
+        print(type(content_read))
+        self.assertEquals(content, content_read)
         os.remove(test_file)
+    
+    def test_rw_utf8_file(self):
+        test_file='/tmp/test_file3'
+        content = "\u6211"
+        fileutil.write_file(test_file, content)
+        self.assertTrue(tools.simple_file_grep(test_file, content))
+
+        content_read = fileutil.read_file('/tmp/test_file3')
+        self.assertEquals(content, content_read)
+        os.remove(test_file)
+    
 
     def test_append_file(self):
         test_file='/tmp/test_file2'
         content = str(uuid.uuid4())
         fileutil.append_file(test_file, content)
-        self.assertTrue(tools.simple_file_grep(test_file, content))
-        os.remove(test_file)
-
-    def test_replace_file(self):
-        test_file='/tmp/test_file3'
-        old_content = str(uuid.uuid4())
-        content = str(uuid.uuid4())
-        with open(test_file, "a+") as F:
-            F.write(old_content)
-        fileutil.replace_file(test_file, content)
-        self.assertFalse(tools.simple_file_grep(test_file, old_content))
         self.assertTrue(tools.simple_file_grep(test_file, content))
         os.remove(test_file)
 

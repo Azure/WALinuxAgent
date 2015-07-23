@@ -16,15 +16,15 @@
 #
 # Requires Python 2.4+ and Openssl 1.0+
 #
-from init import InitHandler
-from run import MainHandler
-from scvmm import ScvmmHandler
-from dhcp import DhcpHandler
-from env import EnvHandler
-from provision import ProvisionHandler
-from resourceDisk import ResourceDiskHandler
-from extension import ExtensionsHandler
-from deprovision import DeprovisionHandler
+from .init import InitHandler
+from .run import MainHandler
+from .scvmm import ScvmmHandler
+from .dhcp import DhcpHandler
+from .env import EnvHandler
+from .provision import ProvisionHandler
+from .resourceDisk import ResourceDiskHandler
+from .extension import ExtensionsHandler
+from .deprovision import DeprovisionHandler
 
 class DefaultHandlerFactory(object):
     def __init__(self):

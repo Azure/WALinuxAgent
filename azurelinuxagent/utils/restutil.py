@@ -22,9 +22,9 @@ import os
 import subprocess
 import azurelinuxagent.logger as logger
 import azurelinuxagent.conf as conf
-import httplib
+import http.client
 import time
-from urlparse import urlparse
+from urllib.parse import urlparse
 
 """
 REST api util functions
@@ -61,21 +61,21 @@ def _http_request(method, host, rel_uri, port=None, data=None, secure=False,
     if secure:
         port = 443 if port is None else port
         if proxy_host is not None and proxy_port is not None:
-            conn = httplib.HTTPSConnection(proxy_host, proxy_port)
+            conn = http.client.HTTPSConnection(proxy_host, proxy_port)
             conn.set_tunnel(host, port)
             #If proxy is used, full url is needed.
             url = "https://{0}:{1}{2}".format(host, port, rel_uri)
         else:
-            conn = httplib.HTTPSConnection(host, port)
+            conn = http.client.HTTPSConnection(host, port)
             url = rel_uri
     else:
         port = 80 if port is None else port
         if proxy_host is not None and proxy_port is not None:
-            conn = httplib.HTTPConnection(proxy_host, proxy_port)
+            conn = http.client.HTTPConnection(proxy_host, proxy_port)
             #If proxy is used, full url is needed.
             url = "http://{0}:{1}{2}".format(host, port, rel_uri)
         else:
-            conn = httplib.HTTPConnection(host, port)
+            conn = http.client.HTTPConnection(host, port)
             url = rel_uri
     if headers == None:
         conn.request(method, url, data)
@@ -100,7 +100,7 @@ def http_request(method, url, data, headers=None, max_retry=3, chk_proxy=False):
         proxy_host, proxy_port = get_http_proxy()
 
     #If httplib module is not built with ssl support. Fallback to http
-    if secure and not hasattr(httplib, "HTTPSConnection"):
+    if secure and not hasattr(http.client, "HTTPSConnection"):
         logger.warn("httplib is not built with ssl support")
         secure = False
 
@@ -108,7 +108,7 @@ def http_request(method, url, data, headers=None, max_retry=3, chk_proxy=False):
     if secure and \
             proxy_host is not None and \
             proxy_port is not None and \
-            not hasattr(httplib.HTTPSConnection, "set_tunnel"):
+            not hasattr(http.client.HTTPSConnection, "set_tunnel"):
         logger.warn("httplib doesn't support https tunnelling(new in python 2.7)")
         secure = False
 
@@ -119,7 +119,7 @@ def http_request(method, url, data, headers=None, max_retry=3, chk_proxy=False):
             logger.verb("HTTP Resp: Status={0}", resp.status)
             logger.verb("    Header={0}", resp.getheaders())
             return resp
-        except httplib.HTTPException as e:
+        except http.client.HTTPException as e:
             logger.warn('HTTPException {0}, args:{1}', e, repr(e.args))
         except IOError as e:
             logger.warn('Socket IOError {0}, args:{1}', e, repr(e.args))

@@ -42,7 +42,7 @@ def set_properties(obj, data):
     validata_param("data", data, dict)
 
     props = vars(obj)
-    for name, val in props.items():
+    for name, val in list(props.items()):
         try:
             new_val = data[name]
         except KeyError:
@@ -64,7 +64,7 @@ def get_properties(obj):
 
     data = {}
     props = vars(obj)
-    for name, val in props.items():
+    for name, val in list(props.items()):
         if isinstance(val, DataContract):
             data[name] = get_properties(val)
         elif isinstance(val, DataContractList):

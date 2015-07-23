@@ -60,30 +60,59 @@ class Redhat6xOSUtil(DefaultOSUtil):
 
     def asn1_to_ssh_rsa(self, pubkey):
         lines = pubkey.split("\n")
-        lines = filter(lambda x : not x.startswith("----"), lines)
+        lines = [x for x in lines if not x.startswith("----")]
         base64_encoded = "".join(lines)
         try:
             #TODO remove pyasn1 dependency
             from pyasn1.codec.der import decoder as der_decoder
             der_encoded = base64.b64decode(base64_encoded)
             der_encoded = der_decoder.decode(der_encoded)[0][1]
-            k = der_decoder.decode(textutil.bits_to_str(der_encoded))[0]
-            n=k[0]
-            e=k[1]
-            keydata=""
-            keydata += struct.pack('>I',len("ssh-rsa"))
-            keydata += "ssh-rsa"
-            keydata += struct.pack('>I',len(textutil.num_to_bytes(e)))
-            keydata += textutil.num_to_bytes(e)
-            keydata += struct.pack('>I',len(textutil.num_to_bytes(n)) + 1)
-            keydata += "\0"
-            keydata += textutil.num_to_bytes(n)
-            return "ssh-rsa " + base64.b64encode(keydata) + "\n"
+            key = der_decoder.decode(self.bits_to_bytes(der_encoded))[0]
+            n=key[0]
+            e=key[1]
+            print(n)
+            print(e)
+            keydata = bytearray()
+            keydata.extend(struct.pack('>I', len("ssh-rsa")))
+            keydata.extend(b"ssh-rsa")
+            keydata.extend(struct.pack('>I', len(self.num_to_bytes(e))))
+            keydata.extend(self.num_to_bytes(e))
+            keydata.extend(struct.pack('>I', len(self.num_to_bytes(n)) + 1))
+            keydata.extend(b"\0")
+            keydata.extend(self.num_to_bytes(n))
+            return str(b"ssh-rsa " + base64.b64encode(keydata) + b"\n", 
+                       encoding='utf-8')
         except ImportError as e:
             raise OSUtilError("Failed to load pyasn1.codec.der")
-        except Exception as e:
-            raise OSUtilError(("Failed to convert public key: {0} {1}"
-                               "").format(type(e).__name__, e))
+        #except Exception as e:
+            #raise OSUtilError(("Failed to convert public key: {0} {1}"
+                               #"").format(type(e).__name__, e))
+    def num_to_bytes(self, num):
+        """
+        Pack number into bytes.  Retun as string.
+        """
+        result = bytearray()
+        while num:
+            result.append(num & 0xFF)
+            num >>= 8
+        result.reverse()
+        return result
+
+    def bits_to_bytes(self, bits):
+        """
+        Convert an array contains bits, [0,1] to a byte array
+        """
+        index = 7
+        byte_array = bytearray()
+        curr = 0
+        for bit in bits:
+            curr = curr | (bit << index)
+            index = index - 1
+            if index == -1:
+                byte_array.append(curr)
+                curr = 0
+                index = 7
+        return bytes(byte_array)
 
     def openssl_to_openssh(self, input_file, output_file):
         pubkey = fileutil.read_file(input_file)

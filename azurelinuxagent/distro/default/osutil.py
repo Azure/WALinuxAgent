@@ -126,7 +126,7 @@ class DefaultOSUtil(object):
         try:
             passwd_content = fileutil.read_file(self.passwd_file_path)
             passwd = passwd_content.split("\n")
-            new_passwd = filter(lambda x : not x.startswith(username), passwd)
+            new_passwd = [x for x in passwd if not x.startswith(username)]
             new_passwd.append("{0}:{1}:14600::::::".format(username, passwd_hash))
             fileutil.write_file(self.passwd_file_path, "\n".join(new_passwd))
         except IOError as e:
@@ -147,13 +147,13 @@ class DefaultOSUtil(object):
         else:
             sudoer = "{0} ALL = (ALL) ALL\n".format(username)
         fileutil.append_file('/etc/sudoers.d/waagent', sudoer)
-        fileutil.chmod('/etc/sudoers.d/waagent', 0440)
+        fileutil.chmod('/etc/sudoers.d/waagent', 0o440)
 
     def del_root_password(self):
         try:
             passwd_content = fileutil.read_file(self.passwd_file_path)
             passwd = passwd_content.split('\n')
-            new_passwd = filter(lambda x : not x.startswith("root:"), passwd)
+            new_passwd = [x for x in passwd if not x.startswith("root:")]
             new_passwd.insert(0, "root:*LOCK*:14600::::::")
             fileutil.write_file(self.passwd_file_path, "\n".join(new_passwd))
         except IOError as e:
@@ -194,7 +194,7 @@ class DefaultOSUtil(object):
         path, thumbprint = keypair
         path = self._norm_path(path)
         dir_path = os.path.dirname(path)
-        fileutil.mkdir(dir_path, mode=0700, owner=username)
+        fileutil.mkdir(dir_path, mode=0o700, owner=username)
         lib_dir = self.get_lib_dir()
         prv_path = os.path.join(lib_dir, thumbprint + '.prv')
         if not os.path.isfile(prv_path):
@@ -205,8 +205,8 @@ class DefaultOSUtil(object):
         fileutil.write_file(pub_path, pub)
         self.set_selinux_context(pub_path, 'unconfined_u:object_r:ssh_home_t:s0')
         self.set_selinux_context(path, 'unconfined_u:object_r:ssh_home_t:s0')
-        os.chmod(path, 0644)
-        os.chmod(pub_path, 0600)
+        os.chmod(path, 0o644)
+        os.chmod(pub_path, 0o600)
 
     def openssl_to_openssh(self, input_file, output_file):
         shellutil.run("ssh-keygen -i -m PKCS8 -f {0} >> {1}".format(input_file,
@@ -222,7 +222,7 @@ class DefaultOSUtil(object):
 
         path = self._norm_path(path)
         dir_path = os.path.dirname(path)
-        fileutil.mkdir(dir_path, mode=0700, owner=username)
+        fileutil.mkdir(dir_path, mode=0o700, owner=username)
         if value is not None:
             if not value.startswith("ssh-"):
                 raise OSUtilError("Bad public key: {0}".format(value))
@@ -238,13 +238,13 @@ class DefaultOSUtil(object):
             self.set_selinux_context(pub_path, 
                                      'unconfined_u:object_r:ssh_home_t:s0')
             self.openssl_to_openssh(pub_path, path)
-            fileutil.chmod(pub_path, 0600)
+            fileutil.chmod(pub_path, 0o600)
         else:
             raise OSUtilError("SSH public key Fingerprint and Value are None")
 
         self.set_selinux_context(path, 'unconfined_u:object_r:ssh_home_t:s0')
         fileutil.chowner(path, username)
-        fileutil.chmod(path, 0644)
+        fileutil.chmod(path, 0o644)
 
     def is_selinux_system(self):
         """
@@ -292,7 +292,7 @@ class DefaultOSUtil(object):
         conf_file_path = self.get_sshd_conf_file_path()
         conf = fileutil.read_file(conf_file_path).split("\n")
         textutil.set_ssh_config(conf, "ClientAliveInterval", "180")
-        fileutil.replace_file(conf_file_path, '\n'.join(conf))
+        fileutil.write_file(conf_file_path, '\n'.join(conf))
         logger.info("Configured SSH client probing to keep connections alive.")
 
     def conf_sshd(self, disable_password):
@@ -301,7 +301,7 @@ class DefaultOSUtil(object):
         conf = fileutil.read_file(conf_file_path).split("\n")
         textutil.set_ssh_config(conf, "PasswordAuthentication", option)
         textutil.set_ssh_config(conf, "ChallengeResponseAuthentication", option)
-        fileutil.replace_file(conf_file_path, "\n".join(conf))
+        fileutil.write_file(conf_file_path, "\n".join(conf))
         logger.info("Disabled SSH password-based authentication methods.")
 
 
@@ -469,7 +469,8 @@ class DefaultOSUtil(object):
 
     def is_missing_default_route(self):
         routes = shellutil.run_get_output("route -n")[1]
-        for route in routes:
+        for route in routes.split("\n"):
+            print(route)
             if route.startswith("0.0.0.0 ") or route.startswith("default "):
                return False
         return True
@@ -625,7 +626,7 @@ class DefaultOSUtil(object):
             try:
                 content = fileutil.read_file("/etc/sudoers.d/waagent")
                 sudoers = content.split("\n")
-                sudoers = filter(lambda x : username not in x, sudoers)
+                sudoers = [x for x in sudoers if username not in x]
                 fileutil.write_file("/etc/sudoers.d/waagent",
                                          "\n".join(sudoers))
             except IOError as e:

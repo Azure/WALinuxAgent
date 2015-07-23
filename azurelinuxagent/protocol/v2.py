@@ -16,7 +16,7 @@
 #
 # Requires Python 2.4+ and Openssl 1.0+
 
-import httplib
+import http.client
 import json
 import azurelinuxagent.utils.restutil as restutil
 from azurelinuxagent.protocol.common import *
@@ -57,7 +57,7 @@ class MetadataProtocol(Protocol):
         except restutil.HttpError as e:
             raise ProtocolError(str(e))
 
-        if resp.status != httplib.OK:
+        if resp.status != http.client.OK:
             raise ProtocolError("{0} - GET: {1}".format(resp.status, url))
         try:
             data = json.loads(resp.read())
@@ -74,7 +74,7 @@ class MetadataProtocol(Protocol):
             resp = restutil.http_put(url, json.dumps(data), headers=headers)
         except restutil.HttpError as e:
             raise ProtocolError(str(e))
-        if resp.status != httplib.OK:
+        if resp.status != http.client.OK:
             raise ProtocolError("{0} - PUT: {1}".format(resp.status, url))
 
     def _post_data(self, url, obj, headers=None):
@@ -84,7 +84,7 @@ class MetadataProtocol(Protocol):
             resp = restutil.http_post(url, json.dumps(data), headers=headers)
         except restutil.HttpError as e:
             raise ProtocolError(str(e))
-        if resp.status != httplib.CREATED:
+        if resp.status != http.client.CREATED:
             raise ProtocolError("{0} - POST: {1}".format(resp.status, url))
 
     def initialize(self):

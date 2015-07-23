@@ -18,22 +18,22 @@
 # http://msdn.microsoft.com/en-us/library/cc227282%28PROT.10%29.aspx
 # http://msdn.microsoft.com/en-us/library/cc227259%28PROT.13%29.aspx
 
-import env
+from . import env
 import tests.tools as tools
-from tools import *
+from .tools import *
 import uuid
 import unittest
 import os
 import time
-import httplib
+import http.client
 import azurelinuxagent.logger as logger
 import azurelinuxagent.protocol.v1 as v1
-from test_version import VersionInfoSample
-from test_goalstate import goal_state_sample
-from test_hostingenv import hosting_env_sample
-from test_sharedconfig import shared_config_sample
-from test_certificates import certs_sample, transport_cert
-from test_extensionsconfig import ext_conf_sample, manifest_sample
+from .test_version import VersionInfoSample
+from .test_goalstate import goal_state_sample
+from .test_hostingenv import hosting_env_sample
+from .test_sharedconfig import shared_config_sample
+from .test_certificates import certs_sample, transport_cert
+from .test_extensionsconfig import ext_conf_sample, manifest_sample
 
 #logger.LoggerInit("/dev/stdout", "/dev/null", verbose=True)
 #logger.LoggerInit("/dev/stdout", "/dev/null", verbose=False)
@@ -130,12 +130,12 @@ class TestStatusBlob(unittest.TestCase):
         status_blob = v1.StatusBlob(vm_status)
         self.assertNotEquals(None, status_blob.to_json())
 
-    @mock(v1.restutil, 'http_put', MockFunc(retval=MockResp(httplib.CREATED)))
-    @mock(v1.restutil, 'http_head', MockFunc(retval=MockResp(httplib.OK)))
+    @mock(v1.restutil, 'http_put', MockFunc(retval=MockResp(http.client.CREATED)))
+    @mock(v1.restutil, 'http_head', MockFunc(retval=MockResp(http.client.OK)))
     def test_put_page_blob(self):
         vm_status = v1.VMStatus()
         status_blob = v1.StatusBlob(vm_status)
-        data = ['a'] * 100
+        data = 'a' * 100
         status_blob.put_page_blob("http://foo.bar", data)
 
 class TestConvert(unittest.TestCase):

@@ -43,7 +43,7 @@ class InitHandler(object):
                                  path="/dev/console")
 
         #Create lib dir
-        fileutil.mkdir(OSUTIL.get_lib_dir(), mode=0700)
+        fileutil.mkdir(OSUTIL.get_lib_dir(), mode=0o700)
         os.chdir(OSUTIL.get_lib_dir())
 
 

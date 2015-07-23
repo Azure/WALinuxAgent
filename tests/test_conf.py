@@ -19,7 +19,7 @@
 # http://msdn.microsoft.com/en-us/library/cc227259%28PROT.13%29.aspx
 
 import os
-import env
+from . import env
 import uuid
 import unittest
 import tests.tools as tools

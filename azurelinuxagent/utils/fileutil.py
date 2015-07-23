@@ -42,18 +42,30 @@ def read_file(filepath, asbin=False, remove_bom=False):
         contents = textutil.remove_bom(contents)
     return contents
 
-def write_file(filepath, contents):
+def write_file(filepath, contents, asbin=False):
     """
     Write 'contents' to 'filepath'.
     """
-    with open(filepath, "wb") as out_file:
+    if asbin:
+        mode = 'wb'
+    else:
+        mode = 'w'
+        if type(contents) != str:
+            contents = str(contents)
+    with open(filepath, mode) as out_file:
         out_file.write(contents)
 
-def append_file(filepath, contents):
+def append_file(filepath, contents, asbin=False):
     """
     Append 'contents' to 'filepath'.
     """
-    with open(filepath, "a+") as out_file:
+    if asbin:
+        mode = 'ab'
+    else:
+        mode = 'a'
+        if type(contents) != str:
+            contents = str(contents)
+    with open(filepath, mode) as out_file:
         out_file.write(contents)
 
 def replace_file(filepath, contents):
@@ -84,7 +96,7 @@ def replace_file(filepath, contents):
 
         try:
             os.rename(temp, filepath)
-        except IOError, err:
+        except IOError as err:
             logger.error('Rename {0} to {1}, Exception is {2}', temp, filepath,
                          err)
             return 1
@@ -143,7 +155,7 @@ def update_conf_file(path, line_start, val, chk_err=False):
     if not os.path.isfile(path) and chk_err:
         raise Exception("Can't find config file:{0}".format(path))
     conf = read_file(path).split('\n')
-    conf = filter(lambda x: not x.startswith(line_start), conf)
+    conf = [x for x in conf if not x.startswith(line_start)]
     conf.append(val)
     replace_file(path, '\n'.join(conf))
 

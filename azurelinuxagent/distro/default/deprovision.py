@@ -104,10 +104,10 @@ class DeprovisionHandler(object):
     def deprovision(self, force=False, deluser=False):
         warnings, actions = self.setup(deluser)
         for warning in warnings:
-            print warning
+            print(warning)
 
         if not force:
-            confirm = raw_input("Do you want to proceed (y/n)")
+            confirm = input("Do you want to proceed (y/n)")
             if not confirm.lower().startswith('y'):
                 return
 
