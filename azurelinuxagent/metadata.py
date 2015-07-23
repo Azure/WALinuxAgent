@@ -43,10 +43,10 @@ def get_distro():
     return osinfo
 
 AGENT_NAME = "AzureLinuxAgent"
-agent_long_name = "Azure Linux Agent"
+AGENT_LONG_NAME = "Azure Linux Agent"
 AGENT_VERSION = '2.1.1-pre'
-agent_long_version = "{0}-{1}".format(AGENT_NAME, AGENT_VERSION)
-agent_description = """\
+AGENT_LONG_VERSION = "{0}-{1}".format(AGENT_NAME, AGENT_VERSION)
+AGENT_DESCRIPTION = """\
 The Azure Linux Agent supports the provisioning and running of Linux
 VMs in the Azure cloud. This package should be installed on Linux disk
 images that are built to run in the Azure environment.

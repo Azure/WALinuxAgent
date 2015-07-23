@@ -65,7 +65,7 @@ class EventMonitor(object):
                                                      OSUTIL.get_total_mem()))
         self.sysinfo.append(prot.TelemetryEventParam("Processors",
                                                      OSUTIL.get_processor_cores()))
-        protocol = prot.Factory.get_default_protocol()
+        protocol = prot.FACTORY.get_default_protocol()
         metadata = protocol.get_instance_metadata()
         self.sysinfo.append(prot.TelemetryEventParam("TenantName",
                                                      metadata.deploymentName))
@@ -119,7 +119,7 @@ class EventMonitor(object):
             return
 
         try:
-            protocol = prot.Factory.get_default_protocol()
+            protocol = prot.FACTORY.get_default_protocol()
             protocol.report_event(event_list)
         except prot.ProtocolError as e:
             logger.error("{0}", e)

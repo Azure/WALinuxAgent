@@ -159,14 +159,14 @@ class TestExtensions(unittest.TestCase):
         test_ext = ext.ExtensionInstance(ext_sample, pkg_list_sample, 
                                         ext_sample.properties.version, False)
         test_ext.init_logger()
-        self.assertEqual(1, len(test_ext.logger.appenders) - len(logger.default_logger.appenders))
+        self.assertEqual(1, len(test_ext.logger.appenders) - len(logger.DEFAULT_LOGGER.appenders))
         test_ext.handle()
         
         #Test upgrade 
         test_ext = ext.ExtensionInstance(ext_sample, pkg_list_sample, 
                                         ext_sample.properties.version, False)
         test_ext.init_logger()
-        self.assertEqual(1, len(test_ext.logger.appenders) - len(logger.default_logger.appenders))
+        self.assertEqual(1, len(test_ext.logger.appenders) - len(logger.DEFAULT_LOGGER.appenders))
         test_ext.handle()
 
     def test_status_convert(self):

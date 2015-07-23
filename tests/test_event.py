@@ -43,7 +43,7 @@ class TestEvent(unittest.TestCase):
         self.assertNotEquals(0, len(eventsFile))
         shutil.rmtree("/tmp/events")
 
-    @mock(evt.prot.Factory, 'get_default_protocol', 
+    @mock(evt.prot.FACTORY, 'get_default_protocol', 
           MockFunc(retval=MockProtocol()))
     def test_init_sys_info(self):
         monitor = evt.EventMonitor()

@@ -57,7 +57,7 @@ PROTOCOL_VERSION = "2012-11-30"
 class WireProtocolResourceGone(ProtocolError):
     pass
 
-class WIRE_PROTOCOL(Protocol):
+class WireProtocol(Protocol):
 
     def __init__(self, endpoint):
         self.client = WireClient(endpoint)
@@ -134,14 +134,14 @@ def _fetch_uri(uri, headers, chk_proxy=False):
         raise ProtocolError("{0} - {1}".format(resp.status, uri))
     return resp.read()
 
-def _fetchManifest(version_uris):
-    for versionUri in version_uris:
+def _fetch_manifest(version_uris):
+    for version_uri in version_uris:
         try:
-            xml_text = _fetch_uri(versionUri.uri, None, chk_proxy=True)
+            xml_text = _fetch_uri(version_uri.uri, None, chk_proxy=True)
             return xml_text
         except IOError, e:
             logger.warn("Failed to fetch ExtensionManifest: {0}, {1}", e,
-                        versionUri.uri)
+                        version_uri.uri)
     raise ProtocolError("Failed to fetch ExtensionManifest from all sources")
 
 def _build_role_properties(container_id, role_instance_id, thumbprint):
@@ -162,14 +162,14 @@ def _build_role_properties(container_id, role_instance_id, thumbprint):
             "").format(container_id, role_instance_id, thumbprint)
     return xml
 
-def _buildHealthReport(incarnation, container_id, role_instance_id,
-                       status, subStatus, description):
+def _build_health_report(incarnation, container_id, role_instance_id,
+                       status, substatus, description):
     detail = ''
-    if subStatus is not None:
+    if substatus is not None:
         detail = ("<Details>"
                   "<SubStatus>{0}</SubStatus>"
                   "<Description>{1}</Description>"
-                  "</Details>").format(subStatus, description)
+                  "</Details>").format(substatus, description)
     xml = (u"<?xml version=\"1.0\" encoding=\"utf-8\"?>"
             "<Health "
             "xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\""
@@ -265,10 +265,10 @@ def vm_status_to_v1(vm_status):
 
     v1_ga_status = guest_agent_status_to_v1(vm_status.vmAgent)
     v1_handler_status_list = []
-    for v1_handler_status in vm_status.extensionHandlers:
-        handlerAggStatus = extension_handler_status_to_v1(v1_handler_status,
+    for handler_status in vm_status.extensionHandlers:
+        v1_handler_status = extension_handler_status_to_v1(handler_status,
                                                           timestamp)
-        v1_handler_status_list.append(handlerAggStatus)
+        v1_handler_status_list.append(v1_handler_status)
 
     v1_agg_status = {
         'guestAgentStatus': v1_ga_status,
@@ -286,7 +286,7 @@ class StatusBlob(object):
     def __init__(self, vm_status):
         self.vm_status = vm_status
 
-    def toJson(self):
+    def to_json(self):
         report = vm_status_to_v1(self.vm_status)
         return json.dumps(report)
 
@@ -296,7 +296,7 @@ class StatusBlob(object):
         logger.info("Upload status blob")
         blob_type = self.get_blob_type(url)
 
-        data = self.toJson()
+        data = self.to_json()
         if blob_type == "BlockBlob":
             self.put_block_blob(url, data)
         elif blob_type == "PageBlob":
@@ -362,16 +362,16 @@ class StatusBlob(object):
             end = min(len(data), start + page_max)
             content_size = end - start
             #Align to 512 bytes
-            pageEnd = ((end + 511) / 512) * 512
-            buf_size = pageEnd - start
+            page_end = ((end + 511) / 512) * 512
+            buf_size = page_end - start
             buf = bytearray(buf_size)
             buf[0 : content_size] = data[start : end]
             resp = restutil.http_put(url, buffer(buf), {
                 "x-ms-date" :  timestamp,
-                "x-ms-range" : "bytes={0}-{1}".format(start, pageEnd - 1),
+                "x-ms-range" : "bytes={0}-{1}".format(start, page_end - 1),
                 "x-ms-page-write" : "update",
                 "x-ms-version" : self.__class__.__storage_version__,
-                "Content-Length": str(pageEnd - start)
+                "Content-Length": str(page_end - start)
             })
             if resp is None or resp.status != httplib.CREATED:
                 raise ProtocolError(("Failed to upload page blob: {0}"
@@ -446,7 +446,7 @@ class WireClient(object):
     def update_ext_manifest(self, extension, goal_state):
         local_file = MANIFEST_FILE_NAME.format(extension.name,
                                         goal_state.incarnation)
-        xml_text = _fetchManifest(extension.versionUris)
+        xml_text = _fetch_manifest(extension.version_uris)
         fileutil.write_file(local_file, xml_text)
 
     def update_goal_state(self, forced=False, max_retry=3):
@@ -459,7 +459,8 @@ class WireClient(object):
             if(os.path.isfile(INCARNATION_FILE_NAME)):
                 last_incarnation = fileutil.read_file(INCARNATION_FILE_NAME)
             new_incarnation = goal_state.incarnation
-            if last_incarnation is not None and last_incarnation == new_incarnation:
+            if last_incarnation is not None and \
+                    last_incarnation == new_incarnation:
                 #Goalstate is not updated.
                 return
 
@@ -557,7 +558,7 @@ class WireClient(object):
 
     def report_health(self, status, substatus, description):
         goal_state = self.get_goal_state()
-        health_report = _buildHealthReport(goal_state.incarnation,
+        health_report = _build_health_report(goal_state.incarnation,
                                            goal_state.container_id,
                                            goal_state.role_instance_id,
                                            status,
@@ -865,7 +866,7 @@ class ExtensionsConfig(object):
         """
         xml_doc = ET.fromstring(xml_text.strip())
         plugins = find_all_nodes(xml_doc, ".//Plugins/Plugin")
-        settings = find_all_nodes(xml_doc, ".//PluginSettings/Plugin")
+        plugin_settings_list = find_all_nodes(xml_doc, ".//PluginSettings/Plugin")
 
         for plugin in plugins:
             ext = Extension()
@@ -873,45 +874,45 @@ class ExtensionsConfig(object):
             ext.properties.version = plugin.attrib["version"]
             ext.properties.state = plugin.attrib["state"]
 
-            autoUpgrade = plugin.attrib["autoUpgrade"]
-            if autoUpgrade == "true":
+            auto_upgrade = plugin.attrib["autoUpgrade"]
+            if auto_upgrade == "true":
                 ext.properties.upgradePolicy = "auto"
             else:
                 ext.properties.upgradePolicy = "manual"
 
             location = plugin.attrib["location"]
-            failoverLocation = plugin.attrib["failoverlocation"]
-            for uri in [location, failoverLocation]:
+            failover_location = plugin.attrib["failoverlocation"]
+            for uri in [location, failover_location]:
                 versionUri = ExtensionVersionUri()
                 versionUri.uri = uri
-                ext.versionUris.append(versionUri)
+                ext.version_uris.append(versionUri)
 
             name = ext.name
             version = ext.properties.version
-            pluginSettings = filter(lambda x: x.attrib["name"] == name and x.attrib["version"] == version,
-                                    settings)
-            if pluginSettings is None or len(pluginSettings) == 0 :
+            plugin_settings = filter(lambda x: x.attrib["name"] == name and x.attrib["version"] == version,
+                                    plugin_settings_list)
+            if plugin_settings is None or len(plugin_settings) == 0 :
                 continue
 
-            runtimeSettings = None
-            runtimeSettingsNode = find_first_node(pluginSettings[0],
+            runtime_settings = None
+            runtime_settings_node = find_first_node(plugin_settings[0],
                                                 "runtimeSettings")
-            seqNo = runtimeSettingsNode.attrib["seqNo"]
-            runtimeSettingsStr = runtimeSettingsNode.text
+            seqNo = runtime_settings_node.attrib["seqNo"]
+            runtime_settings_str = runtime_settings_node.text
             try:
-                runtimeSettings = json.loads(runtimeSettingsStr)
+                runtime_settings = json.loads(runtime_settings_str)
             except ValueError as e:
                 raise ProtocolError("Invalid extension settings")
 
-            for settings in runtimeSettings["runtimeSettings"]:
-                hSettings = settings["handlerSettings"]
-                extSettings = ExtensionSettings()
-                extSettings.sequenceNumber = seqNo
-                extSettings.publicSettings = hSettings["publicSettings"]
-                extSettings.privateSettings = hSettings["protectedSettings"]
-                thumbprint = hSettings["protectedSettingsCertThumbprint"]
-                extSettings.certificateThumbprint = thumbprint
-                ext.properties.extensions.append(extSettings)
+            for plugin_settings_list in runtime_settings["runtimeSettings"]:
+                handler_settings = plugin_settings_list["handlerSettings"]
+                ext_settings = ExtensionSettings()
+                ext_settings.sequenceNumber = seqNo
+                ext_settings.publicSettings = handler_settings["publicSettings"]
+                ext_settings.privateSettings = handler_settings["protectedSettings"]
+                thumbprint = handler_settings["protectedSettingsCertThumbprint"]
+                ext_settings.certificateThumbprint = thumbprint
+                ext.properties.extensions.append(ext_settings)
 
             self.ext_list.extensions.append(ext)
         self.status_upload_blob = (find_first_node(xml_doc,"StatusUploadBlob")).text
@@ -934,8 +935,8 @@ class ExtensionManifest(object):
             package = ExtensionPackage()
             package.version = version
             for uri in uris:
-                packageUri = ExtensionPackageUri()
-                packageUri.uri = uri
-                package.uris.append(packageUri)
+                pkg_uri = ExtensionPackageUri()
+                pkg_uri.uri = uri
+                package.uris.append(pkg_uri)
             self.pkg_list.versions.append(package)
 

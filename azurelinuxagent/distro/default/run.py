@@ -21,7 +21,7 @@ import os
 import time
 import azurelinuxagent.logger as logger
 import azurelinuxagent.conf as conf
-from azurelinuxagent.metadata import agent_long_name, AGENT_VERSION, \
+from azurelinuxagent.metadata import AGENT_LONG_NAME, AGENT_VERSION, \
                                      DISTRO_NAME, DISTRO_VERSION, DISTRO_FULL_NAME
 import azurelinuxagent.protocol as prot
 import azurelinuxagent.event as event
@@ -34,7 +34,7 @@ class MainHandler(object):
         self.handlers = handlers
 
     def run(self):
-        logger.info("{0} Version:{1}", agent_long_name, AGENT_VERSION)
+        logger.info("{0} Version:{1}", AGENT_LONG_NAME, AGENT_VERSION)
         logger.info("OS: {0} {1}", DISTRO_NAME, DISTRO_VERSION)
 
         event.enable_unhandled_err_dump("Azure Linux Agent")
@@ -58,7 +58,7 @@ class MainHandler(object):
 
         self.handlers.env_handler.start()
 
-        protocol = prot.Factory.get_default_protocol()
+        protocol = prot.FACTORY.get_default_protocol()
         while True:
 
             #Handle extensions
@@ -66,7 +66,7 @@ class MainHandler(object):
 
             #Report status
             vm_status = prot.VMStatus()
-            vm_status.vmAgent.agentVersion = agent_long_name
+            vm_status.vmAgent.agentVersion = AGENT_LONG_NAME
             vm_status.vmAgent.status = "Ready"
             vm_status.vmAgent.message = "Guest Agent is running"
             for h_status in h_status_list:

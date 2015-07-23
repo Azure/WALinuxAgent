@@ -30,19 +30,19 @@ class MetadataProtocol(Protocol):
     def __init__(self, apiversion=APIVERSION, endpoint=ENDPOINT):
         self.apiversion = apiversion
         self.endpoint = endpoint
-        self.identity_uri = __base__uri.format(self.endpoint, "identity",
-                                               self.apiversion, "&expand=*")
-        self.cert_uri = __base__uri.format(self.endpoint, "certificates",
-                                           self.apiversion, "&expand=*")
-        self.ext_uri = __base__uri.format(self.endpoint, "extensionHandlers",
-                                         self.apiversion, "&expand=*")
-        self.provision_status_uri = __base__uri.format(self.endpoint,
-                                                       "provisionStatus",
-                                                       self.apiversion, "")
-        self.status_uri = __base__uri.format(self.endpoint, "status",
-                                             self.apiversion, "")
-        self.event_uri = __base__uri.format(self.endpoint, "status/telemetry",
-                                            self.apiversion, "")
+        self.identity_uri = BASE_URI.format(self.endpoint, "identity",
+                                            self.apiversion, "&expand=*")
+        self.cert_uri = BASE_URI.format(self.endpoint, "certificates",
+                                        self.apiversion, "&expand=*")
+        self.ext_uri = BASE_URI.format(self.endpoint, "extensionHandlers",
+                                       self.apiversion, "&expand=*")
+        self.provision_status_uri = BASE_URI.format(self.endpoint,
+                                                    "provisionStatus",
+                                                    self.apiversion, "")
+        self.status_uri = BASE_URI.format(self.endpoint, "status",
+                                          self.apiversion, "")
+        self.event_uri = BASE_URI.format(self.endpoint, "status/telemetry",
+                                         self.apiversion, "")
 
     def _get_data(self, data_type, url, headers=None):
         try:

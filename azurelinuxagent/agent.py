@@ -25,7 +25,7 @@ import os
 import sys
 import re
 import subprocess
-from azurelinuxagent.metadata import AGENT_NAME, agent_long_version, \
+from azurelinuxagent.metadata import AGENT_NAME, AGENT_LONG_VERSION, \
                                      DISTRO_NAME, DISTRO_VERSION
 
 from azurelinuxagent.utils.osutil import OSUTIL
@@ -85,7 +85,7 @@ def version():
     """
     Show agent version
     """
-    print("{0} running on {1} {2}".format(agent_long_version, DISTRO_NAME,
+    print("{0} running on {1} {2}".format(AGENT_LONG_VERSION, DISTRO_NAME,
                                           DISTRO_VERSION))
 def usage():
     """

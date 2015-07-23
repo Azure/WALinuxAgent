@@ -109,7 +109,7 @@ class StdoutAppender(object):
 
 
 #Initialize logger instance
-default_logger = Logger()
+DEFAULT_LOGGER = Logger()
 
 class LogLevel(object):
     VERBOSE = 0
@@ -129,22 +129,22 @@ class AppenderType(object):
     STDOUT = 2
 
 def add_logger_appender(appender_type, level=LogLevel.INFO, path=None):
-    default_logger.add_appender(appender_type, level, path)
+    DEFAULT_LOGGER.add_appender(appender_type, level, path)
 
 def verb(msg_format, *args):
-    default_logger.verbose(msg_format, *args)
+    DEFAULT_LOGGER.verbose(msg_format, *args)
 
 def info(msg_format, *args):
-    default_logger.info(msg_format, *args)
+    DEFAULT_LOGGER.info(msg_format, *args)
 
 def warn(msg_format, *args):
-    default_logger.warn(msg_format, *args)
+    DEFAULT_LOGGER.warn(msg_format, *args)
 
 def error(msg_format, *args):
-    default_logger.error(msg_format, *args)
+    DEFAULT_LOGGER.error(msg_format, *args)
 
 def log(level, msg_format, *args):
-    default_logger.log(level, msg_format, args)
+    DEFAULT_LOGGER.log(level, msg_format, args)
 
 def _create_logger_appender(appender_type, level=LogLevel.INFO, path=None):
     if appender_type == AppenderType.CONSOLE:

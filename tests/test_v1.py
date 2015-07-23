@@ -128,7 +128,7 @@ class TestStatusBlob(unittest.TestCase):
     def testToJson(self):
         vm_status = v1.VMStatus()
         status_blob = v1.StatusBlob(vm_status)
-        self.assertNotEquals(None, status_blob.toJson())
+        self.assertNotEquals(None, status_blob.to_json())
 
     @mock(v1.restutil, 'http_put', MockFunc(retval=MockResp(httplib.CREATED)))
     @mock(v1.restutil, 'http_head', MockFunc(retval=MockResp(httplib.OK)))

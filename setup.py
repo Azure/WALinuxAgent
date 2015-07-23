@@ -19,7 +19,7 @@
 
 import os
 from azurelinuxagent.metadata import AGENT_NAME, AGENT_VERSION, \
-                                     agent_description, \
+                                     AGENT_DESCRIPTION, \
                                      DISTRO_NAME, DISTRO_VERSION, DISTRO_FULL_NAME
 
 from azurelinuxagent.utils.osutil import OSUTIL
@@ -122,7 +122,7 @@ class install(_install):
 
 setuptools.setup(name=AGENT_NAME,
                  version=AGENT_VERSION,
-                 long_description=agent_description,
+                 long_description=AGENT_DESCRIPTION,
                  author= 'Yue Zhang, Stephen Zarkos, Eric Gable',
                  author_email = 'walinuxagent@microsoft.com',
                  platforms = 'Linux',

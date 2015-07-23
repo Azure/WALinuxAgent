@@ -41,7 +41,7 @@ class ProvisionHandler(object):
             return
 
         logger.info("run provision handler.")
-        protocol = prot.Factory.get_default_protocol()
+        protocol = prot.FACTORY.get_default_protocol()
         try:
             status = prot.ProvisionStatus(status="NotReady",
                                           subStatus="Provision started")

@@ -54,7 +54,7 @@ def set_properties(obj, data):
         elif isinstance(new_val, list):
             validata_param("list", val, DataContractList)
             for data_item in new_val:
-               item = val.itemType()
+               item = val.item_cls()
                set_properties(item, data_item)
                val.append(item)
         else:
@@ -73,8 +73,8 @@ def get_properties(obj):
                 continue
             data[name] = []
             for item in val:
-                dataItem = get_properties(item)
-                data[name].append(dataItem)
+                date_item = get_properties(item)
+                data[name].append(date_item)
         elif val is not None:
             data[name] = val
     return data
@@ -83,8 +83,8 @@ class DataContract(object):
     pass
 
 class DataContractList(list):
-    def __init__(self, itemType):
-        self.itemType = itemType
+    def __init__(self, item_cls):
+        self.item_cls = item_cls
 
 class VMInfo(DataContract):
     def __init__(self, subscriptionId=None, vmName=None):
@@ -125,7 +125,7 @@ class Extension(DataContract):
     def __init__(self, name=None):
         self.name = name
         self.properties = ExtensionProperties()
-        self.versionUris = DataContractList(ExtensionVersionUri)
+        self.version_uris = DataContractList(ExtensionVersionUri)
 
 class ExtensionList(DataContract):
     def __init__(self):

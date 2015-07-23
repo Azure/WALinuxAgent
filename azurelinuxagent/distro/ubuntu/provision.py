@@ -44,7 +44,7 @@ class UbuntuProvisionHandler(ProvisionHandler):
             return
 
         logger.info("Waiting cloud-init to finish provisioning.")
-        protocol = prot.Factory.get_default_protocol()
+        protocol = prot.FACTORY.get_default_protocol()
         try:
             logger.info("Wait for ssh host key to be generated.")
             thumbprint = self.wait_for_ssh_host_key()

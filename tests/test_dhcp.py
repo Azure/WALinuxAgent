@@ -51,6 +51,7 @@ class TestdhcpHandler(unittest.TestCase):
     @mock(dhcp_handler, "socket_send", mock_socket_send)
     @mock(dhcp_handler, "gen_trans_id", mock_gen_trans_id)
     @mock(dhcp_handler.OSUTIL, "get_mac_addr", mock_get_mac_addr)
+    @mock(dhcp_handler.fileutil, "write_file", MockFunc())
     def test_handle_dhcp(self):
         dh = dhcp_handler.DhcpHandler()
         dh.probe()

@@ -23,12 +23,10 @@ import azurelinuxagent.logger as logger
 import azurelinuxagent.utils.fileutil as fileutil
 from azurelinuxagent.utils.osutil import OSUTIL
 from azurelinuxagent.protocol.common import *
-from azurelinuxagent.protocol.v1 import WIRE_PROTOCOL
+from azurelinuxagent.protocol.v1 import WireProtocol
 from azurelinuxagent.protocol.v2 import MetadataProtocol
 
 WIRE_SERVER_ADDR_FILE_NAME = "WireServer"
-WIRE_PROTOCOL = "WireProtocol"
-METADATA_PROTOCOL = "MetaDataProtocol"
 
 def get_wire_protocol_endpoint():
     path = os.path.join(OSUTIL.get_lib_dir(), WIRE_SERVER_ADDR_FILE_NAME)
@@ -46,11 +44,11 @@ def detect_wire_protocol():
     endpoint = get_wire_protocol_endpoint()
 
     OSUTIL.gen_transport_cert()
-    protocol = WIRE_PROTOCOL(endpoint)
+    protocol = WireProtocol(endpoint)
     protocol.initialize()
 
     logger.info("Protocol V1 found.")
-    path = os.path.join(OSUTIL.get_lib_dir(), WIRE_PROTOCOL)
+    path = os.path.join(OSUTIL.get_lib_dir(), WireProtocol)
 
     fileutil.write_file(path, "")
     return protocol
@@ -60,11 +58,10 @@ def detect_metadata_protocol():
     protocol.initialize()
 
     logger.info("Protocol V2 found.")
-    path = os.path.join(OSUTIL.get_lib_dir(), METADATA_PROTOCOL)
-    fileutil.write_file(path, "")
     return protocol
 
-def detect_available_protocols(prob_funcs=[detect_wire_protocol, detect_metadata_protocol]):
+def detect_available_protocols(prob_funcs=[detect_wire_protocol, 
+                                           detect_metadata_protocol]):
     available_protocols = []
     for probe_func in prob_funcs:
         try:
@@ -86,17 +83,10 @@ def choose_default_protocol(protocols):
         raise ProtocolNotFound("No available protocol detected.")
 
 def get_wire_protocol():
-    path = os.path.join(OSUTIL.get_lib_dir(), WIRE_PROTOCOL)
-    if not os.path.isfile(path):
-        raise ProtocolNotFound("Protocol V1 not found")
-
     endpoint = get_wire_protocol_endpoint()
-    return WIRE_PROTOCOL(endpoint)
+    return WireProtocol(endpoint)
 
 def get_metadata_protocol():
-    path = os.path.join(OSUTIL.get_lib_dir(), METADATA_PROTOCOL)
-    if not os.path.isfile(path):
-        raise ProtocolNotFound("Protocol V2 not found")
     return MetadataProtocol()
 
 def get_available_protocols(getters=[get_wire_protocol, get_metadata_protocol]):
@@ -124,4 +114,4 @@ class ProtocolFactory(object):
 
         return self._protocol
 
-Factory = ProtocolFactory()
+FACTORY = ProtocolFactory()

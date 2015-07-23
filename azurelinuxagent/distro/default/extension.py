@@ -101,7 +101,7 @@ def ext_status_to_v2(ext_status, seq_no):
 class ExtensionsHandler(object):
 
     def process(self):
-        protocol = prot.Factory.get_default_protocol()
+        protocol = prot.FACTORY.get_default_protocol()
         ext_list = protocol.get_extensions()
 
         h_status_list = []
@@ -179,7 +179,7 @@ class ExtensionInstance(object):
         self.curr_op = None
 
         prefix = "[{0}]".format(self.get_full_name())
-        self.logger = logger.Logger(logger.default_logger, prefix)
+        self.logger = logger.Logger(logger.DEFAULT_LOGGER, prefix)
 
     def init_logger(self):
         #Init logger appender for extension
