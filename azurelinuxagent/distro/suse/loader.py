@@ -17,12 +17,12 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
-from azurelinuxagent.metadata import DistroName, DistroVersion, DistroFullName
+from azurelinuxagent.metadata import DISTRO_NAME, DISTRO_VERSION, DISTRO_FULL_NAME
 
-def GetOSUtil():
+def get_osutil():
     from azurelinuxagent.distro.suse.osutil import SUSE11OSUtil, SUSEOSUtil
-    if DistroFullName=='SUSE Linux Enterprise Server' and DistroVersion < '12' \
-            or DistroFullName == 'openSUSE' and DistroVersion < '13.2':
+    if DISTRO_FULL_NAME=='SUSE Linux Enterprise Server' and DISTRO_VERSION < '12' \
+            or DISTRO_FULL_NAME == 'openSUSE' and DISTRO_VERSION < '13.2':
         return SUSE11OSUtil()
     else:
         return SUSEOSUtil()

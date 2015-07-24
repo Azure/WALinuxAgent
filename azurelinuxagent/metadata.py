@@ -21,40 +21,40 @@ import os
 import re
 import platform
 
-def GetDistroInfo():
+def get_distro():
     if 'FreeBSD' in platform.system():
         release = re.sub('\-.*\Z', '', str(platform.release()))
-        osInfo = ['freebsd', release, '', 'freebsd']
+        osinfo = ['freebsd', release, '', 'freebsd']
     if 'linux_distribution' in dir(platform):
-        osInfo = list(platform.linux_distribution(full_distribution_name=0))
-        fullName = platform.linux_distribution()[0].strip()
-        osInfo.append(fullName)
+        osinfo = list(platform.linux_distribution(full_distribution_name=0))
+        full_name = platform.linux_distribution()[0].strip()
+        osinfo.append(full_name)
     else:
-        osInfo = platform.dist()
+        osinfo = platform.dist()
 
     #The platform.py lib has issue with detecting oracle linux distribution.
     #Merge the following patch provided by oracle as a temparory fix.
-    if os.path.exists("/etc/oracle-release"): 
-        osInfo[2]="oracle" 
-        osInfo[3]="Oracle Linux" 
+    if os.path.exists("/etc/oracle-release"):
+        osinfo[2] = "oracle"
+        osinfo[3] = "Oracle Linux"
 
     #Remove trailing whitespace and quote in distro name
-    osInfo[0] = osInfo[0].strip('"').strip(' ').lower() 
-    return osInfo
+    osinfo[0] = osinfo[0].strip('"').strip(' ').lower()
+    return osinfo
 
-GuestAgentName = "AzureLinuxAgent"
-GuestAgentLongName = "Azure Linux Agent"
-GuestAgentVersion='2.1.0'
-GuestAgentLongVersion = "{0}-{1}".format(GuestAgentName, GuestAgentVersion)
-GuestAgentDescription = """\
+AGENT_NAME = "AzureLinuxAgent"
+AGENT_LONG_NAME = "Azure Linux Agent"
+AGENT_VERSION = '2.1.1-pre'
+AGENT_LONG_VERSION = "{0}-{1}".format(AGENT_NAME, AGENT_VERSION)
+AGENT_DESCRIPTION = """\
 The Azure Linux Agent supports the provisioning and running of Linux
 VMs in the Azure cloud. This package should be installed on Linux disk
 images that are built to run in the Azure environment.
 """
 
-__DistroInfo = GetDistroInfo()
-DistroName = __DistroInfo[0]
-DistroVersion = __DistroInfo[1]
-DistroCodeName = __DistroInfo[2]
-DistroFullName = __DistroInfo[3]
+__distro__ = get_distro()
+DISTRO_NAME = __distro__[0]
+DISTRO_VERSION = __distro__[1]
+DISTRO_CODE_NAME = __distro__[2]
+DISTRO_FULL_NAME = __distro__[3]
 

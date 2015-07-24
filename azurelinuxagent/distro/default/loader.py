@@ -17,12 +17,12 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
-def GetOSUtil():
+def get_osutil():
     from azurelinuxagent.distro.default.osutil import DefaultOSUtil
     return DefaultOSUtil()
 
-def GetHandlers():
+def get_handlers():
     from azurelinuxagent.distro.default.handlerFactory import DefaultHandlerFactory
     return DefaultHandlerFactory()
-     
-   
+
+

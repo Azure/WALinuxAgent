@@ -17,7 +17,7 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 from init import InitHandler
-from run import RunHandler
+from run import MainHandler
 from scvmm import ScvmmHandler
 from dhcp import DhcpHandler
 from env import EnvHandler
@@ -25,16 +25,16 @@ from provision import ProvisionHandler
 from resourceDisk import ResourceDiskHandler
 from extension import ExtensionsHandler
 from deprovision import DeprovisionHandler
-    
+
 class DefaultHandlerFactory(object):
     def __init__(self):
-        self.initHandler = InitHandler()
-        self.runHandler = RunHandler(self)
-        self.scvmmHandler = ScvmmHandler()
-        self.dhcpHandler = DhcpHandler()
-        self.envHandler = EnvHandler(self)
-        self.provisionHandler = ProvisionHandler()
-        self.resourceDiskHandler = ResourceDiskHandler()
-        self.extensionHandler = ExtensionsHandler()
-        self.deprovisionHandler = DeprovisionHandler()
+        self.init_handler = InitHandler()
+        self.main_handler = MainHandler(self)
+        self.scvmm_handler = ScvmmHandler()
+        self.dhcp_handler = DhcpHandler()
+        self.env_handler = EnvHandler(self)
+        self.provision_handler = ProvisionHandler()
+        self.resource_disk_handler = ResourceDiskHandler()
+        self.extension_handler = ExtensionsHandler()
+        self.deprovision_handler = DeprovisionHandler()
 

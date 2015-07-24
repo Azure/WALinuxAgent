@@ -15,21 +15,22 @@
 # limitations under the License.
 #
 # Requires Python 2.4+ and Openssl 1.0+
+
 import crypt
 import random
 import string
 import struct
 
-def FindFirstNode(xmlDoc, selector):
-    nodes = FindAllNodes(xmlDoc, selector)
+def find_first_node(xml_doc, selector):
+    nodes = find_all_nodes(xml_doc, selector)
     if len(nodes) > 0:
         return nodes[0]
 
-def FindAllNodes(xmlDoc, selector):
-    nodes = xmlDoc.findall(selector)
+def find_all_nodes(xml_doc, selector):
+    nodes = xml_doc.findall(selector)
     return nodes
 
-def GetNodeTextData(a):
+def get_node_text(a):
     """
     Filter non-text nodes from DOM tree
     """
@@ -37,54 +38,54 @@ def GetNodeTextData(a):
         if b.nodeType == b.TEXT_NODE:
             return b.data
 
-def Unpack(buf, offset, range):
+def unpack(buf, offset, range):
     """
     Unpack bytes into python values.
     """
     result = 0
     for i in range:
-        result = (result << 8) | Ord(buf[offset + i])
+        result = (result << 8) | str_to_ord(buf[offset + i])
     return result
 
-def UnpackLittleEndian(buf, offset, length):
+def unpack_little_endian(buf, offset, length):
     """
     Unpack little endian bytes into python values.
     """
-    return Unpack(buf, offset, list(range(length - 1, -1, -1)))
+    return unpack(buf, offset, list(range(length - 1, -1, -1)))
 
-def UnpackBigEndian(buf, offset, length):
+def unpack_big_endian(buf, offset, length):
     """
     Unpack big endian bytes into python values.
     """
-    return Unpack(buf, offset, list(range(0, length)))
+    return unpack(buf, offset, list(range(0, length)))
 
-def HexDump3(buf, offset, length):
+def hex_dump3(buf, offset, length):
     """
     Dump range of buf in formatted hex.
     """
-    return ''.join(['%02X' % Ord(char) for char in buf[offset:offset + length]])
+    return ''.join(['%02X' % str_to_ord(char) for char in buf[offset:offset + length]])
 
-def HexDump2(buf):
+def hex_dump2(buf):
     """
     Dump buf in formatted hex.
     """
-    return HexDump3(buf, 0, len(buf))
+    return hex_dump3(buf, 0, len(buf))
 
-def IsInRangeInclusive(a, low, high):
+def is_in_range(a, low, high):
     """
     Return True if 'a' in 'low' <= a >= 'high'
     """
     return (a >= low and a <= high)
 
-def IsPrintable(ch):
+def is_printable(ch):
     """
     Return True if character is displayable.
     """
-    return (IsInRangeInclusive(ch, Ord('A'), Ord('Z')) 
-           or IsInRangeInclusive(ch, Ord('a'), Ord('z')) 
-           or IsInRangeInclusive(ch, Ord('0'), Ord('9')))
+    return (is_in_range(ch, str_to_ord('A'), str_to_ord('Z'))
+           or is_in_range(ch, str_to_ord('a'), str_to_ord('z'))
+           or is_in_range(ch, str_to_ord('0'), str_to_ord('9')))
 
-def HexDump(buffer, size):
+def hex_dump(buffer, size):
     """
     Return Hex formated dump of a 'buffer' of 'size'.
     """
@@ -111,16 +112,16 @@ def HexDump(buffer, size):
             for j in range(i - (i % 16), i + 1):
                 byte=buffer[j]
                 if type(byte) == str:
-                    byte = ord(byte.decode('latin1'))
+                    byte = str_to_ord(byte.decode('latin1'))
                 k = '.'
-                if IsPrintable(byte):
+                if is_printable(byte):
                     k = chr(byte)
                 result += k
             if (i + 1) != size:
                 result += "\n"
     return result
 
-def Ord(a):
+def str_to_ord(a):
     """
     Allows indexing into a string or an array of integers transparently.
     Generic utility function.
@@ -129,25 +130,25 @@ def Ord(a):
         a = ord(a)
     return a
 
-def CompareBytes(a, b, start, length):
+def compare_bytes(a, b, start, length):
     for offset in range(start, start + length):
-        if Ord(a[offset]) != Ord(b[offset]):
+        if str_to_ord(a[offset]) != str_to_ord(b[offset]):
             return False
     return True
 
-def IntegerToIpAddressV4String(a):
+def int_to_ip4_addr(a):
     """
     Build DHCP request string.
     """
-    return "%u.%u.%u.%u" % ((a >> 24) & 0xFF, 
-                            (a >> 16) & 0xFF, 
-                            (a >> 8) & 0xFF, 
+    return "%u.%u.%u.%u" % ((a >> 24) & 0xFF,
+                            (a >> 16) & 0xFF,
+                            (a >> 8) & 0xFF,
                             (a) & 0xFF)
 
-def Ascii(val):
+def ascii(val):
     uni = None
     if type(val) == str:
-        uni = unicode(val, 'utf-8', errors='ignore') 
+        uni = unicode(val, 'utf-8', errors='ignore')
     else:
         uni = unicode(val)
     if uni is None:
@@ -155,7 +156,7 @@ def Ascii(val):
     else:
         return uni.encode('ascii', 'backslashreplace')
 
-def HexStringToByteArray(a):
+def hexstr_to_bytearray(a):
     """
     Return hex string packed into a binary struct.
     """
@@ -164,7 +165,7 @@ def HexStringToByteArray(a):
         b += struct.pack("B", int(a[c * 2:c * 2 + 2], 16))
     return b
 
-def SetSshConfig(config, name, val):
+def set_ssh_config(config, name, val):
     notfound = True
     for i in range(0, len(config)):
         if config[i].startswith(name):
@@ -177,20 +178,20 @@ def SetSshConfig(config, name, val):
         config.insert(i, "{0} {1}".format(name, val))
     return config
 
-def RemoveBom(c):
-    if ord(c[0]) > 128 and ord(c[1]) > 128 and ord(c[2]) > 128:
+def remove_bom(c):
+    if str_to_ord(c[0]) > 128 and str_to_ord(c[1]) > 128 and str_to_ord(c[2]) > 128:
         c = c[3:]
     return c
 
-def GetPasswordHash(password, useSalt, saltType, saltLength):
-        salt="$6$" 
-        if useSalt:
+def gen_password_hash(password, use_salt, salt_type, salt_len):
+        salt="$6$"
+        if use_salt:
             collection = string.ascii_letters + string.digits
-            salt = ''.join(random.choice(collection) for _ in range(saltLength))
-            salt = "${0}${1}".format(saltType, salt)
+            salt = ''.join(random.choice(collection) for _ in range(salt_len))
+            salt = "${0}${1}".format(salt_type, salt)
         return crypt.crypt(password, salt)
 
-def NumberToBytes(i):
+def num_to_bytes(i):
         """
         Pack number into bytes.  Retun as string.
         """
@@ -201,7 +202,7 @@ def NumberToBytes(i):
         result.reverse()
         return ''.join(result)
 
-def BitsToString(a):
+def bits_to_str(a):
     """
     Return string representation of bits in a.
     """

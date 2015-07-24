@@ -33,32 +33,32 @@ import azurelinuxagent.logger as logger
 class TestHttpOperations(unittest.TestCase):
 
     def test_parse_url(self):
-        host, port, secure, relativeUrl = restutil._ParseUrl("http://abc.def/ghi#hash?jkl=mn")
+        host, port, secure, rel_uri = restutil._parse_url("http://abc.def/ghi#hash?jkl=mn")
         self.assertEquals("abc.def", host)
-        self.assertEquals("/ghi#hash?jkl=mn", relativeUrl)
+        self.assertEquals("/ghi#hash?jkl=mn", rel_uri)
 
-        host, port, secure, relativeUrl = restutil._ParseUrl("http://abc.def/")
+        host, port, secure, rel_uri = restutil._parse_url("http://abc.def/")
         self.assertEquals("abc.def", host)
-        self.assertEquals("/", relativeUrl)
+        self.assertEquals("/", rel_uri)
         self.assertEquals(False, secure)
 
-        host, port, secure, relativeUrl = restutil._ParseUrl("https://abc.def/ghi?jkl=mn")
+        host, port, secure, rel_uri = restutil._parse_url("https://abc.def/ghi?jkl=mn")
         self.assertEquals(True, secure)
 
-        host, port, secure, relativeUrl = restutil._ParseUrl("http://abc.def:80/")
+        host, port, secure, rel_uri = restutil._parse_url("http://abc.def:80/")
         self.assertEquals("abc.def", host)
 
     def _test_http_get(self):
-        resp = restutil.HttpGet("http://httpbin.org/get").read()
+        resp = restutil.http_get("http://httpbin.org/get").read()
         self.assertNotEquals(None, resp)
        
         msg = str(uuid.uuid4())
-        resp = restutil.HttpGet("http://httpbin.org/get", {"x-abc":msg}).read()
+        resp = restutil.http_get("http://httpbin.org/get", {"x-abc":msg}).read()
         self.assertNotEquals(None, resp)
         self.assertTrue(msg in resp)
 
     def _test_https_get(self):
-        resp = restutil.HttpGet("https://httpbin.org/get").read()
+        resp = restutil.http_get("https://httpbin.org/get").read()
         self.assertNotEquals(None, resp)
     
 if __name__ == '__main__':

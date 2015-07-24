@@ -22,7 +22,7 @@ import re
 import json
 import xml.dom.minidom
 import azurelinuxagent.logger as logger
-from azurelinuxagent.utils.textutil import GetNodeTextData
+from azurelinuxagent.utils.textutil import get_node_text
 import azurelinuxagent.utils.fileutil as fileutil
 
 class ProtocolError(Exception):
@@ -31,12 +31,12 @@ class ProtocolError(Exception):
 class ProtocolNotFound(Exception):
     pass
 
-def validata_param(name, val, expectedType):
+def validata_param(name, val, expected_type):
     if val is None:
         raise ProtocolError("Param {0} is None".format(name))
-    if not isinstance(val, expectedType):
+    if not isinstance(val, expected_type):
         raise ProtocolError("Param {0} type should be {1}".format(name,
-                                                                  expectedType))
+                                                                  expected_type))
 
 def set_properties(obj, data):
     validata_param("obj", obj, DataContract)
@@ -45,20 +45,20 @@ def set_properties(obj, data):
     props = vars(obj)
     for name, val in props.items():
         try:
-            newVal = data[name]
+            new_val = data[name]
         except KeyError:
             continue
 
-        if isinstance(newVal, dict):
-            set_properties(val, newVal)
-        elif isinstance(newVal, list):
+        if isinstance(new_val, dict):
+            set_properties(val, new_val)
+        elif isinstance(new_val, list):
             validata_param("list", val, DataContractList)
-            for dataItem in newVal:
-               item = val.itemType() 
-               set_properties(item, dataItem)
+            for data_item in new_val:
+               item = val.item_cls()
+               set_properties(item, data_item)
                val.append(item)
         else:
-            setattr(obj, name, newVal)
+            setattr(obj, name, new_val)
 
 def get_properties(obj):
     validata_param("obj", obj, DataContract)
@@ -73,8 +73,8 @@ def get_properties(obj):
                 continue
             data[name] = []
             for item in val:
-                dataItem = get_properties(item)
-                data[name].append(dataItem)
+                date_item = get_properties(item)
+                data[name].append(date_item)
         elif val is not None:
             data[name] = val
     return data
@@ -83,10 +83,10 @@ class DataContract(object):
     pass
 
 class DataContractList(list):
-    def __init__(self, itemType):
-        self.itemType = itemType
+    def __init__(self, item_cls):
+        self.item_cls = item_cls
 
-class VmInfo(DataContract):
+class VMInfo(DataContract):
     def __init__(self, subscriptionId=None, vmName=None):
         self.subscriptionId = subscriptionId
         self.vmName = vmName
@@ -125,7 +125,7 @@ class Extension(DataContract):
     def __init__(self, name=None):
         self.name = name
         self.properties = ExtensionProperties()
-        self.versionUris = DataContractList(ExtensionVersionUri)
+        self.version_uris = DataContractList(ExtensionVersionUri)
 
 class ExtensionList(DataContract):
     def __init__(self):
@@ -179,14 +179,14 @@ class ExtensionSubStatus(DataContract):
 
 class ExtensionStatus(DataContract):
     def __init__(self, name=None, configurationAppliedTime=None, operation=None,
-                 status=None, code=None, message=None, sequenceNumber=None):
+                 status=None, code=None, message=None, seq_no=None):
         self.name = name
         self.configurationAppliedTime = configurationAppliedTime
         self.operation = operation
         self.status = status
         self.code = code
         self.message = message
-        self.sequenceNumber = sequenceNumber
+        self.sequenceNumber = seq_no
         self.substatusList = DataContractList(ExtensionSubStatus)
 
 class ExtensionHandlerStatus(DataContract):
@@ -223,27 +223,27 @@ class Protocol(DataContract):
     def initialize(self):
         raise NotImplementedError()
 
-    def getVmInfo(self):
+    def get_vminfo(self):
         raise NotImplementedError()
 
-    def getCerts(self):
+    def get_certs(self):
         raise NotImplementedError()
 
-    def getExtensions(self):
-        raise NotImplementedError()
-  
-    def getExtensionPackages(self, extension):
-        raise NotImplementedError()
-    
-    def getInstanceMetadata(self):
+    def get_extensions(self):
         raise NotImplementedError()
 
-    def reportProvisionStatus(self, status):
+    def get_extension_pkgs(self, extension):
         raise NotImplementedError()
 
-    def reportStatus(self, status):
+    def get_instance_metadata(self):
         raise NotImplementedError()
 
-    def reportEvent(self, event):
+    def report_provision_status(self, status):
+        raise NotImplementedError()
+
+    def report_status(self, status):
+        raise NotImplementedError()
+
+    def report_event(self, event):
         raise NotImplementedError()
 

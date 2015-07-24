@@ -18,133 +18,135 @@
 import os
 import azurelinuxagent.logger as logger
 import azurelinuxagent.conf as conf
-from azurelinuxagent.event import AddExtensionEvent, WALAEventOperation
+from azurelinuxagent.event import add_event, WALAEventOperation
 from azurelinuxagent.exception import *
-from azurelinuxagent.utils.osutil import OSUtil
+from azurelinuxagent.utils.osutil import OSUTIL
 import azurelinuxagent.protocol as prot
 import azurelinuxagent.protocol.ovfenv as ovf
 import azurelinuxagent.utils.shellutil as shellutil
 import azurelinuxagent.utils.fileutil as fileutil
 
-CustomDataFile="CustomData"
+CUSTOM_DATA_FILE="CustomData"
 
 class ProvisionHandler(object):
 
     def process(self):
         #If provision is not enabled, return
-        if not conf.GetSwitch("Provisioning.Enabled", True):
-            logger.Info("Provisioning is disabled. Skip.")
+        if not conf.get_switch("Provisioning.Enabled", True):
+            logger.info("Provisioning is disabled. Skip.")
             return
 
-        provisioned = os.path.join(OSUtil.GetLibDir(), "provisioned")
+        provisioned = os.path.join(OSUTIL.get_lib_dir(), "provisioned")
         if os.path.isfile(provisioned):
             return
-        
-        logger.Info("Run provision handler.")
-        protocol = prot.Factory.getDefaultProtocol()
+
+        logger.info("run provision handler.")
+        protocol = prot.FACTORY.get_default_protocol()
         try:
-            status = prot.ProvisionStatus(status="NotReady", 
-                                          subStatus="ProvisionStatus")
-            protocol.reportProvisionStatus(status)
+            status = prot.ProvisionStatus(status="NotReady",
+                                          subStatus="Provision started")
+            protocol.report_provision_status(status)
 
             self.provision()
-            fileutil.SetFileContents(provisioned, "")
-            thumbprint = self.regenerateSshHostKey()
-            
-            logger.Info("Finished provisioning")
+            fileutil.write_file(provisioned, "")
+            thumbprint = self.reg_ssh_host_key()
+
+            logger.info("Finished provisioning")
             status = prot.ProvisionStatus(status="Ready")
             status.properties.certificateThumbprint = thumbprint
-            protocol.reportProvisionStatus(status)
+            protocol.report_provision_status(status)
 
-            AddExtensionEvent(name="WALA", isSuccess=True, message="",
+            add_event(name="WALA", is_success=True, message="",
                               op=WALAEventOperation.Provision)
         except ProvisionError as e:
-            logger.Error("Provision failed: {0}", e)
-            protocol.reportProvisionStatus(status="NotReady", subStatus=str(e))
-            AddExtensionEvent(name="WALA", isSuccess=False, message=str(e),
+            logger.error("Provision failed: {0}", e)
+            status = prot.ProvisionStatus(status="NotReady",
+                                          subStatus= str(e))
+            protocol.report_provision_status(status)
+            add_event(name="WALA", is_success=False, message=str(e),
                               op=WALAEventOperation.Provision)
 
-    
-    def regenerateSshHostKey(self):
-        keyPairType = conf.Get("Provisioning.SshHostKeyPairType", "rsa")
-        if conf.GetSwitch("Provisioning.RegenerateSshHostKeyPair"):
-            shellutil.Run("rm -f /etc/ssh/ssh_host_*key*")
-            shellutil.Run(("ssh-keygen -N '' -t {0} -f /etc/ssh/ssh_host_{1}_key"
-                           "").format(keyPairType, keyPairType))
-        thumbprint = self.getSshHostKeyThumbprint(keyPairType)
+
+    def reg_ssh_host_key(self):
+        keypair_type = conf.get("Provisioning.SshHostKeyPairType", "rsa")
+        if conf.get_switch("Provisioning.RegenerateSshHostKeyPair"):
+            shellutil.run("rm -f /etc/ssh/ssh_host_*key*")
+            shellutil.run(("ssh-keygen -N '' -t {0} -f /etc/ssh/ssh_host_{1}_key"
+                           "").format(keypair_type, keypair_type))
+        thumbprint = self.get_ssh_host_key_thumbprint(keypair_type)
         return thumbprint
 
-    def getSshHostKeyThumbprint(self, keyPairType):
-        cmd = "ssh-keygen -lf /etc/ssh/ssh_host_{0}_key.pub".format(keyPairType)
-        ret = shellutil.RunGetOutput(cmd)
+    def get_ssh_host_key_thumbprint(self, keypair_type):
+        cmd = "ssh-keygen -lf /etc/ssh/ssh_host_{0}_key.pub".format(keypair_type)
+        ret = shellutil.run_get_output(cmd)
         if ret[0] == 0:
             return ret[1].rstrip().split()[1].replace(':', '')
         else:
             raise ProvisionError(("Failed to generate ssh host key: "
                                   "ret={0}, out= {1}").format(ret[0], ret[1]))
-            
+
 
     def provision(self):
-        logger.Info("Copy ovf-env.xml.")
+        logger.info("Copy ovf-env.xml.")
         try:
-            ovfenv = ovf.CopyOvfEnv()
+            ovfenv = ovf.copy_ovf_env()
         except prot.ProtocolError as e:
             raise ProvisionError("Failed to copy ovf-env.xml: {0}".format(e))
 
-        password = ovfenv.getUserPassword()
-        ovfenv.clearUserPassword()
-        
-        logger.Info("Set host name.")
-        OSUtil.SetHostname(ovfenv.getComputerName())
-        logger.Info("Publish host name.")
-        OSUtil.PublishHostname(ovfenv.getComputerName())
-        logger.Info("Create user account.")
-        OSUtil.UpdateUserAccount(ovfenv.getUserName(), password)
+        password = ovfenv.get_user_password()
+        ovfenv.clear_user_password()
+
+        logger.info("Set host name.")
+        OSUTIL.set_hostname(ovfenv.get_computer_name())
+        logger.info("Publish host name.")
+        OSUTIL.publish_hostname(ovfenv.get_computer_name())
+        logger.info("Create user account.")
+        OSUTIL.set_user_account(ovfenv.get_username(), password)
 
         if password is not None:
-            userSalt = conf.GetSwitch("Provision.UseSalt", True)
-            saltType = conf.GetSwitch("Provision.SaltType", 6)
-            logger.Info("Set user password.")
-            OSUtil.ChangePassword(ovfenv.getUserName(), password, userSalt,
-                                      saltType)
+            use_salt = conf.get_switch("Provision.UseSalt", True)
+            salt_type = conf.get_switch("Provision.SaltType", 6)
+            logger.info("Set user password.")
+            OSUTIL.chpasswd(ovfenv.get_username(), password, use_salt,
+                            salt_type)
 
-        logger.Info("Configure sshd.")
-        OSUtil.ConfigSshd(ovfenv.getDisableSshPasswordAuthentication())
+        logger.info("Configure sshd.")
+        OSUTIL.conf_sshd(ovfenv.get_disable_ssh_password_auth())
 
         #Disable selinux temporary
-        sel = OSUtil.IsSelinuxRunning()
+        sel = OSUTIL.is_selinux_enforcing()
         if sel:
-            OSUtil.SetSelinuxEnforce(0)
-        
-        self.deploySshPublicKeys(ovfenv)
-        self.deploySshKeyPairs(ovfenv)
-        self.saveCustomData(ovfenv)
+            OSUTIL.set_selinux_enforce(0)
+
+        self.deploy_ssh_pubkeys(ovfenv)
+        self.deploy_ssh_keypairs(ovfenv)
+        self.save_customdata(ovfenv)
 
         if sel:
-            OSUtil.SetSelinuxEnforce(1)
+            OSUTIL.set_selinux_enforce(1)
 
-        OSUtil.RestartSshService()
+        OSUTIL.restart_ssh_service()
 
-        if conf.GetSwitch("Provisioning.DeleteRootPassword"):
-            OSUtil.DeleteRootPassword()
+        if conf.get_switch("Provisioning.DeleteRootPassword"):
+            OSUTIL.del_root_password()
 
 
-    def saveCustomData(self, ovfenv):
-        logger.Info("Save custom data")
-        customData = ovfenv.getCustomData()
-        if customData is None:
+    def save_customdata(self, ovfenv):
+        logger.info("Save custom data")
+        customdata = ovfenv.get_customdata()
+        if customdata is None:
             return
-        libDir = OSUtil.GetLibDir()
-        fileutil.SetFileContents(os.path.join(libDir, CustomDataFile), 
-                                 OSUtil.TranslateCustomData(customData))
+        lib_dir = OSUTIL.get_lib_dir()
+        fileutil.write_file(os.path.join(lib_dir, CUSTOM_DATA_FILE),
+                            OSUTIL.decode_customdata(customdata))
 
-    def deploySshPublicKeys(self, ovfenv):
-        for thumbprint, path in ovfenv.getSshPublicKeys():
-            logger.Info("Deploy ssh public key.")
-            OSUtil.DeploySshPublicKey(ovfenv.getUserName(), thumbprint, path)
-    
-    def deploySshKeyPairs(self, ovfenv):
-        for thumbprint, path in ovfenv.getSshKeyPairs():
-            logger.Info("Deploy ssh key pairs.")
-            OSUtil.DeploySshKeyPair(ovfenv.getUserName(), thumbprint, path)
-   
+    def deploy_ssh_pubkeys(self, ovfenv):
+        for thumbprint, path in ovfenv.get_ssh_pubkeys():
+            logger.info("Deploy ssh public key.")
+            OSUTIL.deploy_ssh_pubkey(ovfenv.get_username(), thumbprint, path)
+
+    def deploy_ssh_keypairs(self, ovfenv):
+        for thumbprint, path in ovfenv.get_ssh_keypairs():
+            logger.info("Deploy ssh key pairs.")
+            OSUTIL.deploy_ssh_keypair(ovfenv.get_username(), thumbprint, path)
+

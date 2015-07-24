@@ -26,9 +26,9 @@ import threading
 import platform
 import azurelinuxagent.logger as logger
 import azurelinuxagent.protocol as prot
-from azurelinuxagent.metadata import DistroName, DistroVersion, DistroCodeName,\
-                                     GuestAgentVersion
-from azurelinuxagent.utils.osutil import OSUtil
+from azurelinuxagent.metadata import DISTRO_NAME, DISTRO_VERSION, DISTRO_CODE_NAME,\
+                                     AGENT_VERSION
+from azurelinuxagent.utils.osutil import OSUTIL
 
 class EventError(Exception):
     pass
@@ -42,108 +42,108 @@ class WALAEventOperation:
     Enable = "Enable"
     Download = "Download"
     Upgrade = "Upgrade"
-    Update = "Update"           
+    Update = "Update"
     ActivateResourceDisk="ActivateResourceDisk"
     UnhandledError="UnhandledError"
-               		           
+
 class EventMonitor(object):
     def __init__(self):
-        self.sysInfo = []
-        self.eventDir = os.path.join(OSUtil.GetLibDir(), "events")
-        self.initSystemInfo()
+        self.sysinfo = []
+        self.event_dir = os.path.join(OSUTIL.get_lib_dir(), "events")
+        self.init_sysinfo()
 
-    def initSystemInfo(self):
-        osversion = "{0}:{1}-{2}-{3}:{4}".format(platform.system(), 
-                                                 DistroName,
-                                                 DistroVersion,
-                                                 DistroCodeName,
+    def init_sysinfo(self):
+        osversion = "{0}:{1}-{2}-{3}:{4}".format(platform.system(),
+                                                 DISTRO_NAME,
+                                                 DISTRO_VERSION,
+                                                 DISTRO_CODE_NAME,
                                                  platform.release())
-        self.sysInfo.append(prot.TelemetryEventParam("OSVersion", osversion))
-        self.sysInfo.append(prot.TelemetryEventParam("GAVersion", 
-                                                     GuestAgentVersion))
-        self.sysInfo.append(prot.TelemetryEventParam("RAM", 
-                                                     OSUtil.GetTotalMemory()))
-        self.sysInfo.append(prot.TelemetryEventParam("Processors", 
-                                                     OSUtil.GetProcessorCores()))
-        protocol = prot.Factory.getDefaultProtocol()
-        metadata = protocol.getInstanceMetadata()
-        self.sysInfo.append(prot.TelemetryEventParam("TenantName",
+        self.sysinfo.append(prot.TelemetryEventParam("OSVersion", osversion))
+        self.sysinfo.append(prot.TelemetryEventParam("GAVersion",
+                                                     AGENT_VERSION))
+        self.sysinfo.append(prot.TelemetryEventParam("RAM",
+                                                     OSUTIL.get_total_mem()))
+        self.sysinfo.append(prot.TelemetryEventParam("Processors",
+                                                     OSUTIL.get_processor_cores()))
+        protocol = prot.FACTORY.get_default_protocol()
+        metadata = protocol.get_instance_metadata()
+        self.sysinfo.append(prot.TelemetryEventParam("TenantName",
                                                      metadata.deploymentName))
-        self.sysInfo.append(prot.TelemetryEventParam("RoleName",
+        self.sysinfo.append(prot.TelemetryEventParam("RoleName",
                                                      metadata.roleName))
-        self.sysInfo.append(prot.TelemetryEventParam("RoleInstanceName",
+        self.sysinfo.append(prot.TelemetryEventParam("RoleInstanceName",
                                                      metadata.roleInstanceId))
-        self.sysInfo.append(prot.TelemetryEventParam("ContainerId",
+        self.sysinfo.append(prot.TelemetryEventParam("ContainerId",
                                                      metadata.containerId))
 
-    def startEventsLoop(self):
-        eventThread = threading.Thread(target = self.eventsLoop)
-        eventThread.setDaemon(True)
-        eventThread.start()
+    def start(self):
+        event_thread = threading.Thread(target = self.run)
+        event_thread.setDaemon(True)
+        event_thread.start()
 
-    def collectEvent(self, eventFilePath):
+    def collect_event(self, evt_file_name):
         try:
-            with open(eventFilePath, "rb") as hfile:
+            with open(evt_file_name, "rb") as evt_file:
             #if fail to open or delete the file, throw exception
-                jsonStr = hfile.read().decode("utf-8",'ignore')
-            os.remove(eventFilePath)
-            return jsonStr
+                json_str = evt_file.read().decode("utf-8",'ignore')
+            os.remove(evt_file_name)
+            return json_str
         except IOError as e:
-            msg = "Failed to process {0}, {1}".format(eventFilePath, e)
+            msg = "Failed to process {0}, {1}".format(evt_file_name, e)
             raise EventError(msg)
 
-    def collectAndSendEvents(self):
-        eventList = prot.TelemetryEventList()
-        eventFiles = os.listdir(self.eventDir)
-        for eventFile in eventFiles:
-            if not eventFile.endswith(".tld"):
+    def collect_and_send_events(self):
+        event_list = prot.TelemetryEventList()
+        event_files = os.listdir(self.event_dir)
+        for event_file in event_files:
+            if not event_file.endswith(".tld"):
                 continue
-            eventFilePath = os.path.join(self.eventDir, eventFile)
+            event_file_path = os.path.join(self.event_dir, event_file)
             try:
-                dataStr = self.collectEvent(eventFilePath)
+                data_str = self.collect_event(event_file_path)
             except EventError as e:
-                logger.Error("{0}", e)
+                logger.error("{0}", e)
                 continue
             try:
-                data = json.loads(dataStr)
+                data = json.loads(data_str)
             except ValueError as e:
-                logger.Verbose(dataStr)
-                logger.Error("Failed to decode json event file{0}", e)
+                logger.verb(data_str)
+                logger.error("Failed to decode json event file{0}", e)
                 continue
 
             event = prot.TelemetryEvent()
             prot.set_properties(event, data)
-            event.parameters.extend(self.sysInfo)
-            eventList.events.append(event)
-        if len(eventList.events) == 0:
+            event.parameters.extend(self.sysinfo)
+            event_list.events.append(event)
+        if len(event_list.events) == 0:
             return
 
         try:
-            protocol = prot.Factory.getDefaultProtocol()
-            protocol.reportEvent(eventList)
+            protocol = prot.FACTORY.get_default_protocol()
+            protocol.report_event(event_list)
         except prot.ProtocolError as e:
-            logger.Error("{0}", e)
+            logger.error("{0}", e)
 
-    def eventsLoop(self):
-        lastHeatbeat = datetime.datetime.min
+    def run(self):
+        last_heartbeat = datetime.datetime.min
         period = datetime.timedelta(hours = 12)
         while(True):
-            if (datetime.datetime.now()-lastHeatbeat) > period:
-                lastHeatbeat = datetime.datetime.now()
-                AddExtensionEvent(op=WALAEventOperation.HeartBeat,
-                                  name="WALA",isSuccess=True)
-            self.collectAndSendEvents()
+            if (datetime.datetime.now()-last_heartbeat) > period:
+                last_heartbeat = datetime.datetime.now()
+                add_event(op=WALAEventOperation.HeartBeat,
+                                  name="WALA",is_success=True)
+            self.collect_and_send_events()
             time.sleep(60)
-        
-def SaveEvent(data):
-    eventfolder = os.path.join(OSUtil.GetLibDir(), 'events')
-    if not os.path.exists(eventfolder):
-        os.mkdir(eventfolder)
-        os.chmod(eventfolder,0700)
-    if len(os.listdir(eventfolder)) > 1000:
-        raise EventError("Too many files under: {0}", eventfolder)
 
-    filename = os.path.join(eventfolder, str(int(time.time()*1000000)))
+def save_event(data):
+    event_dir = os.path.join(OSUTIL.get_lib_dir(), 'events')
+    if not os.path.exists(event_dir):
+        os.mkdir(event_dir)
+        os.chmod(event_dir,0700)
+    if len(os.listdir(event_dir)) > 1000:
+        raise EventError("Too many files under: {0}", event_dir)
+
+    filename = os.path.join(event_dir, str(int(time.time()*1000000)))
     try:
         with open(filename+".tmp",'wb+') as hfile:
             hfile.write(data.encode("utf-8"))
@@ -152,38 +152,38 @@ def SaveEvent(data):
         raise EventError("Failed to write events to file:{0}", e)
 
 
-def AddExtensionEvent(name, op, isSuccess, duration=0, version="1.0", 
-                      message="", evtType="", isInternal=False):
+def add_event(name, op, is_success, duration=0, version="1.0",
+              message="", evt_type="", is_internal=False):
     event = prot.TelemetryEvent(1, "69B669B9-4AF8-4C50-BDC4-6006FA76E975")
-    event.parameters.append(prot.TelemetryEventParam('Name', name)) 
-    event.parameters.append(prot.TelemetryEventParam('Version', version)) 
-    event.parameters.append(prot.TelemetryEventParam('IsInternal', isInternal)) 
-    event.parameters.append(prot.TelemetryEventParam('Operation', op)) 
-    event.parameters.append(prot.TelemetryEventParam('OperationSuccess', 
-                                                     isSuccess)) 
-    event.parameters.append(prot.TelemetryEventParam('Message', message)) 
-    event.parameters.append(prot.TelemetryEventParam('Duration', duration)) 
-    event.parameters.append(prot.TelemetryEventParam('ExtensionType', evtType)) 
-    
+    event.parameters.append(prot.TelemetryEventParam('Name', name))
+    event.parameters.append(prot.TelemetryEventParam('Version', version))
+    event.parameters.append(prot.TelemetryEventParam('IsInternal', is_internal))
+    event.parameters.append(prot.TelemetryEventParam('Operation', op))
+    event.parameters.append(prot.TelemetryEventParam('OperationSuccess',
+                                                     is_success))
+    event.parameters.append(prot.TelemetryEventParam('Message', message))
+    event.parameters.append(prot.TelemetryEventParam('Duration', duration))
+    event.parameters.append(prot.TelemetryEventParam('ExtensionType', evt_type))
+
     data = prot.get_properties(event)
     try:
-        SaveEvent(json.dumps(data))
+        save_event(json.dumps(data))
     except EventError as e:
-        logger.Error("{0}", e)
+        logger.error("{0}", e)
 
-def DumpUnhandledError(name):
+def dump_unhandled_err(name):
     if hasattr(sys, 'last_type') and hasattr(sys, 'last_value') and \
             hasattr(sys, 'last_traceback'):
         last_type = getattr(sys, 'last_type')
         last_value = getattr(sys, 'last_value')
         last_traceback = getattr(sys, 'last_traceback')
-        error = traceback.format_exception(last_type, last_value, 
+        error = traceback.format_exception(last_type, last_value,
                                            last_traceback)
         message= "".join(error)
-        logger.Error(message)
-        AddExtensionEvent(name, isSuccess=False, message=message,
+        logger.error(message)
+        add_event(name, is_success=False, message=message,
                           op=WALAEventOperation.UnhandledError)
 
-def EnableUnhandledErrorDump(name):
-    atexit.register(DumpUnhandledError, name)
+def enable_unhandled_err_dump(name):
+    atexit.register(dump_unhandled_err, name)
 

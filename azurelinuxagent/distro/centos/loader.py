@@ -17,9 +17,9 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
-from azurelinuxagent.metadata import DistroName, DistroVersion
+from azurelinuxagent.metadata import DISTRO_NAME, DISTRO_VERSION
 import azurelinuxagent.distro.redhat.loader as redhat
 
-def GetOSUtil():
-    return redhat.GetOSUtil()
-    
+def get_osutil():
+    return redhat.get_osutil()
+

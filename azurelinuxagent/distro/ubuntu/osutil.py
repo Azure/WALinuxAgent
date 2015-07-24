@@ -35,31 +35,31 @@ class Ubuntu14xOSUtil(DefaultOSUtil):
     def __init__(self):
         super(Ubuntu14xOSUtil, self).__init__()
 
-    def StartNetwork(self):
-        return shellutil.Run("service networking start", chk_err=False)
-   
-    def StopAgentService(self):
-        return shellutil.Run("service walinuxagent stop", chk_err=False)
+    def start_network(self):
+        return shellutil.run("service networking start", chk_err=False)
 
-    def StartAgentService(self):
-        return shellutil.Run("service walinuxagent start", chk_err=False)
+    def stop_agent_service(self):
+        return shellutil.run("service walinuxagent stop", chk_err=False)
+
+    def start_agent_service(self):
+        return shellutil.run("service walinuxagent start", chk_err=False)
 
 class Ubuntu1204OSUtil(Ubuntu14xOSUtil):
     def __init__(self):
         super(Ubuntu1204OSUtil, self).__init__()
 
     #Override
-    def GetDhcpProcessId(self):
-        ret= shellutil.RunGetOutput("pidof dhclient3")
+    def get_dhcp_pid(self):
+        ret= shellutil.run_get_output("pidof dhclient3")
         return ret[1] if ret[0] == 0 else None
 
 class UbuntuOSUtil(Ubuntu14xOSUtil):
     def __init__(self):
         super(UbuntuOSUtil, self).__init__()
 
-    def RegisterAgentService(self):
-        return shellutil.Run("systemctl unmask walinuxagent", chk_err=False)
-    
-    def UnregisterAgentService(self):
-        return shellutil.Run("systemctl mask walinuxagent", chk_err=False)
+    def register_agent_service(self):
+        return shellutil.run("systemctl unmask walinuxagent", chk_err=False)
+
+    def unregister_agent_service(self):
+        return shellutil.run("systemctl mask walinuxagent", chk_err=False)
 

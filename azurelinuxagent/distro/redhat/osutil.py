@@ -30,54 +30,54 @@ import azurelinuxagent.logger as logger
 import azurelinuxagent.utils.fileutil as fileutil
 import azurelinuxagent.utils.shellutil as shellutil
 import azurelinuxagent.utils.textutil as textutil
-from azurelinuxagent.distro.default.osutil import OSUtil, OSUtilError
+from azurelinuxagent.distro.default.osutil import DefaultOSUtil, OSUtilError
 
-class Redhat6xOSUtil(OSUtil):
+class Redhat6xOSUtil(DefaultOSUtil):
     def __init__(self):
         super(Redhat6xOSUtil, self).__init__()
-        self.sshdConfigPath = '/etc/ssh/sshd_config'
-        self.opensslCmd = '/usr/bin/openssl'
-        self.configPath = '/etc/waagent.conf'
+        self.sshd_conf_file_path = '/etc/ssh/sshd_config'
+        self.openssl_cmd = '/usr/bin/openssl'
+        self.conf_file_path = '/etc/waagent.conf'
         self.selinux=None
 
-    def StartNetwork(self):
-        return shellutil.Run("/sbin/service networking start", chk_err=False)
+    def start_network(self):
+        return shellutil.run("/sbin/service networking start", chk_err=False)
 
-    def RestartSshService(self):
-        return shellutil.Run("/sbin/service sshd condrestart", chk_err=False)
+    def restart_ssh_service(self):
+        return shellutil.run("/sbin/service sshd condrestart", chk_err=False)
 
-    def StopAgentService(self):
-        return shellutil.Run("/sbin/service waagent stop", chk_err=False)
+    def stop_agent_service(self):
+        return shellutil.run("/sbin/service waagent stop", chk_err=False)
 
-    def StartAgentService(self):
-        return shellutil.Run("/sbin/service waagent start", chk_err=False)
+    def start_agent_service(self):
+        return shellutil.run("/sbin/service waagent start", chk_err=False)
 
-    def RegisterAgentService(self):
-        return shellutil.Run("chkconfig --add waagent", chk_err=False)
-    
-    def UnregisterAgentService(self):
-        return shellutil.Run("chkconfig --del waagent", chk_err=False)
+    def register_agent_service(self):
+        return shellutil.run("chkconfig --add waagent", chk_err=False)
 
-    def RsaPublicKeyToSshRsa(self, publicKey):
-        lines = publicKey.split("\n")
+    def unregister_agent_service(self):
+        return shellutil.run("chkconfig --del waagent", chk_err=False)
+
+    def asn1_to_ssh_rsa(self, pubkey):
+        lines = pubkey.split("\n")
         lines = filter(lambda x : not x.startswith("----"), lines)
-        base64Encoded = "".join(lines)
+        base64_encoded = "".join(lines)
         try:
             #TODO remove pyasn1 dependency
             from pyasn1.codec.der import decoder as der_decoder
-            derEncoded = base64.b64decode(base64Encoded)
-            derEncoded = der_decoder.decode(derEncoded)[0][1]
-            k = der_decoder.decode(textutil.BitsToString(derEncoded))[0]
+            der_encoded = base64.b64decode(base64_encoded)
+            der_encoded = der_decoder.decode(der_encoded)[0][1]
+            k = der_decoder.decode(textutil.bits_to_str(der_encoded))[0]
             n=k[0]
             e=k[1]
             keydata=""
             keydata += struct.pack('>I',len("ssh-rsa"))
             keydata += "ssh-rsa"
-            keydata += struct.pack('>I',len(textutil.NumberToBytes(e)))
-            keydata += textutil.NumberToBytes(e)
-            keydata += struct.pack('>I',len(textutil.NumberToBytes(n)) + 1)
+            keydata += struct.pack('>I',len(textutil.num_to_bytes(e)))
+            keydata += textutil.num_to_bytes(e)
+            keydata += struct.pack('>I',len(textutil.num_to_bytes(n)) + 1)
             keydata += "\0"
-            keydata += textutil.NumberToBytes(n)
+            keydata += textutil.num_to_bytes(n)
             return "ssh-rsa " + base64.b64encode(keydata) + "\n"
         except ImportError as e:
             raise OSUtilError("Failed to load pyasn1.codec.der")
@@ -85,37 +85,37 @@ class Redhat6xOSUtil(OSUtil):
             raise OSUtilError(("Failed to convert public key: {0} {1}"
                                "").format(type(e).__name__, e))
 
-    def OpenSslToOpenSsh(self, inputFile, outputFile):
-        publicKey = fileutil.GetFileContents(inputFile)
-        sshRsaPublicKey = self.RsaPublicKeyToSshRsa(publicKey)
-        fileutil.SetFileContents(outputFile, sshRsaPublicKey)
+    def openssl_to_openssh(self, input_file, output_file):
+        pubkey = fileutil.read_file(input_file)
+        ssh_rsa_pubkey = self.asn1_to_ssh_rsa(pubkey)
+        fileutil.write_file(output_file, ssh_rsa_pubkey)
 
     #Override
-    def GetDhcpProcessId(self):
-        ret= shellutil.RunGetOutput("pidof dhclient")
+    def get_dhcp_pid(self):
+        ret= shellutil.run_get_output("pidof dhclient")
         return ret[1] if ret[0] == 0 else None
 
 class RedhatOSUtil(Redhat6xOSUtil):
     def __init__(self):
         super(RedhatOSUtil, self).__init__()
 
-    def SetHostname(self, hostname):
-        super(RedhatOSUtil, self).SetHostname(hostname)
-        fileutil.UpdateConfigFile('/etc/sysconfig/network', 
+    def set_hostname(self, hostname):
+        super(RedhatOSUtil, self).set_hostname(hostname)
+        fileutil.update_conf_file('/etc/sysconfig/network',
                                   'HOSTNAME',
                                   'HOSTNAME={0}'.format(hostname))
-    
-    def SetDhcpHostname(self, hostname):
-        ifname = self.GetInterfaceName()
+
+    def set_dhcp_hostname(self, hostname):
+        ifname = self.get_if_name()
         filepath = "/etc/sysconfig/network-scripts/ifcfg-{0}".format(ifname)
-        fileutil.UpdateConfigFile(filepath,
+        fileutil.update_conf_file(filepath,
                                   'DHCP_HOSTNAME',
                                   'DHCP_HOSTNAME={0}'.format(hostname))
 
-    def RegisterAgentService(self):
-        return shellutil.Run("systemctl enable waagent", chk_err=False)
-    
-    def UnregisterAgentService(self):
-        return shellutil.Run("systemctl disable waagent", chk_err=False)
+    def register_agent_service(self):
+        return shellutil.run("systemctl enable waagent", chk_err=False)
+
+    def unregister_agent_service(self):
+        return shellutil.run("systemctl disable waagent", chk_err=False)
 
 

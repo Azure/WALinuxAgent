@@ -26,23 +26,14 @@ import os
 import azurelinuxagent.utils.shellutil as shellutil
 import test
 
-class TestRunCmd(unittest.TestCase):
+class TestrunCmd(unittest.TestCase):
     def test_run_get_output(self):
-        output = shellutil.RunGetOutput("ls /")
+        output = shellutil.run_get_output("ls /")
         self.assertNotEquals(None, output)
         self.assertEquals(0, output[0])
 
-        err = shellutil.RunGetOutput("ls /not-exists")
+        err = shellutil.run_get_output("ls /not-exists")
         self.assertNotEquals(0, err[0])
-
-    def test_run_send_stdin(self):
-        test_sh = os.path.join(env.test_root, "read_stdin.sh")
-        
-        output = shellutil.RunSendStdin(test_sh, "y")
-        self.assertEquals(0, output[0])
-        
-        output = shellutil.RunSendStdin(test_sh, "n")
-        self.assertEquals(1, output[0])
-    
+            
 if __name__ == '__main__':
     unittest.main()

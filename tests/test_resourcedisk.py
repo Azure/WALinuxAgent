@@ -23,11 +23,11 @@ from tests.tools import *
 import unittest
 import azurelinuxagent.distro.default.resourceDisk as rdh
 import azurelinuxagent.logger as logger
-from azurelinuxagent.utils.osutil import OSUtil
+from azurelinuxagent.utils.osutil import OSUTIL
 
 #logger.LoggerInit("/dev/null", "/dev/stdout")
 
-MockGPTOutput="""
+gpt_output_sample="""
 Model: Msft Virtual Disk (scsi)
 Disk /dev/sda: 32.2GB
 Sector size (logical/physical): 512B/4096B
@@ -40,24 +40,24 @@ Number  Start   End     Size    Type     File system  Flags
 
 class TestResourceDisk(unittest.TestCase):
 
-    @Mockup(rdh.OSUtil, 'DeviceForIdePort', MockFunc(retval='foo'))
-    @Mockup(rdh.shellutil, 'RunGetOutput', MockFunc(retval=(0, MockGPTOutput)))
-    @Mockup(rdh.shellutil, 'Run', MockFunc(retval=0))
+    @mock(rdh.OSUTIL, 'device_for_ide_port', MockFunc(retval='foo'))
+    @mock(rdh.shellutil, 'run_get_output', MockFunc(retval=(0, gpt_output_sample)))
+    @mock(rdh.shellutil, 'run', MockFunc(retval=0))
     def test_mountGPT(self):
         handler = rdh.ResourceDiskHandler()
-        handler.mountResourceDisk('/tmp/foo', 'ext4')
+        handler.mount_resource_disk('/tmp/foo', 'ext4')
 
-    @Mockup(rdh.OSUtil, 'DeviceForIdePort', MockFunc(retval='foo'))
-    @Mockup(rdh.shellutil, 'RunGetOutput', MockFunc(retval=(0, "")))
-    @Mockup(rdh.shellutil, 'Run', MockFunc(retval=0))
+    @mock(rdh.OSUTIL, 'device_for_ide_port', MockFunc(retval='foo'))
+    @mock(rdh.shellutil, 'run_get_output', MockFunc(retval=(0, "")))
+    @mock(rdh.shellutil, 'run', MockFunc(retval=0))
     def test_mountMBR(self):
         handler = rdh.ResourceDiskHandler()
-        handler.mountResourceDisk('/tmp/foo', 'ext4')
+        handler.mount_resource_disk('/tmp/foo', 'ext4')
 
-    @Mockup(rdh.shellutil, 'Run', MockFunc(retval=0))
+    @mock(rdh.shellutil, 'run', MockFunc(retval=0))
     def test_createSwapSpace(self):
         handler = rdh.ResourceDiskHandler()
-        handler.createSwapSpace('/tmp/foo', 512)
+        handler.create_swap_space('/tmp/foo', 512)
 
 if __name__ == '__main__':
     unittest.main()

@@ -17,11 +17,11 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
-from azurelinuxagent.metadata import DistroName, DistroVersion
+from azurelinuxagent.metadata import DISTRO_NAME, DISTRO_VERSION
 
-def GetOSUtil():
+def get_osutil():
     from azurelinuxagent.distro.redhat.osutil import Redhat6xOSUtil, RedhatOSUtil
-    if DistroVersion < "7":
+    if DISTRO_VERSION < "7":
         return Redhat6xOSUtil()
     else:
         return RedhatOSUtil()

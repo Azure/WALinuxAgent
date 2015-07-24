@@ -18,9 +18,11 @@
 #
 
 """
-Load OSUtil implementation from azurelinuxagent.distro
+Handler handles different tasks like, provisioning, deprovisioning etc.
+The handlers could be extended for different distros. The default 
+implementation is under azurelinuxagent.distros.default
 """
 import azurelinuxagent.distro.loader as loader
 
-Handlers = loader.GetHandlers()
+HANDLERS = loader.get_handlers()
 

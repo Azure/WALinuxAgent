@@ -18,11 +18,11 @@
 #
 
 import os
-from azurelinuxagent.metadata import GuestAgentName, GuestAgentVersion, \
-                                     GuestAgentDescription, \
-                                     DistroName, DistroVersion, DistroFullName
+from azurelinuxagent.metadata import AGENT_NAME, AGENT_VERSION, \
+                                     AGENT_DESCRIPTION, \
+                                     DISTRO_NAME, DISTRO_VERSION, DISTRO_FULL_NAME
 
-from azurelinuxagent.utils.osutil import OSUtil
+from azurelinuxagent.utils.osutil import OSUTIL
 import azurelinuxagent.agent as agent
 import setuptools
 from setuptools import find_packages
@@ -103,9 +103,9 @@ class install(_install):
 
     def initialize_options(self):
         _install.initialize_options(self)
-        self.lnx_distro = DistroName
-        self.lnx_distro_version = DistroVersion
-        self.lnx_distro_fullname = DistroFullName
+        self.lnx_distro = DISTRO_NAME
+        self.lnx_distro_version = DISTRO_VERSION
+        self.lnx_distro_fullname = DISTRO_FULL_NAME
         self.register_service = False
         
     def finalize_options(self):
@@ -118,11 +118,11 @@ class install(_install):
     def run(self):
         _install.run(self)
         if self.register_service:
-            agent.RegisterService()
+            agent.register_service()
 
-setuptools.setup(name=GuestAgentName,
-                 version=GuestAgentVersion,
-                 long_description=GuestAgentDescription,
+setuptools.setup(name=AGENT_NAME,
+                 version=AGENT_VERSION,
+                 long_description=AGENT_DESCRIPTION,
                  author= 'Yue Zhang, Stephen Zarkos, Eric Gable',
                  author_email = 'walinuxagent@microsoft.com',
                  platforms = 'Linux',

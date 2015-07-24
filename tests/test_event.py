@@ -29,25 +29,25 @@ import azurelinuxagent.event as evt
 import azurelinuxagent.protocol as prot
 
 class MockProtocol(object):
-    def getInstanceMetadata(self): 
+    def get_instance_metadata(self): 
         return prot.InstanceMetadata(deploymentName='foo', roleName='foo',
                                      roleInstanceId='foo', containerId='foo')
-    def reportEvent(self, data): pass
+    def report_event(self, data): pass
 
 class TestEvent(unittest.TestCase):
     def test_save(self):
         if not os.path.exists("/tmp/events"):
             os.mkdir("/tmp/events")
-        evt.AddExtensionEvent("Test", "Test", True)
+        evt.add_event("Test", "Test", True)
         eventsFile = os.listdir("/tmp/events")
         self.assertNotEquals(0, len(eventsFile))
         shutil.rmtree("/tmp/events")
 
-    @Mockup(evt.prot.Factory, 'getDefaultProtocol', 
-            MockFunc(retval=MockProtocol()))
-    def test_initSystemInfo(self):
+    @mock(evt.prot.FACTORY, 'get_default_protocol', 
+          MockFunc(retval=MockProtocol()))
+    def test_init_sys_info(self):
         monitor = evt.EventMonitor()
-        self.assertNotEquals(0, len(monitor.sysInfo))
+        self.assertNotEquals(0, len(monitor.sysinfo))
         
 if __name__ == '__main__':
     unittest.main()

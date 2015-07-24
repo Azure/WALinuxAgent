@@ -22,22 +22,22 @@ import azurelinuxagent.logger as logger
 import azurelinuxagent.utils.fileutil as fileutil
 from azurelinuxagent.distro.default.deprovision import DeprovisionHandler, DeprovisionAction
 
-def DeleteResolve():
+def del_resolv():
     if os.path.realpath('/etc/resolv.conf') != '/run/resolvconf/resolv.conf':
-        logger.Info("resolvconf is not configured. Removing /etc/resolv.conf")
-        fileutil.RemoveFiles('/etc/resolv.conf')
+        logger.info("resolvconf is not configured. Removing /etc/resolv.conf")
+        fileutil.rm_files('/etc/resolv.conf')
     else:
-        logger.Info("resolvconf is enabled; leaving /etc/resolv.conf intact")
-        fileutil.RemoveFiles('/etc/resolvconf/resolv.conf.d/tail',
+        logger.info("resolvconf is enabled; leaving /etc/resolv.conf intact")
+        fileutil.rm_files('/etc/resolvconf/resolv.conf.d/tail',
                              '/etc/resolvconf/resolv.conf.d/originial')
 
 
 class UbuntuDeprovisionHandler(DeprovisionHandler):
-    def setUp(self, deluser):
-        warnings, actions = super(UbuntuDeprovisionHandler, self).setUp(deluser)
+    def setup(self, deluser):
+        warnings, actions = super(UbuntuDeprovisionHandler, self).setup(deluser)
         warnings.append("WARNING! Nameserver configuration in "
                         "/etc/resolvconf/resolv.conf.d/{tail,originial} "
                         "will be deleted.")
-        actions.append(DeprovisionAction(DeleteResolve))
+        actions.append(DeprovisionAction(del_resolv))
         return warnings, actions
 

@@ -28,14 +28,14 @@ import time
 import azurelinuxagent.utils.fileutil as fileutil
 import azurelinuxagent.utils.shellutil as shellutil
 import azurelinuxagent.conf as conf
-from azurelinuxagent.utils.osutil import OSUtil
+from azurelinuxagent.utils.osutil import OSUTIL
 import test
 
 class TestOSUtil(unittest.TestCase):
     def test_current_distro(self):
-        self.assertNotEquals(None, OSUtil)
+        self.assertNotEquals(None, OSUTIL)
 
-MountlistSample="""\
+mount_list_sample="""\
 /dev/sda1 on / type ext4 (rw)
 proc on /proc type proc (rw)
 sysfs on /sys type sysfs (rw)
@@ -48,29 +48,29 @@ none on /proc/sys/fs/binfmt_misc type binfmt_misc (rw)
 class TestCurrOS(unittest.TestCase):
 #class TestCurrOS(object):
     def test_get_paths(self):
-        self.assertNotEquals(None, OSUtil.GetHome())
-        self.assertNotEquals(None, OSUtil.GetLibDir())
-        self.assertNotEquals(None, OSUtil.GetAgentPidPath())
-        self.assertNotEquals(None, OSUtil.GetConfigurationPath())
-        self.assertNotEquals(None, OSUtil.GetDvdMountPoint())
-        self.assertNotEquals(None, OSUtil.GetOvfEnvPathOnDvd())
+        self.assertNotEquals(None, OSUTIL.get_home())
+        self.assertNotEquals(None, OSUTIL.get_lib_dir())
+        self.assertNotEquals(None, OSUTIL.get_agent_pid_file_path())
+        self.assertNotEquals(None, OSUTIL.get_conf_file_path())
+        self.assertNotEquals(None, OSUTIL.get_dvd_mount_point())
+        self.assertNotEquals(None, OSUTIL.get_ovf_env_file_path_on_dvd())
 
-    @Mockup(shellutil, 'RunGetOutput', MockFunc(retval=[0, '']))
-    @Mockup(shellutil, 'RunSendStdin', MockFunc(retval=[0, '']))
-    @Mockup(fileutil, 'SetFileContents', MockFunc())
-    @Mockup(fileutil, 'AppendFileContents', MockFunc())
-    @Mockup(fileutil, 'GetFileContents', MockFunc(retval=''))
-    @Mockup(fileutil, 'ChangeMod', MockFunc())
+    @mock(fileutil, 'write_file', MockFunc())
+    @mock(fileutil, 'append_file', MockFunc())
+    @mock(fileutil, 'chmod', MockFunc())
+    @mock(fileutil, 'read_file', MockFunc(retval=''))
+    @mock(shellutil, 'run', MockFunc())
+    @mock(shellutil, 'run_get_output', MockFunc(retval=[0, '']))
     def test_update_user_account(self):
-        OSUtil.UpdateUserAccount('api', 'api')
-        OSUtil.DeleteAccount('api')
+        OSUTIL.set_user_account('api', 'api')
+        OSUTIL.del_account('api')
 
-    @Mockup(fileutil, 'GetFileContents', MockFunc(retval='root::::'))
-    @Mockup(fileutil, 'SetFileContents', MockFunc())
+    @mock(fileutil, 'read_file', MockFunc(retval='root::::'))
+    @mock(fileutil, 'write_file', MockFunc())
     def test_delete_root_password(self):
-        OSUtil.DeleteRootPassword()
+        OSUTIL.del_root_password()
         self.assertEquals('root:*LOCK*:14600::::::',
-                          fileutil.SetFileContents.args[1])
+                          fileutil.write_file.args[1])
  
     def test_cert_operation(self):
         if os.path.isfile('/tmp/test.prv'):
@@ -81,84 +81,84 @@ class TestCurrOS(unittest.TestCase):
             os.remove('/tmp/test.crt')
         shutil.copyfile(os.path.join(env.test_root, 'test.crt'), 
                         '/tmp/test.crt')
-        pub1 = OSUtil.GetPubKeyFromPrv('/tmp/test.prv')
-        pub2 = OSUtil.GetPubKeyFromCrt('/tmp/test.crt')
+        pub1 = OSUTIL.get_pubkey_from_prv('/tmp/test.prv')
+        pub2 = OSUTIL.get_pubkey_from_crt('/tmp/test.crt')
         self.assertEquals(pub1, pub2)
-        thumbprint = OSUtil.GetThumbprintFromCrt('/tmp/test.crt')
+        thumbprint = OSUTIL.get_thumbprint_from_crt('/tmp/test.crt')
         self.assertEquals('33B0ABCE4673538650971C10F7D7397E71561F35', thumbprint)
 
     def test_selinux(self):
-        if not OSUtil.IsSelinuxSystem():
+        if not OSUTIL.is_selinux_system():
             return
-        isRunning = OSUtil.IsSelinuxRunning()
-        if not OSUtil.IsSelinuxRunning():
-            OSUtil.SetSelinuxEnforce(0)
-            self.assertEquals(False, OSUtil.IsSelinuxRunning())
-            OSUtil.SetSelinuxEnforce(1)
-            self.assertEquals(True, OSUtil.IsSelinuxRunning())
+        isrunning = OSUTIL.is_selinux_enforcing()
+        if not OSUTIL.is_selinux_enforcing():
+            OSUTIL.set_selinux_enforce(0)
+            self.assertEquals(False, OSUTIL.is_selinux_enforcing())
+            OSUTIL.set_selinux_enforce(1)
+            self.assertEquals(True, OSUTIL.is_selinux_enforcing())
         if os.path.isfile('/tmp/abc'):
             os.remove('/tmp/abc')
-        fileutil.SetFileContents('/tmp/abc', '')
-        OSUtil.SetSelinuxContext('/tmp/abc','unconfined_u:object_r:ssh_home_t:s')
-        OSUtil.SetSelinuxEnforce(1 if isRunning else 0)
+        fileutil.write_file('/tmp/abc', '')
+        OSUTIL.set_selinux_context('/tmp/abc','unconfined_u:object_r:ssh_home_t:s')
+        OSUTIL.set_selinux_enforce(1 if isrunning else 0)
 
-    @Mockup(shellutil, 'RunGetOutput', MockFunc(retval=[0, '']))
-    @Mockup(fileutil, 'SetFileContents', MockFunc())
+    @mock(shellutil, 'run_get_output', MockFunc(retval=[0, '']))
+    @mock(fileutil, 'write_file', MockFunc())
     def test_network_operation(self):
-        OSUtil.StartNetwork()
-        OSUtil.OpenPortForDhcp()
-        OSUtil.GenerateTransportCert()
-        mac = OSUtil.GetMacAddress()
+        OSUTIL.start_network()
+        OSUTIL.allow_dhcp_broadcast()
+        OSUTIL.gen_transport_cert()
+        mac = OSUTIL.get_mac_addr()
         self.assertNotEquals(None, mac)
-        OSUtil.IsMissingDefaultRoute()
-        OSUtil.SetBroadcastRouteForDhcp('api')
-        OSUtil.RemoveBroadcastRouteForDhcp('api')
-        OSUtil.RouteAdd('', '', '')
-        OSUtil.GetDhcpProcessId()
-        OSUtil.SetHostname('api')
-        OSUtil.PublishHostname('api')
+        OSUTIL.is_missing_default_route()
+        OSUTIL.set_route_for_dhcp_broadcast('api')
+        OSUTIL.remove_route_for_dhcp_broadcast('api')
+        OSUTIL.route_add('', '', '')
+        OSUTIL.get_dhcp_pid()
+        OSUTIL.set_hostname('api')
+        OSUTIL.publish_hostname('api')
    
-    @Mockup(OSUtil, 'GetHome', MockFunc(retval='/tmp/home'))
+    @mock(OSUTIL, 'get_home', MockFunc(retval='/tmp/home'))
     def test_deploy_key(self):
         if os.path.isdir('/tmp/home'):
             shutil.rmtree('/tmp/home')
-        user = shellutil.RunGetOutput('whoami')[1].strip()
-        OSUtil.DeploySshKeyPair(user, 'test', '$HOME/.ssh/id_rsa')
-        OSUtil.DeploySshPublicKey(user, 'test', '$HOME/.ssh/authorized_keys')
+        user = shellutil.run_get_output('whoami')[1].strip()
+        OSUTIL.deploy_ssh_keypair(user, 'test', '$HOME/.ssh/id_rsa')
+        OSUTIL.deploy_ssh_pubkey(user, 'test', '$HOME/.ssh/authorized_keys')
         self.assertTrue(os.path.isfile('/tmp/home/.ssh/id_rsa'))
         self.assertTrue(os.path.isfile('/tmp/home/.ssh/id_rsa.pub'))
         self.assertTrue(os.path.isfile('/tmp/home/.ssh/authorized_keys'))
 
-    @Mockup(shellutil, 'RunGetOutput', MockFunc(retval=[0, '']))
-    @Mockup(OSUtil, 'GetSshdConfigPath', MockFunc(retval='/tmp/sshd_config'))
+    @mock(shellutil, 'run_get_output', MockFunc(retval=[0, '']))
+    @mock(OSUTIL, 'get_sshd_conf_file_path', MockFunc(retval='/tmp/sshd_config'))
     def test_ssh_operation(self):
-        shellutil.RunGetOutput.retval=[0, 
+        shellutil.run_get_output.retval=[0, 
                                        '2048 f1:fe:14:66:9d:46:9a:60:8b:8c:'
                                        '80:43:39:1c:20:9e  root@api (RSA)']
-        sshdConfig = OSUtil.GetSshdConfigPath()
-        self.assertEquals('/tmp/sshd_config', sshdConfig)
-        if os.path.isfile(sshdConfig):
-            os.remove(sshdConfig)
-        shutil.copyfile(os.path.join(env.test_root, 'sshd_config'), sshdConfig)
-        OSUtil.SetSshClientAliveInterval()
-        OSUtil.ConfigSshd(True)
-        self.assertTrue(simple_file_grep(sshdConfig, 
+        sshd_conf = OSUTIL.get_sshd_conf_file_path()
+        self.assertEquals('/tmp/sshd_config', sshd_conf)
+        if os.path.isfile(sshd_conf):
+            os.remove(sshd_conf)
+        shutil.copyfile(os.path.join(env.test_root, 'sshd_config'), sshd_conf)
+        OSUTIL.set_ssh_client_alive_interval()
+        OSUTIL.conf_sshd(True)
+        self.assertTrue(simple_file_grep(sshd_conf, 
                                          'PasswordAuthentication no'))
-        self.assertTrue(simple_file_grep(sshdConfig, 
+        self.assertTrue(simple_file_grep(sshd_conf, 
                                          'ChallengeResponseAuthentication no'))
-        self.assertTrue(simple_file_grep(sshdConfig, 
+        self.assertTrue(simple_file_grep(sshd_conf, 
                                          'ClientAliveInterval 180'))
 
-    @Mockup(shellutil, 'RunGetOutput', MockFunc(retval=[0, '']))
-    @Mockup(OSUtil, 'GetDvdMountPoint', MockFunc(retval='/tmp/cdrom'))
+    @mock(shellutil, 'run_get_output', MockFunc(retval=[0, '']))
+    @mock(OSUTIL, 'get_mount_point', MockFunc(retval='/tmp/cdrom'))
     def test_mount(self):
-        OSUtil.MountDvd()
-        OSUtil.UmountDvd()
-        mountPoint = OSUtil.GetMountPoint(MountlistSample, '/dev/sda')
-        self.assertNotEquals(None, mountPoint)
+        OSUTIL.mount_dvd()
+        OSUTIL.umount_dvd()
+        mount_point = OSUTIL.get_mount_point(mount_list_sample, '/dev/sda')
+        self.assertNotEquals(None, mount_point)
 
     def _test_getdvd(self):
-        OSUtil.GetDvdDevice()
+        OSUTIL.get_dvd_device()
 
 if __name__ == '__main__':
     unittest.main()

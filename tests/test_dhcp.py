@@ -25,34 +25,35 @@ import unittest
 import os
 import json
 import azurelinuxagent.utils.fileutil as fileutil
-import azurelinuxagent.distro.default.dhcp as dhcpHandler
+import azurelinuxagent.distro.default.dhcp as dhcp_handler
 
 SampleDhcpResponse = None
 with open(os.path.join(env.test_root, "dhcp")) as F:
      SampleDhcpResponse = F.read()
         
-MockSocketSend = MockFunc('SocketSend', SampleDhcpResponse)
-MockGenTransactionId = MockFunc('GenTransactionId', "\xC6\xAA\xD1\x5D")
-MockGetMacAddress = MockFunc('GetMacAddress', "\x00\x15\x5D\x38\xAA\x38")
+mock_socket_send = MockFunc('socket_send', SampleDhcpResponse)
+mock_gen_trans_id = MockFunc('gen_trans_id', "\xC6\xAA\xD1\x5D")
+mock_get_mac_addr = MockFunc('get_mac_addr', "\x00\x15\x5D\x38\xAA\x38")
 
 class TestdhcpHandler(unittest.TestCase):
  
     def test_build_dhcp_req(self):
-        req = dhcpHandler.BuildDhcpRequest(MockGetMacAddress())
+        req = dhcp_handler.build_dhcp_request(mock_get_mac_addr())
         self.assertNotEquals(None, req)
 
-    @Mockup(dhcpHandler, "GenTransactionId", MockGenTransactionId)
-    @Mockup(dhcpHandler, "SocketSend", MockSocketSend)
+    @mock(dhcp_handler, "gen_trans_id", mock_gen_trans_id)
+    @mock(dhcp_handler, "socket_send", mock_socket_send)
     def test_send_dhcp_req(self):
-        req = dhcpHandler.BuildDhcpRequest(MockGetMacAddress())
-        resp = dhcpHandler.SendDhcpRequest(req)
+        req = dhcp_handler.build_dhcp_request(mock_get_mac_addr())
+        resp = dhcp_handler.send_dhcp_request(req)
         self.assertNotEquals(None, resp)
 
-    @Mockup(dhcpHandler, "SocketSend", MockSocketSend)
-    @Mockup(dhcpHandler, "GenTransactionId", MockGenTransactionId)
-    @Mockup(dhcpHandler.OSUtil, "GetMacAddress", MockGetMacAddress)
+    @mock(dhcp_handler, "socket_send", mock_socket_send)
+    @mock(dhcp_handler, "gen_trans_id", mock_gen_trans_id)
+    @mock(dhcp_handler.OSUTIL, "get_mac_addr", mock_get_mac_addr)
+    @mock(dhcp_handler.fileutil, "write_file", MockFunc())
     def test_handle_dhcp(self):
-        dh = dhcpHandler.DhcpHandler()
+        dh = dhcp_handler.DhcpHandler()
         dh.probe()
         self.assertEquals("10.62.144.1", dh.gateway)
         self.assertEquals("10.62.144.140", dh.endpoint)

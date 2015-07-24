@@ -19,161 +19,161 @@
 
 from azurelinuxagent.protocol.common import *
 
-from azurelinuxagent.utils.osutil import OSUtil, OSUtilError
+from azurelinuxagent.utils.osutil import OSUTIL, OSUtilError
 
-def GetOvfEnv():
-    ovfFilePath = os.path.join(OSUtil.GetLibDir(), OvfFileName)
-    if os.path.isfile(ovfFilePath):
-        xmlText = fileutil.GetFileContents(ovfFilePath)        
-        return OvfEnv(xmlText)
+def get_ovf_env():
+    ovf_file_path = os.path.join(OSUTIL.get_lib_dir(), OVF_FILE_NAME)
+    if os.path.isfile(ovf_file_path):
+        xml_text = fileutil.read_file(ovf_file_path)
+        return OvfEnv(xml_text)
     else:
         raise ProtocolError("ovf-env.xml is missing.")
 
-def CopyOvfEnv():
+def copy_ovf_env():
     """
-    Copy ovf env file from dvd to hard disk. 
+    Copy ovf env file from dvd to hard disk.
     Remove password before save it to the disk
     """
     try:
-        OSUtil.MountDvd()
-        ovfFile = OSUtil.GetOvfEnvPathOnDvd()
+        OSUTIL.mount_dvd()
+        ovf_file_path_on_dvd = OSUTIL.get_ovf_env_file_path_on_dvd()
 
-        ovfxml = fileutil.GetFileContents(ovfFile, removeBom=True)
+        ovfxml = fileutil.read_file(ovf_file_path_on_dvd, remove_bom=True)
         ovfenv = OvfEnv(ovfxml)
         ovfxml = re.sub("<UserPassword>.*?<", "<UserPassword>*<", ovfxml)
-        ovfFilePath = os.path.join(OSUtil.GetLibDir(), OvfFileName)
-        fileutil.SetFileContents(ovfFilePath, ovfxml)
-        OSUtil.UmountDvd()
+        ovf_file_path = os.path.join(OSUTIL.get_lib_dir(), OVF_FILE_NAME)
+        fileutil.write_file(ovf_file_path, ovfxml)
+        OSUTIL.umount_dvd()
     except IOError as e:
         raise ProtocolError(str(e))
     except OSUtilError as e:
         raise ProtocolError(str(e))
     return ovfenv
 
-OvfFileName="ovf-env.xml"
+OVF_FILE_NAME="ovf-env.xml"
 class OvfEnv(object):
     """
     Read, and process provisioning info from provisioning file OvfEnv.xml
     """
-    def __init__(self, xmlText):
-        if xmlText is None:
+    def __init__(self, xml_text):
+        if xml_text is None:
             raise ValueError("ovf-env is None")
-        logger.Verbose("Load ovf-env.xml")
-        self.parse(xmlText)
+        logger.verb("Load ovf-env.xml")
+        self.parse(xml_text)
 
     def reinitialize(self):
         """
         Reset members.
         """
-        self.WaNs = "http://schemas.microsoft.com/windowsazure"
-        self.OvfNs = "http://schemas.dmtf.org/ovf/environment/1"
-        self.MajorVersion = 1
-        self.MinorVersion = 0
-        self.ComputerName = None
-        self.UserName = None
-        self.UserPassword = None
-        self.CustomData = None
-        self.DisableSshPasswordAuthentication = True
-        self.SshPublicKeys = []
-        self.SshKeyPairs = []
+        self.wa_ns = "http://schemas.microsoft.com/windowsazure"
+        self.ovf_ns = "http://schemas.dmtf.org/ovf/environment/1"
+        self.major_version = 1
+        self.minor_version = 0
+        self.compute_name = None
+        self.user_name = None
+        self.user_password = None
+        self.customdata = None
+        self.disable_ssh_password_auth = True
+        self.ssh_pubkeys = []
+        self.ssh_keypairs = []
 
-    def getMajorVersion(self):
-        return self.MajorVersion
+    def get_major_version(self):
+        return self.major_version
 
-    def getMinorVersion(self):
-        return self.MinorVersion
+    def get_minor_version(self):
+        return self.minor_version
 
-    def getComputerName(self):
-        return self.ComputerName
+    def get_computer_name(self):
+        return self.compute_name
 
-    def getUserName(self):
-        return self.UserName
+    def get_username(self):
+        return self.user_name
 
-    def getUserPassword(self):
-        return self.UserPassword
+    def get_user_password(self):
+        return self.user_password
 
-    def clearUserPassword(self):
-        self.UserPassword = None
+    def clear_user_password(self):
+        self.user_password = None
 
-    def getCustomData(self):
-        return self.CustomData
+    def get_customdata(self):
+        return self.customdata
 
-    def getDisableSshPasswordAuthentication(self):
-        return self.DisableSshPasswordAuthentication
+    def get_disable_ssh_password_auth(self):
+        return self.disable_ssh_password_auth
 
-    def getSshPublicKeys(self):
-        return self.SshPublicKeys
+    def get_ssh_pubkeys(self):
+        return self.ssh_pubkeys
 
-    def getSshKeyPairs(self):
-        return self.SshKeyPairs
+    def get_ssh_keypairs(self):
+        return self.ssh_keypairs
 
-    def parse(self, xmlText):
+    def parse(self, xml_text):
         """
         Parse xml tree, retreiving user and ssh key information.
         Return self.
         """
         self.reinitialize()
-        dom = xml.dom.minidom.parseString(xmlText)
-        if len(dom.getElementsByTagNameNS(self.OvfNs, "Environment")) != 1:
-            logger.Error("Unable to parse OVF XML.")
+        dom = xml.dom.minidom.parseString(xml_text)
+        if len(dom.getElementsByTagNameNS(self.ovf_ns, "Environment")) != 1:
+            logger.error("Unable to parse OVF XML.")
         section = None
         newer = False
-        for p in dom.getElementsByTagNameNS(self.WaNs, "ProvisioningSection"):
+        for p in dom.getElementsByTagNameNS(self.wa_ns, "ProvisioningSection"):
             for n in p.childNodes:
                 if n.localName == "Version":
-                    verparts = GetNodeTextData(n).split('.')
+                    verparts = get_node_text(n).split('.')
                     major = int(verparts[0])
                     minor = int(verparts[1])
-                    if major > self.MajorVersion:
+                    if major > self.major_version:
                         newer = True
-                    if major != self.MajorVersion:
+                    if major != self.major_version:
                         break
-                    if minor > self.MinorVersion:
+                    if minor > self.minor_version:
                         newer = True
                     section = p
         if newer == True:
-            logger.Warn("Newer provisioning configuration detected. "
+            logger.warn("Newer provisioning configuration detected. "
                     "Please consider updating waagent.")
             if section == None:
-                logger.Error("Could not find ProvisioningSection with "
-                        "major version={0}", self.MajorVersion)
+                logger.error("Could not find ProvisioningSection with "
+                        "major version={0}", self.major_version)
                 return None
-        self.ComputerName = GetNodeTextData(section.getElementsByTagNameNS(self.WaNs, "HostName")[0])
-        self.UserName = GetNodeTextData(section.getElementsByTagNameNS(self.WaNs, "UserName")[0])
+        self.compute_name = get_node_text(section.getElementsByTagNameNS(self.wa_ns, "HostName")[0])
+        self.user_name = get_node_text(section.getElementsByTagNameNS(self.wa_ns, "UserName")[0])
         try:
-            self.UserPassword = GetNodeTextData(section.getElementsByTagNameNS(self.WaNs, "UserPassword")[0])
+            self.user_password = get_node_text(section.getElementsByTagNameNS(self.wa_ns, "UserPassword")[0])
         except:
             pass
-        CDSection=None
-        CDSection=section.getElementsByTagNameNS(self.WaNs, "CustomData")
-        if len(CDSection) > 0 :
-            self.CustomData=GetNodeTextData(CDSection[0])
-        disableSshPass = section.getElementsByTagNameNS(self.WaNs, "DisableSshPasswordAuthentication")
-        if len(disableSshPass) != 0:
-            self.DisableSshPasswordAuthentication = (GetNodeTextData(disableSshPass[0]).lower() == "true")
-        for pkey in section.getElementsByTagNameNS(self.WaNs, "PublicKey"):
-            logger.Verbose(repr(pkey))
+        cd_section=None
+        cd_section=section.getElementsByTagNameNS(self.wa_ns, "CustomData")
+        if len(cd_section) > 0 :
+            self.customdata=get_node_text(cd_section[0])
+        disable_ssh_password_auth = section.getElementsByTagNameNS(self.wa_ns, "DisableSshPasswordAuthentication")
+        if len(disable_ssh_password_auth) != 0:
+            self.disable_ssh_password_auth = (get_node_text(disable_ssh_password_auth[0]).lower() == "true")
+        for pkey in section.getElementsByTagNameNS(self.wa_ns, "PublicKey"):
+            logger.verb(repr(pkey))
             fp = None
             path = None
             for c in pkey.childNodes:
                 if c.localName == "Fingerprint":
-                    fp = GetNodeTextData(c).upper()
-                    logger.Verbose(fp)
+                    fp = get_node_text(c).upper()
+                    logger.verb(fp)
                 if c.localName == "Path":
-                    path = GetNodeTextData(c)
-                    logger.Verbose(path)
-            self.SshPublicKeys += [[fp, path]]
-        for keyp in section.getElementsByTagNameNS(self.WaNs, "KeyPair"):
+                    path = get_node_text(c)
+                    logger.verb(path)
+            self.ssh_pubkeys += [[fp, path]]
+        for keyp in section.getElementsByTagNameNS(self.wa_ns, "KeyPair"):
             fp = None
             path = None
-            logger.Verbose(repr(keyp))
+            logger.verb(repr(keyp))
             for c in keyp.childNodes:
                 if c.localName == "Fingerprint":
-                    fp = GetNodeTextData(c).upper()
-                    logger.Verbose(fp)
+                    fp = get_node_text(c).upper()
+                    logger.verb(fp)
                 if c.localName == "Path":
-                    path = GetNodeTextData(c)
-                    logger.Verbose(path)
-            self.SshKeyPairs += [[fp, path]]
+                    path = get_node_text(c)
+                    logger.verb(path)
+            self.ssh_keypairs += [[fp, path]]
         return self
 

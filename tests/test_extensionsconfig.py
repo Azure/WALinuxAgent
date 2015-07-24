@@ -26,7 +26,7 @@ import os
 import json
 import azurelinuxagent.protocol.v1 as v1
 
-ExtensionsConfigSample="""\
+ext_conf_sample="""\
 <Extensions version="1.0.0.0" goalStateIncarnation="9"><GuestAgentExtension xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
   <GAFamilies>
     <GAFamily>
@@ -68,13 +68,13 @@ ExtensionsConfigSample="""\
 </Plugins>
 <PluginSettings>
   <Plugin name="OSTCExtensions.ExampleHandlerLinux" version="1.4">
-    <RuntimeSettings seqNo="6">{"runtimeSettings":[{"handlerSettings":{"protectedSettingsCertThumbprint":"4037FBF5F1F3014F99B5D6C7799E9B20E6871CB3","protectedSettings":"MIICWgYJK","publicSettings":{"foo":"bar"}}}]}</RuntimeSettings>
+    <runtimeSettings seqNo="6">{"runtimeSettings":[{"handlerSettings":{"protectedSettingsCertThumbprint":"4037FBF5F1F3014F99B5D6C7799E9B20E6871CB3","protectedSettings":"MIICWgYJK","publicSettings":{"foo":"bar"}}}]}</runtimeSettings>
   </Plugin>
 </PluginSettings>
 <StatusUploadBlob>https://yuezhatest.blob.core.windows.net/vhds/test-cs12.test-cs12.test-cs12.status?sr=b&amp;sp=rw&amp;se=9999-01-01&amp;sk=key1&amp;sv=2014-02-14&amp;sig=hfRh7gzUE7sUtYwke78IOlZOrTRCYvkec4hGZ9zZzXo%3D</StatusUploadBlob></Extensions>
 """
 
-ManifestSample="""\
+manifest_sample="""\
 <?xml version="1.0" encoding="utf-8"?>
 <PluginVersionManifest xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
     <Plugins>
@@ -113,8 +113,8 @@ EmptySettings="""\
 
 class TestExtensionsConfig(unittest.TestCase):
     def test_extensions_config(self):
-        config = v1.ExtensionsConfig(ExtensionsConfigSample)
-        extensions = config.extList.extensions
+        config = v1.ExtensionsConfig(ext_conf_sample)
+        extensions = config.ext_list.extensions
         self.assertNotEquals(None, extensions)
         self.assertEquals(1, len(extensions))
         self.assertNotEquals(None, extensions[0])
@@ -131,9 +131,9 @@ class TestExtensionsConfig(unittest.TestCase):
         self.assertEquals(json.loads('{"foo":"bar"}'), 
                           settings.publicSettings)
 
-        man = v1.ExtensionManifest(ManifestSample)
-        self.assertNotEquals(None, man.packageList)
-        self.assertEquals(3, len(man.packageList.versions))
+        man = v1.ExtensionManifest(manifest_sample)
+        self.assertNotEquals(None, man.pkg_list)
+        self.assertEquals(3, len(man.pkg_list.versions))
     
     def test_empty_settings(self):
         config = v1.ExtensionsConfig(EmptySettings)

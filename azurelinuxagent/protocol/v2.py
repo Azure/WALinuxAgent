@@ -21,34 +21,32 @@ import json
 import azurelinuxagent.utils.restutil as restutil
 from azurelinuxagent.protocol.common import *
 
-DefaultEndpoint='169.254.169.254'
-DefaultApiVersion='2015-01-01'
-BaseUri = "https://{0}/Microsoft.Computer/{1}?$api-version={{{2}}}{3}" 
+ENDPOINT='169.254.169.254'
+APIVERSION='2015-01-01'
+BASE_URI = "https://{0}/Microsoft.Computer/{1}?$api-version={{{2}}}{3}"
 
-class ProtocolV2(Protocol):
+class MetadataProtocol(Protocol):
 
-    def __init__(self, apiVersion=DefaultApiVersion, endpoint=DefaultEndpoint):
-        self.apiVersion = apiVersion
+    def __init__(self, apiversion=APIVERSION, endpoint=ENDPOINT):
+        self.apiversion = apiversion
         self.endpoint = endpoint
-        self.identityUri = BaseUri.format(self.endpoint, "identity",
-                                          self.apiVersion, "&expand=*")
-        self.certUri = BaseUri.format(self.endpoint, "certificates",
-                                      self.apiVersion, "&expand=*")
-        self.certUri = BaseUri.format(self.endpoint, "certificates",
-                                      self.apiVersion, "&expand=*")
-        self.extUri = BaseUri.format(self.endpoint, "extensionHandlers",
-                                     self.apiVersion, "&expand=*")
-        self.provisionStatusUri = BaseUri.format(self.endpoint, 
-                                                 "provisionStatus",
-                                                 self.apiVersion, "")
-        self.statusUri = BaseUri.format(self.endpoint, "status",
-                                        self.apiVersion, "")
-        self.eventUri = BaseUri.format(self.endpoint, "status/telemetry",
-                                       self.apiVersion, "")
+        self.identity_uri = BASE_URI.format(self.endpoint, "identity",
+                                            self.apiversion, "&expand=*")
+        self.cert_uri = BASE_URI.format(self.endpoint, "certificates",
+                                        self.apiversion, "&expand=*")
+        self.ext_uri = BASE_URI.format(self.endpoint, "extensionHandlers",
+                                       self.apiversion, "&expand=*")
+        self.provision_status_uri = BASE_URI.format(self.endpoint,
+                                                    "provisionStatus",
+                                                    self.apiversion, "")
+        self.status_uri = BASE_URI.format(self.endpoint, "status",
+                                          self.apiversion, "")
+        self.event_uri = BASE_URI.format(self.endpoint, "status/telemetry",
+                                         self.apiversion, "")
 
-    def _getData(self, dataType, url, headers=None):
+    def _get_data(self, data_type, url, headers=None):
         try:
-            resp = restutil.HttpGet(url, headers)
+            resp = restutil.http_get(url, headers)
         except restutil.HttpError as e:
             raise ProtocolError(str(e))
 
@@ -58,23 +56,23 @@ class ProtocolV2(Protocol):
             data = json.loads(resp.read())
         except ValueError as e:
             raise ProtocolError(str(e))
-        obj = dataType()
+        obj = data_type()
         set_properties(obj, data)
         return obj
 
-    def _putData(self, url, obj, headers=None):
+    def _put_data(self, url, obj, headers=None):
         data = get_properties(obj)
         try:
-            resp = restutil.HttpPut(url, json.dumps(data))
+            resp = restutil.http_put(url, json.dumps(data))
         except restutil.HttpError as e:
             raise ProtocolError(str(e))
         if resp.status != httplib.OK:
             raise ProtocolError("{0} - PUT: {1}".format(resp.status, url))
 
-    def _postData(self, url, obj, headers=None):
+    def _post_data(self, url, obj, headers=None):
         data = get_properties(obj)
         try:
-            resp = restutil.HttpPost(url, json.dumps(data))
+            resp = restutil.http_post(url, json.dumps(data))
         except restutil.HttpError as e:
             raise ProtocolError(str(e))
         if resp.status != httplib.CREATED:
@@ -82,27 +80,27 @@ class ProtocolV2(Protocol):
 
     def initialize(self):
         pass
-        
-    def getVmInfo(self):
-        return self._getData(VmInfo, self.identityUri)
 
-    def getCerts(self):
-        certs = self._getData(CertList, self.certUri)
+    def get_vminfo(self):
+        return self._get_data(VMInfo, self.identity_uri)
+
+    def get_certs(self):
+        certs = self._get_data(CertList, self.cert_uri)
         #TODO download pfx and convert to pem
         return certs
 
-    def getExtensions(self):
-        return self._getData(ExtensionList, self.extUri)
+    def get_extensions(self):
+        return self._get_data(ExtensionList, self.ext_uri)
 
-    def reportProvisionStatus(self, status):
+    def report_provision_status(self, status):
         validata_param('status', status, ProvisionStatus)
-        self._putData(self.provisionStatusUri, status)
-        
-    def reportStatus(self, status):
+        self._put_data(self.provision_status_uri, status)
+
+    def report_status(self, status):
         validata_param('status', status, VMStatus)
-        self._putData(self.statusUri, status)
-    
-    def reportEvent(self, events):
+        self._put_data(self.status_uri, status)
+
+    def report_event(self, events):
         validata_param('events', events, TelemetryEventList)
-        self._postData(self.eventUri, events)
+        self._post_data(self.event_uri, events)
 

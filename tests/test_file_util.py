@@ -30,36 +30,36 @@ class TestFileOperations(unittest.TestCase):
     def test_get_set_file_contents(self):
         test_file='/tmp/test_file'
         content = str(uuid.uuid4())
-        fileutil.SetFileContents(test_file, content)
+        fileutil.write_file(test_file, content)
         self.assertTrue(tools.simple_file_grep(test_file, content))
-        self.assertEquals(content, fileutil.GetFileContents('/tmp/test_file'))
+        self.assertEquals(content, fileutil.read_file('/tmp/test_file'))
         os.remove(test_file)
 
     def test_append_file(self):
         test_file='/tmp/test_file2'
         content = str(uuid.uuid4())
-        fileutil.AppendFileContents(test_file, content)
+        fileutil.append_file(test_file, content)
         self.assertTrue(tools.simple_file_grep(test_file, content))
         os.remove(test_file)
 
     def test_replace_file(self):
         test_file='/tmp/test_file3'
-        contentOld = str(uuid.uuid4())
+        old_content = str(uuid.uuid4())
         content = str(uuid.uuid4())
         with open(test_file, "a+") as F:
-            F.write(contentOld)
-        fileutil.ReplaceFileContentsAtomic(test_file, content)
-        self.assertFalse(tools.simple_file_grep(test_file, contentOld))
+            F.write(old_content)
+        fileutil.replace_file(test_file, content)
+        self.assertFalse(tools.simple_file_grep(test_file, old_content))
         self.assertTrue(tools.simple_file_grep(test_file, content))
         os.remove(test_file)
 
     def test_get_last_path_element(self):
         filepath = '/tmp/abc.def'
-        filename = fileutil.GetLastPathElement(filepath)
+        filename = fileutil.base_name(filepath)
         self.assertEquals('abc.def', filename)
 
         filepath = '/tmp/abc'
-        filename = fileutil.GetLastPathElement(filepath)
+        filename = fileutil.base_name(filepath)
         self.assertEquals('abc', filename)
 
 if __name__ == '__main__':

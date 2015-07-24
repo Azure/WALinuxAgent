@@ -16,46 +16,50 @@
 #
 # Requires Python 2.4+ and Openssl 1.0+
 #
+"""
+Defines all exceptions
+"""
 
-"""
-Base class of agent error.
-"""
 class AgentError(Exception):
+    """
+    Base class of agent error.
+    """
     def __init__(self, errno, msg):
         msg = "({0}){1}".format(errno, msg)
         super(AgentError, self).__init__(msg)
 
-"""
-When configure file is not found or malformed.
-"""
 class AgentConfigError(AgentError):
+    """
+    When configure file is not found or malformed.
+    """
     def __init__(self, msg):
         super(AgentConfigError, self).__init__('000001', msg)
 
-"""
-When network is not avaiable.
-"""
 class AgentNetworkError(AgentError):
+    """
+    When network is not avaiable.
+    """
     def __init__(self, msg):
         super(AgentNetworkError, self).__init__('000002', msg)
 
-"""
-When failed to execute an extension
-"""
 class ExtensionError(AgentError):
+    """
+    When failed to execute an extension
+    """
     def __init__(self, msg):
         super(ExtensionError, self).__init__('000003', msg)
 
-"""
-When provision failed
-"""
 class ProvisionError(AgentError):
+    """
+    When provision failed
+    """
     def __init__(self, msg):
         super(ProvisionError, self).__init__('000004', msg)
-"""
-Mount resource disk failed
-"""
+
 class ResourceDiskError(AgentError):
+    """
+    Mount resource disk failed
+    """
     def __init__(self, msg):
         super(ResourceDiskError, self).__init__('000005', msg)
 

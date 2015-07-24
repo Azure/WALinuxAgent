@@ -20,7 +20,7 @@
 import os
 import azurelinuxagent.conf as conf
 import azurelinuxagent.logger as logger
-from azurelinuxagent.utils.osutil import OSUtil
+from azurelinuxagent.utils.osutil import OSUTIL
 import azurelinuxagent.utils.fileutil as fileutil
 
 
@@ -28,22 +28,22 @@ class InitHandler(object):
     def init(self, verbose):
         #Init stdout log
         level = logger.LogLevel.VERBOSE if verbose else logger.LogLevel.INFO
-        logger.AddLoggerAppender(logger.AppenderType.STDOUT, level)
+        logger.add_logger_appender(logger.AppenderType.STDOUT, level)
 
         #Init config
-        configPath = OSUtil.GetConfigurationPath()
-        conf.LoadConfiguration(configPath)
-        
+        conf_file_path = OSUTIL.get_conf_file_path()
+        conf.load_conf(conf_file_path)
+
         #Init log
-        verbose = verbose or conf.GetSwitch("Logs.Verbose", False)
+        verbose = verbose or conf.get_switch("Logs.Verbose", False)
         level = logger.LogLevel.VERBOSE if verbose else logger.LogLevel.INFO
-        logger.AddLoggerAppender(logger.AppenderType.FILE, level,
+        logger.add_logger_appender(logger.AppenderType.FILE, level,
                                  path="/var/log/waagent.log")
-        logger.AddLoggerAppender(logger.AppenderType.CONSOLE, level,
+        logger.add_logger_appender(logger.AppenderType.CONSOLE, level,
                                  path="/dev/console")
-        
+
         #Create lib dir
-        fileutil.CreateDir(OSUtil.GetLibDir(), mode=0700)
-        os.chdir(OSUtil.GetLibDir())
+        fileutil.mkdir(OSUTIL.get_lib_dir(), mode=0700)
+        os.chdir(OSUTIL.get_lib_dir())
 
 

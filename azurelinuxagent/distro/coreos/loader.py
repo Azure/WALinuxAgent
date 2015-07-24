@@ -18,11 +18,11 @@
 #
 
 
-def GetOSUtil():
+def get_osutil():
     from azurelinuxagent.distro.coreos.osutil import CoreOSUtil
     return CoreOSUtil()
 
-def GetHandlers():
+def get_handlers():
     from azurelinuxagent.distro.coreos.handlerFactory import CoreOSHandlerFactory
     return CoreOSHandlerFactory()
 

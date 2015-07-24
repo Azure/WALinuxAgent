@@ -21,16 +21,16 @@
 import env
 from tests.tools import *
 import unittest
-from azurelinuxagent.metadata import GuestAgentName, GuestAgentVersion, \
-                                     DistroName, DistroVersion, DistroCodeName, \
-                                     DistroFullName
+from azurelinuxagent.metadata import AGENT_NAME, AGENT_VERSION, \
+                                     DISTRO_NAME, DISTRO_VERSION, DISTRO_CODE_NAME, \
+                                     DISTRO_FULL_NAME
 
 class TestOSInfo(unittest.TestCase):
     def test_curr_os_info(self):
-        self.assertNotEquals(None, DistroName)
-        self.assertNotEquals(None, DistroVersion)
-        self.assertNotEquals(None, DistroCodeName)
-        self.assertNotEquals(None, DistroFullName)
+        self.assertNotEquals(None, DISTRO_NAME)
+        self.assertNotEquals(None, DISTRO_VERSION)
+        self.assertNotEquals(None, DISTRO_CODE_NAME)
+        self.assertNotEquals(None, DISTRO_FULL_NAME)
 
 if __name__ == '__main__':
     unittest.main()

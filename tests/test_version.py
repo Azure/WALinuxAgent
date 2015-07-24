@@ -42,11 +42,11 @@ VersionInfoSample="""\
 class TestVersionInfo(unittest.TestCase):
     def test_version_info(self):
         config = v1.VersionInfo(VersionInfoSample)
-        self.assertEquals("2012-11-30", config.getPreferred())
-        self.assertNotEquals(None, config.getSupported())
-        self.assertEquals(2, len(config.getSupported()))
-        self.assertEquals("2010-12-15", config.getSupported()[0])
-        self.assertEquals("2010-28-10", config.getSupported()[1])
+        self.assertEquals("2012-11-30", config.get_preferred())
+        self.assertNotEquals(None, config.get_supported())
+        self.assertEquals(2, len(config.get_supported()))
+        self.assertEquals("2010-12-15", config.get_supported()[0])
+        self.assertEquals("2010-28-10", config.get_supported()[1])
    
 if __name__ == '__main__':
     unittest.main()
