@@ -21,6 +21,7 @@ Provision handler
 
 import os
 import azurelinuxagent.logger as logger
+from azurelinuxagent.future import text
 import azurelinuxagent.conf as conf
 from azurelinuxagent.event import add_event, WALAEventOperation
 from azurelinuxagent.exception import *
@@ -65,9 +66,9 @@ class ProvisionHandler(object):
         except ProvisionError as e:
             logger.error("Provision failed: {0}", e)
             status = prot.ProvisionStatus(status="NotReady",
-                                          subStatus= str(e))
+                                          subStatus= text(e))
             protocol.report_provision_status(status)
-            add_event(name="WALA", is_success=False, message=str(e),
+            add_event(name="WALA", is_success=False, message=text(e),
                               op=WALAEventOperation.Provision)
 
     def reg_ssh_host_key(self):

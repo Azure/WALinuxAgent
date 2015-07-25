@@ -20,6 +20,7 @@
 import os
 import time
 import azurelinuxagent.logger as logger
+from azurelinuxagent.future import text
 import azurelinuxagent.conf as conf
 from azurelinuxagent.metadata import AGENT_LONG_NAME, AGENT_VERSION, \
                                      DISTRO_NAME, DISTRO_VERSION, DISTRO_FULL_NAME
@@ -38,8 +39,7 @@ class MainHandler(object):
         logger.info("OS: {0} {1}", DISTRO_NAME, DISTRO_VERSION)
 
         event.enable_unhandled_err_dump("Azure Linux Agent")
-        fileutil.write_file(OSUTIL.get_agent_pid_file_path(),
-                                 str(os.getpid()))
+        fileutil.write_file(OSUTIL.get_agent_pid_file_path(), text(os.getpid()))
 
         if conf.get_switch("DetectScvmmEnv", False):
             if self.handlers.scvmm_handler.detect_scvmm_env():

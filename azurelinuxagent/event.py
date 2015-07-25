@@ -25,9 +25,10 @@ import datetime
 import threading
 import platform
 import azurelinuxagent.logger as logger
+from azurelinuxagent.future import text
 import azurelinuxagent.protocol as prot
-from azurelinuxagent.metadata import DISTRO_NAME, DISTRO_VERSION, DISTRO_CODE_NAME,\
-                                     AGENT_VERSION
+from azurelinuxagent.metadata import DISTRO_NAME, DISTRO_VERSION, \
+                                     DISTRO_CODE_NAME, AGENT_VERSION
 from azurelinuxagent.utils.osutil import OSUTIL
 
 class EventError(Exception):
@@ -142,7 +143,7 @@ def save_event(data):
     if len(os.listdir(event_dir)) > 1000:
         raise EventError("Too many files under: {0}", event_dir)
 
-    filename = os.path.join(event_dir, str(int(time.time()*1000000)))
+    filename = os.path.join(event_dir, text(int(time.time()*1000000)))
     try:
         with open(filename+".tmp",'wb+') as hfile:
             hfile.write(data.encode("utf-8"))

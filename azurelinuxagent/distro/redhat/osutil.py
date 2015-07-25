@@ -27,6 +27,7 @@ import fcntl
 import time
 import base64
 import azurelinuxagent.logger as logger
+from azurelinuxagent.future import text, bytebuffer
 import azurelinuxagent.utils.fileutil as fileutil
 import azurelinuxagent.utils.shellutil as shellutil
 import azurelinuxagent.utils.textutil as textutil
@@ -70,8 +71,6 @@ class Redhat6xOSUtil(DefaultOSUtil):
             key = der_decoder.decode(self.bits_to_bytes(der_encoded))[0]
             n=key[0]
             e=key[1]
-            print(n)
-            print(e)
             keydata = bytearray()
             keydata.extend(struct.pack('>I', len("ssh-rsa")))
             keydata.extend(b"ssh-rsa")
@@ -80,13 +79,12 @@ class Redhat6xOSUtil(DefaultOSUtil):
             keydata.extend(struct.pack('>I', len(self.num_to_bytes(n)) + 1))
             keydata.extend(b"\0")
             keydata.extend(self.num_to_bytes(n))
-            return str(b"ssh-rsa " + base64.b64encode(keydata) + b"\n", 
-                       encoding='utf-8')
+            keydata_base64 = base64.b64encode(bytebuffer(keydata))
+            return text(b"ssh-rsa " +  keydata_base64 + b"\n", 
+                        encoding='utf-8')
         except ImportError as e:
             raise OSUtilError("Failed to load pyasn1.codec.der")
-        #except Exception as e:
-            #raise OSUtilError(("Failed to convert public key: {0} {1}"
-                               #"").format(type(e).__name__, e))
+
     def num_to_bytes(self, num):
         """
         Pack number into bytes.  Retun as string.

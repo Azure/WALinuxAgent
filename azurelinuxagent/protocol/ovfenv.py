@@ -23,6 +23,7 @@ import os
 import re
 import xml.dom.minidom as minidom
 import azurelinuxagent.logger as logger
+from azurelinuxagent.future import text
 import azurelinuxagent.utils.fileutil as fileutil
 from azurelinuxagent.utils.textutil import parse_doc, findall, find, findtext
 from azurelinuxagent.utils.osutil import OSUTIL, OSUtilError
@@ -59,9 +60,9 @@ def copy_ovf_env():
         fileutil.write_file(ovf_file_path, ovfxml)
         OSUTIL.umount_dvd()
     except IOError as e:
-        raise ProtocolError(str(e))
+        raise ProtocolError(text(e))
     except OSUtilError as e:
-        raise ProtocolError(str(e))
+        raise ProtocolError(text(e))
     return ovfenv
 
 def _validate_ovf(val, msg):

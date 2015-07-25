@@ -21,10 +21,10 @@ import json
 import re
 import time
 import traceback
-import http.client
 import xml.sax.saxutils as saxutils
 import xml.etree.ElementTree as ET
 import azurelinuxagent.logger as logger
+from azurelinuxagent.future import text, httpclient
 import azurelinuxagent.utils.restutil as restutil
 from azurelinuxagent.utils.textutil import parse_doc, findall, find, findtext, \
                                            getattrib, gettext
@@ -116,13 +116,13 @@ def _fetch_uri(uri, headers, chk_proxy=False):
     try:
         resp = restutil.http_get(uri, headers, chk_proxy=chk_proxy)
     except restutil.HttpError as e:
-        raise ProtocolError(str(e))
+        raise ProtocolError(text(e))
 
-    if(resp.status == http.client.GONE):
+    if(resp.status == httpclient.GONE):
         raise WireProtocolResourceGone(uri)
-    if(resp.status != http.client.OK):
+    if(resp.status != httpclient.OK):
         raise ProtocolError("{0} - {1}".format(resp.status, uri))
-    return str(resp.read(), encoding='utf-8')
+    return text(resp.read(), encoding='utf-8')
 
 def _fetch_manifest(version_uris):
     for version_uri in version_uris:
@@ -302,7 +302,7 @@ class StatusBlob(object):
             "x-ms-date" :  timestamp,
             'x-ms-version' : self.__class__.__storage_version__
         })
-        if resp is None or resp.status != http.client.OK:
+        if resp is None or resp.status != httpclient.OK:
             raise ProtocolError(("Failed to get status blob type: {0}"
                                  "").format(resp.status))
 
@@ -316,10 +316,10 @@ class StatusBlob(object):
         resp = restutil.http_put(url, data, {
             "x-ms-date" :  timestamp,
             "x-ms-blob-type" : "BlockBlob",
-            "Content-Length": str(len(data)),
+            "Content-Length": text(len(data)),
             "x-ms-version" : self.__class__.__storage_version__
         })
-        if resp is None or resp.status != http.client.CREATED:
+        if resp is None or resp.status != httpclient.CREATED:
             raise ProtocolError(("Failed to upload block blob: {0}"
                                  "").format(resp.status))
 
@@ -332,10 +332,10 @@ class StatusBlob(object):
             "x-ms-date" :  timestamp,
             "x-ms-blob-type" : "PageBlob",
             "Content-Length": "0",
-            "x-ms-blob-content-length" : str(page_blob_size),
+            "x-ms-blob-content-length" : text(page_blob_size),
             "x-ms-version" : self.__class__.__storage_version__
         })
-        if resp is None or resp.status != http.client.CREATED:
+        if resp is None or resp.status != httpclient.CREATED:
             raise ProtocolError(("Failed to clean up page blob: {0}"
                                  "").format(resp.status))
 
@@ -361,9 +361,9 @@ class StatusBlob(object):
                 "x-ms-range" : "bytes={0}-{1}".format(start, page_end - 1),
                 "x-ms-page-write" : "update",
                 "x-ms-version" : self.__class__.__storage_version__,
-                "Content-Length": str(page_end - start)
+                "Content-Length": text(page_end - start)
             })
-            if resp is None or resp.status != http.client.CREATED:
+            if resp is None or resp.status != httpclient.CREATED:
                 raise ProtocolError(("Failed to upload page blob: {0}"
                                      "").format(resp.status))
             start = end
@@ -376,13 +376,13 @@ def event_param_to_v1(param):
         attr_type = 'mt:uint64'
     elif param_type is str:
         attr_type = 'mt:wstr'
-    elif str(param_type).count("'unicode'") > 0:
+    elif text(param_type).count("'unicode'") > 0:
         attr_type = 'mt:wstr'
     elif param_type is bool:
         attr_type = 'mt:bool'
     elif param_type is float:
         attr_type = 'mt:float64'
-    return param_format.format(param.name, saxutils.quoteattr(str(param.value)),
+    return param_format.format(param.name, saxutils.quoteattr(text(param.value)),
                                attr_type)
 
 def event_to_v1(event):
@@ -581,7 +581,7 @@ class WireClient(object):
         except restutil.HttpError as e:
             raise ProtocolError("Failed to send events:{0}".format(e))
 
-        if resp.status != http.client.OK:
+        if resp.status != httpclient.OK:
             logger.verb(resp.read())
             raise ProtocolError("Failed to send events:{0}".format(resp.status))
 

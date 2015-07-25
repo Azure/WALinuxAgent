@@ -76,7 +76,7 @@ def validate_dhcp_resp(request, response):
     bytes_recv = len(response)
     if bytes_recv < 0xF6:
         logger.error("HandleDhcpResponse: Too few bytes received:{0}",
-                     str(bytes_recv))
+                     bytes_recv)
         return False
 
     logger.verb("BytesReceived:{0}", hex(bytes_recv))
@@ -113,7 +113,7 @@ def parse_route(response, option, i, length, bytes_recv):
                    hex(length))
     routes = []
     if length < 5:
-        logger.error("Data too small for option:{0}", str(option))
+        logger.error("Data too small for option:{0}", option)
     j = i + 2
     while j < (i + length + 2):
         mask_len_bits = str_to_ord(response[j])
@@ -140,7 +140,7 @@ def parse_ip_addr(response, option, i, length, bytes_recv):
         ip_addr = int_to_ip4_addr(addr)
         return ip_addr
     else:
-        logger.error("Data too small for option:{0}", str(option))
+        logger.error("Data too small for option:{0}", option)
     return None
 
 def parse_dhcp_resp(response):

@@ -18,14 +18,14 @@
 # http://msdn.microsoft.com/en-us/library/cc227282%28PROT.10%29.aspx
 # http://msdn.microsoft.com/en-us/library/cc227259%28PROT.13%29.aspx
 
-from . import env
+import tests.env
 import tests.tools as tools
 from .tools import *
 import uuid
 import unittest
 import os
 import time
-import http.client
+from azurelinuxagent.utils.restutil import httpclient
 import azurelinuxagent.logger as logger
 import azurelinuxagent.protocol.v1 as v1
 from .test_version import VersionInfoSample
@@ -130,8 +130,8 @@ class TestStatusBlob(unittest.TestCase):
         status_blob = v1.StatusBlob(vm_status)
         self.assertNotEquals(None, status_blob.to_json())
 
-    @mock(v1.restutil, 'http_put', MockFunc(retval=MockResp(http.client.CREATED)))
-    @mock(v1.restutil, 'http_head', MockFunc(retval=MockResp(http.client.OK)))
+    @mock(v1.restutil, 'http_put', MockFunc(retval=MockResp(httpclient.CREATED)))
+    @mock(v1.restutil, 'http_head', MockFunc(retval=MockResp(httpclient.OK)))
     def test_put_page_blob(self):
         vm_status = v1.VMStatus()
         status_blob = v1.StatusBlob(vm_status)

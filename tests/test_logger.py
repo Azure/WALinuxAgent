@@ -18,12 +18,12 @@
 # http://msdn.microsoft.com/en-us/library/cc227282%28PROT.10%29.aspx
 # http://msdn.microsoft.com/en-us/library/cc227259%28PROT.13%29.aspx
 
-from . import env
+import tests.env
 import tests.tools as tools
 import uuid
 import unittest
 import azurelinuxagent.logger as logger
-import test
+from azurelinuxagent.future import text
 
 class TestLogger(unittest.TestCase):
 
@@ -55,11 +55,11 @@ class TestLogger(unittest.TestCase):
                                   logger.LogLevel.INFO,
                                   '/tmp/testlog')
 
-        msg = str(uuid.uuid4())
+        msg = text(uuid.uuid4())
         _logger.info("Test logger: {0}", msg)
         self.assertTrue(tools.simple_file_grep('/tmp/testlog', msg))
 
-        msg = str(uuid.uuid4())
+        msg = text(uuid.uuid4())
         _logger.verbose("Verbose should not be logged: {0}", msg)
         self.assertFalse(tools.simple_file_grep('/tmp/testlog', msg))
 
@@ -73,11 +73,11 @@ class TestLogger(unittest.TestCase):
                                   logger.LogLevel.VERBOSE,
                                   '/tmp/testlog')
 
-        msg = str(uuid.uuid4())
+        msg = text(uuid.uuid4())
         _logger.info("Test logger: {0}", msg)
         self.assertTrue(tools.simple_file_grep('/tmp/testlog', msg))
 
-        msg = str(uuid.uuid4())
+        msg = text(uuid.uuid4())
         _logger.verbose("Test logger: {0}", msg)
         self.assertFalse(tools.simple_file_grep('/tmp/testlog', msg))
 

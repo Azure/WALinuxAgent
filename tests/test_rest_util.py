@@ -18,7 +18,7 @@
 # http://msdn.microsoft.com/en-us/library/cc227282%28PROT.10%29.aspx
 # http://msdn.microsoft.com/en-us/library/cc227259%28PROT.13%29.aspx
 
-from . import env
+import tests.env
 from tests.tools import *
 import uuid
 import unittest
@@ -52,7 +52,7 @@ class TestHttpOperations(unittest.TestCase):
         resp = restutil.http_get("http://httpbin.org/get").read()
         self.assertNotEquals(None, resp)
        
-        msg = str(uuid.uuid4())
+        msg = text(uuid.uuid4())
         resp = restutil.http_get("http://httpbin.org/get", {"x-abc":msg}).read()
         self.assertNotEquals(None, resp)
         self.assertTrue(msg in resp)

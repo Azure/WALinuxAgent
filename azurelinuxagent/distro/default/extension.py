@@ -22,6 +22,7 @@ import time
 import json
 import subprocess
 import azurelinuxagent.logger as logger
+from azurelinuxagent.future import text
 from azurelinuxagent.utils.osutil import OSUTIL
 import azurelinuxagent.protocol as prot
 from azurelinuxagent.event import add_event, WALAEventOperation
@@ -129,10 +130,10 @@ class ExtensionsHandler(object):
             logger.error("Failed to handle extension: {0}-{1}\n {2}",
                          ext.get_name(), ext.get_version(), e)
             add_event(name=ext.get_name(), is_success=False,
-                              op=ext.get_curr_op(), message = str(e))
+                              op=ext.get_curr_op(), message = text(e))
             ext_status = prot.ExtensionStatus(status='error', code='-1',
                                              operation = ext.get_curr_op(),
-                                             message = str(e),
+                                             message = text(e),
                                              seq_no = ext.get_seq_no())
             status = ext.create_handler_status(ext_status)
             status.status = "Ready"

@@ -185,18 +185,6 @@ def int_to_ip4_addr(a):
                             (a >> 8) & 0xFF,
                             (a) & 0xFF)
 
-def ascii(val):
-    uni = None
-    if type(val) == str:
-        pass
-        #uni = str(val, 'utf-8', errors='ignore')
-    else:
-        uni = str(val)
-    if uni is None:
-        raise ValueError('<Unsupported charset>')
-    else:
-        return uni.encode('ascii', 'backslashreplace')
-
 def hexstr_to_bytearray(a):
     """
     Return hex string packed into a binary struct.

@@ -20,6 +20,7 @@
 import platform
 import os
 import subprocess
+from azurelinuxagent.future import text
 import azurelinuxagent.logger as logger
 
 if not hasattr(subprocess,'check_output'):
@@ -79,6 +80,6 @@ def run_get_output(cmd, chk_err=True):
             logger.error("Error Code:{0}", e.returncode)
             logger.error("Result:{0}", e.output[:-1].decode('latin-1'))
         return e.returncode, e.output.decode('latin-1')
-    return 0, str(output, encoding="utf-8")
+    return 0, text(output, encoding="utf-8")
 
 #End shell command util functions

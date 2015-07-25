@@ -27,6 +27,7 @@ import shutil
 import pwd
 import tempfile
 import azurelinuxagent.logger as logger
+from azurelinuxagent.future import text
 import azurelinuxagent.utils.textutil as textutil
 
 def read_file(filepath, asbin=False, remove_bom=False):
@@ -51,7 +52,7 @@ def write_file(filepath, contents, asbin=False):
     else:
         mode = 'w'
         if type(contents) != str:
-            contents = str(contents)
+            contents = text(contents)
     with open(filepath, mode) as out_file:
         out_file.write(contents)
 
@@ -64,7 +65,7 @@ def append_file(filepath, contents, asbin=False):
     else:
         mode = 'a'
         if type(contents) != str:
-            contents = str(contents)
+            contents = text(contents)
     with open(filepath, mode) as out_file:
         out_file.write(contents)
 

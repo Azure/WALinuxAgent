@@ -17,18 +17,18 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
+import time
 import platform
 import os
 import subprocess
 import azurelinuxagent.logger as logger
 import azurelinuxagent.conf as conf
-import http.client
-import time
-from urllib.parse import urlparse
+from azurelinuxagent.future import httpclient, urlparse
 
 """
 REST api util functions
 """
+
 RETRY_WAITING_INTERVAL = 10
 
 class HttpError(Exception):
