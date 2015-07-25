@@ -39,7 +39,7 @@ def get_data_files(name, version, fullname):
 
     #Script file
     script_dest = '/usr/sbin'
-    script_src = ['bin/waagent', 'bin/waagent2', 'bin/waagent3']
+    script_src = ['bin/waagent']
     if name == 'coreos':
         script_dest = '/usr/share/oem/bin'
     data_files.append((script_dest, script_src))
@@ -103,6 +103,7 @@ class install(_install):
 
     def initialize_options(self):
         _install.initialize_options(self)
+        self.init_system=None
         self.lnx_distro = DISTRO_NAME
         self.lnx_distro_version = DISTRO_VERSION
         self.lnx_distro_fullname = DISTRO_FULL_NAME
@@ -110,6 +111,9 @@ class install(_install):
         
     def finalize_options(self):
         _install.finalize_options(self)
+        if self.init_system is not None:
+            print("WARNING: --init-system is deprecated,"
+                  "use --lnx-distro* instead")
         data_files = get_data_files(self.lnx_distro, self.lnx_distro_version,
                                     self.lnx_distro_fullname)
         self.distribution.data_files = data_files
