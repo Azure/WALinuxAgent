@@ -294,6 +294,11 @@ def CreateDir(dirpath, user, mode):
     ChangeOwner(dirpath, user)
 
 def CreateAccount(user, password, expiration, thumbprint):
+    disabled = Config.get("Agent.DisableUserManipulation")
+    if disabled != None and disabled.lower().startswith("y"):
+        Error("User manipulation is disabled for " + user)
+        return "User manipulation is disabled"
+
     userentry = None
     try:
         userentry = pwd.getpwnam(user)
@@ -2346,6 +2351,8 @@ Logs.Verbose=n                          #
 
 OS.RootDeviceScsiTimeout=300            # Root device timeout in seconds.
 OS.OpensslPath=None                     # If "None", the system default version is used.
+
+Agent.DisableUserManipulation=n         # If set, removes the agent's ability to create/modify local users
 """
 
 WaagentLogrotate = """\

@@ -161,6 +161,7 @@ LBProbeResponder=y
 Logs.Verbose=n
 OS.RootDeviceScsiTimeout=300
 OS.OpensslPath=None
+Agent.DisableUserManipulation=n
 
 The various configuration options are described in detail below. Configuration
 options are of three types : Boolean, String or Integer. The Boolean
@@ -296,6 +297,13 @@ Type: String Default: None
 
 This can be used to specify an alternate path for the openssl binary to use for
 cryptographic operations.
+
+Agent.DisableUserManipulation:
+Type: Boolean Default: n
+
+If set, `waagent` will not create or update local users. This means you will also
+lose the ability to reset user passwords. If you wish to set this to `y`, be aware
+that it will likely affect provisioning.
 
 
 APPENDIX
