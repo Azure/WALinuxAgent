@@ -20,30 +20,63 @@ import crypt
 import random
 import string
 import struct
+import xml.dom.minidom as minidom
 
-def find_first_node(xml_doc, selector, ns=None):
-    nodes = find_all_nodes(xml_doc, selector, ns=ns)
-    if len(nodes) > 0:
-        return nodes[0]
+def parse_doc(xml_text):
+    """
+    Parse xml document from string
+    """
+    return minidom.parseString(xml_text)
 
-def find_all_nodes(xml_doc, selector, ns=None):
-    nodes = xml_doc.findall(selector, ns)
-    return nodes
+def findall(root, tag, namespace=None):
+    """
+    Get all nodes by tag and namespace under Node root.
+    """
+    if root is None:
+        return []
 
-def find_text(root, selector, ns=None, default=None):
-    element = root.find(selector, ns)
-    if element is not None:
-        return element.text
+    if namespace is None:
+        return root.getElementsByTagName(tag)
     else:
-        return default
+        return root.getElementsByTagNameNS(namespace, tag)
 
-def get_node_text(a):
+def find(root, tag, namespace=None):
     """
-    Filter non-text nodes from DOM tree
+    Get first node by tag and namespace under Node root.
     """
-    for b in a.childNodes:
-        if b.nodeType == b.TEXT_NODE:
-            return b.data
+    nodes = findall(root, tag, namespace=namespace)
+    if nodes is not None and len(nodes) >= 1:
+        return nodes[0]
+    else:
+        return None
+
+def gettext(node):
+    """
+    Get node text
+    """
+    if node is None:
+        return None
+    
+    for child in node.childNodes:
+        if child.nodeType == child.TEXT_NODE:
+            return child.data
+    return None
+
+def findtext(root, tag, namespace=None):
+    """
+    Get text of node by tag and namespace under Node root.
+    """
+    node = find(root, tag, namespace=namespace)
+    return gettext(node)
+
+def getattrib(node, attr_name):
+    """
+    Get attribute of xml node
+    """
+    if node is not None:
+        return node.getAttribute(attr_name)
+    else:
+        return None
 
 def unpack(buf, offset, range):
     """

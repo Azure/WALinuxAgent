@@ -22,7 +22,6 @@ import re
 import json
 import xml.dom.minidom
 import azurelinuxagent.logger as logger
-from azurelinuxagent.utils.textutil import get_node_text
 import azurelinuxagent.utils.fileutil as fileutil
 
 class ProtocolError(Exception):

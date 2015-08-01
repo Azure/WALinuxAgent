@@ -21,20 +21,17 @@ Copy and parse ovf-env.xml from provisiong ISO and local cache
 """
 import os
 import re
-import xml.etree.ElementTree as ET
+import xml.dom.minidom as minidom
 import azurelinuxagent.logger as logger
 import azurelinuxagent.utils.fileutil as fileutil
-from azurelinuxagent.utils.textutil import find_text
+from azurelinuxagent.utils.textutil import parse_doc, findall, find, findtext
 from azurelinuxagent.utils.osutil import OSUTIL, OSUtilError
 from azurelinuxagent.protocol import ProtocolError
 
 OVF_FILE_NAME = "ovf-env.xml"
 OVF_VERSION = "1.0"
-OVF_NAME_SPACE = {
-        "oe" : "http://schemas.dmtf.org/ovf/environment/1",
-        "wa" : "http://schemas.microsoft.com/windowsazure",
-        "i" : "http://www.w3.org/2001/XMLSchema-instance"
-}
+OVF_NAME_SPACE = "http://schemas.dmtf.org/ovf/environment/1"
+WA_NAME_SPACE = "http://schemas.microsoft.com/windowsazure"
 
 def get_ovf_env():
     """
@@ -93,47 +90,55 @@ class OvfEnv(object):
         Parse xml tree, retreiving user and ssh key information.
         Return self.
         """
-        ns = OVF_NAME_SPACE
-        xml_doc = ET.fromstring(xml_text)
-        section = xml_doc.find(".//wa:ProvisioningSection", ns)
+        wans = WA_NAME_SPACE
+        ovfns = OVF_NAME_SPACE
+
+        xml_doc = parse_doc(xml_text)
+        
+        environment = find(xml_doc, "Environment", namespace=ovfns)
+        _validate_ovf(environment, "Environment not found")
+
+        section = find(environment, "ProvisioningSection", namespace=wans)
         _validate_ovf(section, "ProvisioningSection not found")
 
-        version = section.find("wa:Version", ns).text
+        version = findtext(environment, "Version", namespace=wans)
         _validate_ovf(version, "Version not found")
 
         if version > OVF_VERSION:
             logger.warn("Newer provisioning configuration detected. "
                         "Please consider updating waagent")
-
-        conf_set = section.find("wa:LinuxProvisioningConfigurationSet", ns)
+        
+        conf_set = find(section, "LinuxProvisioningConfigurationSet", 
+                        namespace=wans)
         _validate_ovf(conf_set, "LinuxProvisioningConfigurationSet not found")
 
-        self.hostname = find_text(conf_set, "wa:HostName", ns=ns)
+        self.hostname = findtext(conf_set, "HostName", namespace=wans)
         _validate_ovf(self.hostname, "HostName not found")
 
-        self.username = find_text(conf_set, "wa:UserName", ns=ns)
+        self.username = findtext(conf_set, "UserName", namespace=wans)
         _validate_ovf(self.username, "UserName not found")
+        
+        self.user_password = findtext(conf_set, "UserPassword", namespace=wans)
 
-        self.user_password = find_text(conf_set, "wa:UserPassword", ns=ns)
-
-        self.customdata = find_text(conf_set, "wa:CustomData", ns=ns)
-
-        auth = find_text(conf_set, "wa:DisableSshPasswordAuthentication", ns=ns)
-        if auth is not None and auth.lower() == "true":
+        self.customdata = findtext(conf_set, "CustomData", namespace=wans)
+        
+        auth_option = findtext(conf_set, "DisableSshPasswordAuthentication", 
+                               namespace=wans)
+        if auth_option is not None and auth_option.lower() == "true":
             self.disable_ssh_password_auth = True
         else:
             self.disable_ssh_password_auth = False
 
-        public_keys = conf_set.findall("wa:SSH/wa:PublicKeys/wa:PublicKey", ns)
+        public_keys = findall(conf_set, "PublicKey", namespace=wans)
         for public_key in public_keys:
-            path = find_text(public_key, "wa:Path", ns=ns)
-            fingerprint = find_text(public_key, "wa:Fingerprint", ns=ns)
-            value = find_text(public_key, "wa:Value", ns=ns)
+            path = findtext(public_key, "Path", namespace=wans)
+            fingerprint = findtext(public_key, "Fingerprint", namespace=wans)
+            value = findtext(public_key, "Value", namespace=wans)
             self.ssh_pubkeys.append((path, fingerprint, value))
 
-        keypairs = conf_set.findall("wa:SSH/wa:KeyPairs/wa:KeyPair", ns)
+        keypairs = findall(conf_set, "KeyPair", namespace=wans)
         for keypair in keypairs:
-            path = find_text(keypair, "wa:Path", ns=ns)
-            fingerprint = find_text(keypair, "wa:Fingerprint", ns=ns)
+            path = findtext(keypair, "Path", namespace=wans)
+            fingerprint = findtext(keypair, "Fingerprint", namespace=wans)
             self.ssh_keypairs.append((path, fingerprint))
 

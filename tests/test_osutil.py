@@ -158,6 +158,7 @@ class TestCurrOS(unittest.TestCase):
                                          'ClientAliveInterval 180'))
 
     @mock(shellutil, 'run_get_output', MockFunc(retval=[0, '']))
+    @mock(OSUTIL, 'get_dvd_device', MockFunc(retval='abc'))
     @mock(OSUTIL, 'get_mount_point', MockFunc(retval='/tmp/cdrom'))
     def test_mount(self):
         OSUTIL.mount_dvd()
