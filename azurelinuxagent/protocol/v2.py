@@ -29,7 +29,7 @@ BASE_URI = "http://{0}/Microsoft.Compute/{1}?api-version={{{2}}}{3}"
 def _add_content_type(headers):
     if headers is None:
         headers = {}
-    headers["contents-type"] = "application/json"
+    headers["content-type"] = "application/json"
     return headers
 
 class MetadataProtocol(Protocol):
