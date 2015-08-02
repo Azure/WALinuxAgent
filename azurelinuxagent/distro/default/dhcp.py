@@ -228,7 +228,6 @@ def disable_dhcp_service(func):
 @disable_dhcp_service
 def send_dhcp_request(request):
     __waiting_duration__ = [0, 10, 30, 60, 60]
-    sock = None
     for duration in __waiting_duration__:
         try:
             OSUTIL.allow_dhcp_broadcast()
@@ -238,24 +237,27 @@ def send_dhcp_request(request):
         except AgentNetworkError as e:
             logger.error("Failed to send DHCP request: {0}", e)
             return None
-        finally:
-            if sock:
-                sock.close()
         time.sleep(duration)
 
 def socket_send(request):
-    sock = socket.socket(socket.AF_INET,
-                         socket.SOCK_DGRAM,
-                         socket.IPPROTO_UDP)
-    sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    sock.bind(("0.0.0.0", 68))
-    sock.sendto(request, ("<broadcast>", 67))
-    sock.settimeout(10)
-    logger.verb("Send DHCP request: Setting socket.timeout=10, "
-                   "entering recv")
-    response = sock.recv(1024)
-    return response
+    sock = None
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM,
+                             socket.IPPROTO_UDP)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.bind(("0.0.0.0", 68))
+        sock.sendto(request, ("<broadcast>", 67))
+        sock.settimeout(10)
+        logger.verb("Send DHCP request: Setting socket.timeout=10, "
+                       "entering recv")
+        response = sock.recv(1024)
+        return response
+    except IOError as e:
+        raise AgentNetworkError("{0}".format(e))
+    finally:
+        if sock:
+            sock.close()
 
 def build_dhcp_request(mac_addr):
     """
