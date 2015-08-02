@@ -78,6 +78,7 @@ def get_data_files(name, version, fullname):
         else:
             init_dest = '/etc/init'
             init_src = ['init/ubuntu/walinuxagent.conf']
+            data_files.append(('/etc/default', ['init/ubuntu/walinuxagent']))
     elif name == 'suse':
         if fullname == 'SUSE Linux Enterprise Server' and version >= '12' or \
                 fullname == 'openSUSE' and version >= '13.2':
