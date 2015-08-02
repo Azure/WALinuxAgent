@@ -1,8 +1,4 @@
-#!/usr/bin/env python
-#
-# Azure Linux Agent
-#
-# Copyright 2015 Microsoft Corporation
+# Copyright 2014 Microsoft Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,34 +12,29 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# Requires Python 2.6+ and Openssl 1.0+
+# Requires Python 2.4+ and Openssl 1.0+
 #
 # Implements parts of RFC 2131, 1541, 1497 and
 # http://msdn.microsoft.com/en-us/library/cc227282%28PROT.10%29.aspx
 # http://msdn.microsoft.com/en-us/library/cc227259%28PROT.13%29.aspx
-#
 
+import tests.env
+import tests.tools as tools
 import os
 import imp
 import sys
-import azurelinuxagent.agent as agent
+import uuid
+import unittest
 
-if __name__ == '__main__' :
-    """
-    Invoke main method of agent
-    """
-    agent.main()
+class TestImportWAAgent(unittest.TestCase):
+    def test_import_waagent(self):
+        agent_path = os.path.join(tools.parent, 'bin/waagent')
+        if sys.version_info[0] == 2:
+            waagent = imp.load_source('waagent', agent_path) 
+            self.assertNotEquals(None, waagent.LoggerInit)
+        else:
+            self.assertRaises(ImportError, imp.load_source, 'waagent', 
+                              agent_path)
 
-if __name__ == 'waagent':
-    """
-    Load waagent2.0 to support old version of extensions
-    """
-    if sys.version_info[0] == 3:
-        raise ImportError("waagent2.0 doesn't support python3")
-    bin_path = os.path.dirname(os.path.abspath(__file__))
-    agent20_path = os.path.join(bin_path, "waagent2.0")
-    if not os.path.isfile(agent20_path):
-        raise ImportError("Can't load waagent")
-    agent20 = imp.load_source('waagent', agent20_path)
-    __all__ = dir(agent20)
-
+if __name__ == '__main__':
+    unittest.main()

@@ -39,7 +39,7 @@ def get_data_files(name, version, fullname):
 
     #Script file
     script_dest = '/usr/sbin'
-    script_src = ['bin/waagent']
+    script_src = ['bin/waagent', 'bin/waagent2.0']
     if name == 'coreos':
         script_dest = '/usr/share/oem/bin'
     data_files.append((script_dest, script_src))

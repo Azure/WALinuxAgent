@@ -57,3 +57,6 @@ waagentc
 *.pyproj
 *.sln
 *.suo
+
+waagentc
+bin/waagent2.0c
