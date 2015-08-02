@@ -26,7 +26,7 @@ import os
 import test
 import azurelinuxagent.protocol.v1 as v1
 
-goal_state_sample="""\
+goal_state_sample=u"""\
 <?xml version="1.0" encoding="utf-8"?>
 <GoalState xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="goalstate10.xsd">
    <Version>2010-12-15</Version>

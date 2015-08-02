@@ -22,6 +22,7 @@ Log utils
 """
 
 import sys
+from azurelinuxagent.future import text
 import azurelinuxagent.utils.textutil as textutil
 from datetime import datetime
 
@@ -52,13 +53,14 @@ class Logger(object):
             msg = msg_format.format(*args)
         else:
             msg = msg_format
-        time = datetime.now().strftime('%Y/%m/%d %H:%M:%S.%f')
+        time = datetime.now().strftime(u'%Y/%m/%d %H:%M:%S.%f')
         level_str = LogLevel.STRINGS[level]
         if self.prefix is not None:
-            log_item = "{0} {1} {2} {3}".format(time, level_str, self.prefix,
-                                                msg)
+            log_item = u"{0} {1} {2} {3}\n".format(time, level_str, self.prefix,
+                                                   msg)
         else:
-            log_item = "{0} {1} {2}".format(time, level_str, msg)
+            log_item = u"{0} {1} {2}\n".format(time, level_str, msg)
+        log_item = text(log_item.encode("ascii", "backslashreplace"), encoding='ascii')
         for appender in self.appenders:
             appender.write(level, log_item)
 

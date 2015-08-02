@@ -27,7 +27,7 @@ import json
 import azurelinuxagent.utils.fileutil as fileutil
 import azurelinuxagent.protocol.v1 as v1
 
-certs_sample="""\
+certs_sample=u"""\
 <?xml version="1.0" encoding="utf-8"?>
 <CertificateFile xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="certificates10.xsd">
   <Version>2012-11-30</Version>
@@ -111,7 +111,7 @@ h+249Wj0Bw==
 </CertificateFile>
 """
 
-transport_cert="""\
+transport_cert=u"""\
 -----BEGIN CERTIFICATE-----
 MIIDBzCCAe+gAwIBAgIJANujJuVt5eC8MA0GCSqGSIb3DQEBCwUAMBkxFzAVBgNV
 BAMMDkxpbnV4VHJhbnNwb3J0MCAXDTE0MTAyNDA3MjgwN1oYDzIxMDQwNzEyMDcy
@@ -133,7 +133,7 @@ DsfY6XGSEIhZnA4=
 -----END CERTIFICATE-----
 """
 
-transport_private="""\
+transport_private=u"""\
 -----BEGIN PRIVATE KEY-----
 MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDT3CQJHeleTXqI
 EioyHk1zlguccyk8riT7eGGTFUqLFNJSOmtMB6foNnz9ts61bMFvkCc+gFVqIyBK

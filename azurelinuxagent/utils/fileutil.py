@@ -30,44 +30,37 @@ import azurelinuxagent.logger as logger
 from azurelinuxagent.future import text
 import azurelinuxagent.utils.textutil as textutil
 
-def read_file(filepath, asbin=False, remove_bom=False):
+def read_file(filepath, asbin=False, remove_bom=False, encoding='utf-8'):
     """
     Read and return contents of 'filepath'.
     """
-    mode = 'r'
-    if asbin:
-        mode += 'b'
+    mode = 'rb'
     with open(filepath, mode) as in_file:
-        contents = in_file.read()
-    if (not asbin) and remove_bom:
-        contents = textutil.remove_bom(contents)
-    return contents
+        data = in_file.read()
+        if asbin:
+            return data
+        else:
+            contents = text(data, encoding=encoding)
+            if remove_bom:
+                contents = textutil.remove_bom(contents)
+            return contents
 
-def write_file(filepath, contents, asbin=False):
+def write_file(filepath, contents, asbin=False, encoding='utf-8', append=False):
     """
     Write 'contents' to 'filepath'.
     """
-    if asbin:
-        mode = 'wb'
-    else:
-        mode = 'w'
-        if type(contents) != str:
-            contents = text(contents)
+    mode = "ab" if append else "wb"
+    data = contents
+    if not asbin:
+        data = contents.encode(encoding)
     with open(filepath, mode) as out_file:
-        out_file.write(contents)
+        out_file.write(data)
 
-def append_file(filepath, contents, asbin=False):
+def append_file(filepath, contents, asbin=False, encoding='utf-8'):
     """
     Append 'contents' to 'filepath'.
     """
-    if asbin:
-        mode = 'ab'
-    else:
-        mode = 'a'
-        if type(contents) != str:
-            contents = text(contents)
-    with open(filepath, mode) as out_file:
-        out_file.write(contents)
+    write_file(filepath, contents, asbin=asbin, encoding=encoding, append=True)
 
 def replace_file(filepath, contents):
     """

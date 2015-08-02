@@ -256,7 +256,7 @@ def socket_send(request):
     except IOError as e:
         raise AgentNetworkError("{0}".format(e))
     finally:
-        if sock:
+        if sock is not None:
             sock.close()
 
 def build_dhcp_request(mac_addr):

@@ -35,21 +35,19 @@ class TestFileOperations(unittest.TestCase):
         self.assertTrue(tools.simple_file_grep(test_file, content))
 
         content_read = fileutil.read_file('/tmp/test_file')
-        print(type(content_read))
         self.assertEquals(content, content_read)
         os.remove(test_file)
     
     def test_rw_utf8_file(self):
         test_file='/tmp/test_file3'
         content = "\u6211"
-        fileutil.write_file(test_file, content)
+        fileutil.write_file(test_file, content, encoding="utf-8")
         self.assertTrue(tools.simple_file_grep(test_file, content))
 
         content_read = fileutil.read_file('/tmp/test_file3')
         self.assertEquals(content, content_read)
         os.remove(test_file)
-    
-
+   
     def test_append_file(self):
         test_file='/tmp/test_file2'
         content = text(uuid.uuid4())

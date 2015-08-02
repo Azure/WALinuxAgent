@@ -26,7 +26,7 @@ import os
 import json
 import azurelinuxagent.protocol.v1 as v1
 
-ext_conf_sample="""\
+ext_conf_sample=u"""\
 <Extensions version="1.0.0.0" goalStateIncarnation="9"><GuestAgentExtension xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
   <GAFamilies>
     <GAFamily>
@@ -74,7 +74,7 @@ ext_conf_sample="""\
 <StatusUploadBlob>https://yuezhatest.blob.core.windows.net/vhds/test-cs12.test-cs12.test-cs12.status?sr=b&amp;sp=rw&amp;se=9999-01-01&amp;sk=key1&amp;sv=2014-02-14&amp;sig=hfRh7gzUE7sUtYwke78IOlZOrTRCYvkec4hGZ9zZzXo%3D</StatusUploadBlob></Extensions>
 """
 
-manifest_sample="""\
+manifest_sample=u"""\
 <?xml version="1.0" encoding="utf-8"?>
 <PluginVersionManifest xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
     <Plugins>
@@ -102,7 +102,7 @@ manifest_sample="""\
 </PluginVersionManifest>
 """
 
-EmptySettings="""\
+EmptySettings=u"""\
 <Extensions>
     <Plugins>
         <Plugin name="OSTCExtensions.ExampleHandlerLinux" version="1.4" location="http://rdfepirv2hknprdstr03.blob.core.windows.net/b01058962be54ceca550a390fa5ff064/Microsoft.OSTCExtensions_CustomScriptForLinuxTest_asiaeast_manifest.xml" config="" state="enabled" autoUpgrade="true" failoverlocation="http://rdfepirv2hknprdstr04.blob.core.windows.net/b01058962be54ceca550a390fa5ff064/Microsoft.OSTCExtensions_CustomScriptForLinuxTest_asiaeast_manifest.xml" runAsStartupTask="false" isJson="true" />
