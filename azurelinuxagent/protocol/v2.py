@@ -22,8 +22,9 @@ import azurelinuxagent.utils.restutil as restutil
 from azurelinuxagent.protocol.common import *
 
 ENDPOINT='169.254.169.254'
-APIVERSION='2015-05-01-preview'
 #TODO use http for azure pack test
+#ENDPOINT='localhost'
+APIVERSION='2015-05-01-preview'
 BASE_URI = "http://{0}/Microsoft.Compute/{1}?api-version={{{2}}}{3}"
 
 def _add_content_type(headers):

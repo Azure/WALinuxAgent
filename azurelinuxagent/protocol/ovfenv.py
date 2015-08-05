@@ -59,6 +59,7 @@ def copy_ovf_env():
         ovf_file_path = os.path.join(OSUTIL.get_lib_dir(), OVF_FILE_NAME)
         fileutil.write_file(ovf_file_path, ovfxml)
         OSUTIL.umount_dvd()
+        OSUTIL.eject_dvd()
     except IOError as e:
         raise ProtocolError(text(e))
     except OSUtilError as e:
