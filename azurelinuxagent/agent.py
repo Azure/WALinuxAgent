@@ -26,8 +26,9 @@ import sys
 import re
 import subprocess
 from azurelinuxagent.metadata import AGENT_NAME, AGENT_LONG_VERSION, \
-                                     DISTRO_NAME, DISTRO_VERSION
-
+                                     DISTRO_NAME, DISTRO_VERSION, \
+                                     PY_VERSION_MAJOR, PY_VERSION_MINOR, \
+                                     PY_VERSION_MICRO
 from azurelinuxagent.utils.osutil import OSUTIL
 from azurelinuxagent.handler import HANDLERS
 
@@ -87,6 +88,8 @@ def version():
     """
     print(("{0} running on {1} {2}".format(AGENT_LONG_VERSION, DISTRO_NAME,
                                           DISTRO_VERSION)))
+    print("Python: {0}.{1}.{2}".format(PY_VERSION_MAJOR, PY_VERSION_MINOR,
+                                       PY_VERSION_MICRO))
 def usage():
     """
     Show agent usage

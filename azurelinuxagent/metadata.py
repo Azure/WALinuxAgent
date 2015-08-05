@@ -20,6 +20,7 @@
 import os
 import re
 import platform
+import sys
 from azurelinuxagent.future import text
 
 def get_distro():
@@ -58,4 +59,9 @@ DISTRO_NAME = __distro__[0]
 DISTRO_VERSION = __distro__[1]
 DISTRO_CODE_NAME = __distro__[2]
 DISTRO_FULL_NAME = __distro__[3]
+
+PY_VERSION = sys.version_info
+PY_VERSION_MAJOR = sys.version_info[0]
+PY_VERSION_MINOR = sys.version_info[1]
+PY_VERSION_MICRO = sys.version_info[2]
 
