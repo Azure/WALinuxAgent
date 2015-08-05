@@ -917,9 +917,9 @@ class ExtensionsConfig(object):
             handler_settings = plugin_settings_list["handlerSettings"]
             ext_settings = ExtensionSettings()
             ext_settings.sequenceNumber = seqNo
-            ext_settings.publicSettings = handler_settings["publicSettings"]
-            ext_settings.privateSettings = handler_settings["protectedSettings"]
-            thumbprint = handler_settings["protectedSettingsCertThumbprint"]
+            ext_settings.publicSettings = handler_settings.get("publicSettings", None)
+            ext_settings.privateSettings = handler_settings.get("protectedSettings", None)
+            thumbprint = handler_settings.get("protectedSettingsCertThumbprint", None)
             ext_settings.certificateThumbprint = thumbprint
             ext.properties.extensions.append(ext_settings)
 
