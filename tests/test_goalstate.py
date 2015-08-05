@@ -46,7 +46,6 @@ goal_state_sample=u"""\
          <Configuration>
          <HostingEnvironmentConfig>http://hostingenvuri/</HostingEnvironmentConfig>
          <SharedConfig>http://sharedconfiguri/</SharedConfig>
-         <Certificates>http://certificatesuri/</Certificates>
          <ExtensionsConfig>http://extensionsconfiguri/</ExtensionsConfig>
          <FullConfig>http://fullconfiguri/</FullConfig>
          </Configuration>
@@ -63,7 +62,7 @@ class TestGoalState(unittest.TestCase):
         self.assertNotEquals(None, goal_state.expected_state)
         self.assertNotEquals(None, goal_state.hosting_env_uri)
         self.assertNotEquals(None, goal_state.shared_conf_uri)
-        self.assertNotEquals(None, goal_state.certs_uri)
+        self.assertEquals(None, goal_state.certs_uri)
         self.assertNotEquals(None, goal_state.ext_uri)
         self.assertNotEquals(None, goal_state.role_instance_id)
         self.assertNotEquals(None, goal_state.container_id)

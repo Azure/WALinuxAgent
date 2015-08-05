@@ -406,24 +406,32 @@ class WireClient(object):
         self.req_count = 0
 
     def update_hosting_env(self, goal_state):
+        if goal_state.hosting_env_uri is None:
+            raise ProtocolError("HostingEnvironmentConfig uri is empty")
         local_file = HOSTING_ENV_FILE_NAME
         xml_text = _fetch_uri(goal_state.hosting_env_uri, self.get_header())
         fileutil.write_file(local_file, xml_text)
         self.hosting_env = HostingEnv(xml_text)
 
     def update_shared_conf(self, goal_state):
+        if goal_state.shared_conf_uri is None:
+            raise ProtocolError("SharedConfig uri is empty")
         local_file = SHARED_CONF_FILE_NAME
         xml_text = _fetch_uri(goal_state.shared_conf_uri, self.get_header())
         fileutil.write_file(local_file, xml_text)
         self.shared_conf = SharedConfig(xml_text)
 
     def update_certs(self, goal_state):
+        if goal_state.certs_uri is None:
+            return
         local_file = CERTS_FILE_NAME
         xml_text = _fetch_uri(goal_state.certs_uri, self.get_header_for_cert())
         fileutil.write_file(local_file, xml_text)
         self.certs = Certificates(xml_text)
 
     def update_ext_conf(self, goal_state):
+        if goal_state.ext_uri is None:
+            raise ProtocolError("ExtensionsConfig uri is empty")
         incarnation = goal_state.incarnation
         local_file = EXT_CONF_FILE_NAME.format(incarnation)
         xml_text = _fetch_uri(goal_state.ext_uri,
@@ -498,6 +506,8 @@ class WireClient(object):
         if(self.certs is None):
             xml_text = _fetch_cache(Certificates)
             self.certs = Certificates(xml_text)
+        if self.certs is None:
+            return None
         return self.certs
 
     def get_ext_conf(self):
