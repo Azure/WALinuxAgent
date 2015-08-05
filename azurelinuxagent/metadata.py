@@ -65,3 +65,29 @@ PY_VERSION_MAJOR = sys.version_info[0]
 PY_VERSION_MINOR = sys.version_info[1]
 PY_VERSION_MICRO = sys.version_info[2]
 
+
+"""
+Add this walk arround for detecting Snappy Ubuntu Core temporarily, until ubuntu 
+fixed this bug: https://bugs.launchpad.net/snappy/+bug/1481086
+"""
+def which(program):
+    # Return path of program for execution if found in path
+    def is_exe(fpath):
+        return os.path.isfile(fpath) and os.access(fpath, os.X_OK)
+    _fpath, _ = os.path.split(program)
+    if _fpath:
+        if is_exe(program):
+            return program
+    else:
+        for path in os.environ.get("PATH", "").split(os.pathsep):
+            path = path.strip('"')
+            exe_file = os.path.join(path, program)
+            if is_exe(exe_file):
+                return exe_file
+    return None
+
+def is_snappy():
+       return which("snappy")
+
+if is_snappy():
+    DISTRO_FULL_NAME = "Snappy Ubuntu Core"
