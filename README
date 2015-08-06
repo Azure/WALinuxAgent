@@ -90,7 +90,7 @@ files provided (see debian/README and rpm/README).
 For more advanced installation options, such as installing to custom locations 
 or prefixes, you can use setuptools to install from source by running:
    
-    #sudo python setup.py install
+    #sudo python setup.py install --register-service
 
 You can view more installation options by running:
 
