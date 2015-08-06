@@ -87,23 +87,24 @@ Installation via your distribution's package repository is preferred.
 You can also customize your own RPM or DEB packages using the configuration
 files provided (see debian/README and rpm/README).
 
-If installing manually, waagent should be copied to /usr/sbin/waagent and
-installed by running:
+For more advanced installation options, such as installing to custom locations 
+or prefixes, you can use setuptools to install from source by running:
+   
+    #sudo python setup.py install
 
-    # sudo chmod 755 /usr/sbin/waagent
-    # sudo /usr/sbin/waagent -install -verbose
+You can view more installation options by running:
+
+    #sudo python setup.py install --help
 
 The agent's log file is kept at /var/log/waagent.log.
-
 
 UPGRADE
 
 Upgrading via your distribution's package repository is preferred.
 
-If upgrading manually, same with installation above, waagent should be copied 
-to /usr/sbin/waagent to override original file and installed by running:
+If upgrading manually, same with installation above by running:
 
-    # sudo chmod 755 /usr/sbin/waagent
+    #sudo python setup.py install -force
 
 Restart waagent service,for most of linux distributions:
 
@@ -177,6 +178,7 @@ Commands:
   -daemon: Run waagent as a daemon to manage interaction with the platform.
    This argument is specified to waagent in the waagent init script.
 
+  -start: Run waagent as a background process
 
 CONFIGURATION
 
