@@ -44,9 +44,9 @@ def get_distro():
     osinfo[0] = osinfo[0].strip('"').strip(' ').lower()
     return osinfo
 
-AGENT_NAME = "AzureLinuxAgent"
+AGENT_NAME = "WALinuxAgent"
 AGENT_LONG_NAME = "Azure Linux Agent"
-AGENT_VERSION = '2.1.1-pre'
+AGENT_VERSION = '2.1.1'
 AGENT_LONG_VERSION = "{0}-{1}".format(AGENT_NAME, AGENT_VERSION)
 AGENT_DESCRIPTION = """\
 The Azure Linux Agent supports the provisioning and running of Linux
