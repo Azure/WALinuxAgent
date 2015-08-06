@@ -48,6 +48,9 @@ class DhcpHandler(object):
         mac_addr = OSUTIL.get_mac_addr()
         req = build_dhcp_request(mac_addr)
         resp = send_dhcp_request(req)
+        if resp is None:
+            logger.warn("Failed to detect wire server.")
+            return 
         endpoint, gateway, routes = parse_dhcp_resp(resp)
         self.endpoint = endpoint
         logger.info("Wire server endpoint:{0}", endpoint)
@@ -235,9 +238,9 @@ def send_dhcp_request(request):
             validate_dhcp_resp(request, response)
             return response
         except AgentNetworkError as e:
-            logger.error("Failed to send DHCP request: {0}", e)
-            return None
+            logger.warn("Failed to send DHCP request: {0}", e)
         time.sleep(duration)
+    return None
 
 def socket_send(request):
     sock = None

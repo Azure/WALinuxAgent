@@ -34,6 +34,7 @@ with open(os.path.join(env.test_root, "dhcp"), 'rb') as F:
 mock_socket_send = MockFunc('socket_send', SampleDhcpResponse)
 mock_gen_trans_id = MockFunc('gen_trans_id', "\xC6\xAA\xD1\x5D")
 mock_get_mac_addr = MockFunc('get_mac_addr', "\x00\x15\x5D\x38\xAA\x38")
+mock_send_dhcp_failed = MockFunc(retval=None)
 
 class TestdhcpHandler(unittest.TestCase):
  
@@ -47,6 +48,11 @@ class TestdhcpHandler(unittest.TestCase):
         req = dhcp_handler.build_dhcp_request(mock_get_mac_addr())
         resp = dhcp_handler.send_dhcp_request(req)
         self.assertNotEquals(None, resp)
+
+    @mock(dhcp_handler, "send_dhcp_request", mock_send_dhcp_failed)
+    def test_send_dhcp_failed(self):
+        dhcp = dhcp_handler.DhcpHandler()
+        dhcp.probe()
 
     @mock(dhcp_handler, "socket_send", mock_socket_send)
     @mock(dhcp_handler, "gen_trans_id", mock_gen_trans_id)
