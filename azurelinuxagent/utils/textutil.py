@@ -170,8 +170,6 @@ def str_to_ord(a):
     Allows indexing into a string or an array of integers transparently.
     Generic utility function.
     """
-    print(type(a))
-    print(a)
     if type(a) == type(b'') or type(a) == type(u''):
         a = ord(a)
     return a

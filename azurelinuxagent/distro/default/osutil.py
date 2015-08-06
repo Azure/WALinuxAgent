@@ -476,7 +476,6 @@ class DefaultOSUtil(object):
     def is_missing_default_route(self):
         routes = shellutil.run_get_output("route -n")[1]
         for route in routes.split("\n"):
-            print(route)
             if route.startswith("0.0.0.0 ") or route.startswith("default "):
                return False
         return True

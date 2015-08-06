@@ -26,9 +26,9 @@
 import os
 import imp
 import sys
-import azurelinuxagent.agent as agent
 
 if __name__ == '__main__' :
+    import azurelinuxagent.agent as agent
     """
     Invoke main method of agent
     """
