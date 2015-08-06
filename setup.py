@@ -85,11 +85,11 @@ def get_data_files(name, version, fullname):
             set_files(data_files, dest='/etc/default', 
                       src=['init/ubuntu/walinuxagent'])
         elif fullname == 'Snappy Ubuntu Core':
-            set_systemd_files(data_files, 
-                              src=["init/ubuntu/walinuxagent.service"])
-        else:
             set_files(data_files, dest="<TODO>", 
                       src=["init/ubuntu/snappy/walinuxagent.yml"])
+        else:
+            set_systemd_files(data_files, 
+                              src=["init/ubuntu/walinuxagent.service"])
     elif name == 'suse':
         set_bin_files(data_files)
         set_conf_files(data_files, src=["config/suse/waagent.conf"])
