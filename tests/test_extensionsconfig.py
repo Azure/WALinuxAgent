@@ -128,7 +128,7 @@ EmptyPublicSettings=u"""\
 class TestExtensionsConfig(unittest.TestCase):
     def test_extensions_config(self):
         config = v1.ExtensionsConfig(ext_conf_sample)
-        extensions = config.ext_list.extensions
+        extensions = config.ext_handlers.extHandlers
         self.assertNotEquals(None, extensions)
         self.assertEquals(1, len(extensions))
         self.assertNotEquals(None, extensions[0])

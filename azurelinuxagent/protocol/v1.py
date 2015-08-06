@@ -77,31 +77,36 @@ class WireProtocol(Protocol):
         certificates = self.client.get_certs()
         return certificates.cert_list
 
-    def get_extensions(self):
+    def get_ext_handlers(self):
         #Update goal state to get latest extensions config
         self.client.update_goal_state()
         ext_conf = self.client.get_ext_conf()
-        return ext_conf.ext_list
+        return ext_conf.ext_handlers
 
-    def get_extension_pkgs(self, extension):
+    def get_ext_handler_pkgs(self, ext_handler):
         goal_state = self.client.get_goal_state()
-        man = self.client.get_ext_manifest(extension, goal_state)
+        man = self.client.get_ext_manifest(ext_handler, goal_state)
         return man.pkg_list
    
-    def report_provision_status(self, provisionStatus):
-        validata_param("provisionStatus", provisionStatus, ProvisionStatus)
+    def report_provision_status(self, provision_status):
+        validata_param("provision_status", provision_status, ProvisionStatus)
 
-        if provisionStatus.status is not None:
-            self.client.report_health(provisionStatus.status,
-                                     provisionStatus.subStatus,
-                                     provisionStatus.description)
-        if provisionStatus.properties.certificateThumbprint is not None:
-            thumbprint = provisionStatus.properties.certificateThumbprint
+        if provision_status.status is not None:
+            self.client.report_health(provision_status.status,
+                                      provision_status.subStatus,
+                                      provision_status.description)
+        if provision_status.properties.certificateThumbprint is not None:
+            thumbprint = provision_status.properties.certificateThumbprint
             self.client.report_role_prop(thumbprint)
 
-    def report_status(self, vmStatus):
-        validata_param("vmStatus", vmStatus, VMStatus)
-        self.client.upload_status_blob(vmStatus)
+    def report_vm_status(self, vm_status):
+        validata_param("vm_status", vm_status, VMStatus)
+        self.client.status_blob.set_vm_status(vm_status)
+        self.client.upload_status_blob()
+
+    def report_ext_status(self, ext_handler_name, ext_name, ext_status):
+        validata_param("ext_status", ext_status, ExtensionStatus)
+        self.client.status_blob.set_ext_status(ext_handler_name, ext_status)
 
     def report_event(self, events):
         validata_param("events", events, TelemetryEventList)
@@ -193,19 +198,19 @@ def _build_health_report(incarnation, container_id, role_instance_id,
 """
 Convert VMStatus object to status blob format
 """
-def guest_agent_status_to_v1(ga_status):
+def ga_status_to_v1(ga_status):
     formatted_msg = {
         'lang' : 'en-US',
         'message' : ga_status.message
     }
     v1_ga_status = {
-        'version' : ga_status.agentVersion,
+        'version' : ga_status.version,
         'status' : ga_status.status,
         'formattedMessage' : formatted_msg
     }
     return v1_ga_status
 
-def extension_substatus_to_v1(sub_status_list):
+def ext_substatus_to_v1(sub_status_list):
     status_list = []
     for substatus in sub_status_list:
         status = {
@@ -220,14 +225,14 @@ def extension_substatus_to_v1(sub_status_list):
         status_list.append(status)
     return status_list
 
-def extension_handler_status_to_v1(handler_status, timestamp):
-    if handler_status is None or len(handler_status.extensionStatusList) == 0:
-        return
-    ext_status = handler_status.extensionStatusList[0]
-    sub_status = extension_substatus_to_v1(ext_status.substatusList)
-    ext_in_status = {
+def ext_status_to_v1(ext_name, ext_status):
+    if ext_status is None:
+        return None
+    timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    v1_sub_status = ext_substatus_to_v1(ext_status.substatusList)
+    v1_ext_status = {
         "status":{
-            "name": ext_status.name,
+            "name": ext_name,
             "configurationAppliedTime": ext_status.configurationAppliedTime,
             "operation": ext_status.operation,
             "status": ext_status.status,
@@ -239,31 +244,41 @@ def extension_handler_status_to_v1(handler_status, timestamp):
         },
         "timestampUTC": timestamp
     }
-
-    if len(sub_status) != 0:
-        ext_in_status['substatus'] = sub_status
-
+    if len(v1_sub_status) != 0:
+        v1_ext_status['substatus'] = v1_sub_status
+    return v1_ext_status
+    
+def ext_handler_status_to_v1(handler_status, ext_statuses, timestamp):
     v1_handler_status = {
-        'handlerVersion' : handler_status.handlerVersion,
-        'handlerName' : handler_status.handlerName,
+        'handlerVersion' : handler_status.version,
+        'handlerName' : handler_status.name,
         'status' : handler_status.status,
         'runtimeSettingsStatus' : {
-            'settingsStatus' : ext_in_status,
-            'sequenceNumber' : ext_status.sequenceNumber
         }
     }
+
+    if len(handler_status.extensions) > 0:
+        #Currently, no more than one extension per handler
+        ext_name = handler_status.extensions[0]
+        ext_status = ext_statuses.get(ext_name)
+        v1_ext_status = ext_status_to_v1(ext_name, ext_status)
+        if ext_status is not None and v1_ext_status is not None:
+            v1_handler_status["runtimeSettingsStatus"] = {
+                'settingsStatus' : v1_ext_status,
+                'sequenceNumber' : ext_status.sequenceNumber
+            }
     return v1_handler_status
 
-
-def vm_status_to_v1(vm_status):
+def vm_status_to_v1(vm_status, ext_statuses):
     timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
-    v1_ga_status = guest_agent_status_to_v1(vm_status.vmAgent)
+    v1_ga_status = ga_status_to_v1(vm_status.vmAgent)
     v1_handler_status_list = []
-    for handler_status in vm_status.extensionHandlers:
-        v1_handler_status = extension_handler_status_to_v1(handler_status,
-                                                          timestamp)
-        v1_handler_status_list.append(v1_handler_status)
+    for handler_status in vm_status.vmAgent.extensionHandlers:
+        v1_handler_status = ext_handler_status_to_v1(handler_status, 
+                                                     ext_statuses, timestamp)
+        if v1_handler_status is not None:
+            v1_handler_status_list.append(v1_handler_status)
 
     v1_agg_status = {
         'guestAgentStatus': v1_ga_status,
@@ -278,16 +293,26 @@ def vm_status_to_v1(vm_status):
 
 
 class StatusBlob(object):
-    def __init__(self, vm_status):
-        self.vm_status = vm_status
+    def __init__(self):
+        self.vm_status = None
+        self.ext_statuses = {}
 
+    def set_vm_status(self, vm_status):
+        validata_param("vmAgent", vm_status, VMStatus)
+        self.vm_status = vm_status
+    
+    def set_ext_status(self, ext_handler_name, ext_status):
+        validata_param("extensionStatus", ext_status, ExtensionStatus)
+        self.ext_statuses[ext_handler_name]= ext_status
+        
     def to_json(self):
-        report = vm_status_to_v1(self.vm_status)
+        report = vm_status_to_v1(self.vm_status, self.ext_statuses)
         return json.dumps(report)
 
     __storage_version__ = "2014-02-14"
 
     def upload(self, url):
+        #TODO upload extension only if content has changed
         logger.info("Upload status blob")
         blob_type = self.get_blob_type(url)
 
@@ -416,6 +441,7 @@ class WireClient(object):
         self.certs = None
         self.ext_conf = None
         self.req_count = 0
+        self.status_blob = StatusBlob()
 
     def update_hosting_env(self, goal_state):
         if goal_state.hosting_env_uri is None:
@@ -450,13 +476,13 @@ class WireClient(object):
                             self.get_header())
         fileutil.write_file(local_file, xml_text)
         self.ext_conf = ExtensionsConfig(xml_text)
-        for extension in self.ext_conf.ext_list.extensions:
-            self.update_ext_manifest(extension, goal_state)
+        for ext_handler in self.ext_conf.ext_handlers.extHandlers:
+            self.update_ext_handler_manifest(ext_handler, goal_state)
 
-    def update_ext_manifest(self, extension, goal_state):
-        local_file = MANIFEST_FILE_NAME.format(extension.name,
-                                        goal_state.incarnation)
-        xml_text = _fetch_manifest(extension.version_uris)
+    def update_ext_handler_manifest(self, ext_handler, goal_state):
+        local_file = MANIFEST_FILE_NAME.format(ext_handler.name,
+                                               goal_state.incarnation)
+        xml_text = _fetch_manifest(ext_handler.versionUris)
         fileutil.write_file(local_file, xml_text)
 
     def update_goal_state(self, forced=False, max_retry=3):
@@ -551,11 +577,10 @@ class WireClient(object):
             error = ("Agent supported wire protocol version: {0} was not "
                      "advised by Fabric.").format(PROTOCOL_VERSION)
             raise ProtocolNotFound(error)
-
-    def upload_status_blob(self, vm_status):
+   
+    def upload_status_blob(self):
         ext_conf = self.get_ext_conf()
-        status_blob = StatusBlob(vm_status)
-        status_blob.upload(ext_conf.status_upload_blob)
+        self.status_blob.upload(ext_conf.status_upload_blob)
 
     def report_role_prop(self, thumbprint):
         goal_state = self.get_goal_state()
@@ -851,7 +876,7 @@ class Certificates(object):
 
         for v1_cert in v1_cert_list:
             cert = Cert()
-            set_properties(cert, v1_cert)
+            set_properties("certs", cert, v1_cert)
             self.cert_list.certificates.append(cert)
 
     def write_to_tmp_file(self, index, suffix, buf):
@@ -871,7 +896,7 @@ class ExtensionsConfig(object):
         if xml_text is None:
             raise ValueError("ExtensionsConfig is None")
         logger.verb("Load ExtensionsConfig.xml")
-        self.ext_list = ExtensionList()
+        self.ext_handlers = ExtHandlerList()
         self.status_upload_blob = None
         self.parse(xml_text)
 
@@ -886,38 +911,38 @@ class ExtensionsConfig(object):
         plugin_settings = findall(plugin_settings_list, "Plugin")
 
         for plugin in plugins:
-            ext = self.parse_ext(plugin)
-            self.ext_list.extensions.append(ext)
-            self.parse_ext_settings(ext, plugin_settings)
+            ext_handler = self.parse_plugin(plugin)
+            self.ext_handlers.extHandlers.append(ext_handler)
+            self.parse_plugin_settings(ext_handler, plugin_settings)
 
         self.status_upload_blob = findtext(xml_doc, "StatusUploadBlob")
 
-    def parse_ext(self, plugin):
-        ext = Extension()
-        ext.name = getattrib(plugin, "name")
-        ext.properties.version = getattrib(plugin, "version")
-        ext.properties.state = getattrib(plugin, "state")
+    def parse_plugin(self, plugin):
+        ext_handler = ExtHandler()
+        ext_handler.name = getattrib(plugin, "name")
+        ext_handler.properties.version = getattrib(plugin, "version")
+        ext_handler.properties.state = getattrib(plugin, "state")
 
         auto_upgrade = getattrib(plugin, "autoUpgrade")
         if auto_upgrade is not None and auto_upgrade.lower() == "true":
-            ext.properties.upgradePolicy = "auto"
+            ext_handler.properties.upgradePolicy = "auto"
         else:
-            ext.properties.upgradePolicy = "manual"
+            ext_handler.properties.upgradePolicy = "manual"
 
         location = getattrib(plugin, "location")
         failover_location = getattrib(plugin, "failoverlocation")
         for uri in [location, failover_location]:
-            version_uri = ExtensionVersionUri()
+            version_uri = ExtHandlerVersionUri()
             version_uri.uri = uri
-            ext.version_uris.append(version_uri)
-        return ext
+            ext_handler.versionUris.append(version_uri)
+        return ext_handler
 
-    def parse_ext_settings(self, ext, plugin_settings):
+    def parse_plugin_settings(self, ext_handler, plugin_settings):
         if plugin_settings is None:
             return 
 
-        name = ext.name
-        version = ext.properties.version
+        name = ext_handler.name
+        version = ext_handler.properties.version
         settings = [x for x in plugin_settings \
                           if getattrib(x, "name") == name and \
                              getattrib(x ,"version") == version]
@@ -937,20 +962,23 @@ class ExtensionsConfig(object):
 
         for plugin_settings_list in runtime_settings["runtimeSettings"]:
             handler_settings = plugin_settings_list["handlerSettings"]
-            ext_settings = ExtensionSettings()
-            ext_settings.sequenceNumber = seqNo
-            ext_settings.publicSettings = handler_settings.get("publicSettings", None)
-            ext_settings.privateSettings = handler_settings.get("protectedSettings", None)
-            thumbprint = handler_settings.get("protectedSettingsCertThumbprint", None)
-            ext_settings.certificateThumbprint = thumbprint
-            ext.properties.extensions.append(ext_settings)
+            ext = Extension()
+            #There is no "extension name" in wire protocol.
+            #Put
+            ext.name = ext_handler.name
+            ext.sequenceNumber = seqNo
+            ext.publicSettings = handler_settings.get("publicSettings")
+            ext.privateSettings = handler_settings.get("protectedSettings")
+            thumbprint = handler_settings.get("protectedSettingsCertThumbprint")
+            ext.certificateThumbprint = thumbprint
+            ext_handler.properties.extensions.append(ext)
 
 class ExtensionManifest(object):
     def __init__(self, xml_text):
         if xml_text is None:
             raise ValueError("ExtensionManifest is None")
         logger.verb("Load ExtensionManifest.xml")
-        self.pkg_list = ExtensionPackageList()
+        self.pkg_list = ExtHandlerPackageList()
         self.parse(xml_text)
 
     def parse(self, xml_text):
@@ -961,10 +989,10 @@ class ExtensionManifest(object):
             uris = find(package, "Uris")
             uri_list = findall(uris, "Uri")
             uri_list = [gettext(x) for x in uri_list]
-            package = ExtensionPackage()
+            package = ExtHandlerPackage()
             package.version = version
             for uri in uri_list:
-                pkg_uri = ExtensionPackageUri()
+                pkg_uri = ExtHandlerVersionUri()
                 pkg_uri.uri = uri
                 package.uris.append(pkg_uri)
             self.pkg_list.versions.append(package)

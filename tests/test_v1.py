@@ -134,32 +134,37 @@ class TestWireClint(unittest.TestCase):
 class TestStatusBlob(unittest.TestCase):
     def testToJson(self):
         vm_status = v1.VMStatus()
-        status_blob = v1.StatusBlob(vm_status)
+        status_blob = v1.StatusBlob()
+        status_blob.set_vm_status(vm_status)
         self.assertNotEquals(None, status_blob.to_json())
 
     @mock(v1.restutil, 'http_put', MockFunc(retval=MockResp(httpclient.CREATED)))
     @mock(v1.restutil, 'http_head', MockFunc(retval=MockResp(httpclient.OK)))
     def test_put_page_blob(self):
         vm_status = v1.VMStatus()
-        status_blob = v1.StatusBlob(vm_status)
+        status_blob = v1.StatusBlob()
+        status_blob.set_vm_status(vm_status)
         data = 'a' * 100
         status_blob.put_page_blob("http://foo.bar", data)
 
 class TestConvert(unittest.TestCase):
     def test_status(self):
         vm_status = v1.VMStatus() 
-        handler_status = v1.ExtensionHandlerStatus()
-        substatus = v1.ExtensionSubStatus()
+        handler_status = v1.ExtHandlerStatus(name="foo")
+
+        ext_statuses = {}
+
+        ext_name="bar"
         ext_status = v1.ExtensionStatus()
+        handler_status.extensions.append(ext_name)
+        ext_statuses[ext_name] = ext_status
 
-        vm_status.extensionHandlers.append(handler_status)
-        v1.vm_status_to_v1(vm_status)
-
-        handler_status.extensionStatusList.append(ext_status)
-        v1.vm_status_to_v1(vm_status)
-
+        substatus = v1.ExtensionSubStatus()
         ext_status.substatusList.append(substatus)
-        v1.vm_status_to_v1(vm_status)
+
+        vm_status.vmAgent.extensionHandlers.append(handler_status)
+        v1_status = v1.vm_status_to_v1(vm_status, ext_statuses)
+        print(v1_status)
 
     def test_param(self):
         param = v1.TelemetryEventParam()

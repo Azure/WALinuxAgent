@@ -19,8 +19,7 @@
 # http://msdn.microsoft.com/en-us/library/cc227259%28PROT.13%29.aspx
 
 import tests.env
-import tests.tools as tools
-from .tools import *
+from tests.tools import *
 import uuid
 import unittest
 import os
@@ -33,29 +32,15 @@ extensionDataStr = """
     "vmAgent": {
         "agentVersion": "2.4.1198.689",
         "status": "Ready",
-        "message": "GuestAgent is running and accepting new configurations."
-    },
-    "extensionHandlers": [{
-            "handlerName": "Microsoft.Compute.CustomScript",
-            "handlerVersion": "1.0.0.0",
+        "message": "GuestAgent is running and accepting new configurations.",
+        "extensionHandlers": [{
+            "name": "Microsoft.Compute.CustomScript",
+            "version": "1.0.0.0",
             "status": "Ready",
             "message": "Plugin enabled (name: Microsoft.Compute.CustomScript, version: 1.0.0.0).",
-            "extensionStatusList": [{
-                "name": "MyDomainJoinScript",
-                "configurationAppliedTime": "2014-08-12T19:20:18Z",
-                "operation": "CommandExecutionFinished",
-                "status": "Success",
-                "sequenceNumber": "0",
-                "substatusList": [{
-                    "name": "StdOut",
-                    "status": "Info",
-                    "code": "0",
-                    "message": "Joiningdomainfoo"
-                }]
-            }]
-        }
-
-    ]
+            "extensions": []
+        }]
+    }
 }
 """
 
@@ -63,25 +48,24 @@ class TestProtocolContract(unittest.TestCase):
     def test_get_properties(self):
         data = get_properties(VMInfo())
         data = get_properties(Cert())
-        data = get_properties(ExtensionPackageList())
-        data = get_properties(InstanceMetadata())
+        data = get_properties(ExtHandlerPackageList())
         data = get_properties(VMStatus())
         data = get_properties(TelemetryEventList())
-        data = get_properties(Extension(name="hehe"))
+        data = get_properties(ExtHandler(name="hehe"))
         self.assertTrue("name" in data)
         self.assertTrue("properties" in data)
         self.assertEquals(dict, type(data["properties"]))
-        self.assertTrue("versionUris" not in data)
+        self.assertTrue("versionUris" in data)
 
     def test_set_properties(self):
         data = json.loads(extensionDataStr)
         obj = VMStatus()
-        set_properties(obj, data)
+        set_properties("vmStatus", obj, data)
         self.assertNotEquals(None, obj.vmAgent)
         self.assertEquals(VMAgentStatus, type(obj.vmAgent))
         self.assertNotEquals(None, obj.vmAgent.status)
-        self.assertNotEquals(None, obj.extensionHandlers)
-        self.assertEquals(DataContractList, type(obj.extensionHandlers))
+        self.assertNotEquals(None, obj.vmAgent.extensionHandlers)
+        self.assertEquals(DataContractList, type(obj.vmAgent.extensionHandlers))
 
 if __name__ == '__main__':
     unittest.main()

@@ -22,6 +22,7 @@ import re
 import json
 import xml.dom.minidom
 import azurelinuxagent.logger as logger
+from azurelinuxagent.future import text
 import azurelinuxagent.utils.fileutil as fileutil
 
 class ProtocolError(Exception):
@@ -32,51 +33,49 @@ class ProtocolNotFound(Exception):
 
 def validata_param(name, val, expected_type):
     if val is None:
-        raise ProtocolError("Param {0} is None".format(name))
+        raise ProtocolError("{0} is None".format(name))
     if not isinstance(val, expected_type):
-        raise ProtocolError("Param {0} type should be {1}".format(name,
-                                                                  expected_type))
+        raise ProtocolError(("{0} type should be {1} not {2}"
+                             "").format(name, expected_type, type(val)))
 
-def set_properties(obj, data):
-    validata_param("obj", obj, DataContract)
-    validata_param("data", data, dict)
-
-    props = vars(obj)
-    for name, val in list(props.items()):
-        try:
-            new_val = data[name]
-        except KeyError:
-            continue
-
-        if isinstance(new_val, dict):
-            set_properties(val, new_val)
-        elif isinstance(new_val, list):
-            validata_param("list", val, DataContractList)
-            for data_item in new_val:
-               item = val.item_cls()
-               set_properties(item, data_item)
-               val.append(item)
-        else:
-            setattr(obj, name, new_val)
+def set_properties(name, obj, data):
+    if isinstance(obj, DataContract):
+        validata_param("Property '{0}'".format(name), data, dict)
+        for prob_name, prob_val in data.items():
+            prob_full_name = "{0}.{1}".format(name, prob_name)
+            try:
+                prob =  getattr(obj, prob_name)
+            except AttributeError:
+                logger.warn("Unknown property: {0}", prob_full_name)
+                continue
+            prob = set_properties(prob_full_name, prob, prob_val)
+            setattr(obj, prob_name, prob)
+        return obj
+    elif isinstance(obj, DataContractList):
+        validata_param("List '{0}'".format(name), data, list)
+        for item_data in data:
+            item = obj.item_cls()
+            item = set_properties(name, item, item_data)
+            obj.append(item)
+        return obj
+    else:
+        return data
 
 def get_properties(obj):
-    validata_param("obj", obj, DataContract)
-
-    data = {}
-    props = vars(obj)
-    for name, val in list(props.items()):
-        if isinstance(val, DataContract):
-            data[name] = get_properties(val)
-        elif isinstance(val, DataContractList):
-            if len(val) == 0:
-                continue
-            data[name] = []
-            for item in val:
-                date_item = get_properties(item)
-                data[name].append(date_item)
-        elif val is not None:
-            data[name] = val
-    return data
+    if isinstance(obj, DataContract):
+        data = {}
+        props = vars(obj)
+        for prob_name, prob in list(props.items()):
+            data[prob_name] = get_properties(prob)
+        return data
+    elif isinstance(obj, DataContractList):
+        data = []
+        for item in obj:
+            item_data = get_properties(item)
+            data.append(item_data)
+        return data
+    else:
+        return obj
 
 class DataContract(object):
     pass
@@ -85,6 +84,9 @@ class DataContractList(list):
     def __init__(self, item_cls):
         self.item_cls = item_cls
 
+"""
+Data contract between guest and host
+"""
 class VMInfo(DataContract):
     def __init__(self, subscriptionId=None, vmName=None):
         self.subscriptionId = subscriptionId
@@ -100,8 +102,8 @@ class CertList(DataContract):
     def __init__(self):
         self.certificates = DataContractList(Cert)
 
-class ExtensionSettings(DataContract):
-    def __init__(self, name=None, sequenceNumber=None, publicSettings=None,
+class Extension(DataContract):
+    def __init__(self, name=None, sequenceNumber=None, publicSettings={},
                  privateSettings=None, certificateThumbprint=None):
         self.name = name
         self.sequenceNumber = sequenceNumber
@@ -109,47 +111,39 @@ class ExtensionSettings(DataContract):
         self.privateSettings = privateSettings
         self.certificateThumbprint = certificateThumbprint
 
-class ExtensionProperties(DataContract):
+class ExtHandlerProperties(DataContract):
     def __init__(self):
         self.version = None
         self.upgradePolicy = None
         self.state = None
-        self.extensions = DataContractList(ExtensionSettings)
+        self.extensions = DataContractList(Extension)
 
-class ExtensionVersionUri(DataContract):
+class ExtHandlerVersionUri(DataContract):
     def __init__(self):
         self.uri = None
 
-class Extension(DataContract):
+class ExtHandler(DataContract):
     def __init__(self, name=None):
         self.name = name
-        self.properties = ExtensionProperties()
-        self.version_uris = DataContractList(ExtensionVersionUri)
+        self.properties = ExtHandlerProperties()
+        self.versionUris = DataContractList(ExtHandlerVersionUri)
 
-class ExtensionList(DataContract):
+class ExtHandlerList(DataContract):
     def __init__(self):
-        self.extensions = DataContractList(Extension)
+        self.extHandlers = DataContractList(ExtHandler)
 
-class ExtensionPackageUri(DataContract):
+class ExtHandlerPackageUri(DataContract):
     def __init__(self, uri=None):
         self.uri = uri
 
-class ExtensionPackage(DataContract):
+class ExtHandlerPackage(DataContract):
     def __init__(self, version = None):
         self.version = version
-        self.uris = DataContractList(ExtensionPackageUri)
+        self.uris = DataContractList(ExtHandlerPackageUri)
 
-class ExtensionPackageList(DataContract):
+class ExtHandlerPackageList(DataContract):
     def __init__(self):
-        self.versions = DataContractList(ExtensionPackage)
-
-class InstanceMetadata(DataContract):
-    def __init__(self, deploymentName=None, roleName=None, roleInstanceId=None,
-                 containerId=None):
-        self.deploymentName = deploymentName
-        self.roleName = roleName
-        self.roleInstanceId = roleInstanceId
-        self.containerId = containerId
+        self.versions = DataContractList(ExtHandlerPackage)
 
 class VMProperties(DataContract):
     def __init__(self, certificateThumbprint=None):
@@ -163,12 +157,6 @@ class ProvisionStatus(DataContract):
         self.description = description
         self.properties = VMProperties()
 
-class VMAgentStatus(DataContract):
-    def __init__(self, agentVersion=None, status=None, message=None):
-        self.agentVersion = agentVersion
-        self.status = status
-        self.message = message
-
 class ExtensionSubStatus(DataContract):
     def __init__(self, name=None, status=None, code=None, message=None):
         self.name = name
@@ -177,30 +165,34 @@ class ExtensionSubStatus(DataContract):
         self.message = message
 
 class ExtensionStatus(DataContract):
-    def __init__(self, name=None, configurationAppliedTime=None, operation=None,
-                 status=None, code=None, message=None, seq_no=None):
-        self.name = name
+    def __init__(self, configurationAppliedTime=None, operation=None,
+                 status=None, seq_no=None, code=None, message=None):
         self.configurationAppliedTime = configurationAppliedTime
         self.operation = operation
         self.status = status
+        self.sequenceNumber = seq_no
         self.code = code
         self.message = message
-        self.sequenceNumber = seq_no
         self.substatusList = DataContractList(ExtensionSubStatus)
 
-class ExtensionHandlerStatus(DataContract):
-    def __init__(self, handlerName=None, handlerVersion=None, status=None,
-                 message=None):
-        self.handlerName = handlerName
-        self.handlerVersion = handlerVersion
+class ExtHandlerStatus(DataContract):
+    def __init__(self, name=None, version=None, status=None, message=None):
+        self.name = name
+        self.version = version
         self.status = status
         self.message = message
-        self.extensionStatusList = DataContractList(ExtensionStatus)
+        self.extensions = DataContractList(text)
+
+class VMAgentStatus(DataContract):
+    def __init__(self, version=None, status=None, message=None):
+        self.version = version
+        self.status = status
+        self.message = message
+        self.extensionHandlers = DataContractList(ExtHandlerStatus)
 
 class VMStatus(DataContract):
     def __init__(self):
         self.vmAgent = VMAgentStatus()
-        self.extensionHandlers = DataContractList(ExtensionHandlerStatus)
 
 class TelemetryEventParam(DataContract):
     def __init__(self, name=None, value=None):
@@ -228,16 +220,19 @@ class Protocol(DataContract):
     def get_certs(self):
         raise NotImplementedError()
 
-    def get_extensions(self):
+    def get_ext_handlers(self):
         raise NotImplementedError()
 
-    def get_extension_pkgs(self, extension):
+    def get_ext_handler_pkgs(self, extension):
         raise NotImplementedError()
 
-    def report_provision_status(self, status):
+    def report_provision_status(self, provision_status):
         raise NotImplementedError()
 
-    def report_status(self, status):
+    def report_vm_status(self, vm_status):
+        raise NotImplementedError()
+
+    def report_ext_status(self, ext_handler_name, ext_name, ext_status):
         raise NotImplementedError()
 
     def report_event(self, event):

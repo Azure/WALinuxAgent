@@ -111,7 +111,7 @@ class EventMonitor(object):
                 continue
 
             event = prot.TelemetryEvent()
-            prot.set_properties(event, data)
+            prot.set_properties("event", event, data)
             event.parameters.extend(self.sysinfo)
             event_list.events.append(event)
         if len(event_list.events) == 0:
@@ -151,8 +151,10 @@ def save_event(data):
     except IOError as e:
         raise EventError("Failed to write events to file:{0}", e)
 
-def add_event(name, op, is_success, duration=0, version="1.0",
+def add_event(name, op="", is_success=True, duration=0, version="1.0",
               message="", evt_type="", is_internal=False):
+    log = logger.info if is_success else logger.error
+    log("Event: name={0}, op={1}, message={2}", name, op, message)
     event = prot.TelemetryEvent(1, "69B669B9-4AF8-4C50-BDC4-6006FA76E975")
     event.parameters.append(prot.TelemetryEventParam('Name', name))
     event.parameters.append(prot.TelemetryEventParam('Version', version))
