@@ -170,7 +170,9 @@ def str_to_ord(a):
     Allows indexing into a string or an array of integers transparently.
     Generic utility function.
     """
-    if type(a) == type("a"):
+    print(type(a))
+    print(a)
+    if type(a) == type(b'') or type(a) == type(u''):
         a = ord(a)
     return a
 
@@ -212,7 +214,8 @@ def set_ssh_config(config, name, val):
     return config
 
 def remove_bom(c):
-    if str_to_ord(c[0]) > 128 and str_to_ord(c[1]) > 128 and str_to_ord(c[2]) > 128:
+    if str_to_ord(c[0]) > 128 and str_to_ord(c[1]) > 128 and \
+            str_to_ord(c[2]) > 128:
         c = c[3:]
     return c
 

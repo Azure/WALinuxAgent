@@ -24,9 +24,11 @@ import uuid
 import unittest
 import os
 import json
+from azurelinuxagent.future import text
 import azurelinuxagent.protocol.ovfenv as ovfenv
 
-ExtensionsConfigSample="""
+ExtensionsConfigSample="""\
+<?xml version="1.0" encoding="utf-8"?>
  <Environment xmlns="http://schemas.dmtf.org/ovf/environment/1" xmlns:oe="http://schemas.dmtf.org/ovf/environment/1" xmlns:wa="http://schemas.microsoft.com/windowsazure" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
     <wa:ProvisioningSection>
       <wa:Version>1.0</wa:Version>

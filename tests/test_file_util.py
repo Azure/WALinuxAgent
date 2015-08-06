@@ -47,6 +47,13 @@ class TestFileOperations(unittest.TestCase):
         content_read = fileutil.read_file('/tmp/test_file3')
         self.assertEquals(content, content_read)
         os.remove(test_file)
+
+    def test_remove_bom(self):
+        test_file= '/tmp/test_file4'
+        data = b'\xef\xbb\xbfhehe'
+        fileutil.write_file(test_file, data, asbin=True)
+        data = fileutil.read_file(test_file, remove_bom=True)
+        self.assertNotEquals(0xbb, ord(data[0]))
    
     def test_append_file(self):
         test_file='/tmp/test_file2'

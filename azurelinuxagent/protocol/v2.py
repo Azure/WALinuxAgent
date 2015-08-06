@@ -61,7 +61,10 @@ class MetadataProtocol(Protocol):
         if resp.status != httpclient.OK:
             raise ProtocolError("{0} - GET: {1}".format(resp.status, url))
         try:
-            data = json.loads(text(resp.read(), encoding="utf-8"))
+            data = resp.read()
+            if data is None:
+                return None
+            data = json.loads(text(data, encoding="utf-8"))
         except ValueError as e:
             raise ProtocolError(text(e))
         obj = data_type()

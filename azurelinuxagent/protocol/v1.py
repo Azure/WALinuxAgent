@@ -27,7 +27,7 @@ import azurelinuxagent.logger as logger
 from azurelinuxagent.future import text, httpclient
 import azurelinuxagent.utils.restutil as restutil
 from azurelinuxagent.utils.textutil import parse_doc, findall, find, findtext, \
-                                           getattrib, gettext
+                                           getattrib, gettext, remove_bom
 from azurelinuxagent.utils.osutil import OSUTIL
 import azurelinuxagent.utils.fileutil as fileutil
 import azurelinuxagent.utils.shellutil as shellutil
@@ -122,7 +122,12 @@ def _fetch_uri(uri, headers, chk_proxy=False):
         raise WireProtocolResourceGone(uri)
     if(resp.status != httpclient.OK):
         raise ProtocolError("{0} - {1}".format(resp.status, uri))
-    return text(resp.read(), encoding='utf-8')
+    data = resp.read()
+    if data is None:
+        return None
+    data = remove_bom(data)
+    xml_text = text(data, encoding='utf-8')
+    return xml_text
 
 def _fetch_manifest(version_uris):
     for version_uri in version_uris:

@@ -37,13 +37,17 @@ def read_file(filepath, asbin=False, remove_bom=False, encoding='utf-8'):
     mode = 'rb'
     with open(filepath, mode) as in_file:
         data = in_file.read()
+        if data is None:
+            return None
+
         if asbin:
             return data
-        else:
-            contents = text(data, encoding=encoding)
-            if remove_bom:
-                contents = textutil.remove_bom(contents)
-            return contents
+
+        if remove_bom:
+            #Remove bom on bytes data before it is converted into string.
+            data = textutil.remove_bom(data)
+        data = text(data, encoding=encoding)
+        return data
 
 def write_file(filepath, contents, asbin=False, encoding='utf-8', append=False):
     """

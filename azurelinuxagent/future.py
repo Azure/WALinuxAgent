@@ -15,5 +15,5 @@ elif sys.version_info[0] == 2:
     text = unicode
     bytebuffer = buffer
 else:
-    raise ImportError("Unknown python version:".format(sys.version_info))
+    raise ImportError("Unknown python version:{0}".format(sys.version_info))
 
