@@ -18,14 +18,14 @@
 # http://msdn.microsoft.com/en-us/library/cc227282%28PROT.10%29.aspx
 # http://msdn.microsoft.com/en-us/library/cc227259%28PROT.13%29.aspx
 
-import env
+import tests.env
 import tests.tools as tools
 import uuid
 import unittest
 import os
 import azurelinuxagent.protocol.v1 as v1
 
-hosting_env_sample="""
+hosting_env_sample=u"""
  <HostingEnvironmentConfig version="1.0.0.0" goalStateIncarnation="1">
    <StoredCertificates>
      <StoredCertificate name="Stored0Microsoft.WindowsAzure.Plugins.RemoteAccess.PasswordEncryption" certificateId="sha1:C093FA5CD3AAE057CB7C4E04532B2E16E07C26CA" storeName="My" configurationLevel="System" />

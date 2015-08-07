@@ -18,14 +18,14 @@
 # http://msdn.microsoft.com/en-us/library/cc227282%28PROT.10%29.aspx
 # http://msdn.microsoft.com/en-us/library/cc227259%28PROT.13%29.aspx
 
-import env
+import tests.env
 import tests.tools as tools
 import uuid
 import unittest
 import os
 import azurelinuxagent.protocol.v1 as v1
 
-shared_config_sample="""
+shared_config_sample=u"""
 
  <SharedConfig version="1.0.0.0" goalStateIncarnation="1">
    <Deployment name="db00a7755a5e4e8a8fe4b19bc3b330c3" guid="{ce5a036f-5c93-40e7-8adf-2613631008ab}" incarnation="2">

@@ -18,7 +18,7 @@
 # http://msdn.microsoft.com/en-us/library/cc227282%28PROT.10%29.aspx
 # http://msdn.microsoft.com/en-us/library/cc227259%28PROT.13%29.aspx
 
-import env
+import tests.env as env
 from tests.tools import *
 import uuid
 import unittest
@@ -28,7 +28,7 @@ import time
 import azurelinuxagent.utils.fileutil as fileutil
 import azurelinuxagent.utils.shellutil as shellutil
 import azurelinuxagent.conf as conf
-from azurelinuxagent.utils.osutil import OSUTIL
+from azurelinuxagent.utils.osutil import OSUTIL, OSUtilError
 import test
 
 class TestOSUtil(unittest.TestCase):
@@ -62,8 +62,9 @@ class TestCurrOS(unittest.TestCase):
     @mock(shellutil, 'run', MockFunc())
     @mock(shellutil, 'run_get_output', MockFunc(retval=[0, '']))
     def test_update_user_account(self):
-        OSUTIL.set_user_account('api', 'api')
-        OSUTIL.del_account('api')
+        OSUTIL.useradd('foo')
+        OSUTIL.chpasswd('foo', 'bar')
+        OSUTIL.del_account('foo')
 
     @mock(fileutil, 'read_file', MockFunc(retval='root::::'))
     @mock(fileutil, 'write_file', MockFunc())
@@ -119,12 +120,19 @@ class TestCurrOS(unittest.TestCase):
         OSUTIL.publish_hostname('api')
    
     @mock(OSUTIL, 'get_home', MockFunc(retval='/tmp/home'))
+    @mock(OSUTIL, 'get_pubkey_from_prv', MockFunc(retval=''))
+    @mock(fileutil, 'chowner', MockFunc())
     def test_deploy_key(self):
         if os.path.isdir('/tmp/home'):
             shutil.rmtree('/tmp/home')
-        user = shellutil.run_get_output('whoami')[1].strip()
-        OSUTIL.deploy_ssh_keypair(user, 'test', '$HOME/.ssh/id_rsa')
-        OSUTIL.deploy_ssh_pubkey(user, 'test', '$HOME/.ssh/authorized_keys')
+        fileutil.write_file('/tmp/foo.prv', '')
+        OSUTIL.deploy_ssh_keypair("foo", ('$HOME/.ssh/id_rsa', 'foo'))
+        OSUTIL.deploy_ssh_pubkey("foo", ('$HOME/.ssh/authorized_keys', None, 
+                                         'ssh-rsa asdf'))
+        OSUTIL.deploy_ssh_pubkey("foo", ('$HOME/.ssh/authorized_keys', 'foo', 
+                                         'ssh-rsa asdf'))
+        self.assertRaises(OSUtilError, OSUTIL.deploy_ssh_pubkey, "foo", 
+                         ('$HOME/.ssh/authorized_keys', 'foo','hehe-rsa asdf'))
         self.assertTrue(os.path.isfile('/tmp/home/.ssh/id_rsa'))
         self.assertTrue(os.path.isfile('/tmp/home/.ssh/id_rsa.pub'))
         self.assertTrue(os.path.isfile('/tmp/home/.ssh/authorized_keys'))
@@ -150,6 +158,7 @@ class TestCurrOS(unittest.TestCase):
                                          'ClientAliveInterval 180'))
 
     @mock(shellutil, 'run_get_output', MockFunc(retval=[0, '']))
+    @mock(OSUTIL, 'get_dvd_device', MockFunc(retval=[0, 'abc']))
     @mock(OSUTIL, 'get_mount_point', MockFunc(retval='/tmp/cdrom'))
     def test_mount(self):
         OSUTIL.mount_dvd()
@@ -157,8 +166,9 @@ class TestCurrOS(unittest.TestCase):
         mount_point = OSUTIL.get_mount_point(mount_list_sample, '/dev/sda')
         self.assertNotEquals(None, mount_point)
 
-    def _test_getdvd(self):
-        OSUTIL.get_dvd_device()
+    def test_getdvd(self):
+        fileutil.write_file("/tmp/sr0", '')
+        OSUTIL.get_dvd_device(dev_dir='/tmp')
 
 if __name__ == '__main__':
     unittest.main()

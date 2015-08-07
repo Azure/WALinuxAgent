@@ -18,25 +18,22 @@
 # http://msdn.microsoft.com/en-us/library/cc227282%28PROT.10%29.aspx
 # http://msdn.microsoft.com/en-us/library/cc227259%28PROT.13%29.aspx
 
-import env
+import tests.env
 import tests.tools as tools
-from tools import *
+from tests.tools import *
 import uuid
 import unittest
 import os
 import time
-import httplib
+from azurelinuxagent.utils.restutil import httpclient
 import azurelinuxagent.logger as logger
 import azurelinuxagent.protocol.v1 as v1
-from test_version import VersionInfoSample
-from test_goalstate import goal_state_sample
-from test_hostingenv import hosting_env_sample
-from test_sharedconfig import shared_config_sample
-from test_certificates import certs_sample, transport_cert
-from test_extensionsconfig import ext_conf_sample, manifest_sample
-
-#logger.LoggerInit("/dev/stdout", "/dev/null", verbose=True)
-#logger.LoggerInit("/dev/stdout", "/dev/null", verbose=False)
+from tests.test_version import VersionInfoSample
+from tests.test_goalstate import goal_state_sample
+from tests.test_hostingenv import hosting_env_sample
+from tests.test_sharedconfig import shared_config_sample
+from tests.test_certificates import certs_sample, transport_cert
+from tests.test_extensionsconfig import ext_conf_sample, manifest_sample
 
 def mock_fetch_uri(url, headers=None, chk_proxy=False):
     content = None
@@ -83,7 +80,21 @@ def mock_fetch_cache(file_path):
         raise Exception("Bad filepath {0}".format(file_path))
     return content
 
+data_with_bom = b'\xef\xbb\xbfhehe'
+
+class MockResp(object):
+    def __init__(self, status=v1.httpclient.OK, data=None):
+        self.status = status
+        self.data = data
+
+    def read(self):
+        return self.data
+
 class TestWireClint(unittest.TestCase):
+
+    @mock(v1.restutil, 'http_get', MockFunc(retval=MockResp(data=data_with_bom)))
+    def test_fetch_uri_with_bom(self):
+        v1._fetch_uri("http://foo.bar", None)
 
     @mock(v1, '_fetch_cache', mock_fetch_cache)
     def test_get(self):
@@ -120,22 +131,18 @@ class TestWireClint(unittest.TestCase):
         ext_conf = client.get_ext_conf()
         self.assertNotEquals(None, ext_conf)
 
-class MockResp(object):
-    def __init__(self, status):
-        self.status = status
-
 class TestStatusBlob(unittest.TestCase):
     def testToJson(self):
         vm_status = v1.VMStatus()
         status_blob = v1.StatusBlob(vm_status)
         self.assertNotEquals(None, status_blob.to_json())
 
-    @mock(v1.restutil, 'http_put', MockFunc(retval=MockResp(httplib.CREATED)))
-    @mock(v1.restutil, 'http_head', MockFunc(retval=MockResp(httplib.OK)))
+    @mock(v1.restutil, 'http_put', MockFunc(retval=MockResp(httpclient.CREATED)))
+    @mock(v1.restutil, 'http_head', MockFunc(retval=MockResp(httpclient.OK)))
     def test_put_page_blob(self):
         vm_status = v1.VMStatus()
         status_blob = v1.StatusBlob(vm_status)
-        data = ['a'] * 100
+        data = 'a' * 100
         status_blob.put_page_blob("http://foo.bar", data)
 
 class TestConvert(unittest.TestCase):

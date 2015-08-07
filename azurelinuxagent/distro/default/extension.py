@@ -22,6 +22,7 @@ import time
 import json
 import subprocess
 import azurelinuxagent.logger as logger
+from azurelinuxagent.future import text
 from azurelinuxagent.utils.osutil import OSUTIL
 import azurelinuxagent.protocol as prot
 from azurelinuxagent.event import add_event, WALAEventOperation
@@ -129,10 +130,10 @@ class ExtensionsHandler(object):
             logger.error("Failed to handle extension: {0}-{1}\n {2}",
                          ext.get_name(), ext.get_version(), e)
             add_event(name=ext.get_name(), is_success=False,
-                              op=ext.get_curr_op(), message = str(e))
+                              op=ext.get_curr_op(), message = text(e))
             ext_status = prot.ExtensionStatus(status='error', code='-1',
                                              operation = ext.get_curr_op(),
-                                             message = str(e),
+                                             message = text(e),
                                              seq_no = ext.get_seq_no())
             status = ext.create_handler_status(ext_status)
             status.status = "Ready"
@@ -183,7 +184,7 @@ class ExtensionInstance(object):
 
     def init_logger(self):
         #Init logger appender for extension
-        fileutil.mkdir(self.get_log_dir(), mode=0700)
+        fileutil.mkdir(self.get_log_dir(), mode=0o700)
         log_file = os.path.join(self.get_log_dir(), "CommandExecution.log")
         self.logger.add_appender(logger.AppenderType.FILE,
                                       logger.LogLevel.INFO, log_file)
@@ -282,7 +283,7 @@ class ExtensionInstance(object):
 
         self.logger.info("Unpack extension package")
         pkg_file = os.path.join(self.lib_dir, os.path.basename(uri.uri) + ".zip")
-        fileutil.write_file(pkg_file, bytearray(package))
+        fileutil.write_file(pkg_file, bytearray(package), asbin=True)
         zipfile.ZipFile(pkg_file).extractall(self.get_base_dir())
         chmod = "find {0} -type f | xargs chmod u+x".format(self.get_base_dir())
         shellutil.run(chmod)
@@ -299,9 +300,9 @@ class ExtensionInstance(object):
 
         #Create status and config dir
         status_dir = self.get_status_dir()
-        fileutil.mkdir(status_dir, mode=0700)
+        fileutil.mkdir(status_dir, mode=0o700)
         conf_dir = self.get_conf_dir()
-        fileutil.mkdir(conf_dir, mode=0700)
+        fileutil.mkdir(conf_dir, mode=0o700)
 
         #Init handler state to uninstall
         self.set_handler_status("NotReady")
@@ -508,8 +509,7 @@ class ExtensionInstance(object):
         if major is None:
             raise ExtensionError("Wrong version format: {0}".format(version))
 
-        packages = filter(lambda x : x.version.startswith(major + "."),
-                          self.pkg_list.versions)
+        packages = [x for x in self.pkg_list.versions if x.version.startswith(major + ".")]
         packages = sorted(packages, key=lambda x: x.version, reverse=True)
         if len(packages) <= 0:
             raise ExtensionError("Can't find version: {0}.*".format(major))

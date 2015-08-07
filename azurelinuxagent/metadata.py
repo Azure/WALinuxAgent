@@ -20,10 +20,12 @@
 import os
 import re
 import platform
+import sys
+from azurelinuxagent.future import text
 
 def get_distro():
     if 'FreeBSD' in platform.system():
-        release = re.sub('\-.*\Z', '', str(platform.release()))
+        release = re.sub('\-.*\Z', '', text(platform.release()))
         osinfo = ['freebsd', release, '', 'freebsd']
     if 'linux_distribution' in dir(platform):
         osinfo = list(platform.linux_distribution(full_distribution_name=0))
@@ -42,9 +44,9 @@ def get_distro():
     osinfo[0] = osinfo[0].strip('"').strip(' ').lower()
     return osinfo
 
-AGENT_NAME = "AzureLinuxAgent"
+AGENT_NAME = "WALinuxAgent"
 AGENT_LONG_NAME = "Azure Linux Agent"
-AGENT_VERSION = '2.1.1-pre'
+AGENT_VERSION = '2.1.1'
 AGENT_LONG_VERSION = "{0}-{1}".format(AGENT_NAME, AGENT_VERSION)
 AGENT_DESCRIPTION = """\
 The Azure Linux Agent supports the provisioning and running of Linux
@@ -58,3 +60,34 @@ DISTRO_VERSION = __distro__[1]
 DISTRO_CODE_NAME = __distro__[2]
 DISTRO_FULL_NAME = __distro__[3]
 
+PY_VERSION = sys.version_info
+PY_VERSION_MAJOR = sys.version_info[0]
+PY_VERSION_MINOR = sys.version_info[1]
+PY_VERSION_MICRO = sys.version_info[2]
+
+
+"""
+Add this walk arround for detecting Snappy Ubuntu Core temporarily, until ubuntu 
+fixed this bug: https://bugs.launchpad.net/snappy/+bug/1481086
+"""
+def which(program):
+    # Return path of program for execution if found in path
+    def is_exe(fpath):
+        return os.path.isfile(fpath) and os.access(fpath, os.X_OK)
+    _fpath, _ = os.path.split(program)
+    if _fpath:
+        if is_exe(program):
+            return program
+    else:
+        for path in os.environ.get("PATH", "").split(os.pathsep):
+            path = path.strip('"')
+            exe_file = os.path.join(path, program)
+            if is_exe(exe_file):
+                return exe_file
+    return None
+
+def is_snappy():
+       return which("snappy")
+
+if is_snappy():
+    DISTRO_FULL_NAME = "Snappy Ubuntu Core"

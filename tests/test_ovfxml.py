@@ -18,15 +18,17 @@
 # http://msdn.microsoft.com/en-us/library/cc227282%28PROT.10%29.aspx
 # http://msdn.microsoft.com/en-us/library/cc227259%28PROT.13%29.aspx
 
-import env
+import tests.env
 import tests.tools as tools
 import uuid
 import unittest
 import os
 import json
+from azurelinuxagent.future import text
 import azurelinuxagent.protocol.ovfenv as ovfenv
 
-ExtensionsConfigSample="""
+ExtensionsConfigSample="""\
+<?xml version="1.0" encoding="utf-8"?>
  <Environment xmlns="http://schemas.dmtf.org/ovf/environment/1" xmlns:oe="http://schemas.dmtf.org/ovf/environment/1" xmlns:wa="http://schemas.microsoft.com/windowsazure" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
     <wa:ProvisioningSection>
       <wa:Version>1.0</wa:Version>
@@ -41,6 +43,7 @@ ExtensionsConfigSample="""
             <PublicKey>
               <Fingerprint>EB0C0AB4B2D5FC35F2F0658D19F44C8283E2DD62</Fingerprint>
               <Path>$HOME/UserName/.ssh/authorized_keys</Path>
+              <Value>ssh-rsa AAAANOTAREALKEY== foo@bar.local</Value>
             </PublicKey>
           </PublicKeys>
           <KeyPairs>
@@ -59,17 +62,20 @@ ExtensionsConfigSample="""
 class TestOvf(unittest.TestCase):
     def test_ovf(self):
         config = ovfenv.OvfEnv(ExtensionsConfigSample)
-        self.assertEquals(1, config.get_major_version())
-        self.assertEquals(0, config.get_minor_version())
-        self.assertEquals("HostName", config.get_computer_name())
-        self.assertEquals("UserName", config.get_username())
-        self.assertEquals("UserPassword", config.get_user_password())
-        self.assertEquals(False, config.get_disable_ssh_password_auth())
-        self.assertEquals("CustomData", config.get_customdata())
-        self.assertNotEquals(None, config.get_ssh_pubkeys())
-        self.assertEquals(1, len(config.get_ssh_pubkeys()))
-        self.assertNotEquals(None, config.get_ssh_keypairs())
-        self.assertEquals(1, len(config.get_ssh_keypairs()))
+        self.assertEquals("HostName", config.hostname)
+        self.assertEquals("UserName", config.username)
+        self.assertEquals("UserPassword", config.user_password)
+        self.assertEquals(False, config.disable_ssh_password_auth)
+        self.assertEquals("CustomData", config.customdata)
+        self.assertNotEquals(None, config.ssh_pubkeys)
+        self.assertEquals(1, len(config.ssh_pubkeys))
+        pubkey = config.ssh_pubkeys[0]
+        path, fingerprint, value = pubkey
+        self.assertEquals(path, "$HOME/UserName/.ssh/authorized_keys")
+        self.assertEquals(fingerprint, "EB0C0AB4B2D5FC35F2F0658D19F44C8283E2DD62"),
+        self.assertEquals(value, "ssh-rsa AAAANOTAREALKEY== foo@bar.local")
+        self.assertNotEquals(None, config.ssh_keypairs)
+        self.assertEquals(1, len(config.ssh_keypairs))
         
 if __name__ == '__main__':
     unittest.main()

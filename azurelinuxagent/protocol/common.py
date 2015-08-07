@@ -22,7 +22,6 @@ import re
 import json
 import xml.dom.minidom
 import azurelinuxagent.logger as logger
-from azurelinuxagent.utils.textutil import get_node_text
 import azurelinuxagent.utils.fileutil as fileutil
 
 class ProtocolError(Exception):
@@ -43,7 +42,7 @@ def set_properties(obj, data):
     validata_param("data", data, dict)
 
     props = vars(obj)
-    for name, val in props.items():
+    for name, val in list(props.items()):
         try:
             new_val = data[name]
         except KeyError:
@@ -65,7 +64,7 @@ def get_properties(obj):
 
     data = {}
     props = vars(obj)
-    for name, val in props.items():
+    for name, val in list(props.items()):
         if isinstance(val, DataContract):
             data[name] = get_properties(val)
         elif isinstance(val, DataContractList):
@@ -233,9 +232,6 @@ class Protocol(DataContract):
         raise NotImplementedError()
 
     def get_extension_pkgs(self, extension):
-        raise NotImplementedError()
-
-    def get_instance_metadata(self):
         raise NotImplementedError()
 
     def report_provision_status(self, status):

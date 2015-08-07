@@ -16,12 +16,28 @@
 #
 # Requires Python 2.4+ and Openssl 1.0+
 #
-
-from azurelinuxagent.protocol.common import *
-
+"""
+Copy and parse ovf-env.xml from provisiong ISO and local cache
+"""
+import os
+import re
+import xml.dom.minidom as minidom
+import azurelinuxagent.logger as logger
+from azurelinuxagent.future import text
+import azurelinuxagent.utils.fileutil as fileutil
+from azurelinuxagent.utils.textutil import parse_doc, findall, find, findtext
 from azurelinuxagent.utils.osutil import OSUTIL, OSUtilError
+from azurelinuxagent.protocol import ProtocolError
+
+OVF_FILE_NAME = "ovf-env.xml"
+OVF_VERSION = "1.0"
+OVF_NAME_SPACE = "http://schemas.dmtf.org/ovf/environment/1"
+WA_NAME_SPACE = "http://schemas.microsoft.com/windowsazure"
 
 def get_ovf_env():
+    """
+    Load saved ovf-env.xml
+    """
     ovf_file_path = os.path.join(OSUTIL.get_lib_dir(), OVF_FILE_NAME)
     if os.path.isfile(ovf_file_path):
         xml_text = fileutil.read_file(ovf_file_path)
@@ -37,20 +53,23 @@ def copy_ovf_env():
     try:
         OSUTIL.mount_dvd()
         ovf_file_path_on_dvd = OSUTIL.get_ovf_env_file_path_on_dvd()
-
         ovfxml = fileutil.read_file(ovf_file_path_on_dvd, remove_bom=True)
         ovfenv = OvfEnv(ovfxml)
         ovfxml = re.sub("<UserPassword>.*?<", "<UserPassword>*<", ovfxml)
         ovf_file_path = os.path.join(OSUTIL.get_lib_dir(), OVF_FILE_NAME)
         fileutil.write_file(ovf_file_path, ovfxml)
         OSUTIL.umount_dvd()
+        OSUTIL.eject_dvd()
     except IOError as e:
-        raise ProtocolError(str(e))
+        raise ProtocolError(text(e))
     except OSUtilError as e:
-        raise ProtocolError(str(e))
+        raise ProtocolError(text(e))
     return ovfenv
 
-OVF_FILE_NAME="ovf-env.xml"
+def _validate_ovf(val, msg):
+    if val is None:
+        raise ProtocolError("Failed to parse OVF XML: {0}".format(msg))
+
 class OvfEnv(object):
     """
     Read, and process provisioning info from provisioning file OvfEnv.xml
@@ -59,121 +78,69 @@ class OvfEnv(object):
         if xml_text is None:
             raise ValueError("ovf-env is None")
         logger.verb("Load ovf-env.xml")
-        self.parse(xml_text)
-
-    def reinitialize(self):
-        """
-        Reset members.
-        """
-        self.wa_ns = "http://schemas.microsoft.com/windowsazure"
-        self.ovf_ns = "http://schemas.dmtf.org/ovf/environment/1"
-        self.major_version = 1
-        self.minor_version = 0
-        self.compute_name = None
-        self.user_name = None
+        self.hostname = None
+        self.username = None
         self.user_password = None
         self.customdata = None
         self.disable_ssh_password_auth = True
         self.ssh_pubkeys = []
         self.ssh_keypairs = []
-
-    def get_major_version(self):
-        return self.major_version
-
-    def get_minor_version(self):
-        return self.minor_version
-
-    def get_computer_name(self):
-        return self.compute_name
-
-    def get_username(self):
-        return self.user_name
-
-    def get_user_password(self):
-        return self.user_password
-
-    def clear_user_password(self):
-        self.user_password = None
-
-    def get_customdata(self):
-        return self.customdata
-
-    def get_disable_ssh_password_auth(self):
-        return self.disable_ssh_password_auth
-
-    def get_ssh_pubkeys(self):
-        return self.ssh_pubkeys
-
-    def get_ssh_keypairs(self):
-        return self.ssh_keypairs
+        self.parse(xml_text)
 
     def parse(self, xml_text):
         """
         Parse xml tree, retreiving user and ssh key information.
         Return self.
         """
-        self.reinitialize()
-        dom = xml.dom.minidom.parseString(xml_text)
-        if len(dom.getElementsByTagNameNS(self.ovf_ns, "Environment")) != 1:
-            logger.error("Unable to parse OVF XML.")
-        section = None
-        newer = False
-        for p in dom.getElementsByTagNameNS(self.wa_ns, "ProvisioningSection"):
-            for n in p.childNodes:
-                if n.localName == "Version":
-                    verparts = get_node_text(n).split('.')
-                    major = int(verparts[0])
-                    minor = int(verparts[1])
-                    if major > self.major_version:
-                        newer = True
-                    if major != self.major_version:
-                        break
-                    if minor > self.minor_version:
-                        newer = True
-                    section = p
-        if newer == True:
+        wans = WA_NAME_SPACE
+        ovfns = OVF_NAME_SPACE
+
+        xml_doc = parse_doc(xml_text)
+        
+        environment = find(xml_doc, "Environment", namespace=ovfns)
+        _validate_ovf(environment, "Environment not found")
+
+        section = find(environment, "ProvisioningSection", namespace=wans)
+        _validate_ovf(section, "ProvisioningSection not found")
+
+        version = findtext(environment, "Version", namespace=wans)
+        _validate_ovf(version, "Version not found")
+
+        if version > OVF_VERSION:
             logger.warn("Newer provisioning configuration detected. "
-                    "Please consider updating waagent.")
-            if section == None:
-                logger.error("Could not find ProvisioningSection with "
-                        "major version={0}", self.major_version)
-                return None
-        self.compute_name = get_node_text(section.getElementsByTagNameNS(self.wa_ns, "HostName")[0])
-        self.user_name = get_node_text(section.getElementsByTagNameNS(self.wa_ns, "UserName")[0])
-        try:
-            self.user_password = get_node_text(section.getElementsByTagNameNS(self.wa_ns, "UserPassword")[0])
-        except:
-            pass
-        cd_section=None
-        cd_section=section.getElementsByTagNameNS(self.wa_ns, "CustomData")
-        if len(cd_section) > 0 :
-            self.customdata=get_node_text(cd_section[0])
-        disable_ssh_password_auth = section.getElementsByTagNameNS(self.wa_ns, "DisableSshPasswordAuthentication")
-        if len(disable_ssh_password_auth) != 0:
-            self.disable_ssh_password_auth = (get_node_text(disable_ssh_password_auth[0]).lower() == "true")
-        for pkey in section.getElementsByTagNameNS(self.wa_ns, "PublicKey"):
-            logger.verb(repr(pkey))
-            fp = None
-            path = None
-            for c in pkey.childNodes:
-                if c.localName == "Fingerprint":
-                    fp = get_node_text(c).upper()
-                    logger.verb(fp)
-                if c.localName == "Path":
-                    path = get_node_text(c)
-                    logger.verb(path)
-            self.ssh_pubkeys += [[fp, path]]
-        for keyp in section.getElementsByTagNameNS(self.wa_ns, "KeyPair"):
-            fp = None
-            path = None
-            logger.verb(repr(keyp))
-            for c in keyp.childNodes:
-                if c.localName == "Fingerprint":
-                    fp = get_node_text(c).upper()
-                    logger.verb(fp)
-                if c.localName == "Path":
-                    path = get_node_text(c)
-                    logger.verb(path)
-            self.ssh_keypairs += [[fp, path]]
-        return self
+                        "Please consider updating waagent")
+        
+        conf_set = find(section, "LinuxProvisioningConfigurationSet", 
+                        namespace=wans)
+        _validate_ovf(conf_set, "LinuxProvisioningConfigurationSet not found")
+
+        self.hostname = findtext(conf_set, "HostName", namespace=wans)
+        _validate_ovf(self.hostname, "HostName not found")
+
+        self.username = findtext(conf_set, "UserName", namespace=wans)
+        _validate_ovf(self.username, "UserName not found")
+        
+        self.user_password = findtext(conf_set, "UserPassword", namespace=wans)
+
+        self.customdata = findtext(conf_set, "CustomData", namespace=wans)
+        
+        auth_option = findtext(conf_set, "DisableSshPasswordAuthentication", 
+                               namespace=wans)
+        if auth_option is not None and auth_option.lower() == "true":
+            self.disable_ssh_password_auth = True
+        else:
+            self.disable_ssh_password_auth = False
+
+        public_keys = findall(conf_set, "PublicKey", namespace=wans)
+        for public_key in public_keys:
+            path = findtext(public_key, "Path", namespace=wans)
+            fingerprint = findtext(public_key, "Fingerprint", namespace=wans)
+            value = findtext(public_key, "Value", namespace=wans)
+            self.ssh_pubkeys.append((path, fingerprint, value))
+
+        keypairs = findall(conf_set, "KeyPair", namespace=wans)
+        for keypair in keypairs:
+            path = findtext(keypair, "Path", namespace=wans)
+            fingerprint = findtext(keypair, "Fingerprint", namespace=wans)
+            self.ssh_keypairs.append((path, fingerprint))
 

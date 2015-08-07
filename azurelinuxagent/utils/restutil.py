@@ -17,18 +17,18 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
+import time
 import platform
 import os
 import subprocess
 import azurelinuxagent.logger as logger
 import azurelinuxagent.conf as conf
-import httplib
-import time
-from urlparse import urlparse
+from azurelinuxagent.future import httpclient, urlparse
 
 """
 REST api util functions
 """
+
 RETRY_WAITING_INTERVAL = 10
 
 class HttpError(Exception):
@@ -61,21 +61,21 @@ def _http_request(method, host, rel_uri, port=None, data=None, secure=False,
     if secure:
         port = 443 if port is None else port
         if proxy_host is not None and proxy_port is not None:
-            conn = httplib.HTTPSConnection(proxy_host, proxy_port)
+            conn = httpclient.HTTPSConnection(proxy_host, proxy_port)
             conn.set_tunnel(host, port)
             #If proxy is used, full url is needed.
             url = "https://{0}:{1}{2}".format(host, port, rel_uri)
         else:
-            conn = httplib.HTTPSConnection(host, port)
+            conn = httpclient.HTTPSConnection(host, port)
             url = rel_uri
     else:
         port = 80 if port is None else port
         if proxy_host is not None and proxy_port is not None:
-            conn = httplib.HTTPConnection(proxy_host, proxy_port)
+            conn = httpclient.HTTPConnection(proxy_host, proxy_port)
             #If proxy is used, full url is needed.
             url = "http://{0}:{1}{2}".format(host, port, rel_uri)
         else:
-            conn = httplib.HTTPConnection(host, port)
+            conn = httpclient.HTTPConnection(host, port)
             url = rel_uri
     if headers == None:
         conn.request(method, url, data)
@@ -100,7 +100,7 @@ def http_request(method, url, data, headers=None, max_retry=3, chk_proxy=False):
         proxy_host, proxy_port = get_http_proxy()
 
     #If httplib module is not built with ssl support. Fallback to http
-    if secure and not hasattr(httplib, "HTTPSConnection"):
+    if secure and not hasattr(httpclient, "HTTPSConnection"):
         logger.warn("httplib is not built with ssl support")
         secure = False
 
@@ -108,18 +108,19 @@ def http_request(method, url, data, headers=None, max_retry=3, chk_proxy=False):
     if secure and \
             proxy_host is not None and \
             proxy_port is not None and \
-            not hasattr(httplib.HTTPSConnection, "set_tunnel"):
+            not hasattr(httpclient.HTTPSConnection, "set_tunnel"):
         logger.warn("httplib doesn't support https tunnelling(new in python 2.7)")
         secure = False
 
     for retry in range(0, max_retry):
         try:
-            resp = _http_request(method, host, rel_uri, port=port, data=data, secure=secure,
-                                 headers=headers, proxy_host=proxy_host, proxy_port=proxy_port)
+            resp = _http_request(method, host, rel_uri, port=port, data=data, 
+                                 secure=secure, headers=headers, 
+                                 proxy_host=proxy_host, proxy_port=proxy_port)
             logger.verb("HTTP Resp: Status={0}", resp.status)
             logger.verb("    Header={0}", resp.getheaders())
             return resp
-        except httplib.HTTPException as e:
+        except httpclient.HTTPException as e:
             logger.warn('HTTPException {0}, args:{1}', e, repr(e.args))
         except IOError as e:
             logger.warn('Socket IOError {0}, args:{1}', e, repr(e.args))
@@ -131,18 +132,23 @@ def http_request(method, url, data, headers=None, max_retry=3, chk_proxy=False):
     raise HttpError("HTTP Err: {0} {1}".format(method, url))
 
 def http_get(url, headers=None, max_retry=3, chk_proxy=False):
-    return http_request("GET", url, data=None, headers=headers, max_retry=max_retry, chk_proxy=chk_proxy)
+    return http_request("GET", url, data=None, headers=headers, 
+                        max_retry=max_retry, chk_proxy=chk_proxy)
 
 def http_head(url, headers=None, max_retry=3, chk_proxy=False):
-    return http_request("HEAD", url, None, headers=headers, max_retry=max_retry, chk_proxy=chk_proxy)
+    return http_request("HEAD", url, None, headers=headers, 
+                        max_retry=max_retry, chk_proxy=chk_proxy)
 
 def http_post(url, data, headers=None, max_retry=3, chk_proxy=False):
-    return http_request("POST", url, data, headers=headers, max_retry=max_retry, chk_proxy=chk_proxy)
+    return http_request("POST", url, data, headers=headers, 
+                        max_retry=max_retry, chk_proxy=chk_proxy)
 
 def http_put(url, data, headers=None, max_retry=3, chk_proxy=False):
-    return http_request("PUT", url, data, headers=headers, max_retry=max_retry, chk_proxy=chk_proxy)
+    return http_request("PUT", url, data, headers=headers, 
+                        max_retry=max_retry, chk_proxy=chk_proxy)
 
 def http_delete(url, headers=None, max_retry=3, chk_proxy=False):
-    return http_request("DELETE", url, None, headers=headers, max_retry=max_retry, chk_proxy=chk_proxy)
+    return http_request("DELETE", url, None, headers=headers, 
+                        max_retry=max_retry, chk_proxy=chk_proxy)
 
 #End REST api util functions

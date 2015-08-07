@@ -18,7 +18,7 @@
 # http://msdn.microsoft.com/en-us/library/cc227282%28PROT.10%29.aspx
 # http://msdn.microsoft.com/en-us/library/cc227259%28PROT.13%29.aspx
 
-import env
+import tests.env
 import tests.tools as tools
 import uuid
 import unittest
@@ -26,7 +26,7 @@ import os
 import test
 import azurelinuxagent.protocol.v1 as v1
 
-goal_state_sample="""
+goal_state_sample=u"""\
 <?xml version="1.0" encoding="utf-8"?>
 <GoalState xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="goalstate10.xsd">
    <Version>2010-12-15</Version>
@@ -46,7 +46,6 @@ goal_state_sample="""
          <Configuration>
          <HostingEnvironmentConfig>http://hostingenvuri/</HostingEnvironmentConfig>
          <SharedConfig>http://sharedconfiguri/</SharedConfig>
-         <Certificates>http://certificatesuri/</Certificates>
          <ExtensionsConfig>http://extensionsconfiguri/</ExtensionsConfig>
          <FullConfig>http://fullconfiguri/</FullConfig>
          </Configuration>
@@ -63,7 +62,7 @@ class TestGoalState(unittest.TestCase):
         self.assertNotEquals(None, goal_state.expected_state)
         self.assertNotEquals(None, goal_state.hosting_env_uri)
         self.assertNotEquals(None, goal_state.shared_conf_uri)
-        self.assertNotEquals(None, goal_state.certs_uri)
+        self.assertEquals(None, goal_state.certs_uri)
         self.assertNotEquals(None, goal_state.ext_uri)
         self.assertNotEquals(None, goal_state.role_instance_id)
         self.assertNotEquals(None, goal_state.container_id)

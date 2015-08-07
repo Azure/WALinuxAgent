@@ -18,8 +18,8 @@
 # http://msdn.microsoft.com/en-us/library/cc227282%28PROT.10%29.aspx
 # http://msdn.microsoft.com/en-us/library/cc227259%28PROT.13%29.aspx
 
-import env
-from tools import *
+import tests.env
+from .tools import *
 import uuid
 import unittest
 import os
@@ -29,9 +29,8 @@ import azurelinuxagent.event as evt
 import azurelinuxagent.protocol as prot
 
 class MockProtocol(object):
-    def get_instance_metadata(self): 
-        return prot.InstanceMetadata(deploymentName='foo', roleName='foo',
-                                     roleInstanceId='foo', containerId='foo')
+    def get_vminfo(self): 
+        return prot.VMInfo(subscriptionId='foo', vmName='bar')
     def report_event(self, data): pass
 
 class TestEvent(unittest.TestCase):
@@ -47,6 +46,7 @@ class TestEvent(unittest.TestCase):
           MockFunc(retval=MockProtocol()))
     def test_init_sys_info(self):
         monitor = evt.EventMonitor()
+        monitor.init_sysinfo()
         self.assertNotEquals(0, len(monitor.sysinfo))
         
 if __name__ == '__main__':

@@ -20,6 +20,7 @@
 import os
 import time
 import azurelinuxagent.logger as logger
+from azurelinuxagent.future import text
 import azurelinuxagent.conf as conf
 import azurelinuxagent.protocol as prot
 from azurelinuxagent.exception import *
@@ -57,7 +58,7 @@ class UbuntuProvisionHandler(ProvisionHandler):
 
         except ProvisionError as e:
             logger.error("Provision failed: {0}", e)
-            protocol.report_provision_status(status="NotReady", subStatus=str(e))
+            protocol.report_provision_status(status="NotReady", subStatus=text(e))
 
     def wait_for_ssh_host_key(self, max_retry=60):
         kepair_type = conf.get("Provisioning.SshHostKeyPairType", "rsa")

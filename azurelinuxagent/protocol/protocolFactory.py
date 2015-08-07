@@ -20,6 +20,7 @@ import os
 import traceback
 import threading
 import azurelinuxagent.logger as logger
+from azurelinuxagent.future import text
 import azurelinuxagent.utils.fileutil as fileutil
 from azurelinuxagent.utils.osutil import OSUTIL
 from azurelinuxagent.protocol.common import *
@@ -46,11 +47,7 @@ def detect_wire_protocol():
     OSUTIL.gen_transport_cert()
     protocol = WireProtocol(endpoint)
     protocol.initialize()
-
     logger.info("Protocol V1 found.")
-    path = os.path.join(OSUTIL.get_lib_dir(), WireProtocol)
-
-    fileutil.write_file(path, "")
     return protocol
 
 def detect_metadata_protocol():
@@ -68,7 +65,7 @@ def detect_available_protocols(prob_funcs=[detect_wire_protocol,
             protocol = probe_func()
             available_protocols.append(protocol)
         except ProtocolNotFound as e:
-            logger.info(str(e))
+            logger.info(text(e))
     return available_protocols
 
 def detect_default_protocol():
@@ -96,7 +93,7 @@ def get_available_protocols(getters=[get_wire_protocol, get_metadata_protocol]):
             protocol = getter()
             available_protocols.append(protocol)
         except ProtocolNotFound as e:
-            logger.info(str(e))
+            logger.info(text(e))
     return available_protocols
 
 class ProtocolFactory(object):

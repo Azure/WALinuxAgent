@@ -25,9 +25,10 @@ import datetime
 import threading
 import platform
 import azurelinuxagent.logger as logger
+from azurelinuxagent.future import text
 import azurelinuxagent.protocol as prot
-from azurelinuxagent.metadata import DISTRO_NAME, DISTRO_VERSION, DISTRO_CODE_NAME,\
-                                     AGENT_VERSION
+from azurelinuxagent.metadata import DISTRO_NAME, DISTRO_VERSION, \
+                                     DISTRO_CODE_NAME, AGENT_VERSION
 from azurelinuxagent.utils.osutil import OSUTIL
 
 class EventError(Exception):
@@ -50,7 +51,6 @@ class EventMonitor(object):
     def __init__(self):
         self.sysinfo = []
         self.event_dir = os.path.join(OSUTIL.get_lib_dir(), "events")
-        self.init_sysinfo()
 
     def init_sysinfo(self):
         osversion = "{0}:{1}-{2}-{3}:{4}".format(platform.system(),
@@ -58,6 +58,7 @@ class EventMonitor(object):
                                                  DISTRO_VERSION,
                                                  DISTRO_CODE_NAME,
                                                  platform.release())
+
         self.sysinfo.append(prot.TelemetryEventParam("OSVersion", osversion))
         self.sysinfo.append(prot.TelemetryEventParam("GAVersion",
                                                      AGENT_VERSION))
@@ -65,17 +66,15 @@ class EventMonitor(object):
                                                      OSUTIL.get_total_mem()))
         self.sysinfo.append(prot.TelemetryEventParam("Processors",
                                                      OSUTIL.get_processor_cores()))
-        protocol = prot.FACTORY.get_default_protocol()
-        metadata = protocol.get_instance_metadata()
-        self.sysinfo.append(prot.TelemetryEventParam("TenantName",
-                                                     metadata.deploymentName))
-        self.sysinfo.append(prot.TelemetryEventParam("RoleName",
-                                                     metadata.roleName))
-        self.sysinfo.append(prot.TelemetryEventParam("RoleInstanceName",
-                                                     metadata.roleInstanceId))
-        self.sysinfo.append(prot.TelemetryEventParam("ContainerId",
-                                                     metadata.containerId))
-
+        try:
+            protocol = prot.FACTORY.get_default_protocol()
+            vminfo = protocol.get_vminfo()
+            self.sysinfo.append(prot.TelemetryEventParam("VMName",
+                                                         vminfo.vmName))
+            #TODO add other system info like, subscription id, etc.
+        except prot.ProtocolError as e:
+            logger.warn("Failed to get vm info: {0}", e)
+       
     def start(self):
         event_thread = threading.Thread(target = self.run)
         event_thread.setDaemon(True)
@@ -117,7 +116,7 @@ class EventMonitor(object):
             event_list.events.append(event)
         if len(event_list.events) == 0:
             return
-
+        
         try:
             protocol = prot.FACTORY.get_default_protocol()
             protocol.report_event(event_list)
@@ -125,6 +124,7 @@ class EventMonitor(object):
             logger.error("{0}", e)
 
     def run(self):
+        self.init_sysinfo()
         last_heartbeat = datetime.datetime.min
         period = datetime.timedelta(hours = 12)
         while(True):
@@ -139,18 +139,17 @@ def save_event(data):
     event_dir = os.path.join(OSUTIL.get_lib_dir(), 'events')
     if not os.path.exists(event_dir):
         os.mkdir(event_dir)
-        os.chmod(event_dir,0700)
+        os.chmod(event_dir,0o700)
     if len(os.listdir(event_dir)) > 1000:
         raise EventError("Too many files under: {0}", event_dir)
 
-    filename = os.path.join(event_dir, str(int(time.time()*1000000)))
+    filename = os.path.join(event_dir, text(int(time.time()*1000000)))
     try:
         with open(filename+".tmp",'wb+') as hfile:
             hfile.write(data.encode("utf-8"))
         os.rename(filename+".tmp", filename+".tld")
     except IOError as e:
         raise EventError("Failed to write events to file:{0}", e)
-
 
 def add_event(name, op, is_success, duration=0, version="1.0",
               message="", evt_type="", is_internal=False):

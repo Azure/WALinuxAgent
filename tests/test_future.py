@@ -20,23 +20,18 @@
 
 import tests.env
 from tests.tools import *
+import uuid
 import unittest
-from azurelinuxagent.utils.osutil import OSUTIL, OSUtilError
-from azurelinuxagent.handler import HANDLERS
-import azurelinuxagent.distro.default.osutil as osutil
+import os
+import shutil
+import time
+import azurelinuxagent.future as future
 
-class TestDistroLoader(unittest.TestCase):
-    def test_loader(self):
-        self.assertNotEquals(osutil.DefaultOSUtil, type(OSUTIL))
-        self.assertNotEquals(None, HANDLERS.init_handler)
-        self.assertNotEquals(None, HANDLERS.main_handler)
-        self.assertNotEquals(None, HANDLERS.scvmm_handler)
-        self.assertNotEquals(None, HANDLERS.dhcp_handler)
-        self.assertNotEquals(None, HANDLERS.env_handler)
-        self.assertNotEquals(None, HANDLERS.provision_handler)
-        self.assertNotEquals(None, HANDLERS.resource_disk_handler)
-        self.assertNotEquals(None, HANDLERS.env_handler)
-        self.assertNotEquals(None, HANDLERS.deprovision_handler)
+class TestFuture(unittest.TestCase):
+    def test_future_pkgs(self):
+        future.httpclient
+        future.urlparse
+        future.text(b"asdf", encoding="utf-8")
 
 if __name__ == '__main__':
     unittest.main()

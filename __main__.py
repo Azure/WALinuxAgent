@@ -17,5 +17,4 @@
 
 import azurelinuxagent.agent as agent
 
-print "hehe"
 agent.main()

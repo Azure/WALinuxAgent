@@ -31,85 +31,110 @@ from setuptools.command.install import install as  _install
 root_dir = os.path.dirname(os.path.abspath(__file__))
 os.chdir(root_dir)
 
+def set_files(data_files, dest=None, src=None):
+    data_files.append((dest, src))
+
+def set_bin_files(data_files, dest="/usr/sbin", 
+                  src=["bin/waagent", "bin/waagent2.0"]):
+    data_files.append((dest, src))
+
+def set_conf_files(data_files, dest="/etc", src=["config/waagent.conf"]):
+    data_files.append((dest, src))
+
+def set_logrotate_files(data_files, dest="/etc/logrotate.d", 
+                        src=["config/waagent.logrotate"]):
+    data_files.append((dest, src))
+
+def set_sysv_files(data_files, dest="/etc/rc.d/init.d", src=["init/waagent"]):
+    data_files.append((dest, src))
+
+def set_systemd_files(data_files, dest="/lib/systemd/system", 
+                      src=["init/waagent.service"]):
+    data_files.append((dest, src))
+
 def get_data_files(name, version, fullname):
     """
     Determine data_files according to distro name, version and init system type
     """
     data_files=[]
 
-    #Script file
-    script_dest = '/usr/sbin'
-    script_src = ['bin/waagent']
-    if name == 'coreos':
-        script_dest = '/usr/share/oem/bin'
-    data_files.append((script_dest, script_src))
-
-    #Config file
-    conf_dest = '/etc'
-    conf_src = ['config/waagent.conf']
-    if name == 'suse':
-        conf_src = ['config/suse/waagent.conf']
-    if name == 'ubuntu':
-        conf_src = ['config/ubuntu/waagent.conf']
-    if name == 'coreos':
-        conf_dest = '/usr/share/oem/'
-    data_files.append((conf_dest, conf_src))
-    
-    #logrotate config file
-    logrotate_dest = '/etc/logrotate.d'
-    logrotate_src = ['config/waagent.logrotate']
-    data_files.append((logrotate_dest, logrotate_src))
-
-    #init script file, default is sysV
-    init_dest = '/etc/rc.d/init.d'
-    init_src = ['init/waagent']
-
     if name == 'redhat' or name == 'centos':
+        set_bin_files(data_files)
+        set_conf_files(data_files)
+        set_logrotate_files(data_files)
         if version >= "7.0":
-            init_dest = '/etc/systemd/system'
-            init_src = ['init/waagent.service']
-    elif name == 'coreos':
-        init_dest = '/usr/share/oem'
-        init_src = ['init/coreos/cloud-config.yml']
-    elif name == 'ubuntu':
-        if version >= "15.04":
-            init_dest = '/lib/systemd/system'
-            init_src = ['init/ubuntu/walinuxagent.service']
+            #redhat7.0+ uses systemd
+            set_systemd_files(data_files, dest="/var/lib/systemd/system")
         else:
-            init_dest = '/etc/init'
-            init_src = ['init/ubuntu/walinuxagent.conf']
+            set_sysv_files(data_files)
+
+    elif name == 'coreos':
+        set_bin_files(data_files, dest="/usr/share/oem/bin")
+        set_conf_files(data_files, dest="/usr/share/oem")
+        set_logrotate_files(data_files)
+        set_files(data_files, dest="/usr/share/oem", 
+                  src="init/coreos/cloud-config.yml")
+    elif name == 'ubuntu':
+        set_bin_files(data_files)
+        set_conf_files(data_files, src=["config/ubuntu/waagent.conf"])
+        set_logrotate_files(data_files)
+        if version < "15.04":
+            #Ubuntu15.04- uses upstart
+            set_files(data_files, dest="/etc/init",
+                      src=["init/ubuntu/walinuxagent.conf"])
+            set_files(data_files, dest='/etc/default', 
+                      src=['init/ubuntu/walinuxagent'])
+        elif fullname == 'Snappy Ubuntu Core':
+            set_files(data_files, dest="<TODO>", 
+                      src=["init/ubuntu/snappy/walinuxagent.yml"])
+        else:
+            set_systemd_files(data_files, 
+                              src=["init/ubuntu/walinuxagent.service"])
     elif name == 'suse':
+        set_bin_files(data_files)
+        set_conf_files(data_files, src=["config/suse/waagent.conf"])
+        set_logrotate_files(data_files)
         if fullname == 'SUSE Linux Enterprise Server' and version >= '12' or \
                 fullname == 'openSUSE' and version >= '13.2':
-            init_dest = '/etc/systemd/system'
-            init_src = ['init/waagent.service']
+            set_systemd_files(data_files, dest='/var/lib/systemd/system')
         else:
-            init_dest = '/etc/init.d'
-            init_src = ['init/waagent']
-
-    data_files.append((init_dest, init_src))
-
+            set_sysv_files(data_files, dest='/etc/init.d')
+    else:
+        #Use default setting
+        set_bin_files(data_files)
+        set_conf_files(data_files)
+        set_logrotate_files(data_files)
+        set_sysv_files(data_files)
     return data_files
 
 class install(_install):
     user_options = _install.user_options + [
         # This will magically show up in member variable 'init_system'
-        ('init-system=', None, 'Deprecated, use --lnx-distro* instead'),
+        ('init-system=', None, 'deprecated, use --lnx-distro* instead'),
         ('lnx-distro=', None, 'target Linux distribution'),
         ('lnx-distro-version=', None, 'target Linux distribution version'),
         ('lnx-distro-fullname=', None, 'target Linux distribution full name'),
         ('register-service', None, 'register as startup service'),
+        ('skip-data-files', None, 'skip data files installation'),
     ]
 
     def initialize_options(self):
         _install.initialize_options(self)
+        self.init_system=None
         self.lnx_distro = DISTRO_NAME
         self.lnx_distro_version = DISTRO_VERSION
         self.lnx_distro_fullname = DISTRO_FULL_NAME
         self.register_service = False
+        self.skip_data_files = False
         
     def finalize_options(self):
         _install.finalize_options(self)
+        if self.skip_data_files:
+            return
+
+        if self.init_system is not None:
+            print("WARNING: --init-system is deprecated,"
+                  "use --lnx-distro* instead")
         data_files = get_data_files(self.lnx_distro, self.lnx_distro_version,
                                     self.lnx_distro_fullname)
         self.distribution.data_files = data_files

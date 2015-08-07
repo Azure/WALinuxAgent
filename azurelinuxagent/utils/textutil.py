@@ -20,23 +20,67 @@ import crypt
 import random
 import string
 import struct
+import xml.dom.minidom as minidom
+import sys
 
-def find_first_node(xml_doc, selector):
-    nodes = find_all_nodes(xml_doc, selector)
-    if len(nodes) > 0:
+def parse_doc(xml_text):
+    """
+    Parse xml document from string
+    """
+    #The minidom lib has some issue with unicode in python2.
+    #Encode the string into utf-8 first
+    xml_text = xml_text.encode('utf-8')
+    return minidom.parseString(xml_text)
+
+def findall(root, tag, namespace=None):
+    """
+    Get all nodes by tag and namespace under Node root.
+    """
+    if root is None:
+        return []
+
+    if namespace is None:
+        return root.getElementsByTagName(tag)
+    else:
+        return root.getElementsByTagNameNS(namespace, tag)
+
+def find(root, tag, namespace=None):
+    """
+    Get first node by tag and namespace under Node root.
+    """
+    nodes = findall(root, tag, namespace=namespace)
+    if nodes is not None and len(nodes) >= 1:
         return nodes[0]
+    else:
+        return None
 
-def find_all_nodes(xml_doc, selector):
-    nodes = xml_doc.findall(selector)
-    return nodes
+def gettext(node):
+    """
+    Get node text
+    """
+    if node is None:
+        return None
+    
+    for child in node.childNodes:
+        if child.nodeType == child.TEXT_NODE:
+            return child.data
+    return None
 
-def get_node_text(a):
+def findtext(root, tag, namespace=None):
     """
-    Filter non-text nodes from DOM tree
+    Get text of node by tag and namespace under Node root.
     """
-    for b in a.childNodes:
-        if b.nodeType == b.TEXT_NODE:
-            return b.data
+    node = find(root, tag, namespace=namespace)
+    return gettext(node)
+
+def getattrib(node, attr_name):
+    """
+    Get attribute of xml node
+    """
+    if node is not None:
+        return node.getAttribute(attr_name)
+    else:
+        return None
 
 def unpack(buf, offset, range):
     """
@@ -126,7 +170,7 @@ def str_to_ord(a):
     Allows indexing into a string or an array of integers transparently.
     Generic utility function.
     """
-    if type(a) == type("a"):
+    if type(a) == type(b'') or type(a) == type(u''):
         a = ord(a)
     return a
 
@@ -144,17 +188,6 @@ def int_to_ip4_addr(a):
                             (a >> 16) & 0xFF,
                             (a >> 8) & 0xFF,
                             (a) & 0xFF)
-
-def ascii(val):
-    uni = None
-    if type(val) == str:
-        uni = unicode(val, 'utf-8', errors='ignore')
-    else:
-        uni = unicode(val)
-    if uni is None:
-        raise ValueError('<Unsupported charset>')
-    else:
-        return uni.encode('ascii', 'backslashreplace')
 
 def hexstr_to_bytearray(a):
     """
@@ -179,42 +212,17 @@ def set_ssh_config(config, name, val):
     return config
 
 def remove_bom(c):
-    if str_to_ord(c[0]) > 128 and str_to_ord(c[1]) > 128 and str_to_ord(c[2]) > 128:
+    if str_to_ord(c[0]) > 128 and str_to_ord(c[1]) > 128 and \
+            str_to_ord(c[2]) > 128:
         c = c[3:]
     return c
 
 def gen_password_hash(password, use_salt, salt_type, salt_len):
-        salt="$6$"
-        if use_salt:
-            collection = string.ascii_letters + string.digits
-            salt = ''.join(random.choice(collection) for _ in range(salt_len))
-            salt = "${0}${1}".format(salt_type, salt)
-        return crypt.crypt(password, salt)
+    salt="$6$"
+    if use_salt:
+        collection = string.ascii_letters + string.digits
+        salt = ''.join(random.choice(collection) for _ in range(salt_len))
+        salt = "${0}${1}".format(salt_type, salt)
+    return crypt.crypt(password, salt)
 
-def num_to_bytes(i):
-        """
-        Pack number into bytes.  Retun as string.
-        """
-        result = []
-        while i:
-            result.append(chr(i & 0xFF))
-            i >>= 8
-        result.reverse()
-        return ''.join(result)
-
-def bits_to_str(a):
-    """
-    Return string representation of bits in a.
-    """
-    index=7
-    s = ""
-    c = 0
-    for bit in a:
-        c = c | (bit << index)
-        index = index - 1
-        if index == -1:
-            s = s + struct.pack('>B', c)
-            c = 0
-            index = 7
-    return s
 

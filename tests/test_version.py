@@ -18,15 +18,16 @@
 # http://msdn.microsoft.com/en-us/library/cc227282%28PROT.10%29.aspx
 # http://msdn.microsoft.com/en-us/library/cc227259%28PROT.13%29.aspx
 
-import env
+import tests.env
 import tests.tools as tools
 import uuid
 import unittest
 import os
 import json
 import azurelinuxagent.protocol.v1 as v1
+from azurelinuxagent.future import text
 
-VersionInfoSample="""\
+VersionInfoSample=u"""\
 <?xml version="1.0" encoding="utf-8"?>
 <Versions>
   <Preferred>

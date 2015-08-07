@@ -19,24 +19,22 @@
 # http://msdn.microsoft.com/en-us/library/cc227259%28PROT.13%29.aspx
 
 import tests.env
-from tests.tools import *
+import tests.tools as tools
+import os
+import imp
+import sys
+import uuid
 import unittest
-from azurelinuxagent.utils.osutil import OSUTIL, OSUtilError
-from azurelinuxagent.handler import HANDLERS
-import azurelinuxagent.distro.default.osutil as osutil
 
-class TestDistroLoader(unittest.TestCase):
-    def test_loader(self):
-        self.assertNotEquals(osutil.DefaultOSUtil, type(OSUTIL))
-        self.assertNotEquals(None, HANDLERS.init_handler)
-        self.assertNotEquals(None, HANDLERS.main_handler)
-        self.assertNotEquals(None, HANDLERS.scvmm_handler)
-        self.assertNotEquals(None, HANDLERS.dhcp_handler)
-        self.assertNotEquals(None, HANDLERS.env_handler)
-        self.assertNotEquals(None, HANDLERS.provision_handler)
-        self.assertNotEquals(None, HANDLERS.resource_disk_handler)
-        self.assertNotEquals(None, HANDLERS.env_handler)
-        self.assertNotEquals(None, HANDLERS.deprovision_handler)
+class TestImportWAAgent(unittest.TestCase):
+    def test_import_waagent(self):
+        agent_path = os.path.join(tools.parent, 'bin/waagent')
+        if sys.version_info[0] == 2:
+            waagent = imp.load_source('waagent', agent_path) 
+            self.assertNotEquals(None, waagent.LoggerInit)
+        else:
+            self.assertRaises(ImportError, imp.load_source, 'waagent', 
+                              agent_path)
 
 if __name__ == '__main__':
     unittest.main()

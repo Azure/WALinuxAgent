@@ -21,16 +21,16 @@ import json
 import re
 import time
 import traceback
-import httplib
 import xml.sax.saxutils as saxutils
 import xml.etree.ElementTree as ET
 import azurelinuxagent.logger as logger
+from azurelinuxagent.future import text, httpclient
 import azurelinuxagent.utils.restutil as restutil
-
+from azurelinuxagent.utils.textutil import parse_doc, findall, find, findtext, \
+                                           getattrib, gettext, remove_bom
 from azurelinuxagent.utils.osutil import OSUTIL
 import azurelinuxagent.utils.fileutil as fileutil
 import azurelinuxagent.utils.shellutil as shellutil
-from azurelinuxagent.utils.textutil import *
 from azurelinuxagent.protocol.common import *
 
 VERSION_INFO_URI = "http://{0}/?comp=versions"
@@ -87,17 +87,7 @@ class WireProtocol(Protocol):
         goal_state = self.client.get_goal_state()
         man = self.client.get_ext_manifest(extension, goal_state)
         return man.pkg_list
-
-    def get_instance_metadata(self):
-        goal_state = self.client.get_goal_state()
-        hosting_env = self.client.get_hosting_env()
-        metadata = InstanceMetadata()
-        metadata.deploymentName = hosting_env.deployment_name
-        metadata.roleName = hosting_env.role_name
-        metadata.roleInstanceId = goal_state.role_instance_id
-        metadata.containerId = goal_state.container_id
-        return metadata
-
+   
     def report_provision_status(self, provisionStatus):
         validata_param("provisionStatus", provisionStatus, ProvisionStatus)
 
@@ -126,26 +116,31 @@ def _fetch_uri(uri, headers, chk_proxy=False):
     try:
         resp = restutil.http_get(uri, headers, chk_proxy=chk_proxy)
     except restutil.HttpError as e:
-        raise ProtocolError(str(e))
+        raise ProtocolError(text(e))
 
-    if(resp.status == httplib.GONE):
+    if(resp.status == httpclient.GONE):
         raise WireProtocolResourceGone(uri)
-    if(resp.status != httplib.OK):
+    if(resp.status != httpclient.OK):
         raise ProtocolError("{0} - {1}".format(resp.status, uri))
-    return resp.read()
+    data = resp.read()
+    if data is None:
+        return None
+    data = remove_bom(data)
+    xml_text = text(data, encoding='utf-8')
+    return xml_text
 
 def _fetch_manifest(version_uris):
     for version_uri in version_uris:
         try:
             xml_text = _fetch_uri(version_uri.uri, None, chk_proxy=True)
             return xml_text
-        except IOError, e:
+        except IOError as e:
             logger.warn("Failed to fetch ExtensionManifest: {0}, {1}", e,
                         version_uri.uri)
     raise ProtocolError("Failed to fetch ExtensionManifest from all sources")
 
 def _build_role_properties(container_id, role_instance_id, thumbprint):
-    xml = (u"<?xml version=\"1.0\" encoding=\"utf-8\"?>"
+    xml = ("<?xml version=\"1.0\" encoding=\"utf-8\"?>"
             "<RoleProperties>"
             "<Container>"
             "<ContainerId>{0}</ContainerId>"
@@ -170,7 +165,7 @@ def _build_health_report(incarnation, container_id, role_instance_id,
                   "<SubStatus>{0}</SubStatus>"
                   "<Description>{1}</Description>"
                   "</Details>").format(substatus, description)
-    xml = (u"<?xml version=\"1.0\" encoding=\"utf-8\"?>"
+    xml = ("<?xml version=\"1.0\" encoding=\"utf-8\"?>"
             "<Health "
             "xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\""
             " xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\">"
@@ -312,7 +307,7 @@ class StatusBlob(object):
             "x-ms-date" :  timestamp,
             'x-ms-version' : self.__class__.__storage_version__
         })
-        if resp is None or resp.status != httplib.OK:
+        if resp is None or resp.status != httpclient.OK:
             raise ProtocolError(("Failed to get status blob type: {0}"
                                  "").format(resp.status))
 
@@ -326,10 +321,10 @@ class StatusBlob(object):
         resp = restutil.http_put(url, data, {
             "x-ms-date" :  timestamp,
             "x-ms-blob-type" : "BlockBlob",
-            "Content-Length": str(len(data)),
+            "Content-Length": text(len(data)),
             "x-ms-version" : self.__class__.__storage_version__
         })
-        if resp is None or resp.status != httplib.CREATED:
+        if resp is None or resp.status != httpclient.CREATED:
             raise ProtocolError(("Failed to upload block blob: {0}"
                                  "").format(resp.status))
 
@@ -342,10 +337,10 @@ class StatusBlob(object):
             "x-ms-date" :  timestamp,
             "x-ms-blob-type" : "PageBlob",
             "Content-Length": "0",
-            "x-ms-blob-content-length" : str(page_blob_size),
+            "x-ms-blob-content-length" : text(page_blob_size),
             "x-ms-version" : self.__class__.__storage_version__
         })
-        if resp is None or resp.status != httplib.CREATED:
+        if resp is None or resp.status != httpclient.CREATED:
             raise ProtocolError(("Failed to clean up page blob: {0}"
                                  "").format(resp.status))
 
@@ -362,46 +357,46 @@ class StatusBlob(object):
             end = min(len(data), start + page_max)
             content_size = end - start
             #Align to 512 bytes
-            page_end = ((end + 511) / 512) * 512
+            page_end = int((end + 511) / 512) * 512
             buf_size = page_end - start
-            buf = bytearray(buf_size)
-            buf[0 : content_size] = data[start : end]
-            resp = restutil.http_put(url, buffer(buf), {
+            buf = bytearray(source=data[start:end], encoding="utf-8")
+            #TODO buffer is not defined in python3, however we need this to make httplib to work on python 2.6
+            resp = restutil.http_put(url, buf, {
                 "x-ms-date" :  timestamp,
                 "x-ms-range" : "bytes={0}-{1}".format(start, page_end - 1),
                 "x-ms-page-write" : "update",
                 "x-ms-version" : self.__class__.__storage_version__,
-                "Content-Length": str(page_end - start)
+                "Content-Length": text(page_end - start)
             })
-            if resp is None or resp.status != httplib.CREATED:
+            if resp is None or resp.status != httpclient.CREATED:
                 raise ProtocolError(("Failed to upload page blob: {0}"
                                      "").format(resp.status))
             start = end
 
 def event_param_to_v1(param):
-    param_format = u'<Param Name="{0}" Value={1} T="{2}" />'
+    param_format = '<Param Name="{0}" Value={1} T="{2}" />'
     param_type = type(param.value)
     attr_type = ""
     if param_type is int:
-        attr_type = u'mt:uint64'
+        attr_type = 'mt:uint64'
     elif param_type is str:
-        attr_type = u'mt:wstr'
-    elif str(param_type).count("'unicode'") > 0:
-        attr_type = u'mt:wstr'
+        attr_type = 'mt:wstr'
+    elif text(param_type).count("'unicode'") > 0:
+        attr_type = 'mt:wstr'
     elif param_type is bool:
-        attr_type = u'mt:bool'
+        attr_type = 'mt:bool'
     elif param_type is float:
-        attr_type = u'mt:float64'
-    return param_format.format(param.name, saxutils.quoteattr(str(param.value)),
+        attr_type = 'mt:float64'
+    return param_format.format(param.name, saxutils.quoteattr(text(param.value)),
                                attr_type)
 
 def event_to_v1(event):
     params = ""
     for param in event.parameters:
         params += event_param_to_v1(param)
-    event_str = (u'<Event id="{0}">'
-                 u'<![CDATA[{1}]]>'
-                 u'</Event>').format(event.eventId, params)
+    event_str = ('<Event id="{0}">'
+                 '<![CDATA[{1}]]>'
+                 '</Event>').format(event.eventId, params)
     return event_str
 
 class WireClient(object):
@@ -416,24 +411,32 @@ class WireClient(object):
         self.req_count = 0
 
     def update_hosting_env(self, goal_state):
+        if goal_state.hosting_env_uri is None:
+            raise ProtocolError("HostingEnvironmentConfig uri is empty")
         local_file = HOSTING_ENV_FILE_NAME
         xml_text = _fetch_uri(goal_state.hosting_env_uri, self.get_header())
         fileutil.write_file(local_file, xml_text)
         self.hosting_env = HostingEnv(xml_text)
 
     def update_shared_conf(self, goal_state):
+        if goal_state.shared_conf_uri is None:
+            raise ProtocolError("SharedConfig uri is empty")
         local_file = SHARED_CONF_FILE_NAME
         xml_text = _fetch_uri(goal_state.shared_conf_uri, self.get_header())
         fileutil.write_file(local_file, xml_text)
         self.shared_conf = SharedConfig(xml_text)
 
     def update_certs(self, goal_state):
+        if goal_state.certs_uri is None:
+            return
         local_file = CERTS_FILE_NAME
         xml_text = _fetch_uri(goal_state.certs_uri, self.get_header_for_cert())
         fileutil.write_file(local_file, xml_text)
         self.certs = Certificates(xml_text)
 
     def update_ext_conf(self, goal_state):
+        if goal_state.ext_uri is None:
+            raise ProtocolError("ExtensionsConfig uri is empty")
         incarnation = goal_state.incarnation
         local_file = EXT_CONF_FILE_NAME.format(incarnation)
         xml_text = _fetch_uri(goal_state.ext_uri,
@@ -508,6 +511,8 @@ class WireClient(object):
         if(self.certs is None):
             xml_text = _fetch_cache(Certificates)
             self.certs = Certificates(xml_text)
+        if self.certs is None:
+            return None
         return self.certs
 
     def get_ext_conf(self):
@@ -578,11 +583,11 @@ class WireClient(object):
 
     def send_event(self, provider_id, event_str):
         uri = TELEMETRY_URI.format(self.endpoint)
-        data_format = (u'<?xml version="1.0"?>'
-                       u'<TelemetryData version="1.0">'
-                          u'<Provider id="{0}">{1}'
-                          u'</Provider>'
-                       u'</TelemetryData>')
+        data_format = ('<?xml version="1.0"?>'
+                       '<TelemetryData version="1.0">'
+                          '<Provider id="{0}">{1}'
+                          '</Provider>'
+                       '</TelemetryData>')
         data = data_format.format(provider_id, event_str)
         try:
             self.prevent_throttling()
@@ -591,7 +596,7 @@ class WireClient(object):
         except restutil.HttpError as e:
             raise ProtocolError("Failed to send events:{0}".format(e))
 
-        if resp.status != httplib.OK:
+        if resp.status != httpclient.OK:
             logger.verb(resp.read())
             raise ProtocolError("Failed to send events:{0}".format(resp.status))
 
@@ -611,7 +616,7 @@ class WireClient(object):
             buf[event.providerId] = buf[event.providerId] + event_str
 
         #Send out all events left in buffer.
-        for provider_id in buf.keys():
+        for provider_id in list(buf.keys()):
             if len(buf[provider_id]) > 0:
                 self.send_event(provider_id, buf[provider_id])
 
@@ -651,14 +656,16 @@ class VersionInfo(object):
         self.parse(xml_text)
 
     def parse(self, xml_text):
-        xml_doc = ET.fromstring(xml_text.strip())
-        self.preferred = find_first_node(xml_doc, ".//Preferred/Version").text
+        xml_doc = parse_doc(xml_text)
+        preferred = find(xml_doc, "Preferred")
+        self.preferred = findtext(preferred, "Version")
         logger.info("Fabric preferred wire protocol version:{0}", self.preferred)
 
         self.supported = []
-        nodes = find_all_nodes(xml_doc, ".//Supported/Version")
-        for node in nodes:
-            version = node.text
+        supported = find(xml_doc, "Supported")
+        supported_version = findall(supported, "Version")
+        for node in supported_version:
+            version = gettext(node)
             logger.verb("Fabric supported wire protocol version:{0}", version)
             self.supported.append(version)
 
@@ -691,21 +698,19 @@ class GoalState(object):
         Request configuration data from endpoint server.
         """
         self.xml_text = xml_text
-        xml_doc = ET.fromstring(xml_text.strip())
-        self.incarnation = (find_first_node(xml_doc, ".//Incarnation")).text
-        self.expected_state = (find_first_node(xml_doc, ".//ExpectedState")).text
-        self.hosting_env_uri = (find_first_node(xml_doc,
-                                            ".//HostingEnvironmentConfig")).text
-        self.shared_conf_uri = (find_first_node(xml_doc, ".//SharedConfig")).text
-        node = (find_first_node(xml_doc, ".//Certificates"))
-        self.certs_uri = node.text if node is not None else None
-        self.ext_uri = (find_first_node(xml_doc, ".//ExtensionsConfig")).text
-        self.role_instance_id = (find_first_node(xml_doc,
-                                             ".//RoleInstance/InstanceId")).text
-        self.container_id = (find_first_node(xml_doc,
-                                             ".//Container/ContainerId")).text
-        self.load_balancer_probe_port = (find_first_node(xml_doc,
-                                                    ".//LBProbePorts/Port")).text
+        xml_doc = parse_doc(xml_text)
+        self.incarnation = findtext(xml_doc, "Incarnation")
+        self.expected_state = findtext(xml_doc, "ExpectedState")
+        self.hosting_env_uri = findtext(xml_doc, "HostingEnvironmentConfig")
+        self.shared_conf_uri = findtext(xml_doc, "SharedConfig")
+        self.certs_uri = findtext(xml_doc, "Certificates") 
+        self.ext_uri = findtext(xml_doc, "ExtensionsConfig")
+        role_instance = find(xml_doc, "RoleInstance")
+        self.role_instance_id = findtext(role_instance, "InstanceId")
+        container = find(xml_doc, "Container")
+        self.container_id = findtext(container, "ContainerId")
+        lbprobe_ports = find(xml_doc, "LBProbePorts")
+        self.load_balancer_probe_port = findtext(lbprobe_ports, "Port")
         return self
 
 
@@ -728,11 +733,13 @@ class HostingEnv(object):
         parse and create HostingEnvironmentConfig.xml.
         """
         self.xml_text = xml_text
-        xml_doc = ET.fromstring(xml_text.strip())
-        self.vm_name = find_first_node(xml_doc, ".//Incarnation").attrib["instance"]
-        self.role_name = find_first_node(xml_doc, ".//Role").attrib["name"]
-        deployment = find_first_node(xml_doc, ".//Deployment")
-        self.deployment_name = deployment.attrib["name"]
+        xml_doc = parse_doc(xml_text)
+        incarnation = find(xml_doc, "Incarnation")
+        self.vm_name = getattrib(incarnation, "instance")
+        role = find(xml_doc, "Role")
+        self.role_name = getattrib(role, "name")
+        deployment = find(xml_doc, "Deployment")
+        self.deployment_name = getattrib(deployment, "name")
         return self
 
 class SharedConfig(object):
@@ -768,9 +775,9 @@ class Certificates(object):
         """
         Parse multiple certificates into seperate files.
         """
-        xml_doc = ET.fromstring(xml_text.strip())
-        data_node = find_first_node(xml_doc, ".//Data")
-        if data_node is None:
+        xml_doc = parse_doc(xml_text)
+        data = findtext(xml_doc, "Data")
+        if data is None:
             return
 
         p7m = ("MIME-Version:1.0\n"
@@ -778,14 +785,15 @@ class Certificates(object):
                "Content-Type: application/x-pkcs7-mime; name=\"{1}\"\n"
                "Content-Transfer-Encoding: base64\n"
                "\n"
-               "{2}").format(P7M_FILE_NAME, P7M_FILE_NAME, data_node.text)
+               "{2}").format(P7M_FILE_NAME, P7M_FILE_NAME, data)
 
         fileutil.write_file(os.path.join(self.lib_dir, P7M_FILE_NAME), p7m)
         #decrypt certificates
         cmd = ("{0} cms -decrypt -in {1} -inkey {2} -recip {3}"
                "| {4} pkcs12 -nodes -password pass: -out {5}"
-               "").format(self.openssl_cmd, P7M_FILE_NAME, TRANSPORT_PRV_FILE_NAME,
-                               TRANSPORT_CERT_FILE_NAME, self.openssl_cmd, PEM_FILE_NAME)
+               "").format(self.openssl_cmd, P7M_FILE_NAME, 
+                          TRANSPORT_PRV_FILE_NAME, TRANSPORT_CERT_FILE_NAME, 
+                          self.openssl_cmd, PEM_FILE_NAME)
         shellutil.run(cmd)
 
         #The parsing process use public key to match prv and crt.
@@ -864,58 +872,71 @@ class ExtensionsConfig(object):
         """
         Write configuration to file ExtensionsConfig.xml.
         """
-        xml_doc = ET.fromstring(xml_text.strip())
-        plugins = find_all_nodes(xml_doc, ".//Plugins/Plugin")
-        plugin_settings_list = find_all_nodes(xml_doc, ".//PluginSettings/Plugin")
+        xml_doc = parse_doc(xml_text)
+        plugins_list = find(xml_doc, "Plugins")
+        plugins = findall(plugins_list, "Plugin")
+        plugin_settings_list = find(xml_doc, "PluginSettings")
+        plugin_settings = findall(plugin_settings_list, "Plugin")
 
         for plugin in plugins:
-            ext = Extension()
-            ext.name = plugin.attrib["name"]
-            ext.properties.version = plugin.attrib["version"]
-            ext.properties.state = plugin.attrib["state"]
-
-            auto_upgrade = plugin.attrib["autoUpgrade"]
-            if auto_upgrade == "true":
-                ext.properties.upgradePolicy = "auto"
-            else:
-                ext.properties.upgradePolicy = "manual"
-
-            location = plugin.attrib["location"]
-            failover_location = plugin.attrib["failoverlocation"]
-            for uri in [location, failover_location]:
-                versionUri = ExtensionVersionUri()
-                versionUri.uri = uri
-                ext.version_uris.append(versionUri)
-
-            name = ext.name
-            version = ext.properties.version
-            plugin_settings = filter(lambda x: x.attrib["name"] == name and x.attrib["version"] == version,
-                                    plugin_settings_list)
-            if plugin_settings is None or len(plugin_settings) == 0 :
-                continue
-
-            runtime_settings = None
-            runtime_settings_node = find_first_node(plugin_settings[0],
-                                                "runtimeSettings")
-            seqNo = runtime_settings_node.attrib["seqNo"]
-            runtime_settings_str = runtime_settings_node.text
-            try:
-                runtime_settings = json.loads(runtime_settings_str)
-            except ValueError as e:
-                raise ProtocolError("Invalid extension settings")
-
-            for plugin_settings_list in runtime_settings["runtimeSettings"]:
-                handler_settings = plugin_settings_list["handlerSettings"]
-                ext_settings = ExtensionSettings()
-                ext_settings.sequenceNumber = seqNo
-                ext_settings.publicSettings = handler_settings["publicSettings"]
-                ext_settings.privateSettings = handler_settings["protectedSettings"]
-                thumbprint = handler_settings["protectedSettingsCertThumbprint"]
-                ext_settings.certificateThumbprint = thumbprint
-                ext.properties.extensions.append(ext_settings)
-
+            ext = self.parse_ext(plugin)
             self.ext_list.extensions.append(ext)
-        self.status_upload_blob = (find_first_node(xml_doc,"StatusUploadBlob")).text
+            self.parse_ext_settings(ext, plugin_settings)
+
+        self.status_upload_blob = findtext(xml_doc, "StatusUploadBlob")
+
+    def parse_ext(self, plugin):
+        ext = Extension()
+        ext.name = getattrib(plugin, "name")
+        ext.properties.version = getattrib(plugin, "version")
+        ext.properties.state = getattrib(plugin, "state")
+
+        auto_upgrade = getattrib(plugin, "autoUpgrade")
+        if auto_upgrade is not None and auto_upgrade.lower() == "true":
+            ext.properties.upgradePolicy = "auto"
+        else:
+            ext.properties.upgradePolicy = "manual"
+
+        location = getattrib(plugin, "location")
+        failover_location = getattrib(plugin, "failoverlocation")
+        for uri in [location, failover_location]:
+            version_uri = ExtensionVersionUri()
+            version_uri.uri = uri
+            ext.version_uris.append(version_uri)
+        return ext
+
+    def parse_ext_settings(self, ext, plugin_settings):
+        if plugin_settings is None:
+            return 
+
+        name = ext.name
+        version = ext.properties.version
+        settings = [x for x in plugin_settings \
+                          if getattrib(x, "name") == name and \
+                             getattrib(x ,"version") == version]
+
+        if settings is None or len(settings) == 0:
+            return
+
+        runtime_settings = None
+        runtime_settings_node = find(settings[0], "RuntimeSettings")
+        seqNo = getattrib(runtime_settings_node, "seqNo")
+        runtime_settings_str = gettext(runtime_settings_node)
+        try:
+            runtime_settings = json.loads(runtime_settings_str)
+        except ValueError as e:
+            logger.error("Invalid extension settings")
+            return
+
+        for plugin_settings_list in runtime_settings["runtimeSettings"]:
+            handler_settings = plugin_settings_list["handlerSettings"]
+            ext_settings = ExtensionSettings()
+            ext_settings.sequenceNumber = seqNo
+            ext_settings.publicSettings = handler_settings.get("publicSettings", None)
+            ext_settings.privateSettings = handler_settings.get("protectedSettings", None)
+            thumbprint = handler_settings.get("protectedSettingsCertThumbprint", None)
+            ext_settings.certificateThumbprint = thumbprint
+            ext.properties.extensions.append(ext_settings)
 
 class ExtensionManifest(object):
     def __init__(self, xml_text):
@@ -926,15 +947,16 @@ class ExtensionManifest(object):
         self.parse(xml_text)
 
     def parse(self, xml_text):
-        xml_doc = ET.fromstring(xml_text.strip())
-        packages = find_all_nodes(xml_doc, ".//Plugin")
+        xml_doc = parse_doc(xml_text)
+        packages = findall(xml_doc, "Plugin")
         for package in packages:
-            version = find_first_node(package, "Version").text
-            uris = find_all_nodes(package, "Uris/Uri")
-            uris = map(lambda x : x.text, uris)
+            version = findtext(package, "Version")
+            uris = find(package, "Uris")
+            uri_list = findall(uris, "Uri")
+            uri_list = [gettext(x) for x in uri_list]
             package = ExtensionPackage()
             package.version = version
-            for uri in uris:
+            for uri in uri_list:
                 pkg_uri = ExtensionPackageUri()
                 pkg_uri.uri = uri
                 package.uris.append(pkg_uri)

@@ -26,6 +26,7 @@ import time
 import pwd
 import fcntl
 import azurelinuxagent.logger as logger
+from azurelinuxagent.future import text
 import azurelinuxagent.utils.fileutil as fileutil
 import azurelinuxagent.utils.shellutil as shellutil
 import azurelinuxagent.utils.textutil as textutil
@@ -78,24 +79,6 @@ class DefaultOSUtil(object):
     def get_openssl_cmd(self):
         return self.openssl_cmd
 
-    def set_user_account(self, username, password, expiration=None):
-        """
-        Update password and ssh key for user account.
-        New account will be created if not exists.
-        """
-        if username is None:
-            raise OSUtilError("User name is empty")
-
-        if self.is_sys_user(username):
-            raise OSUtilError(("User {0} is a system user. "
-                               "Will not set passwd.").format(username))
-
-        userentry = self.get_userentry(username)
-        if userentry is None:
-            self.useradd(username, expiration)
-
-        self.conf_sudoer(username, password is None)
-
     def get_userentry(self, username):
         try:
             return pwd.getpwnam(username)
@@ -106,7 +89,8 @@ class DefaultOSUtil(object):
         userentry = self.get_userentry(username)
         uidmin = None
         try:
-            uidmin_def = fileutil.get_line_startingwith("UID_MIN", "/etc/login.defs")
+            uidmin_def = fileutil.get_line_startingwith("UID_MIN", 
+                                                        "/etc/login.defs")
             if uidmin_def is not None:
                 uidmin = int(uidmin_def.split()[1])
         except IOError as e:
@@ -119,6 +103,10 @@ class DefaultOSUtil(object):
             return False
 
     def useradd(self, username, expiration=None):
+        """
+        Update password and ssh key for user account.
+        New account will be created if not exists.
+        """
         if expiration is not None:
             cmd = "useradd -m {0} -e {1}".format(username, expiration)
         else:
@@ -130,13 +118,16 @@ class DefaultOSUtil(object):
                                "output:{2}").format(username, retcode, out))
 
     def chpasswd(self, username, password, use_salt=True, salt_type=6,
-                       salt_len=10):
+                 salt_len=10):
+        if self.is_sys_user(username):
+            raise OSUtilError(("User {0} is a system user. "
+                               "Will not set passwd.").format(username))
         passwd_hash = textutil.gen_password_hash(password, use_salt, salt_type,
                                                  salt_len)
         try:
             passwd_content = fileutil.read_file(self.passwd_file_path)
             passwd = passwd_content.split("\n")
-            new_passwd = filter(lambda x : not x.startswith(username), passwd)
+            new_passwd = [x for x in passwd if not x.startswith(username)]
             new_passwd.append("{0}:{1}:14600::::::".format(username, passwd_hash))
             fileutil.write_file(self.passwd_file_path, "\n".join(new_passwd))
         except IOError as e:
@@ -157,13 +148,13 @@ class DefaultOSUtil(object):
         else:
             sudoer = "{0} ALL = (ALL) ALL\n".format(username)
         fileutil.append_file('/etc/sudoers.d/waagent', sudoer)
-        fileutil.chmod('/etc/sudoers.d/waagent', 0440)
+        fileutil.chmod('/etc/sudoers.d/waagent', 0o440)
 
     def del_root_password(self):
         try:
             passwd_content = fileutil.read_file(self.passwd_file_path)
             passwd = passwd_content.split('\n')
-            new_passwd = filter(lambda x : not x.startswith("root:"), passwd)
+            new_passwd = [x for x in passwd if not x.startswith("root:")]
             new_passwd.insert(0, "root:*LOCK*:14600::::::")
             fileutil.write_file(self.passwd_file_path, "\n".join(new_passwd))
         except IOError as e:
@@ -197,54 +188,64 @@ class DefaultOSUtil(object):
         thumbprint = thumbprint.rstrip().split('=')[1].replace(':', '').upper()
         return thumbprint
 
-    def deploy_ssh_keypair(self, username, thumbprint, path):
+    def deploy_ssh_keypair(self, username, keypair):
         """
         Deploy id_rsa and id_rsa.pub
         """
+        path, thumbprint = keypair
         path = self._norm_path(path)
         dir_path = os.path.dirname(path)
-        fileutil.mkdir(dir_path, mode=0700, owner=username)
+        fileutil.mkdir(dir_path, mode=0o700, owner=username)
         lib_dir = self.get_lib_dir()
         prv_path = os.path.join(lib_dir, thumbprint + '.prv')
         if not os.path.isfile(prv_path):
-            logger.error("Failed to deploy key pair, thumbprint: {0}",
-                         thumbprint)
-            return
+            raise OSUtilError("Can't find {0}.prv".format(thumbprint))
         shutil.copyfile(prv_path, path)
         pub_path = path + '.pub'
         pub = self.get_pubkey_from_prv(prv_path)
         fileutil.write_file(pub_path, pub)
         self.set_selinux_context(pub_path, 'unconfined_u:object_r:ssh_home_t:s0')
         self.set_selinux_context(path, 'unconfined_u:object_r:ssh_home_t:s0')
-        os.chmod(path, 0644)
-        os.chmod(pub_path, 0600)
+        os.chmod(path, 0o644)
+        os.chmod(pub_path, 0o600)
 
     def openssl_to_openssh(self, input_file, output_file):
         shellutil.run("ssh-keygen -i -m PKCS8 -f {0} >> {1}".format(input_file,
                                                                     output_file))
 
-    def deploy_ssh_pubkey(self, username, thumbprint, path):
+    def deploy_ssh_pubkey(self, username, pubkey):
         """
         Deploy authorized_key
         """
+        path, thumbprint, value = pubkey
+        if path is None:
+            raise OSUtilError("Publich key path is None")
+
         path = self._norm_path(path)
         dir_path = os.path.dirname(path)
-        fileutil.mkdir(dir_path, mode=0700, owner=username)
-        lib_dir = self.get_lib_dir()
-        crt_path = os.path.join(lib_dir, thumbprint + '.crt')
-        if not os.path.isfile(crt_path):
-            logger.error("Failed to deploy public key, thumbprint: {0}",
-                         thumbprint)
-            return
-        pub_path = os.path.join(lib_dir, thumbprint + '.pub')
-        pub = self.get_pubkey_from_crt(crt_path)
-        fileutil.write_file(pub_path, pub)
-        self.set_selinux_context(pub_path, 'unconfined_u:object_r:ssh_home_t:s0')
-        self.openssl_to_openssh(pub_path, path)
+        fileutil.mkdir(dir_path, mode=0o700, owner=username)
+        if value is not None:
+            if not value.startswith("ssh-"):
+                raise OSUtilError("Bad public key: {0}".format(value))
+            fileutil.write_file(path, value)
+        elif thumbprint is not None:
+            lib_dir = self.get_lib_dir()
+            crt_path = os.path.join(lib_dir, thumbprint + '.crt')
+            if not os.path.isfile(crt_path):
+                raise OSUtilError("Can't find {0}.crt".format(thumbprint))
+            pub_path = os.path.join(lib_dir, thumbprint + '.pub')
+            pub = self.get_pubkey_from_crt(crt_path)
+            fileutil.write_file(pub_path, pub)
+            self.set_selinux_context(pub_path, 
+                                     'unconfined_u:object_r:ssh_home_t:s0')
+            self.openssl_to_openssh(pub_path, path)
+            fileutil.chmod(pub_path, 0o600)
+        else:
+            raise OSUtilError("SSH public key Fingerprint and Value are None")
+
         self.set_selinux_context(path, 'unconfined_u:object_r:ssh_home_t:s0')
         fileutil.chowner(path, username)
-        fileutil.chmod(path, 0644)
-        fileutil.chmod(pub_path, 0600)
+        fileutil.chmod(path, 0o644)
 
     def is_selinux_system(self):
         """
@@ -292,7 +293,7 @@ class DefaultOSUtil(object):
         conf_file_path = self.get_sshd_conf_file_path()
         conf = fileutil.read_file(conf_file_path).split("\n")
         textutil.set_ssh_config(conf, "ClientAliveInterval", "180")
-        fileutil.replace_file(conf_file_path, '\n'.join(conf))
+        fileutil.write_file(conf_file_path, '\n'.join(conf))
         logger.info("Configured SSH client probing to keep connections alive.")
 
     def conf_sshd(self, disable_password):
@@ -301,7 +302,7 @@ class DefaultOSUtil(object):
         conf = fileutil.read_file(conf_file_path).split("\n")
         textutil.set_ssh_config(conf, "PasswordAuthentication", option)
         textutil.set_ssh_config(conf, "ChallengeResponseAuthentication", option)
-        fileutil.replace_file(conf_file_path, "\n".join(conf))
+        fileutil.write_file(conf_file_path, "\n".join(conf))
         logger.info("Disabled SSH password-based authentication methods.")
 
 
@@ -341,6 +342,11 @@ class DefaultOSUtil(object):
         retcode = self.umount(mount_point, chk_err=chk_err)
         if chk_err and retcode != 0:
             raise OSUtilError("Failed to umount dvd.")
+    
+    def eject_dvd(self, chk_err=True):
+        retcode = shellutil.run("eject")
+        if chk_err and retcode != 0:
+            raise OSUtilError("Failed to eject dvd")
 
     def load_atappix_mod(self):
         if self.is_atapiix_mod_loaded():
@@ -469,7 +475,7 @@ class DefaultOSUtil(object):
 
     def is_missing_default_route(self):
         routes = shellutil.run_get_output("route -n")[1]
-        for route in routes:
+        for route in routes.split("\n"):
             if route.startswith("0.0.0.0 ") or route.startswith("default "):
                return False
         return True
@@ -602,7 +608,7 @@ class DefaultOSUtil(object):
         for vmbus in os.listdir(path):
             deviceid = fileutil.read_file(os.path.join(path, vmbus, "device_id"))
             guid = deviceid.lstrip('{').split('-')
-            if guid[0] == g0 and guid[1] == "000" + str(port_id):
+            if guid[0] == g0 and guid[1] == "000" + text(port_id):
                 for root, dirs, files in os.walk(path + vmbus):
                     if root.endswith("/block"):
                         device = dirs[0]
@@ -625,7 +631,7 @@ class DefaultOSUtil(object):
             try:
                 content = fileutil.read_file("/etc/sudoers.d/waagent")
                 sudoers = content.split("\n")
-                sudoers = filter(lambda x : username not in x, sudoers)
+                sudoers = [x for x in sudoers if username not in x]
                 fileutil.write_file("/etc/sudoers.d/waagent",
                                          "\n".join(sudoers))
             except IOError as e:

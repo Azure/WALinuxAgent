@@ -22,6 +22,7 @@ Log utils
 """
 
 import sys
+from azurelinuxagent.future import text
 import azurelinuxagent.utils.textutil as textutil
 from datetime import datetime
 
@@ -48,19 +49,18 @@ class Logger(object):
         self.log(LogLevel.ERROR, msg_format, *args)
 
     def log(self, level, msg_format, *args):
-        msg_format = textutil.ascii(msg_format)
-        args = map(lambda x: textutil.ascii(x), args)
         if len(args) > 0:
             msg = msg_format.format(*args)
         else:
             msg = msg_format
-        time = datetime.now().strftime('%Y/%m/%d %H:%M:%S.%f')
+        time = datetime.now().strftime(u'%Y/%m/%d %H:%M:%S.%f')
         level_str = LogLevel.STRINGS[level]
         if self.prefix is not None:
-            log_item = "{0} {1} {2} {3}".format(time, level_str, self.prefix,
-                                                msg)
+            log_item = u"{0} {1} {2} {3}\n".format(time, level_str, self.prefix,
+                                                   msg)
         else:
-            log_item = "{0} {1} {2}".format(time, level_str, msg)
+            log_item = u"{0} {1} {2}\n".format(time, level_str, msg)
+        log_item = text(log_item.encode("ascii", "backslashreplace"), encoding='ascii')
         for appender in self.appenders:
             appender.write(level, log_item)
 
@@ -79,7 +79,7 @@ class ConsoleAppender(object):
         if self.level <= level:
             try:
                 with open(self.path, "w") as console:
-                    console.write(msg.encode('ascii', 'ignore') + "\n")
+                    console.write(msg)
             except IOError:
                 pass
 
@@ -92,7 +92,7 @@ class FileAppender(object):
         if self.level <= level:
             try:
                 with open(self.path, "a+") as log_file:
-                    log_file.write(msg.encode('ascii', 'ignore') + "\n")
+                    log_file.write(msg)
             except IOError:
                 pass
 
@@ -103,7 +103,7 @@ class StdoutAppender(object):
     def write(self, level, msg):
         if self.level <= level:
             try:
-                sys.stdout.write(msg.encode('ascii', 'ignore') + "\n")
+                sys.stdout.write(msg)
             except IOError:
                 pass
 

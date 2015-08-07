@@ -19,10 +19,14 @@
 
 import os
 import time
+import sys
 import azurelinuxagent.logger as logger
+from azurelinuxagent.future import text
 import azurelinuxagent.conf as conf
 from azurelinuxagent.metadata import AGENT_LONG_NAME, AGENT_VERSION, \
-                                     DISTRO_NAME, DISTRO_VERSION, DISTRO_FULL_NAME
+                                     DISTRO_NAME, DISTRO_VERSION, \
+                                     DISTRO_FULL_NAME, PY_VERSION_MAJOR, \
+                                     PY_VERSION_MINOR, PY_VERSION_MICRO
 import azurelinuxagent.protocol as prot
 import azurelinuxagent.event as event
 from azurelinuxagent.utils.osutil import OSUTIL
@@ -36,10 +40,11 @@ class MainHandler(object):
     def run(self):
         logger.info("{0} Version:{1}", AGENT_LONG_NAME, AGENT_VERSION)
         logger.info("OS: {0} {1}", DISTRO_NAME, DISTRO_VERSION)
+        logger.info("Python: {0}.{1}.{2}", PY_VERSION_MAJOR, PY_VERSION_MINOR,
+                    PY_VERSION_MICRO)
 
         event.enable_unhandled_err_dump("Azure Linux Agent")
-        fileutil.write_file(OSUTIL.get_agent_pid_file_path(),
-                                 str(os.getpid()))
+        fileutil.write_file(OSUTIL.get_agent_pid_file_path(), text(os.getpid()))
 
         if conf.get_switch("DetectScvmmEnv", False):
             if self.handlers.scvmm_handler.detect_scvmm_env():

@@ -18,10 +18,11 @@
 # http://msdn.microsoft.com/en-us/library/cc227282%28PROT.10%29.aspx
 # http://msdn.microsoft.com/en-us/library/cc227259%28PROT.13%29.aspx
 
-import env
+import tests.env
 from tests.tools import *
 import unittest
 import time
+from azurelinuxagent.future import text
 from azurelinuxagent.utils.osutil import OSUTIL
 from azurelinuxagent.distro.default.env import EnvMonitor
 
@@ -33,7 +34,7 @@ def mock_get_dhcp_pid():
     return "1234"
 
 def mock_dhcp_pid_change():
-    return str(time.time())
+    return text(time.time())
 
 class TestEnvMonitor(unittest.TestCase):
 

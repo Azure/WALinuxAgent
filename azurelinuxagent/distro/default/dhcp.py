@@ -48,6 +48,9 @@ class DhcpHandler(object):
         mac_addr = OSUTIL.get_mac_addr()
         req = build_dhcp_request(mac_addr)
         resp = send_dhcp_request(req)
+        if resp is None:
+            logger.warn("Failed to detect wire server.")
+            return 
         endpoint, gateway, routes = parse_dhcp_resp(resp)
         self.endpoint = endpoint
         logger.info("Wire server endpoint:{0}", endpoint)
@@ -76,7 +79,7 @@ def validate_dhcp_resp(request, response):
     bytes_recv = len(response)
     if bytes_recv < 0xF6:
         logger.error("HandleDhcpResponse: Too few bytes received:{0}",
-                     str(bytes_recv))
+                     bytes_recv)
         return False
 
     logger.verb("BytesReceived:{0}", hex(bytes_recv))
@@ -113,7 +116,7 @@ def parse_route(response, option, i, length, bytes_recv):
                    hex(length))
     routes = []
     if length < 5:
-        logger.error("Data too small for option:{0}", str(option))
+        logger.error("Data too small for option:{0}", option)
     j = i + 2
     while j < (i + length + 2):
         mask_len_bits = str_to_ord(response[j])
@@ -140,7 +143,7 @@ def parse_ip_addr(response, option, i, length, bytes_recv):
         ip_addr = int_to_ip4_addr(addr)
         return ip_addr
     else:
-        logger.error("Data too small for option:{0}", str(option))
+        logger.error("Data too small for option:{0}", option)
     return None
 
 def parse_dhcp_resp(response):
@@ -228,7 +231,6 @@ def disable_dhcp_service(func):
 @disable_dhcp_service
 def send_dhcp_request(request):
     __waiting_duration__ = [0, 10, 30, 60, 60]
-    sock = None
     for duration in __waiting_duration__:
         try:
             OSUTIL.allow_dhcp_broadcast()
@@ -236,26 +238,29 @@ def send_dhcp_request(request):
             validate_dhcp_resp(request, response)
             return response
         except AgentNetworkError as e:
-            logger.error("Failed to send DHCP request: {0}", e)
-            return None
-        finally:
-            if sock:
-                sock.close()
+            logger.warn("Failed to send DHCP request: {0}", e)
         time.sleep(duration)
+    return None
 
 def socket_send(request):
-    sock = socket.socket(socket.AF_INET,
-                         socket.SOCK_DGRAM,
-                         socket.IPPROTO_UDP)
-    sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    sock.bind(("0.0.0.0", 68))
-    sock.sendto(request, ("<broadcast>", 67))
-    sock.settimeout(10)
-    logger.verb("Send DHCP request: Setting socket.timeout=10, "
-                   "entering recv")
-    response = sock.recv(1024)
-    return response
+    sock = None
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM,
+                             socket.IPPROTO_UDP)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.bind(("0.0.0.0", 68))
+        sock.sendto(request, ("<broadcast>", 67))
+        sock.settimeout(10)
+        logger.verb("Send DHCP request: Setting socket.timeout=10, "
+                       "entering recv")
+        response = sock.recv(1024)
+        return response
+    except IOError as e:
+        raise AgentNetworkError("{0}".format(e))
+    finally:
+        if sock is not None:
+            sock.close()
 
 def build_dhcp_request(mac_addr):
     """

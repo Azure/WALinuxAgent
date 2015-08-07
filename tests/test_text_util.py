@@ -18,18 +18,30 @@
 # http://msdn.microsoft.com/en-us/library/cc227282%28PROT.10%29.aspx
 # http://msdn.microsoft.com/en-us/library/cc227259%28PROT.13%29.aspx
 
-import env
-from tools import *
+import tests.env
+from tests.tools import *
 import uuid
 import unittest
 import os
+from azurelinuxagent.future import text
 import azurelinuxagent.utils.textutil as textutil
-import test
 
 class TestTextUtil(unittest.TestCase):
     def test_get_password_hash(self):
         password_hash = textutil.gen_password_hash("asdf", True, 6, 10)
         self.assertNotEquals(None, password_hash)
+
+    def test_remove_bom(self):
+        #Test bom could be removed
+        data = text(b'\xef\xbb\xbfhehe', encoding='utf-8')
+        data = textutil.remove_bom(data)
+        self.assertNotEquals(0xbb, data[0])
+        
+        #Test string without BOM is not affected
+        data = u"hehe"
+        data = textutil.remove_bom(data)
+        self.assertEquals(u"h", data[0])
+
    
 if __name__ == '__main__':
     unittest.main()

@@ -18,38 +18,47 @@
 # http://msdn.microsoft.com/en-us/library/cc227282%28PROT.10%29.aspx
 # http://msdn.microsoft.com/en-us/library/cc227259%28PROT.13%29.aspx
 
-import env
+import tests.env
 import tests.tools as tools
 import uuid
 import unittest
 import os
+import sys
+from azurelinuxagent.future import text
 import azurelinuxagent.utils.fileutil as fileutil
-import test
 
 class TestFileOperations(unittest.TestCase):
-    def test_get_set_file_contents(self):
+    def test_read_write_file(self):
         test_file='/tmp/test_file'
-        content = str(uuid.uuid4())
+        content = text(uuid.uuid4())
         fileutil.write_file(test_file, content)
         self.assertTrue(tools.simple_file_grep(test_file, content))
-        self.assertEquals(content, fileutil.read_file('/tmp/test_file'))
+
+        content_read = fileutil.read_file('/tmp/test_file')
+        self.assertEquals(content, content_read)
+        os.remove(test_file)
+    
+    def test_rw_utf8_file(self):
+        test_file='/tmp/test_file3'
+        content = "\u6211"
+        fileutil.write_file(test_file, content, encoding="utf-8")
+        self.assertTrue(tools.simple_file_grep(test_file, content))
+
+        content_read = fileutil.read_file('/tmp/test_file3')
+        self.assertEquals(content, content_read)
         os.remove(test_file)
 
+    def test_remove_bom(self):
+        test_file= '/tmp/test_file4'
+        data = b'\xef\xbb\xbfhehe'
+        fileutil.write_file(test_file, data, asbin=True)
+        data = fileutil.read_file(test_file, remove_bom=True)
+        self.assertNotEquals(0xbb, ord(data[0]))
+   
     def test_append_file(self):
         test_file='/tmp/test_file2'
-        content = str(uuid.uuid4())
+        content = text(uuid.uuid4())
         fileutil.append_file(test_file, content)
-        self.assertTrue(tools.simple_file_grep(test_file, content))
-        os.remove(test_file)
-
-    def test_replace_file(self):
-        test_file='/tmp/test_file3'
-        old_content = str(uuid.uuid4())
-        content = str(uuid.uuid4())
-        with open(test_file, "a+") as F:
-            F.write(old_content)
-        fileutil.replace_file(test_file, content)
-        self.assertFalse(tools.simple_file_grep(test_file, old_content))
         self.assertTrue(tools.simple_file_grep(test_file, content))
         os.remove(test_file)
 

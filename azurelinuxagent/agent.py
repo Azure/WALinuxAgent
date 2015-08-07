@@ -26,8 +26,9 @@ import sys
 import re
 import subprocess
 from azurelinuxagent.metadata import AGENT_NAME, AGENT_LONG_VERSION, \
-                                     DISTRO_NAME, DISTRO_VERSION
-
+                                     DISTRO_NAME, DISTRO_VERSION, \
+                                     PY_VERSION_MAJOR, PY_VERSION_MINOR, \
+                                     PY_VERSION_MICRO
 from azurelinuxagent.utils.osutil import OSUTIL
 from azurelinuxagent.handler import HANDLERS
 
@@ -85,16 +86,18 @@ def version():
     """
     Show agent version
     """
-    print("{0} running on {1} {2}".format(AGENT_LONG_VERSION, DISTRO_NAME,
-                                          DISTRO_VERSION))
+    print(("{0} running on {1} {2}".format(AGENT_LONG_VERSION, DISTRO_NAME,
+                                          DISTRO_VERSION)))
+    print("Python: {0}.{1}.{2}".format(PY_VERSION_MAJOR, PY_VERSION_MINOR,
+                                       PY_VERSION_MICRO))
 def usage():
     """
     Show agent usage
     """
     print("")
-    print(("usage: {0} [-verbose] [-force] [-help]"
+    print((("usage: {0} [-verbose] [-force] [-help]"
            "-deprovision[+user]|-register-service|-version|-daemon|-start]"
-           "").format(sys.argv[0]))
+           "").format(sys.argv[0])))
     print("")
 
 def start():
@@ -109,9 +112,9 @@ def register_service():
     """
     Register agent as a service
     """
-    print "Register {0} service".format(AGENT_NAME)
+    print("Register {0} service".format(AGENT_NAME))
     OSUTIL.register_agent_service()
-    print "Start {0} service".format(AGENT_NAME)
+    print("Start {0} service".format(AGENT_NAME))
     OSUTIL.start_agent_service()
 
 def main():

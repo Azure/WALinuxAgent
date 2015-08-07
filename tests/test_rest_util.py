@@ -18,17 +18,23 @@
 # http://msdn.microsoft.com/en-us/library/cc227282%28PROT.10%29.aspx
 # http://msdn.microsoft.com/en-us/library/cc227259%28PROT.13%29.aspx
 
-import env
+import tests.env
 from tests.tools import *
 import uuid
 import unittest
 import os
 import azurelinuxagent.utils.restutil as restutil
+from azurelinuxagent.future import text
 import test
 import socket
 import azurelinuxagent.logger as logger
 
-#logger.LoggerInit("/dev/stdout", "/dev/null", verbose=True)
+class MockResponse(object):
+    def __init__(self, status=restutil.httpclient.OK):
+        self.status = status
+
+    def getheaders(self):
+        pass
 
 class TestHttpOperations(unittest.TestCase):
 
@@ -48,18 +54,10 @@ class TestHttpOperations(unittest.TestCase):
         host, port, secure, rel_uri = restutil._parse_url("http://abc.def:80/")
         self.assertEquals("abc.def", host)
 
-    def _test_http_get(self):
-        resp = restutil.http_get("http://httpbin.org/get").read()
-        self.assertNotEquals(None, resp)
-       
-        msg = str(uuid.uuid4())
-        resp = restutil.http_get("http://httpbin.org/get", {"x-abc":msg}).read()
-        self.assertNotEquals(None, resp)
-        self.assertTrue(msg in resp)
-
-    def _test_https_get(self):
-        resp = restutil.http_get("https://httpbin.org/get").read()
-        self.assertNotEquals(None, resp)
+    @mock(restutil.httpclient.HTTPConnection, 'request', MockFunc())
+    @mock(restutil.httpclient.HTTPConnection, 'getresponse', MockFunc(retval=MockResponse()))
+    def test_http_request(self):
+        restutil.http_get("https://httpbin.org/get")
     
 if __name__ == '__main__':
     unittest.main()

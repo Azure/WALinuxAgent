@@ -18,7 +18,7 @@
 # http://msdn.microsoft.com/en-us/library/cc227282%28PROT.10%29.aspx
 # http://msdn.microsoft.com/en-us/library/cc227259%28PROT.13%29.aspx
 
-import env
+import tests.env
 import tests.tools as tools
 import uuid
 import unittest
@@ -26,7 +26,7 @@ import os
 import json
 import azurelinuxagent.protocol.v1 as v1
 
-ext_conf_sample="""\
+ext_conf_sample=u"""\
 <Extensions version="1.0.0.0" goalStateIncarnation="9"><GuestAgentExtension xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
   <GAFamilies>
     <GAFamily>
@@ -68,13 +68,13 @@ ext_conf_sample="""\
 </Plugins>
 <PluginSettings>
   <Plugin name="OSTCExtensions.ExampleHandlerLinux" version="1.4">
-    <runtimeSettings seqNo="6">{"runtimeSettings":[{"handlerSettings":{"protectedSettingsCertThumbprint":"4037FBF5F1F3014F99B5D6C7799E9B20E6871CB3","protectedSettings":"MIICWgYJK","publicSettings":{"foo":"bar"}}}]}</runtimeSettings>
+    <RuntimeSettings seqNo="6">{"runtimeSettings":[{"handlerSettings":{"protectedSettingsCertThumbprint":"4037FBF5F1F3014F99B5D6C7799E9B20E6871CB3","protectedSettings":"MIICWgYJK","publicSettings":{"foo":"bar"}}}]}</RuntimeSettings>
   </Plugin>
 </PluginSettings>
 <StatusUploadBlob>https://yuezhatest.blob.core.windows.net/vhds/test-cs12.test-cs12.test-cs12.status?sr=b&amp;sp=rw&amp;se=9999-01-01&amp;sk=key1&amp;sv=2014-02-14&amp;sig=hfRh7gzUE7sUtYwke78IOlZOrTRCYvkec4hGZ9zZzXo%3D</StatusUploadBlob></Extensions>
 """
 
-manifest_sample="""\
+manifest_sample=u"""\
 <?xml version="1.0" encoding="utf-8"?>
 <PluginVersionManifest xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
     <Plugins>
@@ -102,11 +102,25 @@ manifest_sample="""\
 </PluginVersionManifest>
 """
 
-EmptySettings="""\
+EmptySettings=u"""\
 <Extensions>
     <Plugins>
         <Plugin name="OSTCExtensions.ExampleHandlerLinux" version="1.4" location="http://rdfepirv2hknprdstr03.blob.core.windows.net/b01058962be54ceca550a390fa5ff064/Microsoft.OSTCExtensions_CustomScriptForLinuxTest_asiaeast_manifest.xml" config="" state="enabled" autoUpgrade="true" failoverlocation="http://rdfepirv2hknprdstr04.blob.core.windows.net/b01058962be54ceca550a390fa5ff064/Microsoft.OSTCExtensions_CustomScriptForLinuxTest_asiaeast_manifest.xml" runAsStartupTask="false" isJson="true" />
     </Plugins>
+  <StatusUploadBlob>https://yuezhatest.blob.core.windows.net/vhds/test-cs12.test-cs12.test-cs12.status?sr=b&amp;sp=rw&amp;se=9999-01-01&amp;sk=key1&amp;sv=2014-02-14&amp;sig=hfRh7gzUE7sUtYwke78IOlZOrTRCYvkec4hGZ9zZzXo%3D</StatusUploadBlob>
+</Extensions>
+"""
+
+EmptyPublicSettings=u"""\
+<Extensions>
+    <Plugins>
+        <Plugin name="OSTCExtensions.ExampleHandlerLinux" version="1.4" location="http://rdfepirv2hknprdstr03.blob.core.windows.net/b01058962be54ceca550a390fa5ff064/Microsoft.OSTCExtensions_CustomScriptForLinuxTest_asiaeast_manifest.xml" config="" state="enabled" autoUpgrade="true" failoverlocation="http://rdfepirv2hknprdstr04.blob.core.windows.net/b01058962be54ceca550a390fa5ff064/Microsoft.OSTCExtensions_CustomScriptForLinuxTest_asiaeast_manifest.xml" runAsStartupTask="false" isJson="true" />
+    </Plugins>
+  <PluginSettings>
+      <Plugin name="OSTCExtensions.ExampleHandlerLinux" version="1.4">
+        <RuntimeSettings seqNo="6">{"runtimeSettings":[{"handlerSettings":{"protectedSettingsCertThumbprint":"4037FBF5F1F3014F99B5D6C7799E9B20E6871CB3","protectedSettings":"MIICWgYJK"}}]}</RuntimeSettings>
+      </Plugin>
+  </PluginSettings>
   <StatusUploadBlob>https://yuezhatest.blob.core.windows.net/vhds/test-cs12.test-cs12.test-cs12.status?sr=b&amp;sp=rw&amp;se=9999-01-01&amp;sk=key1&amp;sv=2014-02-14&amp;sig=hfRh7gzUE7sUtYwke78IOlZOrTRCYvkec4hGZ9zZzXo%3D</StatusUploadBlob>
 </Extensions>
 """
@@ -137,6 +151,9 @@ class TestExtensionsConfig(unittest.TestCase):
     
     def test_empty_settings(self):
         config = v1.ExtensionsConfig(EmptySettings)
+   
+    def test_empty_public_settings(self):
+        config = v1.ExtensionsConfig(EmptyPublicSettings)
    
 if __name__ == '__main__':
     unittest.main()

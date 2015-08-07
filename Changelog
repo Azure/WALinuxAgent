@@ -1,5 +1,12 @@
-AzureLinuxAgent                                                          Changelog
+WALinuxAgent                                                          Changelog
 |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
-01 Jul 2015, AzureLinuxAgent 2.1.0
+07 Aug 2015, WALinuxAgent 2.1.1
+   . Support python3
+   . Fixed bugs for metadata protocol
+   . Fixed a few pylint warnings
+   . Enabled travis-ci
+
+|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+01 Jul 2015, WALinuxAgent 2.1.0
    . Divide waagent into different modules
 
