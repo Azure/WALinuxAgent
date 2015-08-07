@@ -359,6 +359,13 @@ HttpProxy.Host=None
 HttpProxy.Port=None
 Type: String Default: None
 
+Agent.DisableUserManipulation:
+Type: Boolean Default: n
+
+If set, `waagent` will not create or update local users. This means you will also
+lose the ability to reset user passwords. If you wish to set this to `y`, be aware
+that it will likely affect provisioning.
+
 If set, agent will use proxy server to access internet
 
 APPENDIX

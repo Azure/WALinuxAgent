@@ -139,6 +139,8 @@ Logs.Verbose=n                          # Enable verbose logs
 
 OS.RootDeviceScsiTimeout=300            # Root device timeout in seconds.
 OS.OpensslPath=None                     # If "None", the system default version is used.
+
+Agent.DisableUserManipulation=n         # If "n", disable user creation and modification
 """
 README_FILENAME="DATALOSS_WARNING_README.txt"
 README_FILECONTENT="""\
@@ -1119,6 +1121,11 @@ class CoreOSDistro(AbstractDistro):
         and sudo permissions.
         Returns None if successful, error string on failure.
         """
+        disabled = Config.get("Agent.DisableUserManipulation")
+        if disabled != None and disabled.lower().startswith("y"):
+            Error("User manipulation is disabled for " + user)
+            return "User manipulation is disabled"
+
         userentry = None
         try:
             userentry = pwd.getpwnam(user)
@@ -1581,6 +1588,12 @@ class fedoraDistro(redhatDistro):
         self.installAgentServiceScriptFiles()
 
     def CreateAccount(self, user, password, expiration, thumbprint):
+        # Explicitly check for DisableUserManipulation here due to `usermod` invocation
+        disabled = Config.get("Agent.DisableUserManipulation")
+        if disabled != None and disabled.lower().startswith("y"):
+            Error("User manipulation is disabled for " + user)
+            return "User manipulation is disabled"
+
         super(fedoraDistro, self).CreateAccount(user, password, expiration, thumbprint)
         Run('/sbin/usermod ' + user + ' -G wheel')
 
@@ -1619,6 +1632,8 @@ Logs.Verbose=n                          # Enable verbose logs
 
 OS.RootDeviceScsiTimeout=300            # Root device timeout in seconds.
 OS.OpensslPath=None                     # If "None", the system default version is used.
+
+Agent.DisableUserManipulation=n         # If "n", disable user creation and modification
 """
 
 bsd_init_file="""\
@@ -1861,6 +1876,11 @@ class FreeBSDDistro(AbstractDistro):
         and sudo permissions.
         Returns None if successful, error string on failure.
         """
+        disabled = Config.get("Agent.DisableUserManipulation")
+        if disabled != None and disabled.lower().startswith("y"):
+            Error("User manipulation is disabled for " + user)
+            return "User manipulation is disabled"
+
         userentry = None
         try:
             userentry = pwd.getpwnam(user)
@@ -2265,6 +2285,11 @@ def CreateAccount(user, password, expiration, thumbprint):
     and sudo permissions.
     Returns None if successful, error string on failure.
     """
+    disabled = Config.get("Agent.DisableUserManipulation")
+    if disabled != None and disabled.lower().startswith("y"):
+        Error("User manipulation is disabled for " + user)
+        return "User manipulation is disabled"
+
     userentry = None
     try:
         userentry = pwd.getpwnam(user)
