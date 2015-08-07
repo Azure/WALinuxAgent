@@ -24,7 +24,7 @@ import traceback
 import xml.sax.saxutils as saxutils
 import xml.etree.ElementTree as ET
 import azurelinuxagent.logger as logger
-from azurelinuxagent.future import text, httpclient
+from azurelinuxagent.future import text, httpclient, bytebuffer
 import azurelinuxagent.utils.restutil as restutil
 from azurelinuxagent.utils.textutil import parse_doc, findall, find, findtext, \
                                            getattrib, gettext, remove_bom
@@ -292,12 +292,15 @@ class StatusBlob(object):
         blob_type = self.get_blob_type(url)
 
         data = self.to_json()
-        if blob_type == "BlockBlob":
-            self.put_block_blob(url, data)
-        elif blob_type == "PageBlob":
-            self.put_page_blob(url, data)
-        else:
-            raise ProtocolError("Unknown blob type: {0}".format(blob_type))
+        try:
+            if blob_type == "BlockBlob":
+                self.put_block_blob(url, data)
+            elif blob_type == "PageBlob":
+                self.put_page_blob(url, data)
+            else:
+                raise ProtocolError("Unknown blob type: {0}".format(blob_type))
+        except restutil.HttpError as e:
+            raise ProtocolError("Failed to upload status blob: {0}".format(e))
 
     def get_blob_type(self, url):
         #Check blob type
@@ -330,9 +333,13 @@ class StatusBlob(object):
 
     def put_page_blob(self, url, data):
         logger.verb("Replace old page blob")
+
+        #Convert string into bytes
+        data=bytearray(data, encoding='utf-8')
         timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
         #Align to 512 bytes
-        page_blob_size = ((len(data) + 511) / 512) * 512
+        page_blob_size = int((len(data) + 511) / 512) * 512
         resp = restutil.http_put(url, "", {
             "x-ms-date" :  timestamp,
             "x-ms-blob-type" : "PageBlob",
@@ -344,7 +351,7 @@ class StatusBlob(object):
             raise ProtocolError(("Failed to clean up page blob: {0}"
                                  "").format(resp.status))
 
-        if '?' in url < 0:
+        if url.count("?") < 0:
             url = "{0}?comp=page".format(url)
         else:
             url = "{0}&comp=page".format(url)
@@ -359,9 +366,9 @@ class StatusBlob(object):
             #Align to 512 bytes
             page_end = int((end + 511) / 512) * 512
             buf_size = page_end - start
-            buf = bytearray(source=data[start:end], encoding="utf-8")
-            #TODO buffer is not defined in python3, however we need this to make httplib to work on python 2.6
-            resp = restutil.http_put(url, buf, {
+            buf = bytearray(buf_size)
+            buf[0: content_size] = data[start: end]
+            resp = restutil.http_put(url, bytebuffer(buf), {
                 "x-ms-date" :  timestamp,
                 "x-ms-range" : "bytes={0}-{1}".format(start, page_end - 1),
                 "x-ms-page-write" : "update",
