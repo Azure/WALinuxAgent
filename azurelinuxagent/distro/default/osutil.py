@@ -83,6 +83,9 @@ class DefaultOSUtil(object):
         Update password and ssh key for user account.
         New account will be created if not exists.
         """
+        if conf.get_switch("Agent.DisableUserManipulation", False):
+            raise OSUtilError("User manipulation is disabled")
+
         if username is None:
             raise OSUtilError("User name is empty")
 
@@ -119,6 +122,9 @@ class DefaultOSUtil(object):
             return False
 
     def useradd(self, username, expiration=None):
+        if conf.get_switch("Agent.DisableUserManipulation", False):
+            raise OSUtilError("User manipulation is disabled")
+
         if expiration is not None:
             cmd = "useradd -m {0} -e {1}".format(username, expiration)
         else:
@@ -131,6 +137,9 @@ class DefaultOSUtil(object):
 
     def chpasswd(self, username, password, use_salt=True, salt_type=6,
                        salt_len=10):
+        if conf.get_switch("Agent.DisableUserManipulation", False):
+            raise OSUtilError("User manipulation is disabled")
+
         passwd_hash = textutil.gen_password_hash(password, use_salt, salt_type,
                                                  salt_len)
         try:
@@ -144,6 +153,9 @@ class DefaultOSUtil(object):
                                "").format(username, e))
 
     def conf_sudoer(self, username, nopasswd):
+        if conf.get_switch("Agent.DisableUserManipulation", False):
+            raise OSUtilError("User manipulation is disabled")
+
         # for older distros create sudoers.d
         if not os.path.isdir('/etc/sudoers.d/'):
             # create the /etc/sudoers.d/ directory
@@ -227,6 +239,9 @@ class DefaultOSUtil(object):
         """
         Deploy authorized_key
         """
+        if conf.get_switch("Agent.DisableUserManipulation", False):
+            raise OSUtilError("User manipulation is disabled")
+
         path = self._norm_path(path)
         dir_path = os.path.dirname(path)
         fileutil.mkdir(dir_path, mode=0700, owner=username)
