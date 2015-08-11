@@ -1,0 +1,10 @@
+name: walinuxagent 
+version: 2.1.1
+vendor: Microsoft Corporation <lizzha@microsoft.com>
+type: framework
+services:
+ - name: walinuxagent
+   start: bin/waagent.start
+   security-policy:
+      apparmor: meta/walinuxagent.apparmor
+      seccomp: meta/walinuxagent.seccomp

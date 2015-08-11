@@ -1,0 +1,116 @@
+# AppArmor confinement for waagent
+
+#include <tunables/global>
+
+# Specified profile variables
+###VAR###
+
+###PROFILEATTACH### flags=(attach_disconnected) {
+  #include <abstractions/base>
+  #include <abstractions/ssl_certs>  
+  #include <abstractions/openssl>
+  #include <abstractions/python>
+
+  # Executable binaries
+  /usr/bin/python{,2,2.[0-9]*,3,3.[0-9]*}       ixr,
+  /usr/bin/env                                  ixr,
+  /bin/sh                                       ixr,
+  /bin/dash                                     ixr,
+  /bin/bash                                     ixr,
+  /bin/uname                                    ixr,
+  /bin/grep                                     ixr,
+  /bin/mkdir                                    ixr,
+  /bin/chown                                    ixr,
+  /bin/kmod                                     ixr,
+  /bin/mount                                    ixr,
+  /bin/umount                                   ixr,
+  /bin/ls                                       ixr,
+  /bin/pidof                                    ixr,
+  /bin/sed                                      ixr,
+  /bin/cat                                      ixr,
+  /usr/bin/{,g}awk                              ixr,
+  /usr/bin/openssl                              ixr,
+  /usr/bin/ssh-keygen                           ixr,
+  /usr/bin/wc                                   ixr,
+  /{,usr/}bin/which                             ixr,
+  /usr/bin/sudo                                 ixr,
+  /usr/sbin/useradd                             ixr,
+  /usr/sbin/chpasswd                            ixr,
+  /sbin/{,s}fdisk                               ixr,
+  /sbin/iptables                                ixr,
+  /sbin/lsmod                                   ixr,
+  /sbin/route                                   ixr,
+  /sbin/xtables-multi                           ixr,
+  /sbin/dhclient                                ixr,
+  /sbin/killall5                                ixr,
+  /sbin/shutdown                                ixr,
+  /sbin/mkfs                                    ixr,
+
+  # Capability
+  capability net_bind_service,
+  capability net_raw,
+  capability net_admin,
+  capability dac_override,
+  capability sys_module,
+  capability sys_admin,
+  capability sys_ptrace,
+
+  ptrace (read),
+  ptrace (trace),
+
+  mount,
+  umount,
+  network, 
+
+  # Log path
+  /var/log/waagent.log                          rw,
+  /var/log/azure/                               rw,
+  /var/log/azure/**                             rw,
+
+  # lib path
+  /var/lib/waagent/                             rw,
+  /var/lib/waagent/**                           mrwkix,
+  /{,usr/}lib/                                  r,
+  /{,usr/}lib/**                                r,
+
+  /etc/                                         r,
+  /etc/**                                       r,
+  /etc/udev/rules.d/**                          w,
+
+  /usr/share/                                   r,
+  /usr/share/**                                 r,
+  /usr/local/{,s}bin/                           r,
+  /usr/{,s}bin/                                 r,
+  /{,s}bin/                                     r,
+
+  /dev/                                         r,
+  /dev/sr0                                      r,
+  /dev/null                                     w,
+  /dev/console                                  rw,
+  /dev/tty                                      rw,
+
+  /run/                                         r,
+  /run/**                                       r,
+  /run/mount/utab                               w,
+  /run/waagent.pid                              w,
+
+  @{PROC}/                                      r,
+  @{PROC}/**                                    r,
+  /sys/module/                                  r,
+  /sys/module/**                                r,
+  /sys/firmware/acpi/tables/**                  r,
+  /sys/devices/pci0000:00/0000:00:0[0-9].[0-9]/ata[0-9]/host[0-9]/target[0-9]:[0-9]:[0-9]/[0-9]:[0-9]:[0-9]:[0-9]/block/sr0/ r,
+
+  /sys/block/                                   r,
+  /sys/block/sd*/device/timeout                 rw,
+  /sys/devices/LNXSYSTM:00/LNXSYBUS:0[0-9]/PNP0A03:00/device:0[0-9]/VMBUS:0[0-9]/vmbus_0_*/host[0-9]/target*/[0-9]:[0-9]:[0-9]:[0-9]/timeout rw,
+
+  /mnt/cdrom/                                   wr,
+  /mnt/cdrom/secure/                            wr,
+
+  # Writable for the install directory
+  @{CLICK_DIR}/@{APP_PKGNAME}/                   r,
+  @{CLICK_DIR}/@{APP_PKGNAME}/@{APP_VERSION}/    r,
+  @{CLICK_DIR}/@{APP_PKGNAME}/@{APP_VERSION}/**  mrwklix,
+
+}
