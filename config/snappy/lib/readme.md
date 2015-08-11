@@ -1,1 +1,1 @@
-### Place the azurelinuxagent folder here
+Place the azurelinuxagent folder here
