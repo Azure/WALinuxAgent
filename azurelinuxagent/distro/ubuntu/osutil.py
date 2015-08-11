@@ -65,7 +65,7 @@ class UbuntuOSUtil(Ubuntu14xOSUtil):
 
 class UbuntuSnappyOSUtil(Ubuntu14xOSUtil):
     def __init__(self):
-        super(UbuntuOSUtil, self).__init__()
+        super(UbuntuSnappyOSUtil, self).__init__()
         self.conf_file_path = '/apps/walinuxagent/current/waagent.conf'
 
     def remove_rules_files(self, rules_files=""):
