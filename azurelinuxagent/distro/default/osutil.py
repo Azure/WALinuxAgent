@@ -117,13 +117,11 @@ class DefaultOSUtil(object):
                                "retcode:{1}, "
                                "output:{2}").format(username, retcode, out))
 
-    def chpasswd(self, username, password, use_salt=True, salt_type=6,
-                 salt_len=10):
+    def chpasswd(self, username, password, crypt_id=6, salt_len=10):
         if self.is_sys_user(username):
             raise OSUtilError(("User {0} is a system user. "
                                "Will not set passwd.").format(username))
-        passwd_hash = textutil.gen_password_hash(password, use_salt, salt_type,
-                                                 salt_len)
+        passwd_hash = textutil.gen_password_hash(password, crypt_id, salt_len)
         try:
             passwd_content = fileutil.read_file(self.passwd_file_path)
             passwd = passwd_content.split("\n")

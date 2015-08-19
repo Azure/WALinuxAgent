@@ -120,10 +120,10 @@ class ProvisionHandler(object):
 
         if ovfenv.user_password is not None:
             logger.info("Set user password.")
-            use_salt = conf.get_switch("Provision.UseSalt", True)
-            salt_type = conf.get_switch("Provision.SaltType", 6)
-            OSUTIL.chpasswd(ovfenv.username, ovfenv.user_password, 
-                            use_salt,salt_type)
+            crypt_id = conf.get("Provision.PasswordCryptId", "6")
+            salt_len = conf.get_int("Provision.PasswordCryptSaltLength", 10)
+            OSUTIL.chpasswd(ovfenv.username, ovfenv.user_password,
+                            crypt_id=crypt_id, salt_len=salt_len)
          
         logger.info("Configure sudoer")
         OSUTIL.conf_sudoer(ovfenv.username, ovfenv.user_password is None)
