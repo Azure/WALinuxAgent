@@ -1028,6 +1028,19 @@ class centosDistro(redhatDistro):
     def __init__(self):
         super(centosDistro,self).__init__()
 
+############################################################    
+#	oracleDistro
+############################################################    
+
+class oracleDistro(redhatDistro):
+    """
+    Oracle Distro concrete class
+    Put Oracle specific behavior here...
+    """
+    def __init__(self):
+        super(oracleDistro, self).__init__()
+
+
 
 ############################################################    
 #	asianuxDistro
@@ -5987,11 +6000,6 @@ def main():
     global LinuxDistro
     LinuxDistro=DistInfo()[0]
     
-    #The platform.py lib has issue with detecting oracle linux distribution.
-    #Merge the following patch provided by oracle as a temparory fix.
-    if os.path.exists("/etc/oracle-release"): 
-        LinuxDistro="Oracle Linux" 
-
     global MyDistro
     MyDistro=GetMyDistro()
     if MyDistro == None :
