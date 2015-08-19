@@ -23,6 +23,8 @@
 # http://msdn.microsoft.com/en-us/library/cc227259%28PROT.13%29.aspx
 #
 
+import crypt
+import random
 import array
 import base64
 import httplib
@@ -174,7 +176,7 @@ class AbstractDistro(object):
         self.hostname_file_path='/etc/hostname'
         self.dhcp_client_name='dhclient'
         self.requiredDeps = [ 'route', 'shutdown', 'ssh-keygen', 'useradd', 
-                              'openssl', 'sfdisk', 'fdisk', 'mkfs', 'chpasswd', 
+                              'openssl', 'sfdisk', 'fdisk', 'mkfs', 
                               'sed', 'grep', 'sudo', 'parted' ]
         self.init_script_file='/etc/init.d/waagent'
         self.agent_package_name='WALinuxAgent'
@@ -187,6 +189,7 @@ class AbstractDistro(object):
         self.sudoers_dir_base = '/etc'
         self.waagent_conf_file = WaagentConf
         self.shadow_file_mode=0600
+        self.shadow_file_path="/etc/shadow"
         self.dhcp_enabled = False
         
     def isSelinuxSystem(self):
@@ -341,8 +344,39 @@ class AbstractDistro(object):
         return 0
     
     def changePass(self,user,password):
-        return RunSendStdin("chpasswd",(user + ":" + password + "\n"))
+        Log("Change user password")
+        crypt_id = Config.get("Provisioning.PasswordCryptId")
+        if crypt_id is None:
+            crypt_id = "6"
+
+        salt_len = Config.get("Provisioning.PasswordCryptSaltLength")
+        try:
+            salt_len = int(salt_len)
+            if salt_len < 0 or salt_len > 10:
+                salt_len = 10
+        except (ValueError, TypeError):
+            salt_len = 10
+
+        return self.chpasswd(user, password, crypt_id=crypt_id, 
+                             salt_len=salt_len)
     
+    def chpasswd(self, username, password, crypt_id=6, salt_len=10):
+        passwd_hash = self.gen_password_hash(password, crypt_id, salt_len)
+        try:
+            passwd_content = GetFileContents(self.shadow_file_path)
+            passwd = passwd_content.split("\n")
+            new_passwd = [x for x in passwd if not x.startswith(username)]
+            new_passwd.append("{0}:{1}:14600::::::".format(username, passwd_hash))
+            SetFileContents(self.shadow_file_path, "\n".join(new_passwd))
+        except IOError as e:
+            return "Failed to set password for {0}: {1}".format(username, e)
+
+    def gen_password_hash(self, password, crypt_id, salt_len):
+        collection = string.ascii_letters + string.digits
+        salt = ''.join(random.choice(collection) for _ in range(salt_len))
+        salt = "${0}${1}".format(crypt_id, salt)
+        return crypt.crypt(password, salt)
+
     def load_ata_piix(self):
         return WaAgent.TryLoadAtapiix()
 
@@ -1163,7 +1197,7 @@ class CoreOSDistro(AbstractDistro):
         else:
             Log("CreateAccount: " + user + " already exists. Will update password.")
         if password != None:
-            RunSendStdin("chpasswd", user + ":" + password + "\n")
+            self.changePass(user, password)
         try:
             if password == None:
                 SetFileContents("/etc/sudoers.d/waagent", user + " ALL = (ALL) NOPASSWD: ALL\n")
@@ -1907,7 +1941,10 @@ class FreeBSDDistro(AbstractDistro):
                 Log("CreateAccount: " + user + " already exists. Will update password.")
         
         if password != None:
-            self.changePass(user,password)
+            ret = self.changePass(user,password)
+            if ret is not None:
+                Error(str(ret))
+                return ret
         try:
             # for older distros create sudoers.d
             if not os.path.isdir(MyDistro.sudoers_dir_base+'/sudoers.d/'):
@@ -2309,7 +2346,7 @@ def CreateAccount(user, password, expiration, thumbprint):
     else:
         Log("CreateAccount: " + user + " already exists. Will update password.")
     if password != None:
-        RunSendStdin("chpasswd",(user + ":" + password + "\n"))
+        MyDistro.changePass(user, password)
     try:
         # for older distros create sudoers.d
         if not os.path.isdir('/etc/sudoers.d/'):
