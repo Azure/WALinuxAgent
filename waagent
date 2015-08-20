@@ -679,6 +679,13 @@ class AbstractDistro(object):
         if ret != 0:
             raise Exception("Failed to config ipv4 for {0}: {1}".format(ifName, 
                                                                         output))
+    def setDefaultGateway(self, gateway):
+        Run("/sbin/route add default gw" + gateway, chk_err=False)
+
+    def routeAdd(self, net, mask, gateway):
+        Run("/sbin/route add -net " + net + " netmask " + mask + " gw " + gateway,
+            chk_err=False)
+
 
 ############################################################
 #	GentooDistro
@@ -2109,7 +2116,13 @@ class FreeBSDDistro(AbstractDistro):
     
     def getTotalMemory(self):
         return int(RunGetOutput("sysctl hw.realmem | awk '{print $2}'")[1])/1024
-        
+    
+    def setDefaultGateway(self, gateway):
+        Run("/sbin/route add default " + gateway, chk_err=False)
+
+    def routeAdd(self, net, mask, gateway):
+        Run("/sbin/route add -net " + net + " " + mask + " " + gateway, chk_err=False)
+
 ############################################################
 # END DISTRO CLASS DEFS
 ############################################################  
@@ -5049,7 +5062,16 @@ class Agent(Util):
         net = self.IntegerToIpAddressV4String(net)
         mask = self.IntegerToIpAddressV4String(mask)
         gateway = self.IntegerToIpAddressV4String(gateway)
-        Run("/sbin/route add -net " + net + " netmask " + mask + " gw " + gateway,chk_err=False)
+        Log("Route add: net={0}, mask={1}, gateway={2}".format(net, mask, gateway))
+        MyDistro.routeAdd(net, mask, gateway)
+    
+    def SetDefaultGateway(self, gateway):
+        """
+        Set default gateway
+        """
+        gateway = self.IntegerToIpAddressV4String(gateway)
+        Log("Set default gateway: {0}".format(gateway))
+        MyDistro.setDefaultGateway(gateway)
 
     def HandleDhcpResponse(self, sendData, receiveBuffer):
         """
@@ -5132,7 +5154,7 @@ class Agent(Util):
                     gateway = self.UnpackBigEndian(receiveBuffer, i + 2, 4)
                     IpAddress = self.IntegerToIpAddressV4String(gateway)
                     if option == 3:
-                        self.RouteAdd(0, 0, gateway)
+                        self.SetDefaultGateway(gateway)
                         name = "DefaultGateway"
                     else:
                         endpoint = IpAddress
