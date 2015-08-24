@@ -362,8 +362,8 @@ class AbstractDistro(object):
     
     def chpasswd(self, username, password, crypt_id=6, salt_len=10):
         passwd_hash = self.gen_password_hash(password, crypt_id, salt_len)
-        cmd = "usermod {0} -p '{1}'".format(username, passwd_hash)
-        ret, output = shellutil.run_get_output(cmd)
+        cmd = "usermod -p '{0}' {1}".format(passwd_hash, username)
+        ret, output = RunGetOutput(cmd, log_cmd=False)
         if ret != 0:
             return "Failed to set password for {0}: {1}".format(username, output)
 
@@ -1814,7 +1814,7 @@ class FreeBSDDistro(AbstractDistro):
         return 0
 
     def changePass(self,user,password):
-        return RunSendStdin("pw usermod " + user + " -h 0 ",password)
+        return RunSendStdin("pw usermod " + user + " -h 0 ",password, log_cmd=False)
     
     def load_ata_piix(self):
         return 0
@@ -2239,41 +2239,43 @@ def Run(cmd,chk_err=True):
     retcode,out=RunGetOutput(cmd,chk_err)
     return retcode
 
-def RunGetOutput(cmd,chk_err=True):
+def RunGetOutput(cmd, chk_err=True, log_cmd=True):
     """
     Wrapper for subprocess.check_output.
     Execute 'cmd'.  Returns return code and STDOUT, trapping expected exceptions.
     Reports exceptions to Error if chk_err parameter is True
     """
-    LogIfVerbose(cmd)
+    if log_cmd:
+        LogIfVerbose(cmd)
     try:                                     
         output=subprocess.check_output(cmd,stderr=subprocess.STDOUT,shell=True)
     except subprocess.CalledProcessError,e :
-        if chk_err :
+        if chk_err and log_cmd:
             Error('CalledProcessError.  Error Code is ' + str(e.returncode)  )
             Error('CalledProcessError.  Command string was ' + e.cmd  )
             Error('CalledProcessError.  Command result was ' + (e.output[:-1]).decode('latin-1'))
         return e.returncode,e.output.decode('latin-1')
     return 0,output.decode('latin-1')
 
-def RunSendStdin(cmd,input,chk_err=True):
+def RunSendStdin(cmd, input, chk_err=True, log_cmd=True):
     """
     Wrapper for subprocess.Popen.
     Execute 'cmd', sending 'input' to STDIN of 'cmd'.
     Returns return code and STDOUT, trapping expected exceptions.
     Reports exceptions to Error if chk_err parameter is True
     """
-    LogIfVerbose(cmd+input)
+    if log_cmd:
+        LogIfVerbose(cmd+input)
     try:                                     
         me=subprocess.Popen([cmd], shell=True, stdin=subprocess.PIPE,stderr=subprocess.STDOUT,stdout=subprocess.PIPE)
         output=me.communicate(input)
     except OSError , e :
-        if chk_err :
+        if chk_err and log_cmd:
             Error('CalledProcessError.  Error Code is ' + str(me.returncode)  )
             Error('CalledProcessError.  Command string was ' + cmd  )
             Error('CalledProcessError.  Command result was ' + output[0].decode('latin-1'))
             return 1,output[0].decode('latin-1')
-    if me.returncode is not 0 and chk_err is True:
+    if me.returncode is not 0 and chk_err is True and log_cmd:
             Error('CalledProcessError.  Error Code is ' + str(me.returncode)  )
             Error('CalledProcessError.  Command string was ' + cmd  )
             Error('CalledProcessError.  Command result was ' + output[0].decode('latin-1'))
