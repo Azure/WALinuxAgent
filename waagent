@@ -175,7 +175,7 @@ class AbstractDistro(object):
         self.ssh_config_file='/etc/ssh/sshd_config'
         self.hostname_file_path='/etc/hostname'
         self.dhcp_client_name='dhclient'
-        self.requiredDeps = [ 'route', 'shutdown', 'ssh-keygen', 'useradd', 
+        self.requiredDeps = [ 'route', 'shutdown', 'ssh-keygen', 'useradd', 'usermod',
                               'openssl', 'sfdisk', 'fdisk', 'mkfs', 
                               'sed', 'grep', 'sudo', 'parted' ]
         self.init_script_file='/etc/init.d/waagent'
@@ -362,14 +362,10 @@ class AbstractDistro(object):
     
     def chpasswd(self, username, password, crypt_id=6, salt_len=10):
         passwd_hash = self.gen_password_hash(password, crypt_id, salt_len)
-        try:
-            passwd_content = GetFileContents(self.shadow_file_path)
-            passwd = passwd_content.split("\n")
-            new_passwd = [x for x in passwd if not x.startswith(username)]
-            new_passwd.append("{0}:{1}:14600::::::".format(username, passwd_hash))
-            SetFileContents(self.shadow_file_path, "\n".join(new_passwd))
-        except IOError as e:
-            return "Failed to set password for {0}: {1}".format(username, e)
+        cmd = "usermod {0} -p '{1}'".format(username, passwd_hash)
+        ret, output = shellutil.run_get_output(cmd)
+        if ret != 0:
+            return "Failed to set password for {0}: {1}".format(username, output)
 
     def gen_password_hash(self, password, crypt_id, salt_len):
         collection = string.ascii_letters + string.digits
