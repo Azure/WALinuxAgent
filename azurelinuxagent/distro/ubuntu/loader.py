@@ -17,16 +17,20 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
-from azurelinuxagent.metadata import DISTRO_NAME, DISTRO_VERSION
+from azurelinuxagent.metadata import DISTRO_NAME, DISTRO_VERSION, DISTRO_FULL_NAME
 
 def get_osutil():
     from  azurelinuxagent.distro.ubuntu.osutil import Ubuntu1204OSUtil, \
                                                       UbuntuOSUtil, \
-                                                      Ubuntu14xOSUtil
+                                                      Ubuntu14xOSUtil, \
+                                                      UbuntuSnappyOSUtil
+
     if DISTRO_VERSION == "12.04":
         return Ubuntu1204OSUtil()
     elif DISTRO_VERSION == "14.04" or DISTRO_VERSION == "14.10":
         return Ubuntu14xOSUtil()
+    elif DISTRO_FULL_NAME == "Snappy Ubuntu Core":
+        return UbuntuSnappyOSUtil()
     else:
         return UbuntuOSUtil()
 
