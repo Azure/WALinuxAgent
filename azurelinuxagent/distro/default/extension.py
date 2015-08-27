@@ -31,6 +31,9 @@ import azurelinuxagent.utils.fileutil as fileutil
 import azurelinuxagent.utils.restutil as restutil
 import azurelinuxagent.utils.shellutil as shellutil
 
+#HandlerEnvironment.json schema version
+HANDLER_ENVIRONMENT_VERSION = 1.0
+
 VALID_EXTENSION_STATUS = ['transitioning', 'error', 'success', 'warning']
 
 def validate_has_key(obj, key, fullname):
@@ -482,13 +485,10 @@ class ExtensionInstance(object):
         }
         fileutil.write_file(self.get_settings_file(), json.dumps(ext_settings))
 
-        latest = os.path.join(self.get_conf_dir(), "latest")
-        fileutil.write_file(latest, self.settings.sequenceNumber)
 
     def create_handler_env(self):
         env = [{
-            "name": self.get_name(),
-            "version" : self.get_version(),
+            "version" : HANDLER_ENVIRONMENT_VERSION,
             "handlerEnvironment" : {
                 "logFolder" : self.get_log_dir(),
                 "configFolder" : self.get_conf_dir(),
