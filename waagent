@@ -1944,10 +1944,7 @@ class FreeBSDDistro(AbstractDistro):
                 Log("CreateAccount: " + user + " already exists. Will update password.")
         
         if password != None:
-            ret = self.changePass(user,password)
-            if ret is not None:
-                Error(str(ret))
-                return ret
+            self.changePass(user,password)
         try:
             # for older distros create sudoers.d
             if not os.path.isdir(MyDistro.sudoers_dir_base+'/sudoers.d/'):
