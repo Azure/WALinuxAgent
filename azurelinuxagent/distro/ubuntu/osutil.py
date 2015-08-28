@@ -63,3 +63,13 @@ class UbuntuOSUtil(Ubuntu14xOSUtil):
     def unregister_agent_service(self):
         return shellutil.run("systemctl mask walinuxagent", chk_err=False)
 
+class UbuntuSnappyOSUtil(Ubuntu14xOSUtil):
+    def __init__(self):
+        super(UbuntuSnappyOSUtil, self).__init__()
+        self.conf_file_path = '/apps/walinuxagent/current/waagent.conf'
+
+    def remove_rules_files(self, rules_files=""):
+        pass
+
+    def restore_rules_files(self, rules_files=""):
+        pass
