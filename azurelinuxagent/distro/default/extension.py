@@ -30,6 +30,7 @@ from azurelinuxagent.exception import ExtensionError
 import azurelinuxagent.utils.fileutil as fileutil
 import azurelinuxagent.utils.restutil as restutil
 import azurelinuxagent.utils.shellutil as shellutil
+from azurelinuxagent.utils.textutil import Version
 
 #HandlerEnvironment.json schema version
 HANDLER_ENVIRONMENT_VERSION = 1.0
@@ -163,7 +164,8 @@ def get_installed_version(target_name):
             name, version = parse_extension_dirname(dir_name)
             #Here we need to ensure names are exactly the same.
             if name == target_name:
-                if installed_version is None or installed_version < version:
+                if installed_version is None or \
+                        Version(installed_version) < Version(version):
                     installed_version = version
     return installed_version
 
@@ -216,14 +218,14 @@ class ExtensionInstance(object):
     def handle_enable(self):
         target_version = self.get_target_version()
         if self.installed:
-            if target_version > self.curr_version:
+            if Version(target_version) > Version(self.curr_version):
                 self.upgrade(target_version)
-            elif target_version == self.curr_version:
+            elif Version(target_version) == Version(self.curr_version):
                 self.enable()
             else:
                 raise ExtensionError("A newer version has already been installed")
         else:
-            if target_version > self.get_version():
+            if Version(target_version) > Version(self.curr_version):
                 #This will happen when auto upgrade policy is enabled
                 self.logger.info("Auto upgrade to new version:{0}",
                                  target_version)
@@ -509,21 +511,23 @@ class ExtensionInstance(object):
         if major is None:
             raise ExtensionError("Wrong version format: {0}".format(version))
 
-        packages = [x for x in self.pkg_list.versions if x.version.startswith(major + ".")]
-        packages = sorted(packages, key=lambda x: x.version, reverse=True)
+        packages = [x for x in self.pkg_list.versions \
+                    if x.version.startswith(major + ".")]
+        packages = sorted(packages, key=lambda x: Version(x.version), 
+                          reverse=True)
         if len(packages) <= 0:
             raise ExtensionError("Can't find version: {0}.*".format(major))
 
         return packages[0].version
 
     def get_package_uris(self):
-        version = self.get_version()
+        version = self.curr_version
         packages = self.pkg_list.versions
         if packages is None:
             raise ExtensionError("Package uris is None.")
 
         for package in packages:
-            if package.version == version:
+            if Version(package.version) == Version(version):
                 return package.uris
 
         raise ExtensionError("Can't get package uris for {0}.".format(version))

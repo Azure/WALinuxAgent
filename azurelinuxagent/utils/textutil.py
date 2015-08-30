@@ -22,6 +22,7 @@ import string
 import struct
 import xml.dom.minidom as minidom
 import sys
+from distutils.version import LooseVersion
 
 def parse_doc(xml_text):
     """
@@ -223,4 +224,4 @@ def gen_password_hash(password, crypt_id, salt_len):
     salt = "${0}${1}".format(crypt_id, salt)
     return crypt.crypt(password, salt)
 
-
+Version = LooseVersion
