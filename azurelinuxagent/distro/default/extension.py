@@ -257,6 +257,7 @@ class ExtHandlerInstance(object):
 
     def handle_enable(self):
         target_version = self.get_target_version()
+        logger.info("Target version: {0}", target_version)
         if self.installed:
             if Version(target_version) > Version(self.curr_version):
                 self.upgrade(target_version)
@@ -536,6 +537,7 @@ class ExtHandlerInstance(object):
 
     def create_handler_env(self):
         env = [{
+            "name": self.name,
             "version" : HANDLER_ENVIRONMENT_VERSION,
             "handlerEnvironment" : {
                 "logFolder" : self.get_log_dir(),
@@ -548,7 +550,7 @@ class ExtHandlerInstance(object):
                                  json.dumps(env))
 
     def get_target_version(self):
-        version = self.curr_version
+        version = self.version
         update_policy = self.update_policy
         if update_policy is None or update_policy.lower() != 'auto':
             return version
