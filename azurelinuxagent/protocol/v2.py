@@ -98,7 +98,6 @@ class MetadataProtocol(Protocol):
         return vminfo
 
     def get_certs(self):
-        #TODO walk arround for azure pack test
         #TODO download and save certs
         return CertList()
 

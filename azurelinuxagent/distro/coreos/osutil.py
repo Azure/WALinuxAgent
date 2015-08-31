@@ -37,7 +37,7 @@ class CoreOSUtil(DefaultOSUtil):
         super(CoreOSUtil, self).__init__()
         self.waagent_path='/usr/share/oem/bin/waagent'
         self.python_path='/usr/share/oem/python/bin'
-        self.conf_path = '/usr/share/oem/waagent.conf'
+        self.conf_file_path = '/usr/share/oem/waagent.conf'
         if 'PATH' in os.environ:
             path = "{0}:{1}".format(os.environ['PATH'], self.python_path)
         else:
@@ -55,7 +55,7 @@ class CoreOSUtil(DefaultOSUtil):
        #User 'core' is not a sysuser
        if username == 'core':
            return False
-       return super(CoreOSUtil, self).IsSysUser(username)
+       return super(CoreOSUtil, self).is_sys_user(username)
 
     def is_dhcp_enabled(self):
         return True

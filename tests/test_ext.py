@@ -138,6 +138,8 @@ class TestExtensions(unittest.TestCase):
         mock_set_state.args = None
         test_ext = ext.ExtHandlerInstance(ext_sample, pkg_list_sample, 
                                           ext_sample.properties.version, False)
+        if not os.path.isdir(test_ext.get_base_dir()):
+            os.makedirs(test_ext.get_base_dir())
         test_ext.handle_uninstall()
         self.assertEqual(None, mock_launch_command.args)
         self.assertEqual(None, mock_set_state.args)
@@ -145,10 +147,11 @@ class TestExtensions(unittest.TestCase):
 
         test_ext = ext.ExtHandlerInstance(ext_sample, pkg_list_sample, 
                                           ext_sample.properties.version, True)
+        if not os.path.isdir(test_ext.get_base_dir()):
+            os.makedirs(test_ext.get_base_dir())
         test_ext.handle_uninstall()
-        self.assertEqual(manifest_sample.get_uninstall_command(), mock_launch_command.args[0])
-        #self.assertEqual("UnInstall", test_ext.ext_status.operation)
-        #self.assertEqual("NotReady", mock_set_state.args[0])
+        self.assertEqual(manifest_sample.get_uninstall_command(), 
+                         mock_launch_command.args[0])
     
     @mock(ext.ExtHandlerInstance, 'upgrade', MockFunc())
     @mock(ext.ExtHandlerInstance, 'enable', MockFunc())

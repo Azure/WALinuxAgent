@@ -469,7 +469,9 @@ class WireClient(object):
 
     def update_ext_conf(self, goal_state):
         if goal_state.ext_uri is None:
-            raise ProtocolError("ExtensionsConfig uri is empty")
+            logger.info("ExtensionsConfig.xml uri is empty")
+            self.ext_conf = ExtensionsConfig(None)
+            return
         incarnation = goal_state.incarnation
         local_file = EXT_CONF_FILE_NAME.format(incarnation)
         xml_text = _fetch_uri(goal_state.ext_uri,
@@ -551,9 +553,12 @@ class WireClient(object):
     def get_ext_conf(self):
         if(self.ext_conf is None):
             goal_state = self.get_goal_state()
-            local_file = EXT_CONF_FILE_NAME.format(goal_state.incarnation)
-            xml_text = _fetch_cache(local_file)
-            self.ext_conf = ExtensionsConfig(xml_text)
+            if goal_state.ext_uri is None:
+                self.ext_conf = ExtensionsConfig(None)
+            else:
+                local_file = EXT_CONF_FILE_NAME.format(goal_state.incarnation)
+                xml_text = _fetch_cache(local_file)
+                self.ext_conf = ExtensionsConfig(xml_text)
         return self.ext_conf
 
     def get_ext_manifest(self, extension, goal_state):
@@ -580,7 +585,8 @@ class WireClient(object):
    
     def upload_status_blob(self):
         ext_conf = self.get_ext_conf()
-        self.status_blob.upload(ext_conf.status_upload_blob)
+        if ext_conf.status_upload_blob is not None:
+            self.status_blob.upload(ext_conf.status_upload_blob)
 
     def report_role_prop(self, thumbprint):
         goal_state = self.get_goal_state()
@@ -893,12 +899,11 @@ class ExtensionsConfig(object):
     """
 
     def __init__(self, xml_text):
-        if xml_text is None:
-            raise ValueError("ExtensionsConfig is None")
         logger.verb("Load ExtensionsConfig.xml")
         self.ext_handlers = ExtHandlerList()
         self.status_upload_blob = None
-        self.parse(xml_text)
+        if xml_text is not None:
+            self.parse(xml_text)
 
     def parse(self, xml_text):
         """

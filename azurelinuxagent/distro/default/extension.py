@@ -21,6 +21,7 @@ import zipfile
 import time
 import json
 import subprocess
+import shutil
 import azurelinuxagent.logger as logger
 from azurelinuxagent.future import text
 from azurelinuxagent.utils.osutil import OSUTIL
@@ -136,6 +137,11 @@ class ExtHandlersHandler(object):
         except prot.ProtocolError as e:
             add_event(name="WALA", is_success=False, message = text(e))
             return
+        
+        if ext_handlers.extHandlers is None or \
+                len(ext_handlers.extHandlers) == 0:
+            logger.info("No extensions to handle")
+            return
 
         vm_status = prot.VMStatus()
         vm_status.vmAgent.version = AGENT_VERSION
@@ -224,7 +230,6 @@ class ExtHandlerInstance(object):
             self.collect_ext_status()
             self.collect_handler_status()
         except ExtensionError as e:
-            #TODO add None check for azure stack test
             if self.ext_status is not None:
                 self.ext_status.status = 'error'
             if self.handler_status is not None:
@@ -390,8 +395,12 @@ class ExtHandlerInstance(object):
 
         man = self.load_manifest()
         self.launch_command(man.get_uninstall_command())
-        #TODO for azure stack test
-        #self.set_state("NotReady")
+        
+        self.logger.info("Remove ext handler dir: {0}", self.get_base_dir())
+        try:
+            shutil.rmtree(self.get_base_dir())
+        except IOError as e:
+            raise ExtensionError("Failed to rm ext handler dir: {0}".format(e))
         self.handler_status = None
         self.ext_status = None
 
@@ -404,7 +413,6 @@ class ExtHandlerInstance(object):
 
     def collect_handler_status(self):
         self.logger.info("Collect extension handler status")
-        #TODO for azure stack test
         if self.handler_status is None:
             return
 
@@ -417,7 +425,6 @@ class ExtHandlerInstance(object):
 
     def collect_ext_status(self):
         self.logger.info("Collect extension status")
-        #TODO for azure stack test
         if self.handler_status is None:
             return
 
