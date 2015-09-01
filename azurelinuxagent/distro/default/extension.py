@@ -230,11 +230,6 @@ class ExtHandlerInstance(object):
             self.collect_ext_status()
             self.collect_handler_status()
         except ExtensionError as e:
-            if self.ext_status is not None:
-                self.ext_status.status = 'error'
-            if self.handler_status is not None:
-                self.handler_status.status = "NotReady"
-                self.handler_status.message =  text(e)
             self.report_event(is_success=False, message=text(e))
 
         self.logger.info("Finished processing extension handler")
@@ -287,6 +282,14 @@ class ExtHandlerInstance(object):
         self.uninstall()
 
     def report_event(self, is_success=True, message=""):
+        if self.ext_status is not None:
+            if not is_success:
+                self.ext_status.status = "error"
+                self.ext_status.code = -1
+        if self.handler_status is not None:
+            self.handler_status.message = message
+            if not is_success:
+                self.handler_status.status = "NotReady"
         add_event(name=self.name, op=self.ext_status.operation, 
                   is_success=is_success, message=message)
 
@@ -343,7 +346,7 @@ class ExtHandlerInstance(object):
         zipfile.ZipFile(pkg_file).extractall(self.get_base_dir())
         chmod = "find {0} -type f | xargs chmod u+x".format(self.get_base_dir())
         shellutil.run(chmod)
-        self.report_event()
+        self.report_event(message="Download succeeded")
 
     def init_dir(self):
         self.logger.info("Initialize extension directory")
@@ -505,7 +508,7 @@ class ExtHandlerInstance(object):
         ret = child.wait()
         if ret == None or ret != 0:
             raise ExtensionError("Non-zero exit code: {0}, {1}".format(ret, cmd))
-        self.report_event()
+        self.report_event(message="Launch command succeeded: {0}".format(cmd))
 
     def load_manifest(self):
         man_file = self.get_manifest_file()

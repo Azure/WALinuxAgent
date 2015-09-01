@@ -256,6 +256,10 @@ def ext_handler_status_to_v1(handler_status, ext_statuses, timestamp):
         'handlerVersion' : handler_status.version,
         'handlerName' : handler_status.name,
         'status' : handler_status.status,
+        "formattedMessage": {
+            "lang":"en-US",
+            "message": handler_status.message
+        },
         'runtimeSettingsStatus' : {
         }
     }
