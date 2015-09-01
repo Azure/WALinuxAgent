@@ -145,50 +145,53 @@ def _fetch_manifest(version_uris):
     raise ProtocolError("Failed to fetch ExtensionManifest from all sources")
 
 def _build_role_properties(container_id, role_instance_id, thumbprint):
-    xml = ("<?xml version=\"1.0\" encoding=\"utf-8\"?>"
-            "<RoleProperties>"
-            "<Container>"
-            "<ContainerId>{0}</ContainerId>"
-            "<RoleInstances>"
-            "<RoleInstance>"
-            "<Id>{1}</Id>"
-            "<Properties>"
-            "<Property name=\"CertificateThumbprint\" value=\"{2}\" />"
-            "</Properties>"
-            "</RoleInstance>"
-            "</RoleInstances>"
-            "</Container>"
-            "</RoleProperties>"
-            "").format(container_id, role_instance_id, thumbprint)
+    xml = (u"<?xml version=\"1.0\" encoding=\"utf-8\"?>"
+           u"<RoleProperties>"
+           u"<Container>"
+           u"<ContainerId>{0}</ContainerId>"
+           u"<RoleInstances>"
+           u"<RoleInstance>"
+           u"<Id>{1}</Id>"
+           u"<Properties>"
+           u"<Property name=\"CertificateThumbprint\" value=\"{2}\" />"
+           u"</Properties>"
+           u"</RoleInstance>"
+           u"</RoleInstances>"
+           u"</Container>"
+           u"</RoleProperties>"
+           u"").format(container_id, role_instance_id, thumbprint)
     return xml
 
 def _build_health_report(incarnation, container_id, role_instance_id,
                        status, substatus, description):
-    detail = ''
+    #Escape '&', '<' and '>'
+    description = saxutils.escape(text(description))
+    detail = u''
     if substatus is not None:
-        detail = ("<Details>"
-                  "<SubStatus>{0}</SubStatus>"
-                  "<Description>{1}</Description>"
-                  "</Details>").format(substatus, description)
-    xml = ("<?xml version=\"1.0\" encoding=\"utf-8\"?>"
-            "<Health "
-            "xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\""
-            " xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\">"
-            "<GoalStateIncarnation>{0}</GoalStateIncarnation>"
-            "<Container>"
-            "<ContainerId>{1}</ContainerId>"
-            "<RoleInstanceList>"
-            "<Role>"
-            "<InstanceId>{2}</InstanceId>"
-            "<Health>"
-            "<State>{3}</State>"
-            "{4}"
-            "</Health>"
-            "</Role>"
-            "</RoleInstanceList>"
-            "</Container>"
-            "</Health>"
-            "").format(incarnation,
+        substatus = saxutils.escape(text(substatus))
+        detail = (u"<Details>"
+                  u"<SubStatus>{0}</SubStatus>"
+                  u"<Description>{1}</Description>"
+                  u"</Details>").format(substatus, description)
+    xml = (u"<?xml version=\"1.0\" encoding=\"utf-8\"?>"
+           u"<Health "
+           u"xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\""
+           u" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\">"
+           u"<GoalStateIncarnation>{0}</GoalStateIncarnation>"
+           u"<Container>"
+           u"<ContainerId>{1}</ContainerId>"
+           u"<RoleInstanceList>"
+           u"<Role>"
+           u"<InstanceId>{2}</InstanceId>"
+           u"<Health>"
+           u"<State>{3}</State>"
+           u"{4}"
+           u"</Health>"
+           u"</Role>"
+           u"</RoleInstanceList>"
+           u"</Container>"
+           u"</Health>"
+           u"").format(incarnation,
                        container_id,
                        role_instance_id,
                        status,
@@ -331,10 +334,14 @@ class StatusBlob(object):
         #Check blob type
         logger.verb("Check blob type.")
         timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-        resp = restutil.http_head(url, {
-            "x-ms-date" :  timestamp,
-            'x-ms-version' : self.__class__.__storage_version__
-        })
+        try:
+            resp = restutil.http_head(url, {
+                "x-ms-date" :  timestamp,
+                'x-ms-version' : self.__class__.__storage_version__
+            })
+        except restutil.HttpError as e:
+            raise ProtocolError((u"Failed to get status blob type: {0}"
+                                 u"").format(e))
         if resp is None or resp.status != httpclient.OK:
             raise ProtocolError(("Failed to get status blob type: {0}"
                                  "").format(resp.status))
@@ -346,13 +353,17 @@ class StatusBlob(object):
     def put_block_blob(self, url, data):
         logger.verb("Upload block blob")
         timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-        resp = restutil.http_put(url, data, {
-            "x-ms-date" :  timestamp,
-            "x-ms-blob-type" : "BlockBlob",
-            "Content-Length": text(len(data)),
-            "x-ms-version" : self.__class__.__storage_version__
-        })
-        if resp is None or resp.status != httpclient.CREATED:
+        try:
+            resp = restutil.http_put(url, data, {
+                "x-ms-date" :  timestamp,
+                "x-ms-blob-type" : "BlockBlob",
+                "Content-Length": text(len(data)),
+                "x-ms-version" : self.__class__.__storage_version__
+            })
+        except restutil.HttpError as e:
+            raise ProtocolError((u"Failed to upload block blob: {0}"
+                                 u"").format(e))
+        if resp.status != httpclient.CREATED:
             raise ProtocolError(("Failed to upload block blob: {0}"
                                  "").format(resp.status))
 
@@ -365,14 +376,18 @@ class StatusBlob(object):
 
         #Align to 512 bytes
         page_blob_size = int((len(data) + 511) / 512) * 512
-        resp = restutil.http_put(url, "", {
-            "x-ms-date" :  timestamp,
-            "x-ms-blob-type" : "PageBlob",
-            "Content-Length": "0",
-            "x-ms-blob-content-length" : text(page_blob_size),
-            "x-ms-version" : self.__class__.__storage_version__
-        })
-        if resp is None or resp.status != httpclient.CREATED:
+        try:
+            resp = restutil.http_put(url, "", {
+                "x-ms-date" :  timestamp,
+                "x-ms-blob-type" : "PageBlob",
+                "Content-Length": "0",
+                "x-ms-blob-content-length" : text(page_blob_size),
+                "x-ms-version" : self.__class__.__storage_version__
+            })
+        except restutil.HttpError as e:
+            raise ProtocolError((u"Failed to clean up page blob: {0}"
+                                 u"").format(e))
+        if resp.status != httpclient.CREATED:
             raise ProtocolError(("Failed to clean up page blob: {0}"
                                  "").format(resp.status))
 
@@ -393,13 +408,17 @@ class StatusBlob(object):
             buf_size = page_end - start
             buf = bytearray(buf_size)
             buf[0: content_size] = data[start: end]
-            resp = restutil.http_put(url, bytebuffer(buf), {
-                "x-ms-date" :  timestamp,
-                "x-ms-range" : "bytes={0}-{1}".format(start, page_end - 1),
-                "x-ms-page-write" : "update",
-                "x-ms-version" : self.__class__.__storage_version__,
-                "Content-Length": text(page_end - start)
-            })
+            try:
+                resp = restutil.http_put(url, bytebuffer(buf), {
+                    "x-ms-date" :  timestamp,
+                    "x-ms-range" : "bytes={0}-{1}".format(start, page_end - 1),
+                    "x-ms-page-write" : "update",
+                    "x-ms-version" : self.__class__.__storage_version__,
+                    "Content-Length": text(page_end - start)
+                })
+            except restutil.HttpError as e:
+                raise ProtocolError((u"Failed to upload page blob: {0}"
+                                     u"").format(e))
             if resp is None or resp.status != httpclient.CREATED:
                 raise ProtocolError(("Failed to upload page blob: {0}"
                                      "").format(resp.status))
@@ -593,25 +612,42 @@ class WireClient(object):
         role_prop = _build_role_properties(goal_state.container_id,
                                            goal_state.role_instance_id,
                                            thumbprint)
+        role_prop = role_prop.encode("utf-8")
         role_prop_uri = ROLE_PROP_URI.format(self.endpoint)
-        ret = restutil.http_post(role_prop_uri,
-                                 role_prop,
-                                 headers=self.get_header_for_xml_content())
-
+        try:
+            resp = restutil.http_post(role_prop_uri,
+                                      role_prop,
+                                      headers=self.get_header_for_xml_content())
+        except restutil.HttpError as e:
+            raise ProtocolError((u"Failed to send role properties: {0}"
+                                 u"").format(e))
+        if resp.status != httpclient.ACCEPTED:
+            raise ProtocolError((u"Failed to send role properties: {0}"
+                                 u", {1}").format(resp.status, resp.read()))
 
     def report_health(self, status, substatus, description):
         goal_state = self.get_goal_state()
         health_report = _build_health_report(goal_state.incarnation,
-                                           goal_state.container_id,
-                                           goal_state.role_instance_id,
-                                           status,
-                                           substatus,
-                                           description)
+                                             goal_state.container_id,
+                                             goal_state.role_instance_id,
+                                             status,
+                                             substatus,
+                                             description)
+        health_report = health_report.encode("utf-8")
         health_report_uri = HEALTH_REPORT_URI.format(self.endpoint)
         headers = self.get_header_for_xml_content()
-        resp = restutil.http_post(health_report_uri,
-                                  health_report,
-                                  headers=headers)
+        try:
+            resp = restutil.http_post(health_report_uri,
+                                      health_report,
+                                      headers=headers)
+        except restutil.HttpError as e:
+            raise ProtocolError((u"Failed to send provision status: {0}"
+                                 u"").format(e))
+        if resp.status != httpclient.OK:
+            raise ProtocolError((u"Failed to send provision status: {0}"
+                                 u", {1}").format(resp.status, resp.read()))
+
+
     def prevent_throttling(self):
         self.req_count += 1
         if self.req_count % 3 == 0:

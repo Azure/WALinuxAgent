@@ -23,6 +23,7 @@ import azurelinuxagent.logger as logger
 from azurelinuxagent.future import text
 import azurelinuxagent.conf as conf
 import azurelinuxagent.protocol as prot
+from azurelinuxagent.event import add_event, WALAEventOperation
 from azurelinuxagent.exception import *
 from azurelinuxagent.utils.osutil import OSUTIL
 import azurelinuxagent.utils.shellutil as shellutil
@@ -54,11 +55,25 @@ class UbuntuProvisionHandler(ProvisionHandler):
             logger.info("Finished provisioning")
             status = prot.ProvisionStatus(status="Ready")
             status.properties.certificateThumbprint = thumbprint
-            protocol.report_provision_status(status)
+            try:
+                protocol.report_provision_status(status)
+            except prot.ProtocolError as pe:
+                add_event(name="WALA", is_success=False, message=text(pe),
+                          op=WALAEventOperation.Provision)
 
         except ProvisionError as e:
             logger.error("Provision failed: {0}", e)
-            protocol.report_provision_status(status="NotReady", subStatus=text(e))
+            status = prot.ProvisionStatus(status="NotReady",
+                                          subStatus="ProvisioningFailed",
+                                          description= text(e))
+            try:
+                protocol.report_provision_status(status)
+            except prot.ProtocolError as pe:
+                add_event(name="WALA", is_success=False, message=text(pe),
+                          op=WALAEventOperation.Provision)
+
+            add_event(name="WALA", is_success=False, message=text(e),
+                      op=WALAEventOperation.Provision)
 
     def wait_for_ssh_host_key(self, max_retry=60):
         kepair_type = conf.get("Provisioning.SshHostKeyPairType", "rsa")
