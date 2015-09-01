@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 # Copyright 2014 Microsoft Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -25,15 +26,19 @@ import unittest
 import os
 import azurelinuxagent.utils.shellutil as shellutil
 import test
+from azurelinuxagent.future import text
 
 class TestrunCmd(unittest.TestCase):
     def test_run_get_output(self):
-        output = shellutil.run_get_output("ls /")
+        output = shellutil.run_get_output(u"ls /")
         self.assertNotEquals(None, output)
         self.assertEquals(0, output[0])
 
-        err = shellutil.run_get_output("ls /not-exists")
+        err = shellutil.run_get_output(u"ls /not-exists")
         self.assertNotEquals(0, err[0])
             
+        err = shellutil.run_get_output(u"ls 我")
+        self.assertNotEquals(0, err[0])
+
 if __name__ == '__main__':
     unittest.main()

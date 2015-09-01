@@ -225,3 +225,4 @@ def gen_password_hash(password, crypt_id, salt_len):
     return crypt.crypt(password, salt)
 
 Version = LooseVersion
+

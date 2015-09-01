@@ -122,8 +122,8 @@ class DefaultOSUtil(object):
             raise OSUtilError(("User {0} is a system user. "
                                "Will not set passwd.").format(username))
         passwd_hash = textutil.gen_password_hash(password, crypt_id, salt_len)
-        cmd = "usermod {0} -p '{1}'".format(username, passwd_hash)
-        ret, output = shellutil.run_get_output(cmd)
+        cmd = "usermod -p '{0}' {1}".format(passwd_hash, username)
+        ret, output = shellutil.run_get_output(cmd, log_cmd=False)
         if ret != 0:
             raise OSUtilError(("Failed to set password for {0}: {1}"
                                "").format(username, output))
