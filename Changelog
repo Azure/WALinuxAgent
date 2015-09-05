@@ -1,5 +1,11 @@
 WALinuxAgent                                                          Changelog
 |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+6 Sep 2015, WALinuxAgent 2.0.15
+   . FreeBSD - fix default gateway
+   . Oracle - fix distro name detection
+   . Redhat - Port "chpasswd" from 2.1
+
+|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 1 Jul 2015, WALinuxAgent 2.0.14
    . Fix rdma config
    . Fix page blob uploading for python 2.6
