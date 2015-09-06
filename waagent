@@ -23,6 +23,8 @@
 # http://msdn.microsoft.com/en-us/library/cc227259%28PROT.13%29.aspx
 #
 
+import crypt
+import random
 import array
 import base64
 import httplib
@@ -173,8 +175,8 @@ class AbstractDistro(object):
         self.ssh_config_file='/etc/ssh/sshd_config'
         self.hostname_file_path='/etc/hostname'
         self.dhcp_client_name='dhclient'
-        self.requiredDeps = [ 'route', 'shutdown', 'ssh-keygen', 'useradd', 
-                              'openssl', 'sfdisk', 'fdisk', 'mkfs', 'chpasswd', 
+        self.requiredDeps = [ 'route', 'shutdown', 'ssh-keygen', 'useradd', 'usermod',
+                              'openssl', 'sfdisk', 'fdisk', 'mkfs', 
                               'sed', 'grep', 'sudo', 'parted' ]
         self.init_script_file='/etc/init.d/waagent'
         self.agent_package_name='WALinuxAgent'
@@ -187,6 +189,7 @@ class AbstractDistro(object):
         self.sudoers_dir_base = '/etc'
         self.waagent_conf_file = WaagentConf
         self.shadow_file_mode=0600
+        self.shadow_file_path="/etc/shadow"
         self.dhcp_enabled = False
         
     def isSelinuxSystem(self):
@@ -341,8 +344,35 @@ class AbstractDistro(object):
         return 0
     
     def changePass(self,user,password):
-        return RunSendStdin("chpasswd",(user + ":" + password + "\n"))
+        Log("Change user password")
+        crypt_id = Config.get("Provisioning.PasswordCryptId")
+        if crypt_id is None:
+            crypt_id = "6"
+
+        salt_len = Config.get("Provisioning.PasswordCryptSaltLength")
+        try:
+            salt_len = int(salt_len)
+            if salt_len < 0 or salt_len > 10:
+                salt_len = 10
+        except (ValueError, TypeError):
+            salt_len = 10
+
+        return self.chpasswd(user, password, crypt_id=crypt_id, 
+                             salt_len=salt_len)
     
+    def chpasswd(self, username, password, crypt_id=6, salt_len=10):
+        passwd_hash = self.gen_password_hash(password, crypt_id, salt_len)
+        cmd = "usermod -p '{0}' {1}".format(passwd_hash, username)
+        ret, output = RunGetOutput(cmd, log_cmd=False)
+        if ret != 0:
+            return "Failed to set password for {0}: {1}".format(username, output)
+
+    def gen_password_hash(self, password, crypt_id, salt_len):
+        collection = string.ascii_letters + string.digits
+        salt = ''.join(random.choice(collection) for _ in range(salt_len))
+        salt = "${0}${1}".format(crypt_id, salt)
+        return crypt.crypt(password, salt)
+
     def load_ata_piix(self):
         return WaAgent.TryLoadAtapiix()
 
@@ -645,6 +675,13 @@ class AbstractDistro(object):
         if ret != 0:
             raise Exception("Failed to config ipv4 for {0}: {1}".format(ifName, 
                                                                         output))
+    def setDefaultGateway(self, gateway):
+        Run("/sbin/route add default gw" + gateway, chk_err=False)
+
+    def routeAdd(self, net, mask, gateway):
+        Run("/sbin/route add -net " + net + " netmask " + mask + " gw " + gateway,
+            chk_err=False)
+
 
 ############################################################
 #	GentooDistro
@@ -1028,6 +1065,19 @@ class centosDistro(redhatDistro):
     def __init__(self):
         super(centosDistro,self).__init__()
 
+############################################################    
+#	oracleDistro
+############################################################    
+
+class oracleDistro(redhatDistro):
+    """
+    Oracle Distro concrete class
+    Put Oracle specific behavior here...
+    """
+    def __init__(self):
+        super(oracleDistro, self).__init__()
+
+
 
 ############################################################    
 #	asianuxDistro
@@ -1150,7 +1200,7 @@ class CoreOSDistro(AbstractDistro):
         else:
             Log("CreateAccount: " + user + " already exists. Will update password.")
         if password != None:
-            RunSendStdin("chpasswd", user + ":" + password + "\n")
+            self.changePass(user, password)
         try:
             if password == None:
                 SetFileContents("/etc/sudoers.d/waagent", user + " ALL = (ALL) NOPASSWD: ALL\n")
@@ -1764,7 +1814,7 @@ class FreeBSDDistro(AbstractDistro):
         return 0
 
     def changePass(self,user,password):
-        return RunSendStdin("pw usermod " + user + " -h 0 ",password)
+        return RunSendStdin("pw usermod " + user + " -h 0 ",password, log_cmd=False)
     
     def load_ata_piix(self):
         return 0
@@ -2059,7 +2109,13 @@ class FreeBSDDistro(AbstractDistro):
     
     def getTotalMemory(self):
         return int(RunGetOutput("sysctl hw.realmem | awk '{print $2}'")[1])/1024
-        
+    
+    def setDefaultGateway(self, gateway):
+        Run("/sbin/route add default " + gateway, chk_err=False)
+
+    def routeAdd(self, net, mask, gateway):
+        Run("/sbin/route add -net " + net + " " + mask + " " + gateway, chk_err=False)
+
 ############################################################
 # END DISTRO CLASS DEFS
 ############################################################  
@@ -2180,41 +2236,43 @@ def Run(cmd,chk_err=True):
     retcode,out=RunGetOutput(cmd,chk_err)
     return retcode
 
-def RunGetOutput(cmd,chk_err=True):
+def RunGetOutput(cmd, chk_err=True, log_cmd=True):
     """
     Wrapper for subprocess.check_output.
     Execute 'cmd'.  Returns return code and STDOUT, trapping expected exceptions.
     Reports exceptions to Error if chk_err parameter is True
     """
-    LogIfVerbose(cmd)
+    if log_cmd:
+        LogIfVerbose(cmd)
     try:                                     
         output=subprocess.check_output(cmd,stderr=subprocess.STDOUT,shell=True)
     except subprocess.CalledProcessError,e :
-        if chk_err :
+        if chk_err and log_cmd:
             Error('CalledProcessError.  Error Code is ' + str(e.returncode)  )
             Error('CalledProcessError.  Command string was ' + e.cmd  )
             Error('CalledProcessError.  Command result was ' + (e.output[:-1]).decode('latin-1'))
         return e.returncode,e.output.decode('latin-1')
     return 0,output.decode('latin-1')
 
-def RunSendStdin(cmd,input,chk_err=True):
+def RunSendStdin(cmd, input, chk_err=True, log_cmd=True):
     """
     Wrapper for subprocess.Popen.
     Execute 'cmd', sending 'input' to STDIN of 'cmd'.
     Returns return code and STDOUT, trapping expected exceptions.
     Reports exceptions to Error if chk_err parameter is True
     """
-    LogIfVerbose(cmd+input)
+    if log_cmd:
+        LogIfVerbose(cmd+input)
     try:                                     
         me=subprocess.Popen([cmd], shell=True, stdin=subprocess.PIPE,stderr=subprocess.STDOUT,stdout=subprocess.PIPE)
         output=me.communicate(input)
     except OSError , e :
-        if chk_err :
+        if chk_err and log_cmd:
             Error('CalledProcessError.  Error Code is ' + str(me.returncode)  )
             Error('CalledProcessError.  Command string was ' + cmd  )
             Error('CalledProcessError.  Command result was ' + output[0].decode('latin-1'))
             return 1,output[0].decode('latin-1')
-    if me.returncode is not 0 and chk_err is True:
+    if me.returncode is not 0 and chk_err is True and log_cmd:
             Error('CalledProcessError.  Error Code is ' + str(me.returncode)  )
             Error('CalledProcessError.  Command string was ' + cmd  )
             Error('CalledProcessError.  Command result was ' + output[0].decode('latin-1'))
@@ -2296,7 +2354,7 @@ def CreateAccount(user, password, expiration, thumbprint):
     else:
         Log("CreateAccount: " + user + " already exists. Will update password.")
     if password != None:
-        RunSendStdin("chpasswd",(user + ":" + password + "\n"))
+        MyDistro.changePass(user, password)
     try:
         # for older distros create sudoers.d
         if not os.path.isdir('/etc/sudoers.d/'):
@@ -4999,7 +5057,16 @@ class Agent(Util):
         net = self.IntegerToIpAddressV4String(net)
         mask = self.IntegerToIpAddressV4String(mask)
         gateway = self.IntegerToIpAddressV4String(gateway)
-        Run("/sbin/route add -net " + net + " netmask " + mask + " gw " + gateway,chk_err=False)
+        Log("Route add: net={0}, mask={1}, gateway={2}".format(net, mask, gateway))
+        MyDistro.routeAdd(net, mask, gateway)
+    
+    def SetDefaultGateway(self, gateway):
+        """
+        Set default gateway
+        """
+        gateway = self.IntegerToIpAddressV4String(gateway)
+        Log("Set default gateway: {0}".format(gateway))
+        MyDistro.setDefaultGateway(gateway)
 
     def HandleDhcpResponse(self, sendData, receiveBuffer):
         """
@@ -5082,7 +5149,7 @@ class Agent(Util):
                     gateway = self.UnpackBigEndian(receiveBuffer, i + 2, 4)
                     IpAddress = self.IntegerToIpAddressV4String(gateway)
                     if option == 3:
-                        self.RouteAdd(0, 0, gateway)
+                        self.SetDefaultGateway(gateway)
                         name = "DefaultGateway"
                     else:
                         endpoint = IpAddress
@@ -5987,11 +6054,6 @@ def main():
     global LinuxDistro
     LinuxDistro=DistInfo()[0]
     
-    #The platform.py lib has issue with detecting oracle linux distribution.
-    #Merge the following patch provided by oracle as a temparory fix.
-    if os.path.exists("/etc/oracle-release"): 
-        LinuxDistro="Oracle Linux" 
-
     global MyDistro
     MyDistro=GetMyDistro()
     if MyDistro == None :
