@@ -20,7 +20,7 @@
 """
 Log utils
 """
-
+import os
 import sys
 from azurelinuxagent.future import text
 from datetime import datetime
@@ -63,7 +63,8 @@ class Logger(object):
         else:
             log_item = u"{0} {1} {2}\n".format(time, level_str, msg)
 
-        log_item = text(log_item.encode('ascii', "backslashreplace"))
+        log_item = text(log_item.encode('ascii', "backslashreplace"), 
+                        encoding="ascii")
         for appender in self.appenders:
             appender.write(level, log_item)
 
@@ -109,7 +110,6 @@ class StdoutAppender(object):
                 sys.stdout.write(msg)
             except IOError:
                 pass
-
 
 #Initialize logger instance
 DEFAULT_LOGGER = Logger()
