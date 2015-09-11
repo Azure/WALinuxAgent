@@ -265,8 +265,6 @@ def ext_handler_status_to_v1(handler_status, ext_statuses, timestamp):
             "lang":"en-US",
             "message": handler_status.message
         },
-        'runtimeSettingsStatus' : {
-        }
     }
 
     if len(handler_status.extensions) > 0:
@@ -325,7 +323,7 @@ class StatusBlob(object):
 
     def upload(self, url):
         #TODO upload extension only if content has changed
-        logger.info("Upload status blob")
+        logger.verb("Upload status blob")
         blob_type = self.get_blob_type(url)
 
         data = self.to_json()

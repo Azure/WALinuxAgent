@@ -112,8 +112,10 @@ class TestExtensions(unittest.TestCase):
         self.assertEqual("/tmp/TestExt-2.0/status", test_ext.get_status_dir())
         self.assertEqual("/tmp/TestExt-2.0/status/0.status", 
                          test_ext.get_status_file())
-        self.assertEqual("/tmp/TestExt-2.0/config/HandlerState", 
+        self.assertEqual("/tmp/handler_state/TestExt-2.0/0.state", 
                          test_ext.get_handler_state_file())
+        self.assertEqual("/tmp/handler_state/TestExt-2.0/0.message", 
+                         test_ext.get_handler_state_message_file())
         self.assertEqual("/tmp/TestExt-2.0/config", test_ext.get_conf_dir())
         self.assertEqual("/tmp/TestExt-2.0/config/0.settings", 
                          test_ext.get_settings_file())
@@ -143,7 +145,6 @@ class TestExtensions(unittest.TestCase):
         test_ext.handle_uninstall()
         self.assertEqual(None, mock_launch_command.args)
         self.assertEqual(None, mock_set_state.args)
-        self.assertEqual(None, test_ext.ext_status.operation)
 
         test_ext = ext.ExtHandlerInstance(ext_sample, pkg_list_sample, 
                                           ext_sample.properties.version, True)
