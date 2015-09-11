@@ -49,8 +49,13 @@ class ProvisionHandler(object):
         protocol = prot.FACTORY.get_default_protocol()
         try:
             status = prot.ProvisionStatus(status="NotReady",
-                                          subStatus="Provision started")
-            protocol.report_provision_status(status)
+                                          subStatus="Provisioning",
+                                          description="Starting")
+            try:
+                protocol.report_provision_status(status)
+            except prot.ProtocolError as e:
+                add_event(name="WALA", is_success=False, message=text(e),
+                          op=WALAEventOperation.Provision)
 
             self.provision()
             fileutil.write_file(provisioned, "")
@@ -59,17 +64,28 @@ class ProvisionHandler(object):
             logger.info("Finished provisioning")
             status = prot.ProvisionStatus(status="Ready")
             status.properties.certificateThumbprint = thumbprint
-            protocol.report_provision_status(status)
+
+            try:
+                protocol.report_provision_status(status)
+            except prot.ProtocolError as pe:
+                add_event(name="WALA", is_success=False, message=text(pe),
+                          op=WALAEventOperation.Provision)
 
             add_event(name="WALA", is_success=True, message="",
-                              op=WALAEventOperation.Provision)
+                      op=WALAEventOperation.Provision)
         except ProvisionError as e:
             logger.error("Provision failed: {0}", e)
             status = prot.ProvisionStatus(status="NotReady",
-                                          subStatus= text(e))
-            protocol.report_provision_status(status)
+                                          subStatus="ProvisioningFailed",
+                                          description= text(e))
+            try:
+                protocol.report_provision_status(status)
+            except prot.ProtocolError as pe:
+                add_event(name="WALA", is_success=False, message=text(pe),
+                          op=WALAEventOperation.Provision)
+
             add_event(name="WALA", is_success=False, message=text(e),
-                              op=WALAEventOperation.Provision)
+                      op=WALAEventOperation.Provision)
 
     def reg_ssh_host_key(self):
         keypair_type = conf.get("Provisioning.SshHostKeyPairType", "rsa")
@@ -120,10 +136,10 @@ class ProvisionHandler(object):
 
         if ovfenv.user_password is not None:
             logger.info("Set user password.")
-            use_salt = conf.get_switch("Provision.UseSalt", True)
-            salt_type = conf.get_switch("Provision.SaltType", 6)
-            OSUTIL.chpasswd(ovfenv.username, ovfenv.user_password, 
-                            use_salt,salt_type)
+            crypt_id = conf.get("Provision.PasswordCryptId", "6")
+            salt_len = conf.get_int("Provision.PasswordCryptSaltLength", 10)
+            OSUTIL.chpasswd(ovfenv.username, ovfenv.user_password,
+                            crypt_id=crypt_id, salt_len=salt_len)
          
         logger.info("Configure sudoer")
         OSUTIL.conf_sudoer(ovfenv.username, ovfenv.user_password is None)

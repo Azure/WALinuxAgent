@@ -65,21 +65,25 @@ def run(cmd, chk_err=True):
     retcode,out=run_get_output(cmd,chk_err)
     return retcode
 
-def run_get_output(cmd, chk_err=True):
+def run_get_output(cmd, chk_err=True, log_cmd=True):
     """
     Wrapper for subprocess.check_output.
     Execute 'cmd'.  Returns return code and STDOUT, trapping expected exceptions.
     Reports exceptions to Error if chk_err parameter is True
     """
-    logger.verb("run cmd '{0}'", cmd)
+    if log_cmd:
+        logger.verb(u"run cmd '{0}'", cmd)
     try:
         output=subprocess.check_output(cmd,stderr=subprocess.STDOUT,shell=True)
+        output = text(output, encoding='utf-8', errors="backslashreplace")
     except subprocess.CalledProcessError as e :
-        if chk_err :
-            logger.error("run cmd '{0}' failed", e.cmd)
-            logger.error("Error Code:{0}", e.returncode)
-            logger.error("Result:{0}", e.output[:-1].decode('latin-1'))
-        return e.returncode, e.output.decode('latin-1')
-    return 0, text(output, encoding="utf-8")
+        output = text(e.output, encoding='utf-8', errors="backslashreplace")
+        if chk_err:
+            if log_cmd:
+                logger.error(u"run cmd '{0}' failed", e.cmd)
+            logger.error(u"Error Code:{0}", e.returncode)
+            logger.error(u"Result:{0}", output)
+        return e.returncode, output 
+    return 0, output
 
 #End shell command util functions

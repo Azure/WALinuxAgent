@@ -22,6 +22,7 @@ import string
 import struct
 import xml.dom.minidom as minidom
 import sys
+from distutils.version import LooseVersion
 
 def parse_doc(xml_text):
     """
@@ -217,12 +218,11 @@ def remove_bom(c):
         c = c[3:]
     return c
 
-def gen_password_hash(password, use_salt, salt_type, salt_len):
-    salt="$6$"
-    if use_salt:
-        collection = string.ascii_letters + string.digits
-        salt = ''.join(random.choice(collection) for _ in range(salt_len))
-        salt = "${0}${1}".format(salt_type, salt)
+def gen_password_hash(password, crypt_id, salt_len):
+    collection = string.ascii_letters + string.digits
+    salt = ''.join(random.choice(collection) for _ in range(salt_len))
+    salt = "${0}${1}".format(crypt_id, salt)
     return crypt.crypt(password, salt)
 
+Version = LooseVersion
 

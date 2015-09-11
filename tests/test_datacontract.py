@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # Copyright 2014 Microsoft Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,25 +19,36 @@
 # http://msdn.microsoft.com/en-us/library/cc227259%28PROT.13%29.aspx
 
 import tests.env
-import tests.tools as tools
+from tests.tools import *
 import uuid
 import unittest
 import os
-import azurelinuxagent.utils.shellutil as shellutil
-import test
-from azurelinuxagent.future import text
+import shutil
+import time
+from azurelinuxagent.protocol.common import *
 
-class TestrunCmd(unittest.TestCase):
-    def test_run_get_output(self):
-        output = shellutil.run_get_output(u"ls /")
-        self.assertNotEquals(None, output)
-        self.assertEquals(0, output[0])
+class SampleDataContract(DataContract):
+    def __init__(self):
+        self.foo = None
+        self.bar = DataContractList(int)
 
-        err = shellutil.run_get_output(u"ls /not-exists")
-        self.assertNotEquals(0, err[0])
-            
-        err = shellutil.run_get_output(u"ls 我")
-        self.assertNotEquals(0, err[0])
+class TestDataContract(unittest.TestCase):
+    def test_get_properties(self):
+        obj = SampleDataContract()
+        obj.foo = "foo"
+        obj.bar.append(1)
+        data = get_properties(obj)
+        self.assertEquals("foo", data["foo"])
+        self.assertEquals(list, type(data["bar"]))
+
+    def test_set_properties(self):
+        obj = SampleDataContract()
+        data = {
+                'foo' : 1, 
+                'baz': 'a'
+        }
+        set_properties('sample', obj, data)
+        self.assertFalse(hasattr(obj, 'baz'))
 
 if __name__ == '__main__':
     unittest.main()

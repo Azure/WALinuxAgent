@@ -27,8 +27,8 @@ from azurelinuxagent.metadata import AGENT_LONG_NAME, AGENT_VERSION, \
                                      DISTRO_NAME, DISTRO_VERSION, \
                                      DISTRO_FULL_NAME, PY_VERSION_MAJOR, \
                                      PY_VERSION_MINOR, PY_VERSION_MICRO
-import azurelinuxagent.protocol as prot
 import azurelinuxagent.event as event
+import azurelinuxagent.protocol as prot
 from azurelinuxagent.utils.osutil import OSUTIL
 import azurelinuxagent.utils.fileutil as fileutil
 
@@ -65,22 +65,7 @@ class MainHandler(object):
 
         protocol = prot.FACTORY.get_default_protocol()
         while True:
-
             #Handle extensions
-            h_status_list = self.handlers.extension_handler.process()
-
-            #Report status
-            vm_status = prot.VMStatus()
-            vm_status.vmAgent.agentVersion = AGENT_LONG_NAME
-            vm_status.vmAgent.status = "Ready"
-            vm_status.vmAgent.message = "Guest Agent is running"
-            for h_status in h_status_list:
-                vm_status.extensionHandlers.append(h_status)
-            try:
-                logger.info("Report vm status")
-                protocol.report_status(vm_status)
-            except prot.ProtocolError as e:
-                logger.error("Failed to report vm status: {0}", e)
-
+            self.handlers.ext_handlers_handler.process()
             time.sleep(25)
 

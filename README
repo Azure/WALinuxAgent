@@ -199,6 +199,8 @@ Provisioning.SshHostKeyPairType=rsa
 Provisioning.MonitorHostName=y
 Provisioning.DecodeCustomData=n
 Provisioning.ExecuteCustomData=n
+Provisioning.PasswordCryptId=6
+Provisioning.PasswordCryptSaltLength=10
 ResourceDisk.Format=y
 ResourceDisk.Filesystem=ext4
 ResourceDisk.MountPoint=/mnt/resource
@@ -299,6 +301,20 @@ Provisioning.ExecuteCustomData:
 Type: Boolean Default: n
 
 If set, waagent will execute CustomData after provisioning.
+
+Provisioning.PasswordCryptId:
+Type:String Default:6
+
+Algorithm used by crypt when generating password hash.
+    1 - MD5
+    2a - Blowfish
+    5 - SHA-256
+    6 - SHA-512
+
+Provisioning.PasswordCryptSaltLength
+Type:String Default:10
+
+Length of random salt used when generating password hash.
 
 ResourceDisk.Format:
 Type: Boolean Default: y

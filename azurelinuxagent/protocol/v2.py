@@ -25,7 +25,7 @@ ENDPOINT='169.254.169.254'
 #TODO use http for azure pack test
 #ENDPOINT='localhost'
 APIVERSION='2015-05-01-preview'
-BASE_URI = "http://{0}/Microsoft.Compute/{1}?api-version={{{2}}}{3}"
+BASE_URI = "http://{0}/Microsoft.Compute/{1}?api-version={2}{3}"
 
 def _add_content_type(headers):
     if headers is None:
@@ -47,12 +47,15 @@ class MetadataProtocol(Protocol):
         self.provision_status_uri = BASE_URI.format(self.endpoint,
                                                     "provisioningStatus",
                                                     self.apiversion, "")
-        self.status_uri = BASE_URI.format(self.endpoint, "status",
-                                          self.apiversion, "")
+        self.vm_status_uri = BASE_URI.format(self.endpoint, "status/vmagent",
+                                             self.apiversion, "")
+        self.ext_status_uri = BASE_URI.format(self.endpoint, 
+                                              "status/extensions/{0}",
+                                              self.apiversion, "")
         self.event_uri = BASE_URI.format(self.endpoint, "status/telemetry",
                                          self.apiversion, "")
 
-    def _get_data(self, data_type, url, headers=None):
+    def _get_data(self, url, headers=None):
         try:
             resp = restutil.http_get(url, headers=headers)
         except restutil.HttpError as e:
@@ -60,20 +63,15 @@ class MetadataProtocol(Protocol):
 
         if resp.status != httpclient.OK:
             raise ProtocolError("{0} - GET: {1}".format(resp.status, url))
-        try:
-            data = resp.read()
-            if data is None:
-                return None
-            data = json.loads(text(data, encoding="utf-8"))
-        except ValueError as e:
-            raise ProtocolError(text(e))
-        obj = data_type()
-        set_properties(obj, data)
-        return obj
 
-    def _put_data(self, url, obj, headers=None):
+        data = resp.read()
+        if data is None:
+            return None
+        data = json.loads(text(data, encoding="utf-8"))
+        return data
+
+    def _put_data(self, url, data, headers=None):
         headers = _add_content_type(headers) 
-        data = get_properties(obj)
         try:
             resp = restutil.http_put(url, json.dumps(data), headers=headers)
         except restutil.HttpError as e:
@@ -81,9 +79,8 @@ class MetadataProtocol(Protocol):
         if resp.status != httpclient.OK:
             raise ProtocolError("{0} - PUT: {1}".format(resp.status, url))
 
-    def _post_data(self, url, obj, headers=None):
+    def _post_data(self, url, data, headers=None):
         headers = _add_content_type(headers) 
-        data = get_properties(obj)
         try:
             resp = restutil.http_post(url, json.dumps(data), headers=headers)
         except restutil.HttpError as e:
@@ -95,28 +92,54 @@ class MetadataProtocol(Protocol):
         pass
 
     def get_vminfo(self):
-        return self._get_data(VMInfo, self.identity_uri)
+        vminfo = VMInfo()
+        data = self._get_data(self.identity_uri)
+        set_properties("vminfo", vminfo, data)
+        return vminfo
 
     def get_certs(self):
-        #TODO walk arround for azure pack test
+        #TODO download and save certs
         return CertList()
 
-        certs = self._get_data(CertList, self.cert_uri)
-        #TODO download pfx and convert to pem
-        return certs
+    def get_ext_handlers(self):
+        ext_list = ExtHandlerList()
+        data = self._get_data(self.ext_uri)
+        set_properties("extensionHandlers", ext_list.extHandlers, data)
+        return ext_list
 
-    def get_extensions(self):
-        return self._get_data(ExtensionList, self.ext_uri)
+    def get_ext_handler_pkgs(self, ext_handler):
+        ext_handler_pkgs = ExtHandlerPackageList()
+        data = None
+        for version_uri in ext_handler.versionUris:
+            try:
+                data = self._get_data(version_uri.uri)
+                break
+            except ProtocolError as e:
+                logger.warn("Failed to get version uris: {0}", e)
+                logger.info("Retry getting version uris")
+        set_properties("extensionPackages", ext_handler_pkgs, data)
+        return ext_handler_pkgs
 
-    def report_provision_status(self, status):
-        validata_param('status', status, ProvisionStatus)
-        self._put_data(self.provision_status_uri, status)
+    def report_provision_status(self, provision_status):
+        validata_param('provisionStatus', provision_status, ProvisionStatus)
+        data = get_properties(provision_status)
+        self._put_data(self.provision_status_uri, data)
 
-    def report_status(self, status):
-        validata_param('status', status, VMStatus)
-        self._put_data(self.status_uri, status)
+    def report_vm_status(self, vm_status):
+        validata_param('vmStatus', vm_status, VMStatus)
+        data = get_properties(vm_status)
+        self._put_data(self.vm_status_uri, data)
+
+    def report_ext_status(self, ext_handler_name, ext_name, ext_status):
+        validata_param('extensionStatus', ext_status, ExtensionStatus)
+        data = get_properties(ext_status)
+        uri = self.ext_status_uri.format(ext_name)
+        self._put_data(uri, data)
 
     def report_event(self, events):
-        validata_param('events', events, TelemetryEventList)
-        self._post_data(self.event_uri, events)
+        #TODO disable telemetry for azure stack test
+        #validata_param('events', events, TelemetryEventList)
+        #data = get_properties(events)
+        #self._post_data(self.event_uri, data)
+        pass
 

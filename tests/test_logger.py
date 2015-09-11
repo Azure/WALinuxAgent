@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 # Copyright 2014 Microsoft Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -45,9 +46,9 @@ class TestLogger(unittest.TestCase):
         _logger.info("{0} {1}", 0, 1)
         _logger.warn("{0} {1}", 0, 1)
         _logger.error("{0} {1}", 0, 1)
-        _logger.info("this is a unicode {0}", '\u6211')
-        _logger.info("this is a utf-8 {0}", '\u6211'.encode('utf-8'))
-        _logger.info("this is a gbk {0}", 0xff )
+        _logger.add_appender(logger.AppenderType.STDOUT, 
+                             logger.LogLevel.INFO, None)
+        _logger.info(u"啊哈this is a utf-8 {0}", u'呵呵')
 
     def test_file_appender(self):
         _logger = logger.Logger()
@@ -63,9 +64,6 @@ class TestLogger(unittest.TestCase):
         _logger.verbose("Verbose should not be logged: {0}", msg)
         self.assertFalse(tools.simple_file_grep('/tmp/testlog', msg))
 
-        _logger.info("this is a unicode {0}", '\u6211')
-        _logger.info("this is a utf-8 {0}", '\u6211'.encode('utf-8'))
-        _logger.info("this is a gbk {0}", 0xff)
 
     def test_concole_appender(self):
         _logger = logger.Logger()

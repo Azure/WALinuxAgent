@@ -117,22 +117,16 @@ class DefaultOSUtil(object):
                                "retcode:{1}, "
                                "output:{2}").format(username, retcode, out))
 
-    def chpasswd(self, username, password, use_salt=True, salt_type=6,
-                 salt_len=10):
+    def chpasswd(self, username, password, crypt_id=6, salt_len=10):
         if self.is_sys_user(username):
             raise OSUtilError(("User {0} is a system user. "
                                "Will not set passwd.").format(username))
-        passwd_hash = textutil.gen_password_hash(password, use_salt, salt_type,
-                                                 salt_len)
-        try:
-            passwd_content = fileutil.read_file(self.passwd_file_path)
-            passwd = passwd_content.split("\n")
-            new_passwd = [x for x in passwd if not x.startswith(username)]
-            new_passwd.append("{0}:{1}:14600::::::".format(username, passwd_hash))
-            fileutil.write_file(self.passwd_file_path, "\n".join(new_passwd))
-        except IOError as e:
+        passwd_hash = textutil.gen_password_hash(password, crypt_id, salt_len)
+        cmd = "usermod -p '{0}' {1}".format(passwd_hash, username)
+        ret, output = shellutil.run_get_output(cmd, log_cmd=False)
+        if ret != 0:
             raise OSUtilError(("Failed to set password for {0}: {1}"
-                               "").format(username, e))
+                               "").format(username, output))
 
     def conf_sudoer(self, username, nopasswd):
         # for older distros create sudoers.d

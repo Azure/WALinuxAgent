@@ -25,10 +25,13 @@ import unittest
 import os
 from azurelinuxagent.future import text
 import azurelinuxagent.utils.textutil as textutil
+from azurelinuxagent.utils.textutil import Version
 
 class TestTextUtil(unittest.TestCase):
     def test_get_password_hash(self):
-        password_hash = textutil.gen_password_hash("asdf", True, 6, 10)
+        password_hash = textutil.gen_password_hash("asdf", 6, 10)
+        self.assertNotEquals(None, password_hash)
+        password_hash = textutil.gen_password_hash("asdf", 6, 0)
         self.assertNotEquals(None, password_hash)
 
     def test_remove_bom(self):
@@ -42,6 +45,22 @@ class TestTextUtil(unittest.TestCase):
         data = textutil.remove_bom(data)
         self.assertEquals(u"h", data[0])
 
-   
+    def test_version_compare(self) :
+        self.assertTrue(Version("1.0") < Version("1.1"))
+        self.assertTrue(Version("1.9") < Version("1.10"))
+        self.assertTrue(Version("1.9.9") < Version("1.10.0"))
+        self.assertTrue(Version("1.0.0.0") < Version("1.2.0.0"))
+
+        self.assertTrue(Version("1.0") <= Version("1.1"))
+        self.assertTrue(Version("1.1") > Version("1.0"))
+        self.assertTrue(Version("1.1") >= Version("1.0"))
+
+        self.assertTrue(Version("1.0") == Version("1.0"))
+        self.assertTrue(Version("1.0") >= Version("1.0"))
+        self.assertTrue(Version("1.0") <= Version("1.0"))
+
+        self.assertTrue(Version("1.9") < "1.10")
+        self.assertTrue("1.9" < Version("1.10"))
+        
 if __name__ == '__main__':
     unittest.main()
