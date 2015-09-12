@@ -123,10 +123,15 @@ def _fetch_uri(uri, headers, chk_proxy=False):
     except restutil.HttpError as e:
         raise ProtocolError(text(e))
 
+    if(resp.status == httpclient.FORBIDDEN):
+        logger.info("Sleep to prevent throttling.")
+        time.sleep(10)
+    
     if(resp.status == httpclient.GONE):
         raise WireProtocolResourceGone(uri)
     if(resp.status != httpclient.OK):
         raise ProtocolError("{0} - {1}".format(resp.status, uri))
+    
     data = resp.read()
     if data is None:
         return None
