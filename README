@@ -95,6 +95,11 @@ installed by running:
 
 The agent's log file is kept at /var/log/waagent.log.
 
+Note: Provision Guest Agent must be enabled for Linux VM in Azure. But if you are running Linux VM created from your VHD file or unchecked the VM agent option during creating Linux VM in Azure portal, the value of provision guest agent on the VM may not be set to "True". You need run below PowerShell command to set the ProvisionGuestAgent to "True":
+
+Powershell command:
+    $vm = Get-AzureVM -ServiceName 'MyServiceName' -Name 'MyVMName'
+    $vm.GetInstance().ProvisionGuestAgent = $true
 
 UPGRADE
 
@@ -117,7 +122,11 @@ For CoreOS, use:
 
     #sudo systemctl restart waagent 
 
-The agent's log file is kept at /var/log/waagent.log.
+Check the agent version, you will see it is updated to new version:
+    #waagent -version
+or(on Ubuntu)
+    #walinuxagent -version
+
 
 
 COMMAND LINE OPTIONS
