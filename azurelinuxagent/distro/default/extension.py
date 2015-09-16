@@ -155,28 +155,28 @@ class ExtHandlersHandler(object):
             add_event(name="WALA", is_success=False, message = text(e))
             return
         
-        if ext_handlers.extHandlers is None or \
-                len(ext_handlers.extHandlers) == 0:
-            logger.verb("No extensions to handle")
-            return
 
         vm_status = prot.VMStatus()
         vm_status.vmAgent.version = AGENT_VERSION
         vm_status.vmAgent.status = "Ready"
         vm_status.vmAgent.message = "Guest Agent is running"
 
-        for ext_handler in ext_handlers.extHandlers:
-            #TODO handle extension in parallel
-            try:
-                pkg_list = protocol.get_ext_handler_pkgs(ext_handler)
-            except prot.ProtocolError as e:
-                add_event(name="WALA", is_success=False, message=text(e))
-                continue
-                
-            handler_status = self.process_extension(ext_handler, pkg_list)
-            if handler_status is not None:
-                vm_status.vmAgent.extensionHandlers.append(handler_status)
-        
+        if ext_handlers.extHandlers is None or \
+                len(ext_handlers.extHandlers) == 0:
+            logger.verb("No extensions to handle")
+        else:
+            for ext_handler in ext_handlers.extHandlers:
+                #TODO handle extension in parallel
+                try:
+                    pkg_list = protocol.get_ext_handler_pkgs(ext_handler)
+                except prot.ProtocolError as e:
+                    add_event(name="WALA", is_success=False, message=text(e))
+                    continue
+                    
+                handler_status = self.process_extension(ext_handler, pkg_list)
+                if handler_status is not None:
+                    vm_status.vmAgent.extensionHandlers.append(handler_status)
+            
         try:
             logger.verb("Report vm agent status")
             protocol.report_vm_status(vm_status)
