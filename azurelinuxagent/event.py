@@ -82,11 +82,11 @@ class EventMonitor(object):
 
     def collect_event(self, evt_file_name):
         try:
-            logger.info("Found event file: {0}", evt_file_name)
+            logger.verb("Found event file: {0}", evt_file_name)
             with open(evt_file_name, "rb") as evt_file:
             #if fail to open or delete the file, throw exception
                 json_str = evt_file.read().decode("utf-8",'ignore')
-            logger.info("Processed event file: {0}", evt_file_name)
+            logger.verb("Processed event file: {0}", evt_file_name)
             os.remove(evt_file_name)
             return json_str
         except IOError as e:
@@ -109,7 +109,7 @@ class EventMonitor(object):
                 data = json.loads(data_str)
             except ValueError as e:
                 logger.verb(data_str)
-                logger.error("Failed to decode json event file{0}", e)
+                logger.error("Failed to decode json event file: {0}", e)
                 continue
 
             event = prot.TelemetryEvent()
