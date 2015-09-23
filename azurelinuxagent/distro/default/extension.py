@@ -630,7 +630,7 @@ class ExtHandlerInstance(object):
 
         settings = {
             'publicSettings': self.ext.publicSettings,
-            'protectedSettings': self.ext.privateSettings,
+            'protectedSettings': self.ext.protectedSettings,
             'protectedSettingsCertThumbprint': self.ext.certificateThumbprint
         }
         ext_settings = {

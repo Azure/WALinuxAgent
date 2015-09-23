@@ -1018,7 +1018,7 @@ class ExtensionsConfig(object):
             ext.name = ext_handler.name
             ext.sequenceNumber = seqNo
             ext.publicSettings = handler_settings.get("publicSettings")
-            ext.privateSettings = handler_settings.get("protectedSettings")
+            ext.protectedSettings = handler_settings.get("protectedSettings")
             thumbprint = handler_settings.get("protectedSettingsCertThumbprint")
             ext.certificateThumbprint = thumbprint
             ext_handler.properties.extensions.append(ext)

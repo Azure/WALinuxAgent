@@ -141,7 +141,7 @@ class TestExtensionsConfig(unittest.TestCase):
         settings = extension.properties.extensions[0]
         self.assertEquals("4037FBF5F1F3014F99B5D6C7799E9B20E6871CB3", 
                           settings.certificateThumbprint)
-        self.assertEquals("MIICWgYJK", settings.privateSettings)
+        self.assertEquals("MIICWgYJK", settings.protectedSettings)
         self.assertEquals(json.loads('{"foo":"bar"}'), 
                           settings.publicSettings)
 

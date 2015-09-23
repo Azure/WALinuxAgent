@@ -104,11 +104,11 @@ class CertList(DataContract):
 
 class Extension(DataContract):
     def __init__(self, name=None, sequenceNumber=None, publicSettings=None,
-                 privateSettings=None, certificateThumbprint=None):
+                 protectedSettings=None, certificateThumbprint=None):
         self.name = name
         self.sequenceNumber = sequenceNumber
         self.publicSettings = publicSettings
-        self.privateSettings = privateSettings
+        self.protectedSettings = protectedSettings
         self.certificateThumbprint = certificateThumbprint
 
 class ExtHandlerProperties(DataContract):
