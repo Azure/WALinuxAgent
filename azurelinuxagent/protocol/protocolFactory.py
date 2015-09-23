@@ -44,7 +44,6 @@ def get_wire_protocol_endpoint():
 def detect_wire_protocol():
     endpoint = get_wire_protocol_endpoint()
 
-    OSUTIL.gen_transport_cert()
     protocol = WireProtocol(endpoint)
     protocol.initialize()
     logger.info("Protocol V1 found.")

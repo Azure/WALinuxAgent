@@ -63,6 +63,8 @@ class WireProtocol(Protocol):
         self.client = WireClient(endpoint)
 
     def initialize(self):
+        OSUTIL.gen_transport_cert(TRANSPORT_PRV_FILE_NAME, 
+                                  TRANSPORT_CERT_FILE_NAME)
         self.client.check_wire_protocol_version()
         self.client.update_goal_state(forced=True)
 

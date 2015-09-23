@@ -177,7 +177,7 @@ class DefaultOSUtil(object):
 
     def get_thumbprint_from_crt(self, file_name):
         cmd="{0} x509 -in {1} -fingerprint -noout".format(self.openssl_cmd,
-                                                            file_name)
+                                                          file_name)
         thumbprint = shellutil.run_get_output(cmd)[1]
         thumbprint = thumbprint.rstrip().split('=')[1].replace(':', '').upper()
         return thumbprint
@@ -386,13 +386,13 @@ class DefaultOSUtil(object):
         shellutil.run("iptables -I INPUT -p udp --dport 68 -j ACCEPT",
                       chk_err=False)
 
-    def gen_transport_cert(self):
+    def gen_transport_cert(self, prv_file, crt_file):
         """
         Create ssl certificate for https communication with endpoint server.
         """
         cmd = ("{0} req -x509 -nodes -subj /CN=LinuxTransport -days 32768 "
-               "-newkey rsa:2048 -keyout TransportPrivate.pem "
-               "-out TransportCert.pem").format(self.openssl_cmd)
+               "-newkey rsa:2048 -keyout {1} "
+               "-out {2}").format(self.openssl_cmd, prv_file, crt_file)
         shellutil.run(cmd)
 
     def remove_rules_files(self, rules_files=__RULES_FILES__):

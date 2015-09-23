@@ -108,7 +108,7 @@ class TestCurrOS(unittest.TestCase):
     def test_network_operation(self):
         OSUTIL.start_network()
         OSUTIL.allow_dhcp_broadcast()
-        OSUTIL.gen_transport_cert()
+        OSUTIL.gen_transport_cert("prv", "crt")
         mac = OSUTIL.get_mac_addr()
         self.assertNotEquals(None, mac)
         OSUTIL.is_missing_default_route()
@@ -169,6 +169,13 @@ class TestCurrOS(unittest.TestCase):
     def test_getdvd(self):
         fileutil.write_file("/tmp/sr0", '')
         OSUTIL.get_dvd_device(dev_dir='/tmp')
+
+    def test_gen_transport_cert(self):
+        prv_file = os.path.join(OSUTIL.get_lib_dir(), "prv.pem")
+        crt_file = os.path.join(OSUTIL.get_lib_dir(), "crt.pem")
+        OSUTIL.gen_transport_cert(prv_file, crt_file)
+        self.assertTrue(os.path.isfile(prv_file))
+        self.assertTrue(os.path.isfile(crt_file))
 
 if __name__ == '__main__':
     unittest.main()

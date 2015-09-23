@@ -84,6 +84,7 @@ class TestMetadataProtocol(unittest.TestCase):
     @mock(v2.MetadataProtocol, '_get_data', mock_get_data)
     def test_getters(self):
         protocol = v2.MetadataProtocol()
+        protocol.initialize()
         vminfo = protocol.get_vminfo()
         self.assertNotEquals(None, vminfo)
         self.assertNotEquals(None, vminfo.vmName)
@@ -111,6 +112,7 @@ class TestMetadataProtocol(unittest.TestCase):
     @mock(v2.MetadataProtocol, '_put_data', MockFunc())
     def test_reporters(self):
         protocol = v2.MetadataProtocol()
+        protocol.initialize()
         protocol.report_provision_status(v2.ProvisionStatus())
         protocol.report_vm_status(v2.VMStatus())
         protocol.report_ext_status("foo", "baz", v2.ExtensionStatus())

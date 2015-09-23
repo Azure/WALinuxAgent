@@ -17,6 +17,9 @@
 # Requires Python 2.4+ and Openssl 1.0+
 
 import json
+import shutil
+import os
+from azurelinuxagent.utils.osutil import OSUTIL
 from azurelinuxagent.future import httpclient, text
 import azurelinuxagent.utils.restutil as restutil
 from azurelinuxagent.protocol.common import *
@@ -26,6 +29,9 @@ ENDPOINT='169.254.169.254'
 #ENDPOINT='localhost'
 APIVERSION='2015-05-01-preview'
 BASE_URI = "http://{0}/Microsoft.Compute/{1}?api-version={2}{3}"
+
+TRANSPORT_PRV_FILE_NAME = "V2TransportCert.pem"
+TRANSPORT_CERT_FILE_NAME = "V2TransportPrivate.pem"
 
 def _add_content_type(headers):
     if headers is None:
@@ -87,9 +93,28 @@ class MetadataProtocol(Protocol):
             raise ProtocolError(text(e))
         if resp.status != httpclient.CREATED:
             raise ProtocolError("{0} - POST: {1}".format(resp.status, url))
+    
+    def _get_trans_cert(self):
+        file_name = TRANSPORT_CERT_FILE_NAME
+        if not os.path.isfile(file_name):
+            raise ProtocolError("{0} is missing.".format(file_name))
+        return fileutil.read_file(file_name)
 
     def initialize(self):
-        pass
+        trans_prv_file = os.path.join(OSUTIL.get_lib_dir(), 
+                                      TRANSPORT_PRV_FILE_NAME)
+        trans_crt_file = os.path.join(OSUTIL.get_lib_dir(), 
+                                      TRANSPORT_CERT_FILE_NAME)
+        OSUTIL.gen_transport_cert(trans_prv_file, trans_crt_file)
+
+        #"Install" the cert and private key to /var/lib/waagent
+        thumbprint = OSUTIL.get_thumbprint_from_crt(trans_crt_file)
+        prv_file = os.path.join(OSUTIL.get_lib_dir(), 
+                                "{0}.prv".format(thumbprint))
+        crt_file = os.path.join(OSUTIL.get_lib_dir(), 
+                                "{0}.crt".format(thumbprint))
+        shutil.copyfile(trans_prv_file, prv_file)
+        shutil.copyfile(trans_crt_file, crt_file)
 
     def get_vminfo(self):
         vminfo = VMInfo()
@@ -102,8 +127,11 @@ class MetadataProtocol(Protocol):
         return CertList()
 
     def get_ext_handlers(self):
+        headers = {
+            "x-ms-vmagent-public-x509-cert": self._get_trans_cert()
+        }
         ext_list = ExtHandlerList()
-        data = self._get_data(self.ext_uri)
+        data = self._get_data(self.ext_uri, headers=headers)
         set_properties("extensionHandlers", ext_list.extHandlers, data)
         return ext_list
 
