@@ -224,5 +224,13 @@ def gen_password_hash(password, crypt_id, salt_len):
     salt = "${0}${1}".format(crypt_id, salt)
     return crypt.crypt(password, salt)
 
+def get_bytes_from_pem(pem_str):
+    base64_bytes = ""
+    for line in pem_str.split('\n'):
+        if "----" not in line:
+            base64_bytes += line
+    return base64_bytes
+
+
 Version = LooseVersion
 

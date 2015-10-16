@@ -26,6 +26,7 @@ import xml.etree.ElementTree as ET
 import azurelinuxagent.logger as logger
 from azurelinuxagent.future import text, httpclient, bytebuffer
 import azurelinuxagent.utils.restutil as restutil
+import azurelinuxagent.utils.textutil as textutil
 from azurelinuxagent.utils.textutil import parse_doc, findall, find, findtext, \
                                            getattrib, gettext, remove_bom
 from azurelinuxagent.utils.osutil import OSUTIL
@@ -717,11 +718,8 @@ class WireClient(object):
         }
 
     def get_header_for_cert(self):
-        cert = ""
         content = _fetch_cache(TRANSPORT_CERT_FILE_NAME)
-        for line in content.split('\n'):
-            if "CERTIFICATE" not in line:
-                cert += line.rstrip()
+        cert = textutil.get_bytes_from_pem(content)
         return {
             "x-ms-agent-name":"WALinuxAgent",
             "x-ms-version":PROTOCOL_VERSION,

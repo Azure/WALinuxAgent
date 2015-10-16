@@ -22,6 +22,7 @@ import os
 from azurelinuxagent.utils.osutil import OSUTIL
 from azurelinuxagent.future import httpclient, text
 import azurelinuxagent.utils.restutil as restutil
+import azurelinuxagent.utils.textutil as textutil
 from azurelinuxagent.protocol.common import *
 
 ENDPOINT='169.254.169.254'
@@ -98,7 +99,8 @@ class MetadataProtocol(Protocol):
         file_name = TRANSPORT_CERT_FILE_NAME
         if not os.path.isfile(file_name):
             raise ProtocolError("{0} is missing.".format(file_name))
-        return fileutil.read_file(file_name)
+        content = fileutil.read_file(file_name)
+        return textutil.get_bytes_from_pem(content)
 
     def initialize(self):
         trans_prv_file = os.path.join(OSUTIL.get_lib_dir(), 

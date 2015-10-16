@@ -45,7 +45,7 @@ class TestTextUtil(unittest.TestCase):
         data = textutil.remove_bom(data)
         self.assertEquals(u"h", data[0])
 
-    def test_version_compare(self) :
+    def test_version_compare(self):
         self.assertTrue(Version("1.0") < Version("1.1"))
         self.assertTrue(Version("1.9") < Version("1.10"))
         self.assertTrue(Version("1.9.9") < Version("1.10.0"))
@@ -61,6 +61,20 @@ class TestTextUtil(unittest.TestCase):
 
         self.assertTrue(Version("1.9") < "1.10")
         self.assertTrue("1.9" < Version("1.10"))
+
+    def test_get_bytes_from_pem(self):
+        content = ("-----BEGIN CERTIFICATE-----\n"
+                   "certificate\n"
+                   "-----END CERTIFICATE----\n")
+        base64_bytes = textutil.get_bytes_from_pem(content)
+        self.assertEquals("certificate", base64_bytes)
+
+
+        content = ("-----BEGIN PRIVATE KEY-----\n"
+                   "private key\n"
+                   "-----END PRIVATE Key-----\n")
+        base64_bytes = textutil.get_bytes_from_pem(content)
+        self.assertEquals("private key", base64_bytes)
         
 if __name__ == '__main__':
     unittest.main()
