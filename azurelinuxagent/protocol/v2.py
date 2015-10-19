@@ -31,8 +31,8 @@ ENDPOINT='169.254.169.254'
 APIVERSION='2015-05-01-preview'
 BASE_URI = "http://{0}/Microsoft.Compute/{1}?api-version={2}{3}"
 
-TRANSPORT_PRV_FILE_NAME = "V2TransportCert.pem"
-TRANSPORT_CERT_FILE_NAME = "V2TransportPrivate.pem"
+TRANSPORT_PRV_FILE_NAME = "V2TransportPrivate.pem"
+TRANSPORT_CERT_FILE_NAME = "V2TransportCert.pem"
 
 def _add_content_type(headers):
     if headers is None:
