@@ -22,7 +22,6 @@ from azurelinuxagent.metadata import AGENT_NAME, AGENT_VERSION, \
                                      AGENT_DESCRIPTION, \
                                      DISTRO_NAME, DISTRO_VERSION, DISTRO_FULL_NAME
 
-from azurelinuxagent.utils.osutil import OSUTIL
 import azurelinuxagent.agent as agent
 import setuptools
 from setuptools import find_packages
