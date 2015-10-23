@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Windows Azure Linux Agent setup.py
+# Microsoft Azure Linux Agent setup.py
 #
 # Copyright 2013 Microsoft Corporation
 #

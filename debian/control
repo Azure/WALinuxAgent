@@ -20,10 +20,10 @@ Depends: python (>= 2.4),
          ${misc:Depends},
          ${python:Depends}
 Conflicts: network-manager
-Description: Windows Azure Linux Agent
- The Windows Azure Linux Agent supports the provisioning and running of Linux
- VMs in the Windows Azure cloud. This package should be installed on Linux
- disk images that are built to run in the Windows Azure environment.
+Description: Microsoft Azure Linux Agent
+ The Microsoft Azure Linux Agent supports the provisioning and running of Linux
+ VMs in the Microsoft Azure cloud. This package should be installed on Linux
+ disk images that are built to run in the Microsoft Azure environment.
 
 Package: walinuxagent-data-saver
 Architecture: i386 amd64

@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Windows Azure Linux Agent
+# Microsoft Azure Linux Agent
 #
 # Copyright 2015 Microsoft Corporation
 #
@@ -79,7 +79,7 @@ if not hasattr(subprocess,'check_output'):
     subprocess.CalledProcessError=CalledProcessError
     
 GuestAgentName = "WALinuxAgent"
-GuestAgentLongName = "Windows Azure Linux Agent"
+GuestAgentLongName = "Microsoft Azure Linux Agent"
 GuestAgentVersion = "WALinuxAgent-2.0.15-pre"
 ProtocolVersion = "2012-11-30" #WARNING this value is used to confirm the correct fabric protocol.
 
@@ -106,7 +106,7 @@ HandlerStatusToAggStatus = {"installed":"Installing", "enabled":"Ready", "uninta
 
 WaagentConf = """\
 #
-# Windows Azure Linux Agent Configuration
+# Microsoft Azure Linux Agent Configuration
 #
 
 Role.StateConsumer=None                 # Specified program is invoked with the argument "Ready" when we report ready status
@@ -126,7 +126,7 @@ ResourceDisk.MountPoint=/mnt/resource   #
 ResourceDisk.EnableSwap=n               # Create and use swapfile on resource disk.
 ResourceDisk.SwapSizeMB=0               # Size of the swapfile.
 
-LBProbeResponder=y                      # Respond to load balancer probes if requested by Windows Azure.
+LBProbeResponder=y                      # Respond to load balancer probes if requested by Microsoft Azure.
 
 Logs.Verbose=n                          # Enable verbose logs
 
@@ -656,7 +656,7 @@ command=/usr/sbin/waagent
 pidfile=/var/run/waagent.pid
 command_args=-daemon
 command_background=true
-name="Windows Azure Linux Agent"
+name="Microsoft Azure Linux Agent"
 
 depend()
 {
@@ -725,7 +725,7 @@ class gentooDistro(AbstractDistro):
 suse_init_file = """\
 #! /bin/sh
 #
-# Windows Azure Linux Agent sysV init script
+# Microsoft Azure Linux Agent sysV init script
 #
 # Copyright 2013 Microsoft Corporation
 # Copyright SUSE LLC
@@ -751,12 +751,12 @@ suse_init_file = """\
 # System startup script for the waagent
 #
 ### BEGIN INIT INFO
-# Provides: WindowsAzureLinuxAgent
+# Provides: MicrosoftAzureLinuxAgent
 # Required-Start: $network sshd
 # Required-Stop: $network sshd
 # Default-Start: 3 5
 # Default-Stop: 0 1 2 6
-# Description: Start the WindowsAzureLinuxAgent
+# Description: Start the MicrosoftAzureLinuxAgent
 ### END INIT INFO
 
 PYTHON=/usr/bin/python
@@ -789,14 +789,14 @@ rc_reset
 
 case "$1" in
     start)
-        echo -n "Starting WindowsAzureLinuxAgent"
+        echo -n "Starting MicrosoftAzureLinuxAgent"
         ## Start daemon with startproc(8). If this fails
         ## the echo return value is set appropriate.
         startproc -f ${PYTHON} ${WAZD_BIN} -daemon
         rc_status -v
         ;;
     stop)
-        echo -n "Shutting down WindowsAzureLinuxAgent"
+        echo -n "Shutting down MicrosoftAzureLinuxAgent"
         ## Stop daemon with killproc(8) and if this fails
         ## set echo the echo return value.
         killproc -p ${WAZD_PIDFILE} ${PYTHON} ${WAZD_BIN}
@@ -820,7 +820,7 @@ case "$1" in
         rc_status
         ;;
     status)
-        echo -n "Checking for service WindowsAzureLinuxAgent "
+        echo -n "Checking for service MicrosoftAzureLinuxAgent "
         ## Check status with checkproc(8), if process is running
         ## checkproc will return with exit status 0.
 
@@ -902,17 +902,17 @@ class SuSEDistro(AbstractDistro):
 redhat_init_file= """\
 #!/bin/bash
 #
-# Init file for WindowsAzureLinuxAgent.
+# Init file for MicrosoftAzureLinuxAgent.
 #
 # chkconfig: 2345 60 80
-# description: WindowsAzureLinuxAgent
+# description: MicrosoftAzureLinuxAgent
 #
 
 # source function library
 . /etc/rc.d/init.d/functions
 
 RETVAL=0
-FriendlyName="WindowsAzureLinuxAgent"
+FriendlyName="MicrosoftAzureLinuxAgent"
 WAZD_BIN=/usr/sbin/waagent
 
 start()
@@ -1194,15 +1194,15 @@ class CoreOSDistro(AbstractDistro):
 debian_init_file = """\
 #!/bin/sh
 ### BEGIN INIT INFO
-# Provides:          WindowsAzureLinuxAgent
+# Provides:          MicrosoftAzureLinuxAgent
 # Required-Start:    $network $syslog
 # Required-Stop:     $network $syslog
 # Should-Start:      $network $syslog
 # Should-Stop:       $network $syslog
 # Default-Start:     2 3 4 5
 # Default-Stop:      0 1 6
-# Short-Description: WindowsAzureLinuxAgent
-# Description:       WindowsAzureLinuxAgent
+# Short-Description: MicrosoftAzureLinuxAgent
+# Description:       MicrosoftAzureLinuxAgent
 ### END INIT INFO
 
 . /lib/lsb/init-functions
@@ -1213,7 +1213,7 @@ WAZD_PID=/var/run/waagent.pid
 
 case "$1" in
     start)
-        log_begin_msg "Starting WindowsAzureLinuxAgent..."
+        log_begin_msg "Starting MicrosoftAzureLinuxAgent..."
         pid=$( pidofproc $WAZD_BIN )
         if [ -n "$pid" ] ; then
               log_begin_msg "Already running."
@@ -1225,7 +1225,7 @@ case "$1" in
         ;;
 
     stop)
-        log_begin_msg "Stopping WindowsAzureLinuxAgent..."
+        log_begin_msg "Stopping MicrosoftAzureLinuxAgent..."
         start-stop-daemon --stop --quiet --oknodo --pidfile $WAZD_PID
         ret=$?
         rm -f $WAZD_PID
@@ -1350,7 +1350,7 @@ class KaliDistro(debianDistro):
 #	UbuntuDistro
 ############################################################    
 ubuntu_upstart_file = """\
-#walinuxagent - start Windows Azure agent
+#walinuxagent - start Microsoft Azure agent
 
 description "walinuxagent"
 author "Ben Howard <ben.howard@canonical.com>"
@@ -1474,7 +1474,7 @@ class LinuxMintDistro(UbuntuDistro):
 ############################################################    
 fedora_systemd_service = """\
 [Unit]
-Description=Windows Azure Linux Agent
+Description=Microsoft Azure Linux Agent
 After=network.target
 After=sshd.service
 ConditionFileIsExecutable=/usr/sbin/waagent
@@ -1599,7 +1599,7 @@ class fedoraDistro(redhatDistro):
 ############################################################    
 FreeBSDWaagentConf = """\
 #
-# Windows Azure Linux Agent Configuration
+# Microsoft Azure Linux Agent Configuration
 #
 
 Role.StateConsumer=None                 # Specified program is invoked with the argument "Ready" when we report ready status
@@ -1619,7 +1619,7 @@ ResourceDisk.MountPoint=/mnt/resource   #
 ResourceDisk.EnableSwap=n               # Create and use swapfile on resource disk.
 ResourceDisk.SwapSizeMB=0               # Size of the swapfile.
 
-LBProbeResponder=y                      # Respond to load balancer probes if requested by Windows Azure.
+LBProbeResponder=y                      # Respond to load balancer probes if requested by Microsoft Azure.
 
 Logs.Verbose=n                          # Enable verbose logs
 
@@ -5086,7 +5086,7 @@ class Agent(Util):
                         name = "DefaultGateway"
                     else:
                         endpoint = IpAddress
-                        name = "Windows Azure wire protocol endpoint"
+                        name = "Microsoft Azure wire protocol endpoint"
                     LogIfVerbose(name + ": " + IpAddress + " at " + hex(i))
                 else:
                     Error("HandleDhcpResponse: Data too small for option " + str(option))
@@ -5098,7 +5098,7 @@ class Agent(Util):
     def DoDhcpWork(self):
         """
         Discover the wire server via DHCP option 245.
-        And workaround incompatibility with Windows Azure DHCP servers.
+        And workaround incompatibility with Microsoft Azure DHCP servers.
         """
         ShortSleep = False # Sleep 1 second before retrying DHCP queries.
         ifname=None
@@ -5212,7 +5212,7 @@ class Agent(Util):
         if not goalStateXml:
             Error("UpdateGoalState failed.")
             return
-        Log("Retrieved GoalState from Windows Azure Fabric.")
+        Log("Retrieved GoalState from Microsoft Azure Fabric.")
         self.GoalState = GoalState(self).Parse(goalStateXml)
         return self.GoalState
 
@@ -5524,15 +5524,15 @@ class Agent(Util):
         except:
             pass
 
-        Log("Probing for Windows Azure environment.")
+        Log("Probing for Microsoft Azure environment.")
         self.Endpoint = self.DoDhcpWork()
 
         if self.Endpoint == None:
-            Log("Windows Azure environment not detected.")
+            Log("Microsoft Azure environment not detected.")
             while True:
                 time.sleep(60)
 
-        Log("Discovered Windows Azure endpoint: " + self.Endpoint)
+        Log("Discovered Microsoft Azure endpoint: " + self.Endpoint)
         if not self.CheckVersions():
             Error("Agent.CheckVersions failed")
             sys.exit(1)

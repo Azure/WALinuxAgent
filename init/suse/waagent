@@ -1,6 +1,6 @@
 #! /bin/sh
 #
-# Windows Azure Linux Agent sysV init script
+# Microsoft Azure Linux Agent sysV init script
 #
 # Copyright 2013 Microsoft Corporation
 # Copyright SUSE LLC
@@ -26,12 +26,12 @@
 # System startup script for the waagent
 #
 ### BEGIN INIT INFO
-# Provides: WindowsAzureLinuxAgent
+# Provides: MicrosoftAzureLinuxAgent
 # Required-Start: $network sshd
 # Required-Stop: $network sshd
 # Default-Start: 3 5
 # Default-Stop: 0 1 2 6
-# Description: Start the WindowsAzureLinuxAgent
+# Description: Start the MicrosoftAzureLinuxAgent
 ### END INIT INFO
 
 PYTHON=/usr/bin/python
@@ -64,14 +64,14 @@ rc_reset
 
 case "$1" in
     start)
-        echo -n "Starting WindowsAzureLinuxAgent"
+        echo -n "Starting MicrosoftAzureLinuxAgent"
         ## Start daemon with startproc(8). If this fails
         ## the echo return value is set appropriate.
         startproc -f ${PYTHON} ${WAZD_BIN} -start
         rc_status -v
         ;;
     stop)
-        echo -n "Shutting down WindowsAzureLinuxAgent"
+        echo -n "Shutting down MicrosoftAzureLinuxAgent"
         ## Stop daemon with killproc(8) and if this fails
         ## set echo the echo return value.
         killproc -p ${WAZD_PIDFILE} ${PYTHON} ${WAZD_BIN}
@@ -95,7 +95,7 @@ case "$1" in
         rc_status
         ;;
     status)
-        echo -n "Checking for service WindowsAzureLinuxAgent "
+        echo -n "Checking for service MicrosoftAzureLinuxAgent "
         ## Check status with checkproc(8), if process is running
         ## checkproc will return with exit status 0.
 

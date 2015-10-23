@@ -1,4 +1,4 @@
-# Windows Azure Linux Agent
+# Microsoft Azure Linux Agent
 #
 # Copyright 2014 Microsoft Corporation
 #
