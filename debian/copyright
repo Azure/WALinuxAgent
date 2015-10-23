@@ -1,7 +1,7 @@
 Format: http://www.debian.org/doc/packaging-manuals/copyright-format/1.0
 Upstream-Name: walinuxagent
 Upstream-Contact: Microsoft Corporation <walinuxagent@microsoft.com>
-Source: https://github.com/Windows-Azure/WALinuxAgent/
+Source: https://github.com/Azure/WALinuxAgent/
 
 Files: *
 Copyright: 2012, Microsoft Corporation <walinuxagent@microsoft.com>

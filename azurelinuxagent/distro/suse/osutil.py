@@ -79,6 +79,26 @@ class SUSEOSUtil(SUSE11OSUtil):
         super(SUSEOSUtil, self).__init__()
         self.dhclient_name = 'wickedd-dhcp4'
 
+    def stop_dhcp_service(self):
+        cmd = "systemctl stop {0}".format(self.dhclient_name)
+        return shellutil.run(cmd, chk_err=False)
+
+    def start_dhcp_service(self):
+        cmd = "systemctl start {0}".format(self.dhclient_name)
+        return shellutil.run(cmd, chk_err=False)
+
+    def start_network(self) :
+        return shellutil.run("systemctl start network", chk_err=False)
+
+    def restart_ssh_service(self):
+        return shellutil.run("systemctl restart sshd", chk_err=False)
+
+    def stop_agent_service(self):
+        return shellutil.run("systemctl stop waagent", chk_err=False)
+
+    def start_agent_service(self):
+        return shellutil.run("systemctl start waagent", chk_err=False)
+
     def register_agent_service(self):
         return shellutil.run("systemctl enable waagent", chk_err=False)
 
