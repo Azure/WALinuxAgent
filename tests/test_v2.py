@@ -109,6 +109,7 @@ class TestMetadataProtocol(unittest.TestCase):
         packages = protocol.get_ext_handler_pkgs(ext_handers.extHandlers[0])
         self.assertNotEquals(None, packages)
     
+    @mock(v2.MetadataProtocol, '_get_data', mock_get_data)
     @mock(v2.MetadataProtocol, '_put_data', MockFunc())
     def test_reporters(self):
         protocol = v2.MetadataProtocol()

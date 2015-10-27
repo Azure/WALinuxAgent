@@ -19,6 +19,7 @@
 import json
 import shutil
 import os
+import time
 from azurelinuxagent.utils.osutil import OSUTIL
 from azurelinuxagent.future import httpclient, text
 import azurelinuxagent.utils.restutil as restutil
@@ -33,6 +34,10 @@ BASE_URI = "http://{0}/Microsoft.Compute/{1}?api-version={2}{3}"
 
 TRANSPORT_PRV_FILE_NAME = "V2TransportPrivate.pem"
 TRANSPORT_CERT_FILE_NAME = "V2TransportCert.pem"
+
+#TODO remote workarround for azure stack test
+MAX_PING = 30
+RETRY_PING_INTERVAL = 10
 
 def _add_content_type(headers):
     if headers is None:
@@ -117,6 +122,17 @@ class MetadataProtocol(Protocol):
                                 "{0}.crt".format(thumbprint))
         shutil.copyfile(trans_prv_file, prv_file)
         shutil.copyfile(trans_crt_file, crt_file)
+
+        #TODO remote workarround for azure stack test
+        for retry in range(0, MAX_PING):
+            try:
+                self.get_vminfo()
+                return
+            except ProtocolError as e:
+                logger.warn("Metadata server is not ready, retry = {0}", retry)
+            if retry < MAX_PING - 1:
+                time.sleep(RETRY_PING_INTERVAL)
+        raise ProtocolNotFound("Metadata server endpoint is not reachable")
 
     def get_vminfo(self):
         vminfo = VMInfo()
