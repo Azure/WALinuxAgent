@@ -2119,6 +2119,21 @@ class FreeBSDDistro(AbstractDistro):
 ############################################################
 #	archDistro
 ############################################################
+arch_systemd_service = """\
+[Unit]
+Description=Azure Linux Agent
+After=network.target
+After=sshd.service
+ConditionFileIsExecutable=/usr/sbin/waagent
+ConditionPathExists=/etc/waagent.conf
+
+[Service]
+Type=simple
+ExecStart=/usr/sbin/python2 /usr/sbin/waagent -daemon
+
+[Install]
+WantedBy=multi-user.target
+"""
 class archDistro(AbstractDistro):
     """
     Arch Distro concrete class
@@ -2129,14 +2144,40 @@ class archDistro(AbstractDistro):
         super(archDistro, self).__init__()
         self.requiredDeps += [ "/usr/bin/systemctl" ]
         self.service_cmd = '/usr/bin/systemctl'
+        self.agent_service_name = 'waagent'
+        self.init_script_file = '/usr/lib/systemd/system/' + self.agent_service_name + '.service'
+        self.init_file = arch_systemd_service
         self.ssh_service_name='sshd'
         self.requiredPackages = ['net-tools', 'parted']
 
-    """
+    def installAgentServiceScriptFiles(self):
+        SetFileContents(self.init_script_file, self.init_file)
+        os.chmod(self.init_script_file, 0644)
+        return Run(self.service_cmd + ' daemon-reload')
+
+    def uninstallAgentService(self):
+        return Run("rm -f " + self.init_script_file)
+
+    def registerAgentService(self):
+        self.installAgentServiceScriptFiles()
+        return Run(self.service_cmd + ' enable ' + self.agent_service_name)
+
+    def unregisterAgentService(self):
+        self.stopAgentService()
+        Run(self.service_cmd + ' disable ' + self.agent_service_name)
+        self.uninstallAgentService()
+        
+    def startAgentService(self):
+        return Run(self.service_cmd + ' start ' + self.agent_service_name)
+
+    def stopAgentService(self):
+        return Run(self.service_cmd + ' stop '  + self.agent_service_name, False)
+        
+    def checkPackageInstalled(self,p):
+        """
         Check that the package is installed.
         Return 1 if installed, 0 if not installed.
-    """
-    def checkPackageInstalled(self,p):
+        """
         if Run('pacman -Qq ' + p,chk_err=False):
             return 0
         else:
@@ -2166,6 +2207,7 @@ class archDistro(AbstractDistro):
             return 1
         else :
             return 0
+
 ############################################################
 # END DISTRO CLASS DEFS
 ############################################################  
