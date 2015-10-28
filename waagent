@@ -2148,7 +2148,9 @@ class archDistro(AbstractDistro):
         self.init_script_file = '/usr/lib/systemd/system/' + self.agent_service_name + '.service'
         self.init_file = arch_systemd_service
         self.ssh_service_name='sshd'
-        self.requiredPackages = ['net-tools', 'parted']
+        self.requiredPackages = ['net-tools', 'parted', 'sudo']
+        self.dhcp_client_name='systemd-networkd'
+        self.dhcp_enabled = True
 
     def installAgentServiceScriptFiles(self):
         SetFileContents(self.init_script_file, self.init_file)
@@ -2171,8 +2173,24 @@ class archDistro(AbstractDistro):
         return Run(self.service_cmd + ' start ' + self.agent_service_name)
 
     def stopAgentService(self):
-        return Run(self.service_cmd + ' stop '  + self.agent_service_name, False)
-        
+        return Run(self.service_cmd + ' stop '  + self.agent_service_name)
+
+    def restartSshService(self):
+        sshRestartCmd = self.service_cmd + " " +  self.ssh_service_restart_option + " " + self.ssh_service_name
+        retcode = Run(sshRestartCmd)
+        if retcode > 0:
+            Error("Failed to restart SSH service with return code:" + str(retcode))
+        return retcode
+
+    def RestartInterface(self, iface):
+        Run(self.service_cmd + " restart systemd-networkd")
+
+    def startDHCP(self):
+        Run(self.service_cmd + " start " + self.dhcp_client_name, chk_err=False)
+
+    def stopDHCP(self):
+        Run(self.service_cmd + " stop " + self.dhcp_client_name, chk_err=False)
+
     def checkPackageInstalled(self,p):
         """
         Check that the package is installed.
