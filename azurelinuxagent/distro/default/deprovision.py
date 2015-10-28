@@ -19,6 +19,7 @@
 
 import azurelinuxagent.conf as conf
 from azurelinuxagent.utils.osutil import OSUTIL
+from azurelinuxagent.future import read_input
 import azurelinuxagent.protocol as prot
 import azurelinuxagent.protocol.ovfenv as ovf
 import azurelinuxagent.utils.fileutil as fileutil
@@ -107,7 +108,7 @@ class DeprovisionHandler(object):
             print(warning)
 
         if not force:
-            confirm = input("Do you want to proceed (y/n)")
+            confirm = read_input("Do you want to proceed (y/n)")
             if not confirm.lower().startswith('y'):
                 return
 
