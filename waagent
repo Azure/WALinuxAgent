@@ -2117,6 +2117,56 @@ class FreeBSDDistro(AbstractDistro):
         Run("/sbin/route add -net " + net + " " + mask + " " + gateway, chk_err=False)
 
 ############################################################
+#	archDistro
+############################################################
+class archDistro(AbstractDistro):
+    """
+    Arch Distro concrete class
+    Put Arch specific behavior here...
+    """
+
+    def __init__(self):
+        super(archDistro, self).__init__()
+        self.requiredDeps += [ "/usr/bin/systemctl" ]
+        self.service_cmd = '/usr/bin/systemctl'
+        self.ssh_service_name='sshd'
+        self.requiredPackages = ['net-tools', 'parted']
+
+    """
+        Check that the package is installed.
+        Return 1 if installed, 0 if not installed.
+    """
+    def checkPackageInstalled(self,p):
+        if Run('pacman -Qq ' + p,chk_err=False):
+            return 0
+        else:
+            return 1
+
+    def checkDependencies(self):
+        """
+        Arch dependency check.  python-pyasn1 is NOT needed.
+        Return 1 unless all dependencies are satisfied.
+        """
+        for a in self.requiredPackages :
+            if not self.checkPackageInstalled(a):
+                Error("Package " + a + " is required but not installed.")
+                return 1
+
+        for a in self.requiredDeps:
+            if Run("which " + a + " > /dev/null 2>&1",chk_err=False):
+                Error("Missing required dependency: " + a)
+                return 1
+        return 0
+
+    def sshDeployPublicKey(self,fprint,path):
+        """
+        We support PKCS8.
+        """
+        if Run("ssh-keygen -i -m PKCS8 -f " + fprint + " >> " + path):
+            return 1
+        else :
+            return 0
+############################################################
 # END DISTRO CLASS DEFS
 ############################################################  
 
