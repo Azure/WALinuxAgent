@@ -5927,13 +5927,17 @@ def DistInfo(fullname=0):
         release = re.sub('\-.*\Z', '', str(platform.release()))
         distinfo = ['FreeBSD', release]
         return distinfo
-    
+
+    distinfo = ['', '', '']
     if 'linux_distribution' in dir(platform):
         distinfo = list(platform.linux_distribution(full_distribution_name=fullname))
         distinfo[0] = distinfo[0].strip() # remove trailing whitespace in distro name
-        return distinfo
     else:
-        return platform.dist()
+        distinfo = platform.dist()
+    if distinfo[0] == '' :
+        distinfo = platform.dist(supported_dists=('arch'))
+
+    return distinfo
 
 def PackagedInstall(buildroot):
     """
