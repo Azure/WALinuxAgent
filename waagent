@@ -5914,6 +5914,9 @@ def GetMyDistro(dist_class_name=''):
         dist_class_name=Distro+'Distro'
     else:
         Distro=dist_class_name
+    if dist_class_name == 'Distro':
+        print 'Cannot detect distribution type.'
+        return None
     if not globals().has_key(dist_class_name):
         print Distro+' is not a supported distribution.'
         return None
