@@ -64,7 +64,7 @@ def _http_request(method, host, rel_uri, port=None, data=None, secure=False,
             conn = httpclient.HTTPSConnection(proxy_host, proxy_port)
             conn.set_tunnel(host, port)
             #If proxy is used, full url is needed.
-            url = "https://{0}:{1}{2}".format(host, port, rel_uri, timeout=10)
+            url = "https://{0}:{1}{2}".format(host, port, rel_uri)
         else:
             conn = httpclient.HTTPSConnection(host, port, timeout=10)
             url = rel_uri
@@ -73,7 +73,7 @@ def _http_request(method, host, rel_uri, port=None, data=None, secure=False,
         if proxy_host is not None and proxy_port is not None:
             conn = httpclient.HTTPConnection(proxy_host, proxy_port)
             #If proxy is used, full url is needed.
-            url = "http://{0}:{1}{2}".format(host, port, rel_uri, timeout=10)
+            url = "http://{0}:{1}{2}".format(host, port, rel_uri)
         else:
             conn = httpclient.HTTPConnection(host, port, timeout=10)
             url = rel_uri
