@@ -23,6 +23,7 @@ import threading
 import time
 import azurelinuxagent.logger as logger
 import azurelinuxagent.conf as conf
+import azurelinuxagent.protocol.dhcp as dhcp
 from azurelinuxagent.utils.osutil import OSUTIL
 
 class EnvHandler(object):
@@ -34,7 +35,8 @@ class EnvHandler(object):
     If new scsi disk found, set
     """
     def __init__(self, handlers):
-        self.monitor = EnvMonitor(handlers.dhcp_handler)
+        self.handlers = handlers
+        self.monitor = EnvMonitor()
 
     def start(self):
         self.monitor.start()
@@ -44,14 +46,14 @@ class EnvHandler(object):
 
 class EnvMonitor(object):
 
-    def __init__(self, dhcp_handler):
-        self.dhcp_handler = dhcp_handler
+    def __init__(self):
         self.stopped = True
         self.hostname = None
         self.dhcpid = None
         self.server_thread=None
 
     def start(self):
+        self.dhcp_resp = dhcp.DHCPCLIENT.get_dhcp_resp()
         if not self.stopped:
             logger.info("Stop existing env monitor service.")
             self.stop()
@@ -102,7 +104,7 @@ class EnvMonitor(object):
         if newpid is not None and newpid != self.dhcpid:
            logger.info("EnvMonitor: Detected dhcp client restart. "
                        "Restoring routing table.")
-           self.dhcp_handler.conf_routes()
+           self.dhcp_resp.conf_routes()
            self.dhcpid = newpid
 
     def stop(self):

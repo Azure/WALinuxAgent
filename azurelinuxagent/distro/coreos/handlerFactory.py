@@ -23,5 +23,5 @@ from azurelinuxagent.distro.default.handlerFactory import DefaultHandlerFactory
 class CoreOSHandlerFactory(DefaultHandlerFactory):
     def __init__(self):
         super(CoreOSHandlerFactory, self).__init__()
-        self.deprovision_handler = CoreOSDeprovisionHandler()
+        self.deprovision_handler = CoreOSDeprovisionHandler(self)
 

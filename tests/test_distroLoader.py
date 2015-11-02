@@ -31,7 +31,6 @@ class TestDistroLoader(unittest.TestCase):
         self.assertNotEquals(None, HANDLERS.init_handler)
         self.assertNotEquals(None, HANDLERS.main_handler)
         self.assertNotEquals(None, HANDLERS.scvmm_handler)
-        self.assertNotEquals(None, HANDLERS.dhcp_handler)
         self.assertNotEquals(None, HANDLERS.env_handler)
         self.assertNotEquals(None, HANDLERS.provision_handler)
         self.assertNotEquals(None, HANDLERS.resource_disk_handler)

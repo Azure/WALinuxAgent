@@ -26,6 +26,8 @@ VMM_CONF_FILE_NAME = "linuxosconfiguration.xml"
 VMM_STARTUP_SCRIPT_NAME= "install"
 
 class ScvmmHandler(object):
+    def __init__(self, handlers):
+        self.handlers = handlers
 
     def detect_scvmm_env(self):
         logger.info("Detecting Microsoft System Center VMM Environment")

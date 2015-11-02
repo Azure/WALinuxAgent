@@ -27,6 +27,7 @@ import platform
 import azurelinuxagent.logger as logger
 from azurelinuxagent.future import text
 import azurelinuxagent.protocol as prot
+from azurelinuxagent.protocol.factory import PROT_FACTORY
 from azurelinuxagent.metadata import DISTRO_NAME, DISTRO_VERSION, \
                                      DISTRO_CODE_NAME, AGENT_VERSION
 from azurelinuxagent.utils.osutil import OSUTIL
@@ -67,7 +68,7 @@ class EventMonitor(object):
         self.sysinfo.append(prot.TelemetryEventParam("Processors",
                                                      OSUTIL.get_processor_cores()))
         try:
-            protocol = prot.FACTORY.get_default_protocol()
+            protocol = PROT_FACTORY.get_protocol()
             vminfo = protocol.get_vminfo()
             self.sysinfo.append(prot.TelemetryEventParam("VMName",
                                                          vminfo.vmName))
@@ -109,7 +110,7 @@ class EventMonitor(object):
                 data = json.loads(data_str)
             except ValueError as e:
                 logger.verb(data_str)
-                logger.error("Failed to decode json event file: {0}", e)
+                logger.verb("Failed to decode json event file: {0}", e)
                 continue
 
             event = prot.TelemetryEvent()
@@ -120,7 +121,7 @@ class EventMonitor(object):
             return
         
         try:
-            protocol = prot.FACTORY.get_default_protocol()
+            protocol = PROT_FACTORY.get_protocol()
             protocol.report_event(event_list)
         except prot.ProtocolError as e:
             logger.error("{0}", e)

@@ -27,7 +27,7 @@ import json
 import azurelinuxagent.logger as logger
 from azurelinuxagent.utils.osutil import OSUTIL
 import azurelinuxagent.utils.fileutil as fileutil
-import azurelinuxagent.protocol as prot
+import azurelinuxagent.protocol.common as prot
 import azurelinuxagent.distro.default.extension as ext
 
 ext_sample_json = {

@@ -24,9 +24,10 @@ import azurelinuxagent.logger as logger
 from azurelinuxagent.future import text
 import azurelinuxagent.conf as conf
 from azurelinuxagent.event import add_event, WALAEventOperation
-from azurelinuxagent.exception import *
+from azurelinuxagent.exception import ProvisionError
 from azurelinuxagent.utils.osutil import OSUTIL, OSUtilError
-import azurelinuxagent.protocol as prot
+from azurelinuxagent.protocol.factory import PROT_FACTORY, ProvisionStatus, \
+                                             ProtocolError
 import azurelinuxagent.protocol.ovfenv as ovf
 import azurelinuxagent.utils.shellutil as shellutil
 import azurelinuxagent.utils.fileutil as fileutil
@@ -35,58 +36,65 @@ CUSTOM_DATA_FILE="CustomData"
 
 class ProvisionHandler(object):
 
+    def __init__(self, handlers):
+        self.handlers = handlers
+
+    def report_event(self, message, is_success=False):
+        add_event(name="WALA", message=message, is_success=is_success,
+                  op=WALAEventOperation.Provision)
+
+    def report_not_ready(self, protocol, sub_status, description):
+        status = ProvisionStatus(status="NotReady", subStatus=sub_status,
+                                 description=description)
+        try:
+            protocol.report_provision_status(status)
+        except ProtocolError as e:
+            self.report_event(text(e))
+
+    def report_ready(self, protocol, thumbprint=None):
+        status = ProvisionStatus(status="Ready")
+        status.properties.certificateThumbprint = thumbprint
+        try:
+            protocol.report_provision_status(status)
+        except ProtocolError as e:
+            self.report_event(text(e))
+
     def process(self):
         #If provision is not enabled, return
         if not conf.get_switch("Provisioning.Enabled", True):
             logger.info("Provisioning is disabled. Skip.")
-            return
+            return 
 
         provisioned = os.path.join(OSUTIL.get_lib_dir(), "provisioned")
         if os.path.isfile(provisioned):
             return
 
-        logger.info("run provision handler.")
-        protocol = prot.FACTORY.get_default_protocol()
+        logger.info("Run provision handler.")
+        logger.info("Copy ovf-env.xml.")
         try:
-            status = prot.ProvisionStatus(status="NotReady",
-                                          subStatus="Provisioning",
-                                          description="Starting")
-            try:
-                protocol.report_provision_status(status)
-            except prot.ProtocolError as e:
-                add_event(name="WALA", is_success=False, message=text(e),
-                          op=WALAEventOperation.Provision)
-
-            self.provision()
+            ovfenv = ovf.copy_ovf_env()
+        except ProtocolError as e:
+            self.report_event("Failed to copy ovf-env.xml: {0}".format(e))
+            return
+    
+        protocol = PROT_FACTORY.detect_protocol_by_file()
+        self.report_not_ready(protocol, "Provisioning", "Starting")
+        
+        try:
+            logger.info("Start provisioning")
+            self.provision(ovfenv)
             fileutil.write_file(provisioned, "")
             thumbprint = self.reg_ssh_host_key()
-
             logger.info("Finished provisioning")
-            status = prot.ProvisionStatus(status="Ready")
-            status.properties.certificateThumbprint = thumbprint
-
-            try:
-                protocol.report_provision_status(status)
-            except prot.ProtocolError as pe:
-                add_event(name="WALA", is_success=False, message=text(pe),
-                          op=WALAEventOperation.Provision)
-
-            add_event(name="WALA", is_success=True, message="",
-                      op=WALAEventOperation.Provision)
         except ProvisionError as e:
             logger.error("Provision failed: {0}", e)
-            status = prot.ProvisionStatus(status="NotReady",
-                                          subStatus="ProvisioningFailed",
-                                          description= text(e))
-            try:
-                protocol.report_provision_status(status)
-            except prot.ProtocolError as pe:
-                add_event(name="WALA", is_success=False, message=text(pe),
-                          op=WALAEventOperation.Provision)
+            self.report_not_ready(protocol, "ProvisioningFailed", text(e))
+            self.report_event(text(e))
+            return
 
-            add_event(name="WALA", is_success=False, message=text(e),
-                      op=WALAEventOperation.Provision)
-
+        self.report_ready(protocol, thumbprint)
+        self.report_event("Provision succeed", is_success=True)
+           
     def reg_ssh_host_key(self):
         keypair_type = conf.get("Provisioning.SshHostKeyPairType", "rsa")
         if conf.get_switch("Provisioning.RegenerateSshHostKeyPair"):
@@ -105,14 +113,7 @@ class ProvisionHandler(object):
             raise ProvisionError(("Failed to generate ssh host key: "
                                   "ret={0}, out= {1}").format(ret[0], ret[1]))
 
-
-    def provision(self):
-        logger.info("Copy ovf-env.xml.")
-        try:
-            ovfenv = ovf.copy_ovf_env()
-        except prot.ProtocolError as e:
-            raise ProvisionError("Failed to copy ovf-env.xml: {0}".format(e))
-    
+    def provision(self, ovfenv):
         logger.info("Handle ovf-env.xml.")
         try:
             logger.info("Set host name.")

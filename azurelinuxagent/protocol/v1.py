@@ -33,6 +33,7 @@ from azurelinuxagent.utils.osutil import OSUTIL
 import azurelinuxagent.utils.fileutil as fileutil
 import azurelinuxagent.utils.shellutil as shellutil
 from azurelinuxagent.protocol.common import *
+import azurelinuxagent.protocol.dhcp as dhcp
 
 VERSION_INFO_URI = "http://{0}/?comp=versions"
 GOAL_STATE_URI = "http://{0}/machine/?comp=goalstate"
@@ -54,19 +55,23 @@ TRANSPORT_CERT_FILE_NAME = "TransportCert.pem"
 TRANSPORT_PRV_FILE_NAME = "TransportPrivate.pem"
 
 PROTOCOL_VERSION = "2012-11-30"
+ENDPOINT_FINE_NAME = "WireServer"
 
 class WireProtocolResourceGone(ProtocolError):
     pass
 
 class WireProtocol(Protocol):
 
-    def __init__(self, endpoint):
-        self.client = WireClient(endpoint)
+    def __init__(self):
+        dhcp_resp = dhcp.DHCPCLIENT.get_dhcp_resp()
+        self.client = WireClient(dhcp_resp.endpoint)
 
     def initialize(self):
+        dhcp_resp = dhcp.DHCPCLIENT.fetch_dhcp_resp()
+        self.client = WireClient(dhcp_resp.endpoint)
+        self.client.check_wire_protocol_version()
         OSUTIL.gen_transport_cert(TRANSPORT_PRV_FILE_NAME, 
                                   TRANSPORT_CERT_FILE_NAME)
-        self.client.check_wire_protocol_version()
         self.client.update_goal_state(forced=True)
 
     def get_vminfo(self):
@@ -462,6 +467,8 @@ def event_to_v1(event):
 
 class WireClient(object):
     def __init__(self, endpoint):
+        if endpoint is None:
+            raise ProtocolError("WireProtocl endpoint is None")
         self.endpoint = endpoint
         self.goal_state = None
         self.updated = None

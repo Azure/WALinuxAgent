@@ -25,7 +25,8 @@ import shutil
 import azurelinuxagent.logger as logger
 from azurelinuxagent.future import text
 from azurelinuxagent.utils.osutil import OSUTIL
-import azurelinuxagent.protocol as prot
+from azurelinuxagent.protocol.factory import PROT_FACTORY
+import azurelinuxagent.protocol.common as prot
 from azurelinuxagent.metadata import AGENT_VERSION
 from azurelinuxagent.event import add_event, WALAEventOperation
 from azurelinuxagent.exception import ExtensionError
@@ -146,10 +147,12 @@ class ExtHandlerState(object):
 
 
 class ExtHandlersHandler(object):
+    def __init__(self, handlers):
+        self.handlers = handlers
 
     def process(self):
         try:
-            protocol = prot.FACTORY.get_default_protocol()
+            protocol = PROT_FACTORY.get_protocol()
             ext_handlers = protocol.get_ext_handlers()
         except prot.ProtocolError as e:
             add_event(name="WALA", is_success=False, message = text(e))
@@ -195,7 +198,7 @@ class ExtHandlersHandler(object):
         
         if handler.ext_status is not None:
             try:
-                protocol = prot.FACTORY.get_default_protocol()
+                protocol = PROT_FACTORY.get_protocol()
                 protocol.report_ext_status(handler.name, handler.ext.name, 
                                            handler.ext_status)
             except prot.ProtocolError as e:

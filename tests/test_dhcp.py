@@ -25,7 +25,7 @@ import unittest
 import os
 import json
 import azurelinuxagent.utils.fileutil as fileutil
-import azurelinuxagent.distro.default.dhcp as dhcp_handler
+import azurelinuxagent.protocol.dhcp as dhcp
 
 SampleDhcpResponse = None
 with open(os.path.join(env.test_root, "dhcp"), 'rb') as F:
@@ -39,30 +39,28 @@ mock_send_dhcp_failed = MockFunc(retval=None)
 class TestdhcpHandler(unittest.TestCase):
  
     def test_build_dhcp_req(self):
-        req = dhcp_handler.build_dhcp_request(mock_get_mac_addr())
+        req = dhcp.build_dhcp_request(mock_get_mac_addr())
         self.assertNotEquals(None, req)
 
-    @mock(dhcp_handler, "gen_trans_id", mock_gen_trans_id)
-    @mock(dhcp_handler, "socket_send", mock_socket_send)
+    @mock(dhcp, "gen_trans_id", mock_gen_trans_id)
+    @mock(dhcp, "socket_send", mock_socket_send)
     def test_send_dhcp_req(self):
-        req = dhcp_handler.build_dhcp_request(mock_get_mac_addr())
-        resp = dhcp_handler.send_dhcp_request(req)
+        req = dhcp.build_dhcp_request(mock_get_mac_addr())
+        resp = dhcp.send_dhcp_request(req)
         self.assertNotEquals(None, resp)
 
-    @mock(dhcp_handler, "send_dhcp_request", mock_send_dhcp_failed)
+    @mock(dhcp, "send_dhcp_request", mock_send_dhcp_failed)
     def test_send_dhcp_failed(self):
-        dhcp = dhcp_handler.DhcpHandler()
-        dhcp.probe()
+        dhcp_resp = dhcp.DHCPCLIENT.get_dhcp_resp()
 
-    @mock(dhcp_handler, "socket_send", mock_socket_send)
-    @mock(dhcp_handler, "gen_trans_id", mock_gen_trans_id)
-    @mock(dhcp_handler.OSUTIL, "get_mac_addr", mock_get_mac_addr)
-    @mock(dhcp_handler.fileutil, "write_file", MockFunc())
+    @mock(dhcp, "socket_send", mock_socket_send)
+    @mock(dhcp, "gen_trans_id", mock_gen_trans_id)
+    @mock(dhcp.OSUTIL, "get_mac_addr", mock_get_mac_addr)
+    @mock(dhcp.fileutil, "write_file", MockFunc())
     def test_handle_dhcp(self):
-        dh = dhcp_handler.DhcpHandler()
-        dh.probe()
-        self.assertEquals("10.62.144.1", dh.gateway)
-        self.assertEquals("10.62.144.140", dh.endpoint)
+        dhcp_resp = dhcp.DHCPCLIENT.get_dhcp_resp()
+        self.assertEquals("10.62.144.1", dhcp_resp.gateway)
+        self.assertEquals("10.62.144.140", dhcp_resp.endpoint)
 
 if __name__ == '__main__':
     unittest.main()

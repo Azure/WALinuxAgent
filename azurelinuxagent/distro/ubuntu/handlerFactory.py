@@ -24,6 +24,6 @@ from azurelinuxagent.distro.default.handlerFactory import DefaultHandlerFactory
 class UbuntuHandlerFactory(DefaultHandlerFactory):
     def __init__(self):
         super(UbuntuHandlerFactory, self).__init__()
-        self.provision_handler = UbuntuProvisionHandler()
-        self.deprovision_handler = UbuntuDeprovisionHandler()
+        self.provision_handler = UbuntuProvisionHandler(self)
+        self.deprovision_handler = UbuntuDeprovisionHandler(self)
 

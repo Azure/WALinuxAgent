@@ -41,6 +41,8 @@ For additional details to please refer to the MSDN documentation at : http://msd
 """
 
 class ResourceDiskHandler(object):
+    def __init__(self, handlers):
+        self.handlers = handlers
 
     def start_activate_resource_disk(self):
         disk_thread = threading.Thread(target = self.run)

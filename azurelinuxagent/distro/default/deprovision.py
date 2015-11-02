@@ -35,6 +35,8 @@ class DeprovisionAction(object):
         self.func(*self.args, **self.kwargs)
 
 class DeprovisionHandler(object):
+    def __init__(self, handlers):
+        self.handlers = handlers
 
     def del_root_password(self, warnings, actions):
         warnings.append("WARNING! root password will be disabled. "

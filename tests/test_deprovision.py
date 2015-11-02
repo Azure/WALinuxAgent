@@ -36,7 +36,7 @@ def MockSetup(self, deluser):
 
 class TestDeprovisionHandler(unittest.TestCase):
     def test_setup(self):
-        handler = deprovision_handler.DeprovisionHandler()
+        handler = deprovision_handler.DeprovisionHandler(None)
         warnings, actions = handler.setup(False)
         self.assertNotEquals(None, warnings)
         self.assertNotEquals(0, len(warnings))
@@ -47,7 +47,7 @@ class TestDeprovisionHandler(unittest.TestCase):
     
     @mock(deprovision_handler.DeprovisionHandler, 'setup', MockSetup)
     def test_deprovision(self):
-        handler = deprovision_handler.DeprovisionHandler()
+        handler = deprovision_handler.DeprovisionHandler(None)
         handler.deprovision(force=True)
 
 if __name__ == '__main__':

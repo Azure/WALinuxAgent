@@ -16,25 +16,23 @@
 #
 # Requires Python 2.4+ and Openssl 1.0+
 #
-from .init import InitHandler
-from .run import MainHandler
-from .scvmm import ScvmmHandler
-from .dhcp import DhcpHandler
-from .env import EnvHandler
-from .provision import ProvisionHandler
-from .resourceDisk import ResourceDiskHandler
-from .extension import ExtHandlersHandler
-from .deprovision import DeprovisionHandler
+from azurelinuxagent.distro.default.init import InitHandler
+from azurelinuxagent.distro.default.run import MainHandler
+from azurelinuxagent.distro.default.scvmm import ScvmmHandler
+from azurelinuxagent.distro.default.env import EnvHandler
+from azurelinuxagent.distro.default.provision import ProvisionHandler
+from azurelinuxagent.distro.default.resourceDisk import ResourceDiskHandler
+from azurelinuxagent.distro.default.extension import ExtHandlersHandler
+from azurelinuxagent.distro.default.deprovision import DeprovisionHandler
 
 class DefaultHandlerFactory(object):
     def __init__(self):
-        self.init_handler = InitHandler()
+        self.init_handler = InitHandler(self)
         self.main_handler = MainHandler(self)
-        self.scvmm_handler = ScvmmHandler()
-        self.dhcp_handler = DhcpHandler()
+        self.scvmm_handler = ScvmmHandler(self)
         self.env_handler = EnvHandler(self)
-        self.provision_handler = ProvisionHandler()
-        self.resource_disk_handler = ResourceDiskHandler()
-        self.ext_handlers_handler = ExtHandlersHandler()
-        self.deprovision_handler = DeprovisionHandler()
+        self.provision_handler = ProvisionHandler(self)
+        self.resource_disk_handler = ResourceDiskHandler(self)
+        self.ext_handlers_handler = ExtHandlersHandler(self)
+        self.deprovision_handler = DeprovisionHandler(self)
 

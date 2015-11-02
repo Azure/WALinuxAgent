@@ -22,13 +22,17 @@ import tests.env
 from tests.tools import *
 import unittest
 import time
+import azurelinuxagent.protocol.dhcp as dhcp
 from azurelinuxagent.future import text
 from azurelinuxagent.utils.osutil import OSUTIL
 from azurelinuxagent.distro.default.env import EnvMonitor
 
-class MockDhcpHandler(object):
+class MockDhcpResponse(object):
     def conf_routes(self):
         pass
+
+def mock_get_dhcp_resp(self):
+    return MockDhcpResponse()
 
 def mock_get_dhcp_pid():
     return "1234"
@@ -39,13 +43,15 @@ def mock_dhcp_pid_change():
 class TestEnvMonitor(unittest.TestCase):
 
     @mock(OSUTIL, 'get_dhcp_pid', mock_get_dhcp_pid)
+    @mock(dhcp.DHCPCLIENT, 'get_dhcp_resp', mock_get_dhcp_resp)
     def test_dhcp_pid_not_change(self):
-        monitor = EnvMonitor(MockDhcpHandler())
+        monitor = EnvMonitor()
         monitor.handle_dhclient_restart()
 
     @mock(OSUTIL, 'get_dhcp_pid', mock_dhcp_pid_change)
+    @mock(dhcp.DHCPCLIENT, 'get_dhcp_resp', mock_get_dhcp_resp)
     def test_dhcp_pid_change(self):
-        monitor = EnvMonitor(MockDhcpHandler())
+        monitor = EnvMonitor()
         monitor.handle_dhclient_restart()
 
 if __name__ == '__main__':

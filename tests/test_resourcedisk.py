@@ -44,19 +44,19 @@ class TestResourceDisk(unittest.TestCase):
     @mock(rdh.shellutil, 'run_get_output', MockFunc(retval=(0, gpt_output_sample)))
     @mock(rdh.shellutil, 'run', MockFunc(retval=0))
     def test_mountGPT(self):
-        handler = rdh.ResourceDiskHandler()
+        handler = rdh.ResourceDiskHandler(None)
         handler.mount_resource_disk('/tmp/foo', 'ext4')
 
     @mock(rdh.OSUTIL, 'device_for_ide_port', MockFunc(retval='foo'))
     @mock(rdh.shellutil, 'run_get_output', MockFunc(retval=(0, "")))
     @mock(rdh.shellutil, 'run', MockFunc(retval=0))
     def test_mountMBR(self):
-        handler = rdh.ResourceDiskHandler()
+        handler = rdh.ResourceDiskHandler(None)
         handler.mount_resource_disk('/tmp/foo', 'ext4')
 
     @mock(rdh.shellutil, 'run', MockFunc(retval=0))
     def test_createSwapSpace(self):
-        handler = rdh.ResourceDiskHandler()
+        handler = rdh.ResourceDiskHandler(None)
         handler.create_swap_space('/tmp/foo', 512)
 
 if __name__ == '__main__':

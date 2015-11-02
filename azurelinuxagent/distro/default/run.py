@@ -28,7 +28,8 @@ from azurelinuxagent.metadata import AGENT_LONG_NAME, AGENT_VERSION, \
                                      DISTRO_FULL_NAME, PY_VERSION_MAJOR, \
                                      PY_VERSION_MINOR, PY_VERSION_MICRO
 import azurelinuxagent.event as event
-import azurelinuxagent.protocol as prot
+import azurelinuxagent.protocol.dhcp as dhcp
+from azurelinuxagent.protocol.factory import PROT_FACTORY
 from azurelinuxagent.utils.osutil import OSUTIL
 import azurelinuxagent.utils.fileutil as fileutil
 
@@ -43,27 +44,25 @@ class MainHandler(object):
         logger.info("Python: {0}.{1}.{2}", PY_VERSION_MAJOR, PY_VERSION_MINOR,
                     PY_VERSION_MICRO)
 
-        event.enable_unhandled_err_dump("Azure Linux Agent")
+        event.enable_unhandled_err_dump(AGENT_LONG_NAME)
         fileutil.write_file(OSUTIL.get_agent_pid_file_path(), text(os.getpid()))
 
         if conf.get_switch("DetectScvmmEnv", False):
             if self.handlers.scvmm_handler.detect_scvmm_env():
                 return
-
-        self.handlers.dhcp_handler.probe()
-
-        prot.detect_default_protocol()
-
-        event.EventMonitor().start()
+        
+        PROT_FACTORY.wait_for_network()
 
         self.handlers.provision_handler.process()
+        
+        PROT_FACTORY.detect_protocol()
 
         if conf.get_switch("ResourceDisk.Format", False):
             self.handlers.resource_disk_handler.start_activate_resource_disk()
 
+        event.EventMonitor().start()
         self.handlers.env_handler.start()
 
-        protocol = prot.FACTORY.get_default_protocol()
         while True:
             #Handle extensions
             self.handlers.ext_handlers_handler.process()

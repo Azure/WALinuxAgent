@@ -108,6 +108,7 @@ class MetadataProtocol(Protocol):
         return textutil.get_bytes_from_pem(content)
 
     def initialize(self):
+        self.get_vminfo()
         trans_prv_file = os.path.join(OSUTIL.get_lib_dir(), 
                                       TRANSPORT_PRV_FILE_NAME)
         trans_crt_file = os.path.join(OSUTIL.get_lib_dir(), 
@@ -122,18 +123,7 @@ class MetadataProtocol(Protocol):
                                 "{0}.crt".format(thumbprint))
         shutil.copyfile(trans_prv_file, prv_file)
         shutil.copyfile(trans_crt_file, crt_file)
-
-        #TODO remote workarround for azure stack test
-        for retry in range(0, MAX_PING):
-            try:
-                self.get_vminfo()
-                return
-            except ProtocolError as e:
-                logger.warn("Metadata server is not ready, retry = {0}", retry)
-            if retry < MAX_PING - 1:
-                time.sleep(RETRY_PING_INTERVAL)
-        raise ProtocolNotFound("Metadata server endpoint is not reachable")
-
+    
     def get_vminfo(self):
         vminfo = VMInfo()
         data = self._get_data(self.identity_uri)

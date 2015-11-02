@@ -25,6 +25,9 @@ import azurelinuxagent.utils.fileutil as fileutil
 
 
 class InitHandler(object):
+    def __init__(self, handlers):
+        self.handlers = handlers
+
     def init(self, verbose):
         #Init stdout log
         level = logger.LogLevel.VERBOSE if verbose else logger.LogLevel.INFO

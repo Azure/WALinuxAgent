@@ -27,6 +27,7 @@ import shutil
 import azurelinuxagent.utils.fileutil as fileutil
 import azurelinuxagent.event as evt
 import azurelinuxagent.protocol as prot
+from azurelinuxagent.protocol.factory import PROT_FACTORY
 
 class MockProtocol(object):
     def get_vminfo(self): 
@@ -42,8 +43,7 @@ class TestEvent(unittest.TestCase):
         self.assertNotEquals(0, len(eventsFile))
         shutil.rmtree("/tmp/events")
 
-    @mock(evt.prot.FACTORY, 'get_default_protocol', 
-          MockFunc(retval=MockProtocol()))
+    @mock(PROT_FACTORY, 'get_protocol', MockFunc(retval=MockProtocol()))
     def test_init_sys_info(self):
         monitor = evt.EventMonitor()
         monitor.init_sysinfo()
