@@ -124,6 +124,9 @@ class MetadataProtocol(Protocol):
         shutil.copyfile(trans_prv_file, prv_file)
         shutil.copyfile(trans_crt_file, crt_file)
     
+    def reinitialize(self):
+        pass
+
     def get_vminfo(self):
         vminfo = VMInfo()
         data = self._get_data(self.identity_uri)

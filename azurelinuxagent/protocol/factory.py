@@ -63,9 +63,11 @@ def _get_protocol():
 
     protocol_name = fileutil.read_file(protocol_file_path)
     if protocol_name == WireProtocol.__name__:
-        return WireProtocol()
+        protoc0l = WireProtocol()
     else:
-        return MetadataProtocol()
+        protocol = MetadataProtocol()
+    protocol.reinitialize()
+    return protocol
 
 class ProtocolFactory(object):
     def __init__(self):

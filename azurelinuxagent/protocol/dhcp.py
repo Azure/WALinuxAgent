@@ -33,15 +33,13 @@ class DhcpResponse(object):
     def __init__(self, resp):
         endpoint, gateway, routes = parse_dhcp_resp(resp)
         self.endpoint = endpoint
-        logger.verb("Wire server endpoint:{0}", endpoint)
-        logger.verb("Gateway:{0}", gateway)
-        logger.verb("Routes:{0}", routes)
         self.gateway = gateway
         self.routes = routes
-        self.conf_routes()
 
     def conf_routes(self):
         logger.info("Configure routes")
+        logger.info("Gateway:{0}", self.gateway)
+        logger.info("Routes:{0}", self.routes)
         #Add default gateway
         if self.gateway is not None:
             OSUTIL.route_add(0 , 0, self.gateway)

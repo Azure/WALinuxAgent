@@ -60,6 +60,7 @@ class EnvMonitor(object):
 
         self.stopped = False
         logger.info("Start env monitor service.")
+        self.dhcp_resp.conf_routes()
         self.hostname = socket.gethostname()
         self.dhcpid = OSUTIL.get_dhcp_pid()
         self.server_thread = threading.Thread(target = self.monitor)

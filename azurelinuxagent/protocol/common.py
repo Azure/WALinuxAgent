@@ -214,6 +214,9 @@ class Protocol(DataContract):
     def initialize(self):
         raise NotImplementedError()
 
+    def reinitialize(self):
+        raise NotImplementedError()
+
     def get_vminfo(self):
         raise NotImplementedError()
 

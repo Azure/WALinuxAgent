@@ -63,8 +63,7 @@ class WireProtocolResourceGone(ProtocolError):
 class WireProtocol(Protocol):
 
     def __init__(self):
-        dhcp_resp = dhcp.DHCPCLIENT.get_dhcp_resp()
-        self.client = WireClient(dhcp_resp.endpoint)
+        pass
 
     def initialize(self):
         dhcp_resp = dhcp.DHCPCLIENT.fetch_dhcp_resp()
@@ -73,6 +72,10 @@ class WireProtocol(Protocol):
         OSUTIL.gen_transport_cert(TRANSPORT_PRV_FILE_NAME, 
                                   TRANSPORT_CERT_FILE_NAME)
         self.client.update_goal_state(forced=True)
+
+    def reinitialize(self):
+        dhcp_resp = dhcp.DHCPCLIENT.get_dhcp_resp()
+        self.client = WireClient(dhcp_resp.endpoint)
 
     def get_vminfo(self):
         hosting_env = self.client.get_hosting_env()
@@ -469,6 +472,7 @@ class WireClient(object):
     def __init__(self, endpoint):
         if endpoint is None:
             raise ProtocolError("WireProtocl endpoint is None")
+        logger.info("Wire server endpoint:{0}", endpoint)
         self.endpoint = endpoint
         self.goal_state = None
         self.updated = None
