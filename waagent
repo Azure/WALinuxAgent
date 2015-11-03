@@ -2693,6 +2693,53 @@ def DeviceForIdePort(n):
 class HttpResourceGoneError(Exception):
     pass
 
+def DoInstallRHUIRPM():
+    """
+    Install RHUI RPM according to VM region
+    """
+    rhuiRPMinstalled = os.path.exists(LibDir + "/rhuirpminstalled")
+    if rhuiRPMinstalled:
+        return
+    else:
+        SetFileContents(LibDir + "/rhuirpminstalled", "")
+
+    Log("Begin to install RHUI RPM")
+    cmd = "grep '<Location>' /var/lib/waagent/ExtensionsConfig* --no-filename | sed 's/<Location>//g' | sed 's/<\/Location>//g' | sed 's/ //g' | tr 'A-Z' 'a-z' | uniq"
+
+    retcode,out = RunGetOutput(cmd, True)
+    region = out.rstrip("\n")
+
+    #try a few times at most to get the region info
+    retry = 0
+    for i in range(0, 8):
+        if (region != ""):
+            break
+        Log("region info is empty, now wait 15 seconds...")
+        time.sleep(15)
+        retcode,out = RunGetOutput(cmd, True)
+        region = out.rstrip("\n")
+
+    if region == "":
+        Log("could not detect region info, now use the default region: eastus2")
+        region = "eastus2"
+
+    scriptFilePath = "/tmp/install-rhui-rpm.sh"
+
+    if not os.path.exists(scriptFilePath):
+        Error(scriptFilePath + " does not exist, now quit RHUI RPM installation.");
+        return
+    #chmod a+x script file
+    os.chmod(scriptFilePath, 0100)
+    Log("begin to run " + scriptFilePath)
+
+    #execute the downloaded script file
+    retcode,out = RunGetOutput(scriptFilePath, True)
+    if retcode != 0:
+        Error("execute script " + scriptFilePath + " failed, return code: " + str(retcode) + ", now exit RHUI RPM installation.");
+        return
+
+    Log("install RHUI RPM completed")
+    
 class Util(object):
     """
     Http communication class.
@@ -5720,6 +5767,10 @@ class Agent(Util):
             if goalState.ExtensionsConfig != None :
                 goalState.ExtensionsConfig.ReportHandlerStatus()
             
+            global LinuxDistro
+            if LinuxDistro == "redhat":
+                DoInstallRHUIRPM()
+                
             if not eventMonitor:
                 eventMonitor = WALAEventMonitor(self.HttpPostWithHeaders)
                 eventMonitor.StartEventsLoop()
