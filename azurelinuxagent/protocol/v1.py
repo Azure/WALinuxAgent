@@ -132,8 +132,8 @@ def _fetch_uri(uri, headers, chk_proxy=False):
         raise ProtocolError(text(e))
 
     if(resp.status == httpclient.FORBIDDEN):
-        logger.info("Sleep to prevent throttling.")
-        time.sleep(10)
+        logger.info("Sleep 15 seconds to prevent throttling.")
+        time.sleep(15)
     
     if(resp.status == httpclient.GONE):
         raise WireProtocolResourceGone(uri)
@@ -632,6 +632,7 @@ class WireClient(object):
         role_prop = role_prop.encode("utf-8")
         role_prop_uri = ROLE_PROP_URI.format(self.endpoint)
         try:
+            self.prevent_throttling()
             resp = restutil.http_post(role_prop_uri,
                                       role_prop,
                                       headers=self.get_header_for_xml_content())
@@ -654,6 +655,7 @@ class WireClient(object):
         health_report_uri = HEALTH_REPORT_URI.format(self.endpoint)
         headers = self.get_header_for_xml_content()
         try:
+            self.prevent_throttling()
             resp = restutil.http_post(health_report_uri,
                                       health_report,
                                       headers=headers)
@@ -668,7 +670,7 @@ class WireClient(object):
     def prevent_throttling(self):
         self.req_count += 1
         if self.req_count % 3 == 0:
-            logger.info("Sleep 15 before sending event to avoid throttling.")
+            logger.info("Sleep 15 seconds to avoid throttling.")
             self.req_count = 0
             time.sleep(15)
 

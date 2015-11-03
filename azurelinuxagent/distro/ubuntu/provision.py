@@ -54,6 +54,8 @@ class UbuntuProvisionHandler(ProvisionHandler):
 
         protocol = PROT_FACTORY.detect_protocol_by_file()
         self.report_not_ready(protocol, "Provisioning", "Starting")
+        logger.info("Sleep 15 seconds to prevent throttling")
+        time.sleep(15) #Sleep to prevent throttling
         try:
             logger.info("Wait for ssh host key to be generated.")
             thumbprint = self.wait_for_ssh_host_key()
