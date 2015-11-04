@@ -59,8 +59,6 @@ class DeprovisionHandler(object):
 
     def regen_ssh_host_key(self, warnings, actions):
         warnings.append("WARNING! All SSH host key pairs will be deleted.")
-        actions.append(DeprovisionAction(OSUTIL.set_hostname,
-                                         ['localhost.localdomain']))
         actions.append(DeprovisionAction(shellutil.run,
                                          ['rm -f /etc/ssh/ssh_host_*key*']))
 
@@ -81,6 +79,11 @@ class DeprovisionHandler(object):
         dirs_to_del = [OSUTIL.get_lib_dir()]
         actions.append(DeprovisionAction(fileutil.rm_dirs, dirs_to_del))
 
+    def reset_hostname(self, warnings, actions):
+        localhost = ["localhost.localdomain"]
+        actions.append(DeprovisionAction(OSUTIL.set_hostname, localhost))
+        actions.append(DeprovisionAction(OSUTIL.set_dhcp_hostname, localhost))
+
     def setup(self, deluser):
         warnings = []
         actions = []
@@ -90,6 +93,7 @@ class DeprovisionHandler(object):
             self.regen_ssh_host_key(warnings, actions)
 
         self.del_dhcp_lease(warnings, actions)
+        self.reset_hostname(warnings, actions)
 
         if conf.get_switch("Provisioning.DeleteRootPassword", False):
             self.del_root_password(warnings, actions)
