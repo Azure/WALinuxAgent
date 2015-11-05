@@ -138,7 +138,6 @@ class Redhat6xOSUtil(DefaultOSUtil):
                                   'DHCP_HOSTNAME',
                                   'DHCP_HOSTNAME={0}'.format(hostname))
 
-
 class RedhatOSUtil(Redhat6xOSUtil):
     def __init__(self):
         super(RedhatOSUtil, self).__init__()
@@ -149,6 +148,13 @@ class RedhatOSUtil(Redhat6xOSUtil):
         Unlike redhat 6.x, redhat 7.x will set hostname to /etc/hostname
         """
         DefaultOSUtil.set_hostname(self, hostname)
+
+    def publish_hostname(self, hostname):
+        """
+        Restart NetworkManager first before publishing hostname
+        """
+        shellutil.run("service NetworkManager restart")
+        super(RedhatOSUtil, self).publish_hostname(hostname)
 
     def register_agent_service(self):
         return shellutil.run("systemctl enable waagent", chk_err=False)
