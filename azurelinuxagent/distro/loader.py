@@ -25,7 +25,7 @@ def get_distro_loader():
         logger.verb("Loading distro implemetation from: {0}", DISTRO_NAME)
         pkg_name = "azurelinuxagent.distro.{0}.loader".format(DISTRO_NAME)
         return __import__(pkg_name, fromlist="loader")
-    except ImportError as e:
+    except (ImportError, ValueError):
         logger.warn("Unable to load distro implemetation for {0}.", DISTRO_NAME)
         logger.warn("Use default distro implemetation instead.")
         return default_loader

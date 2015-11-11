@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Windows Azure Linux Agent setup.py
+# Microsoft Azure Linux Agent setup.py
 #
 # Copyright 2013 Microsoft Corporation
 #
@@ -22,7 +22,6 @@ from azurelinuxagent.metadata import AGENT_NAME, AGENT_VERSION, \
                                      AGENT_DESCRIPTION, \
                                      DISTRO_NAME, DISTRO_VERSION, DISTRO_FULL_NAME
 
-from azurelinuxagent.utils.osutil import OSUTIL
 import azurelinuxagent.agent as agent
 import setuptools
 from setuptools import find_packages
@@ -62,11 +61,14 @@ def get_data_files(name, version, fullname):
         set_bin_files(data_files)
         set_conf_files(data_files)
         set_logrotate_files(data_files)
-        if version >= "7.0":
-            #redhat7.0+ uses systemd
-            set_systemd_files(data_files, dest="/var/lib/systemd/system")
-        else:
+        if version.startswith("6"):
             set_sysv_files(data_files)
+        else:
+            #redhat7.0+ use systemd
+            set_systemd_files(data_files, dest="/usr/lib/systemd/system")
+            if version.startswith("7.1"):
+                #TODO this is a mitigation to systemctl bug on 7.1
+                set_sysv_files(data_files)
 
     elif name == 'coreos':
         set_bin_files(data_files, dest="/usr/share/oem/bin")
@@ -78,8 +80,8 @@ def get_data_files(name, version, fullname):
         set_bin_files(data_files)
         set_conf_files(data_files, src=["config/ubuntu/waagent.conf"])
         set_logrotate_files(data_files)
-        if version < "15.04":
-            #Ubuntu15.04- uses upstart
+        if version.startswith("12") or version.startswith("14"):
+            #Ubuntu12.04/14.04 - uses upstart
             set_files(data_files, dest="/etc/init",
                       src=["init/ubuntu/walinuxagent.conf"])
             set_files(data_files, dest='/etc/default', 
@@ -88,17 +90,21 @@ def get_data_files(name, version, fullname):
             set_files(data_files, dest="<TODO>", 
                       src=["init/ubuntu/snappy/walinuxagent.yml"])
         else:
+            #Ubuntu15.04+ uses systemd
             set_systemd_files(data_files, 
                               src=["init/ubuntu/walinuxagent.service"])
     elif name == 'suse':
         set_bin_files(data_files)
         set_conf_files(data_files, src=["config/suse/waagent.conf"])
         set_logrotate_files(data_files)
-        if fullname == 'SUSE Linux Enterprise Server' and version >= '12' or \
-                fullname == 'openSUSE' and version >= '13.2':
-            set_systemd_files(data_files, dest='/var/lib/systemd/system')
+        if fullname == 'SUSE Linux Enterprise Server' and \
+                version.startswith('11') or \
+                fullname == 'openSUSE' and version.startswith('13.1'):
+            set_sysv_files(data_files, dest='/etc/init.d', 
+                           src=["init/suse/waagent"])
         else:
-            set_sysv_files(data_files, dest='/etc/init.d')
+            #sles 12+ and openSUSE 13.2+ use systemd
+            set_systemd_files(data_files, dest='/usr/lib/systemd/system')
     else:
         #Use default setting
         set_bin_files(data_files)

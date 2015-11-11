@@ -1,4 +1,4 @@
-# Windows Azure Linux Agent
+# Microsoft Azure Linux Agent
 #
 # Copyright 2014 Microsoft Corporation
 #
@@ -123,10 +123,15 @@ def _fetch_uri(uri, headers, chk_proxy=False):
     except restutil.HttpError as e:
         raise ProtocolError(text(e))
 
+    if(resp.status == httpclient.FORBIDDEN):
+        logger.info("Sleep to prevent throttling.")
+        time.sleep(10)
+    
     if(resp.status == httpclient.GONE):
         raise WireProtocolResourceGone(uri)
     if(resp.status != httpclient.OK):
         raise ProtocolError("{0} - {1}".format(resp.status, uri))
+    
     data = resp.read()
     if data is None:
         return None
@@ -260,8 +265,6 @@ def ext_handler_status_to_v1(handler_status, ext_statuses, timestamp):
             "lang":"en-US",
             "message": handler_status.message
         },
-        'runtimeSettingsStatus' : {
-        }
     }
 
     if len(handler_status.extensions) > 0:
@@ -320,7 +323,7 @@ class StatusBlob(object):
 
     def upload(self, url):
         #TODO upload extension only if content has changed
-        logger.info("Upload status blob")
+        logger.verb("Upload status blob")
         blob_type = self.get_blob_type(url)
 
         data = self.to_json()

@@ -31,7 +31,7 @@ class TestLogger(unittest.TestCase):
     def test_no_appender(self):
         #The logger won't throw exception even if no appender.
         _logger = logger.Logger()
-        _logger.verbose("Assert no exception")
+        _logger.verb("Assert no exception")
         _logger.info("Assert no exception")
         _logger.warn("Assert no exception")
         _logger.error("Assert no exception")
@@ -41,8 +41,8 @@ class TestLogger(unittest.TestCase):
         _logger.info("This is an exception {0}", Exception("Test"))
         _logger.info("This is an number {0}", 0)
         _logger.info("This is an boolean {0}", True)
-        _logger.verbose("{0}")
-        _logger.verbose("{0} {1}", 0, 1)
+        _logger.verb("{0}")
+        _logger.verb("{0} {1}", 0, 1)
         _logger.info("{0} {1}", 0, 1)
         _logger.warn("{0} {1}", 0, 1)
         _logger.error("{0} {1}", 0, 1)
@@ -61,7 +61,7 @@ class TestLogger(unittest.TestCase):
         self.assertTrue(tools.simple_file_grep('/tmp/testlog', msg))
 
         msg = text(uuid.uuid4())
-        _logger.verbose("Verbose should not be logged: {0}", msg)
+        _logger.verb("Verbose should not be logged: {0}", msg)
         self.assertFalse(tools.simple_file_grep('/tmp/testlog', msg))
 
 
@@ -76,7 +76,7 @@ class TestLogger(unittest.TestCase):
         self.assertTrue(tools.simple_file_grep('/tmp/testlog', msg))
 
         msg = text(uuid.uuid4())
-        _logger.verbose("Test logger: {0}", msg)
+        _logger.verb("Test logger: {0}", msg)
         self.assertFalse(tools.simple_file_grep('/tmp/testlog', msg))
 
 

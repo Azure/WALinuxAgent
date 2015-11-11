@@ -122,15 +122,14 @@ class Redhat6xOSUtil(DefaultOSUtil):
         ret= shellutil.run_get_output("pidof dhclient")
         return ret[1] if ret[0] == 0 else None
 
-class RedhatOSUtil(Redhat6xOSUtil):
-    def __init__(self):
-        super(RedhatOSUtil, self).__init__()
-
     def set_hostname(self, hostname):
-        super(RedhatOSUtil, self).set_hostname(hostname)
+        """
+        Set /etc/sysconfig/network
+        """
         fileutil.update_conf_file('/etc/sysconfig/network',
                                   'HOSTNAME',
                                   'HOSTNAME={0}'.format(hostname))
+        shellutil.run("hostname {0}".format(hostname), chk_err=False)
 
     def set_dhcp_hostname(self, hostname):
         ifname = self.get_if_name()
@@ -138,6 +137,24 @@ class RedhatOSUtil(Redhat6xOSUtil):
         fileutil.update_conf_file(filepath,
                                   'DHCP_HOSTNAME',
                                   'DHCP_HOSTNAME={0}'.format(hostname))
+
+class RedhatOSUtil(Redhat6xOSUtil):
+    def __init__(self):
+        super(RedhatOSUtil, self).__init__()
+
+    def set_hostname(self, hostname):
+        """
+        Set /etc/hostname
+        Unlike redhat 6.x, redhat 7.x will set hostname to /etc/hostname
+        """
+        DefaultOSUtil.set_hostname(self, hostname)
+
+    def publish_hostname(self, hostname):
+        """
+        Restart NetworkManager first before publishing hostname
+        """
+        shellutil.run("service NetworkManager restart")
+        super(RedhatOSUtil, self).publish_hostname(hostname)
 
     def register_agent_service(self):
         return shellutil.run("systemctl enable waagent", chk_err=False)

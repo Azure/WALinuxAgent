@@ -55,7 +55,7 @@ REQUIREMENTS
 
 The following systems have been tested and are known to work with the Azure
 Linux Agent.  Please note that this list may differ from the official list
-of supported systems on the Windows Azure Platform as described here:
+of supported systems on the Microsoft Azure Platform as described here:
 http://support.microsoft.com/kb/2805216
 
   Supported Linux Distributions:

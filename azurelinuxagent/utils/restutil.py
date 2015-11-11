@@ -1,4 +1,4 @@
-# Windows Azure Linux Agent
+# Microsoft Azure Linux Agent
 #
 # Copyright 2014 Microsoft Corporation
 #
@@ -66,7 +66,7 @@ def _http_request(method, host, rel_uri, port=None, data=None, secure=False,
             #If proxy is used, full url is needed.
             url = "https://{0}:{1}{2}".format(host, port, rel_uri)
         else:
-            conn = httpclient.HTTPSConnection(host, port)
+            conn = httpclient.HTTPSConnection(host, port, timeout=10)
             url = rel_uri
     else:
         port = 80 if port is None else port
@@ -75,7 +75,7 @@ def _http_request(method, host, rel_uri, port=None, data=None, secure=False,
             #If proxy is used, full url is needed.
             url = "http://{0}:{1}{2}".format(host, port, rel_uri)
         else:
-            conn = httpclient.HTTPConnection(host, port)
+            conn = httpclient.HTTPConnection(host, port, timeout=10)
             url = rel_uri
     if headers == None:
         conn.request(method, url, data)

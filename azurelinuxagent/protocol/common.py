@@ -1,4 +1,4 @@
-# Windows Azure Linux Agent
+# Microsoft Azure Linux Agent
 #
 # Copyright 2014 Microsoft Corporation
 #
@@ -103,7 +103,7 @@ class CertList(DataContract):
         self.certificates = DataContractList(Cert)
 
 class Extension(DataContract):
-    def __init__(self, name=None, sequenceNumber=None, publicSettings={},
+    def __init__(self, name=None, sequenceNumber=None, publicSettings=None,
                  privateSettings=None, certificateThumbprint=None):
         self.name = name
         self.sequenceNumber = sequenceNumber
