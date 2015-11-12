@@ -261,6 +261,7 @@ def ext_status_to_v1(ext_name, ext_status):
                 "message": ext_status.message
             }
         },
+        "version": 1.0,
         "timestampUTC": timestamp
     }
     if len(v1_sub_status) != 0:
@@ -272,11 +273,12 @@ def ext_handler_status_to_v1(handler_status, ext_statuses, timestamp):
         'handlerVersion' : handler_status.version,
         'handlerName' : handler_status.name,
         'status' : handler_status.status,
-        "formattedMessage": {
+    }
+    if handler_status.message is not None:
+        v1_handler_status["formattedMessage"] = {
             "lang":"en-US",
             "message": handler_status.message
-        },
-    }
+        }
 
     if len(handler_status.extensions) > 0:
         #Currently, no more than one extension per handler

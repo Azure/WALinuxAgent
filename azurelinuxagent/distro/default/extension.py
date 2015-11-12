@@ -59,24 +59,25 @@ def validate_in_range(val, valid_range, name):
     if val not in valid_range:
         raise ExtensionError("Invalid {0}: {1}".format(name, val))
 
+def parse_formatted_message(formatted_message):
+    if formatted_message is None:
+        return None
+    validate_has_key(formatted_message, 'lang', 'formattedMessage/lang')
+    validate_has_key(formatted_message, 'message', 'formattedMessage/message')
+    return formatted_message.get('message')
+    
+
 def parse_ext_substatus(substatus):
     #Check extension sub status format
-    validate_has_key(substatus, 'name', 'substatus/name')
     validate_has_key(substatus, 'status', 'substatus/status')
-    validate_has_key(substatus, 'code', 'substatus/code')
-    validate_has_key(substatus, 'formattedMessage', 'substatus/formattedMessage')
-    validate_has_key(substatus['formattedMessage'], 'lang',
-                     'substatus/formattedMessage/lang')
-    validate_has_key(substatus['formattedMessage'], 'message',
-                     'substatus/formattedMessage/message')
-
     validate_in_range(substatus['status'], VALID_EXTENSION_STATUS,
                       'substatus/status')
     status = prot.ExtensionSubStatus()
     status.name = substatus.get('name')
     status.status = substatus.get('status')
-    status.code = substatus.get('code')
-    status.message  =  substatus.get('formattedMessage').get('message')
+    status.code = substatus.get('code', 0)
+    formatted_message = substatus.get('formattedMessage')
+    status.message = parse_formatted_message(formatted_message)
     return status
 
 def parse_ext_status(ext_status, data):
@@ -88,15 +89,7 @@ def parse_ext_status(ext_status, data):
     validate_has_key(data, 'status', 'status')
     status_data = data['status']
     validate_has_key(status_data, 'status', 'status/status')
-    validate_has_key(status_data, 'operation', 'status/operation')
-    validate_has_key(status_data, 'code', 'status/code')
-    validate_has_key(status_data, 'name', 'status/name')
-    validate_has_key(status_data, 'formattedMessage', 'status/formattedMessage')
-    validate_has_key(status_data['formattedMessage'], 'lang',
-                     'status/formattedMessage/lang')
-    validate_has_key(status_data['formattedMessage'], 'message',
-                     'status/formattedMessage/message')
-
+    
     validate_in_range(status_data['status'], VALID_EXTENSION_STATUS,
                       'status/status')
 
@@ -104,10 +97,9 @@ def parse_ext_status(ext_status, data):
     ext_status.configurationAppliedTime = applied_time
     ext_status.operation = status_data.get('operation')
     ext_status.status = status_data.get('status')
-
-    ext_status.code = status_data.get('code')
-    ext_status.message =status_data['formattedMessage'].get('message')
-
+    ext_status.code = status_data.get('code', 0)
+    formatted_message = status_data.get('formattedMessage')
+    ext_status.message = parse_formatted_message(formatted_message)
     substatus_list = status_data.get('substatus')
     if substatus_list is None:
         return
@@ -250,11 +242,20 @@ class ExtHandlerInstance(object):
 
         try: 
             self.handle_state()
+        except ExtensionError as e:
+            self.set_state_err(text(e))
+            self.report_event(is_success=False, message=text(e))
+            self.logger.error("Failed to process extension handler")
+            return
+
+        try: 
             if self.installed:
                 self.collect_ext_status()
                 self.collect_handler_status()
         except ExtensionError as e:
             self.report_event(is_success=False, message=text(e))
+            self.logger.error("Failed to get extension handler status")
+            return
 
         self.logger.verb("Finished processing extension handler")
 
@@ -358,7 +359,6 @@ class ExtHandlerInstance(object):
                 self.ext_status.code = -1
         if self.handler_status is not None:
             self.handler_status.message = message
-            self.set_state_message(message)
             if not is_success:
                 self.handler_status.status = "NotReady"
         add_event(name=self.name, op=self.ext_status.operation, 
@@ -492,7 +492,7 @@ class ExtHandlerInstance(object):
          
         handler_state = self.get_state()
         self.handler_status.status = handler_state_to_status(handler_state)
-        self.handler_status.message = self.get_state_messsage()
+        self.handler_status.message = self.get_state_err()
         man = self.load_manifest()
         if man.is_report_heartbeat():
             heartbeat = self.collect_heartbeat()
@@ -533,7 +533,8 @@ class ExtHandlerInstance(object):
                 handler_state = handler_state.rstrip()
             return handler_state
         except IOError as e:
-            raise ExtensionError("Failed to get handler state: {0}".format(e))
+            err = "Failed to get handler state: {0}".format(e)
+            add_event(name=self.name, is_success=False, message=err)
 
     def set_state(self, state):
         handler_state_file = self.get_handler_state_file()
@@ -542,28 +543,31 @@ class ExtHandlerInstance(object):
         try:
             fileutil.write_file(handler_state_file, state)
         except IOError as e:
-            raise ExtensionError("Failed to set handler state: {0}".format(e))
+            err = "Failed to set handler state: {0}".format(e)
+            add_event(name=self.name, is_success=False, message=err)
 
-    def get_state_messsage(self):
-        handler_state_message_file= self.get_handler_state_message_file()
-        if not os.path.isfile(handler_state_message_file):
+    def get_state_err(self):
+        """Get handler error message"""
+        handler_state_err_file= self.get_handler_state_err_file()
+        if not os.path.isfile(handler_state_err_file):
             return None
         try:
-            message = fileutil.read_file(handler_state_message_file)
+            message = fileutil.read_file(handler_state_err_file)
             return message
         except IOError as e:
-            raise ExtensionError(("Failed to get handler state message: {0}"
-                                  "").format(e))
+            err = "Failed to get handler state message: {0}".format(e)
+            add_event(name=self.name, is_success=False, message=err)
 
-    def set_state_message(self, message):
-        handler_state_message_file = self.get_handler_state_message_file()
-        if not os.path.isfile(handler_state_message_file):
+    def set_state_err(self, message):
+        """Set handler error message"""
+        handler_state_err_file = self.get_handler_state_err_file()
+        if not os.path.isfile(handler_state_err_file):
             self.make_handler_state_dir()
         try:
-            fileutil.write_file(handler_state_message_file, message)
+            fileutil.write_file(handler_state_err_file, message)
         except IOError as e:
-            raise ExtensionError(("Failed to set handler status message: {0}"
-                                  "").format(e))
+            err = "Failed to set handler state message: {0}".format(e)
+            add_event(name=self.name, is_success=False, message=err)
 
     def collect_heartbeat(self):
         self.logger.info("Collect heart beat")
@@ -716,9 +720,9 @@ class ExtHandlerInstance(object):
         return os.path.join(self.get_handler_state_dir(), 
                             '{0}.state'.format(self.ext.sequenceNumber))
 
-    def get_handler_state_message_file(self):
+    def get_handler_state_err_file(self):
         return os.path.join(self.get_handler_state_dir(), 
-                            '{0}.message'.format(self.ext.sequenceNumber))
+                            '{0}.error'.format(self.ext.sequenceNumber))
 
 
     def get_heartbeat_file(self):

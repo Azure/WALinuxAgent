@@ -81,6 +81,45 @@ manifest_sample_str = {
 }
 manifest_sample = ext.HandlerManifest(manifest_sample_str)
 
+ext_status_sample="""
+[{
+    "version": 1.0,
+    "timestampUTC": "2015-11-12T06:59:48Z",
+    "status": {
+        "name": "<Handler workload name>",
+        "operation": "<name of the operation being performed>",
+        "configurationAppliedTime": "2015-11-12T06:59:48Z",
+        "status": "error",
+        "code": 0,
+        "formattedMessage": {
+            "lang": "en-US",
+            "message": "formatted user message"
+        },
+        "substatus": [{
+            "name": "<Handler workload subcomponent name>",
+            "status": "error",
+            "code": 0 ,
+            "formattedMessage": {
+                "lang": "lang[-locale]",
+                "message": "formatted user message"
+            }
+        },{
+            "status": "error"
+        }]
+    }
+}]
+"""
+
+ext_status_sample_min="""
+[{
+    "version": 1.0,
+    "timestampUTC": "2015-11-12T06:59:48Z",
+    "status": {
+        "status": "error"
+    }
+}]
+"""
+
 def mock_load_manifest(self):
     return manifest_sample
 
@@ -114,8 +153,8 @@ class TestExtensions(unittest.TestCase):
                          test_ext.get_status_file())
         self.assertEqual("/tmp/handler_state/TestExt-2.0/0.state", 
                          test_ext.get_handler_state_file())
-        self.assertEqual("/tmp/handler_state/TestExt-2.0/0.message", 
-                         test_ext.get_handler_state_message_file())
+        self.assertEqual("/tmp/handler_state/TestExt-2.0/0.error", 
+                         test_ext.get_handler_state_err_file())
         self.assertEqual("/tmp/TestExt-2.0/config", test_ext.get_conf_dir())
         self.assertEqual("/tmp/TestExt-2.0/config/0.settings", 
                          test_ext.get_settings_file())
@@ -171,7 +210,11 @@ class TestExtensions(unittest.TestCase):
         test_ext.handle_enable()
 
     def test_status_convert(self):
-        data = json.loads('[{"status": {"status": "success", "formattedMessage": {"lang": "en-US", "message": "Script is finished"}, "operation": "Enable", "code": "0", "name": "Microsoft.OSTCExtensions.CustomScriptForLinux"}, "version": "1.0", "timestampUTC": "2015-06-27T08:34:50Z"}]')
+        data = json.loads(ext_status_sample)
+        ext_status = prot.ExtensionStatus()
+        ext.parse_ext_status(ext_status, data)
+
+        data = json.loads(ext_status_sample_min)
         ext_status = prot.ExtensionStatus()
         ext.parse_ext_status(ext_status, data)
 
