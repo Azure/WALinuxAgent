@@ -57,6 +57,9 @@ TRANSPORT_PRV_FILE_NAME = "TransportPrivate.pem"
 PROTOCOL_VERSION = "2012-11-30"
 ENDPOINT_FINE_NAME = "WireServer"
 
+SHORT_WAITING_INTERVAL = 1 # 1 second
+LONG_WAITING_INTERVAL = 15 # 15 seconds
+
 class WireProtocolResourceGone(ProtocolError):
     pass
 
@@ -122,43 +125,6 @@ class WireProtocol(Protocol):
     def report_event(self, events):
         validata_param("events", events, TelemetryEventList)
         self.client.report_event(events)
-
-def _fetch_cache(local_file):
-    if not os.path.isfile(local_file):
-        raise ProtocolError("{0} is missing.".format(local_file))
-    return fileutil.read_file(local_file)
-
-def _fetch_uri(uri, headers, chk_proxy=False):
-    try:
-        resp = restutil.http_get(uri, headers, chk_proxy=chk_proxy)
-    except restutil.HttpError as e:
-        raise ProtocolError(text(e))
-
-    if(resp.status == httpclient.FORBIDDEN):
-        logger.info("Sleep 15 seconds to prevent throttling.")
-        time.sleep(15)
-    
-    if(resp.status == httpclient.GONE):
-        raise WireProtocolResourceGone(uri)
-    if(resp.status != httpclient.OK):
-        raise ProtocolError("{0} - {1}".format(resp.status, uri))
-    
-    data = resp.read()
-    if data is None:
-        return None
-    data = remove_bom(data)
-    xml_text = text(data, encoding='utf-8')
-    return xml_text
-
-def _fetch_manifest(version_uris):
-    for version_uri in version_uris:
-        try:
-            xml_text = _fetch_uri(version_uri.uri, None, chk_proxy=True)
-            return xml_text
-        except IOError as e:
-            logger.warn("Failed to fetch ExtensionManifest: {0}, {1}", e,
-                        version_uri.uri)
-    raise ProtocolError("Failed to fetch ExtensionManifest from all sources")
 
 def _build_role_properties(container_id, role_instance_id, thumbprint):
     xml = (u"<?xml version=\"1.0\" encoding=\"utf-8\"?>"
@@ -316,9 +282,10 @@ def vm_status_to_v1(vm_status, ext_statuses):
 
 
 class StatusBlob(object):
-    def __init__(self):
+    def __init__(self, client):
         self.vm_status = None
         self.ext_statuses = {}
+        self.client = client
 
     def set_vm_status(self, vm_status):
         validata_param("vmAgent", vm_status, VMStatus)
@@ -355,7 +322,7 @@ class StatusBlob(object):
         logger.verb("Check blob type.")
         timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         try:
-            resp = restutil.http_head(url, {
+            resp = self.client.call_storage_service(restutil.http_head, url, {
                 "x-ms-date" :  timestamp,
                 'x-ms-version' : self.__class__.__storage_version__
             })
@@ -374,7 +341,8 @@ class StatusBlob(object):
         logger.verb("Upload block blob")
         timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         try:
-            resp = restutil.http_put(url, data, {
+            resp = self.client.call_storage_service(restutil.http_put, url, 
+                                                    data, {
                 "x-ms-date" :  timestamp,
                 "x-ms-blob-type" : "BlockBlob",
                 "Content-Length": text(len(data)),
@@ -397,7 +365,8 @@ class StatusBlob(object):
         #Align to 512 bytes
         page_blob_size = int((len(data) + 511) / 512) * 512
         try:
-            resp = restutil.http_put(url, "", {
+            resp = self.client.call_storage_service(restutil.http_put, url, 
+                                                    "", {
                 "x-ms-date" :  timestamp,
                 "x-ms-blob-type" : "PageBlob",
                 "Content-Length": "0",
@@ -429,7 +398,8 @@ class StatusBlob(object):
             buf = bytearray(buf_size)
             buf[0: content_size] = data[start: end]
             try:
-                resp = restutil.http_put(url, bytebuffer(buf), {
+                resp = self.client.call_storage_service(restutil.http_put, url, 
+                                                        bytebuffer(buf), {
                     "x-ms-date" :  timestamp,
                     "x-ms-range" : "bytes={0}-{1}".format(start, page_end - 1),
                     "x-ms-page-write" : "update",
@@ -482,32 +452,144 @@ class WireClient(object):
         self.shared_conf = None
         self.certs = None
         self.ext_conf = None
+        self.last_request = 0
         self.req_count = 0
-        self.status_blob = StatusBlob()
+        self.status_blob = StatusBlob(self)
+
+    def prevent_throttling(self):
+        """
+        Try to avoid throttling of wire server
+        """
+        now = time.time()
+        if now - self.last_request < 1:
+            logger.info("Last request issued less than 1 second ago")
+            logger.info("Sleep {0} second to avoid throttling.", 
+                        SHORT_WAITING_INTERVAL)
+            time.sleep(SHORT_WAITING_INTERVAL)
+        self.last_request = now
+
+        self.req_count += 1
+        if self.req_count % 3 == 0:
+            logger.info("Sleep {0} second to avoid throttling.", 
+                        SHORT_WAITING_INTERVAL)
+            time.sleep(SHORT_WAITING_INTERVAL)
+            self.req_count = 0
+
+    def call_wireserver(self, http_req, *args, **kwargs):
+        """
+        Call wire server. Handle throttling(403) and Resource Gone(410)
+        """
+        self.prevent_throttling()
+        for retry in range(0, 3):
+            resp = http_req(*args, **kwargs)
+            if resp.status == httpclient.FORBIDDEN:
+                logger.warn("Sending too much request to wire server")
+                logger.info("Sleep {0} second to avoid throttling.", 
+                            LONG_WAITING_INTERVAL)
+                time.sleep(LONG_WAITING_INTERVAL)
+            elif resp.status == httpclient.GONE:
+                msg = args[0] if len(args) > 0 else ""
+                raise WireProtocolResourceGone(msg)
+            else:
+                return resp
+        raise ProtocolError(("Calling wire server failed: {0}"
+                             "").format(resp.status))
+
+    def decode_config(self, data):
+        if data is None:
+            return None
+        data = remove_bom(data)
+        xml_text = text(data, encoding='utf-8')
+        return xml_text
+
+    def fetch_config(self, uri, headers):
+        try:
+            resp = self.call_wireserver(restutil.http_get, uri, 
+                                        headers=headers)
+        except restutil.HttpError as e:
+            raise ProtocolError(text(e))
+
+        if(resp.status != httpclient.OK):
+            raise ProtocolError("{0} - {1}".format(resp.status, uri))
+
+        return self.decode_config(resp.read())
+
+    def fetch_cache(self, local_file):
+        if not os.path.isfile(local_file):
+            raise ProtocolError("{0} is missing.".format(local_file))
+        try:
+            return fileutil.read_file(local_file)
+        except IOError as e:
+            raise ProtocolError("Failed to read cache: {0}".format(e))
+
+    def save_cache(self, local_file, data):
+        try:
+            fileutil.write_file(local_file, data)
+        except IOError as e:
+            raise ProtocolError("Failed to write cache: {0}".format(e))
+
+    def call_storage_service(self, http_req, *args, **kwargs):
+        """ 
+        Call storage service, handle SERVICE_UNAVAILABLE(503)
+        """
+        for retry in range(0, 3):
+            resp = http_req(*args, **kwargs)
+            if resp.status == httpclient.SERVICE_UNAVAILABLE:
+                logger.warn("Storage service is not avaible temporaryly")
+                logger.info("Will retry later, in {0} seconds", 
+                            LONG_WAITING_INTERVAL)
+                time.sleep(LONG_WAITING_INTERVAL)
+            else:
+                return resp
+        raise ProtocolError(("Calling storage endpoint failed: {0}"
+                             "").format(resp.status))
+
+    def fetch_manifest(self, version_uris):
+        for version_uri in version_uris:
+            try:
+                resp = self.call_storage_service(restutil.http_get, 
+                                                 version_uri.uri, None, 
+                                                 chk_proxy=True)
+            except restutil.HttpError as e:
+                raise ProtocolError(text(e))
+
+            if resp.status == httpclient.OK:
+                return self.decode_config(resp.read())
+            logger.warn("Failed to fetch ExtensionManifest: {0}, {1}", 
+                        resp.status, version_uri.uri)
+            logger.info("Will retry later, in {0} seconds", 
+                        LONG_WAITING_INTERVAL)
+            time.sleep(LONG_WAITING_INTERVAL)
+        raise ProtocolError(("Failed to fetch ExtensionManifest from "
+                             "all sources"))
+
 
     def update_hosting_env(self, goal_state):
         if goal_state.hosting_env_uri is None:
             raise ProtocolError("HostingEnvironmentConfig uri is empty")
         local_file = HOSTING_ENV_FILE_NAME
-        xml_text = _fetch_uri(goal_state.hosting_env_uri, self.get_header())
-        fileutil.write_file(local_file, xml_text)
+        xml_text = self.fetch_config(goal_state.hosting_env_uri, 
+                                     self.get_header())
+        self.save_cache(local_file, xml_text)
         self.hosting_env = HostingEnv(xml_text)
 
     def update_shared_conf(self, goal_state):
         if goal_state.shared_conf_uri is None:
             raise ProtocolError("SharedConfig uri is empty")
         local_file = SHARED_CONF_FILE_NAME
-        xml_text = _fetch_uri(goal_state.shared_conf_uri, self.get_header())
-        fileutil.write_file(local_file, xml_text)
+        xml_text = self.fetch_config(goal_state.shared_conf_uri, 
+                                     self.get_header())
+        self.save_cache(local_file, xml_text)
         self.shared_conf = SharedConfig(xml_text)
 
     def update_certs(self, goal_state):
         if goal_state.certs_uri is None:
             return
         local_file = CERTS_FILE_NAME
-        xml_text = _fetch_uri(goal_state.certs_uri, self.get_header_for_cert())
-        fileutil.write_file(local_file, xml_text)
-        self.certs = Certificates(xml_text)
+        xml_text = self.fetch_config(goal_state.certs_uri, 
+                                     self.get_header_for_cert())
+        self.save_cache(local_file, xml_text)
+        self.certs = Certificates(self, xml_text)
 
     def update_ext_conf(self, goal_state):
         if goal_state.ext_uri is None:
@@ -516,9 +598,8 @@ class WireClient(object):
             return
         incarnation = goal_state.incarnation
         local_file = EXT_CONF_FILE_NAME.format(incarnation)
-        xml_text = _fetch_uri(goal_state.ext_uri,
-                            self.get_header())
-        fileutil.write_file(local_file, xml_text)
+        xml_text = self.fetch_config(goal_state.ext_uri, self.get_header())
+        self.save_cache(local_file, xml_text)
         self.ext_conf = ExtensionsConfig(xml_text)
         for ext_handler in self.ext_conf.ext_handlers.extHandlers:
             self.update_ext_handler_manifest(ext_handler, goal_state)
@@ -526,18 +607,21 @@ class WireClient(object):
     def update_ext_handler_manifest(self, ext_handler, goal_state):
         local_file = MANIFEST_FILE_NAME.format(ext_handler.name,
                                                goal_state.incarnation)
-        xml_text = _fetch_manifest(ext_handler.versionUris)
-        fileutil.write_file(local_file, xml_text)
+        xml_text = self.fetch_manifest(ext_handler.versionUris)
+        self.save_cache(local_file, xml_text)
 
     def update_goal_state(self, forced=False, max_retry=3):
         uri = GOAL_STATE_URI.format(self.endpoint)
-        xml_text = _fetch_uri(uri, self.get_header())
+        xml_text = self.fetch_config(uri, self.get_header())
         goal_state = GoalState(xml_text)
+
+        incarnation_file = os.path.join(OSUTIL.get_lib_dir(), 
+                                        INCARNATION_FILE_NAME)
 
         if not forced:
             last_incarnation = None
-            if(os.path.isfile(INCARNATION_FILE_NAME)):
-                last_incarnation = fileutil.read_file(INCARNATION_FILE_NAME)
+            if(os.path.isfile(incarnation_file)):
+                last_incarnation = fileutil.read_file(incarnation_file)
             new_incarnation = goal_state.incarnation
             if last_incarnation is not None and \
                     last_incarnation == new_incarnation:
@@ -548,10 +632,10 @@ class WireClient(object):
         for retry in range(0, max_retry):
             try:
                 self.goal_state = goal_state
-                goal_state_file = GOAL_STATE_FILE_NAME.format(goal_state.incarnation)
-                fileutil.write_file(goal_state_file, xml_text)
-                fileutil.write_file(INCARNATION_FILE_NAME,
-                                         goal_state.incarnation)
+                file_name = GOAL_STATE_FILE_NAME.format(goal_state.incarnation)
+                goal_state_file = os.path.join(OSUTIL.get_lib_dir(), file_name)
+                self.save_cache(goal_state_file, xml_text)
+                self.save_cache(incarnation_file, goal_state.incarnation)
                 self.update_hosting_env(goal_state)
                 self.update_shared_conf(goal_state)
                 self.update_certs(goal_state)
@@ -559,35 +643,35 @@ class WireClient(object):
                 return
             except WireProtocolResourceGone:
                 logger.info("Incarnation is out of date. Update goalstate.")
-                xml_text = _fetch_uri(GOAL_STATE_URI, self.get_header())
+                xml_text = self.fetch_config(GOAL_STATE_URI, self.get_header())
                 goal_state = GoalState(xml_text)
 
         raise ProtocolError("Exceeded max retry updating goal state")
 
     def get_goal_state(self):
         if(self.goal_state is None):
-            incarnation = _fetch_cache(INCARNATION_FILE_NAME)
+            incarnation = self.fetch_cache(INCARNATION_FILE_NAME)
             goal_state_file = GOAL_STATE_FILE_NAME.format(incarnation)
-            xml_text = _fetch_cache(goal_state_file)
+            xml_text = self.fetch_cache(goal_state_file)
             self.goal_state = GoalState(xml_text)
         return self.goal_state
 
     def get_hosting_env(self):
         if(self.hosting_env is None):
-            xml_text = _fetch_cache(HOSTING_ENV_FILE_NAME)
+            xml_text = self.fetch_cache(HOSTING_ENV_FILE_NAME)
             self.hosting_env = HostingEnv(xml_text)
         return self.hosting_env
 
     def get_shared_conf(self):
         if(self.shared_conf is None):
-            xml_text = _fetch_cache(SHARED_CONF_FILE_NAME)
+            xml_text = self.fetch_cache(SHARED_CONF_FILE_NAME)
             self.shared_conf = SharedConfig(xml_text)
         return self.shared_conf
 
     def get_certs(self):
         if(self.certs is None):
-            xml_text = _fetch_cache(Certificates)
-            self.certs = Certificates(xml_text)
+            xml_text = self.fetch_cache(CERTS_FILE_NAME)
+            self.certs = Certificates(self, xml_text)
         if self.certs is None:
             return None
         return self.certs
@@ -599,19 +683,19 @@ class WireClient(object):
                 self.ext_conf = ExtensionsConfig(None)
             else:
                 local_file = EXT_CONF_FILE_NAME.format(goal_state.incarnation)
-                xml_text = _fetch_cache(local_file)
+                xml_text = self.fetch_cache(local_file)
                 self.ext_conf = ExtensionsConfig(xml_text)
         return self.ext_conf
 
     def get_ext_manifest(self, extension, goal_state):
         local_file = MANIFEST_FILE_NAME.format(extension.name,
                                         goal_state.incarnation)
-        xml_text = _fetch_cache(local_file)
+        xml_text = self.fetch_cache(local_file)
         return ExtensionManifest(xml_text)
 
     def check_wire_protocol_version(self):
         uri = VERSION_INFO_URI.format(self.endpoint)
-        version_info_xml = _fetch_uri(uri, None)
+        version_info_xml = self.fetch_config(uri, None)
         version_info = VersionInfo(version_info_xml)
 
         preferred = version_info.get_preferred()
@@ -637,11 +721,10 @@ class WireClient(object):
                                            thumbprint)
         role_prop = role_prop.encode("utf-8")
         role_prop_uri = ROLE_PROP_URI.format(self.endpoint)
+        headers = self.get_header_for_xml_content()
         try:
-            self.prevent_throttling()
-            resp = restutil.http_post(role_prop_uri,
-                                      role_prop,
-                                      headers=self.get_header_for_xml_content())
+            resp = self.call_wireserver(restutil.http_post, role_prop_uri,
+                                        role_prop, headers = headers)
         except restutil.HttpError as e:
             raise ProtocolError((u"Failed to send role properties: {0}"
                                  u"").format(e))
@@ -661,24 +744,14 @@ class WireClient(object):
         health_report_uri = HEALTH_REPORT_URI.format(self.endpoint)
         headers = self.get_header_for_xml_content()
         try:
-            self.prevent_throttling()
-            resp = restutil.http_post(health_report_uri,
-                                      health_report,
-                                      headers=headers)
+            resp = self.call_wireserver(restutil.http_post, health_report_uri,
+                                        health_report, headers = headers)
         except restutil.HttpError as e:
             raise ProtocolError((u"Failed to send provision status: {0}"
                                  u"").format(e))
         if resp.status != httpclient.OK:
             raise ProtocolError((u"Failed to send provision status: {0}"
                                  u", {1}").format(resp.status, resp.read()))
-
-
-    def prevent_throttling(self):
-        self.req_count += 1
-        if self.req_count % 3 == 0:
-            logger.info("Sleep 15 seconds to avoid throttling.")
-            self.req_count = 0
-            time.sleep(15)
 
     def send_event(self, provider_id, event_str):
         uri = TELEMETRY_URI.format(self.endpoint)
@@ -689,9 +762,8 @@ class WireClient(object):
                        '</TelemetryData>')
         data = data_format.format(provider_id, event_str)
         try:
-            self.prevent_throttling()
             header = self.get_header_for_xml_content()
-            resp = restutil.http_post(uri, data, header)
+            resp = self.call_wireserver(restutil.http_post, uri, data, header)
         except restutil.HttpError as e:
             raise ProtocolError("Failed to send events:{0}".format(e))
 
@@ -733,7 +805,7 @@ class WireClient(object):
         }
 
     def get_header_for_cert(self):
-        content = _fetch_cache(TRANSPORT_CERT_FILE_NAME)
+        content = self.fetch_cache(TRANSPORT_CERT_FILE_NAME)
         cert = textutil.get_bytes_from_pem(content)
         return {
             "x-ms-agent-name":"WALinuxAgent",
@@ -858,10 +930,9 @@ class Certificates(object):
     """
     Object containing certificates of host and provisioned user.
     """
-    def __init__(self, xml_text=None):
-        if xml_text is None:
-            raise ValueError("Certificates.xml is None")
+    def __init__(self, client, xml_text):
         logger.verb("Load Certificates.xml")
+        self.client = client
         self.lib_dir = OSUTIL.get_lib_dir()
         self.openssl_cmd = OSUTIL.get_openssl_cmd()
         self.cert_list = CertList()
@@ -883,7 +954,7 @@ class Certificates(object):
                "\n"
                "{2}").format(P7M_FILE_NAME, P7M_FILE_NAME, data)
 
-        fileutil.write_file(os.path.join(self.lib_dir, P7M_FILE_NAME), p7m)
+        self.client.save_cache(os.path.join(self.lib_dir, P7M_FILE_NAME), p7m)
         #decrypt certificates
         cmd = ("{0} cms -decrypt -in {1} -inkey {2} -recip {3}"
                "| {4} pkcs12 -nodes -password pass: -out {5}"
@@ -945,8 +1016,7 @@ class Certificates(object):
 
     def write_to_tmp_file(self, index, suffix, buf):
         file_name = os.path.join(self.lib_dir, "{0}.{1}".format(index, suffix))
-        with open(file_name, 'w') as tmp:
-            tmp.writelines(buf)
+        self.client.save_cache(file_name, "".join(buf))
         return file_name
 
 
