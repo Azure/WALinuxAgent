@@ -184,7 +184,8 @@ class TestCertificates(unittest.TestCase):
                             transport_cert)
         fileutil.write_file(os.path.join('/tmp', "TransportPrivate.pem"), 
                             transport_private)
-        config = v1.Certificates(certs_sample)
+        client = v1.WireClient("http://foo.bar")
+        config = v1.Certificates(client, certs_sample)
         self.assertNotEquals(None, config)
         self.assertTrue(os.path.isfile(crt1))
         self.assertTrue(os.path.isfile(crt2))
