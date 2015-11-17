@@ -58,12 +58,17 @@ def copy_ovf_env():
         ovfxml = re.sub("<UserPassword>.*?<", "<UserPassword>*<", ovfxml)
         ovf_file_path = os.path.join(OSUTIL.get_lib_dir(), OVF_FILE_NAME)
         fileutil.write_file(ovf_file_path, ovfxml)
-        OSUTIL.umount_dvd()
-        OSUTIL.eject_dvd()
     except IOError as e:
         raise ProtocolError(text(e))
     except OSUtilError as e:
         raise ProtocolError(text(e))
+
+    try:
+        OSUTIL.umount_dvd()
+        OSUTIL.eject_dvd()
+    except OSUtilError as e:
+        logger.warn(text(e))
+
     return ovfenv
 
 def _validate_ovf(val, msg):
