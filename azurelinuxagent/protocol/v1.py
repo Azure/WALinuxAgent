@@ -629,7 +629,7 @@ class WireClient(object):
                 return
             except WireProtocolResourceGone:
                 logger.info("Incarnation is out of date. Update goalstate.")
-                xml_text = self.fetch_config(GOAL_STATE_URI, self.get_header())
+                xml_text = self.fetch_config(uri, self.get_header())
                 goal_state = GoalState(xml_text)
 
         raise ProtocolError("Exceeded max retry updating goal state")
