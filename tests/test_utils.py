@@ -14,6 +14,8 @@
 #
 
 import unittest
+import tempfile
+import os
 from env import waagent
 
 sample_mount_list = """\
@@ -42,6 +44,40 @@ class TestWAAgentUtils(unittest.TestCase):
         malformed = 'asdfasdfasdfa aasdf'
         mp = waagent.GetMountPoint(malformed, device_name)
         self.assertEqual(mp, None)
+
+    def test_replace_in_file_found(self):
+        tmpfilename = tempfile.mkstemp('', 'tmp', None, True)[1]
+        try:
+            tmpfile = open(tmpfilename, 'w')
+            tmpfile.write('Replace Me')
+            tmpfile.close()
+
+            result = waagent.ReplaceStringInFile(tmpfilename, r'c. ', 'ced ')
+
+            tmpfile = open(tmpfilename, 'r')
+            newcontents = tmpfile.read();
+            tmpfile.close()
+
+            self.assertEqual('Replaced Me', str(newcontents))
+        finally:
+            os.remove(tmpfilename)
+
+    def test_replace_in_file_not_found(self):
+        tmpfilename = tempfile.mkstemp('', 'tmp', None, True)[1]
+        try:
+            tmpfile = open(tmpfilename, 'w')
+            tmpfile.write('Replace Me')
+            tmpfile.close()
+
+            result = waagent.ReplaceStringInFile(tmpfilename, r'not here ', 'ced ')
+
+            tmpfile = open(tmpfilename, 'r')
+            newcontents = tmpfile.read();
+            tmpfile.close()
+
+            self.assertEqual('Replace Me', str(newcontents))
+        finally:
+            os.remove(tmpfilename)
 
 if __name__ == '__main__':
     unittest.main()

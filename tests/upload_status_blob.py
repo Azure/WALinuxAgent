@@ -30,8 +30,14 @@ and defined the following 2 variables like:
 """
 from status_blob_url import blockBlobUrl, pageBlobUrl
 
+class MockConfig(object):
+    def get(self, keyName):
+        return None
+
+waagent.Config = MockConfig()
+
 if __name__ == '__main__':
     waagent.LoggerInit('/dev/stdout', '/dev/null', verbose=True)
     status = "a" * 512
     waagent.UploadStatusBlob(blockBlobUrl, status.encode("utf-8"))
-    waagent.UploadStatusBlob(pageBlobUrl, status.encode("utf-8"))
+    #waagent.UploadStatusBlob(pageBlobUrl, status.encode("utf-8"))

@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Windows Azure Linux Agent
+# Azure Linux Agent
 #
 # Copyright 2015 Microsoft Corporation
 #
@@ -23,6 +23,8 @@
 # http://msdn.microsoft.com/en-us/library/cc227259%28PROT.13%29.aspx
 #
 
+import crypt
+import random
 import array
 import base64
 import httplib
@@ -79,8 +81,8 @@ if not hasattr(subprocess,'check_output'):
     subprocess.CalledProcessError=CalledProcessError
     
 GuestAgentName = "WALinuxAgent"
-GuestAgentLongName = "Windows Azure Linux Agent"
-GuestAgentVersion = "WALinuxAgent-2.0.12"
+GuestAgentLongName = "Azure Linux Agent"
+GuestAgentVersion = "WALinuxAgent-2.0.16"
 ProtocolVersion = "2012-11-30" #WARNING this value is used to confirm the correct fabric protocol.
 
 Config = None
@@ -106,7 +108,7 @@ HandlerStatusToAggStatus = {"installed":"Installing", "enabled":"Ready", "uninta
 
 WaagentConf = """\
 #
-# Windows Azure Linux Agent Configuration
+# Azure Linux Agent Configuration
 #
 
 Role.StateConsumer=None                 # Specified program is invoked with the argument "Ready" when we report ready status
@@ -126,7 +128,7 @@ ResourceDisk.MountPoint=/mnt/resource   #
 ResourceDisk.EnableSwap=n               # Create and use swapfile on resource disk.
 ResourceDisk.SwapSizeMB=0               # Size of the swapfile.
 
-LBProbeResponder=y                      # Respond to load balancer probes if requested by Windows Azure.
+LBProbeResponder=y                      # Respond to load balancer probes if requested by Azure.
 
 Logs.Verbose=n                          # Enable verbose logs
 
@@ -173,8 +175,8 @@ class AbstractDistro(object):
         self.ssh_config_file='/etc/ssh/sshd_config'
         self.hostname_file_path='/etc/hostname'
         self.dhcp_client_name='dhclient'
-        self.requiredDeps = [ 'route', 'shutdown', 'ssh-keygen', 'useradd', 
-                              'openssl', 'sfdisk', 'fdisk', 'mkfs', 'chpasswd', 
+        self.requiredDeps = [ 'route', 'shutdown', 'ssh-keygen', 'useradd', 'usermod',
+                              'openssl', 'sfdisk', 'fdisk', 'mkfs', 
                               'sed', 'grep', 'sudo', 'parted' ]
         self.init_script_file='/etc/init.d/waagent'
         self.agent_package_name='WALinuxAgent'
@@ -187,6 +189,7 @@ class AbstractDistro(object):
         self.sudoers_dir_base = '/etc'
         self.waagent_conf_file = WaagentConf
         self.shadow_file_mode=0600
+        self.shadow_file_path="/etc/shadow"
         self.dhcp_enabled = False
         
     def isSelinuxSystem(self):
@@ -341,8 +344,35 @@ class AbstractDistro(object):
         return 0
     
     def changePass(self,user,password):
-        return RunSendStdin("chpasswd",(user + ":" + password + "\n"))
+        Log("Change user password")
+        crypt_id = Config.get("Provisioning.PasswordCryptId")
+        if crypt_id is None:
+            crypt_id = "6"
+
+        salt_len = Config.get("Provisioning.PasswordCryptSaltLength")
+        try:
+            salt_len = int(salt_len)
+            if salt_len < 0 or salt_len > 10:
+                salt_len = 10
+        except (ValueError, TypeError):
+            salt_len = 10
+
+        return self.chpasswd(user, password, crypt_id=crypt_id, 
+                             salt_len=salt_len)
     
+    def chpasswd(self, username, password, crypt_id=6, salt_len=10):
+        passwd_hash = self.gen_password_hash(password, crypt_id, salt_len)
+        cmd = "usermod -p '{0}' {1}".format(passwd_hash, username)
+        ret, output = RunGetOutput(cmd, log_cmd=False)
+        if ret != 0:
+            return "Failed to set password for {0}: {1}".format(username, output)
+
+    def gen_password_hash(self, password, crypt_id, salt_len):
+        collection = string.ascii_letters + string.digits
+        salt = ''.join(random.choice(collection) for _ in range(salt_len))
+        salt = "${0}${1}".format(crypt_id, salt)
+        return crypt.crypt(password, salt)
+
     def load_ata_piix(self):
         return WaAgent.TryLoadAtapiix()
 
@@ -606,6 +636,9 @@ class AbstractDistro(object):
         """
         Translate the custom data from a Base64 encoding. Default to no-op.
         """
+        decodeCustomData = Config.get("Provisioning.DecodeCustomData")
+        if decodeCustomData != None and decodeCustomData.lower().startswith("y"):
+            return base64.b64decode(data)
         return data
 
     def getConfigurationPath(self):
@@ -616,7 +649,40 @@ class AbstractDistro(object):
     
     def getTotalMemory(self):
         return int(RunGetOutput("grep MemTotal /proc/meminfo |awk '{print $2}'")[1])/1024
-        
+    
+    def getInterfaceNameByMac(self, mac):
+        ret, output = RunGetOutput("ifconfig -a")
+        if ret != 0:
+            raise Exception("Failed to get network interface info")
+        output = output.replace('\n', '')
+        match = re.search(r"(eth\d).*(HWaddr|ether) {0}".format(mac), 
+                          output, re.IGNORECASE)
+        if match is None:
+            raise Exception("Failed to get ifname with mac: {0}".format(mac))
+        output = match.group(0)
+        eths = re.findall(r"eth\d", output)
+        if eths is None or len(eths) == 0:
+            raise Exception("Failed to get ifname with mac: {0}".format(mac))
+        return eths[-1]
+
+    def configIpV4(self, ifName, addr, netmask=24):
+        ret, output = RunGetOutput("ifconfig {0} up".format(ifName))
+        if ret != 0:
+            raise Exception("Failed to bring up {0}: {1}".format(ifName, 
+                                                                 output))
+        ret, output = RunGetOutput("ifconfig {0} {1}/{2}".format(ifName, addr,
+                                                                 netmask))
+        if ret != 0:
+            raise Exception("Failed to config ipv4 for {0}: {1}".format(ifName, 
+                                                                        output))
+    def setDefaultGateway(self, gateway):
+        Run("/sbin/route add default gw" + gateway, chk_err=False)
+
+    def routeAdd(self, net, mask, gateway):
+        Run("/sbin/route add -net " + net + " netmask " + mask + " gw " + gateway,
+            chk_err=False)
+
+
 ############################################################
 #	GentooDistro
 ############################################################
@@ -627,7 +693,7 @@ command=/usr/sbin/waagent
 pidfile=/var/run/waagent.pid
 command_args=-daemon
 command_background=true
-name="Windows Azure Linux Agent"
+name="Azure Linux Agent"
 
 depend()
 {
@@ -696,7 +762,7 @@ class gentooDistro(AbstractDistro):
 suse_init_file = """\
 #! /bin/sh
 #
-# Windows Azure Linux Agent sysV init script
+# Azure Linux Agent sysV init script
 #
 # Copyright 2013 Microsoft Corporation
 # Copyright SUSE LLC
@@ -722,12 +788,12 @@ suse_init_file = """\
 # System startup script for the waagent
 #
 ### BEGIN INIT INFO
-# Provides: WindowsAzureLinuxAgent
+# Provides: AzureLinuxAgent
 # Required-Start: $network sshd
 # Required-Stop: $network sshd
 # Default-Start: 3 5
 # Default-Stop: 0 1 2 6
-# Description: Start the WindowsAzureLinuxAgent
+# Description: Start the AzureLinuxAgent
 ### END INIT INFO
 
 PYTHON=/usr/bin/python
@@ -760,14 +826,14 @@ rc_reset
 
 case "$1" in
     start)
-        echo -n "Starting WindowsAzureLinuxAgent"
+        echo -n "Starting AzureLinuxAgent"
         ## Start daemon with startproc(8). If this fails
         ## the echo return value is set appropriate.
         startproc -f ${PYTHON} ${WAZD_BIN} -daemon
         rc_status -v
         ;;
     stop)
-        echo -n "Shutting down WindowsAzureLinuxAgent"
+        echo -n "Shutting down AzureLinuxAgent"
         ## Stop daemon with killproc(8) and if this fails
         ## set echo the echo return value.
         killproc -p ${WAZD_PIDFILE} ${PYTHON} ${WAZD_BIN}
@@ -791,7 +857,7 @@ case "$1" in
         rc_status
         ;;
     status)
-        echo -n "Checking for service WindowsAzureLinuxAgent "
+        echo -n "Checking for service AzureLinuxAgent "
         ## Check status with checkproc(8), if process is running
         ## checkproc will return with exit status 0.
 
@@ -873,17 +939,17 @@ class SuSEDistro(AbstractDistro):
 redhat_init_file= """\
 #!/bin/bash
 #
-# Init file for WindowsAzureLinuxAgent.
+# Init file for AzureLinuxAgent.
 #
 # chkconfig: 2345 60 80
-# description: WindowsAzureLinuxAgent
+# description: AzureLinuxAgent
 #
 
 # source function library
 . /etc/rc.d/init.d/functions
 
 RETVAL=0
-FriendlyName="WindowsAzureLinuxAgent"
+FriendlyName="AzureLinuxAgent"
 WAZD_BIN=/usr/sbin/waagent
 
 start()
@@ -999,6 +1065,32 @@ class centosDistro(redhatDistro):
     def __init__(self):
         super(centosDistro,self).__init__()
 
+############################################################    
+#	oracleDistro
+############################################################    
+
+class oracleDistro(redhatDistro):
+    """
+    Oracle Distro concrete class
+    Put Oracle specific behavior here...
+    """
+    def __init__(self):
+        super(oracleDistro, self).__init__()
+
+
+
+############################################################    
+#	asianuxDistro
+############################################################    
+
+class asianuxDistro(redhatDistro):
+    """
+    Asianux Distro concrete class
+    Put Asianux specific behavior here...
+    """
+    def __init__(self):
+        super(asianuxDistro,self).__init__()
+
 
 ############################################################
 #   CoreOSDistro
@@ -1020,7 +1112,7 @@ class CoreOSDistro(AbstractDistro):
         self.dhcp_client_name='systemd-networkd'
         self.getpidcmd='pidof '
         self.shadow_file_mode=0640
-        self.waagent_path='/usr/share/oem/waagent/bin'
+        self.waagent_path='/usr/share/oem/bin'
         self.python_path='/usr/share/oem/python/bin'
         self.dhcp_enabled=True
         if 'PATH' in os.environ:
@@ -1108,7 +1200,7 @@ class CoreOSDistro(AbstractDistro):
         else:
             Log("CreateAccount: " + user + " already exists. Will update password.")
         if password != None:
-            RunSendStdin("chpasswd", user + ":" + password + "\n")
+            self.changePass(user, password)
         try:
             if password == None:
                 SetFileContents("/etc/sudoers.d/waagent", user + " ALL = (ALL) NOPASSWD: ALL\n")
@@ -1152,15 +1244,15 @@ class CoreOSDistro(AbstractDistro):
 debian_init_file = """\
 #!/bin/sh
 ### BEGIN INIT INFO
-# Provides:          WindowsAzureLinuxAgent
+# Provides:          AzureLinuxAgent
 # Required-Start:    $network $syslog
 # Required-Stop:     $network $syslog
 # Should-Start:      $network $syslog
 # Should-Stop:       $network $syslog
 # Default-Start:     2 3 4 5
 # Default-Stop:      0 1 6
-# Short-Description: WindowsAzureLinuxAgent
-# Description:       WindowsAzureLinuxAgent
+# Short-Description: AzureLinuxAgent
+# Description:       AzureLinuxAgent
 ### END INIT INFO
 
 . /lib/lsb/init-functions
@@ -1171,7 +1263,7 @@ WAZD_PID=/var/run/waagent.pid
 
 case "$1" in
     start)
-        log_begin_msg "Starting WindowsAzureLinuxAgent..."
+        log_begin_msg "Starting AzureLinuxAgent..."
         pid=$( pidofproc $WAZD_BIN )
         if [ -n "$pid" ] ; then
               log_begin_msg "Already running."
@@ -1183,7 +1275,7 @@ case "$1" in
         ;;
 
     stop)
-        log_begin_msg "Stopping WindowsAzureLinuxAgent..."
+        log_begin_msg "Stopping AzureLinuxAgent..."
         start-stop-daemon --stop --quiet --oknodo --pidfile $WAZD_PID
         ret=$?
         rm -f $WAZD_PID
@@ -1293,10 +1385,22 @@ class debianDistro(AbstractDistro):
             return 0
         
 ############################################################    
+#	KaliDistro - WIP
+#       Functioning on Kali 1.1.0a so far
+############################################################ 
+class KaliDistro(debianDistro):
+    """
+    Kali Distro concrete class
+    Put Kali specific behavior here...
+    """
+    def __init__(self):
+        super(KaliDistro,self).__init__()
+
+############################################################    
 #	UbuntuDistro
 ############################################################    
 ubuntu_upstart_file = """\
-#walinuxagent - start Windows Azure agent
+#walinuxagent - start Azure agent
 
 description "walinuxagent"
 author "Ben Howard <ben.howard@canonical.com>"
@@ -1338,18 +1442,6 @@ class UbuntuDistro(debianDistro):
 
     def registerAgentService(self):
         return self.installAgentServiceScriptFiles()
-
-    def startAgentService(self):
-        """
-        Use upstart syntax.
-        """
-        return Run('start ' + self.agent_service_name)
-        
-    def stopAgentService(self):
-        """
-        Use upstart syntax.
-        """
-        return Run('stop ' + self.agent_service_name)
     
     def uninstallAgentService(self):
         """
@@ -1432,7 +1524,7 @@ class LinuxMintDistro(UbuntuDistro):
 ############################################################    
 fedora_systemd_service = """\
 [Unit]
-Description=Windows Azure Linux Agent
+Description=Azure Linux Agent
 After=network.target
 After=sshd.service
 ConditionFileIsExecutable=/usr/sbin/waagent
@@ -1557,7 +1649,7 @@ class fedoraDistro(redhatDistro):
 ############################################################    
 FreeBSDWaagentConf = """\
 #
-# Windows Azure Linux Agent Configuration
+# Azure Linux Agent Configuration
 #
 
 Role.StateConsumer=None                 # Specified program is invoked with the argument "Ready" when we report ready status
@@ -1577,7 +1669,7 @@ ResourceDisk.MountPoint=/mnt/resource   #
 ResourceDisk.EnableSwap=n               # Create and use swapfile on resource disk.
 ResourceDisk.SwapSizeMB=0               # Size of the swapfile.
 
-LBProbeResponder=y                      # Respond to load balancer probes if requested by Windows Azure.
+LBProbeResponder=y                      # Respond to load balancer probes if requested by Azure.
 
 Logs.Verbose=n                          # Enable verbose logs
 
@@ -1619,7 +1711,7 @@ __name__='setupmain' #prevent waagent.__main__ from executing
 waagent=imp.load_source('waagent','/tmp/waagent') 
 waagent.LoggerInit('/var/log/waagent.log','/dev/console')
 from waagent import RunGetOutput,Run
-Config=waagent.ConfigurationProvider()
+Config=waagent.ConfigurationProvider(None)
 format = Config.get("ResourceDisk.Format")
 if format == None or format.lower().startswith("n"):
     sys.exit(0)
@@ -1722,7 +1814,7 @@ class FreeBSDDistro(AbstractDistro):
         return 0
 
     def changePass(self,user,password):
-        return RunSendStdin("pw usermod " + user + " -h 0 ",password)
+        return RunSendStdin("pw usermod " + user + " -h 0 ",password, log_cmd=False)
     
     def load_ata_piix(self):
         return 0
@@ -2017,7 +2109,13 @@ class FreeBSDDistro(AbstractDistro):
     
     def getTotalMemory(self):
         return int(RunGetOutput("sysctl hw.realmem | awk '{print $2}'")[1])/1024
-        
+    
+    def setDefaultGateway(self, gateway):
+        Run("/sbin/route add default " + gateway, chk_err=False)
+
+    def routeAdd(self, net, mask, gateway):
+        Run("/sbin/route add -net " + net + " " + mask + " " + gateway, chk_err=False)
+
 ############################################################
 # END DISTRO CLASS DEFS
 ############################################################  
@@ -2138,41 +2236,43 @@ def Run(cmd,chk_err=True):
     retcode,out=RunGetOutput(cmd,chk_err)
     return retcode
 
-def RunGetOutput(cmd,chk_err=True):
+def RunGetOutput(cmd, chk_err=True, log_cmd=True):
     """
     Wrapper for subprocess.check_output.
     Execute 'cmd'.  Returns return code and STDOUT, trapping expected exceptions.
     Reports exceptions to Error if chk_err parameter is True
     """
-    LogIfVerbose(cmd)
+    if log_cmd:
+        LogIfVerbose(cmd)
     try:                                     
         output=subprocess.check_output(cmd,stderr=subprocess.STDOUT,shell=True)
     except subprocess.CalledProcessError,e :
-        if chk_err :
+        if chk_err and log_cmd:
             Error('CalledProcessError.  Error Code is ' + str(e.returncode)  )
             Error('CalledProcessError.  Command string was ' + e.cmd  )
             Error('CalledProcessError.  Command result was ' + (e.output[:-1]).decode('latin-1'))
         return e.returncode,e.output.decode('latin-1')
     return 0,output.decode('latin-1')
 
-def RunSendStdin(cmd,input,chk_err=True):
+def RunSendStdin(cmd, input, chk_err=True, log_cmd=True):
     """
     Wrapper for subprocess.Popen.
     Execute 'cmd', sending 'input' to STDIN of 'cmd'.
     Returns return code and STDOUT, trapping expected exceptions.
     Reports exceptions to Error if chk_err parameter is True
     """
-    LogIfVerbose(cmd+input)
+    if log_cmd:
+        LogIfVerbose(cmd+input)
     try:                                     
         me=subprocess.Popen([cmd], shell=True, stdin=subprocess.PIPE,stderr=subprocess.STDOUT,stdout=subprocess.PIPE)
         output=me.communicate(input)
     except OSError , e :
-        if chk_err :
+        if chk_err and log_cmd:
             Error('CalledProcessError.  Error Code is ' + str(me.returncode)  )
             Error('CalledProcessError.  Command string was ' + cmd  )
             Error('CalledProcessError.  Command result was ' + output[0].decode('latin-1'))
             return 1,output[0].decode('latin-1')
-    if me.returncode is not 0 and chk_err is True:
+    if me.returncode is not 0 and chk_err is True and log_cmd:
             Error('CalledProcessError.  Error Code is ' + str(me.returncode)  )
             Error('CalledProcessError.  Command string was ' + cmd  )
             Error('CalledProcessError.  Command result was ' + output[0].decode('latin-1'))
@@ -2254,7 +2354,7 @@ def CreateAccount(user, password, expiration, thumbprint):
     else:
         Log("CreateAccount: " + user + " already exists. Will update password.")
     if password != None:
-        RunSendStdin("chpasswd",(user + ":" + password + "\n"))
+        MyDistro.changePass(user, password)
     try:
         # for older distros create sudoers.d
         if not os.path.isdir('/etc/sudoers.d/'):
@@ -2516,18 +2616,22 @@ def GetFirstActiveNetworkInterfaceNonLoopback():
     """
     iface=''
     expected=16 # how many devices should I expect...
-    struct_size=40 # for 64bit the size is 40 bytes
+    is_64bits = sys.maxsize > 2**32
+    struct_size=40 if is_64bits else 32 # for 64bit the size is 40 bytes, for 32bits it is 32 bytes.
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     buff=array.array('B', b'\0' * (expected*struct_size))
     retsize=(struct.unpack('iL', fcntl.ioctl(s.fileno(), 0x8912, struct.pack('iL',expected*struct_size,buff.buffer_info()[0]))))[0]
     if retsize == (expected*struct_size) :
         Warn('SIOCGIFCONF returned more than ' + str(expected) + ' up network interfaces.')
     s=buff.tostring()
+    preferred_nic = Config.get("Network.Interface")
     for i in range(0,struct_size*expected,struct_size):
         iface=s[i:i+16].split(b'\0', 1)[0]
         if iface == b'lo':
             continue
-        else :
+        elif preferred_nic is None:
+            break
+        elif iface == preferred_nic:
             break
     return iface.decode('latin-1'), socket.inet_ntoa(s[i+20:i+24])
 
@@ -2586,12 +2690,62 @@ def DeviceForIdePort(n):
             break
     return device
 
+class HttpResourceGoneError(Exception):
+    pass
+
+def DoInstallRHUIRPM():
+    """
+    Install RHUI RPM according to VM region
+    """
+    rhuiRPMinstalled = os.path.exists(LibDir + "/rhuirpminstalled")
+    if rhuiRPMinstalled:
+        return
+    else:
+        SetFileContents(LibDir + "/rhuirpminstalled", "")
+
+    Log("Begin to install RHUI RPM")
+    cmd = "grep '<Location>' /var/lib/waagent/ExtensionsConfig* --no-filename | sed 's/<Location>//g' | sed 's/<\/Location>//g' | sed 's/ //g' | tr 'A-Z' 'a-z' | uniq"
+
+    retcode,out = RunGetOutput(cmd, True)
+    region = out.rstrip("\n")
+
+    #try a few times at most to get the region info
+    retry = 0
+    for i in range(0, 8):
+        if (region != ""):
+            break
+        Log("region info is empty, now wait 15 seconds...")
+        time.sleep(15)
+        retcode,out = RunGetOutput(cmd, True)
+        region = out.rstrip("\n")
+
+    if region == "":
+        Log("could not detect region info, now use the default region: eastus2")
+        region = "eastus2"
+
+    scriptFilePath = "/tmp/install-rhui-rpm.sh"
+
+    if not os.path.exists(scriptFilePath):
+        Error(scriptFilePath + " does not exist, now quit RHUI RPM installation.");
+        return
+    #chmod a+x script file
+    os.chmod(scriptFilePath, 0100)
+    Log("begin to run " + scriptFilePath)
+
+    #execute the downloaded script file
+    retcode,out = RunGetOutput(scriptFilePath, True)
+    if retcode != 0:
+        Error("execute script " + scriptFilePath + " failed, return code: " + str(retcode) + ", now exit RHUI RPM installation.");
+        return
+
+    Log("install RHUI RPM completed")
+    
 class Util(object):
     """
     Http communication class.
     Base of GoalState, and Agent classes.
     """
-    __RetryWaitingInterval=10
+    RetryWaitingInterval=10
 
     def __init__(self):
         self.Endpoint = None
@@ -2599,47 +2753,82 @@ class Util(object):
     def _ParseUrl(self, url):
         secure = False
         host = self.Endpoint
-        action = url
-
-        #Strip "http[s]://hostname/" from url
+        path = url
+        port = None
+        
+        #"http[s]://hostname[:port][/]"
         if url.startswith("http://"):
             url = url[7:]
-            pos = url.index("/")
-            if pos > 0:
-                host = url[0: pos]
-                action = url[pos:]
+            if "/" in url:
+                host = url[0: url.index("/")]
+                path = url[url.index("/"):]
+            else:
+                host = url
+                path = "/"
         elif url.startswith("https://"):
             secure = True
             url = url[8:]
-            pos = url.index("/")
-            if pos > 0:
-                host = url[0:pos]
-                action = url[pos:]
-        return host, action, secure        
+            if "/" in url:
+                host = url[0: url.index("/")]
+                path = url[url.index("/"):]
+            else:
+                host = url
+                path = "/"
 
-    def _HttpRequest(self, method, host, action, data=None, 
-                     secure=False, headers=None):
-        resp = None;
+        if host is None:
+            raise ValueError("Host is invalid:{0}".format(url))
+        
+        if(":" in host):
+            pos = host.rfind(":")
+            port = int(host[pos + 1:])
+            host = host[0:pos]
+        
+        return host, port, secure, path
+
+    def GetHttpProxy(self, secure):
+        """
+        Get http_proxy and https_proxy from environment variables.
+        Username and password is not supported now.
+        """
+        host = Config.get("HttpProxy.Host")
+        port = Config.get("HttpProxy.Port")
+        return (host, port) 
+
+    def _HttpRequest(self, method, host, path, port=None, data=None, secure=False, 
+                     headers=None, proxyHost=None, proxyPort=None):
+        resp = None
+        conn = None
         try:
-            httpConnection = None
-
-            #If httplib module is not built with ssl support. Failback to http
-            if secure and hasattr(httplib, "HTTPSConnection"):
-                httpConnection = httplib.HTTPSConnection(host)
+            if secure:
+                port = 443 if port is None else port
+                if proxyHost is not None and proxyPort is not None:
+                    conn = httplib.HTTPSConnection(proxyHost, proxyPort)
+                    conn.set_tunnel(host, port)
+                    #If proxy is used, full url is needed.
+                    path = "https://{0}:{1}{2}".format(host, port, path)
+                else:
+                    conn = httplib.HTTPSConnection(host, port)
             else:
-                httpConnection = httplib.HTTPConnection(host)
+                port = 80 if port is None else port
+                if proxyHost is not None and proxyPort is not None:
+                    conn = httplib.HTTPConnection(proxyHost, proxyPort)
+                    #If proxy is used, full url is needed.
+                    path = "http://{0}:{1}{2}".format(host, port, path)
+                else:
+                    conn = httplib.HTTPConnection(host, port)
             if headers == None:
-                httpConnection.request(method, action, data)
+                conn.request(method, path, data)
             else:
-                httpConnection.request(method, action, data, headers)
-            resp = httpConnection.getresponse()
+                conn.request(method, path, data, headers)
+            resp = conn.getresponse()
         except httplib.HTTPException, e:
             Error('HTTPException {0}, args:{1}'.format(e, repr(e.args)))
         except IOError, e:
             Error('Socket IOError {0}, args:{1}'.format(e, repr(e.args)))
         return resp
 
-    def HttpRequest(self, method, url, data, headers=None, maxRetry=3):
+    def HttpRequest(self, method, url, data=None, 
+                    headers=None, maxRetry=3, chkProxy=False):
         """
         Sending http request to server
         On error, sleep 10 and maxRetry times.
@@ -2648,14 +2837,44 @@ class Util(object):
         LogIfVerbose("HTTP Req: {0} {1}".format(method, url))
         LogIfVerbose("HTTP Req: Data={0}".format(data))
         LogIfVerbose("HTTP Req: Header={0}".format(headers))
-        host, action, secure = self._ParseUrl(url)
-        resp = self._HttpRequest(method, host, action, data, secure, headers)
+        try:
+            host, port, secure, path = self._ParseUrl(url)
+        except ValueError, e:
+            Error("Failed to parse url:{0}".format(url))
+            return None
+
+        #Check proxy
+        proxyHost, proxyPort = (None, None)
+        if chkProxy:
+            proxyHost, proxyPort = self.GetHttpProxy(secure)
+
+        #If httplib module is not built with ssl support. Fallback to http
+        if secure and not hasattr(httplib, "HTTPSConnection"):
+            Warn("httplib is not built with ssl support")
+            secure = False
+            proxyHost, proxyPort = self.GetHttpProxy(secure)
+        
+        #If httplib module doesn't support https tunnelling. Fallback to http
+        if secure and \
+                proxyHost is not None and \
+                proxyPort is not None and \
+                not hasattr(httplib.HTTPSConnection, "set_tunnel"):
+            Warn("httplib doesn't support https tunnelling(new in python 2.7)")
+            secure = False
+            proxyHost, proxyPort = self.GetHttpProxy(secure)
+
+        resp = self._HttpRequest(method, host, path, port=port, data=data, 
+                                 secure=secure, headers=headers,
+                                 proxyHost=proxyHost, proxyPort=proxyPort)
         for retry in range(0, maxRetry):
             if resp is not None and \
                    (resp.status == httplib.OK or \
                     resp.status == httplib.CREATED or \
                     resp.status == httplib.ACCEPTED):
                 return resp;
+
+            if resp is not None and resp.status == httplib.GONE:
+                raise HttpResourceGoneError("Http resource gone.")
 
             Error("Retry={0}".format(retry))
             Error("HTTP Req: {0} {1}".format(method, url))
@@ -2668,65 +2887,75 @@ class Util(object):
                 Error("HTTP Err: Reason={0}".format(resp.reason))
                 Error("HTTP Err: Header={0}".format(resp.getheaders()))
                 Error("HTTP Err: Body={0}".format(resp.read()))
-            time.sleep(self.__class__.__RetryWaitingInterval)
-            resp = self._HttpRequest(method, host, action, data, secure, 
-                                     headers)
+
+            time.sleep(self.__class__.RetryWaitingInterval)
+            resp = self._HttpRequest(method, host, path, port=port, data=data, 
+                                     secure=secure, headers=headers,
+                                     proxyHost=proxyHost, proxyPort=proxyPort)
 
         return None
 
-    def HttpGet(self, url, headers=None, maxRetry=3):
-        return self.HttpRequest("GET", url, None, headers, maxRetry)
+    def HttpGet(self, url, headers=None, maxRetry=3, chkProxy=False):
+        return self.HttpRequest("GET", url, headers=headers, 
+                                maxRetry=maxRetry, chkProxy=chkProxy)
         
-    def HttpHead(self, url, headers=None, maxRetry=3):
-        return self.HttpRequest("HEAD", url, None, headers, maxRetry)
+    def HttpHead(self, url, headers=None, maxRetry=3, chkProxy=False):
+        return self.HttpRequest("HEAD", url, headers=headers, 
+                                maxRetry=maxRetry, chkProxy=chkProxy)
         
-    def HttpPost(self, url, data, headers=None, maxRetry=3):
-        return self.HttpRequest("POST", url, data, headers, maxRetry)
+    def HttpPost(self, url, data, headers=None, maxRetry=3, chkProxy=False):
+        return self.HttpRequest("POST", url, data=data, headers=headers, 
+                                maxRetry=maxRetry, chkProxy=chkProxy)
 
-    def HttpPut(self, url, data, headers=None, maxRetry=3):
-        return self.HttpRequest("PUT", url, data, headers, maxRetry)
+    def HttpPut(self, url, data, headers=None, maxRetry=3, chkProxy=False):
+        return self.HttpRequest("PUT", url, data=data, headers=headers, 
+                                maxRetry=maxRetry, chkProxy=chkProxy)
 
-    def HttpDelete(self, url, headers=None, maxRetry=3):
-        return self.HttpRequest("DELETE", url, None, headers, maxRetry)
+    def HttpDelete(self, url, headers=None, maxRetry=3, chkProxy=False):
+        return self.HttpRequest("DELETE", url, headers=headers, 
+                                maxRetry=maxRetry, chkProxy=chkProxy)
     
-    def HttpGetWithoutHeaders(self, url, maxRetry=3):
+    def HttpGetWithoutHeaders(self, url, maxRetry=3, chkProxy=False):
         """
         Return data from an HTTP get on 'url'.
         """
-        resp = self.HttpGet(url, None, maxRetry)
+        resp = self.HttpGet(url, headers=None, maxRetry=maxRetry, 
+                            chkProxy=chkProxy)
         return resp.read() if resp is not None else None
 
-    def HttpGetWithHeaders(self, url, maxRetry=3):
+    def HttpGetWithHeaders(self, url, maxRetry=3, chkProxy=False):
         """
         Return data from an HTTP get on 'url' with
         x-ms-agent-name and x-ms-version
         headers.
         """
-        resp = self.HttpGet(url, {
+        resp = self.HttpGet(url, headers={
             "x-ms-agent-name": GuestAgentName, 
             "x-ms-version": ProtocolVersion
-        }, maxRetry)
+        }, maxRetry=maxRetry, chkProxy=chkProxy)
         return resp.read() if resp is not None else None
 
-    def HttpSecureGetWithHeaders(self, url, transportCert, maxRetry=3):
+    def HttpSecureGetWithHeaders(self, url, transportCert, maxRetry=3, 
+                                 chkProxy=False):
         """
         Return output of get using ssl cert.
         """
-        resp = self.HttpGet(url, {
+        resp = self.HttpGet(url, headers={
             "x-ms-agent-name": GuestAgentName,
             "x-ms-version": ProtocolVersion,
             "x-ms-cipher-name": "DES_EDE3_CBC",
             "x-ms-guest-agent-public-x509-cert": transportCert
-        }, maxRetry)
+        }, maxRetry=maxRetry, chkProxy=chkProxy)
         return resp.read() if resp is not None else None
 
-    def HttpPostWithHeaders(self, url, data, maxRetry=3):
-        header = {
+    def HttpPostWithHeaders(self, url, data, maxRetry=3, chkProxy=False):
+        headers = {
             "x-ms-agent-name": GuestAgentName,
             "Content-Type": "text/xml; charset=utf-8",
             "x-ms-version": ProtocolVersion
         }
-        return self.HttpPost(url, data, header, maxRetry)
+        return self.HttpPost(url, data=data, headers=headers, 
+                             maxRetry=maxRetry, chkProxy=chkProxy)
 
 __StorageVersion="2014-02-14"
 
@@ -2738,7 +2967,7 @@ def GetBlobType(url):
     blobPropResp = restutil.HttpHead(url, {
         "x-ms-date" :  timestamp,
         'x-ms-version' : __StorageVersion
-    });
+    }, chkProxy=True);
     blobType = None
     if blobPropResp is None:
         Error("Can't get status blob type.")
@@ -2756,7 +2985,7 @@ def PutBlockBlob(url, data):
         "x-ms-blob-type" : "BlockBlob",
         "Content-Length": str(len(data)),
         "x-ms-version" : __StorageVersion
-    })
+    }, chkProxy=True)
     if ret is None:
         Error("Failed to upload block blob for status.")
 
@@ -2772,7 +3001,7 @@ def PutPageBlob(url, data):
         "Content-Length": "0",
         "x-ms-blob-content-length" : str(pageBlobSize),
         "x-ms-version" : __StorageVersion
-    })
+    }, chkProxy=True)
     if ret is None:
         Error("Failed to clean up page blob for status")
         return
@@ -2794,13 +3023,13 @@ def PutPageBlob(url, data):
         bufSize = pageEnd - start
         buf = bytearray(bufSize)
         buf[0 : contentSize] = data[start : end]
-        ret = restutil.HttpPut(url, buf, {
+        ret = restutil.HttpPut(url, buffer(buf), {
             "x-ms-date" :  timestamp,
             "x-ms-range" : "bytes={0}-{1}".format(start, pageEnd - 1),
             "x-ms-page-write" : "update",
             "x-ms-version" : __StorageVersion,
             "Content-Length": str(pageEnd - start)
-        })
+        }, chkProxy=True)
         if ret is None:
             Error("Failed to upload page blob for status")
             return
@@ -2877,12 +3106,13 @@ class ConfigurationProvider(object):
     """
     Parse amd store key:values in waagent.conf
     """
-    def __init__(self):
+    def __init__(self, walaConfigFile):
         self.values = dict()
         if 'MyDistro' not in globals():
             global MyDistro
             MyDistro = GetMyDistro()
-        walaConfigFile = MyDistro.getConfigurationPath()
+        if walaConfigFile is None:
+            walaConfigFile = MyDistro.getConfigurationPath()
         if os.path.isfile(walaConfigFile) == False:
             raise Exception("Missing configuration in {0}".format(walaConfigFile))
         try:
@@ -3131,6 +3361,7 @@ class SharedConfig(object):
         """
         Parse and write configuration to file SharedConfig.xml.
         """
+        LogIfVerbose(xmlText)
         self.reinitialize()
         self.xmlText = xmlText
         dom = xml.dom.minidom.parseString(xmlText)
@@ -3147,25 +3378,17 @@ class SharedConfig(object):
         if nodes is not None and len(nodes) != 0:
             node = nodes[0]
             if node.hasAttribute("rdmaMacAddress"):
-                self.RdmaMacAddress = node.getAttribute("rdmaMacAddress")
+                addr = node.getAttribute("rdmaMacAddress")
+                self.RdmaMacAddress = addr[0:2]
+                for i in range(1, 6):
+                    self.RdmaMacAddress += ":" + addr[2 * i : 2 *i + 2]
             if node.hasAttribute("rdmaIPv4Address"):
                 self.RdmaIPv4Address = node.getAttribute("rdmaIPv4Address")
         return self
     
     def Save(self):
+        LogIfVerbose("Save SharedConfig.xml")
         SetFileContents("SharedConfig.xml", self.xmlText)
-
-    def ConfigRdma(self, dev="/dev/hvnd_rdma"):
-        if self.RdmaIPv4Address is not None and self.RdmaMacAddress is not None:
-            if os.path.isfile(dev):
-                data = ('rdmaMacAddress="{0}" rdmaIPv4Address="{1}"'
-                        '').format(self.RdmaMacAddress, self.RdmaIPv4Address)
-                Log("Write rdma config to {0}: {1}".format(dev, data))
-                try:
-                    with open(dev, "w") as c:
-                        c.write(data)
-                except IOError, e:
-                    Error("Error writing {0}, {1}".format(dev, e))
 
     def InvokeTopologyConsumer(self):
         program = Config.get("Role.TopologyConsumer")
@@ -3176,8 +3399,104 @@ class SharedConfig(object):
                 ErrorWithPrefix('Agent.Run','Exception: '+ str(e) +' occured launching ' + program )
 
     def Process(self):
-        self.ConfigRdma()
+        global rdma_configured
+        if not rdma_configured and self.RdmaMacAddress is not None and self.RdmaIPv4Address is not None:
+            handler = RdmaHandler(self.RdmaMacAddress, self.RdmaIPv4Address)
+            handler.start()
+            rdma_configured = True
         self.InvokeTopologyConsumer()
+
+rdma_configured = False
+
+class RdmaError(Exception):
+    pass
+
+class RdmaHandler(object):
+    """
+    Handle rdma configuration.
+    """
+
+    def __init__(self, mac, ip_addr, dev="/dev/hvnd_rdma",
+                 dat_conf_files=['/etc/dat.conf', '/etc/rdma/dat.conf',
+                                 '/usr/local/etc/dat.conf']):
+        self.mac = mac
+        self.ip_addr = ip_addr
+        self.dev = dev
+        self.dat_conf_files = dat_conf_files
+        self.data = ('rdmaMacAddress="{0}" rdmaIPv4Address="{1}"'
+                     '').format(self.mac, self.ip_addr)
+
+    def start(self):
+        """
+        Start a new thread to process rdma
+        """
+        threading.Thread(target=self.process).start()
+
+    def process(self):
+        try:
+            self.set_dat_conf()
+            self.set_rdma_dev()
+            self.set_rdma_ip()
+        except RdmaError as e:
+            Error("Failed to config rdma device: {0}".format(e))
+
+    def set_dat_conf(self):
+        """
+        Agent needs to search all possible locations for dat.conf
+        """
+        Log("Set dat.conf")
+        for dat_conf_file in self.dat_conf_files:
+            if not os.path.isfile(dat_conf_file):
+                continue
+            try:
+                self.write_dat_conf(dat_conf_file)
+            except IOError as e:
+                raise RdmaError("Failed to write to dat.conf: {0}".format(e))
+
+    def write_dat_conf(self, dat_conf_file):
+        Log("Write config to {0}".format(dat_conf_file))
+        old = ("ofa-v2-ib0 u2.0 nonthreadsafe default libdaplofa.so.2 "
+               "dapl.2.0 \"\S+ 0\"")
+        new = ("ofa-v2-ib0 u2.0 nonthreadsafe default libdaplofa.so.2 "
+               "dapl.2.0 \"{0} 0\"").format(self.ip_addr)
+        lines = GetFileContents(dat_conf_file)
+        lines = re.sub(old, new, lines)
+        SetFileContents(dat_conf_file, lines)
+
+    def set_rdma_dev(self):
+        """
+        Write config string to /dev/hvnd_rdma
+        """
+        Log("Set /dev/hvnd_rdma")
+        self.wait_rdma_dev()
+        self.write_rdma_dev_conf()
+
+    def write_rdma_dev_conf(self):
+        Log("Write rdma config to {0}: {1}".format(self.dev, self.data))
+        try:
+            with open(self.dev, "w") as c:
+                c.write(self.data)
+        except IOError, e:
+            raise RdmaError("Error writing {0}, {1}".format(self.dev, e))
+
+    def wait_rdma_dev(self):
+        Log("Wait for /dev/hvnd_rdma")
+        retry = 0
+        while retry < 120:
+            if os.path.exists(self.dev):
+                return
+            time.sleep(1)
+            retry += 1
+        raise RdmaError("The device doesn't show up in 120 seconds")
+
+    def set_rdma_ip(self):
+        Log("Set ip addr for rdma")
+        try:
+            if_name = MyDistro.getInterfaceNameByMac(self.mac)
+            #Azure is using 12 bits network mask for infiniband.
+            MyDistro.configIpV4(if_name, self.ip_addr, 12)
+        except Exception as e:
+            raise RdmaError("Failed to config rdma device: {0}".format(e))
 
 class ExtensionsConfig(object):
     """
@@ -3332,7 +3651,7 @@ class ExtensionsConfig(object):
                 Log("Plugin server is: " +  self.Util.Endpoint)
                 SimpleLog(p.plugin_log,"Plugin server is: " +  self.Util.Endpoint)
 
-                manifest=self.Util.HttpGetWithoutHeaders(location)
+                manifest=self.Util.HttpGetWithoutHeaders(location, chkProxy=True)
                 if manifest == None:
                     Error("Unable to download plugin manifest" + name + " from primary location.  Attempting with failover location.")
                     SimpleLog(p.plugin_log,"Unable to download plugin manifest" + name + " from primary location.  Attempting with failover location.")
@@ -3341,7 +3660,7 @@ class ExtensionsConfig(object):
                     Log("Plugin failover server is: " +  self.Util.Endpoint)
                     SimpleLog(p.plugin_log,"Plugin failover server is: " +  self.Util.Endpoint)
 
-                    manifest=self.Util.HttpGetWithoutHeaders(failoverlocation)
+                    manifest=self.Util.HttpGetWithoutHeaders(failoverlocation, chkProxy=True)
                 #if failoverlocation also fail what to do then?
                 if manifest == None:
                     AddExtensionEvent(name,WALAEventOperation.Download,False,0,version,"Download mainfest fail "+failoverlocation)
@@ -3375,7 +3694,7 @@ class ExtensionsConfig(object):
                 SimpleLog(p.plugin_log,"Bundle URI = " + bundle_uri)
 
                 # Download the zipfile archive and save as '.zip'
-                bundle=self.Util.HttpGetWithoutHeaders(bundle_uri)
+                bundle=self.Util.HttpGetWithoutHeaders(bundle_uri, chkProxy=True)
                 if bundle == None:
                     AddExtensionEvent(name,WALAEventOperation.Download,True,0,version,"Download zip fail "+bundle_uri)
                     Error("Unable to download plugin bundle" + bundle_uri )
@@ -4086,6 +4405,7 @@ class GoalState(Util):
                                                                 LogIfVerbose("SharedConfigUrl:" + self.SharedConfigUrl)
                                                                 self.SharedConfigXml = self.HttpGetWithHeaders(self.SharedConfigUrl)
                                                                 self.SharedConfig = SharedConfig().Parse(self.SharedConfigXml)
+                                                                self.SharedConfig.Save()
                                                             elif e.localName == "ExtensionsConfig":
                                                                 self.ExtensionsConfigUrl = GetNodeTextData(e)
                                                                 LogIfVerbose("ExtensionsConfigUrl:" + self.ExtensionsConfigUrl)
@@ -4114,9 +4434,9 @@ class GoalState(Util):
         """
         Calls HostingEnvironmentConfig.Process()
         """
+        LogIfVerbose("Process goalstate")
         self.HostingEnvironmentConfig.Process()
         self.SharedConfig.Process()
-        self.SharedConfig.Save()
         
 class OvfEnv(object):
     """
@@ -4171,7 +4491,7 @@ class OvfEnv(object):
         self.SshPublicKeys = []
         self.SshKeyPairs = []
 
-    def Parse(self, xmlText):
+    def Parse(self, xmlText, isDeprovision = False):
         """
         Parse xml tree, retreiving user and ssh key information.
         Return self.
@@ -4203,6 +4523,8 @@ class OvfEnv(object):
             return None
         self.ComputerName = GetNodeTextData(section.getElementsByTagNameNS(self.WaNs, "HostName")[0])
         self.UserName = GetNodeTextData(section.getElementsByTagNameNS(self.WaNs, "UserName")[0])
+        if isDeprovision == True:
+          return self
         try:
             self.UserPassword = GetNodeTextData(section.getElementsByTagNameNS(self.WaNs, "UserPassword")[0])
         except:
@@ -4213,7 +4535,7 @@ class OvfEnv(object):
             if len(CDSection) > 0 :
                 self.CustomData=GetNodeTextData(CDSection[0])
                 if len(self.CustomData)>0:
-                    SetFileContents(LibDir + '/CustomData', MyDistro.translateCustomData(self.CustomData))
+                    SetFileContents(LibDir + '/CustomData', bytearray(MyDistro.translateCustomData(self.CustomData)))
                     Log('Wrote ' + LibDir + '/CustomData')
                 else :
                     Error('<CustomData> contains no data!')
@@ -4782,7 +5104,16 @@ class Agent(Util):
         net = self.IntegerToIpAddressV4String(net)
         mask = self.IntegerToIpAddressV4String(mask)
         gateway = self.IntegerToIpAddressV4String(gateway)
-        Run("/sbin/route add -net " + net + " netmask " + mask + " gw " + gateway,chk_err=False)
+        Log("Route add: net={0}, mask={1}, gateway={2}".format(net, mask, gateway))
+        MyDistro.routeAdd(net, mask, gateway)
+    
+    def SetDefaultGateway(self, gateway):
+        """
+        Set default gateway
+        """
+        gateway = self.IntegerToIpAddressV4String(gateway)
+        Log("Set default gateway: {0}".format(gateway))
+        MyDistro.setDefaultGateway(gateway)
 
     def HandleDhcpResponse(self, sendData, receiveBuffer):
         """
@@ -4865,11 +5196,11 @@ class Agent(Util):
                     gateway = self.UnpackBigEndian(receiveBuffer, i + 2, 4)
                     IpAddress = self.IntegerToIpAddressV4String(gateway)
                     if option == 3:
-                        self.RouteAdd(0, 0, gateway)
+                        self.SetDefaultGateway(gateway)
                         name = "DefaultGateway"
                     else:
                         endpoint = IpAddress
-                        name = "Windows Azure wire protocol endpoint"
+                        name = "Azure wire protocol endpoint"
                     LogIfVerbose(name + ": " + IpAddress + " at " + hex(i))
                 else:
                     Error("HandleDhcpResponse: Data too small for option " + str(option))
@@ -4881,7 +5212,7 @@ class Agent(Util):
     def DoDhcpWork(self):
         """
         Discover the wire server via DHCP option 245.
-        And workaround incompatibility with Windows Azure DHCP servers.
+        And workaround incompatibility with Azure DHCP servers.
         """
         ShortSleep = False # Sleep 1 second before retrying DHCP queries.
         ifname=None
@@ -4995,7 +5326,7 @@ class Agent(Util):
         if not goalStateXml:
             Error("UpdateGoalState failed.")
             return
-        Log("Retrieved GoalState from Windows Azure Fabric.")
+        Log("Retrieved GoalState from Azure Fabric.")
         self.GoalState = GoalState(self).Parse(goalStateXml)
         return self.GoalState
 
@@ -5307,15 +5638,15 @@ class Agent(Util):
         except:
             pass
 
-        Log("Probing for Windows Azure environment.")
+        Log("Probing for Azure environment.")
         self.Endpoint = self.DoDhcpWork()
 
         if self.Endpoint == None:
-            Log("Windows Azure environment not detected.")
+            Log("Azure environment not detected.")
             while True:
                 time.sleep(60)
 
-        Log("Discovered Windows Azure endpoint: " + self.Endpoint)
+        Log("Discovered Azure endpoint: " + self.Endpoint)
         if not self.CheckVersions():
             Error("Agent.CheckVersions failed")
             sys.exit(1)
@@ -5347,9 +5678,17 @@ class Agent(Util):
             lbProbeResponder = False
         while True:
             if (goalState == None) or (incarnation == None) or (goalState.Incarnation != incarnation):
-                goalState = self.UpdateGoalState()
-                if goalState == None :
+                try:
+                    goalState = self.UpdateGoalState()
+                except HttpResourceGoneError as e:
+                    Warn("Incarnation is out of date:{0}".format(e))
+                    incarnation = None
                     continue
+
+                if goalState == None :
+                    Warn("Failed to fetch goalstate")
+                    continue
+
                 if provisioned == False:
                     self.ReportNotReady("Provisioning", "Starting")
 
@@ -5369,7 +5708,15 @@ class Agent(Util):
                         #Get Ctime of wala config, can help identify the base image of this VM
                         AddExtensionEvent(name="WALA",op=WALAEventOperation.Provision,isSuccess=True,
                                               message="WALA Config Ctime:"+lastCtime)
-                        
+
+                        executeCustomData = Config.get("Provisioning.ExecuteCustomData")
+                        if executeCustomData != None and executeCustomData.lower().startswith("y"):
+                          if os.path.exists(LibDir + '/CustomData'):
+                            Run('chmod +x ' + LibDir + '/CustomData')
+                            Run(LibDir + '/CustomData')
+                          else:
+                            Error(LibDir + '/CustomData does not exist.')
+
                 #
                 # only one port supported
                 # restart server if new port is different than old port
@@ -5377,13 +5724,17 @@ class Agent(Util):
                 #
                 goalPort = goalState.LoadBalancerProbePort
                 if currentPort != goalPort:
-                    self.LoadBalancerProbeServer_Shutdown()
-                    currentPort = goalPort
-                    if currentPort != None and lbProbeResponder == True:
-                        self.LoadBalancerProbeServer = LoadBalancerProbeServer(currentPort)
-                        if self.LoadBalancerProbeServer == None :
-                            lbProbeResponder = False
-                            Log("Unable to create LBProbeResponder.")
+                    try:
+                        self.LoadBalancerProbeServer_Shutdown()
+                        currentPort = goalPort
+                        if currentPort != None and lbProbeResponder == True:
+                            self.LoadBalancerProbeServer = LoadBalancerProbeServer(currentPort)
+                            if self.LoadBalancerProbeServer == None :
+                                lbProbeResponder = False
+                                Log("Unable to create LBProbeResponder.")
+                    except Exception, e:
+                        Error("Failed to launch LBProbeResponder: {0}".format(e))
+                        currentPort = None
 
                 # Report SSH key fingerprint
                 type = Config.get("Provisioning.SshHostKeyPairType")
@@ -5416,11 +5767,15 @@ class Agent(Util):
             if goalState.ExtensionsConfig != None :
                 goalState.ExtensionsConfig.ReportHandlerStatus()
             
+            global LinuxDistro
+            if LinuxDistro == "redhat":
+                DoInstallRHUIRPM()
+                
             if not eventMonitor:
                 eventMonitor = WALAEventMonitor(self.HttpPostWithHeaders)
                 eventMonitor.StartEventsLoop()
 
-            time.sleep(25 - sleepToReduceAccessDenied)	
+            time.sleep(25 - sleepToReduceAccessDenied)
 
             
 WaagentLogrotate = """\
@@ -5514,14 +5869,14 @@ def ReplaceStringInFile(fname,src,repl):
     """
     Replace 'src' with 'repl' in file.
     """
-    updated=''
     try:
         sr=re.compile(src)
         if FindStringInFile(fname,src):
+            updated=''
             for l in (open(fname,'r')).readlines():
                 n=re.sub(sr,repl,l)
                 updated+=n
-        ReplaceFileContentsAtomic(fname,updated)
+            ReplaceFileContentsAtomic(fname,updated)
     except :
         raise
     return
@@ -5681,7 +6036,7 @@ def Deprovision(force, deluser):
     ovfxml = GetFileContents(LibDir+"/ovf-env.xml")
     ovfobj = None
     if ovfxml != None:
-        ovfobj = OvfEnv().Parse(ovfxml)
+        ovfobj = OvfEnv().Parse(ovfxml, True)
 
     print("WARNING! The waagent service will be stopped.")
     print("WARNING! All SSH host key pairs will be deleted.")
@@ -5750,16 +6105,12 @@ def main():
     global LinuxDistro
     LinuxDistro=DistInfo()[0]
     
-    #The platform.py lib has issue with detecting oracle linux distribution.
-    #Merge the following patch provided by oracle as a temparory fix.
-    if os.path.exists("/etc/oracle-release"): 
-        LinuxDistro="Oracle Linux" 
-
     global MyDistro
     MyDistro=GetMyDistro()
     if MyDistro == None :
         sys.exit(1)
     args = []
+    conf_file = None
     global force
     force = False
     for a in sys.argv[1:]:
@@ -5772,6 +6123,8 @@ def main():
             myLogger.verbose = True
         elif re.match("^([-/]*)force", a):
             force = True
+        elif re.match("^(?:[-/]*)conf=.+", a):
+            conf_file = re.match("^(?:[-/]*)conf=(.+)", a).groups()[0]
         elif re.match("^([-/]*)(setup|install)", a):
             sys.exit(MyDistro.Install())
         elif re.match("^([-/]*)(uninstall)", a):
@@ -5779,8 +6132,14 @@ def main():
         else:
             args.append(a)
     global Config
-    Config = ConfigurationProvider()
+    Config = ConfigurationProvider(conf_file)
     
+    logfile = Config.get("Logs.File")
+    if logfile is not None:
+        myLogger.file_path = logfile
+    logconsole = Config.get("Logs.Console")
+    if logconsole is not None and logconsole.lower().startswith("n"):
+        myLogger.con_path = None
     verbose = Config.get("Logs.Verbose")
     if verbose != None and verbose.lower().startswith("y"):
         myLogger.verbose=True

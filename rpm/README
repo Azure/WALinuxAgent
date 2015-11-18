@@ -40,7 +40,11 @@ package:
 
     6. The following command will build the binary and source RPMs:
 
-         rpmbuild -ba ~/rpmbuild/SPECS/walinuxagent.spec
+         rpmbuild -ba ~/rpmbuild/SPECS/redhat6x.spec
 
+There is also a script that can automate the process above.
+"""
+script/buildrpm.sh rpm/redhat6x.spec
+"""
 
 Enjoy!
