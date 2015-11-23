@@ -23,7 +23,6 @@ import threading
 import azurelinuxagent.logger as logger
 from azurelinuxagent.future import text
 import azurelinuxagent.conf as conf
-from azurelinuxagent.utils.osutil import OSUTIL
 from azurelinuxagent.event import add_event, WALAEventOperation
 import azurelinuxagent.utils.fileutil as fileutil
 import azurelinuxagent.utils.shellutil as shellutil
@@ -41,8 +40,8 @@ For additional details to please refer to the MSDN documentation at : http://msd
 """
 
 class ResourceDiskHandler(object):
-    def __init__(self, handlers):
-        self.handlers = handlers
+    def __init__(self, distro):
+        self.distro = distro
 
     def start_activate_resource_disk(self):
         disk_thread = threading.Thread(target = self.run)
@@ -50,17 +49,17 @@ class ResourceDiskHandler(object):
 
     def run(self):
         mount_point = None
-        if conf.get_switch("ResourceDisk.Format", False):
+        if conf.get_resourcedisk_format():
             mount_point = self.activate_resource_disk()
         if mount_point is not None and \
-                conf.get_switch("ResourceDisk.EnableSwap", False):
+                conf.get_resourcedisk_enable_swap():
             self.enable_swap(mount_point)
 
     def activate_resource_disk(self):
         logger.info("Activate resource disk")
         try:
-            mount_point = conf.get("ResourceDisk.MountPoint", "/mnt/resource")
-            fs = conf.get("ResourceDisk.Filesystem", "ext3")
+            mount_point = conf.get_resourcedisk_mountpoint()
+            fs = conf.get_resourcedisk_filesystem()
             mount_point = self.mount_resource_disk(mount_point, fs)
             warning_file = os.path.join(mount_point, DATALOSS_WARNING_FILE_NAME)
             try:
@@ -76,19 +75,19 @@ class ResourceDiskHandler(object):
     def enable_swap(self, mount_point):
         logger.info("Enable swap")
         try:
-            size_mb = conf.get_int("ResourceDisk.SwapSizeMB", 0)
+            size_mb = conf.get_resourcedisk_swap_size_mb()
             self.create_swap_space(mount_point, size_mb)
         except ResourceDiskError as e:
             logger.error("Failed to enable swap {0}", e)
 
     def mount_resource_disk(self, mount_point, fs):
-        device = OSUTIL.device_for_ide_port(1)
+        device = self.distro.osutil.device_for_ide_port(1)
         if device is None:
             raise ResourceDiskError("unable to detect disk topology")
 
         device = "/dev/" + device
         mountlist = shellutil.run_get_output("mount")[1]
-        existing = OSUTIL.get_mount_point(mountlist, device)
+        existing = self.distro.osutil.get_mount_point(mountlist, device)
 
         if(existing):
             logger.info("Resource disk {0}1 is already mounted", device)

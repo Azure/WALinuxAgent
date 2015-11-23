@@ -63,3 +63,44 @@ class ResourceDiskError(AgentError):
     def __init__(self, msg):
         super(ResourceDiskError, self).__init__('000005', msg)
 
+class DhcpError(AgentError):
+    """
+    Failed to handle dhcp response
+    """
+    def __init__(self, msg):
+        super(DhcpError, self).__init__('000006', msg)
+
+class OSUtilError(AgentError):
+    """
+    Failed to perform operation to OS configuration
+    """
+    def __init__(self, msg):
+        super(OSUtilError, self).__init__('000007', msg)
+
+class ProtocolError(AgentError):
+    """
+    Azure protocol error
+    """
+    def __init__(self, msg):
+        super(ProtocolError, self).__init__('000008', msg)
+
+class ProtocolNotFoundError(ProtocolError):
+    """
+    Azure protocol endpoint not found
+    """
+    def __init__(self, msg):
+        super(ProtocolNotFoundError, self).__init__(msg)
+
+class HttpError(AgentError):
+    """
+    Http request failure
+    """
+    def __init__(self, msg):
+        super(HttpError, self).__init__('000009', msg)
+
+class EventError(AgentError):
+    """
+    Event reporting error
+    """
+    def __init__(self, msg):
+        super(EventError, self).__init__('000010', msg)

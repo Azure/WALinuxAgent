@@ -31,9 +31,9 @@ import azurelinuxagent.utils.shellutil as shellutil
 import azurelinuxagent.utils.textutil as textutil
 from azurelinuxagent.distro.default.osutil import DefaultOSUtil
 
-class Ubuntu14xOSUtil(DefaultOSUtil):
+class Ubuntu14OSUtil(DefaultOSUtil):
     def __init__(self):
-        super(Ubuntu14xOSUtil, self).__init__()
+        super(Ubuntu14OSUtil, self).__init__()
 
     def start_network(self):
         return shellutil.run("service networking start", chk_err=False)
@@ -44,16 +44,16 @@ class Ubuntu14xOSUtil(DefaultOSUtil):
     def start_agent_service(self):
         return shellutil.run("service walinuxagent start", chk_err=False)
 
-class Ubuntu1204OSUtil(Ubuntu14xOSUtil):
+class Ubuntu12OSUtil(Ubuntu14OSUtil):
     def __init__(self):
-        super(Ubuntu1204OSUtil, self).__init__()
+        super(Ubuntu12OSUtil, self).__init__()
 
     #Override
     def get_dhcp_pid(self):
         ret= shellutil.run_get_output("pidof dhclient3")
         return ret[1] if ret[0] == 0 else None
 
-class UbuntuOSUtil(Ubuntu14xOSUtil):
+class UbuntuOSUtil(Ubuntu14OSUtil):
     def __init__(self):
         super(UbuntuOSUtil, self).__init__()
 
@@ -63,7 +63,7 @@ class UbuntuOSUtil(Ubuntu14xOSUtil):
     def unregister_agent_service(self):
         return shellutil.run("systemctl mask walinuxagent", chk_err=False)
 
-class UbuntuSnappyOSUtil(Ubuntu14xOSUtil):
+class UbuntuSnappyOSUtil(Ubuntu14OSUtil):
     def __init__(self):
         super(UbuntuSnappyOSUtil, self).__init__()
         self.conf_file_path = '/apps/walinuxagent/current/waagent.conf'

@@ -26,6 +26,8 @@ import time
 import pwd
 import fcntl
 import azurelinuxagent.logger as logger
+import azurelinuxagent.conf as conf
+from azurelinuxagent.exception import OSUtilError
 from azurelinuxagent.future import text
 import azurelinuxagent.utils.fileutil as fileutil
 import azurelinuxagent.utils.shellutil as shellutil
@@ -40,44 +42,14 @@ for all distros. Each concrete distro classes could overwrite default behavior
 if needed.
 """
 
-class OSUtilError(Exception):
-    pass
-
 class DefaultOSUtil(object):
 
     def __init__(self):
-        self.lib_dir = "/var/lib/waagent"
-        self.ext_log_dir = "/var/log/azure"
-        self.dvd_mount_point = "/mnt/cdrom/secure"
-        self.ovf_env_file_path = "/mnt/cdrom/secure/ovf-env.xml"
-        self.agent_pid_file_path = "/var/run/waagent.pid"
-        self.passwd_file_path = "/etc/shadow"
-        self.home = '/home'
-        self.sshd_conf_file_path = '/etc/ssh/sshd_config'
-        self.openssl_cmd = '/usr/bin/openssl'
-        self.conf_file_path = '/etc/waagent.conf'
+        self.agent_conf_file_path = '/etc/waagent.conf'
         self.selinux=None
 
-    def get_lib_dir(self):
-        return self.lib_dir
-
-    def get_ext_log_dir(self):
-        return self.ext_log_dir
-
-    def get_dvd_mount_point(self):
-        return self.dvd_mount_point
-
-    def get_conf_file_path(self):
-        return self.conf_file_path
-
-    def get_ovf_env_file_path_on_dvd(self):
-        return self.ovf_env_file_path
-
-    def get_agent_pid_file_path(self):
-        return self.agent_pid_file_path
-
-    def get_openssl_cmd(self):
-        return self.openssl_cmd
+    def get_agent_conf_file_path(self):
+        return self.agent_conf_file_path
 
     def get_userentry(self, username):
         try:
@@ -146,37 +118,37 @@ class DefaultOSUtil(object):
 
     def del_root_password(self):
         try:
-            passwd_content = fileutil.read_file(self.passwd_file_path)
+            passwd_file_path = conf.get_passwd_file_path()
+            passwd_content = fileutil.read_file(passwd_file_path)
             passwd = passwd_content.split('\n')
             new_passwd = [x for x in passwd if not x.startswith("root:")]
             new_passwd.insert(0, "root:*LOCK*:14600::::::")
-            fileutil.write_file(self.passwd_file_path, "\n".join(new_passwd))
+            fileutil.write_file(passwd_file_path, "\n".join(new_passwd))
         except IOError as e:
             raise OSUtilError("Failed to delete root password:{0}".format(e))
 
-    def get_home(self):
-        return self.home
-
     def get_pubkey_from_prv(self, file_name):
-        cmd = "{0} rsa -in {1} -pubout 2>/dev/null".format(self.openssl_cmd,
+        openssl_cmd = conf.get_openssl_cmd()
+        cmd = "{0} rsa -in {1} -pubout 2>/dev/null".format(openssl_cmd, 
                                                            file_name)
         pub = shellutil.run_get_output(cmd)[1]
         return pub
 
     def get_pubkey_from_crt(self, file_name):
-        cmd = "{0} x509 -in {1} -pubkey -noout".format(self.openssl_cmd,
-                                                       file_name)
+        openssl_cmd = conf.get_openssl_cmd()
+        cmd = "{0} x509 -in {1} -pubkey -noout".format(openssl_cmd, file_name)
         pub = shellutil.run_get_output(cmd)[1]
         return pub
 
     def _norm_path(self, filepath):
-        home = self.get_home()
+        home = conf.get_home_dir()
         # Expand HOME variable if present in path
         path = os.path.normpath(filepath.replace("$HOME", home))
         return path
 
     def get_thumbprint_from_crt(self, file_name):
-        cmd="{0} x509 -in {1} -fingerprint -noout".format(self.openssl_cmd,
+        openssl_cmd = conf.get_openssl_cmd()
+        cmd="{0} x509 -in {1} -fingerprint -noout".format(openssl_cmd, 
                                                           file_name)
         thumbprint = shellutil.run_get_output(cmd)[1]
         thumbprint = thumbprint.rstrip().split('=')[1].replace(':', '').upper()
@@ -190,7 +162,7 @@ class DefaultOSUtil(object):
         path = self._norm_path(path)
         dir_path = os.path.dirname(path)
         fileutil.mkdir(dir_path, mode=0o700, owner=username)
-        lib_dir = self.get_lib_dir()
+        lib_dir = conf.get_lib_dir()
         prv_path = os.path.join(lib_dir, thumbprint + '.prv')
         if not os.path.isfile(prv_path):
             raise OSUtilError("Can't find {0}.prv".format(thumbprint))
@@ -223,7 +195,7 @@ class DefaultOSUtil(object):
                 raise OSUtilError("Bad public key: {0}".format(value))
             fileutil.write_file(path, value)
         elif thumbprint is not None:
-            lib_dir = self.get_lib_dir()
+            lib_dir = conf.get_lib_dir()
             crt_path = os.path.join(lib_dir, thumbprint + '.crt')
             if not os.path.isfile(crt_path):
                 raise OSUtilError("Can't find {0}.crt".format(thumbprint))
@@ -280,11 +252,8 @@ class DefaultOSUtil(object):
         if self.is_selinux_system():
             return shellutil.run('chcon ' + con + ' ' + path)
 
-    def get_sshd_conf_file_path(self):
-        return self.sshd_conf_file_path
-
     def set_ssh_client_alive_interval(self):
-        conf_file_path = self.get_sshd_conf_file_path()
+        conf_file_path = conf.get_sshd_conf_file_path()
         conf = fileutil.read_file(conf_file_path).split("\n")
         textutil.set_ssh_config(conf, "ClientAliveInterval", "180")
         fileutil.write_file(conf_file_path, '\n'.join(conf))
@@ -292,7 +261,7 @@ class DefaultOSUtil(object):
 
     def conf_sshd(self, disable_password):
         option = "no" if disable_password else "yes"
-        conf_file_path = self.get_sshd_conf_file_path()
+        conf_file_path = conf.get_sshd_conf_file_path()
         conf = fileutil.read_file(conf_file_path).split("\n")
         textutil.set_ssh_config(conf, "PasswordAuthentication", option)
         textutil.set_ssh_config(conf, "ChallengeResponseAuthentication", option)
@@ -309,7 +278,7 @@ class DefaultOSUtil(object):
 
     def mount_dvd(self, max_retry=6, chk_err=True):
         dvd = self.get_dvd_device()
-        mount_point = self.get_dvd_mount_point()
+        mount_point = conf.get_dvd_mount_point()
         mountlist = shellutil.run_get_output("mount")[1]
         existing = self.get_mount_point(mountlist, dvd)
         if existing is not None: #Already mounted
@@ -332,7 +301,7 @@ class DefaultOSUtil(object):
             raise OSUtilError("Failed to mount dvd.")
 
     def umount_dvd(self, chk_err=True):
-        mount_point = self.get_dvd_mount_point()
+        mount_point = conf.get_dvd_mount_point()
         retcode = self.umount(mount_point, chk_err=chk_err)
         if chk_err and retcode != 0:
             raise OSUtilError("Failed to umount dvd.")
@@ -390,13 +359,14 @@ class DefaultOSUtil(object):
         """
         Create ssl certificate for https communication with endpoint server.
         """
+        openssl_cmd = conf.get_openssl_cmd() 
         cmd = ("{0} req -x509 -nodes -subj /CN=LinuxTransport -days 32768 "
                "-newkey rsa:2048 -keyout {1} "
-               "-out {2}").format(self.openssl_cmd, prv_file, crt_file)
+               "-out {2}").format(openssl_cmd, prv_file, crt_file)
         shellutil.run(cmd)
 
     def remove_rules_files(self, rules_files=__RULES_FILES__):
-        lib_dir = self.get_lib_dir()
+        lib_dir = conf.get_lib_dir()
         for src in rules_files:
             file_name = fileutil.base_name(src)
             dest = os.path.join(lib_dir, file_name)
@@ -407,7 +377,7 @@ class DefaultOSUtil(object):
                 shutil.move(src, dest)
 
     def restore_rules_files(self, rules_files=__RULES_FILES__):
-        lib_dir = self.get_lib_dir()
+        lib_dir = conf.get_lib_dir()
         for dest in rules_files:
             filename = fileutil.base_name(dest)
             src = os.path.join(lib_dir, filename)
@@ -649,4 +619,5 @@ class DefaultOSUtil(object):
             return int(ret[1])
         else:
             raise OSUtilError("Failed to get procerssor cores")
+    
 

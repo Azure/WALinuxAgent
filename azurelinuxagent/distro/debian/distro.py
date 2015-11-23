@@ -17,11 +17,11 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
-from .deprovision import CoreOSDeprovisionHandler
-from azurelinuxagent.distro.default.handlerFactory import DefaultHandlerFactory
+from azurelinuxagent.distro.default.distro import DefaultDistro
+from azurelinuxagent.distro.debian.osutil import DebianOSUtil
 
-class CoreOSHandlerFactory(DefaultHandlerFactory):
+class DebianDistro(DefaultDistro):
     def __init__(self):
-        super(CoreOSHandlerFactory, self).__init__()
-        self.deprovision_handler = CoreOSDeprovisionHandler(self)
+        super(DebianDistro, self).__init__()
+        self.osutil = DebianOSUtil()
 

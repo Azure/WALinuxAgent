@@ -21,8 +21,9 @@ import time
 import platform
 import os
 import subprocess
-import azurelinuxagent.logger as logger
 import azurelinuxagent.conf as conf
+import azurelinuxagent.logger as logger
+from azurelinuxagent.exception import HttpError
 from azurelinuxagent.future import httpclient, urlparse
 
 """
@@ -30,9 +31,6 @@ REST api util functions
 """
 
 RETRY_WAITING_INTERVAL = 10
-
-class HttpError(Exception):
-    pass
 
 def _parse_url(url):
     o = urlparse(url)
@@ -51,8 +49,8 @@ def get_http_proxy():
     Get http_proxy and https_proxy from environment variables.
     Username and password is not supported now.
     """
-    host = conf.get("HttpProxy.Host", None)
-    port = conf.get("HttpProxy.Port", None)
+    host = conf.get_httpproxy_host()
+    port = conf.get_httpproxy_port()
     return (host, port)
 
 def _http_request(method, host, rel_uri, port=None, data=None, secure=False,

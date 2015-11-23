@@ -17,12 +17,16 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
+from azurelinuxagent.distro.default.distro import DefaultDistro
+from azurelinuxagent.distro.suse.osutil import SUSE11OSUtil, SUSEOSUtil
 
-def get_osutil():
-    from azurelinuxagent.distro.coreos.osutil import CoreOSUtil
-    return CoreOSUtil()
+class SUSE11Distro(DefaultDistro):
+    def __init__(self):
+        super(SUSE11Distro, self).__init__()
+        self.osutil = SUSE11Distro()
 
-def get_handlers():
-    from azurelinuxagent.distro.coreos.handlerFactory import CoreOSHandlerFactory
-    return CoreOSHandlerFactory()
+class SUSEDistro(DefaultDistro):
+    def __init__(self):
+        super(SUSEDistro, self).__init__()
+        self.osutil = SUSEOSUtil()
 

@@ -43,11 +43,11 @@ class ConfigurationProvider(object):
                 else:
                     self.values[parts[0]] = None
 
-    def get(self, key, default_val=None):
+    def get(self, key, default_val):
         val = self.values.get(key)
         return val if val is not None else default_val
 
-    def get_switch(self, key, default_val=False):
+    def get_switch(self, key, default_val):
         val = self.values.get(key)
         if val is not None and val.lower() == 'y':
             return True
@@ -55,7 +55,7 @@ class ConfigurationProvider(object):
             return False
         return default_val
 
-    def get_int(self, key, default_val=-1):
+    def get_int(self, key, default_val):
         try:
             return int(self.values.get(key))
         except TypeError:
@@ -64,9 +64,9 @@ class ConfigurationProvider(object):
             return default_val
 
 
-__config__ = ConfigurationProvider()
+__conf__ = ConfigurationProvider()
 
-def load_conf(conf_file_path, conf=__config__):
+def load_conf_from_file(conf_file_path, conf=__conf__):
     """
     Load conf file from: conf_file_path
     """
@@ -80,30 +80,75 @@ def load_conf(conf_file_path, conf=__config__):
         raise AgentConfigError(("Failed to load conf file:{0}, {1}"
                                 "").format(conf_file_path, err))
 
-def get(key, default_val=None, conf=__config__):
-    """
-    Get option value by key, return default_val if not found
-    """
-    if conf is not None:
-        return conf.get(key, default_val)
-    else:
-        return default_val
+def get_lib_dir(conf=__conf__):
+    return conf.get("Lib.Dir", "/var/lib/waagent")
 
-def get_switch(key, default_val=None, conf=__config__):
-    """
-    Get bool option value by key, return default_val if not found
-    """
-    if conf is not None:
-        return conf.get_switch(key, default_val)
-    else:
-        return default_val
+def get_dvd_mount_point(conf=__conf__):
+    return conf.get("DVD.MountPoint", "/mnt/cdrom/secure")
 
-def get_int(key, default_val=None, conf=__config__):
-    """
-    Get int option value by key, return default_val if not found
-    """
-    if conf is not None:
-        return conf.get_int(key, default_val)
-    else:
-        return default_val
+def get_agent_pid_file_path(conf=__conf__):
+    return conf.get("Pid.File", "/mnt/cdrom/secure")
+
+def get_ext_log_dir(conf=__conf__):
+    return conf.get("Extension.LogDir", "/var/log/azure")
+
+def get_openssl_cmd(conf=__conf__):
+    return conf.get("OS.OpensslPath", "/usr/bin/openssl")
+
+def get_home_dir(conf=__conf__):
+    return conf.get("OS.HomeDir", "/home")
+
+def get_passwd_file_path(conf=__conf__):
+    return conf.get("OS.PasswordPath", "/etc/shadow")
+
+def get_sshd_conf_file_path(conf=__conf__):
+    return conf.get("OS.SshdConfigPath", "/etc/ssh/sshd_config")
+
+def get_root_device_scsi_timeout(conf=__conf__):
+    return conf.get_int("OS.RootDeviceScsiTimeout", None)
+
+def get_ssh_host_keypair_type(conf=__conf__):
+    return conf.get("Provisioning.SshHostKeyPairType", "rsa")
+
+def get_provision_enabled(conf=__conf__):
+    return conf.get_switch("Provisioning.Enabled", True)
+
+def get_regenerate_ssh_host_key(conf=__conf__):
+    return conf.get_switch("Provisioning.RegenerateSshHostKeyPair", False)
+
+def get_delete_root_password(conf=__conf__):
+    return conf.get_switch("Provisioning.DeleteRootPassword", False)
+
+def get_password_cryptid(conf=__conf__):
+    return conf.get("Provisioning.PasswordCryptId", "6")
+
+def get_password_crypt_salt_len(conf=__conf__):
+    return conf.get_int("Provisioning.PasswordCryptSaltLength", 10)
+
+def get_monitor_hostname(conf=__conf__):
+    return conf.get_switch("Provisioning.MonitorHostName", False)
+
+def get_httpproxy_host(conf=__conf__):
+    return conf.get("HttpProxy.Host", None)
+
+def get_httpproxy_port(conf=__conf__):
+    return conf.get("HttpProxy.Port", None)
+
+def get_detect_scvmm_env(conf=__conf__):
+    return conf.get_switch("DetectScvmmEnv", False)
+
+def get_resourcedisk_format(conf=__conf__):
+    return conf.get_switch("ResourceDisk.Format", False)
+
+def get_resourcedisk_enable_swap(conf=__conf__):
+    return conf.get_switch("ResourceDisk.EnableSwap", False)
+
+def get_resourcedisk_mountpoint(conf=__conf__):
+    return conf.get("ResourceDisk.MountPoint", "/mnt/resource")
+
+def get_resourcedisk_filesystem(conf=__conf__):
+    return conf.get("ResourceDisk.MountPoint", "/mnt/resource")
+
+def get_resourcedisk_swap_size_mb(conf=__conf__):
+    return conf.get_int("ResourceDisk.SwapSizeMB", 0)
 

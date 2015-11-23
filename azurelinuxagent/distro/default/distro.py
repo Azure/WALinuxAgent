@@ -16,8 +16,14 @@
 #
 # Requires Python 2.4+ and Openssl 1.0+
 #
+
+from azurelinuxagent.conf import ConfigurationProvider
+from azurelinuxagent.distro.default.osutil import DefaultOSUtil
+from azurelinuxagent.distro.default.daemon import DaemonHandler
 from azurelinuxagent.distro.default.init import InitHandler
-from azurelinuxagent.distro.default.run import MainHandler
+from azurelinuxagent.distro.default.event import EventHandler
+from azurelinuxagent.distro.default.dhcp import DhcpHandler
+from azurelinuxagent.distro.default.protocolUtil import ProtocolUtil
 from azurelinuxagent.distro.default.scvmm import ScvmmHandler
 from azurelinuxagent.distro.default.env import EnvHandler
 from azurelinuxagent.distro.default.provision import ProvisionHandler
@@ -25,10 +31,17 @@ from azurelinuxagent.distro.default.resourceDisk import ResourceDiskHandler
 from azurelinuxagent.distro.default.extension import ExtHandlersHandler
 from azurelinuxagent.distro.default.deprovision import DeprovisionHandler
 
-class DefaultHandlerFactory(object):
+class DefaultDistro(object):
+    """
+    """
     def __init__(self):
+        self.osutil = DefaultOSUtil()
+        self.protocol_util = ProtocolUtil(self)
+
         self.init_handler = InitHandler(self)
-        self.main_handler = MainHandler(self)
+        self.daemon_handler = DaemonHandler(self)
+        self.event_handler = EventHandler(self)
+        self.dhcp_handler = DhcpHandler(self)
         self.scvmm_handler = ScvmmHandler(self)
         self.env_handler = EnvHandler(self)
         self.provision_handler = ProvisionHandler(self)

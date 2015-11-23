@@ -22,14 +22,15 @@ import time
 import json
 import subprocess
 import shutil
+import azurelinuxagent.conf as conf
 import azurelinuxagent.logger as logger
-from azurelinuxagent.future import text
-from azurelinuxagent.utils.osutil import OSUTIL
-from azurelinuxagent.protocol.factory import PROT_FACTORY
-import azurelinuxagent.protocol.common as prot
-from azurelinuxagent.metadata import AGENT_VERSION
 from azurelinuxagent.event import add_event, WALAEventOperation
-from azurelinuxagent.exception import ExtensionError
+from azurelinuxagent.exception import ExtensionError, ProtocolError
+from azurelinuxagent.future import text
+from azurelinuxagent.metadata import AGENT_VERSION
+from azurelinuxagent.protocol.restapi import ExtHandlerStatus, ExtensionStatus, \
+                                             ExtensionSubStatus, Extension, \
+                                             VMStatus
 import azurelinuxagent.utils.fileutil as fileutil
 import azurelinuxagent.utils.restutil as restutil
 import azurelinuxagent.utils.shellutil as shellutil
@@ -72,7 +73,7 @@ def parse_ext_substatus(substatus):
     validate_has_key(substatus, 'status', 'substatus/status')
     validate_in_range(substatus['status'], VALID_EXTENSION_STATUS,
                       'substatus/status')
-    status = prot.ExtensionSubStatus()
+    status = ExtensionSubStatus()
     status.name = substatus.get('name')
     status.status = substatus.get('status')
     status.code = substatus.get('code', 0)
@@ -120,7 +121,7 @@ def get_installed_version(target_name):
     Return the highest version instance with the same name
     """
     installed_version = None
-    lib_dir = OSUTIL.get_lib_dir()
+    lib_dir = conf.get_lib_dir()
     for dir_name in os.listdir(lib_dir):
         path = os.path.join(lib_dir, dir_name)
         if os.path.isdir(path) and dir_name.startswith(target_name):
@@ -139,19 +140,18 @@ class ExtHandlerState(object):
 
 
 class ExtHandlersHandler(object):
-    def __init__(self, handlers):
-        self.handlers = handlers
+    def __init__(self, distro):
+        self.distro = distro
 
-    def process(self):
+    def run(self):
         try:
-            protocol = PROT_FACTORY.get_protocol()
+            protocol = self.distro.protocol_util.get_protocol()
             ext_handlers = protocol.get_ext_handlers()
-        except prot.ProtocolError as e:
+        except ProtocolError as e:
             add_event(name="WALA", is_success=False, message = text(e))
             return
-        
 
-        vm_status = prot.VMStatus()
+        vm_status = VMStatus()
         vm_status.vmAgent.version = AGENT_VERSION
         vm_status.vmAgent.status = "Ready"
         vm_status.vmAgent.message = "Guest Agent is running"
@@ -164,7 +164,7 @@ class ExtHandlersHandler(object):
                 #TODO handle extension in parallel
                 try:
                     pkg_list = protocol.get_ext_handler_pkgs(ext_handler)
-                except prot.ProtocolError as e:
+                except ProtocolError as e:
                     add_event(name="WALA", is_success=False, message=text(e))
                     continue
                     
@@ -175,14 +175,14 @@ class ExtHandlersHandler(object):
         try:
             logger.verb("Report vm agent status")
             protocol.report_vm_status(vm_status)
-        except prot.ProtocolError as e:
+        except ProtocolError as e:
             add_event(name="WALA", is_success=False, message = text(e))
 
     def process_extension(self, ext_handler, pkg_list):
         installed_version = get_installed_version(ext_handler.name)
         if installed_version is not None:
-            handler = ExtHandlerInstance(ext_handler, pkg_list, 
-                                         installed_version, installed=True)
+            handler = ExtHandlerInstance(ext_handler, pkg_list, installed_version, 
+                                         installed=True)
         else:
             handler = ExtHandlerInstance(ext_handler, pkg_list,
                                          ext_handler.properties.version)
@@ -190,16 +190,17 @@ class ExtHandlersHandler(object):
         
         if handler.ext_status is not None:
             try:
-                protocol = PROT_FACTORY.get_protocol()
+                protocol = self.distro.protocol_util.get_protocol()
                 protocol.report_ext_status(handler.name, handler.ext.name, 
                                            handler.ext_status)
-            except prot.ProtocolError as e:
+            except ProtocolError as e:
                 add_event(name="WALA", is_success=False, message=text(e))
         
         return handler.handler_status
 
 class ExtHandlerInstance(object):
-    def __init__(self, ext_handler, pkg_list, curr_version, installed=False):
+    def __init__(self, ext_handler, pkg_list, curr_version, 
+                 installed=False):
         self.ext_handler = ext_handler
         self.name = ext_handler.name
         self.version = ext_handler.properties.version
@@ -210,10 +211,10 @@ class ExtHandlerInstance(object):
         self.curr_version = curr_version
         self.installed = installed
         self.handler_state = None
-        self.lib_dir = OSUTIL.get_lib_dir()
+        self.lib_dir = conf.get_lib_dir()
         
-        self.ext_status = prot.ExtensionStatus()
-        self.handler_status = prot.ExtHandlerStatus()
+        self.ext_status = ExtensionStatus()
+        self.handler_status = ExtHandlerStatus()
         self.handler_status.name = self.name
         self.handler_status.version = self.curr_version
 
@@ -223,7 +224,7 @@ class ExtHandlerInstance(object):
             self.handler_status.extensions = [self.ext.name]
         else:
             #When no extension settings, set sequenceNumber to 0
-            self.ext = prot.Extension(sequenceNumber=0)
+            self.ext = Extension(sequenceNumber=0)
         self.ext_status.sequenceNumber = self.ext.sequenceNumber
 
         prefix = "[{0}]".format(self.get_full_name())
@@ -571,7 +572,7 @@ class ExtHandlerInstance(object):
 
     def collect_heartbeat(self):
         self.logger.info("Collect heart beat")
-        heartbeat_file = os.path.join(OSUTIL.get_lib_dir(),
+        heartbeat_file = os.path.join(conf.get_lib_dir(),
                                       self.get_heartbeat_file())
         if not os.path.isfile(heartbeat_file):
             raise ExtensionError("Failed to get heart beat file")
@@ -696,7 +697,7 @@ class ExtHandlerInstance(object):
         return "{0}-{1}".format(self.name, self.curr_version)
 
     def get_base_dir(self):
-        return os.path.join(OSUTIL.get_lib_dir(), self.get_full_name())
+        return os.path.join(conf.get_lib_dir(), self.get_full_name())
 
     def get_status_dir(self):
         return os.path.join(self.get_base_dir(), "status")
@@ -713,7 +714,7 @@ class ExtHandlerInstance(object):
                             "{0}.settings".format(self.ext.sequenceNumber))
     
     def get_handler_state_dir(self):
-        return os.path.join(OSUTIL.get_lib_dir(), "handler_state", 
+        return os.path.join(conf.get_lib_dir(), "handler_state", 
                             self.get_full_name())
 
     def get_handler_state_file(self):
@@ -735,7 +736,7 @@ class ExtHandlerInstance(object):
         return os.path.join(self.get_base_dir(), 'HandlerEnvironment.json')
 
     def get_log_dir(self):
-        return os.path.join(OSUTIL.get_ext_log_dir(), self.name,
+        return os.path.join(conf.get_ext_log_dir(), self.name,
                             self.curr_version)
 
 class HandlerEnvironment(object):

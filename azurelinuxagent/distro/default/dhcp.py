@@ -21,20 +21,49 @@ import array
 import time
 import threading
 import azurelinuxagent.logger as logger
-from azurelinuxagent.utils.osutil import OSUTIL
+import azurelinuxagent.conf as conf
 import azurelinuxagent.utils.fileutil as fileutil
 import azurelinuxagent.utils.shellutil as shellutil
-from azurelinuxagent.utils.textutil import *
-from azurelinuxagent.protocol.common import ProtocolError
+from azurelinuxagent.utils.textutil import hex_dump, hex_dump2, hex_dump3, \
+                                           compare_bytes, str_to_ord, \
+                                           unpack_big_endian, \
+                                           unpack_little_endian, \
+                                           int_to_ip4_addr
+from azurelinuxagent.exception import DhcpError
 
-DHCP_FILE_NAME = "DHCP"
-    
-class DhcpResponse(object):
-    def __init__(self, resp):
-        endpoint, gateway, routes = parse_dhcp_resp(resp)
-        self.endpoint = endpoint
-        self.gateway = gateway
-        self.routes = routes
+
+class DhcpHandler(object):
+    """
+    Azure use DHCP option 245 to pass endpoint ip to VMs.
+    """
+    def __init__(self, distro):
+        self.distro = distro
+        self.endpoint = None
+        self.gateway = None
+        self.route = None
+
+    def run(self):
+        """
+        Send dhcp request
+        Configure default gateway and routes
+        Save wire server endpoint if found
+        """
+        self.send_dhcp_req()
+        self.conf_routes()
+        if self.endpoint is not None:
+            self.distro.osutil.set_wireserver_endpoint(self.endpoint)
+
+    def wait_for_network(self):
+        """
+        Wait for network stack to be initialized.
+        """
+        ipv4 = self.distro.osutil.get_ip4_addr()
+        while ipv4 == '' or ipv4 == '0.0.0.0':
+            logger.info("Waiting for network.")
+            time.sleep(10)
+            logger.info("Try to start network interface.")
+            self.distro.osutil.start_network()
+            ipv4 = self.distro.osutil.get_ip4_addr()
 
     def conf_routes(self):
         logger.info("Configure routes")
@@ -42,56 +71,56 @@ class DhcpResponse(object):
         logger.info("Routes:{0}", self.routes)
         #Add default gateway
         if self.gateway is not None:
-            OSUTIL.route_add(0 , 0, self.gateway)
+            self.distro.osutil.route_add(0 , 0, self.gateway)
         if self.routes is not None:
             for route in self.routes:
-                OSUTIL.route_add(route[0], route[1], route[2])
+                self.distro.osutil.route_add(route[0], route[1], route[2])
 
-def _load_dhcp_resp():
-    dhcp_file_path = os.path.join(OSUTIL.get_lib_dir(), DHCP_FILE_NAME)
-    resp = fileutil.read_file(dhcp_file_path, asbin=True)
-    return DhcpResponse(resp)
+    def _send_dhcp_req(self, request):    
+        __waiting_duration__ = [0, 10, 30, 60, 60]
+        for duration in __waiting_duration__:
+            try:
+                self.distro.osutil.allow_dhcp_broadcast()
+                response = socket_send(request)
+                validate_dhcp_resp(request, response)
+                return response
+            except DhcpError as e:
+                logger.warn("Failed to send DHCP request: {0}", e)
+            time.sleep(duration)
+        return None
 
-def _fetch_dhcp_resp():
-    logger.info("Send dhcp request")
-    mac_addr = OSUTIL.get_mac_addr()
-    req = build_dhcp_request(mac_addr)
-    resp = send_dhcp_request(req)
-    if resp is None:
-        raise ProtocolError("Failed to receive dhcp response.")
-    dhcp_file_path = os.path.join(OSUTIL.get_lib_dir(), DHCP_FILE_NAME)
-    try:
-        fileutil.write_file(dhcp_file_path, resp, asbin=True)
-    except IOError as e:
-        logger.warn("Failed to save dhcp response: {0}", e)
-    return DhcpResponse(resp)
+    def send_dhcp_req(self):
+        """
+        Build dhcp request with mac addr
+        Configure route to allow dhcp traffic
+        Stop dhcp service if necessary
+        """
+        logger.info("Send dhcp request")
+        mac_addr = self.distro.osutil.get_mac_addr()
+        req = build_dhcp_request(mac_addr)
 
-class DhcpClient(object):
-    def __init__(self):
-        self._resp = None
-        self._lock = threading.Lock()
+        # Temporary allow broadcast for dhcp. Remove the route when done.
+        missing_default_route = self.distro.osutil.is_missing_default_route()
+        ifname = self.distro.osutil.get_if_name()
+        if missing_default_route:
+            self.distro.osutil.set_route_for_dhcp_broadcast(ifname)
 
-    def get_dhcp_resp(self):
-        self._lock.acquire()
-        try:
-            if self._resp is None:
-                try:
-                    self._resp = _load_dhcp_resp()
-                except IOError:
-                    self._resp = _fetch_dhcp_resp()
-            return self._resp
-        finally:
-            self._lock.release()
+        # In some distros, dhcp service needs to be shutdown before agent probe
+        # endpoint through dhcp.
+        if self.distro.osutil.is_dhcp_enabled():
+            self.distro.osutil.stop_dhcp_service()
 
-    def fetch_dhcp_resp(self):
-        self._lock.acquire()
-        try:
-            self._resp = _fetch_dhcp_resp()
-            return self._resp
-        finally:
-            self._lock.release()
+        resp = self._send_dhcp_req(req)
+        
+        if self.distro.osutil.is_dhcp_enabled():
+            self.distro.osutil.start_dhcp_service()
 
-DHCPCLIENT = DhcpClient()
+        if missing_default_route:
+            self.distro.osutil.remove_route_for_dhcp_broadcast(ifname)
+
+        if resp is None:
+            raise DhcpError("Failed to receive dhcp response.")
+        self.endpoint, self.gateway, self.routes = parse_dhcp_resp(resp)
 
 def validate_dhcp_resp(request, response):
     bytes_recv = len(response)
@@ -110,20 +139,20 @@ def validate_dhcp_resp(request, response):
         logger.verb("Cookie not match:\nsend={0},\nreceive={1}",
                        hex_dump3(request, 0xEC, 4),
                        hex_dump3(response, 0xEC, 4))
-        raise ProtocolError("Cookie in dhcp respones doesn't match the request")
+        raise DhcpError("Cookie in dhcp respones doesn't match the request")
 
     if not compare_bytes(request, response, 4, 4):
         logger.verb("TransactionID not match:\nsend={0},\nreceive={1}",
                        hex_dump3(request, 4, 4),
                        hex_dump3(response, 4, 4))
-        raise ProtocolError("TransactionID in dhcp respones "
+        raise DhcpError("TransactionID in dhcp respones "
                             "doesn't match the request")
 
     if not compare_bytes(request, response, 0x1C, 6):
         logger.verb("Mac Address not match:\nsend={0},\nreceive={1}",
                        hex_dump3(request, 0x1C, 6),
                        hex_dump3(response, 0x1C, 6))
-        raise ProtocolError("Mac Addr in dhcp respones "
+        raise DhcpError("Mac Addr in dhcp respones "
                             "doesn't match the request")
 
 def parse_route(response, option, i, length, bytes_recv):
@@ -203,53 +232,6 @@ def parse_dhcp_resp(response):
         i += length + 2
     return endpoint, gateway, routes
 
-
-def allow_dhcp_broadcast(func):
-    """
-    Temporary allow broadcase for dhcp. Remove the route when done.
-    """
-    def wrapper(*args, **kwargs):
-        missing_default_route = OSUTIL.is_missing_default_route()
-        ifname = OSUTIL.get_if_name()
-        if missing_default_route:
-            OSUTIL.set_route_for_dhcp_broadcast(ifname)
-        result = func(*args, **kwargs)
-        if missing_default_route:
-            OSUTIL.remove_route_for_dhcp_broadcast(ifname)
-        return result
-    return wrapper
-
-def disable_dhcp_service(func):
-    """
-    In some distros, dhcp service needs to be shutdown before agent probe
-    endpoint through dhcp.
-    """
-    def wrapper(*args, **kwargs):
-        if OSUTIL.is_dhcp_enabled():
-            OSUTIL.stop_dhcp_service()
-            result = func(*args, **kwargs)
-            OSUTIL.start_dhcp_service()
-            return result
-        else:
-            return func(*args, **kwargs)
-    return wrapper
-
-
-@allow_dhcp_broadcast
-@disable_dhcp_service
-def send_dhcp_request(request):
-    __waiting_duration__ = [0, 10, 30, 60, 60]
-    for duration in __waiting_duration__:
-        try:
-            OSUTIL.allow_dhcp_broadcast()
-            response = socket_send(request)
-            validate_dhcp_resp(request, response)
-            return response
-        except ProtocolError as e:
-            logger.warn("Failed to send DHCP request: {0}", e)
-        time.sleep(duration)
-    return None
-
 def socket_send(request):
     sock = None
     try:
@@ -265,7 +247,7 @@ def socket_send(request):
         response = sock.recv(1024)
         return response
     except IOError as e:
-        raise ProtocolError("{0}".format(e))
+        raise DhcpError("{0}".format(e))
     finally:
         if sock is not None:
             sock.close()

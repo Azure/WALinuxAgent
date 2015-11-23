@@ -22,14 +22,9 @@ import re
 import json
 import xml.dom.minidom
 import azurelinuxagent.logger as logger
+from azurelinuxagent.exception import ProtocolError
 from azurelinuxagent.future import text
 import azurelinuxagent.utils.fileutil as fileutil
-
-class ProtocolError(Exception):
-    pass
-
-class ProtocolNotFound(Exception):
-    pass
 
 def validata_param(name, val, expected_type):
     if val is None:
@@ -211,10 +206,7 @@ class TelemetryEventList(DataContract):
 
 class Protocol(DataContract):
 
-    def initialize(self):
-        raise NotImplementedError()
-
-    def reinitialize(self):
+    def detect(self):
         raise NotImplementedError()
 
     def get_vminfo(self):

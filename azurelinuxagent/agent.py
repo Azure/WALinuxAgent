@@ -29,27 +29,60 @@ from azurelinuxagent.metadata import AGENT_NAME, AGENT_LONG_VERSION, \
                                      DISTRO_NAME, DISTRO_VERSION, \
                                      PY_VERSION_MAJOR, PY_VERSION_MINOR, \
                                      PY_VERSION_MICRO
-from azurelinuxagent.utils.osutil import OSUTIL
-from azurelinuxagent.handler import HANDLERS
 
+from azurelinuxagent.distro.loader import get_distro
 
-def init(verbose):
-    """
-    Initialize agent running environment.
-    """
-    HANDLERS.init_handler.init(verbose)
+class Agent(object):
+    def __init__(self, verbose):
+        """
+        Initialize agent running environment.
+        """
+        self.distro = get_distro();
+        self.distro.init_handler.run(verbose)
 
-def run():
-    """
-    Run agent daemon
-    """
-    HANDLERS.main_handler.run()
+    def daemon(self):
+        """
+        Run agent daemon
+        """
+        self.distro.daemon_handler.run()
 
-def deprovision(force=False, deluser=False):
+    def deprovision(self, force=False, deluser=False):
+        """
+        Run deprovision command
+        """
+        self.distro.deprovision_handler.run(force=force, deluser=deluser)
+
+    def register_service(self):
+        """
+        Register agent as a service
+        """
+        print("Register {0} service".format(AGENT_NAME))
+        self.distro.osutil.register_agent_service()
+        print("Start {0} service".format(AGENT_NAME))
+        self.distro.osutil.start_agent_service()
+
+def main(args):
     """
-    Run deprovision command
+    Parse command line arguments, exit with usage() on error.
+    Invoke different methods according to different command
     """
-    HANDLERS.deprovision_handler.deprovision(force=force, deluser=deluser)
+    command, force, verbose = parse_args(args)
+    if command == "version":
+        version()
+    elif command == "help":
+        usage()
+    elif command == "start":
+        start()
+    else:
+        agent = Agent(verbose)
+        if command == "deprovision+user":
+            agent.deprovision(force, deluser=True)
+        elif command == "deprovision":
+            agent.deprovision(force, deluser=False)
+        elif command == "register-service":
+            agent.register_service()
+        elif command == "daemon":
+            agent.daemon()
 
 def parse_args(sys_args):
     """
@@ -108,34 +141,3 @@ def start():
     devnull = open(os.devnull, 'w')
     subprocess.Popen([sys.argv[0], '-daemon'], stdout=devnull, stderr=devnull)
 
-def register_service():
-    """
-    Register agent as a service
-    """
-    print("Register {0} service".format(AGENT_NAME))
-    OSUTIL.register_agent_service()
-    print("Start {0} service".format(AGENT_NAME))
-    OSUTIL.start_agent_service()
-
-def main():
-    """
-    Parse command line arguments, exit with usage() on error.
-    Invoke different methods according to different command
-    """
-    command, force, verbose = parse_args(sys.argv[1:])
-    if command == "version":
-        version()
-    elif command == "help":
-        usage()
-    else:
-        init(verbose)
-        if command == "deprovision+user":
-            deprovision(force, deluser=True)
-        elif command == "deprovision":
-            deprovision(force, deluser=False)
-        elif command == "start":
-            start()
-        elif command == "register-service":
-            register_service()
-        elif command == "daemon":
-            run()

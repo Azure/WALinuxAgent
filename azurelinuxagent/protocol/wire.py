@@ -23,17 +23,18 @@ import time
 import traceback
 import xml.sax.saxutils as saxutils
 import xml.etree.ElementTree as ET
+import azurelinuxagent.conf as conf
 import azurelinuxagent.logger as logger
+from azurelinuxagent.exception import ProtocolError, HttpError, \
+                                      ProtocolNotFoundError
 from azurelinuxagent.future import text, httpclient, bytebuffer
 import azurelinuxagent.utils.restutil as restutil
 import azurelinuxagent.utils.textutil as textutil
 from azurelinuxagent.utils.textutil import parse_doc, findall, find, findtext, \
                                            getattrib, gettext, remove_bom
-from azurelinuxagent.utils.osutil import OSUTIL
 import azurelinuxagent.utils.fileutil as fileutil
 import azurelinuxagent.utils.shellutil as shellutil
-from azurelinuxagent.protocol.common import *
-import azurelinuxagent.protocol.dhcp as dhcp
+from azurelinuxagent.protocol.restapi import *
 
 VERSION_INFO_URI = "http://{0}/?comp=versions"
 GOAL_STATE_URI = "http://{0}/machine/?comp=goalstate"
@@ -65,20 +66,16 @@ class WireProtocolResourceGone(ProtocolError):
 
 class WireProtocol(Protocol):
 
-    def __init__(self):
-        pass
+    def __init__(self, osutil, endpoint):
+        self.osutil = osutil
+        self.endpoint = endpoint
+        self.client = WireClient(self.endpoint)
 
-    def initialize(self):
-        dhcp_resp = dhcp.DHCPCLIENT.fetch_dhcp_resp()
-        self.client = WireClient(dhcp_resp.endpoint)
+    def detect(self):
         self.client.check_wire_protocol_version()
-        OSUTIL.gen_transport_cert(TRANSPORT_PRV_FILE_NAME, 
+        self.osutil.gen_transport_cert(TRANSPORT_PRV_FILE_NAME, 
                                   TRANSPORT_CERT_FILE_NAME)
         self.client.update_goal_state(forced=True)
-
-    def reinitialize(self):
-        dhcp_resp = dhcp.DHCPCLIENT.get_dhcp_resp()
-        self.client = WireClient(dhcp_resp.endpoint)
 
     def get_vminfo(self):
         hosting_env = self.client.get_hosting_env()
@@ -314,7 +311,7 @@ class StatusBlob(object):
                 self.put_page_blob(url, data)
             else:
                 raise ProtocolError("Unknown blob type: {0}".format(blob_type))
-        except restutil.HttpError as e:
+        except HttpError as e:
             raise ProtocolError("Failed to upload status blob: {0}".format(e))
 
     def get_blob_type(self, url):
@@ -326,7 +323,7 @@ class StatusBlob(object):
                 "x-ms-date" :  timestamp,
                 'x-ms-version' : self.__class__.__storage_version__
             })
-        except restutil.HttpError as e:
+        except HttpError as e:
             raise ProtocolError((u"Failed to get status blob type: {0}"
                                  u"").format(e))
         if resp is None or resp.status != httpclient.OK:
@@ -348,7 +345,7 @@ class StatusBlob(object):
                 "Content-Length": text(len(data)),
                 "x-ms-version" : self.__class__.__storage_version__
             })
-        except restutil.HttpError as e:
+        except HttpError as e:
             raise ProtocolError((u"Failed to upload block blob: {0}"
                                  u"").format(e))
         if resp.status != httpclient.CREATED:
@@ -373,7 +370,7 @@ class StatusBlob(object):
                 "x-ms-blob-content-length" : text(page_blob_size),
                 "x-ms-version" : self.__class__.__storage_version__
             })
-        except restutil.HttpError as e:
+        except HttpError as e:
             raise ProtocolError((u"Failed to clean up page blob: {0}"
                                  u"").format(e))
         if resp.status != httpclient.CREATED:
@@ -406,7 +403,7 @@ class StatusBlob(object):
                     "x-ms-version" : self.__class__.__storage_version__,
                     "Content-Length": text(page_end - start)
                 })
-            except restutil.HttpError as e:
+            except HttpError as e:
                 raise ProtocolError((u"Failed to upload page blob: {0}"
                                      u"").format(e))
             if resp is None or resp.status != httpclient.CREATED:
@@ -506,7 +503,7 @@ class WireClient(object):
         try:
             resp = self.call_wireserver(restutil.http_get, uri, 
                                         headers=headers)
-        except restutil.HttpError as e:
+        except HttpError as e:
             raise ProtocolError(text(e))
 
         if(resp.status != httpclient.OK):
@@ -550,7 +547,7 @@ class WireClient(object):
                 resp = self.call_storage_service(restutil.http_get, 
                                                  version_uri.uri, None, 
                                                  chk_proxy=True)
-            except restutil.HttpError as e:
+            except HttpError as e:
                 raise ProtocolError(text(e))
 
             if resp.status == httpclient.OK:
@@ -615,7 +612,7 @@ class WireClient(object):
         xml_text = self.fetch_config(uri, self.get_header())
         goal_state = GoalState(xml_text)
 
-        incarnation_file = os.path.join(OSUTIL.get_lib_dir(), 
+        incarnation_file = os.path.join(conf.get_lib_dir(), 
                                         INCARNATION_FILE_NAME)
 
         if not forced:
@@ -633,7 +630,7 @@ class WireClient(object):
             try:
                 self.goal_state = goal_state
                 file_name = GOAL_STATE_FILE_NAME.format(goal_state.incarnation)
-                goal_state_file = os.path.join(OSUTIL.get_lib_dir(), file_name)
+                goal_state_file = os.path.join(conf.get_lib_dir(), file_name)
                 self.save_cache(goal_state_file, xml_text)
                 self.save_cache(incarnation_file, goal_state.incarnation)
                 self.update_hosting_env(goal_state)
@@ -707,7 +704,7 @@ class WireClient(object):
         else:
             error = ("Agent supported wire protocol version: {0} was not "
                      "advised by Fabric.").format(PROTOCOL_VERSION)
-            raise ProtocolNotFound(error)
+            raise ProtocolNotFoundError(error)
    
     def upload_status_blob(self):
         ext_conf = self.get_ext_conf()
@@ -725,7 +722,7 @@ class WireClient(object):
         try:
             resp = self.call_wireserver(restutil.http_post, role_prop_uri,
                                         role_prop, headers = headers)
-        except restutil.HttpError as e:
+        except HttpError as e:
             raise ProtocolError((u"Failed to send role properties: {0}"
                                  u"").format(e))
         if resp.status != httpclient.ACCEPTED:
@@ -746,7 +743,7 @@ class WireClient(object):
         try:
             resp = self.call_wireserver(restutil.http_post, health_report_uri,
                                         health_report, headers = headers)
-        except restutil.HttpError as e:
+        except HttpError as e:
             raise ProtocolError((u"Failed to send provision status: {0}"
                                  u"").format(e))
         if resp.status != httpclient.OK:
@@ -764,7 +761,7 @@ class WireClient(object):
         try:
             header = self.get_header_for_xml_content()
             resp = self.call_wireserver(restutil.http_post, uri, data, header)
-        except restutil.HttpError as e:
+        except HttpError as e:
             raise ProtocolError("Failed to send events:{0}".format(e))
 
         if resp.status != httpclient.OK:
@@ -933,8 +930,8 @@ class Certificates(object):
     def __init__(self, client, xml_text):
         logger.verb("Load Certificates.xml")
         self.client = client
-        self.lib_dir = OSUTIL.get_lib_dir()
-        self.openssl_cmd = OSUTIL.get_openssl_cmd()
+        self.lib_dir = conf.get_lib_dir()
+        self.openssl_cmd = self.client.osutil.get_openssl_cmd()
         self.cert_list = CertList()
         self.parse(xml_text)
 
@@ -980,15 +977,15 @@ class Certificates(object):
                     begin_crt = True
                 elif re.match(r'[-]+END.*KEY[-]+', line):
                     tmp_file = self.write_to_tmp_file(index, 'prv', buf)
-                    pub = OSUTIL.get_pubkey_from_prv(tmp_file)
+                    pub = self.client.osutil.get_pubkey_from_prv(tmp_file)
                     prvs[pub] = tmp_file
                     buf = []
                     index += 1
                     begin_prv = False
                 elif re.match(r'[-]+END.*CERTIFICATE[-]+', line):
                     tmp_file = self.write_to_tmp_file(index, 'crt', buf)
-                    pub = OSUTIL.get_pubkey_from_crt(tmp_file)
-                    thumbprint = OSUTIL.get_thumbprint_from_crt(tmp_file)
+                    pub = self.client.osutil.get_pubkey_from_crt(tmp_file)
+                    thumbprint = self.client.osutil.get_thumbprint_from_crt(tmp_file)
                     thumbprints[pub] = thumbprint
                     #Rename crt with thumbprint as the file name
                     crt = "{0}.crt".format(thumbprint)

@@ -20,30 +20,29 @@
 import os
 import subprocess
 import azurelinuxagent.logger as logger
-from azurelinuxagent.utils.osutil import OSUTIL
 
 VMM_CONF_FILE_NAME = "linuxosconfiguration.xml"
 VMM_STARTUP_SCRIPT_NAME= "install"
 
 class ScvmmHandler(object):
-    def __init__(self, handlers):
-        self.handlers = handlers
+    def __init__(self, distro):
+        self.distro = distro
 
     def detect_scvmm_env(self):
         logger.info("Detecting Microsoft System Center VMM Environment")
-        OSUTIL.mount_dvd(max_retry=1, chk_err=False)
-        mount_point = OSUTIL.get_dvd_mount_point()
+        self.distro.osutil.mount_dvd(max_retry=1, chk_err=False)
+        mount_point = self.distro.osutil.get_dvd_mount_point()
         found = os.path.isfile(os.path.join(mount_point, VMM_CONF_FILE_NAME))
         if found:
             self.start_scvmm_agent()
         else:
-            OSUTIL.umount_dvd(chk_err=False)
+            self.distro.osutil.umount_dvd(chk_err=False)
         return found
 
     def start_scvmm_agent(self):
         logger.info("Starting Microsoft System Center VMM Initialization "
                     "Process")
-        mount_point = OSUTIL.get_dvd_mount_point()
+        mount_point = self.distro.osutil.get_dvd_mount_point()
         startup_script = os.path.join(mount_point, VMM_STARTUP_SCRIPT_NAME)
         subprocess.Popen(["/bin/bash", startup_script, "-p " + mount_point])
 

@@ -20,51 +20,57 @@
 import os
 import time
 import sys
+import azurelinuxagent.conf as conf
 import azurelinuxagent.logger as logger
 from azurelinuxagent.future import text
-import azurelinuxagent.conf as conf
+from azurelinuxagent.exception import ProtocolError
 from azurelinuxagent.metadata import AGENT_LONG_NAME, AGENT_VERSION, \
                                      DISTRO_NAME, DISTRO_VERSION, \
                                      DISTRO_FULL_NAME, PY_VERSION_MAJOR, \
                                      PY_VERSION_MINOR, PY_VERSION_MICRO
 import azurelinuxagent.event as event
-import azurelinuxagent.protocol.dhcp as dhcp
-from azurelinuxagent.protocol.factory import PROT_FACTORY
-from azurelinuxagent.utils.osutil import OSUTIL
 import azurelinuxagent.utils.fileutil as fileutil
 
 
-class MainHandler(object):
-    def __init__(self, handlers):
-        self.handlers = handlers
+class DaemonHandler(object):
+    def __init__(self, distro):
+        self.distro = distro
 
     def run(self):
         logger.info("{0} Version:{1}", AGENT_LONG_NAME, AGENT_VERSION)
         logger.info("OS: {0} {1}", DISTRO_NAME, DISTRO_VERSION)
         logger.info("Python: {0}.{1}.{2}", PY_VERSION_MAJOR, PY_VERSION_MINOR,
                     PY_VERSION_MICRO)
+        
+        #Create lib dir
+        if not os.path.isdir(self.distro.conf.get_lib_dir()):
+            fileutil.mkdir(self.distro.conf.get_lib_dir(), mode=0o700)
+            os.chdir(self.distro.conf.get_lib_dir())
 
-        event.enable_unhandled_err_dump(AGENT_LONG_NAME)
-        fileutil.write_file(OSUTIL.get_agent_pid_file_path(), text(os.getpid()))
+        #TODO check running daemon
+        fileutil.write_file(self.distro.osutil.get_agent_pid_file_path(), 
+                            text(os.getpid()))
 
-        if conf.get_switch("DetectScvmmEnv", False):
-            if self.handlers.scvmm_handler.detect_scvmm_env():
+        if conf.get_detect_scvmm_env():
+            if self.distro.scvmm_handler.run():
                 return
+
+        self.distro.provision_handler.run()
         
-        PROT_FACTORY.wait_for_network()
+        if conf.get_resourcedisk_format():
+            self.distro.resource_disk_handler.run()
 
-        self.handlers.provision_handler.process()
+        try:
+            protocol = self.distro.protocol_util.detect_protocol()
+        except ProtocolError as e:
+            logger.error("Failed to detect protocol, exit", e)
+            return
         
-        PROT_FACTORY.detect_protocol()
-
-        if conf.get_switch("ResourceDisk.Format", False):
-            self.handlers.resource_disk_handler.start_activate_resource_disk()
-
-        event.EventMonitor().start()
-        self.handlers.env_handler.start()
-
+        self.distro.event_handler.run()
+        self.distro.env_handler.run()
+        
         while True:
             #Handle extensions
-            self.handlers.ext_handlers_handler.process()
+            self.distro.ext_distro_handler.run()
             time.sleep(25)
 

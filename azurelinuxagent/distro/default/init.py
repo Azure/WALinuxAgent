@@ -20,33 +20,34 @@
 import os
 import azurelinuxagent.conf as conf
 import azurelinuxagent.logger as logger
-from azurelinuxagent.utils.osutil import OSUTIL
-import azurelinuxagent.utils.fileutil as fileutil
+import azurelinuxagent.event as event
 
 
 class InitHandler(object):
-    def __init__(self, handlers):
-        self.handlers = handlers
+    def __init__(self, distro):
+        self.distro = distro
 
-    def init(self, verbose):
+    def run(self, verbose):
         #Init stdout log
         level = logger.LogLevel.VERBOSE if verbose else logger.LogLevel.INFO
         logger.add_logger_appender(logger.AppenderType.STDOUT, level)
 
         #Init config
-        conf_file_path = OSUTIL.get_conf_file_path()
-        conf.load_conf(conf_file_path)
+        conf_file_path = self.distro.osutil.get_agent_conf_file_path()
+        conf.load_conf_from_file(conf_file_path)
 
         #Init log
-        verbose = verbose or conf.get_switch("Logs.Verbose", False)
+        verbose = verbose or self.distro.conf.get_switch("Logs.Verbose", False)
         level = logger.LogLevel.VERBOSE if verbose else logger.LogLevel.INFO
         logger.add_logger_appender(logger.AppenderType.FILE, level,
                                  path="/var/log/waagent.log")
         logger.add_logger_appender(logger.AppenderType.CONSOLE, level,
                                  path="/dev/console")
 
-        #Create lib dir
-        fileutil.mkdir(OSUTIL.get_lib_dir(), mode=0o700)
-        os.chdir(OSUTIL.get_lib_dir())
+        #Init event reporter
+        event_dir = os.path.join(self.distro.conf.get_lib_dir(), "events")
+        event.init_event_reporter(event_dir)
+        event.enable_unhandled_err_dump("WALA")
+
 
 

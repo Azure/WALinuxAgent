@@ -18,10 +18,8 @@
 #
 
 import azurelinuxagent.conf as conf
-from azurelinuxagent.utils.osutil import OSUTIL
+from azurelinuxagent.exception import ProtocolError
 from azurelinuxagent.future import read_input
-import azurelinuxagent.protocol as prot
-import azurelinuxagent.protocol.ovfenv as ovf
 import azurelinuxagent.utils.fileutil as fileutil
 import azurelinuxagent.utils.shellutil as shellutil
 
@@ -35,20 +33,20 @@ class DeprovisionAction(object):
         self.func(*self.args, **self.kwargs)
 
 class DeprovisionHandler(object):
-    def __init__(self, handlers):
-        self.handlers = handlers
+    def __init__(self, distro):
+        self.distro = distro
 
     def del_root_password(self, warnings, actions):
         warnings.append("WARNING! root password will be disabled. "
                         "You will not be able to login as root.")
 
-        actions.append(DeprovisionAction(OSUTIL.del_root_password))
+        actions.append(DeprovisionAction(self.distro.osutil.del_root_password))
 
     def del_user(self, warnings, actions):
 
         try:
-            ovfenv = ovf.get_ovf_env()
-        except prot.ProtocolError:
+            ovfenv = self.distro.protocol_util.get_ovf_env()
+        except ProtocolError:
             warnings.append("WARNING! ovf-env.xml is not found.")
             warnings.append("WARNING! Skip delete user.")
             return
@@ -56,7 +54,8 @@ class DeprovisionHandler(object):
         username = ovfenv.username
         warnings.append(("WARNING! {0} account and entire home directory "
                          "will be deleted.").format(username))
-        actions.append(DeprovisionAction(OSUTIL.del_account, [username]))
+        actions.append(DeprovisionAction(self.distro.osutil.del_account, 
+                                         [username]))
 
 
     def regen_ssh_host_key(self, warnings, actions):
@@ -66,7 +65,7 @@ class DeprovisionHandler(object):
 
     def stop_agent_service(self, warnings, actions):
         warnings.append("WARNING! The waagent service will be stopped.")
-        actions.append(DeprovisionAction(OSUTIL.stop_agent_service))
+        actions.append(DeprovisionAction(self.distro.osutil.stop_agent_service))
 
     def del_files(self, warnings, actions):
         files_to_del = ['/root/.bash_history', '/var/log/waagent.log']
@@ -78,26 +77,28 @@ class DeprovisionHandler(object):
         actions.append(DeprovisionAction(fileutil.rm_dirs, dirs_to_del))
 
     def del_lib_dir(self, warnings, actions):
-        dirs_to_del = [OSUTIL.get_lib_dir()]
+        dirs_to_del = [conf.get_lib_dir()]
         actions.append(DeprovisionAction(fileutil.rm_dirs, dirs_to_del))
 
     def reset_hostname(self, warnings, actions):
         localhost = ["localhost.localdomain"]
-        actions.append(DeprovisionAction(OSUTIL.set_hostname, localhost))
-        actions.append(DeprovisionAction(OSUTIL.set_dhcp_hostname, localhost))
+        actions.append(DeprovisionAction(self.distro.osutil.set_hostname, 
+                                         localhost))
+        actions.append(DeprovisionAction(self.distro.osutil.set_dhcp_hostname, 
+                                         localhost))
 
     def setup(self, deluser):
         warnings = []
         actions = []
 
         self.stop_agent_service(warnings, actions)
-        if conf.get_switch("Provisioning.RegenerateSshHostkey", False):
+        if conf.get_regenerate_ssh_host_key():
             self.regen_ssh_host_key(warnings, actions)
 
         self.del_dhcp_lease(warnings, actions)
         self.reset_hostname(warnings, actions)
 
-        if conf.get_switch("Provisioning.DeleteRootPassword", False):
+        if conf.get_delete_root_password():
             self.del_root_password(warnings, actions)
 
         self.del_lib_dir(warnings, actions)
@@ -108,7 +109,7 @@ class DeprovisionHandler(object):
 
         return warnings, actions
 
-    def deprovision(self, force=False, deluser=False):
+    def run(self, force=False, deluser=False):
         warnings, actions = self.setup(deluser)
         for warning in warnings:
             print(warning)

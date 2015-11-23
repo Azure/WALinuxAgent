@@ -20,11 +20,13 @@ import json
 import shutil
 import os
 import time
-from azurelinuxagent.utils.osutil import OSUTIL
+from azurelinuxagent.exception import ProtocolError, HttpError
 from azurelinuxagent.future import httpclient, text
+import azurelinuxagent.conf as conf
+import azurelinuxagent.logger as logger
 import azurelinuxagent.utils.restutil as restutil
 import azurelinuxagent.utils.textutil as textutil
-from azurelinuxagent.protocol.common import *
+from azurelinuxagent.protocol.restapi import *
 
 ENDPOINT='169.254.169.254'
 #TODO use http for azure pack test
@@ -47,7 +49,8 @@ def _add_content_type(headers):
 
 class MetadataProtocol(Protocol):
 
-    def __init__(self, apiversion=APIVERSION, endpoint=ENDPOINT):
+    def __init__(self, osutil, apiversion=APIVERSION, endpoint=ENDPOINT):
+        self.osutil = osutil
         self.apiversion = apiversion
         self.endpoint = endpoint
         self.identity_uri = BASE_URI.format(self.endpoint, "identity",
@@ -70,7 +73,7 @@ class MetadataProtocol(Protocol):
     def _get_data(self, url, headers=None):
         try:
             resp = restutil.http_get(url, headers=headers)
-        except restutil.HttpError as e:
+        except HttpError as e:
             raise ProtocolError(text(e))
 
         if resp.status != httpclient.OK:
@@ -86,7 +89,7 @@ class MetadataProtocol(Protocol):
         headers = _add_content_type(headers) 
         try:
             resp = restutil.http_put(url, json.dumps(data), headers=headers)
-        except restutil.HttpError as e:
+        except HttpError as e:
             raise ProtocolError(text(e))
         if resp.status != httpclient.OK:
             raise ProtocolError("{0} - PUT: {1}".format(resp.status, url))
@@ -95,7 +98,7 @@ class MetadataProtocol(Protocol):
         headers = _add_content_type(headers) 
         try:
             resp = restutil.http_post(url, json.dumps(data), headers=headers)
-        except restutil.HttpError as e:
+        except HttpError as e:
             raise ProtocolError(text(e))
         if resp.status != httpclient.CREATED:
             raise ProtocolError("{0} - POST: {1}".format(resp.status, url))
@@ -107,25 +110,22 @@ class MetadataProtocol(Protocol):
         content = fileutil.read_file(file_name)
         return textutil.get_bytes_from_pem(content)
 
-    def initialize(self):
+    def detect(self):
         self.get_vminfo()
-        trans_prv_file = os.path.join(OSUTIL.get_lib_dir(), 
+        trans_prv_file = os.path.join(conf.get_lib_dir(), 
                                       TRANSPORT_PRV_FILE_NAME)
-        trans_crt_file = os.path.join(OSUTIL.get_lib_dir(), 
+        trans_crt_file = os.path.join(conf.get_lib_dir(), 
                                       TRANSPORT_CERT_FILE_NAME)
-        OSUTIL.gen_transport_cert(trans_prv_file, trans_crt_file)
+        self.osutil.gen_transport_cert(trans_prv_file, trans_crt_file)
 
         #"Install" the cert and private key to /var/lib/waagent
-        thumbprint = OSUTIL.get_thumbprint_from_crt(trans_crt_file)
-        prv_file = os.path.join(OSUTIL.get_lib_dir(), 
+        thumbprint = self.osutil.get_thumbprint_from_crt(trans_crt_file)
+        prv_file = os.path.join(conf.get_lib_dir(), 
                                 "{0}.prv".format(thumbprint))
-        crt_file = os.path.join(OSUTIL.get_lib_dir(), 
+        crt_file = os.path.join(conf.get_lib_dir(), 
                                 "{0}.crt".format(thumbprint))
         shutil.copyfile(trans_prv_file, prv_file)
         shutil.copyfile(trans_crt_file, crt_file)
-    
-    def reinitialize(self):
-        pass
 
     def get_vminfo(self):
         vminfo = VMInfo()

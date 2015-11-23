@@ -17,12 +17,13 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
-"""
-Handler handles different tasks like, provisioning, deprovisioning etc.
-The handlers could be extended for different distros. The default 
-implementation is under azurelinuxagent.distros.default
-"""
-import azurelinuxagent.distro.loader as loader
+from azurelinuxagent.distro.default.distro import DefaultDistro
+from azurelinuxagent.distro.coreos.osutil import CoreOSUtil
+from azurelinuxagent.distro.coreos.deprovision import CoreOSDeprovisionHandler
 
-HANDLERS = loader.get_handlers()
+class CoreOSDistro(DefaultDistro):
+    def __init__(self):
+        super(CoreOSDistro, self).__init__()
+        self.osutil = CoreOSUtil()
+        self.deprovision_handler = CoreOSDeprovisionHandler(self)
 
