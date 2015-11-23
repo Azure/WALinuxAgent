@@ -558,9 +558,10 @@ class AbstractDistro(object):
         if os.path.isfile(mountpoint + "/swapfile") and os.path.getsize(mountpoint + "/swapfile") != (sizeKB * 1024):
             os.remove(mountpoint + "/swapfile")
         if not os.path.isfile(mountpoint + "/swapfile"):
-            Run("dd if=/dev/zero of=" + mountpoint + "/swapfile bs=1024 count=" + str(sizeKB))
+            self.mkfile(mountpoint + "/swapfile", sizeKB * 1024)
             Run("mkswap " + mountpoint + "/swapfile")
         Run("chmod 600 " + mountpoint + "/swapfile")
+        Run("chmod +t " + mountpoint + "/swapfile") # Try setting sticky too.
         if not Run("swapon " + mountpoint + "/swapfile"):
             Log("Enabled " + str(sizeKB) + " KB of swap at " + mountpoint + "/swapfile")
         else:
@@ -579,6 +580,18 @@ class AbstractDistro(object):
     def mountDVD(self,dvd,location):
         return RunGetOutput(self.mount_dvd_cmd + ' ' + dvd + ' ' + location)
 
+    def mkfile(self,filename,nbytes):
+        """
+        Create a non-sparse file of that size. Replace existing file.
+        
+        See also:
+          - os.posix_fallocate(filename,0,bytes) # py 3.3+
+          - Run('mkfile {nbytes} {fn}'.format(fn=filename, nbytes=nbytes)) # even slower than dd, xfs_mkfile on Linux
+        """
+        if os.path.isfile(filename)
+            os.remove(filename)
+        return Run(ShellEscape(['fallocate', '-l', str(bytes), filename]))
+    
     def GetHome(self):
         return GetHome()
 
@@ -2551,6 +2564,31 @@ class FreeBSDDistro(AbstractDistro):
         SetFileContents(location+"/ovf-env.xml", ovfxml)
         return retcode,out
 
+    def mkfile(self,filename,nbytes):
+        """
+        Create a non-sparse file of that size. Replace existing file. BSD-compatible dd version.
+        
+        For sizes < 64M, a single-pass dd is used. Otherwise use two-pass dd.
+        """
+        max_blocksize = 64 * 1024 ** 2
+        dd_cmd = "dd if=/dev/zero bs={bs} count={n} conv=notrunc of={fn}"
+        
+        if not type(nbytes) is int:
+           nbytes = int(nbytes)
+        
+        if os.path.isfile(filename):
+            os.remove(filename)
+        
+        fn_sh = ShellEscape(filename)
+        
+        if nbytes < max_blocksize:
+            exitcode = Run(dd_cmd.format(bs=bytes, fn=fn_sh, n=1))
+        else:
+            exitcode = Run(dd_cmd.format(bs=max_blocksize, fn=filename, n=bytes/max_blocksize))
+            exitcode <<= 8 # lshift so we have space for another exitcode
+            exitcode += Run(dd.cmd.format(bs=nbytes%max_blocksize, fn=fn_sh, n=1))
+        return exitcode
+
     def GetHome(self):
         return '/home'
 
@@ -2690,6 +2728,19 @@ def GetLineStartingWith(prefix, filepath):
         if line.startswith(prefix):
             return line
     return None
+
+def ShellEscape(wordList):
+    """
+    Escape a list or tuple of strings for Unix Shell as words, using the
+    byte-literal single quote.
+    
+    The resulting string is safe for use with ``shell=True`` in ``subprocess``,
+    and ``assert shlex.split(ShellEscape(wordList)) == wordList``.
+    """
+    if not isinstance(wordList, (tuple, list)):
+        wordList = (wordList,)
+
+    return " ".join("'{0}'".format(s.replace("'","'\\''") for s in wordList))
 
 def Run(cmd,chk_err=True):
     """
