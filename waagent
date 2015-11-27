@@ -1051,7 +1051,24 @@ class redhatDistro(AbstractDistro):
         else:
             return 0
 
-
+    def checkDependencies(self):
+        """
+        Generic dependency check.
+        Return 1 unless all dependencies are satisfied.
+        """
+        if DistInfo()[1] < '7.0' and self.checkPackageInstalled('NetworkManager'):
+            Error(GuestAgentLongName + " is not compatible with network-manager.")
+            return 1
+        try:
+            m= __import__('pyasn1')
+        except ImportError:
+            Error(GuestAgentLongName + " requires python-pyasn1 for your Linux distribution.")
+            return 1
+        for a in self.requiredDeps:
+            if Run("which " + a + " > /dev/null 2>&1",chk_err=False):
+                Error("Missing required dependency: " + a)
+                return 1
+        return 0	
 
 ############################################################    
 #	centosDistro
