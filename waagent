@@ -2543,7 +2543,6 @@ class Logger(object):
                     message = filter(lambda x : x in string.printable, message)
                     C.write(message.encode('ascii','ignore') + "\n")
             except IOError, e:
-                print e
                 pass
                 
     def Log(self,message):
