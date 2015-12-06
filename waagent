@@ -1308,7 +1308,173 @@ class NixOSDistro(AbstractDistro):
         super(NixOSDistro,self).__init__()
         global RulesFiles
         RulesFiles = []
+        EtcDhcpClientConfFiles = []
+        # configs are deleted by NixOS
+        self.agent_files_to_uninstall = []
+        self.dhcp_client_name = "dhcpcd"
+        self.dhcp_enabled=True
+        self.fileBlackList = [ "/root/.bash_history" "/etc/machine-id" ]
+        self.requiredDeps.extend([ "mount", "umount", "pidof", "hostname", "systemctl" ])
+        self.requiredDeps.remove('sed')
 
+    def restartService(self, name):
+        return Run("systemctl restart " + name)
+
+    def checkPackageInstalled(self,p):
+        """
+        The only way to install waagent in NixOS is via system config.
+        Return 1 since it must be preinstalled.
+        """
+        return 1
+
+    def installAgentServiceScriptFiles(self):
+        """
+        The only way to install waagent in NixOS is via system config.
+        Return 1 since it must be preinstalled.
+        """
+        return 1
+
+    def registerAgentService(self):
+        """
+        The only way to install waagent in NixOS is via system config.
+        Return 1 since it must be preinstalled.
+        """
+        return 1
+
+    def uninstallAgentService(self):
+        """
+        The only way to uninstall waagent in NixOS is via system config.
+        """
+        return 1
+
+    def unregisterAgentService(self):
+        """
+        The only way to uninstall waagent in NixOS is via system config.
+        """
+        return 1
+
+    def startAgentService(self):
+        return Run("systemctl start waagent")
+
+    def stopAgentService(self):
+        return Run("systemctl stop waagent")
+
+    def restartSshService(self):
+        """
+        Restart the SSH daemon service if it isn't configured as socket-activated
+        """
+        return self.restartService("sshd")
+
+    def sshDeployPublicKey(self,fprint,path):
+        """
+        We support PKCS8.
+        """
+        if Run("ssh-keygen -i -m PKCS8 -f " + fprint + " >> " + path):
+            return 1
+        else :
+            return 0
+
+    def checkPackageUpdateable(self,p):
+        """
+        Packages can only be updated via system config in NixOS.
+        Return 0 since waagent can't update packages.
+        """
+        return 0
+
+    def deleteRootPassword(self):
+        return Run("usermod root -p '!'")
+
+    def load_ata_piix(self):
+        """
+        ata_piix module (un)loading is handled by the NixOS waagent service.
+        """
+        return 0
+
+    def unload_ata_piix(self):
+        """
+        ata_piix module (un)loading is handled by the NixOS waagent service.
+        """
+        return 0
+
+    def deprovisionWarnUser(self):
+        return
+
+    def checkDependencies(self):
+        """
+        Since the waagent service is installed via system config in NixOS,
+        all dependencies are satisfied.
+        """
+        return 1
+
+    def RestartInterface(self, iface):
+        self.restartService(self.dhcp_client_name)
+
+    def Install(self):
+        """
+        Packages must be installed via system config in NixOS.
+        """
+        return 1
+
+    def stopDHCP(self):
+        Run("systemctl stop " + self.dhcp_client_name)
+    def startDHCP(self):
+        Run("systemctl start " + self.dhcp_client_name)
+
+    def setDefaultGateway(self, gateway):
+        Run("route add default gw" + gateway, chk_err=False)
+
+    def routeAdd(self, net, mask, gateway):
+        Run("route add -net " + net + " netmask " + mask + " gw " + gateway,
+            chk_err=False)
+
+    def CreateAccount(self,user, password, expiration, thumbprint):
+        """
+        Create a user account, with 'user', 'password', 'expiration',
+        ssh keys, and sudo permissions.
+        Returns None if successful, error string on failure.
+        """
+        userentry = None
+        try:
+            userentry = pwd.getpwnam(user)
+        except:
+            pass
+        uidmin = None
+        try:
+            uidmin = int(GetLineStartingWith("UID_MIN", "/etc/login.defs").split()[1])
+        except:
+            pass
+        if uidmin == None:
+            uidmin = 100
+        if userentry != None and userentry[2] < uidmin:
+            Error("CreateAccount: " + user + " is a system user. Will not set password.")
+            return "Failed to set password for system user: " + user + " (0x06)."
+        if userentry == None:
+            command = "useradd -m " + user
+            if expiration != None:
+                command += " -e " + expiration.split('.')[0]
+            if Run(command):
+                Error("Failed to create user account: " + user)
+                return "Failed to create user account: " + user + " (0x07)."
+        else:
+            Log("CreateAccount: " + user + " already exists. Will update password.")
+        if password != None:
+            MyDistro.changePass(user, password)
+        Run('usermod ' + user + ' -G wheel')
+        home = MyDistro.GetHome()
+        if thumbprint != None:
+            dir = home + "/" + user + "/.ssh"
+            CreateDir(dir, user, 0700)
+            pub = dir + "/id_rsa.pub"
+            prv = dir + "/id_rsa"
+            Run("ssh-keygen -y -f " + thumbprint + ".prv > " + pub)
+            SetFileContents(prv, GetFileContents(thumbprint + ".prv"))
+            for f in [pub, prv]:
+                os.chmod(f, 0600)
+                ChangeOwner(f, user)
+            SetFileContents(dir + "/authorized_keys", GetFileContents(pub))
+            ChangeOwner(dir + "/authorized_keys", user)
+        Log("Created user account: " + user)
+        return None
 
 ############################################################
 #   CoreOSDistro
@@ -4948,7 +5114,7 @@ class OvfEnv(object):
         if self.DisableSshPasswordAuthentication:
             filepath = "/etc/ssh/sshd_config"
             # Disable RFC 4252 and RFC 4256 authentication schemes.
-            if os.path.exists(filepath)：
+            if os.path.exists(filepath):
                 ReplaceFileContentsAtomic(filepath, "\n".join(filter(lambda a: not
                     (a.startswith("PasswordAuthentication") or a.startswith("ChallengeResponseAuthentication")),
                     GetFileContents(filepath).split('\n'))) + "\nPasswordAuthentication no\nChallengeResponseAuthentication no\n")
@@ -6294,10 +6460,14 @@ def DistInfo(fullname=0):
         release = re.sub('\-.*\Z', '', str(platform.release()))
         distinfo = ['FreeBSD', release]
         return distinfo
-    
+
     if 'linux_distribution' in dir(platform):
         distinfo = list(platform.linux_distribution(full_distribution_name=fullname))
         distinfo[0] = distinfo[0].strip() # remove trailing whitespace in distro name
+        # Workaround: python platform library cannot detect NixOS
+        if not distinfo[0] and os.path.exists('/etc/os-release'):
+            if 'NixOS' in GetFileContents('/etc/os-release'):
+                return [ 'NixOS', '', '' ]
         return distinfo
     else:
         return platform.dist()
@@ -6421,7 +6591,6 @@ def main():
     LoggerInit('/var/log/waagent.log','/dev/console')
     global LinuxDistro
     LinuxDistro=DistInfo()[0]
-
     global MyDistro
     MyDistro = GetMyDistro()
     if MyDistro == None :
