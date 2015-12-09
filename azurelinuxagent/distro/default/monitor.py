@@ -37,7 +37,7 @@ from azurelinuxagent.metadata import DISTRO_NAME, DISTRO_VERSION, \
 
 
 
-class EventHandler(object):
+class MonitorHandler(object):
     def __init__(self, distro):
         self.distro = distro
         self.sysinfo = []

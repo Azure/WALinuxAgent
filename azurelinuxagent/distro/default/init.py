@@ -46,7 +46,7 @@ class InitHandler(object):
 
         #Init event reporter
         event_dir = os.path.join(self.distro.conf.get_lib_dir(), "events")
-        event.init_event_reporter(event_dir)
+        event.init_event_logger(event_dir)
         event.enable_unhandled_err_dump("WALA")
 
 

@@ -21,7 +21,7 @@ from azurelinuxagent.conf import ConfigurationProvider
 from azurelinuxagent.distro.default.osutil import DefaultOSUtil
 from azurelinuxagent.distro.default.daemon import DaemonHandler
 from azurelinuxagent.distro.default.init import InitHandler
-from azurelinuxagent.distro.default.event import EventHandler
+from azurelinuxagent.distro.default.monitor import MonitorHandler
 from azurelinuxagent.distro.default.dhcp import DhcpHandler
 from azurelinuxagent.distro.default.protocolUtil import ProtocolUtil
 from azurelinuxagent.distro.default.scvmm import ScvmmHandler
@@ -40,7 +40,7 @@ class DefaultDistro(object):
 
         self.init_handler = InitHandler(self)
         self.daemon_handler = DaemonHandler(self)
-        self.event_handler = EventHandler(self)
+        self.event_handler = MonitorHandler(self)
         self.dhcp_handler = DhcpHandler(self)
         self.scvmm_handler = ScvmmHandler(self)
         self.env_handler = EnvHandler(self)

@@ -48,7 +48,7 @@ class WALAEventOperation:
     ActivateResourceDisk="ActivateResourceDisk"
     UnhandledError="UnhandledError"
 
-class EventReporter(object):
+class EventLogger(object):
     def __init__(self):
         self.event_dir = None
 
@@ -88,11 +88,11 @@ class EventReporter(object):
         except EventError as e:
             logger.error("{0}", e)
 
-__event_reporter__ = EventReporter()
+__event_logger__ = EventLogger()
 
 def add_event(name, op="", is_success=True, duration=0, version="1.0",
               message="", evt_type="", is_internal=False,
-              reporter=__event_reporter__):
+              reporter=__event_logger__):
     if reporter.event_dir is None:
         logger.warn("Event reporter is not initialized.")
         return
@@ -100,7 +100,7 @@ def add_event(name, op="", is_success=True, duration=0, version="1.0",
                        version=version, message=message, evt_type=evt_type,
                        is_internal=is_internal)
 
-def init_event_reporter(event_dir, reporter=__event_reporter__):
+def init_event_logger(event_dir, reporter=__event_logger__):
     reporter.event_dir = event_dir
 
 def dump_unhandled_err(name):
