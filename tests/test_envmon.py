@@ -23,7 +23,7 @@ from tests.tools import *
 import unittest
 import time
 import azurelinuxagent.protocol.dhcp as dhcp
-from azurelinuxagent.future import text
+from azurelinuxagent.future import ustr
 from azurelinuxagent.utils.osutil import OSUTIL
 from azurelinuxagent.distro.default.env import EnvMonitor
 
@@ -38,7 +38,7 @@ def mock_get_dhcp_pid():
     return "1234"
 
 def mock_dhcp_pid_change():
-    return text(time.time())
+    return ustr(time.time())
 
 class TestEnvMonitor(unittest.TestCase):
 

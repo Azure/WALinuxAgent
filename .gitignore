@@ -60,3 +60,6 @@ waagentc
 
 waagentc
 bin/waagent2.0c
+
+# rope project
+.ropeproject/

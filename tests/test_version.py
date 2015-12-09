@@ -25,7 +25,7 @@ import unittest
 import os
 import json
 import azurelinuxagent.protocol.v1 as v1
-from azurelinuxagent.future import text
+from azurelinuxagent.future import ustr
 
 VersionInfoSample=u"""\
 <?xml version="1.0" encoding="utf-8"?>

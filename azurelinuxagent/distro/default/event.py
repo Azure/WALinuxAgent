@@ -27,7 +27,7 @@ import platform
 import azurelinuxagent.logger as logger
 from azurelinuxagent.event import WALAEventOperation, add_event
 from azurelinuxagent.exception import EventError, ProtocolError, OSUtilError
-from azurelinuxagent.future import text
+from azurelinuxagent.future import ustr
 from azurelinuxagent.protocol.restapi import TelemetryEventParam, \
                                              TelemetryEventList, \
                                              TelemetryEvent, \

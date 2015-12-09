@@ -24,7 +24,7 @@ import uuid
 import unittest
 import os
 import json
-from azurelinuxagent.future import text
+from azurelinuxagent.future import ustr
 import azurelinuxagent.protocol.ovfenv as ovfenv
 
 ExtensionsConfigSample="""\

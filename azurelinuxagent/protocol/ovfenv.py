@@ -25,7 +25,7 @@ import shutil
 import xml.dom.minidom as minidom
 import azurelinuxagent.logger as logger
 from azurelinuxagent.exception import ProtocolError
-from azurelinuxagent.future import text
+from azurelinuxagent.future import ustr
 import azurelinuxagent.utils.fileutil as fileutil
 from azurelinuxagent.utils.textutil import parse_doc, findall, find, findtext
 

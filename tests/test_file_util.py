@@ -24,13 +24,13 @@ import uuid
 import unittest
 import os
 import sys
-from azurelinuxagent.future import text
+from azurelinuxagent.future import ustr
 import azurelinuxagent.utils.fileutil as fileutil
 
 class TestFileOperations(unittest.TestCase):
     def test_read_write_file(self):
         test_file='/tmp/test_file'
-        content = text(uuid.uuid4())
+        content = ustr(uuid.uuid4())
         fileutil.write_file(test_file, content)
         self.assertTrue(tools.simple_file_grep(test_file, content))
 
@@ -57,7 +57,7 @@ class TestFileOperations(unittest.TestCase):
    
     def test_append_file(self):
         test_file='/tmp/test_file2'
-        content = text(uuid.uuid4())
+        content = ustr(uuid.uuid4())
         fileutil.append_file(test_file, content)
         self.assertTrue(tools.simple_file_grep(test_file, content))
         os.remove(test_file)

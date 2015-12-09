@@ -24,7 +24,7 @@ import tests.tools as tools
 import uuid
 import unittest
 import azurelinuxagent.logger as logger
-from azurelinuxagent.future import text
+from azurelinuxagent.future import ustr
 
 class TestLogger(unittest.TestCase):
 
@@ -56,11 +56,11 @@ class TestLogger(unittest.TestCase):
                                   logger.LogLevel.INFO,
                                   '/tmp/testlog')
 
-        msg = text(uuid.uuid4())
+        msg = ustr(uuid.uuid4())
         _logger.info("Test logger: {0}", msg)
         self.assertTrue(tools.simple_file_grep('/tmp/testlog', msg))
 
-        msg = text(uuid.uuid4())
+        msg = ustr(uuid.uuid4())
         _logger.verb("Verbose should not be logged: {0}", msg)
         self.assertFalse(tools.simple_file_grep('/tmp/testlog', msg))
 
@@ -71,11 +71,11 @@ class TestLogger(unittest.TestCase):
                                   logger.LogLevel.VERBOSE,
                                   '/tmp/testlog')
 
-        msg = text(uuid.uuid4())
+        msg = ustr(uuid.uuid4())
         _logger.info("Test logger: {0}", msg)
         self.assertTrue(tools.simple_file_grep('/tmp/testlog', msg))
 
-        msg = text(uuid.uuid4())
+        msg = ustr(uuid.uuid4())
         _logger.verb("Test logger: {0}", msg)
         self.assertFalse(tools.simple_file_grep('/tmp/testlog', msg))
 

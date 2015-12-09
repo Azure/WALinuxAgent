@@ -26,7 +26,7 @@ import azurelinuxagent.conf as conf
 import azurelinuxagent.logger as logger
 from azurelinuxagent.event import add_event, WALAEventOperation
 from azurelinuxagent.exception import ExtensionError, ProtocolError
-from azurelinuxagent.future import text
+from azurelinuxagent.future import ustr
 from azurelinuxagent.metadata import AGENT_VERSION
 from azurelinuxagent.protocol.restapi import ExtHandlerStatus, ExtensionStatus, \
                                              ExtensionSubStatus, Extension, \
@@ -148,7 +148,7 @@ class ExtHandlersHandler(object):
             protocol = self.distro.protocol_util.get_protocol()
             ext_handlers = protocol.get_ext_handlers()
         except ProtocolError as e:
-            add_event(name="WALA", is_success=False, message = text(e))
+            add_event(name="WALA", is_success=False, message = ustr(e))
             return
 
         vm_status = VMStatus()
@@ -165,7 +165,7 @@ class ExtHandlersHandler(object):
                 try:
                     pkg_list = protocol.get_ext_handler_pkgs(ext_handler)
                 except ProtocolError as e:
-                    add_event(name="WALA", is_success=False, message=text(e))
+                    add_event(name="WALA", is_success=False, message=ustr(e))
                     continue
                     
                 handler_status = self.process_extension(ext_handler, pkg_list)
@@ -176,7 +176,7 @@ class ExtHandlersHandler(object):
             logger.verb("Report vm agent status")
             protocol.report_vm_status(vm_status)
         except ProtocolError as e:
-            add_event(name="WALA", is_success=False, message = text(e))
+            add_event(name="WALA", is_success=False, message = ustr(e))
 
     def process_extension(self, ext_handler, pkg_list):
         installed_version = get_installed_version(ext_handler.name)
@@ -194,7 +194,7 @@ class ExtHandlersHandler(object):
                 protocol.report_ext_status(handler.name, handler.ext.name, 
                                            handler.ext_status)
             except ProtocolError as e:
-                add_event(name="WALA", is_success=False, message=text(e))
+                add_event(name="WALA", is_success=False, message=ustr(e))
         
         return handler.handler_status
 
@@ -244,8 +244,8 @@ class ExtHandlerInstance(object):
         try: 
             self.handle_state()
         except ExtensionError as e:
-            self.set_state_err(text(e))
-            self.report_event(is_success=False, message=text(e))
+            self.set_state_err(ustr(e))
+            self.report_event(is_success=False, message=ustr(e))
             self.logger.error("Failed to process extension handler")
             return
 
@@ -254,7 +254,7 @@ class ExtHandlerInstance(object):
                 self.collect_ext_status()
                 self.collect_handler_status()
         except ExtensionError as e:
-            self.report_event(is_success=False, message=text(e))
+            self.report_event(is_success=False, message=ustr(e))
             self.logger.error("Failed to get extension handler status")
             return
 

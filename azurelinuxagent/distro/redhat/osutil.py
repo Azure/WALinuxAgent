@@ -27,7 +27,7 @@ import fcntl
 import time
 import base64
 import azurelinuxagent.logger as logger
-from azurelinuxagent.future import text, bytebuffer
+from azurelinuxagent.future import ustr, bytebuffer
 import azurelinuxagent.utils.fileutil as fileutil
 import azurelinuxagent.utils.shellutil as shellutil
 import azurelinuxagent.utils.textutil as textutil
@@ -80,7 +80,7 @@ class Redhat6xOSUtil(DefaultOSUtil):
             keydata.extend(b"\0")
             keydata.extend(self.num_to_bytes(n))
             keydata_base64 = base64.b64encode(bytebuffer(keydata))
-            return text(b"ssh-rsa " +  keydata_base64 + b"\n", 
+            return ustr(b"ssh-rsa " +  keydata_base64 + b"\n", 
                         encoding='utf-8')
         except ImportError as e:
             raise OSUtilError("Failed to load pyasn1.codec.der")

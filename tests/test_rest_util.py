@@ -24,7 +24,7 @@ import uuid
 import unittest
 import os
 import azurelinuxagent.utils.restutil as restutil
-from azurelinuxagent.future import text
+from azurelinuxagent.future import ustr
 import test
 import socket
 import azurelinuxagent.logger as logger

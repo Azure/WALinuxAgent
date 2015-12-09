@@ -27,7 +27,7 @@ import azurelinuxagent.conf as conf
 import azurelinuxagent.logger as logger
 from azurelinuxagent.exception import ProtocolError, HttpError, \
                                       ProtocolNotFoundError
-from azurelinuxagent.future import text, httpclient, bytebuffer
+from azurelinuxagent.future import ustr, httpclient, bytebuffer
 import azurelinuxagent.utils.restutil as restutil
 import azurelinuxagent.utils.textutil as textutil
 from azurelinuxagent.utils.textutil import parse_doc, findall, find, findtext, \
@@ -144,10 +144,10 @@ def _build_role_properties(container_id, role_instance_id, thumbprint):
 def _build_health_report(incarnation, container_id, role_instance_id,
                        status, substatus, description):
     #Escape '&', '<' and '>'
-    description = saxutils.escape(text(description))
+    description = saxutils.escape(ustr(description))
     detail = u''
     if substatus is not None:
-        substatus = saxutils.escape(text(substatus))
+        substatus = saxutils.escape(ustr(substatus))
         detail = (u"<Details>"
                   u"<SubStatus>{0}</SubStatus>"
                   u"<Description>{1}</Description>"
@@ -342,7 +342,7 @@ class StatusBlob(object):
                                                     data, {
                 "x-ms-date" :  timestamp,
                 "x-ms-blob-type" : "BlockBlob",
-                "Content-Length": text(len(data)),
+                "Content-Length": ustr(len(data)),
                 "x-ms-version" : self.__class__.__storage_version__
             })
         except HttpError as e:
@@ -367,7 +367,7 @@ class StatusBlob(object):
                 "x-ms-date" :  timestamp,
                 "x-ms-blob-type" : "PageBlob",
                 "Content-Length": "0",
-                "x-ms-blob-content-length" : text(page_blob_size),
+                "x-ms-blob-content-length" : ustr(page_blob_size),
                 "x-ms-version" : self.__class__.__storage_version__
             })
         except HttpError as e:
@@ -401,7 +401,7 @@ class StatusBlob(object):
                     "x-ms-range" : "bytes={0}-{1}".format(start, page_end - 1),
                     "x-ms-page-write" : "update",
                     "x-ms-version" : self.__class__.__storage_version__,
-                    "Content-Length": text(page_end - start)
+                    "Content-Length": ustr(page_end - start)
                 })
             except HttpError as e:
                 raise ProtocolError((u"Failed to upload page blob: {0}"
@@ -419,13 +419,13 @@ def event_param_to_v1(param):
         attr_type = 'mt:uint64'
     elif param_type is str:
         attr_type = 'mt:wstr'
-    elif text(param_type).count("'unicode'") > 0:
+    elif ustr(param_type).count("'unicode'") > 0:
         attr_type = 'mt:wstr'
     elif param_type is bool:
         attr_type = 'mt:bool'
     elif param_type is float:
         attr_type = 'mt:float64'
-    return param_format.format(param.name, saxutils.quoteattr(text(param.value)),
+    return param_format.format(param.name, saxutils.quoteattr(ustr(param.value)),
                                attr_type)
 
 def event_to_v1(event):
@@ -496,7 +496,7 @@ class WireClient(object):
         if data is None:
             return None
         data = remove_bom(data)
-        xml_text = text(data, encoding='utf-8')
+        xml_text = ustr(data, encoding='utf-8')
         return xml_text
 
     def fetch_config(self, uri, headers):
@@ -504,7 +504,7 @@ class WireClient(object):
             resp = self.call_wireserver(restutil.http_get, uri, 
                                         headers=headers)
         except HttpError as e:
-            raise ProtocolError(text(e))
+            raise ProtocolError(ustr(e))
 
         if(resp.status != httpclient.OK):
             raise ProtocolError("{0} - {1}".format(resp.status, uri))
@@ -548,7 +548,7 @@ class WireClient(object):
                                                  version_uri.uri, None, 
                                                  chk_proxy=True)
             except HttpError as e:
-                raise ProtocolError(text(e))
+                raise ProtocolError(ustr(e))
 
             if resp.status == httpclient.OK:
                 return self.decode_config(resp.read())
@@ -798,7 +798,7 @@ class WireClient(object):
         return {
             "x-ms-agent-name":"WALinuxAgent",
             "x-ms-version":PROTOCOL_VERSION,
-            "Content-Type":"text/xml;charset=utf-8"
+            "Content-Type":"ustr/xml;charset=utf-8"
         }
 
     def get_header_for_cert(self):

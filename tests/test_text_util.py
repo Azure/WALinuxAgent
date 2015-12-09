@@ -23,7 +23,7 @@ from tests.tools import *
 import uuid
 import unittest
 import os
-from azurelinuxagent.future import text
+from azurelinuxagent.future import ustr
 import azurelinuxagent.utils.textutil as textutil
 from azurelinuxagent.utils.textutil import Version
 
@@ -36,7 +36,7 @@ class TestTextUtil(unittest.TestCase):
 
     def test_remove_bom(self):
         #Test bom could be removed
-        data = text(b'\xef\xbb\xbfhehe', encoding='utf-8')
+        data = ustr(b'\xef\xbb\xbfhehe', encoding='utf-8')
         data = textutil.remove_bom(data)
         self.assertNotEquals(0xbb, data[0])
         

@@ -21,7 +21,7 @@ import shutil
 import os
 import time
 from azurelinuxagent.exception import ProtocolError, HttpError
-from azurelinuxagent.future import httpclient, text
+from azurelinuxagent.future import httpclient, ustr
 import azurelinuxagent.conf as conf
 import azurelinuxagent.logger as logger
 import azurelinuxagent.utils.restutil as restutil
@@ -74,7 +74,7 @@ class MetadataProtocol(Protocol):
         try:
             resp = restutil.http_get(url, headers=headers)
         except HttpError as e:
-            raise ProtocolError(text(e))
+            raise ProtocolError(ustr(e))
 
         if resp.status != httpclient.OK:
             raise ProtocolError("{0} - GET: {1}".format(resp.status, url))
@@ -82,7 +82,7 @@ class MetadataProtocol(Protocol):
         data = resp.read()
         if data is None:
             return None
-        data = json.loads(text(data, encoding="utf-8"))
+        data = json.loads(ustr(data, encoding="utf-8"))
         return data
 
     def _put_data(self, url, data, headers=None):
@@ -90,7 +90,7 @@ class MetadataProtocol(Protocol):
         try:
             resp = restutil.http_put(url, json.dumps(data), headers=headers)
         except HttpError as e:
-            raise ProtocolError(text(e))
+            raise ProtocolError(ustr(e))
         if resp.status != httpclient.OK:
             raise ProtocolError("{0} - PUT: {1}".format(resp.status, url))
 
@@ -99,7 +99,7 @@ class MetadataProtocol(Protocol):
         try:
             resp = restutil.http_post(url, json.dumps(data), headers=headers)
         except HttpError as e:
-            raise ProtocolError(text(e))
+            raise ProtocolError(ustr(e))
         if resp.status != httpclient.CREATED:
             raise ProtocolError("{0} - POST: {1}".format(resp.status, url))
     

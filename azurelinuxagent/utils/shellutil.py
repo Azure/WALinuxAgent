@@ -20,7 +20,7 @@
 import platform
 import os
 import subprocess
-from azurelinuxagent.future import text
+from azurelinuxagent.future import ustr
 import azurelinuxagent.logger as logger
 
 if not hasattr(subprocess,'check_output'):
@@ -75,9 +75,9 @@ def run_get_output(cmd, chk_err=True, log_cmd=True):
         logger.verb(u"run cmd '{0}'", cmd)
     try:
         output=subprocess.check_output(cmd,stderr=subprocess.STDOUT,shell=True)
-        output = text(output, encoding='utf-8', errors="backslashreplace")
+        output = ustr(output, encoding='utf-8', errors="backslashreplace")
     except subprocess.CalledProcessError as e :
-        output = text(e.output, encoding='utf-8', errors="backslashreplace")
+        output = ustr(e.output, encoding='utf-8', errors="backslashreplace")
         if chk_err:
             if log_cmd:
                 logger.error(u"run cmd '{0}' failed", e.cmd)

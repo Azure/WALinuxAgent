@@ -28,7 +28,7 @@ import fcntl
 import azurelinuxagent.logger as logger
 import azurelinuxagent.conf as conf
 from azurelinuxagent.exception import OSUtilError
-from azurelinuxagent.future import text
+from azurelinuxagent.future import ustr
 import azurelinuxagent.utils.fileutil as fileutil
 import azurelinuxagent.utils.shellutil as shellutil
 import azurelinuxagent.utils.textutil as textutil
@@ -573,7 +573,7 @@ class DefaultOSUtil(object):
         for vmbus in os.listdir(path):
             deviceid = fileutil.read_file(os.path.join(path, vmbus, "device_id"))
             guid = deviceid.lstrip('{').split('-')
-            if guid[0] == g0 and guid[1] == "000" + text(port_id):
+            if guid[0] == g0 and guid[1] == "000" + ustr(port_id):
                 for root, dirs, files in os.walk(path + vmbus):
                     if root.endswith("/block"):
                         device = dirs[0]

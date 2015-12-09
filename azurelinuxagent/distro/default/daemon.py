@@ -22,7 +22,7 @@ import time
 import sys
 import azurelinuxagent.conf as conf
 import azurelinuxagent.logger as logger
-from azurelinuxagent.future import text
+from azurelinuxagent.future import ustr
 from azurelinuxagent.exception import ProtocolError
 from azurelinuxagent.metadata import AGENT_LONG_NAME, AGENT_VERSION, \
                                      DISTRO_NAME, DISTRO_VERSION, \
@@ -49,7 +49,7 @@ class DaemonHandler(object):
 
         #TODO check running daemon
         fileutil.write_file(self.distro.osutil.get_agent_pid_file_path(), 
-                            text(os.getpid()))
+                            ustr(os.getpid()))
 
         if conf.get_detect_scvmm_env():
             if self.distro.scvmm_handler.run():

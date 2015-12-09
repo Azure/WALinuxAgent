@@ -21,7 +21,7 @@ import os
 import re
 import threading
 import azurelinuxagent.logger as logger
-from azurelinuxagent.future import text
+from azurelinuxagent.future import ustr
 import azurelinuxagent.conf as conf
 from azurelinuxagent.event import add_event, WALAEventOperation
 import azurelinuxagent.utils.fileutil as fileutil
@@ -69,7 +69,7 @@ class ResourceDiskHandler(object):
             return mount_point
         except ResourceDiskError as e:
             logger.error("Failed to mount resource disk {0}", e)
-            add_event(name="WALA", is_success=False, message=text(e),
+            add_event(name="WALA", is_success=False, message=ustr(e),
                               op=WALAEventOperation.ActivateResourceDisk)
 
     def enable_swap(self, mount_point):

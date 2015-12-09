@@ -26,7 +26,7 @@ import unittest
 import os
 import azurelinuxagent.utils.shellutil as shellutil
 import test
-from azurelinuxagent.future import text
+from azurelinuxagent.future import ustr
 
 class TestrunCmd(unittest.TestCase):
     def test_run_get_output(self):

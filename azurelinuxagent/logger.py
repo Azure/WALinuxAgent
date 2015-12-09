@@ -22,7 +22,7 @@ Log utils
 """
 import os
 import sys
-from azurelinuxagent.future import text
+from azurelinuxagent.future import ustr
 from datetime import datetime
 
 class Logger(object):
@@ -49,8 +49,8 @@ class Logger(object):
 
     def log(self, level, msg_format, *args):
         #if msg_format is not unicode convert it to unicode
-        if type(msg_format) is not text:
-            msg_format = text(msg_format, errors="backslashreplace")
+        if type(msg_format) is not ustr:
+            msg_format = ustr(msg_format, errors="backslashreplace")
         if len(args) > 0:
             msg = msg_format.format(*args)
         else:
@@ -63,7 +63,7 @@ class Logger(object):
         else:
             log_item = u"{0} {1} {2}\n".format(time, level_str, msg)
 
-        log_item = text(log_item.encode('ascii', "backslashreplace"), 
+        log_item = ustr(log_item.encode('ascii', "backslashreplace"), 
                         encoding="ascii")
         for appender in self.appenders:
             appender.write(level, log_item)

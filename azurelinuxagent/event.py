@@ -26,7 +26,7 @@ import threading
 import platform
 import azurelinuxagent.logger as logger
 from azurelinuxagent.exception import EventError, ProtocolError
-from azurelinuxagent.future import text
+from azurelinuxagent.future import ustr
 from azurelinuxagent.protocol.restapi import TelemetryEventParam, \
                                              TelemetryEventList, \
                                              TelemetryEvent, \
@@ -59,7 +59,7 @@ class EventReporter(object):
         if len(os.listdir(self.event_dir)) > 1000:
             raise EventError("Too many files under: {0}", self.event_dir)
 
-        filename = os.path.join(self.event_dir, text(int(time.time()*1000000)))
+        filename = os.path.join(self.event_dir, ustr(int(time.time()*1000000)))
         try:
             with open(filename+".tmp",'wb+') as hfile:
                 hfile.write(data.encode("utf-8"))

@@ -22,11 +22,11 @@ import re
 import platform
 import sys
 import azurelinuxagent.utils.fileutil as fileutil
-from azurelinuxagent.future import text
+from azurelinuxagent.future import ustr
 
 def get_distro():
     if 'FreeBSD' in platform.system():
-        release = re.sub('\-.*\Z', '', text(platform.release()))
+        release = re.sub('\-.*\Z', '', ustr(platform.release()))
         osinfo = ['freebsd', release, '', 'freebsd']
     if 'linux_distribution' in dir(platform):
         osinfo = list(platform.linux_distribution(full_distribution_name=0))

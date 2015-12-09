@@ -23,7 +23,7 @@ import json
 import xml.dom.minidom
 import azurelinuxagent.logger as logger
 from azurelinuxagent.exception import ProtocolError
-from azurelinuxagent.future import text
+from azurelinuxagent.future import ustr
 import azurelinuxagent.utils.fileutil as fileutil
 
 def validata_param(name, val, expected_type):
@@ -176,7 +176,7 @@ class ExtHandlerStatus(DataContract):
         self.version = version
         self.status = status
         self.message = message
-        self.extensions = DataContractList(text)
+        self.extensions = DataContractList(ustr)
 
 class VMAgentStatus(DataContract):
     def __init__(self, version=None, status=None, message=None):

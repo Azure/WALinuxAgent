@@ -21,7 +21,7 @@ Provision handler
 
 import os
 import azurelinuxagent.logger as logger
-from azurelinuxagent.future import text
+from azurelinuxagent.future import ustr
 import azurelinuxagent.conf as conf
 from azurelinuxagent.event import add_event, WALAEventOperation
 from azurelinuxagent.exception import ProvisionError, ProtocolError, OSUtilError
@@ -66,8 +66,8 @@ class ProvisionHandler(object):
             logger.info("Finished provisioning")
         except ProvisionError as e:
             logger.error("Provision failed: {0}", e)
-            self.report_not_ready("ProvisioningFailed", text(e))
-            self.report_event(text(e))
+            self.report_not_ready("ProvisioningFailed", ustr(e))
+            self.report_event(ustr(e))
             return
 
         self.report_ready(thumbprint)
@@ -170,7 +170,7 @@ class ProvisionHandler(object):
             protocol = self.distro.protocol_util.get_protocol()
             protocol.report_provision_status(status)
         except ProtocolError as e:
-            self.report_event(text(e))
+            self.report_event(ustr(e))
 
     def report_ready(self, thumbprint=None):
         status = ProvisionStatus(status="Ready")
@@ -179,5 +179,5 @@ class ProvisionHandler(object):
             protocol = self.distro.protocol_util.get_protocol()
             protocol.report_provision_status(status)
         except ProtocolError as e:
-            self.report_event(text(e))
+            self.report_event(ustr(e))
 

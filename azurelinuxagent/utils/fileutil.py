@@ -27,7 +27,7 @@ import shutil
 import pwd
 import tempfile
 import azurelinuxagent.logger as logger
-from azurelinuxagent.future import text
+from azurelinuxagent.future import ustr
 import azurelinuxagent.utils.textutil as textutil
 
 def read_file(filepath, asbin=False, remove_bom=False, encoding='utf-8'):
@@ -46,7 +46,7 @@ def read_file(filepath, asbin=False, remove_bom=False, encoding='utf-8'):
         if remove_bom:
             #Remove bom on bytes data before it is converted into string.
             data = textutil.remove_bom(data)
-        data = text(data, encoding=encoding)
+        data = ustr(data, encoding=encoding)
         return data
 
 def write_file(filepath, contents, asbin=False, encoding='utf-8', append=False):

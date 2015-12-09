@@ -20,7 +20,7 @@
 import os
 import time
 import azurelinuxagent.logger as logger
-from azurelinuxagent.future import text
+from azurelinuxagent.future import ustr
 import azurelinuxagent.conf as conf
 import azurelinuxagent.protocol.ovfenv as ovfenv
 from azurelinuxagent.event import add_event, WALAEventOperation
@@ -62,8 +62,8 @@ class UbuntuProvisionHandler(ProvisionHandler):
            
         except ProvisionError as e:
             logger.error("Provision failed: {0}", e)
-            self.report_not_ready("ProvisioningFailed", text(e))
-            self.report_event(text(e))
+            self.report_not_ready("ProvisioningFailed", ustr(e))
+            self.report_event(ustr(e))
             return
             
         self.report_ready(thumbprint)

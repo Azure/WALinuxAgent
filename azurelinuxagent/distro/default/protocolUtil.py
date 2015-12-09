@@ -25,7 +25,7 @@ import azurelinuxagent.conf as conf
 import azurelinuxagent.logger as logger
 from azurelinuxagent.exception import ProtocolError, OSUtilError, \
                                       ProtocolNotFoundError
-from azurelinuxagent.future import text
+from azurelinuxagent.future import ustr
 import azurelinuxagent.utils.fileutil as fileutil
 from azurelinuxagent.protocol.ovfenv import OvfEnv
 from azurelinuxagent.protocol.wire import WireProtocol
@@ -77,13 +77,13 @@ class ProtocolUtil(object):
                 shutil.copyfile(tag_file_path_on_dvd, tag_file_path) 
 
         except (OSUtilError, IOError) as e:
-            raise ProtocolError(text(e))
+            raise ProtocolError(ustr(e))
 
         try:
             self.distro.osutil.umount_dvd()
             self.distro.osutil.eject_dvd()
         except OSUtilError as e:
-            logger.warn(text(e))
+            logger.warn(ustr(e))
 
         return ovfenv
 
@@ -103,14 +103,14 @@ class ProtocolUtil(object):
             file_path = os.path.join(conf.get_lib_dir(), ENDPOINT_FILE_NAME)
             return fileutil.read_file(file_path)
         except IOError as e:
-            raise OSUtilError(text(e))
+            raise OSUtilError(ustr(e))
 
     def _set_wireserver_endpoint(self, endpoint):
         try:
             file_path = os.path.join(conf.get_lib_dir(), ENDPOINT_FILE_NAME)
             fileutil.write_file(file_path, endpoint)
         except IOError as e:
-            raise OSUtilError(text(e))
+            raise OSUtilError(ustr(e))
    
     def _detect_wire_protocol(self):
         endpoint = self.distro.dhcp_handler.endpoint

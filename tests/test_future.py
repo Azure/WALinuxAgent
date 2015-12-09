@@ -31,7 +31,7 @@ class TestFuture(unittest.TestCase):
     def test_future_pkgs(self):
         future.httpclient
         future.urlparse
-        future.text(b"asdf", encoding="utf-8")
+        future.ustr(b"asdf", encoding="utf-8")
 
 if __name__ == '__main__':
     unittest.main()
