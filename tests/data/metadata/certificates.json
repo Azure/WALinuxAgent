@@ -1,0 +1,7 @@
+{
+    "certificates":[{
+        "name":"foo", 
+        "thumbprint":"bar",
+        "certificateDataUri":"baz"
+    }]
+}

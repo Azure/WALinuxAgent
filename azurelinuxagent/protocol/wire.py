@@ -29,11 +29,12 @@ from azurelinuxagent.exception import ProtocolError, HttpError, \
                                       ProtocolNotFoundError
 from azurelinuxagent.future import ustr, httpclient, bytebuffer
 import azurelinuxagent.utils.restutil as restutil
-import azurelinuxagent.utils.textutil as textutil
 from azurelinuxagent.utils.textutil import parse_doc, findall, find, findtext, \
-                                           getattrib, gettext, remove_bom
+                                           getattrib, gettext, remove_bom, \
+                                           get_bytes_from_pem
 import azurelinuxagent.utils.fileutil as fileutil
 import azurelinuxagent.utils.shellutil as shellutil
+from azurelinuxagent.utils.cryptutil import CryptUtil
 from azurelinuxagent.protocol.restapi import *
 
 VERSION_INFO_URI = "http://{0}/?comp=versions"
@@ -66,15 +67,22 @@ class WireProtocolResourceGone(ProtocolError):
 
 class WireProtocol(Protocol):
 
-    def __init__(self, osutil, endpoint):
-        self.osutil = osutil
+    def __init__(self, endpoint):
+        if endpoint is None:
+            raise ProtocolError("WireProtocl endpoint is None")
         self.endpoint = endpoint
         self.client = WireClient(self.endpoint)
 
     def detect(self):
         self.client.check_wire_protocol_version()
-        self.osutil.gen_transport_cert(TRANSPORT_PRV_FILE_NAME, 
-                                  TRANSPORT_CERT_FILE_NAME)
+
+        trans_prv_file = os.path.join(conf.get_lib_dir(), 
+                                      TRANSPORT_PRV_FILE_NAME)
+        trans_cert_file = os.path.join(conf.get_lib_dir(),
+                                       TRANSPORT_CERT_FILE_NAME)
+        cryptutil = CryptUtil(conf.get_openssl_cmd())
+        cryptutil.gen_transport_cert(trans_prv_file, trans_cert_file)
+
         self.client.update_goal_state(forced=True)
 
     def get_vminfo(self):
@@ -439,8 +447,6 @@ def event_to_v1(event):
 
 class WireClient(object):
     def __init__(self, endpoint):
-        if endpoint is None:
-            raise ProtocolError("WireProtocl endpoint is None")
         logger.info("Wire server endpoint:{0}", endpoint)
         self.endpoint = endpoint
         self.goal_state = None
@@ -564,7 +570,7 @@ class WireClient(object):
     def update_hosting_env(self, goal_state):
         if goal_state.hosting_env_uri is None:
             raise ProtocolError("HostingEnvironmentConfig uri is empty")
-        local_file = HOSTING_ENV_FILE_NAME
+        local_file = os.path.join(conf.get_lib_dir(), HOSTING_ENV_FILE_NAME)
         xml_text = self.fetch_config(goal_state.hosting_env_uri, 
                                      self.get_header())
         self.save_cache(local_file, xml_text)
@@ -573,7 +579,7 @@ class WireClient(object):
     def update_shared_conf(self, goal_state):
         if goal_state.shared_conf_uri is None:
             raise ProtocolError("SharedConfig uri is empty")
-        local_file = SHARED_CONF_FILE_NAME
+        local_file = os.path.join(conf.get_lib_dir(), SHARED_CONF_FILE_NAME)
         xml_text = self.fetch_config(goal_state.shared_conf_uri, 
                                      self.get_header())
         self.save_cache(local_file, xml_text)
@@ -582,7 +588,7 @@ class WireClient(object):
     def update_certs(self, goal_state):
         if goal_state.certs_uri is None:
             return
-        local_file = CERTS_FILE_NAME
+        local_file = os.path.join(conf.get_lib_dir(), CERTS_FILE_NAME)
         xml_text = self.fetch_config(goal_state.certs_uri, 
                                      self.get_header_for_cert())
         self.save_cache(local_file, xml_text)
@@ -594,19 +600,12 @@ class WireClient(object):
             self.ext_conf = ExtensionsConfig(None)
             return
         incarnation = goal_state.incarnation
-        local_file = EXT_CONF_FILE_NAME.format(incarnation)
+        local_file = os.path.join(conf.get_lib_dir(), 
+                                 EXT_CONF_FILE_NAME.format(incarnation))
         xml_text = self.fetch_config(goal_state.ext_uri, self.get_header())
         self.save_cache(local_file, xml_text)
         self.ext_conf = ExtensionsConfig(xml_text)
-        for ext_handler in self.ext_conf.ext_handlers.extHandlers:
-            self.update_ext_handler_manifest(ext_handler, goal_state)
-
-    def update_ext_handler_manifest(self, ext_handler, goal_state):
-        local_file = MANIFEST_FILE_NAME.format(ext_handler.name,
-                                               goal_state.incarnation)
-        xml_text = self.fetch_manifest(ext_handler.versionUris)
-        self.save_cache(local_file, xml_text)
-
+    
     def update_goal_state(self, forced=False, max_retry=3):
         uri = GOAL_STATE_URI.format(self.endpoint)
         xml_text = self.fetch_config(uri, self.get_header())
@@ -647,27 +646,34 @@ class WireClient(object):
 
     def get_goal_state(self):
         if(self.goal_state is None):
-            incarnation = self.fetch_cache(INCARNATION_FILE_NAME)
-            goal_state_file = GOAL_STATE_FILE_NAME.format(incarnation)
+            incarnation_file = os.path.join(conf.get_lib_dir(), 
+                                            INCARNATION_FILE_NAME)
+            incarnation = self.fetch_cache(incarnation_file)
+
+            file_name = GOAL_STATE_FILE_NAME.format(goal_state.incarnation)
+            goal_state_file = os.path.join(conf.get_lib_dir(), file_name)
             xml_text = self.fetch_cache(goal_state_file)
             self.goal_state = GoalState(xml_text)
         return self.goal_state
 
     def get_hosting_env(self):
         if(self.hosting_env is None):
-            xml_text = self.fetch_cache(HOSTING_ENV_FILE_NAME)
+            local_file = os.path.join(conf.get_lib_dir(), HOSTING_ENV_FILE_NAME)
+            xml_text = self.fetch_cache(local_file)
             self.hosting_env = HostingEnv(xml_text)
         return self.hosting_env
 
     def get_shared_conf(self):
         if(self.shared_conf is None):
-            xml_text = self.fetch_cache(SHARED_CONF_FILE_NAME)
+            local_file = os.path.join(conf.get_lib_dir(), SHARED_CONF_FILE_NAME)
+            xml_text = self.fetch_cache(local_file)
             self.shared_conf = SharedConfig(xml_text)
         return self.shared_conf
 
     def get_certs(self):
         if(self.certs is None):
-            xml_text = self.fetch_cache(CERTS_FILE_NAME)
+            local_file = os.path.join(conf.get_lib_dir(), CERTS_FILE_NAME)
+            xml_text = self.fetch_cache(local_file)
             self.certs = Certificates(self, xml_text)
         if self.certs is None:
             return None
@@ -680,14 +686,17 @@ class WireClient(object):
                 self.ext_conf = ExtensionsConfig(None)
             else:
                 local_file = EXT_CONF_FILE_NAME.format(goal_state.incarnation)
+                local_file = os.path.join(conf.get_lib_dir(), local_file)
                 xml_text = self.fetch_cache(local_file)
                 self.ext_conf = ExtensionsConfig(xml_text)
         return self.ext_conf
 
-    def get_ext_manifest(self, extension, goal_state):
-        local_file = MANIFEST_FILE_NAME.format(extension.name,
-                                        goal_state.incarnation)
-        xml_text = self.fetch_cache(local_file)
+    def get_ext_manifest(self, ext_handler, goal_state):
+        local_file = MANIFEST_FILE_NAME.format(ext_handler.name,
+                                               goal_state.incarnation)
+        local_file = os.path.join(conf.get_lib_dir(), local_file)
+        xml_text = self.fetch_manifest(ext_handler.versionUris)
+        self.save_cache(local_file, xml_text)
         return ExtensionManifest(xml_text)
 
     def check_wire_protocol_version(self):
@@ -802,8 +811,10 @@ class WireClient(object):
         }
 
     def get_header_for_cert(self):
-        content = self.fetch_cache(TRANSPORT_CERT_FILE_NAME)
-        cert = textutil.get_bytes_from_pem(content)
+        trans_cert_file = os.path.join(conf.get_lib_dir(),
+                                       TRANSPORT_CERT_FILE_NAME)
+        content = self.fetch_cache(trans_cert_file)
+        cert = get_bytes_from_pem(content)
         return {
             "x-ms-agent-name":"WALinuxAgent",
             "x-ms-version":PROTOCOL_VERSION,
@@ -930,8 +941,6 @@ class Certificates(object):
     def __init__(self, client, xml_text):
         logger.verb("Load Certificates.xml")
         self.client = client
-        self.lib_dir = conf.get_lib_dir()
-        self.openssl_cmd = self.client.osutil.get_openssl_cmd()
         self.cert_list = CertList()
         self.parse(xml_text)
 
@@ -943,22 +952,26 @@ class Certificates(object):
         data = findtext(xml_doc, "Data")
         if data is None:
             return
-
+        
+        cryptutil = CryptUtil(conf.get_openssl_cmd())
+        p7m_file = os.path.join(conf.get_lib_dir(), P7M_FILE_NAME)
         p7m = ("MIME-Version:1.0\n"
                "Content-Disposition: attachment; filename=\"{0}\"\n"
                "Content-Type: application/x-pkcs7-mime; name=\"{1}\"\n"
                "Content-Transfer-Encoding: base64\n"
                "\n"
-               "{2}").format(P7M_FILE_NAME, P7M_FILE_NAME, data)
+               "{2}").format(p7m_file, p7m_file, data)
 
-        self.client.save_cache(os.path.join(self.lib_dir, P7M_FILE_NAME), p7m)
+        self.client.save_cache(p7m_file, p7m)
+        
+        trans_prv_file = os.path.join(conf.get_lib_dir(), 
+                                      TRANSPORT_PRV_FILE_NAME)
+        trans_cert_file = os.path.join(conf.get_lib_dir(),
+                                       TRANSPORT_CERT_FILE_NAME)
+        pem_file = os.path.join(conf.get_lib_dir(), PEM_FILE_NAME)
         #decrypt certificates
-        cmd = ("{0} cms -decrypt -in {1} -inkey {2} -recip {3}"
-               "| {4} pkcs12 -nodes -password pass: -out {5}"
-               "").format(self.openssl_cmd, P7M_FILE_NAME, 
-                          TRANSPORT_PRV_FILE_NAME, TRANSPORT_CERT_FILE_NAME, 
-                          self.openssl_cmd, PEM_FILE_NAME)
-        shellutil.run(cmd)
+        cryptutil.decrypt_p7m(p7m_file, trans_prv_file, trans_cert_file, 
+                              pem_file) 
 
         #The parsing process use public key to match prv and crt.
         buf = []
@@ -968,7 +981,7 @@ class Certificates(object):
         thumbprints = {}
         index = 0
         v1_cert_list = []
-        with open(PEM_FILE_NAME) as pem:
+        with open(pem_file) as pem:
             for line in pem.readlines():
                 buf.append(line)
                 if re.match(r'[-]+BEGIN.*KEY[-]+', line):
@@ -977,15 +990,15 @@ class Certificates(object):
                     begin_crt = True
                 elif re.match(r'[-]+END.*KEY[-]+', line):
                     tmp_file = self.write_to_tmp_file(index, 'prv', buf)
-                    pub = self.client.osutil.get_pubkey_from_prv(tmp_file)
+                    pub = cryptutil.get_pubkey_from_prv(tmp_file)
                     prvs[pub] = tmp_file
                     buf = []
                     index += 1
                     begin_prv = False
                 elif re.match(r'[-]+END.*CERTIFICATE[-]+', line):
                     tmp_file = self.write_to_tmp_file(index, 'crt', buf)
-                    pub = self.client.osutil.get_pubkey_from_crt(tmp_file)
-                    thumbprint = self.client.osutil.get_thumbprint_from_crt(tmp_file)
+                    pub = cryptutil.get_pubkey_from_crt(tmp_file)
+                    thumbprint = cryptutil.get_thumbprint_from_crt(tmp_file)
                     thumbprints[pub] = thumbprint
                     #Rename crt with thumbprint as the file name
                     crt = "{0}.crt".format(thumbprint)
@@ -993,7 +1006,7 @@ class Certificates(object):
                         "name":None,
                         "thumbprint":thumbprint
                     })
-                    os.rename(tmp_file, os.path.join(self.lib_dir, crt))
+                    os.rename(tmp_file, os.path.join(conf.get_lib_dir(), crt))
                     buf = []
                     index += 1
                     begin_crt = False
@@ -1004,7 +1017,7 @@ class Certificates(object):
             if thumbprint:
                 tmp_file = prvs[pubkey]
                 prv = "{0}.prv".format(thumbprint)
-                os.rename(tmp_file, os.path.join(self.lib_dir, prv))
+                os.rename(tmp_file, os.path.join(conf.get_lib_dir(), prv))
 
         for v1_cert in v1_cert_list:
             cert = Cert()
@@ -1012,7 +1025,8 @@ class Certificates(object):
             self.cert_list.certificates.append(cert)
 
     def write_to_tmp_file(self, index, suffix, buf):
-        file_name = os.path.join(self.lib_dir, "{0}.{1}".format(index, suffix))
+        file_name = os.path.join(conf.get_lib_dir(), 
+                                 "{0}.{1}".format(index, suffix))
         self.client.save_cache(file_name, "".join(buf))
         return file_name
 

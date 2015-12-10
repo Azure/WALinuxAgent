@@ -25,7 +25,7 @@ import shutil
 import azurelinuxagent.conf as conf
 import azurelinuxagent.logger as logger
 from azurelinuxagent.event import add_event, WALAEventOperation
-from azurelinuxagent.exception import ExtensionError, ProtocolError
+from azurelinuxagent.exception import ExtensionError, ProtocolError, HttpError
 from azurelinuxagent.future import ustr
 from azurelinuxagent.metadata import AGENT_VERSION
 from azurelinuxagent.protocol.restapi import ExtHandlerStatus, ExtensionStatus, \
@@ -399,17 +399,9 @@ class ExtHandlerInstance(object):
         self.logger.info("Download extension package")
         self.set_operation(WALAEventOperation.Download)
 
-        uris = self.get_package_uris()
-        package = None
-        for uri in uris:
-            try:
-                resp = restutil.http_get(uri.uri, chk_proxy=True)
-                if resp.status == restutil.httpclient.OK:
-                    package = resp.read()
-                    break
-            except restutil.HttpError as e:
-                self.logger.warn("Failed download extension from: {0}", uri.uri)
-
+        protocol = self.distro.protocol_util.get_protocol()
+        package = protocol.download_ext_handler_pkg(self.get_package_uris())
+        
         if package is None:
             raise ExtensionError("Download extension failed")
 

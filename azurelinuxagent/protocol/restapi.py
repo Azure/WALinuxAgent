@@ -22,9 +22,9 @@ import re
 import json
 import xml.dom.minidom
 import azurelinuxagent.logger as logger
-from azurelinuxagent.exception import ProtocolError
+from azurelinuxagent.exception import ProtocolError, HttpError
 from azurelinuxagent.future import ustr
-import azurelinuxagent.utils.fileutil as fileutil
+import azurelinuxagent.utils.restutil as restutil
 
 def validata_param(name, val, expected_type):
     if val is None:
@@ -220,6 +220,18 @@ class Protocol(DataContract):
 
     def get_ext_handler_pkgs(self, extension):
         raise NotImplementedError()
+
+    def download_ext_handler_pkg(self, pkg_uris):
+        for uri in pkg_uris:
+            try:
+                resp = restutil.http_get(uri.uri, chk_proxy=True)
+                if resp.status == restutil.httpclient.OK:
+                    #Return package binaries
+                    return resp.read()
+            except HttpError as e:
+                self.logger.warn("Failed download extension from: {0}", uri.uri)
+        #Return None if package couldn't be downloaded
+        return None
 
     def report_provision_status(self, provision_status):
         raise NotImplementedError()

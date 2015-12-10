@@ -24,7 +24,7 @@ import threading
 import azurelinuxagent.conf as conf
 import azurelinuxagent.logger as logger
 from azurelinuxagent.exception import ProtocolError, OSUtilError, \
-                                      ProtocolNotFoundError
+                                      ProtocolNotFoundError, DhcpError
 from azurelinuxagent.future import ustr
 import azurelinuxagent.utils.fileutil as fileutil
 from azurelinuxagent.protocol.ovfenv import OvfEnv
@@ -60,8 +60,8 @@ class ProtocolUtil(object):
         Copy ovf env file from dvd to hard disk.
         Remove password before save it to the disk
         """
-        dvd_mount_point = self.distro.osutil.get_dvd_mount_point()
-        ovf_file_path_on_dvd = self.distro.osutil.get_ovf_env_file_path_on_dvd()
+        dvd_mount_point = conf.get_dvd_mount_point()
+        ovf_file_path_on_dvd = os.path.join(dvd_mount_point, OVF_FILE_NAME)
         tag_file_path_on_dvd = os.path.join(dvd_mount_point, TAG_FILE_NAME)
         try:
             self.distro.osutil.mount_dvd()
@@ -116,21 +116,24 @@ class ProtocolUtil(object):
         endpoint = self.distro.dhcp_handler.endpoint
         if endpoint is None:
             logger.info("WireServer endpoint is not found. Rerun dhcp handler")
-            self.distro.dhcp_handler.run()
+            try:
+                self.distro.dhcp_handler.run()
+            except DhcpError as e:
+                raise ProtocolError(ustr(e))
             endpoint = self.distro.dhcp_handler.endpoint
         
         try:
-            protocol = WireProtocol(self.distro.osutil, endpoint)
+            protocol = WireProtocol(endpoint)
             protocol.detect()
             self._set_wireserver_endpoint(endpoint)
             return protocol
         except ProtocolError as e:
-            logger.info("WireServer is not responding. Rerun dhcp handler")
-            self.distro.dhcp_handler.run()
+            logger.info("WireServer is not responding. Reset endpoint")
+            self.distro.dhcp_handler.endpoint = None
             raise e
 
     def _detect_metadata_protocol(self):
-        protocol = MetadataProtocol(self.distro.osutil)
+        protocol = MetadataProtocol()
         protocol.detect()
         return protocol
             
@@ -144,11 +147,11 @@ class ProtocolUtil(object):
         for retry in range(0, MAX_RETRY):
             for protocol in protocols:
                 try:
-                    if protocol == WireProtocol.__name__:
+                    if protocol == "WireProtocol":
                         return self._detect_wire_protocol()
-
-                    if protocol == MetadataProtocol.__name__:
-                        return self._detect_metadata_protocol
+                    
+                    if protocol == "MetadataProtocol":
+                        return self._detect_metadata_protocol()
 
                 except ProtocolError as e:
                     logger.info("Protocol endpoint not found: {0}, {1}", 
@@ -169,11 +172,11 @@ class ProtocolUtil(object):
             raise ProtocolError("No protocl found")
 
         protocol_name = fileutil.read_file(protocol_file_path)
-        if protocol_name == WireProtocol.__name__:
+        if protocol_name == "WireProtocol":
             endpoint = self._get_wireserver_endpoint()
-            return WireProtocol(self.distro.osutil, endpoint)
-        elif protocol_name == MetadataProtocol.__name__:
-            return MetadataProtocol(self.distro.osutil)
+            return WireProtocol(endpoint)
+        elif protocol_name == "MetadataProtocol":
+            return MetadataProtocol()
         else:
             raise ProtocolNotFoundError(("Unknown protocol: {0}"
                                          "").format(protocol_name))
@@ -185,7 +188,7 @@ class ProtocolUtil(object):
         :returns: protocol instance
         """
         logger.info("Detect protocol endpoints")
-        protocols = [WireProtocol.__name__, MetadataProtocol.__name__]
+        protocols = ["WireProtocol", "MetadataProtocol"]
         self.lock.acquire()
         try:
             if self.protocol is None:
@@ -206,14 +209,13 @@ class ProtocolUtil(object):
         logger.info("Detect protocol by file")
         self.lock.acquire()
         try:
-            tag_file_path = os.path.join(self.distro.conf.get_lib_dir(), 
-                                         TAG_FILE_NAME)
+            tag_file_path = os.path.join(conf.get_lib_dir(), TAG_FILE_NAME)
             if self.protocol is None:
                 protocols = []
                 if os.path.isfile(tag_file_path):
-                    protocols.append(MetadataProtocol.__name__)
+                    protocols.append("MetadataProtocol")
                 else:
-                    protocols.append(WireProtocol.__name__)
+                    protocols.append("WireProtocol")
                 self.protocol = self._detect_protocol(protocols)
         finally:
             self.lock.release()

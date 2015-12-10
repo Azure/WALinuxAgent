@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Environment xmlns="http://schemas.dmtf.org/ovf/environment/1" xmlns:oe="http://schemas.dmtf.org/ovf/environment/1" xmlns:wa="http://schemas.microsoft.com/windowsazure" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+    <wa:ProvisioningSection>
+      <wa:Version>1.0</wa:Version>
+      <LinuxProvisioningConfigurationSet xmlns="http://schemas.microsoft.com/windowsazure" xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
+        <ConfigurationSetType>LinuxProvisioningConfiguration</ConfigurationSetType>
+        <HostName>HostName</HostName>
+        <UserName>UserName</UserName>
+        <UserPassword>UserPassword</UserPassword>
+        <DisableSshPasswordAuthentication>false</DisableSshPasswordAuthentication>
+        <SSH>
+          <PublicKeys>
+            <PublicKey>
+              <Fingerprint>EB0C0AB4B2D5FC35F2F0658D19F44C8283E2DD62</Fingerprint>
+              <Path>$HOME/UserName/.ssh/authorized_keys</Path>
+              <Value>ssh-rsa AAAANOTAREALKEY== foo@bar.local</Value>
+            </PublicKey>
+          </PublicKeys>
+          <KeyPairs>
+            <KeyPair>
+              <Fingerprint>EB0C0AB4B2D5FC35F2F0658D19F44C8283E2DD62</Fingerprint>
+              <Path>$HOME/UserName/.ssh/id_rsa</Path>
+            </KeyPair>
+          </KeyPairs>
+        </SSH>
+        <CustomData>CustomData</CustomData>
+      </LinuxProvisioningConfigurationSet>
+    </wa:ProvisioningSection>
+ </Environment>

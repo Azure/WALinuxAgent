@@ -26,6 +26,7 @@ import azurelinuxagent.conf as conf
 import azurelinuxagent.logger as logger
 import azurelinuxagent.utils.restutil as restutil
 import azurelinuxagent.utils.textutil as textutil
+from azurelinuxagent.utils.cryptutil import CryptUtil
 from azurelinuxagent.protocol.restapi import *
 
 ENDPOINT='169.254.169.254'
@@ -49,8 +50,7 @@ def _add_content_type(headers):
 
 class MetadataProtocol(Protocol):
 
-    def __init__(self, osutil, apiversion=APIVERSION, endpoint=ENDPOINT):
-        self.osutil = osutil
+    def __init__(self, apiversion=APIVERSION, endpoint=ENDPOINT):
         self.apiversion = apiversion
         self.endpoint = endpoint
         self.identity_uri = BASE_URI.format(self.endpoint, "identity",
@@ -104,28 +104,30 @@ class MetadataProtocol(Protocol):
             raise ProtocolError("{0} - POST: {1}".format(resp.status, url))
     
     def _get_trans_cert(self):
-        file_name = TRANSPORT_CERT_FILE_NAME
-        if not os.path.isfile(file_name):
-            raise ProtocolError("{0} is missing.".format(file_name))
-        content = fileutil.read_file(file_name)
+        trans_crt_file = os.path.join(conf.get_lib_dir(), 
+                                      TRANSPORT_CERT_FILE_NAME)
+        if not os.path.isfile(trans_crt_file):
+            raise ProtocolError("{0} is missing.".format(trans_crt_file))
+        content = fileutil.read_file(trans_crt_file)
         return textutil.get_bytes_from_pem(content)
 
     def detect(self):
         self.get_vminfo()
         trans_prv_file = os.path.join(conf.get_lib_dir(), 
                                       TRANSPORT_PRV_FILE_NAME)
-        trans_crt_file = os.path.join(conf.get_lib_dir(), 
-                                      TRANSPORT_CERT_FILE_NAME)
-        self.osutil.gen_transport_cert(trans_prv_file, trans_crt_file)
+        trans_cert_file = os.path.join(conf.get_lib_dir(), 
+                                       TRANSPORT_CERT_FILE_NAME)
+        cryptutil = CryptUtil(conf.get_openssl_cmd())
+        cryptutil.gen_transport_cert(trans_prv_file, trans_cert_file)
 
         #"Install" the cert and private key to /var/lib/waagent
-        thumbprint = self.osutil.get_thumbprint_from_crt(trans_crt_file)
+        thumbprint = cryptutil.get_thumbprint_from_crt(trans_cert_file)
         prv_file = os.path.join(conf.get_lib_dir(), 
                                 "{0}.prv".format(thumbprint))
         crt_file = os.path.join(conf.get_lib_dir(), 
                                 "{0}.crt".format(thumbprint))
         shutil.copyfile(trans_prv_file, prv_file)
-        shutil.copyfile(trans_crt_file, crt_file)
+        shutil.copyfile(trans_cert_file, crt_file)
 
     def get_vminfo(self):
         vminfo = VMInfo()

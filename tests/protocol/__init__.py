@@ -1,5 +1,3 @@
-# Microsoft Azure Linux Agent
-#
 # Copyright 2014 Microsoft Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,17 +14,6 @@
 #
 # Requires Python 2.4+ and Openssl 1.0+
 #
-
-from azurelinuxagent.distro.default.distro import DefaultDistro
-from azurelinuxagent.distro.suse.osutil import SUSE11OSUtil, SUSEOSUtil
-
-class SUSE11Distro(DefaultDistro):
-    def __init__(self):
-        super(SUSE11Distro, self).__init__()
-        self.osutil = SUSE11OSUtil()
-
-class SUSEDistro(DefaultDistro):
-    def __init__(self):
-        super(SUSEDistro, self).__init__()
-        self.osutil = SUSEOSUtil()
-
+# Implements parts of RFC 2131, 1541, 1497 and
+# http://msdn.microsoft.com/en-us/library/cc227282%28PROT.10%29.aspx
+# http://msdn.microsoft.com/en-us/library/cc227259%28PROT.13%29.aspx

@@ -1,0 +1,19 @@
+[{
+    "name":"foo",
+    "properties":{
+        "version":"1.3.0.0",
+        "upgradePolicy": "manual",
+        "state": "enabled",
+        "extensions":[{
+            "name":"baz",
+            "sequenceNumber":0,
+            "publicSettings":{
+                "commandToExecute": "echo 123",
+                "uris":[]
+            }
+        }]
+    },
+    "versionUris":[{
+        "uri":"http://ext_handler_pkgs/versionUri"
+    }]
+}]

@@ -29,38 +29,39 @@ from azurelinuxagent.distro.coreos.distro import CoreOSDistro
 from azurelinuxagent.distro.suse.distro import SUSE11Distro, SUSEDistro
 from azurelinuxagent.distro.debian.distro import DebianDistro
 
-def get_distro():
-    if DISTRO_NAME == "ubuntu":
-        if Version(DISTRO_VERSION) == Version("12.04") or \
-           Version(DISTRO_VERSION) == Version("12.10"):
+def get_distro(distro_name=DISTRO_NAME, distro_version=DISTRO_VERSION,
+               distro_full_name=DISTRO_FULL_NAME):
+    if distro_name == "ubuntu":
+        if Version(distro_version) == Version("12.04") or \
+           Version(distro_version) == Version("12.10"):
             return Ubuntu12Distro()
-        elif Version(DISTRO_VERSION) == Version("14.04") or \
-             Version(DISTRO_VERSION) == Version("14.10"):
+        elif Version(distro_version) == Version("14.04") or \
+             Version(distro_version) == Version("14.10"):
             return Ubuntu14Distro()
-        elif DISTRO_FULL_NAME == "Snappy Ubuntu Core":
+        elif distro_full_name == "Snappy Ubuntu Core":
             return UbuntuSnappyDistro()
         else:
             return UbuntuDistro()
-    if DISTRO_NAME == "coreos":
+    if distro_name == "coreos":
         return CoreOSDistro()
-    if DISTRO_NAME == "suse":
-        if DISTRO_FULL_NAME=='SUSE Linux Enterprise Server' and \
-           Version(DISTRO_VERSION) < Version('12') or \
-           DISTRO_FULL_NAME == 'openSUSE' and \
-           Version(DISTRO_VERSION) < Version('13.2'):
+    if distro_name == "suse":
+        if distro_full_name=='SUSE Linux Enterprise Server' and \
+           Version(distro_version) < Version('12') or \
+           distro_full_name == 'openSUSE' and \
+           Version(distro_version) < Version('13.2'):
             return SUSE11Distro()
         else:
             return SUSEDistro()
-    elif DISTRO_NAME == "debian":
+    elif distro_name == "debian":
         return DebianDistro()
-    elif DISTRO_NAME == "redhat" or DISTRO_NAME == "centos" or \
-            DISTRO_NAME == "oracle":
-        if Version(DISTRO_VERSION) < Version(7):
+    elif distro_name == "redhat" or distro_name == "centos" or \
+            distro_name == "oracle":
+        if Version(distro_version) < Version("7"):
             return Redhat6xDistro()
         else:
             return RedhatDistro()
     else:
-        logger.warn("Unable to load distro implemetation for {0}.", DISTRO_NAME)
+        logger.warn("Unable to load distro implemetation for {0}.", distro_name)
         logger.warn("Use default distro implemetation instead.")
         return DefaultDistro()
 

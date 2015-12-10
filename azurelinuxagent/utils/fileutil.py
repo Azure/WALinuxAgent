@@ -100,6 +100,7 @@ def replace_file(filepath, contents):
             return 1
     return 0
 
+
 def base_name(path):
     head, tail = os.path.split(path)
     return tail
@@ -151,7 +152,7 @@ def rm_dirs(*args):
 def update_conf_file(path, line_start, val, chk_err=False):
     conf = []
     if not os.path.isfile(path) and chk_err:
-        raise Exception("Can't find config file:{0}".format(path))
+        raise IOError("Can't find config file:{0}".format(path))
     conf = read_file(path).split('\n')
     conf = [x for x in conf if not x.startswith(line_start)]
     conf.append(val)

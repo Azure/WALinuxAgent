@@ -18,48 +18,96 @@
 # http://msdn.microsoft.com/en-us/library/cc227282%28PROT.10%29.aspx
 # http://msdn.microsoft.com/en-us/library/cc227259%28PROT.13%29.aspx
 
+"""
+Define util functions for unit test
+"""
 
+import re
 import os
 import sys
+import unittest
+import shutil
+import json
+import tempfile
 from functools import wraps
-from azurelinuxagent.utils.osutil import OSUTIL
+import azurelinuxagent.conf as conf
+import azurelinuxagent.logger as logger
 
-parent = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.append(parent)
+#Import mock module for Python2 and Python3
+try:
+    from unittest.mock import Mock, patch, MagicMock
+except ImportError:
+    from mock import Mock, patch, MagicMock
 
-def simple_file_grep(file_path, search_str):
-    for line in open(file_path):
-         if search_str in line:
-                return line
+test_dir = os.path.dirname(os.path.abspath(__file__))
+data_dir = os.path.join(test_dir, "data")
 
-def mock(target, name, mock):
-    def decorator(func):
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            origin = getattr(target, name)
-            setattr(target, name, mock)
-            try:
-                result = func(*args, **kwargs)
-            except:
-                raise
-            finally:
-                setattr(target, name, origin)
-            return result
+debug = False
+if os.environ.get('DEBUG') == '1':
+    debug = True
+
+if debug:
+    #Enable verbose logger to stdout
+    logger.add_logger_appender(logger.AppenderType.STDOUT, 
+                               logger.LogLevel.VERBOSE)
+
+class AgentTestCase(unittest.TestCase):
+    def setUp(self):
+        prefix = "{0}_".format(self.__class__.__name__)
+        self.tmp_dir = tempfile.mkdtemp(prefix=prefix)
+        conf.get_lib_dir = Mock(return_value=self.tmp_dir)
+
+    def tearDown(self):
+        if not debug and self.tmp_dir is not None:
+            shutil.rmtree(self.tmp_dir)
+
+def load_data(name):
+    """Load test data"""
+    path = os.path.join(data_dir, name)
+    with open(path, "r") as data_file:
+        return data_file.read()
+
+supported_distro = [
+    ["ubuntu", "12.04", ""],
+    ["ubuntu", "14.04", ""],
+    ["ubuntu", "14.10", ""],
+    ["ubuntu", "15.10", ""],
+    ["ubuntu", "15.10", "Snappy Ubuntu Core"],
+
+    ["coreos", "", ""],
+
+    ["suse", "12", "SUSE Linux Enterprise Server"],
+    ["suse", "13.2", "openSUSE"],
+    ["suse", "11", "SUSE Linux Enterprise Server"],
+    ["suse", "13.1", "openSUSE"],
+
+    ["debian", "6.0", ""],
+
+    ["redhat", "6.5", ""],
+    ["redhat", "7.0", ""],
+
+]
+
+def distros(distro_name=".*", distro_version=".*", distro_full_name=".*"):
+    """Run test on multiple distros"""
+    def decorator(test_method):
+        @wraps(test_method)
+        def wrapper(self, *args, **kwargs):
+            for distro in supported_distro:
+                if re.match(distro_name, distro[0]) and \
+                   re.match(distro_version, distro[1]) and \
+                   re.match(distro_full_name, distro[2]):
+                    if debug:
+                        logger.info("Run {0} on {1}", test_method.__name__, distro)
+                    new_args = []
+                    new_args.extend(args)
+                    new_args.extend(distro)
+                    test_method(self, *new_args, **kwargs)
+                    #Call tearDown and setUp to create seprated environment for 
+                    #distro testing
+                    self.tearDown()
+                    self.setUp()
         return wrapper
     return decorator
 
-class MockFunc(object):
-    def __init__(self, name='', retval=None):
-        self.name = name
-        self.retval = retval
 
-    def __call__(*args, **kwargs):
-        self = args[0]
-        self.args = args[1:]
-        self.kwargs = kwargs
-        return self.retval
-
-
-#Mock osutil so that the test of other part will be os unrelated
-OSUTIL.get_lib_dir = MockFunc(retval='/tmp')
-OSUTIL.get_ext_log_dir = MockFunc(retval='/tmp/log')

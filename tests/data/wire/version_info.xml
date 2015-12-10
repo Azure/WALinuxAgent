@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Versions>
+  <Preferred>
+    <Version>2012-11-30</Version>
+  </Preferred>
+  <Supported>
+    <Version>2010-12-15</Version>
+    <Version>2010-28-10</Version>
+  </Supported>
+</Versions>

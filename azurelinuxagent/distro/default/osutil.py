@@ -32,6 +32,7 @@ from azurelinuxagent.future import ustr
 import azurelinuxagent.utils.fileutil as fileutil
 import azurelinuxagent.utils.shellutil as shellutil
 import azurelinuxagent.utils.textutil as textutil
+from azurelinuxagent.utils.cryptutil import CryptUtil
 
 __RULES_FILES__ = [ "/lib/udev/rules.d/75-persistent-net-generator.rules",
                     "/etc/udev/rules.d/70-persistent-net.rules" ]
@@ -127,32 +128,11 @@ class DefaultOSUtil(object):
         except IOError as e:
             raise OSUtilError("Failed to delete root password:{0}".format(e))
 
-    def get_pubkey_from_prv(self, file_name):
-        openssl_cmd = conf.get_openssl_cmd()
-        cmd = "{0} rsa -in {1} -pubout 2>/dev/null".format(openssl_cmd, 
-                                                           file_name)
-        pub = shellutil.run_get_output(cmd)[1]
-        return pub
-
-    def get_pubkey_from_crt(self, file_name):
-        openssl_cmd = conf.get_openssl_cmd()
-        cmd = "{0} x509 -in {1} -pubkey -noout".format(openssl_cmd, file_name)
-        pub = shellutil.run_get_output(cmd)[1]
-        return pub
-
     def _norm_path(self, filepath):
         home = conf.get_home_dir()
         # Expand HOME variable if present in path
         path = os.path.normpath(filepath.replace("$HOME", home))
         return path
-
-    def get_thumbprint_from_crt(self, file_name):
-        openssl_cmd = conf.get_openssl_cmd()
-        cmd="{0} x509 -in {1} -fingerprint -noout".format(openssl_cmd, 
-                                                          file_name)
-        thumbprint = shellutil.run_get_output(cmd)[1]
-        thumbprint = thumbprint.rstrip().split('=')[1].replace(':', '').upper()
-        return thumbprint
 
     def deploy_ssh_keypair(self, username, keypair):
         """
@@ -168,7 +148,8 @@ class DefaultOSUtil(object):
             raise OSUtilError("Can't find {0}.prv".format(thumbprint))
         shutil.copyfile(prv_path, path)
         pub_path = path + '.pub'
-        pub = self.get_pubkey_from_prv(prv_path)
+        crytputil = CryptUtil(conf.get_openssl_cmd())
+        pub = crytputil.get_pubkey_from_prv(prv_path)
         fileutil.write_file(pub_path, pub)
         self.set_selinux_context(pub_path, 'unconfined_u:object_r:ssh_home_t:s0')
         self.set_selinux_context(path, 'unconfined_u:object_r:ssh_home_t:s0')
@@ -176,8 +157,8 @@ class DefaultOSUtil(object):
         os.chmod(pub_path, 0o600)
 
     def openssl_to_openssh(self, input_file, output_file):
-        shellutil.run("ssh-keygen -i -m PKCS8 -f {0} >> {1}".format(input_file,
-                                                                    output_file))
+        cryptutil = CryptUtil(conf.get_openssl_cmd())
+        cryptutil.crt_to_ssh(input_file, output_file)
 
     def deploy_ssh_pubkey(self, username, pubkey):
         """
@@ -186,6 +167,8 @@ class DefaultOSUtil(object):
         path, thumbprint, value = pubkey
         if path is None:
             raise OSUtilError("Publich key path is None")
+
+        crytputil = CryptUtil(conf.get_openssl_cmd())
 
         path = self._norm_path(path)
         dir_path = os.path.dirname(path)
@@ -200,7 +183,7 @@ class DefaultOSUtil(object):
             if not os.path.isfile(crt_path):
                 raise OSUtilError("Can't find {0}.crt".format(thumbprint))
             pub_path = os.path.join(lib_dir, thumbprint + '.pub')
-            pub = self.get_pubkey_from_crt(crt_path)
+            pub = crytputil.get_pubkey_from_crt(crt_path)
             fileutil.write_file(pub_path, pub)
             self.set_selinux_context(pub_path, 
                                      'unconfined_u:object_r:ssh_home_t:s0')
@@ -355,15 +338,6 @@ class DefaultOSUtil(object):
         shellutil.run("iptables -I INPUT -p udp --dport 68 -j ACCEPT",
                       chk_err=False)
 
-    def gen_transport_cert(self, prv_file, crt_file):
-        """
-        Create ssl certificate for https communication with endpoint server.
-        """
-        openssl_cmd = conf.get_openssl_cmd() 
-        cmd = ("{0} req -x509 -nodes -subj /CN=LinuxTransport -days 32768 "
-               "-newkey rsa:2048 -keyout {1} "
-               "-out {2}").format(openssl_cmd, prv_file, crt_file)
-        shellutil.run(cmd)
 
     def remove_rules_files(self, rules_files=__RULES_FILES__):
         lib_dir = conf.get_lib_dir()

@@ -1,0 +1,10 @@
+{
+    "versions": [{
+        "version":"1.3.0.0",
+        "uris":[{
+            "uri":"http://localhost/foo1"
+        },{
+            "uri":"http://localhost/foo2"
+        }]
+    }]
+}
