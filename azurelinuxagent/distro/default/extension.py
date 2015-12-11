@@ -794,7 +794,6 @@ class HandlerManifest(object):
 
     def is_update_with_install(self):
         if "updateMode" not in self.data['handlerManifest']:
-            return False
-        if "updateMode" in self.data:
-            return self.data['handlerManifest']["updateMode"].lower() == "updatewithinstall"
-        return False
+            return True
+
+        return self.data['handlerManifest']["updateMode"].lower() == "updatewithinstall"
