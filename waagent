@@ -79,7 +79,7 @@ if not hasattr(subprocess,'check_output'):
 
     subprocess.check_output=check_output
     subprocess.CalledProcessError=CalledProcessError
-    
+
 GuestAgentName = "WALinuxAgent"
 GuestAgentLongName = "Azure Linux Agent"
 GuestAgentVersion = "WALinuxAgent-2.0.16"
@@ -191,7 +191,7 @@ class AbstractDistro(object):
         self.shadow_file_mode=0600
         self.shadow_file_path="/etc/shadow"
         self.dhcp_enabled = False
-        
+
     def isSelinuxSystem(self):
         """
         Checks and sets self.selinux = True if SELinux is available on system.
@@ -202,7 +202,7 @@ class AbstractDistro(object):
             else:
                 self.selinux = True
         return self.selinux
-    
+
     def isSelinuxRunning(self):
         """
         Calls shell command 'getenforce' and returns True if 'Enforcing'.
@@ -211,7 +211,7 @@ class AbstractDistro(object):
             return RunGetOutput("getenforce")[1].startswith("Enforcing")
         else:
             return False
-        
+
     def setSelinuxEnforce(self,state):
         """
         Calls shell command 'setenforce' with 'state' and returns resulting exit code.
@@ -228,14 +228,14 @@ class AbstractDistro(object):
         """
         if self.isSelinuxSystem():
             return Run('chcon ' + cn + ' ' + path)
-        
+
     def setHostname(self,name):
         """
         Shell call to hostname.
         Returns resulting exit code.
         """
         return Run('hostname ' + name)
-        
+
     def publishHostname(self,name):
         """
         Set the contents of the hostname file to 'name'.
@@ -250,7 +250,7 @@ class AbstractDistro(object):
         except:
             return 1
         return r
-        
+
     def installAgentServiceScriptFiles(self):
         """
         Create the waagent support files for service installation.
@@ -266,7 +266,7 @@ class AbstractDistro(object):
         Abstract Virtual Function.  Over-ridden in concrete Distro classes.
         """
         pass
-    
+
     def uninstallAgentService(self):
         """
         Call service subsystem to remove waagent script.
@@ -280,19 +280,19 @@ class AbstractDistro(object):
         """
         self.stopAgentService()
         self.uninstallAgentService()
-    
+
     def startAgentService(self):
         """
         Service call to start the Agent service
         """
         return Run(self.service_cmd + ' ' + self.agent_service_name + ' start')
-        
+
     def stopAgentService(self):
         """
         Service call to stop the Agent service
         """
         return Run(self.service_cmd + ' '  + self.agent_service_name + ' stop',False)
-    
+
     def restartSshService(self):
         """
         Service call to re(start) the SSH service
@@ -315,7 +315,7 @@ class AbstractDistro(object):
             Error("Failed: " + fprint + ".crt -> " + path)
             error = 1
         return error
-    
+
     def checkPackageInstalled(self,p):
         """
         Query package database for prescence of an installed package.
@@ -342,7 +342,7 @@ class AbstractDistro(object):
             self.setSelinuxContext(filepath,'system_u:object_r:shadow_t:s0')
         Log("Root password deleted.")
         return 0
-    
+
     def changePass(self,user,password):
         Log("Change user password")
         crypt_id = Config.get("Provisioning.PasswordCryptId")
@@ -643,7 +643,7 @@ class AbstractDistro(object):
 
     def getConfigurationPath(self):
         return "/etc/waagent.conf"
-    
+
     def getProcessorCores(self):
         return int(RunGetOutput("grep 'processor.*:' /proc/cpuinfo |wc -l")[1])
     
@@ -682,6 +682,36 @@ class AbstractDistro(object):
         Run("/sbin/route add -net " + net + " netmask " + mask + " gw " + gateway,
             chk_err=False)
 
+    def getNdDriverVersion(self):
+        """
+        if error happens, raise a RdmaException
+        """
+        try:
+            with open("/var/lib/hyperv/.kvp_pool_0", "r") as f:
+                lines = f.read()
+            r = re.search("NdDriverVersion\0+(\d\d\d\.\d)", lines)
+            if r is not None:
+                NdDriverVersion = r.groups()[0]
+                return NdDriverVersion #e.g.  NdDriverVersion = 142.0
+            else :
+                Log("Error: NdDriverVersion not found.")
+                return None
+        except Exception as e:
+            errMsg = 'Failed to enable the extension with error: %s, stack trace: %s' % (str(e), traceback.format_exc())
+            Log("Can't update status: " + errMsg)
+            raise RdmaError(RdmaConfig.nd_driver_detect_error)
+    
+    def checkInstallHyperV(self):
+        return None
+
+    def getRdmaPackageVersion(self):
+        return None
+
+    def rdmaUpdate(self):
+        pass
+
+    def checkRDMA(self):
+        pass
 
 ############################################################
 #	GentooDistro
@@ -703,6 +733,7 @@ depend()
 }
 
 """
+
 class gentooDistro(AbstractDistro):
     """
     Gentoo distro concrete class
@@ -880,21 +911,32 @@ class SuSEDistro(AbstractDistro):
     """
     def __init__(self):
         super(SuSEDistro,self).__init__()
-        self.service_cmd='/sbin/service'
-        self.ssh_service_name='sshd'
-        self.kernel_boot_options_file='/boot/grub/menu.lst'
-        self.hostname_file_path='/etc/HOSTNAME'
-        self.requiredDeps += [ "/sbin/insserv" ]
-        self.init_file=suse_init_file
-        self.dhcp_client_name='dhcpcd'
-        if ((DistInfo(fullname=1)[0] == 'SUSE Linux Enterprise Server' and DistInfo()[1] >= '12') or \
-            (DistInfo(fullname=1)[0] == 'openSUSE'                     and DistInfo()[1] >= '13.2')):
-            self.dhcp_client_name='wickedd-dhcp4'
+        self.dhcp_client_name = 'dhcpcd'
+        self.dhcp_enabled = True
         self.grubKernelBootOptionsFile = '/boot/grub/menu.lst'
         self.grubKernelBootOptionsLine = 'kernel'
-        self.getpidcmd='pidof '
-        self.dhcp_enabled=True
+        self.getpidcmd = 'pidof '
+        self.hostname_file_path = '/etc/HOSTNAME'
+        self.init_file = suse_init_file
+        self.kernel_boot_options_file = '/boot/grub/menu.lst'
+        self.modprobe_path = '/usr/bin/modprobe'
         
+        self.requiredDeps += [ "/sbin/insserv" ]
+        self.reboot_path = '/sbin/reboot'
+        self.service_cmd = '/sbin/service'
+        self.ssh_service_name ='sshd'
+        dist_info = DistInfo()
+        dist_info_fullname = DistInfo(fullname=1)
+        if(dist_info[1] == "11"):
+            self.ps_path = '/bin/ps'
+        else:
+            self.ps_path = '/usr/bin/ps'
+
+        if ((dist_info_fullname[0] == 'SUSE Linux Enterprise Server' and dist_info[1] >= '12') or \
+            (dist_info_fullname[0] == 'openSUSE'                     and dist_info[1] >= '13.2')):
+            self.dhcp_client_name = 'wickedd-dhcp4'
+        self.zypper_path = '/usr/bin/zypper'
+
     def checkPackageInstalled(self,p):
         if Run("rpm -q " + p,chk_err=False):
             return 0
@@ -906,7 +948,6 @@ class SuSEDistro(AbstractDistro):
             return 1
         else:
             return 0
-        
 
     def installAgentServiceScriptFiles(self):
         try:
@@ -914,7 +955,7 @@ class SuSEDistro(AbstractDistro):
             os.chmod(self.init_script_file, 0744)
         except:
             pass
-        
+
     def registerAgentService(self):
         self.installAgentServiceScriptFiles()
         return Run('insserv ' + self.agent_service_name)
@@ -931,7 +972,117 @@ class SuSEDistro(AbstractDistro):
 
     def stopDHCP(self):
         Run("service " + self.dhcp_client_name + " stop", chk_err=False)
-    
+
+    def getRdmaPackageVersion(self):
+        """
+        """
+        error, output = RunGetOutput(self.zypper_path + " info " + RdmaConfig.rmda_package_name)
+        if(error == RdmaConfig.process_success):
+            r = re.search("Version: (\S+)", output)
+            if r is not None:
+                package_version = r.groups()[0]# e.g.  package_version is "20150707_k3.12.28_4-3.1.140.0"
+                return package_version
+            else:
+                return None
+        else:
+            return None
+
+    def checkInstallHyperV(self):
+        error, output = RunGetOutput(self.ps_path + " -ef")
+        if(error != RdmaConfig.process_success):
+            return RdmaConfig.common_failed
+        else:
+            r = re.search("hv_kvp_daemon", output)
+            if r is None :
+                Log("KVP deamon is not running, install it")
+                error,output = RunGetOutput(self.zypper_path + " -n install --force hyper-v")
+                Log("install hyper-v return code: " + str(error) + " output:" + str(output))
+                if(error != RdmaConfig.process_success):
+                    return RdmaConfig.common_failed
+                self.rebootMachine()
+                return RdmaConfig.process_success
+            else :
+                Log("KVP deamon is running")
+                return RdmaConfig.process_success
+
+    def rdmaUpdate(self):
+        check_install_result = self.checkInstallHyperV()
+        if(check_install_result == RdmaConfig.process_success):
+            time.sleep(40)
+            check_result = self.checkRDMA()
+            Log("RDMA  version check result is " + str(check_result))
+            if(check_result == RdmaConfig.UpToDate):
+                return
+            elif(check_result == RdmaConfig.OutOfDate):
+                nd_driver_version = self.getNdDriverVersion()
+                update_rdma_driver_result = self.rdmaUpdatePackage(nd_driver_version)
+            elif(check_result == RdmaConfig.DriverVersionNotFound):
+                raise RdmaException(RdmaConfig.driver_version_not_found)
+            elif(check_result == RdmaConfig.Unknown):
+                raise RdmaException(RdmaConfig.unknown_error)
+        else:
+            raise RdmaException(RdmaConfig.install_hv_utils_failed)
+
+    def rdmaUpdatePackage(self, host_version):
+        error, output = RunGetOutput(self.zypper_path + " lr -u")
+        rdma_pack_repository_name = "msft-rdma-pack"
+        rdma_pack_result = re.search(rdma_pack_repository_name, output)
+        if rdma_pack_result is None :
+            Log("rdma_pack_result is None")
+            error, output = RunGetOutput(self.zypper_path + " ar https://drivers.suse.com/microsoft/Microsoft-LIS-RDMA/sle-12/updates " + rdma_pack_repository_name)
+            #wait for the cache build.
+            time.sleep(20)
+            Log("error result is " + str(error) + " output is : " + str(output))
+        else:
+            Log("output is: " + str(output))
+            Log("msft-rdma-pack found")
+        returnCode, message = RunGetOutput(self.zypper_path + " --no-gpg-checks refresh")
+        Log("refresh repro return code is " + str(returnCode) + " output is: " + str(message))
+        #install the wrapper package, that will put the driver RPM packages under /opt/microsoft/rdma
+        returnCode, message = RunGetOutput(self.zypper_path + " -n remove " + RdmaConfig.wrapper_package_name)
+        Log("remove wrapper package return code is " + str(returnCode) + " output is: " + str(message))
+        returnCode, message = RunGetOutput(self.zypper_path + " --non-interactive install --force " + RdmaConfig.wrapper_package_name)
+        Log("install wrapper package return code is " + str(returnCode) + " output is: " + str(message))
+        r = os.listdir("/opt/microsoft/rdma")
+        if r is not None :
+            for filename in r :
+                if re.match(RdmaConfig.rmda_package_name + "-\d{8}\.(%s).+" % host_version, filename) :
+                    error, output = RunGetOutput(self.zypper_path + " --non-interactive remove " + RdmaConfig.rmda_package_name)
+                    Log("remove rdma package result is " + str(error) + " output is: " + str(output))
+                    Log("Installing RPM /opt/microsoft/rdma/" + filename)
+                    error, output = RunGetOutput(self.zypper_path + " --non-interactive install --force /opt/microsoft/rdma/%s" % filename)
+                    Log("Install rdma package result is " + str(error) + " output is: " + str(output))
+                    if(error == RdmaConfig.process_success):
+                        self.rebootMachine()
+                    else:
+                        raise RdmaError(RdmaConfig.package_install_failed)
+        else:
+            Log("RDMA drivers not found in /opt/microsoft/rdma")
+            raise RdmaError(RdmaConfig.package_not_found)
+
+    def checkRDMA(self):
+        nd_driver_version = self.getNdDriverVersion()
+        if(nd_driver_version is None or nd_driver_version == ""):
+            return RdmaConfig.DriverVersionNotFound
+        package_version = self.getRdmaPackageVersion()
+        if(package_version is None or package_version == ""):
+            return RdmaConfig.OutOfDate
+        else:
+            # package_version would be like this :20150707_k3.12.28_4-3.1 20150707.140.0_k3.12.28_4-1.1
+            # nd_driver_version 140.0
+            Log("nd_driver_version is " + str(nd_driver_version) + " package_version is " + str(package_version))
+            if(nd_driver_version is not None):
+                r = re.match("^[0-9]+[.](%s).+" % nd_driver_version, package_version)# NdDriverVersion should be at the end of package version
+                if not r :	#host ND version is the same as the package version, do an update
+                    return RdmaConfig.OutOfDate
+                else:
+                    return RdmaConfig.UpToDate
+            return RdmaConfig.Unknown
+
+    def rebootMachine(self):
+        Log("rebooting the machine")
+        RunGetOutput(self.reboot_path)
+
 ############################################################    
 #	redhatDistro
 ############################################################    
@@ -992,7 +1143,6 @@ case "$1" in
 esac
 exit $RETVAL
 """
-
 class redhatDistro(AbstractDistro):
     """
     Redhat Distro concrete class
@@ -1031,14 +1181,14 @@ class redhatDistro(AbstractDistro):
     def registerAgentService(self):
         self.installAgentServiceScriptFiles()
         return Run('chkconfig --add waagent')
-   
+
     def uninstallAgentService(self):
         return Run('chkconfig --del ' + self.agent_service_name)
 
     def unregisterAgentService(self):
         self.stopAgentService()
         return self.uninstallAgentService()
-    
+
     def checkPackageInstalled(self,p):
         if Run("yum list installed " + p,chk_err=False):
             return 0
@@ -1082,6 +1232,12 @@ class centosDistro(redhatDistro):
     def __init__(self):
         super(centosDistro,self).__init__()
 
+    def rdmaUpdate(self):
+        pass
+
+    def checkRDMA(self):
+        pass
+
 ############################################################    
 #	oracleDistro
 ############################################################    
@@ -1094,8 +1250,6 @@ class oracleDistro(redhatDistro):
     def __init__(self):
         super(oracleDistro, self).__init__()
 
-
-
 ############################################################    
 #	asianuxDistro
 ############################################################    
@@ -1107,7 +1261,6 @@ class asianuxDistro(redhatDistro):
     """
     def __init__(self):
         super(asianuxDistro,self).__init__()
-
 
 ############################################################
 #   CoreOSDistro
@@ -1316,7 +1469,6 @@ esac
 
 exit 0
 """
-
 class debianDistro(AbstractDistro):
     """
     debian Distro concrete class
@@ -1400,7 +1552,7 @@ class debianDistro(AbstractDistro):
             return 1
         else :
             return 0
-        
+
 ############################################################    
 #	KaliDistro - WIP
 #       Functioning on Kali 1.1.0a so far
@@ -1443,7 +1595,6 @@ end script
 
 exec /usr/sbin/waagent -daemon
 """
-
 class UbuntuDistro(debianDistro):
     """
     Ubuntu Distro concrete class
@@ -1459,7 +1610,7 @@ class UbuntuDistro(debianDistro):
 
     def registerAgentService(self):
         return self.installAgentServiceScriptFiles()
-    
+
     def uninstallAgentService(self):
         """
         If we are packaged - the service name is walinuxagent, do nothing.
@@ -1522,7 +1673,6 @@ class UbuntuDistro(debianDistro):
             time.sleep(1)
         Error("Can't find host key: {0}".format(path))
         return False
-
 
 ############################################################    
 #	LinuxMintDistro
@@ -2261,7 +2411,7 @@ def RunGetOutput(cmd, chk_err=True, log_cmd=True):
     """
     if log_cmd:
         LogIfVerbose(cmd)
-    try:                                     
+    try:
         output=subprocess.check_output(cmd,stderr=subprocess.STDOUT,shell=True)
     except subprocess.CalledProcessError,e :
         if chk_err and log_cmd:
@@ -2511,13 +2661,13 @@ class Logger(object):
         self.file_path=filepath
         self.con_path=conpath
         self.verbose=verbose
-        
+
     def ThrottleLog(self,counter):
         """
         Log everything up to 10, every 10 up to 100, then every 100.
         """
         return (counter < 10) or ((counter < 100) and ((counter % 10) == 0)) or ((counter % 100) == 0)
-    
+
     def LogToFile(self,message):
         """
         Write 'message' to logfile.
@@ -2530,7 +2680,7 @@ class Logger(object):
             except IOError, e:
                 print e
                 pass
-            
+
     def LogToCon(self,message):
         """
         Write 'message' to /dev/console.
@@ -2544,14 +2694,14 @@ class Logger(object):
                     C.write(message.encode('ascii','ignore') + "\n")
             except IOError, e:
                 pass
-                
+
     def Log(self,message):
         """
         Standard Log function.
         Logs to self.file_path, and con_path
         """
         self.LogWithPrefix("", message)
-    
+
     def LogWithPrefix(self,prefix, message):
         """
         Prefix each line of 'message' with current time+'prefix'.
@@ -2563,19 +2713,19 @@ class Logger(object):
             line = t + line
             self.LogToFile(line)
             self.LogToCon(line)
-            
+
     def NoLog(self,message):
         """
         Don't Log.
         """
         pass
-    
+
     def LogIfVerbose(self,message):
         """
         Only log 'message' if global Verbose is True.
         """
         self.LogWithPrefixIfVerbose('',message)
-    
+
     def LogWithPrefixIfVerbose(self,prefix, message):
         """
         Only log 'message' if global Verbose is True.
@@ -2589,26 +2739,26 @@ class Logger(object):
                 line = t + line
                 self.LogToFile(line)
                 self.LogToCon(line)
-                
+
     def Warn(self,message):
         """
         Prepend the text "WARNING:" to the prefix for each line in 'message'.
         """
         self.LogWithPrefix("WARNING:", message)
-    
+
     def Error(self,message):
         """
         Call ErrorWithPrefix(message).
         """
         ErrorWithPrefix("", message)
-    
+
     def ErrorWithPrefix(self,prefix, message):
         """
         Prepend the text "ERROR:" to the prefix for each line in 'message'.
         Errors written to logfile, and /dev/console
         """
         self.LogWithPrefix("ERROR:", message)
-    
+
 def LoggerInit(log_file_path,log_con_path,verbose=False):
     """
     Create log object and export its methods to global scope.
@@ -2755,7 +2905,7 @@ def DoInstallRHUIRPM():
         return
 
     Log("install RHUI RPM completed")
-    
+
 class Util(object):
     """
     Http communication class.
@@ -3092,7 +3242,7 @@ class TCPHandler(SocketServer.BaseRequestHandler):
         log("Received LB probe # " + strCounter)
         self.request.recv(1024)
         self.request.send("HTTP/1.1 200 OK\r\nContent-Length: 2\r\nContent-Type: text/html\r\nDate: " + self.GetHttpDateTimeNow() + "\r\n\r\nOK")
-            
+
 class LoadBalancerProbeServer(object):
     """
     Threaded object to receive and send LB probe messages.
@@ -3124,9 +3274,6 @@ class ConfigurationProvider(object):
     """
     def __init__(self, walaConfigFile):
         self.values = dict()
-        if 'MyDistro' not in globals():
-            global MyDistro
-            MyDistro = GetMyDistro()
         if walaConfigFile is None:
             walaConfigFile = MyDistro.getConfigurationPath()
         if os.path.isfile(walaConfigFile) == False:
@@ -3147,6 +3294,20 @@ class ConfigurationProvider(object):
 
     def get(self, key):
         return self.values.get(key)
+
+    def yes(self,key):
+        configValue = self.get(key)
+        if(configValue is not None and configValue.lower().startswith("y")):
+            return True
+        else:
+            return False
+
+    def no(self,key):
+        configValue = self.get(key)
+        if(configValue is not None and configValue.lower().startswith("n")):
+            return True
+        else:
+            return False
 
 class EnvMonitor(object):
     """
@@ -3424,8 +3585,34 @@ class SharedConfig(object):
 
 rdma_configured = False
 
+class RdmaConfig(object):
+    """
+    configurations
+    """
+    wrapper_package_name = 'msft-rdma-drivers'
+    rmda_package_name = 'msft-lis-rdma-kmp-default'
+    """
+    error code definitions
+    """
+    process_success = 0
+    common_failed = 1
+    install_hv_utils_failed = 2
+    nd_driver_detect_error = 3
+    driver_version_not_found = 4
+    unknown_error = 5
+    package_not_found = 6
+    package_install_failed = 7
+    """
+    check_rdma_result
+    """
+    UpToDate = 0
+    OutOfDate = 1
+    DriverVersionNotFound = 3
+    Unknown = -1
+
 class RdmaError(Exception):
-    pass
+    def __init__(error_code = RdmaConfig.process_success):
+        self.error_code = error_code
 
 class RdmaHandler(object):
     """
@@ -4083,7 +4270,6 @@ class ExtensionsConfig(object):
                     continue
         return str(seq_no)
 
-
     def GenerateAggStatus(self, name, version, reportHeartbeat = False):
         """
         Generate the status which Azure can understand by the status and heartbeat reported by extension
@@ -4142,7 +4328,6 @@ class ExtensionsConfig(object):
         agg_status_string = json.dumps(agg_status_obj)
         LogIfVerbose("Handler Aggregated Status:" + agg_status_string)
         return agg_status_string
-    
 
     def SetHandlerState(self, handler, state=''):
         zip_dir=LibDir+"/" + handler
@@ -4165,7 +4350,6 @@ class ExtensionsConfig(object):
             return handlerState.rstrip('\r\n')
         else:
             return 'NotInstalled'
-
 
 class HostingEnvironmentConfig(object):
     """
@@ -4453,7 +4637,7 @@ class GoalState(Util):
         LogIfVerbose("Process goalstate")
         self.HostingEnvironmentConfig.Process()
         self.SharedConfig.Process()
-        
+
 class OvfEnv(object):
     """
     Read, and process provisioning info from provisioning file OvfEnv.xml
@@ -4724,13 +4908,10 @@ class OvfEnv(object):
         MyDistro.restartSshService()
         return error
 
-
-class WALAEvent(object):   
+class WALAEvent(object):
     def __init__(self):
-            
         self.providerId=""
         self.eventId=1
-        
         self.OpcodeName=""
         self.KeywordName=""
         self.TaskName=""
@@ -4759,7 +4940,7 @@ class WALAEvent(object):
         for attName in  self.__dict__:
             if attName in ["eventId","filedCount","providerId"]:
                 continue
-            
+
             attValue = self.__dict__[attName]
             if type(attValue) is int:
                 strEventsData+=strRecordFormat.format(attName,attValue,strMtUInt64)
@@ -4778,7 +4959,7 @@ class WALAEvent(object):
             if type(attValue) is float:
                 strEventsData+=strRecordFormat.format(attName,attValue,strMtFloat)
                 continue
-            
+
             Log("Warning: property "+attName+":"+str(type(attValue))+":type"+str(type(attValue))+"Can't convert to events data:"+":type not supported")
 
         return u"<Data>{0}{1}{2}</Data>".format(strProviderid,strEventid,strEventsData)
@@ -4790,12 +4971,11 @@ class WALAEvent(object):
             os.chmod(eventfolder,0700)
         if len(os.listdir(eventfolder)) > 1000:
             raise Exception("WriteToFolder:Too many file under "+eventfolder+" exit")
-    
+
         filename = os.path.join(eventfolder,str(int(time.time()*1000000)))
         with open(filename+".tmp",'wb+') as hfile:
             hfile.write(self.ToXml().encode("utf-8"))
         os.rename(filename+".tmp",filename+".tld")
-
 
 class WALAEventOperation:
     HeartBeat="HeartBeat"
@@ -4806,7 +4986,7 @@ class WALAEventOperation:
     Enable = "Enable"
     Download = "Download"
     Upgrade = "Upgrade"
-    Update = "Update"           
+    Update = "Update"
 
 def AddExtensionEvent(name,op,isSuccess,duration=0,version="1.0",message="",type="",isInternal=False):
     event = ExtensionEvent()
@@ -4822,8 +5002,7 @@ def AddExtensionEvent(name,op,isSuccess,duration=0,version="1.0",message="",type
         event.Save()
     except:
         Error("Error "+traceback.format_exc())
-        
-    
+
 class ExtensionEvent(WALAEvent):
     def __init__(self):
                 
@@ -4838,8 +5017,7 @@ class ExtensionEvent(WALAEvent):
         self.ExtensionType=""
         self.Message=""
         self.Duration=0
-    
-               		           
+
 class WALAEventMonitor(WALAEvent):
     def __init__(self,postMethod):
         WALAEvent.__init__(self)
@@ -4852,7 +5030,7 @@ class WALAEventMonitor(WALAEvent):
         eventThread = threading.Thread(target = self.EventsLoop)
         eventThread.setDaemon(True)
         eventThread.start()
-        
+
     def EventsLoop(self):
         LastReportHeartBeatTime = datetime.datetime.min
         try:
@@ -4865,7 +5043,7 @@ class WALAEventMonitor(WALAEvent):
                 time.sleep(60)
         except:
             Error("Exception in events loop:"+traceback.format_exc())
-			     		    		
+
     def SendEvent(self,providerid,events):
         dataFormat = u'<?xml version="1.0"?><TelemetryData version="1.0"><Provider id="{0}">{1}'\
         '</Provider></TelemetryData>'
@@ -4927,7 +5105,6 @@ class WALAEventMonitor(WALAEvent):
                 self.SendEvent(key,events[key])
                 if eventSendNumber%3 == 0:
                     time.sleep(15)
-                
 
     def AddSystemInfo(self,eventData):
         if not self.issysteminfoinitilized:
@@ -4955,8 +5132,7 @@ class WALAEventMonitor(WALAEvent):
                 if self.sysInfo.get(name):
                     node.setAttribute("Value",xml.sax.saxutils.escape(str(self.sysInfo[name])))
 
-        return  eventObject.toxml()            
-
+        return  eventObject.toxml()
 
 class Agent(Util):
     """
@@ -5473,7 +5649,7 @@ class Agent(Util):
             return 1
         
         Log("Loaded " + krn_pth + " driver for ATAPI CD-ROM")
-        
+
         # we have succeeded loading the ata_piix mod if it can be done.
 
     def SearchForVMMStartup(self):
@@ -5523,7 +5699,7 @@ class Agent(Util):
 
         Log("VMM Init script not found.  Provisioning for Azure")
         return 
-        
+
     def Provision(self):
         """
         Responible for:
@@ -5660,6 +5836,7 @@ class Agent(Util):
         if self.Endpoint == None:
             Log("Azure environment not detected.")
             while True:
+                # TODO: find a way to notify the customer, sleep here is not proper.
                 time.sleep(60)
 
         Log("Discovered Azure endpoint: " + self.Endpoint)
@@ -5673,25 +5850,39 @@ class Agent(Util):
         MyDistro.initScsiDiskTimeout()
         global provisioned
         global provisionError
-        
+
         global Openssl
         Openssl = Config.get("OS.OpensslPath")
         if Openssl == None:
             Openssl = "openssl"
 
         self.TransportCert = self.GenerateTransportCert()
-        
+
         eventMonitor = None
         incarnation = None # goalStateIncarnationFromHealthReport
         currentPort = None # loadBalancerProbePort
         goalState = None # self.GoalState, instance of GoalState
         provisioned = os.path.exists(LibDir + "/provisioned")
         program = Config.get("Role.StateConsumer")
-        provisionError = None        
+        provisionError = None 
         lbProbeResponder = True
-        setting = Config.get("LBProbeResponder")
-        if setting != None and setting.lower().startswith("n"):
+
+        lbProbeResponderNo = Config.no("LBProbeResponder")
+        if lbProbeResponderNo:
             lbProbeResponder = False
+
+        updateRdmaDriverConfigured = Config.yes("OS.UpdateRdmaDriver")
+        if(updateRdmaDriverConfigured):
+            MyDistro.rdmaUpdate()
+        else:
+            Log("OS.UpdateRdmaDriver configured to "+str(updateRdmaDriverConfigured)+" so skip the rdma update.")
+        checkRdmaDriverConfigured = Config.yes("OS.CheckRdmaDriver")
+        if(checkRdmaDriverConfigured):
+            checkRdmaResult = MyDistro.checkRDMA()
+            Log("Rdma check result is " + str(checkRdmaResult))
+        else:
+            Log("OS.CheckRdmaDriver configured to "+str(checkRdmaDriverConfigured)+" so skip the rdma check.")
+
         while True:
             if (goalState == None) or (incarnation == None) or (goalState.Incarnation != incarnation):
                 try:
@@ -5782,18 +5973,17 @@ class Agent(Util):
             # report the status/heartbeat results of extension processing
             if goalState.ExtensionsConfig != None :
                 goalState.ExtensionsConfig.ReportHandlerStatus()
-            
+
             global LinuxDistro
             if LinuxDistro == "redhat":
                 DoInstallRHUIRPM()
-                
+
             if not eventMonitor:
                 eventMonitor = WALAEventMonitor(self.HttpPostWithHeaders)
                 eventMonitor.StartEventsLoop()
 
             time.sleep(25 - sleepToReduceAccessDenied)
 
-            
 WaagentLogrotate = """\
 /var/log/waagent.log {
     monthly
@@ -5913,7 +6103,7 @@ def ApplyVNUMAWorkaround():
         Log("Your kernel version " + platform.release() + " has a NUMA-related bug: NUMA has been disabled.")
     else :
         "Error adding 'numa=off'.  NUMA has not been disabled."
-        
+
 def RevertVNUMAWorkaround():
     """
     Remove 'numa=off' from kernel boot options.
@@ -6101,8 +6291,6 @@ def Usage():
     print("usage: " + sys.argv[0] + " [-verbose] [-force] [-help|-install|-uninstall|-deprovision[+user]|-version|-serialconsole|-daemon]")
     return 0
 
-
-
 def main():
     """
     Instantiate MyDistro, exit if distro class is not defined.
@@ -6120,9 +6308,9 @@ def main():
     LoggerInit('/var/log/waagent.log','/dev/console')
     global LinuxDistro
     LinuxDistro=DistInfo()[0]
-    
+
     global MyDistro
-    MyDistro=GetMyDistro()
+    MyDistro = GetMyDistro()
     if MyDistro == None :
         sys.exit(1)
     args = []
@@ -6190,8 +6378,8 @@ def main():
         WaAgent.Run()
     except Exception, e:
         Error(traceback.format_exc())
+
         Error("Exception: " + str(e))
         sys.exit(1)
-    
 if __name__ == '__main__' :
     main()
