@@ -684,7 +684,7 @@ class AbstractDistro(object):
 
     def getNdDriverVersion(self):
         """
-        if error happens, raise a RdmaException
+        if error happens, raise a RdmaError
         """
         try:
             with open("/var/lib/hyperv/.kvp_pool_0", "r") as f:
@@ -1017,11 +1017,11 @@ class SuSEDistro(AbstractDistro):
                 nd_driver_version = self.getNdDriverVersion()
                 update_rdma_driver_result = self.rdmaUpdatePackage(nd_driver_version)
             elif(check_result == RdmaConfig.DriverVersionNotFound):
-                raise RdmaException(RdmaConfig.driver_version_not_found)
+                raise RdmaError(RdmaConfig.driver_version_not_found)
             elif(check_result == RdmaConfig.Unknown):
-                raise RdmaException(RdmaConfig.unknown_error)
+                raise RdmaError(RdmaConfig.unknown_error)
         else:
-            raise RdmaException(RdmaConfig.install_hv_utils_failed)
+            raise RdmaError(RdmaConfig.install_hv_utils_failed)
 
     def rdmaUpdatePackage(self, host_version):
         error, output = RunGetOutput(self.zypper_path + " lr -u")
