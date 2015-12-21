@@ -980,7 +980,7 @@ class SuSEDistro(AbstractDistro):
         if(error == RdmaConfig.process_success):
             r = re.search("Version: (\S+)", output)
             if r is not None:
-                package_version = r.groups()[0]# e.g.  package_version is "20150707_k3.12.28_4-3.1.140.0"
+                package_version = r.groups()[0] # e.g.  package_version is "20150707.140.0_k3.12.28_4-3.1."
                 return package_version
             else:
                 return None
@@ -1008,6 +1008,7 @@ class SuSEDistro(AbstractDistro):
     def rdmaUpdate(self):
         check_install_result = self.checkInstallHyperV()
         if(check_install_result == RdmaConfig.process_success):
+            # wait for sometime the RDMA Driver not passed in by KVP in time.
             time.sleep(40)
             check_result = self.checkRDMA()
             Log("RDMA  version check result is " + str(check_result))
