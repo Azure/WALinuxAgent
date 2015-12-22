@@ -5,3 +5,7 @@ tests/status_blob_url.py
 build
 dist
 *.egg-info
+
+.coverage
+.ropeproject
+
