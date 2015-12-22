@@ -553,6 +553,7 @@ class AbstractDistro(object):
         if not os.path.isfile(mountpoint + "/swapfile"):
             Run("dd if=/dev/zero of=" + mountpoint + "/swapfile bs=1024 count=" + str(sizeKB))
             Run("mkswap " + mountpoint + "/swapfile")
+        Run("chmod 600 " + mountpoint + "/swapfile")
         if not Run("swapon " + mountpoint + "/swapfile"):
             Log("Enabled " + str(sizeKB) + " KB of swap at " + mountpoint + "/swapfile")
         else:
