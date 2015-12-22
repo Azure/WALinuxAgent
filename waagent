@@ -52,6 +52,7 @@ import zipfile
 import json
 import datetime
 import xml.sax.saxutils
+from distutils.version import LooseVersion
 
 if not hasattr(subprocess,'check_output'):
     def check_output(*popenargs, **kwargs):
@@ -3654,15 +3655,25 @@ class ExtensionsConfig(object):
             # if the same plugin exists and the version is newer or
             # does not exist then download and unzip the new plugin
             plg_dir=None
+
+            latest_version_installed = LooseVersion("0.0")
             for root, dirs, files in os.walk(LibDir):
                 for d in dirs:
                     if name in d:
-                        plg_dir=os.path.join(root,d)
-                    if plg_dir != None:
-                        break
+                        #Split plugin dir name with '-' to get intalled plugin name and version
+                        sperator = d.rfind('-')
+                        if sperator < 0:
+                            continue
+                        installed_plg_name = d[0:sperator]
+                        installed_plg_version = LooseVersion(d[sperator + 1:])
+
+                        #Check installed plugin name and compare installed version to get the latest version installed
+                        if installed_plg_name == name and installed_plg_version > latest_version_installed:
+                            plg_dir = os.path.join(root,d)
+                            latest_version_installed = installed_plg_version
             if plg_dir != None :
                 previous_version=plg_dir.rsplit('-')[-1]
-            if plg_dir == None or version > previous_version :
+            if plg_dir == None or LooseVersion(version) > LooseVersion(previous_version) :
                 location=p.getAttribute("location")
                 Log("Downloading plugin manifest: " + name + " from " + location)
                 SimpleLog(p.plugin_log,"Downloading plugin manifest: " + name + " from " + location)
@@ -3778,7 +3789,7 @@ class ExtensionsConfig(object):
 
                 cmd = ''
                 getcmd='installCommand'
-                if plg_dir != None and previous_version != None and version > previous_version :
+                if plg_dir != None and previous_version != None and LooseVersion(version) > LooseVersion(previous_version):
                     previous_handler=name+'-'+previous_version
                     if self.GetHandlerState(previous_handler) != 'NotInstalled':
                         getcmd='updateCommand'
