@@ -2970,8 +2970,12 @@ class Util(object):
             "Content-Type": "text/xml; charset=utf-8",
             "x-ms-version": ProtocolVersion
         }
-        return self.HttpPost(url, data=data, headers=headers, 
-                             maxRetry=maxRetry, chkProxy=chkProxy)
+        try:
+            return self.HttpPost(url, data=data, headers=headers, 
+                                 maxRetry=maxRetry, chkProxy=chkProxy)
+        except HttpResourceGoneError as e:
+            Error("Failed to post: {0} {1}".format(url, e))
+            return None
 
 __StorageVersion="2014-02-14"
 
