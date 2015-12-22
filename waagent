@@ -995,21 +995,28 @@ class SuSEDistro(AbstractDistro):
         if(error != RdmaConfig.process_success):
             return RdmaConfig.common_failed
         else:
-            r = re.search("hv_kvp_daemon", output)
+            hv_kvp_daemon_service_process_name = "hv_kvp_daemon"
+            hv_kvp_daemon_service_name = "hv_kvp_daemon"
+            r = re.search(hv_kvp_daemon_service_process_name, output)
             if r is None :
                 # if the 
-                error,output = RunGetOutput(self.service_cmd+ " hv_kvp_daemon status")
+                Log("hv kvp daemon is not running.")
+                error,output = RunGetOutput(self.service_cmd+ " --status-all")
                 if(error == RdmaConfig.process_success):
-                    Log("the hv_kvp_daemon service is there, bug not started.")
-                    return RdmaConfig.hv_kvp_daemon_not_started
+                    hv_kvp_result = re.search(hv_kvp_daemon_service_name, output)
+                    if hv_kvp_result is None :
+                        Log("KVP service not there, install it")
+                        error,output = RunGetOutput(self.zypper_path + " -n install --force hyper-v")
+                        Log("install hyper-v return code: " + str(error) + " output:" + str(output))
+                        if(error != RdmaConfig.process_success):
+                            return RdmaConfig.common_failed
+                        self.rebootMachine()
+                        return RdmaConfig.process_success
+                    else:
+                        Log("the hv_kvp_daemon service is there, but not started.")
+                        return RdmaConfig.hv_kvp_daemon_not_started
                 else:
-                    Log("KVP deamon is not running and service not there, install it")
-                    error,output = RunGetOutput(self.zypper_path + " -n install --force hyper-v")
-                    Log("install hyper-v return code: " + str(error) + " output:" + str(output))
-                    if(error != RdmaConfig.process_success):
-                        return RdmaConfig.common_failed
-                    self.rebootMachine()
-                    return RdmaConfig.process_success
+                    return RdmaConfig.common_failed
             else :
                 Log("KVP deamon is running")
                 return RdmaConfig.process_success
