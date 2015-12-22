@@ -469,8 +469,15 @@ class AbstractDistro(object):
     def GetInterfaceName(self):
         return GetFirstActiveNetworkInterfaceNonLoopback()[0]
 
-    def RestartInterface(self, iface):
-        Run("ifdown " + iface + " && ifup " + iface)
+    def RestartInterface(self, iface, max_retry=3):
+        for retry in range(1, max_retry + 1):
+            ret = Run("ifdown " + iface + " && ifup " + iface)
+            if ret == 0:
+                return
+            Log("Failed to restart interface: {0}, ret={1}".format(iface, ret))
+            if retry < max_retry:
+                Log("Retry restart interface in 5 seconds")
+                time.sleep(5)
 
     def CreateAccount(self,user, password, expiration, thumbprint):
         return CreateAccount(user, password, expiration, thumbprint)
