@@ -3017,6 +3017,8 @@ def PutBlockBlob(url, data):
     }, chkProxy=True)
     if ret is None:
         Error("Failed to upload block blob for status.")
+        return -1
+    return 0
 
 def PutPageBlob(url, data):
     restutil = Util()
@@ -3033,7 +3035,7 @@ def PutPageBlob(url, data):
     }, chkProxy=True)
     if ret is None:
         Error("Failed to clean up page blob for status")
-        return
+        return -1
         
     if url.index('?') < 0:
         url = "{0}?comp=page".format(url)
@@ -3061,8 +3063,9 @@ def PutPageBlob(url, data):
         }, chkProxy=True)
         if ret is None:
             Error("Failed to upload page blob for status")
-            return
+            return -1
         start = end
+    return 0
 
 def UploadStatusBlob(url, data):
     LogIfVerbose("Upload status blob")
@@ -3070,12 +3073,12 @@ def UploadStatusBlob(url, data):
     blobType = GetBlobType(url) 
 
     if blobType == "BlockBlob":
-        PutBlockBlob(url, data)    
+        return PutBlockBlob(url, data)    
     elif blobType == "PageBlob":
-        PutPageBlob(url, data)    
+        return PutPageBlob(url, data)    
     else:
         Error("Unknown blob type: {0}".format(blobType))
-        return None
+        return -1
 
 class TCPHandler(SocketServer.BaseRequestHandler):
     """
@@ -4046,7 +4049,7 @@ class ExtensionsConfig(object):
             incarnation=self.Extensions[0].getAttribute("goalStateIncarnation")
         except:
             Error('Error parsing ExtensionsConfig.  Unable to send status reports')
-            return None
+            return -1
         status=''
         statuses=''
         for p in self.Plugins:
@@ -4084,11 +4087,10 @@ class ExtensionsConfig(object):
             uri=GetNodeTextData(self.Extensions[0].getElementsByTagName("StatusUploadBlob")[0]).replace('&amp;','&')
         except:
             Error('Error parsing ExtensionsConfig.  Unable to send status reports')
-            return None
+            return -1
 
-        UploadStatusBlob(uri, status.encode("utf-8"))
         LogIfVerbose('Status report '+status+' sent to ' + uri)
-        return True
+        return UploadStatusBlob(uri, status.encode("utf-8"))
 
     def GetCurrentSequenceNumber(self, plugin_base_dir):
         """
@@ -5656,6 +5658,8 @@ class Agent(Util):
         """
         SetFileContents("/var/run/waagent.pid", str(os.getpid()) + "\n")
 
+        reportHandlerStatusCount = 0
+
         # Determine if we are in VMM.  Spawn VMM_STARTUP_SCRIPT_NAME if found.
         self.SearchForVMMStartup()
         ipv4=''
@@ -5800,11 +5804,18 @@ class Agent(Util):
                 incarnation = self.ReportReady()
             # Process our extensions.
             if goalState.ExtensionsConfig == None and goalState.ExtensionsConfigXml != None :
+                reportHandlerStatusCount = 0 #Reset count when new goal state comes
                 goalState.ExtensionsConfig = ExtensionsConfig().Parse(goalState.ExtensionsConfigXml)
 
             # report the status/heartbeat results of extension processing
             if goalState.ExtensionsConfig != None :
-                goalState.ExtensionsConfig.ReportHandlerStatus()
+                ret = goalState.ExtensionsConfig.ReportHandlerStatus()
+                if ret != 0:
+                    Error("Failed to report handler status")
+                elif reportHandlerStatusCount % 1000 == 0:
+                    #Agent report handler status every 25 seconds. Reduce the log entries by adding a count
+                    Log("Successfully reported handler status")
+                reportHandlerStatusCount += 1
             
             global LinuxDistro
             if LinuxDistro == "redhat":
