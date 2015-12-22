@@ -931,6 +931,7 @@ class SuSEDistro(AbstractDistro):
 
         self.requiredDeps += [ "/sbin/insserv" ]
         self.reboot_path = '/sbin/reboot'
+        self.rpm_path = '/bin/rpm'
         self.service_cmd = '/sbin/service'
         self.ssh_service_name ='sshd'
         if(dist_info[1] == "11"):
@@ -1001,22 +1002,18 @@ class SuSEDistro(AbstractDistro):
             if r is None :
                 # if the 
                 Log("hv kvp daemon is not running.")
-                error,output = RunGetOutput(self.service_cmd+ " --status-all")
+                error,output = RunGetOutput(self.rpm_path + " -q hyper-v")
                 if(error == RdmaConfig.process_success):
-                    hv_kvp_result = re.search(hv_kvp_daemon_service_name, output)
-                    if hv_kvp_result is None :
-                        Log("KVP service not there, install it")
-                        error,output = RunGetOutput(self.zypper_path + " -n install --force hyper-v")
-                        Log("install hyper-v return code: " + str(error) + " output:" + str(output))
-                        if(error != RdmaConfig.process_success):
-                            return RdmaConfig.common_failed
+                    Log("the hyper-v package is installed, but hv_kvp_daemon not started")
+                    return RdmaConfig.hv_kvp_daemon_not_started
+                else:
+                    error,output = RunGetOutput(self.zypper_path + " -n install --force hyper-v")
+                    Log("install hyper-v return code: " + str(error) + " output:" + str(output))
+                    if(error != RdmaConfig.process_success):
+                        return RdmaConfig.common_failed
+                    else:
                         self.rebootMachine()
                         return RdmaConfig.process_success
-                    else:
-                        Log("the hv_kvp_daemon service is there, but not started.")
-                        return RdmaConfig.hv_kvp_daemon_not_started
-                else:
-                    return RdmaConfig.common_failed
             else :
                 Log("KVP deamon is running")
                 return RdmaConfig.process_success
@@ -1044,7 +1041,7 @@ class SuSEDistro(AbstractDistro):
                 elif(check_result == RdmaConfig.Unknown):
                     raise RdmaError(RdmaConfig.unknown_error)
         else:
-            raise RdmaError(RdmaConfig.install_hv_utils_failed)
+            raise RdmaError(RdmaConfig.check_install_hv_utils_failed)
 
     def rdmaUpdatePackage(self, host_version, updateRdmaRepository = None):
         # check the repository first
@@ -3622,7 +3619,7 @@ class RdmaConfig(object):
     """
     process_success = 0
     common_failed = 1
-    install_hv_utils_failed = 2
+    check_install_hv_utils_failed = 2
     nd_driver_detect_error = 3
     driver_version_not_found = 4
     unknown_error = 5
