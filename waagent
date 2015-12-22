@@ -707,7 +707,7 @@ class AbstractDistro(object):
     def getRdmaPackageVersion(self):
         return None
 
-    def rdmaUpdate(self):
+    def rdmaUpdate(self,updateRdmaRepository=None):
         Log("rdmaUpdate in base class")
         pass
 
@@ -1014,24 +1014,24 @@ class SuSEDistro(AbstractDistro):
                 Log("KVP deamon is running")
                 return RdmaConfig.process_success
 
-    def rdmaUpdate(self):
+    def rdmaUpdate(self,updateRdmaRepository=None):
         # give some time for the hv_hvp_daemon to start up.
         time.sleep(10)
         check_install_result = self.checkInstallHyperV()
         if(check_install_result == RdmaConfig.process_success):
             # wait for sometime the RDMA Driver not passed in by KVP in time.
-            time.sleep(20)
+            time.sleep(10)
 
             nd_driver_version = self.getNdDriverVersion()
             if(nd_driver_version is None):
                 raise RdmaError(RdmaConfig.driver_version_not_found)
             else:
-                check_result = self.checkRDMA(nd_driver_version)
+                check_result = self.checkRDMA(nd_driver_version=nd_driver_version)
                 Log("RDMA  version check result is " + str(check_result))
                 if(check_result == RdmaConfig.UpToDate):
                     return
                 elif(check_result == RdmaConfig.OutOfDate):
-                    update_rdma_driver_result = self.rdmaUpdatePackage(nd_driver_version)
+                    update_rdma_driver_result = self.rdmaUpdatePackage(host_version=nd_driver_version,updateRdmaRepository=updateRdmaRepository)
                 elif(check_result == RdmaConfig.DriverVersionNotFound):
                     raise RdmaError(RdmaConfig.driver_version_not_found)
                 elif(check_result == RdmaConfig.Unknown):
@@ -1039,19 +1039,22 @@ class SuSEDistro(AbstractDistro):
         else:
             raise RdmaError(RdmaConfig.install_hv_utils_failed)
 
-    def rdmaUpdatePackage(self, host_version):
-        error, output = RunGetOutput(self.zypper_path + " lr -u")
-        rdma_pack_repository_name = "msft-rdma-pack"
-        rdma_pack_result = re.search(rdma_pack_repository_name, output)
-        if rdma_pack_result is None :
-            Log("rdma_pack_result is None")
-            error, output = RunGetOutput(self.zypper_path + " ar https://drivers.suse.com/microsoft/Microsoft-LIS-RDMA/sle-12/updates " + rdma_pack_repository_name)
-            #wait for the cache build.
-            time.sleep(20)
-            Log("error result is " + str(error) + " output is : " + str(output))
-        else:
-            Log("output is: " + str(output))
-            Log("msft-rdma-pack found")
+    def rdmaUpdatePackage(self, host_version, updateRdmaRepository = None):
+        # check the repository first
+        if(updateRdmaRepository is not None):
+            error,output = RunGetOutput(self.zypper_path + " lr -u")
+            rdma_pack_repository_name = "msft-rdma-pack"
+            rdma_pack_result = re.search(rdma_pack_repository_name, output)
+            if rdma_pack_result is None :
+                Log("rdma_pack_result is None")
+                error, output = RunGetOutput(self.zypper_path + " ar " + str(updateRdmaRepository) + " " + rdma_pack_repository_name)
+                #wait for the cache build.
+                time.sleep(20)
+                Log("error result is " + str(error) + " output is : " + str(output))
+            else:
+                Log("output is: " + str(output))
+                Log("msft-rdma-pack found")
+
         returnCode, message = RunGetOutput(self.zypper_path + " --no-gpg-checks refresh")
         Log("refresh repro return code is " + str(returnCode) + " output is: " + str(message))
         #install the wrapper package, that will put the driver RPM packages under /opt/microsoft/rdma
@@ -1249,7 +1252,7 @@ class centosDistro(redhatDistro):
     def __init__(self):
         super(centosDistro,self).__init__()
 
-    def rdmaUpdate(self):
+    def rdmaUpdate(self,updateRdmaRepository=None):
         pass
 
     def checkRDMA(self):
@@ -3628,7 +3631,7 @@ class RdmaConfig(object):
     Unknown = -1
 
 class RdmaError(Exception):
-    def __init__(error_code = RdmaConfig.process_success):
+    def __init__(self, error_code = RdmaConfig.process_success):
         self.error_code = error_code
 
 class RdmaHandler(object):
@@ -5888,17 +5891,22 @@ class Agent(Util):
         if lbProbeResponderNo:
             lbProbeResponder = False
 
-        updateRdmaDriverConfigured = Config.yes("OS.UpdateRdmaDriver")
-        if(updateRdmaDriverConfigured):
-            MyDistro.rdmaUpdate()
-        else:
-            Log("OS.UpdateRdmaDriver configured to "+str(updateRdmaDriverConfigured)+" so skip the rdma update.")
-        checkRdmaDriverConfigured = Config.yes("OS.CheckRdmaDriver")
-        if(checkRdmaDriverConfigured):
-            checkRdmaResult = MyDistro.checkRDMA()
-            Log("Rdma check result is " + str(checkRdmaResult))
-        else:
-            Log("OS.CheckRdmaDriver configured to "+str(checkRdmaDriverConfigured)+" so skip the rdma check.")
+        try:
+            updateRdmaDriverConfigured = Config.yes("OS.UpdateRdmaDriver")
+            updateRdmaRepository = Config.get("OS.RdmaRepository")
+            if(updateRdmaDriverConfigured):
+                MyDistro.rdmaUpdate(updateRdmaRepository)
+            else:
+                Log("OS.UpdateRdmaDriver configured to "+str(updateRdmaDriverConfigured)+" so skip the rdma update.")
+            checkRdmaDriverConfigured = Config.yes("OS.CheckRdmaDriver")
+            if(checkRdmaDriverConfigured):
+                checkRdmaResult = MyDistro.checkRDMA()
+                Log("Rdma check result is " + str(checkRdmaResult))
+            else:
+                Log("OS.CheckRdmaDriver configured to "+str(checkRdmaDriverConfigured)+" so skip the rdma check.")
+        except Exception as e:
+            errMsg = 'check or update Rdma driver failed with error: %s, stack trace: %s' % (str(e), traceback.format_exc())
+            Error(errMsg)
 
         while True:
             if (goalState == None) or (incarnation == None) or (goalState.Incarnation != incarnation):
