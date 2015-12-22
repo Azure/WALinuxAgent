@@ -359,7 +359,7 @@ class AbstractDistro(object):
 
         return self.chpasswd(user, password, crypt_id=crypt_id, 
                              salt_len=salt_len)
-    
+
     def chpasswd(self, username, password, crypt_id=6, salt_len=10):
         passwd_hash = self.gen_password_hash(password, crypt_id, salt_len)
         cmd = "usermod -p '{0}' {1}".format(passwd_hash, username)
@@ -381,7 +381,7 @@ class AbstractDistro(object):
         Generic function to remove ata_piix.ko.
         """
         return WaAgent.TryUnloadAtapiix()
-        
+
     def deprovisionWarnUser(self):
         """
         Generic user warnings used at deprovision.
@@ -403,7 +403,7 @@ class AbstractDistro(object):
             except:
                 pass
         return 0
-    
+
     def uninstallDeleteFiles(self):
         """
         Files to delete when agent is uninstalled.
@@ -414,7 +414,7 @@ class AbstractDistro(object):
             except:
                 pass
         return 0
-    
+
     def checkDependencies(self):
         """
         Generic dependency check.
@@ -566,7 +566,7 @@ class AbstractDistro(object):
         if Run("LC_ALL=C fdisk -l " + dsk + " | grep Disk"):
             return False
         return True
-    
+
     def mountDVD(self,dvd,location):
         return RunGetOutput(self.mount_dvd_cmd + ' ' + dvd + ' ' + location)
 
@@ -700,7 +700,7 @@ class AbstractDistro(object):
             errMsg = 'Failed to enable the extension with error: %s, stack trace: %s' % (str(e), traceback.format_exc())
             Log("Can't update status: " + errMsg)
             raise RdmaError(RdmaConfig.nd_driver_detect_error)
-    
+
     def checkInstallHyperV(self):
         return None
 
@@ -708,9 +708,11 @@ class AbstractDistro(object):
         return None
 
     def rdmaUpdate(self):
+        Log("rdmaUpdate in base class")
         pass
 
     def checkRDMA(self):
+        Log("checkRDMA in base class")
         pass
 
 ############################################################
@@ -911,7 +913,13 @@ class SuSEDistro(AbstractDistro):
     """
     def __init__(self):
         super(SuSEDistro,self).__init__()
+        dist_info = DistInfo()
+        dist_info_fullname = DistInfo(fullname=1)
+
         self.dhcp_client_name = 'dhcpcd'
+        if ((dist_info_fullname[0] == 'SUSE Linux Enterprise Server' and dist_info[1] >= '12') or \
+            (dist_info_fullname[0] == 'openSUSE'                     and dist_info[1] >= '13.2')):
+            self.dhcp_client_name = 'wickedd-dhcp4'
         self.dhcp_enabled = True
         self.grubKernelBootOptionsFile = '/boot/grub/menu.lst'
         self.grubKernelBootOptionsLine = 'kernel'
@@ -920,21 +928,16 @@ class SuSEDistro(AbstractDistro):
         self.init_file = suse_init_file
         self.kernel_boot_options_file = '/boot/grub/menu.lst'
         self.modprobe_path = '/usr/bin/modprobe'
-        
+
         self.requiredDeps += [ "/sbin/insserv" ]
         self.reboot_path = '/sbin/reboot'
         self.service_cmd = '/sbin/service'
         self.ssh_service_name ='sshd'
-        dist_info = DistInfo()
-        dist_info_fullname = DistInfo(fullname=1)
         if(dist_info[1] == "11"):
             self.ps_path = '/bin/ps'
         else:
             self.ps_path = '/usr/bin/ps'
 
-        if ((dist_info_fullname[0] == 'SUSE Linux Enterprise Server' and dist_info[1] >= '12') or \
-            (dist_info_fullname[0] == 'openSUSE'                     and dist_info[1] >= '13.2')):
-            self.dhcp_client_name = 'wickedd-dhcp4'
         self.zypper_path = '/usr/bin/zypper'
 
     def checkPackageInstalled(self,p):
@@ -994,33 +997,45 @@ class SuSEDistro(AbstractDistro):
         else:
             r = re.search("hv_kvp_daemon", output)
             if r is None :
-                Log("KVP deamon is not running, install it")
-                error,output = RunGetOutput(self.zypper_path + " -n install --force hyper-v")
-                Log("install hyper-v return code: " + str(error) + " output:" + str(output))
-                if(error != RdmaConfig.process_success):
-                    return RdmaConfig.common_failed
-                self.rebootMachine()
-                return RdmaConfig.process_success
+                # if the 
+                error,output = RunGetOutput(self.service_cmd+ " hv_kvp_daemon status")
+                if(error == RdmaConfig.process_success):
+                    Log("the hv_kvp_daemon service is there, bug not started.")
+                    return RdmaConfig.hv_kvp_daemon_not_started
+                else:
+                    Log("KVP deamon is not running and service not there, install it")
+                    error,output = RunGetOutput(self.zypper_path + " -n install --force hyper-v")
+                    Log("install hyper-v return code: " + str(error) + " output:" + str(output))
+                    if(error != RdmaConfig.process_success):
+                        return RdmaConfig.common_failed
+                    self.rebootMachine()
+                    return RdmaConfig.process_success
             else :
                 Log("KVP deamon is running")
                 return RdmaConfig.process_success
 
     def rdmaUpdate(self):
+        # give some time for the hv_hvp_daemon to start up.
+        time.sleep(10)
         check_install_result = self.checkInstallHyperV()
         if(check_install_result == RdmaConfig.process_success):
             # wait for sometime the RDMA Driver not passed in by KVP in time.
-            time.sleep(40)
-            check_result = self.checkRDMA()
-            Log("RDMA  version check result is " + str(check_result))
-            if(check_result == RdmaConfig.UpToDate):
-                return
-            elif(check_result == RdmaConfig.OutOfDate):
-                nd_driver_version = self.getNdDriverVersion()
-                update_rdma_driver_result = self.rdmaUpdatePackage(nd_driver_version)
-            elif(check_result == RdmaConfig.DriverVersionNotFound):
+            time.sleep(20)
+
+            nd_driver_version = self.getNdDriverVersion()
+            if(nd_driver_version is None):
                 raise RdmaError(RdmaConfig.driver_version_not_found)
-            elif(check_result == RdmaConfig.Unknown):
-                raise RdmaError(RdmaConfig.unknown_error)
+            else:
+                check_result = self.checkRDMA(nd_driver_version)
+                Log("RDMA  version check result is " + str(check_result))
+                if(check_result == RdmaConfig.UpToDate):
+                    return
+                elif(check_result == RdmaConfig.OutOfDate):
+                    update_rdma_driver_result = self.rdmaUpdatePackage(nd_driver_version)
+                elif(check_result == RdmaConfig.DriverVersionNotFound):
+                    raise RdmaError(RdmaConfig.driver_version_not_found)
+                elif(check_result == RdmaConfig.Unknown):
+                    raise RdmaError(RdmaConfig.unknown_error)
         else:
             raise RdmaError(RdmaConfig.install_hv_utils_failed)
 
@@ -1061,8 +1076,9 @@ class SuSEDistro(AbstractDistro):
             Log("RDMA drivers not found in /opt/microsoft/rdma")
             raise RdmaError(RdmaConfig.package_not_found)
 
-    def checkRDMA(self):
-        nd_driver_version = self.getNdDriverVersion()
+    def checkRDMA(self, nd_driver_version = None):
+        if(nd_driver_version is None):
+            nd_driver_version = self.getNdDriverVersion()
         if(nd_driver_version is None or nd_driver_version == ""):
             return RdmaConfig.DriverVersionNotFound
         package_version = self.getRdmaPackageVersion()
@@ -1496,7 +1512,7 @@ class debianDistro(AbstractDistro):
             return 1
         else:
             return 0
-        
+
     def checkDependencies(self):
         """
         Debian dependency check.  python-pyasn1 is NOT needed.
@@ -1517,7 +1533,7 @@ class debianDistro(AbstractDistro):
             return 1
         else:
             return 0
-            
+
     def installAgentServiceScriptFiles(self):
         """
         If we are packaged - the service name is walinuxagent, do nothing.
@@ -1531,20 +1547,20 @@ class debianDistro(AbstractDistro):
             ErrorWithPrefix('installAgentServiceScriptFiles','Exception: '+str(e)+' occured creating ' + self.init_script_file)
             return 1
         return 0
-    
+
     def registerAgentService(self):
         if self.installAgentServiceScriptFiles() == 0:
             return Run('update-rc.d waagent defaults')
         else :
             return 1
-    
+
     def uninstallAgentService(self):
         return Run('update-rc.d -f ' + self.agent_service_name + ' remove')
 
     def unregisterAgentService(self):
         self.stopAgentService()
         return self.uninstallAgentService()
-    
+
     def sshDeployPublicKey(self,fprint,path):
         """
         We support PKCS8.
@@ -1945,7 +1961,7 @@ class FreeBSDDistro(AbstractDistro):
         self.mount_dvd_cmd = 'dd bs=2048 count=33 skip=295 if=' # custom data max len is 64k 
         self.sudoers_dir_base = '/usr/local/etc'
         self.waagent_conf_file = FreeBSDWaagentConf
-        
+
     def installAgentServiceScriptFiles(self):
         SetFileContents(self.init_script_file, self.init_file)
         os.chmod(self.init_script_file, 0777)
@@ -1956,7 +1972,6 @@ class FreeBSDDistro(AbstractDistro):
         self.installAgentServiceScriptFiles()
         return Run("services_mkdb " + self.init_script_file)
 
-        
     def sshDeployPublicKey(self,fprint,path):
         """
         We support PKCS8.
@@ -2143,7 +2158,7 @@ class FreeBSDDistro(AbstractDistro):
             ChangeOwner(dir + "/authorized_keys", user)
         Log("Created user account: " + user)
         return None
-    
+
     def DeleteAccount(self,user):
         """
         Delete the 'user'.
@@ -2233,12 +2248,12 @@ class FreeBSDDistro(AbstractDistro):
         Log("Configured SSH client probing to keep connections alive.")
         #ApplyVNUMAWorkaround()
         return 0
-    
+
     def mediaHasFilesystem(self,dsk):
         if Run('LC_ALL=C fdisk -p ' + dsk + ' | grep "invalid fdisk partition table found" ',False):
             return False
         return True
-    
+
     def mountDVD(self,dvd,location):
         #At this point we cannot read a joliet option udf DVD in freebsd10 - so we 'dd' it into our location
         retcode,out = RunGetOutput(self.mount_dvd_cmd + dvd + ' of=' + location + '/ovf-env.xml')
@@ -2274,10 +2289,10 @@ class FreeBSDDistro(AbstractDistro):
 
     def getProcessorCores(self):
         return int(RunGetOutput("sysctl hw.ncpu | awk '{print $2}'")[1])
-    
+
     def getTotalMemory(self):
         return int(RunGetOutput("sysctl hw.realmem | awk '{print $2}'")[1])/1024
-    
+
     def setDefaultGateway(self, gateway):
         Run("/sbin/route add default " + gateway, chk_err=False)
 
@@ -3603,6 +3618,7 @@ class RdmaConfig(object):
     unknown_error = 5
     package_not_found = 6
     package_install_failed = 7
+    hv_kvp_daemon_not_started = 8
     """
     check_rdma_result
     """
