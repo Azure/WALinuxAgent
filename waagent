@@ -5684,10 +5684,11 @@ class Agent(Util):
         Log("Probing for Azure environment.")
         self.Endpoint = self.DoDhcpWork()
 
-        if self.Endpoint == None:
+        while self.Endpoint == None:
             Log("Azure environment not detected.")
-            while True:
-                time.sleep(60)
+            Log("Retry environment detection in 60 seconds")
+            time.sleep(60)
+            self.Endpoint = self.DoDhcpWork()
 
         Log("Discovered Azure endpoint: " + self.Endpoint)
         if not self.CheckVersions():
