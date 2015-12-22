@@ -2818,20 +2818,20 @@ class Util(object):
             if secure:
                 port = 443 if port is None else port
                 if proxyHost is not None and proxyPort is not None:
-                    conn = httplib.HTTPSConnection(proxyHost, proxyPort)
+                    conn = httplib.HTTPSConnection(proxyHost, proxyPort, timeout=10)
                     conn.set_tunnel(host, port)
                     #If proxy is used, full url is needed.
                     path = "https://{0}:{1}{2}".format(host, port, path)
                 else:
-                    conn = httplib.HTTPSConnection(host, port)
+                    conn = httplib.HTTPSConnection(host, port, timeout=10)
             else:
                 port = 80 if port is None else port
                 if proxyHost is not None and proxyPort is not None:
-                    conn = httplib.HTTPConnection(proxyHost, proxyPort)
+                    conn = httplib.HTTPConnection(proxyHost, proxyPort, timeout=10)
                     #If proxy is used, full url is needed.
                     path = "http://{0}:{1}{2}".format(host, port, path)
                 else:
-                    conn = httplib.HTTPConnection(host, port)
+                    conn = httplib.HTTPConnection(host, port, timeout=10)
             if headers == None:
                 conn.request(method, path, data)
             else:
