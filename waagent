@@ -6180,18 +6180,21 @@ def main():
         sys.exit(Usage())
     global modloaded
     modloaded = False
-    try:
-        SwitchCwd()
-        Log(GuestAgentLongName + " Version: " + GuestAgentVersion)
-        if IsLinux():
-            Log("Linux Distribution Detected      : " + LinuxDistro)
-        global WaAgent
-        WaAgent = Agent()
-        WaAgent.Run()
-    except Exception, e:
-        Error(traceback.format_exc())
-        Error("Exception: " + str(e))
-        sys.exit(1)
+
+    while True:
+        try:
+            SwitchCwd()
+            Log(GuestAgentLongName + " Version: " + GuestAgentVersion)
+            if IsLinux():
+                Log("Linux Distribution Detected      : " + LinuxDistro)
+            global WaAgent
+            WaAgent = Agent()
+            WaAgent.Run()
+        except Exception, e:
+            Error(traceback.format_exc())
+            Error("Exception: " + str(e))
+            Log("Restart agent in 15 seconds")
+            time.sleep(15)
     
 if __name__ == '__main__' :
     main()
