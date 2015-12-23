@@ -3671,19 +3671,22 @@ class ExtensionsConfig(object):
             for root, dirs, files in os.walk(LibDir):
                 for d in dirs:
                     if name in d:
-                        #Split plugin dir name with '-' to get intalled plugin name and version
-                        sperator = d.rfind('-')
-                        if sperator < 0:
-                            continue
-                        installed_plg_name = d[0:sperator]
-                        installed_plg_version = LooseVersion(d[sperator + 1:])
+                        try:
+                            #Split plugin dir name with '-' to get intalled plugin name and version
+                            sperator = d.rfind('-')
+                            if sperator < 0:
+                                continue
+                            installed_plg_name = d[0:sperator]
+                            installed_plg_version = LooseVersion(d[sperator + 1:])
 
-                        #Check installed plugin name and compare installed version to get the latest version installed
-                        if installed_plg_name == name and installed_plg_version > latest_version_installed:
-                            plg_dir = os.path.join(root,d)
-                            latest_version_installed = installed_plg_version
-            if plg_dir != None :
-                previous_version=plg_dir.rsplit('-')[-1]
+                            #Check installed plugin name and compare installed version to get the latest version installed
+                            if installed_plg_name == name and installed_plg_version > latest_version_installed:
+                                plg_dir = os.path.join(root,d)
+                                previous_version = str(installed_plg_version)
+                                latest_version_installed = installed_plg_version
+                        except Exception as e:
+                            Warn("Invalid plugin dir name: {0} {1}".format(d, e))
+                            continue
             if plg_dir == None or LooseVersion(version) > LooseVersion(previous_version) :
                 location=p.getAttribute("location")
                 Log("Downloading plugin manifest: " + name + " from " + location)
@@ -6215,7 +6218,7 @@ def main():
         sys.exit(Usage())
     global modloaded
     modloaded = False
-
+   
     while True:
         try:
             SwitchCwd()
