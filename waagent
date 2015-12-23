@@ -1060,7 +1060,7 @@ class SuSEDistro(AbstractDistro):
                 Log("msft-rdma-pack found")
 
         returnCode, message = RunGetOutput(self.zypper_path + " --no-gpg-checks refresh")
-        Log("refresh repro return code is " + str(returnCode) + " output is: " + str(message))
+        Log("refresh repo return code is " + str(returnCode) + " output is: " + str(message))
         #install the wrapper package, that will put the driver RPM packages under /opt/microsoft/rdma
         returnCode, message = RunGetOutput(self.zypper_path + " -n remove " + RdmaConfig.wrapper_package_name)
         Log("remove wrapper package return code is " + str(returnCode) + " output is: " + str(message))
