@@ -24,90 +24,92 @@ class AgentError(Exception):
     """
     Base class of agent error.
     """
-    def __init__(self, errno, msg):
-        msg = "({0}){1}".format(errno, msg)
+    def __init__(self, errno, msg, inner=None):
+        msg = u"({0}){1}".format(errno, msg)
+        if inner is not None:
+            msg = u"{0} \n  inner error: {1}".format(msg, inner)
         super(AgentError, self).__init__(msg)
 
 class AgentConfigError(AgentError):
     """
     When configure file is not found or malformed.
     """
-    def __init__(self, msg=None):
-        super(AgentConfigError, self).__init__('000001', msg)
+    def __init__(self, msg=None, inner=None):
+        super(AgentConfigError, self).__init__('000001', msg, inner)
 
 class AgentNetworkError(AgentError):
     """
     When network is not avaiable.
     """
-    def __init__(self, msg=None):
-        super(AgentNetworkError, self).__init__('000002', msg)
+    def __init__(self, msg=None, inner=None):
+        super(AgentNetworkError, self).__init__('000002', msg, inner)
 
 class ExtensionError(AgentError):
     """
     When failed to execute an extension
     """
-    def __init__(self, msg=None):
-        super(ExtensionError, self).__init__('000003', msg)
+    def __init__(self, msg=None, inner=None):
+        super(ExtensionError, self).__init__('000003', msg, inner)
 
 class ProvisionError(AgentError):
     """
     When provision failed
     """
-    def __init__(self, msg=None):
-        super(ProvisionError, self).__init__('000004', msg)
+    def __init__(self, msg=None, inner=None):
+        super(ProvisionError, self).__init__('000004', msg, inner)
 
 class ResourceDiskError(AgentError):
     """
     Mount resource disk failed
     """
-    def __init__(self, msg=None):
-        super(ResourceDiskError, self).__init__('000005', msg)
+    def __init__(self, msg=None, inner=None):
+        super(ResourceDiskError, self).__init__('000005', msg, inner)
 
 class DhcpError(AgentError):
     """
     Failed to handle dhcp response
     """
-    def __init__(self, msg=None):
-        super(DhcpError, self).__init__('000006', msg)
+    def __init__(self, msg=None, inner=None):
+        super(DhcpError, self).__init__('000006', msg, inner)
 
 class OSUtilError(AgentError):
     """
     Failed to perform operation to OS configuration
     """
-    def __init__(self, msg=None):
-        super(OSUtilError, self).__init__('000007', msg)
+    def __init__(self, msg=None, inner=None):
+        super(OSUtilError, self).__init__('000007', msg, inner)
 
 class ProtocolError(AgentError):
     """
     Azure protocol error
     """
-    def __init__(self, msg=None):
-        super(ProtocolError, self).__init__('000008', msg)
+    def __init__(self, msg=None, inner=None):
+        super(ProtocolError, self).__init__('000008', msg, inner)
 
 class ProtocolNotFoundError(ProtocolError):
     """
     Azure protocol endpoint not found
     """
-    def __init__(self, msg=None):
-        super(ProtocolNotFoundError, self).__init__(msg)
+    def __init__(self, msg=None, inner=None):
+        super(ProtocolNotFoundError, self).__init__(msg, inner)
 
 class HttpError(AgentError):
     """
     Http request failure
     """
-    def __init__(self, msg=None):
-        super(HttpError, self).__init__('000009', msg)
+    def __init__(self, msg=None, inner=None):
+        super(HttpError, self).__init__('000009', msg, inner)
 
 class EventError(AgentError):
     """
     Event reporting error
     """
-    def __init__(self, msg=None):
-        super(EventError, self).__init__('000010', msg)
+    def __init__(self, msg=None, inner=None):
+        super(EventError, self).__init__('000010', msg, inner)
 
 class CryptError(AgentError):
     """
     Encrypt/Decrypt error
     """
-    def __init__(self, msg=None):
-        super(CryptError, self).__init__('000011', msg)
+    def __init__(self, msg=None, inner=None):
+        super(CryptError, self).__init__('000011', msg, inner)

@@ -36,10 +36,10 @@ class UbuntuProvisionHandler(ProvisionHandler):
     def __init__(self, distro):
         self.distro = distro
 
-    def process(self):
+    def run(self):
         #If provision is enabled, run default provision handler
         if conf.get_provision_enabled():
-            super(UbuntuProvisionHandler, self).process()
+            super(UbuntuProvisionHandler, self).run()
             return
 
         logger.info("run Ubuntu provision handler")
@@ -50,7 +50,7 @@ class UbuntuProvisionHandler(ProvisionHandler):
         logger.info("Waiting cloud-init to copy ovf-env.xml.")
         self.wait_for_ovfenv()
 
-        protocol = self.distro.protocol_util.detect_protocol_by_file()
+        protocol = self.distro.protocol_util.detect_protocol()
         self.report_not_ready("Provisioning", "Starting")
         logger.info("Sleep 15 seconds to prevent throttling")
         time.sleep(15) #Sleep to prevent throttling

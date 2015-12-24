@@ -40,7 +40,7 @@ class DhcpHandler(object):
         self.distro = distro
         self.endpoint = None
         self.gateway = None
-        self.route = None
+        self.routes = None
 
     def run(self):
         """
@@ -50,8 +50,6 @@ class DhcpHandler(object):
         """
         self.send_dhcp_req()
         self.conf_routes()
-        if self.endpoint is not None:
-            self.distro.osutil.set_wireserver_endpoint(self.endpoint)
 
     def wait_for_network(self):
         """

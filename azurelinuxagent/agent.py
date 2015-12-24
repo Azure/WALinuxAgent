@@ -61,12 +61,12 @@ class Agent(object):
         print("Start {0} service".format(AGENT_NAME))
         self.distro.osutil.start_agent_service()
 
-def main(args):
+def main():
     """
     Parse command line arguments, exit with usage() on error.
     Invoke different methods according to different command
     """
-    command, force, verbose = parse_args(args)
+    command, force, verbose = parse_args(sys.argv[1:])
     if command == "version":
         version()
     elif command == "help":

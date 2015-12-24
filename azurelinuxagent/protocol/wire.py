@@ -65,6 +65,7 @@ class WireProtocolResourceGone(ProtocolError):
     pass
 
 class WireProtocol(Protocol):
+    """Slim layer to adapte wire protocol data to metadata protocol interface"""
 
     def __init__(self, endpoint):
         if endpoint is None:
@@ -96,12 +97,16 @@ class WireProtocol(Protocol):
         return certificates.cert_list
 
     def get_ext_handlers(self):
+        logger.verb("Get extension handler config")
         #Update goal state to get latest extensions config
         self.client.update_goal_state()
+        goal_state = self.client.get_goal_state()
         ext_conf = self.client.get_ext_conf()
-        return ext_conf.ext_handlers
+        #In wire protocol, incarnation is equivalent to ETag 
+        return ext_conf.ext_handlers, goal_state.incarnation
 
     def get_ext_handler_pkgs(self, ext_handler):
+        logger.verb("Get extension handler package")
         goal_state = self.client.get_goal_state()
         man = self.client.get_ext_manifest(ext_handler, goal_state)
         return man.pkg_list
@@ -149,7 +154,7 @@ def _build_role_properties(container_id, role_instance_id, thumbprint):
     return xml
 
 def _build_health_report(incarnation, container_id, role_instance_id,
-                       status, substatus, description):
+                         status, substatus, description):
     #Escape '&', '<' and '>'
     description = saxutils.escape(ustr(description))
     detail = u''
@@ -243,6 +248,7 @@ def ext_handler_status_to_v1(handler_status, ext_statuses, timestamp):
         'handlerVersion' : handler_status.version,
         'handlerName' : handler_status.name,
         'status' : handler_status.status,
+        'code': handler_status.code
     }
     if handler_status.message is not None:
         v1_handler_status["formattedMessage"] = {
@@ -464,15 +470,15 @@ class WireClient(object):
         """
         now = time.time()
         if now - self.last_request < 1:
-            logger.info("Last request issued less than 1 second ago")
-            logger.info("Sleep {0} second to avoid throttling.", 
+            logger.verb("Last request issued less than 1 second ago")
+            logger.verb("Sleep {0} second to avoid throttling.", 
                         SHORT_WAITING_INTERVAL)
             time.sleep(SHORT_WAITING_INTERVAL)
         self.last_request = now
 
         self.req_count += 1
         if self.req_count % 3 == 0:
-            logger.info("Sleep {0} second to avoid throttling.", 
+            logger.verb("Sleep {0} second to avoid throttling.", 
                         SHORT_WAITING_INTERVAL)
             time.sleep(SHORT_WAITING_INTERVAL)
             self.req_count = 0
@@ -548,6 +554,7 @@ class WireClient(object):
 
     def fetch_manifest(self, version_uris):
         for version_uri in version_uris:
+            logger.verb("Fetch ext handler manifest: {0}", version_uri.uri)
             try:
                 resp = self.call_storage_service(restutil.http_get, 
                                                  version_uri.uri, None, 
@@ -649,7 +656,7 @@ class WireClient(object):
                                             INCARNATION_FILE_NAME)
             incarnation = self.fetch_cache(incarnation_file)
 
-            file_name = GOAL_STATE_FILE_NAME.format(goal_state.incarnation)
+            file_name = GOAL_STATE_FILE_NAME.format(incarnation)
             goal_state_file = os.path.join(conf.get_lib_dir(), file_name)
             xml_text = self.fetch_cache(goal_state_file)
             self.goal_state = GoalState(xml_text)
@@ -806,7 +813,7 @@ class WireClient(object):
         return {
             "x-ms-agent-name":"WALinuxAgent",
             "x-ms-version":PROTOCOL_VERSION,
-            "Content-Type":"ustr/xml;charset=utf-8"
+            "Content-Type":"text/xml;charset=utf-8"
         }
 
     def get_header_for_cert(self):

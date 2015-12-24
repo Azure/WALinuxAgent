@@ -33,7 +33,7 @@ class TestWireProtocolGetters(AgentTestCase):
         protocol.detect()
         protocol.get_vminfo()
         protocol.get_certs()
-        ext_handlers = protocol.get_ext_handlers()
+        ext_handlers, etag= protocol.get_ext_handlers()
         for ext_handler in ext_handlers.extHandlers:
             protocol.get_ext_handler_pkgs(ext_handler)
 

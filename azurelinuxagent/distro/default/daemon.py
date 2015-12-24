@@ -43,13 +43,12 @@ class DaemonHandler(object):
                     PY_VERSION_MICRO)
         
         #Create lib dir
-        if not os.path.isdir(self.distro.conf.get_lib_dir()):
-            fileutil.mkdir(self.distro.conf.get_lib_dir(), mode=0o700)
-            os.chdir(self.distro.conf.get_lib_dir())
+        if not os.path.isdir(conf.get_lib_dir()):
+            fileutil.mkdir(conf.get_lib_dir(), mode=0o700)
+            os.chdir(conf.get_lib_dir())
 
         #TODO check running daemon
-        fileutil.write_file(self.distro.osutil.get_agent_pid_file_path(), 
-                            ustr(os.getpid()))
+        fileutil.write_file(conf.get_agent_pid_file_path(), ustr(os.getpid()))
 
         if conf.get_detect_scvmm_env():
             if self.distro.scvmm_handler.run():
@@ -71,6 +70,6 @@ class DaemonHandler(object):
         
         while True:
             #Handle extensions
-            self.distro.ext_distro_handler.run()
+            self.distro.ext_handlers_handler.run()
             time.sleep(25)
 

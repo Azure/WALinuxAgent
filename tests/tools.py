@@ -32,6 +32,7 @@ import tempfile
 from functools import wraps
 import azurelinuxagent.conf as conf
 import azurelinuxagent.logger as logger
+import azurelinuxagent.event as event
 
 #Import mock module for Python2 and Python3
 try:
@@ -46,8 +47,8 @@ debug = False
 if os.environ.get('DEBUG') == '1':
     debug = True
 
+#Enable verbose logger to stdout
 if debug:
-    #Enable verbose logger to stdout
     logger.add_logger_appender(logger.AppenderType.STDOUT, 
                                logger.LogLevel.VERBOSE)
 
@@ -56,6 +57,8 @@ class AgentTestCase(unittest.TestCase):
         prefix = "{0}_".format(self.__class__.__name__)
         self.tmp_dir = tempfile.mkdtemp(prefix=prefix)
         conf.get_lib_dir = Mock(return_value=self.tmp_dir)
+        ext_log_dir = os.path.join(self.tmp_dir, "azure")
+        conf.get_ext_log_dir = Mock(return_value=ext_log_dir)
 
     def tearDown(self):
         if not debug and self.tmp_dir is not None:
@@ -66,6 +69,13 @@ def load_data(name):
     path = os.path.join(data_dir, name)
     with open(path, "r") as data_file:
         return data_file.read()
+
+def load_bin_data(name):
+    """Load test bin data"""
+    path = os.path.join(data_dir, name)
+    with open(path, "rb") as data_file:
+        return data_file.read()
+
 
 supported_distro = [
     ["ubuntu", "12.04", ""],
@@ -98,7 +108,8 @@ def distros(distro_name=".*", distro_version=".*", distro_full_name=".*"):
                    re.match(distro_version, distro[1]) and \
                    re.match(distro_full_name, distro[2]):
                     if debug:
-                        logger.info("Run {0} on {1}", test_method.__name__, distro)
+                        logger.info("Run {0} on {1}", test_method.__name__, 
+                                    distro)
                     new_args = []
                     new_args.extend(args)
                     new_args.extend(distro)

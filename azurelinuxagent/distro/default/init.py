@@ -37,7 +37,7 @@ class InitHandler(object):
         conf.load_conf_from_file(conf_file_path)
 
         #Init log
-        verbose = verbose or self.distro.conf.get_switch("Logs.Verbose", False)
+        verbose = verbose or conf.get_logs_verbose()
         level = logger.LogLevel.VERBOSE if verbose else logger.LogLevel.INFO
         logger.add_logger_appender(logger.AppenderType.FILE, level,
                                  path="/var/log/waagent.log")
@@ -45,7 +45,7 @@ class InitHandler(object):
                                  path="/dev/console")
 
         #Init event reporter
-        event_dir = os.path.join(self.distro.conf.get_lib_dir(), "events")
+        event_dir = os.path.join(conf.get_lib_dir(), "events")
         event.init_event_logger(event_dir)
         event.enable_unhandled_err_dump("WALA")
 

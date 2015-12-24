@@ -26,6 +26,7 @@ import azurelinuxagent.conf as conf
 import azurelinuxagent.logger as logger
 import azurelinuxagent.utils.restutil as restutil
 import azurelinuxagent.utils.textutil as textutil
+import azurelinuxagent.utils.fileutil as fileutil
 from azurelinuxagent.utils.cryptutil import CryptUtil
 from azurelinuxagent.protocol.restapi import *
 
@@ -36,7 +37,7 @@ BASE_URI = "http://{0}/Microsoft.Compute/{1}?api-version={2}{3}"
 TRANSPORT_PRV_FILE_NAME = "V2TransportPrivate.pem"
 TRANSPORT_CERT_FILE_NAME = "V2TransportCert.pem"
 
-#TODO remote workarround for azure stack test
+#TODO remote workarround for azure stack 
 MAX_PING = 30
 RETRY_PING_INTERVAL = 10
 
@@ -78,10 +79,11 @@ class MetadataProtocol(Protocol):
             raise ProtocolError("{0} - GET: {1}".format(resp.status, url))
 
         data = resp.read()
+        etag = resp.getheader('ETag')
         if data is None:
             return None
         data = json.loads(ustr(data, encoding="utf-8"))
-        return data
+        return data, etag
 
     def _put_data(self, url, data, headers=None):
         headers = _add_content_type(headers) 
@@ -130,7 +132,7 @@ class MetadataProtocol(Protocol):
 
     def get_vminfo(self):
         vminfo = VMInfo()
-        data = self._get_data(self.identity_uri)
+        data, etag = self._get_data(self.identity_uri)
         set_properties("vminfo", vminfo, data)
         return vminfo
 
@@ -143,16 +145,16 @@ class MetadataProtocol(Protocol):
             "x-ms-vmagent-public-x509-cert": self._get_trans_cert()
         }
         ext_list = ExtHandlerList()
-        data = self._get_data(self.ext_uri, headers=headers)
+        data, etag = self._get_data(self.ext_uri, headers=headers)
         set_properties("extensionHandlers", ext_list.extHandlers, data)
-        return ext_list
+        return ext_list, etag
 
     def get_ext_handler_pkgs(self, ext_handler):
         ext_handler_pkgs = ExtHandlerPackageList()
         data = None
         for version_uri in ext_handler.versionUris:
             try:
-                data = self._get_data(version_uri.uri)
+                data, etag = self._get_data(version_uri.uri)
                 break
             except ProtocolError as e:
                 logger.warn("Failed to get version uris: {0}", e)
@@ -168,6 +170,14 @@ class MetadataProtocol(Protocol):
     def report_vm_status(self, vm_status):
         validata_param('vmStatus', vm_status, VMStatus)
         data = get_properties(vm_status)
+        #TODO code field is not implemented for metadata protocol yet. Remove it
+        handler_statuses = data['vmAgent']['extensionHandlers']
+        for handler_status in handler_statuses:
+            try:
+                handler_status.pop('code', None)
+            except KeyError:
+                pass
+
         self._put_data(self.vm_status_uri, data)
 
     def report_ext_status(self, ext_handler_name, ext_name, ext_status):

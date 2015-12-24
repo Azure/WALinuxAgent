@@ -171,10 +171,12 @@ class ExtensionStatus(DataContract):
         self.substatusList = DataContractList(ExtensionSubStatus)
 
 class ExtHandlerStatus(DataContract):
-    def __init__(self, name=None, version=None, status=None, message=None):
+    def __init__(self, name=None, version=None, status=None, code=0, 
+                 message=None):
         self.name = name
         self.version = version
         self.status = status
+        self.code = code
         self.message = message
         self.extensions = DataContractList(ustr)
 
@@ -221,17 +223,13 @@ class Protocol(DataContract):
     def get_ext_handler_pkgs(self, extension):
         raise NotImplementedError()
 
-    def download_ext_handler_pkg(self, pkg_uris):
-        for uri in pkg_uris:
-            try:
-                resp = restutil.http_get(uri.uri, chk_proxy=True)
-                if resp.status == restutil.httpclient.OK:
-                    #Return package binaries
-                    return resp.read()
-            except HttpError as e:
-                self.logger.warn("Failed download extension from: {0}", uri.uri)
-        #Return None if package couldn't be downloaded
-        return None
+    def download_ext_handler_pkg(self, uri):
+        try:
+            resp = restutil.http_get(uri, chk_proxy=True)
+            if resp.status == restutil.httpclient.OK:
+                return resp.read()
+        except HttpError as e:
+            raise ProtocolError("Failed to download from: {0}".format(uri), e)
 
     def report_provision_status(self, provision_status):
         raise NotImplementedError()

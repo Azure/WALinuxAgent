@@ -80,6 +80,9 @@ def load_conf_from_file(conf_file_path, conf=__conf__):
         raise AgentConfigError(("Failed to load conf file:{0}, {1}"
                                 "").format(conf_file_path, err))
 
+def get_logs_verbose(conf=__conf__):
+    return conf.get_switch("Logs.Verbose", False)
+
 def get_lib_dir(conf=__conf__):
     return conf.get("Lib.Dir", "/var/lib/waagent")
 
@@ -87,7 +90,7 @@ def get_dvd_mount_point(conf=__conf__):
     return conf.get("DVD.MountPoint", "/mnt/cdrom/secure")
 
 def get_agent_pid_file_path(conf=__conf__):
-    return conf.get("Pid.File", "/mnt/cdrom/secure")
+    return conf.get("Pid.File", "/var/run/waagent.pid")
 
 def get_ext_log_dir(conf=__conf__):
     return conf.get("Extension.LogDir", "/var/log/azure")
@@ -105,7 +108,7 @@ def get_sshd_conf_file_path(conf=__conf__):
     return conf.get("OS.SshdConfigPath", "/etc/ssh/sshd_config")
 
 def get_root_device_scsi_timeout(conf=__conf__):
-    return conf.get_int("OS.RootDeviceScsiTimeout", None)
+    return conf.get("OS.RootDeviceScsiTimeout", None)
 
 def get_ssh_host_keypair_type(conf=__conf__):
     return conf.get("Provisioning.SshHostKeyPairType", "rsa")
@@ -147,7 +150,7 @@ def get_resourcedisk_mountpoint(conf=__conf__):
     return conf.get("ResourceDisk.MountPoint", "/mnt/resource")
 
 def get_resourcedisk_filesystem(conf=__conf__):
-    return conf.get("ResourceDisk.MountPoint", "/mnt/resource")
+    return conf.get("ResourceDisk.Filesystem", "ext3")
 
 def get_resourcedisk_swap_size_mb(conf=__conf__):
     return conf.get_int("ResourceDisk.SwapSizeMB", 0)

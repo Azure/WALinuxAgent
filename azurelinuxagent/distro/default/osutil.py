@@ -237,18 +237,19 @@ class DefaultOSUtil(object):
 
     def set_ssh_client_alive_interval(self):
         conf_file_path = conf.get_sshd_conf_file_path()
-        conf = fileutil.read_file(conf_file_path).split("\n")
-        textutil.set_ssh_config(conf, "ClientAliveInterval", "180")
-        fileutil.write_file(conf_file_path, '\n'.join(conf))
+        conf_file = fileutil.read_file(conf_file_path).split("\n")
+        textutil.set_ssh_config(conf_file, "ClientAliveInterval", "180")
+        fileutil.write_file(conf_file_path, '\n'.join(conf_file))
         logger.info("Configured SSH client probing to keep connections alive.")
 
     def conf_sshd(self, disable_password):
         option = "no" if disable_password else "yes"
         conf_file_path = conf.get_sshd_conf_file_path()
-        conf = fileutil.read_file(conf_file_path).split("\n")
-        textutil.set_ssh_config(conf, "PasswordAuthentication", option)
-        textutil.set_ssh_config(conf, "ChallengeResponseAuthentication", option)
-        fileutil.write_file(conf_file_path, "\n".join(conf))
+        conf_file = fileutil.read_file(conf_file_path).split("\n")
+        textutil.set_ssh_config(conf_file, "PasswordAuthentication", option)
+        textutil.set_ssh_config(conf_file, "ChallengeResponseAuthentication", 
+                                option)
+        fileutil.write_file(conf_file_path, "\n".join(conf_file))
         logger.info("Disabled SSH password-based authentication methods.")
 
 

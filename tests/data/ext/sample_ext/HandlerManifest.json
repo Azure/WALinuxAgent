@@ -1,0 +1,14 @@
+[{
+    "name": "ExampleHandlerLinux",
+    "version": 1.0,
+    "handlerManifest": {
+        "installCommand": "sample.py -install",
+        "uninstallCommand": "sample.py -uninstall",
+        "updateCommand": "sample.py -update",
+        "enableCommand": "sample.py -enable",
+        "disableCommand": "sample.py -disable",
+        "rebootAfterInstall": false,
+        "reportHeartbeat": false
+    }
+}]
+

@@ -57,7 +57,7 @@ class EventLogger(object):
             os.mkdir(self.event_dir)
             os.chmod(self.event_dir, 0o700)
         if len(os.listdir(self.event_dir)) > 1000:
-            raise EventError("Too many files under: {0}", self.event_dir)
+            raise EventError("Too many files under: {0}".format(self.event_dir))
 
         filename = os.path.join(self.event_dir, ustr(int(time.time()*1000000)))
         try:
@@ -69,8 +69,6 @@ class EventLogger(object):
 
     def add_event(self, name, op="", is_success=True, duration=0, version="1.0",
                   message="", evt_type="", is_internal=False):
-        log = logger.info if is_success else logger.error
-        log("Event: name={0}, op={1}, message={2}", name, op, message)
         event = TelemetryEvent(1, "69B669B9-4AF8-4C50-BDC4-6006FA76E975")
         event.parameters.append(TelemetryEventParam('Name', name))
         event.parameters.append(TelemetryEventParam('Version', version))
@@ -93,6 +91,9 @@ __event_logger__ = EventLogger()
 def add_event(name, op="", is_success=True, duration=0, version="1.0",
               message="", evt_type="", is_internal=False,
               reporter=__event_logger__):
+    log = logger.info if is_success else logger.error
+    log("Event: name={0}, op={1}, message={2}", name, op, message)
+
     if reporter.event_dir is None:
         logger.warn("Event reporter is not initialized.")
         return

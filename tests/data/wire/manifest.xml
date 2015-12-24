@@ -4,23 +4,15 @@
         <Plugin>
             <Version>1.0</Version>
             <Uris>
-                <Uri>http://blahblah</Uri>
+                <Uri>http://foo.bar/zar/OSTCExtensions.ExampleHandlerLinux</Uri>
             </Uris>
         </Plugin>
         <Plugin>
             <Version>1.1</Version>
             <Uris>
-                <Uri>http://blahblah</Uri>
+                <Uri>http://foo.bar/zar/OSTCExtensions.ExampleHandlerLinux</Uri>
             </Uris>
         </Plugin>
     </Plugins>
-    <InternalPlugins>
-        <Plugin>
-            <Version>1.2</Version>
-            <Uris>
-                <Uri>http://blahblah</Uri>
-            </Uris>
-    </Plugin>
-</InternalPlugins>
 </PluginVersionManifest>
 

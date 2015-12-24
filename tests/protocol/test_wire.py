@@ -46,7 +46,7 @@ class TestWireProtocolGetters(AgentTestCase):
         protocol.detect()
         protocol.get_vminfo()
         protocol.get_certs()
-        ext_handlers = protocol.get_ext_handlers()
+        ext_handlers, etag = protocol.get_ext_handlers()
         for ext_handler in ext_handlers.extHandlers:
             protocol.get_ext_handler_pkgs(ext_handler)
 
@@ -72,12 +72,12 @@ class TestWireProtocolGetters(AgentTestCase):
         self._test_getters(test_data, *args)
 
     def test_getters_ext_no_settings(self, *args):
-        """Provision with agent is not checked"""
+        """Extensions without any settings"""
         test_data = WireProtocolData(DATA_FILE_EXT_NO_SETTINGS)
         self._test_getters(test_data, *args)
         
     def test_getters_ext_no_public(self, *args):
-        """Provision with agent is not checked"""
+        """Extensions without any public settings"""
         test_data = WireProtocolData(DATA_FILE_EXT_NO_PUBLIC)
         self._test_getters(test_data, *args)
 

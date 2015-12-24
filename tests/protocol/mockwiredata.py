@@ -32,6 +32,7 @@ DATA_FILE = {
         "manifest": "wire/manifest.xml",
         "trans_prv": "wire/trans_prv",
         "trans_cert": "wire/trans_cert",
+        "test_ext": "ext/sample_ext.zip"
 }
 
 DATA_FILE_NO_EXT = DATA_FILE.copy()
@@ -44,7 +45,7 @@ DATA_FILE_EXT_NO_PUBLIC = DATA_FILE.copy()
 DATA_FILE_EXT_NO_PUBLIC["ext_conf"] = "wire/ext_conf_no_public.xml"
 
 class WireProtocolData(object):
-    def __init__(self, data_files):
+    def __init__(self, data_files=DATA_FILE):
         self.version_info = load_data(data_files.get("version_info"))
         self.goal_state = load_data(data_files.get("goal_state"))
         self.hosting_env = load_data(data_files.get("hosting_env"))
@@ -54,6 +55,7 @@ class WireProtocolData(object):
         self.manifest = load_data(data_files.get("manifest"))
         self.trans_prv = load_data(data_files.get("trans_prv"))
         self.trans_cert = load_data(data_files.get("trans_cert"))
+        self.ext = load_bin_data(data_files.get("test_ext"))
 
     def mock_http_get(self, url, *args, **kwargs):
         content = None
@@ -71,6 +73,12 @@ class WireProtocolData(object):
             content = self.ext_conf
         elif "manifest.xml" in url:
             content = self.manifest
+        elif "ExampleHandlerLinux" in url:
+            content = self.ext
+            resp = MagicMock()
+            resp.status = httpclient.OK
+            resp.read = Mock(return_value=content)
+            return resp
         else:
             raise Exception("Bad url {0}".format(url))
         resp = MagicMock()
