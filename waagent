@@ -1002,7 +1002,7 @@ class SuSEDistro(AbstractDistro):
             if r is None :
                 # if the 
                 Log("hv kvp daemon is not running.")
-                error,output = RunGetOutput(self.rpm_path + " -q hyper-v")
+                error,output = RunGetOutput(self.rpm_path + " -q hyper-v", chk_err=False,log_cmd=False)
                 if(error == RdmaConfig.process_success):
                     Log("the hyper-v package is installed, but hv_kvp_daemon not started")
                     return RdmaConfig.hv_kvp_daemon_not_started
