@@ -3668,25 +3668,26 @@ class ExtensionsConfig(object):
             plg_dir=None
 
             latest_version_installed = LooseVersion("0.0")
-            for root, dirs, files in os.walk(LibDir):
-                for d in dirs:
-                    if name in d:
-                        try:
-                            #Split plugin dir name with '-' to get intalled plugin name and version
-                            sperator = d.rfind('-')
-                            if sperator < 0:
-                                continue
-                            installed_plg_name = d[0:sperator]
-                            installed_plg_version = LooseVersion(d[sperator + 1:])
-
-                            #Check installed plugin name and compare installed version to get the latest version installed
-                            if installed_plg_name == name and installed_plg_version > latest_version_installed:
-                                plg_dir = os.path.join(root,d)
-                                previous_version = str(installed_plg_version)
-                                latest_version_installed = installed_plg_version
-                        except Exception as e:
-                            Warn("Invalid plugin dir name: {0} {1}".format(d, e))
+            for item in os.listdir(LibDir):
+                itemPath = os.path.join(LibDir, item)
+                if os.path.isdir(itemPath) and name in item:
+                    try:
+                        #Split plugin dir name with '-' to get intalled plugin name and version
+                        sperator = item.rfind('-')
+                        if sperator < 0:
                             continue
+                        installed_plg_name = item[0:sperator]
+                        installed_plg_version = LooseVersion(item[sperator + 1:])
+
+                        #Check installed plugin name and compare installed version to get the latest version installed
+                        if installed_plg_name == name and installed_plg_version > latest_version_installed:
+                            plg_dir = itemPath
+                            previous_version = str(installed_plg_version)
+                            latest_version_installed = installed_plg_version
+                    except Exception as e:
+                        Warn("Invalid plugin dir name: {0} {1}".format(item, e))
+                        continue
+
             if plg_dir == None or LooseVersion(version) > LooseVersion(previous_version) :
                 location=p.getAttribute("location")
                 Log("Downloading plugin manifest: " + name + " from " + location)
@@ -3816,6 +3817,23 @@ class ExtensionsConfig(object):
                             self.SetHandlerState(previous_handler, 'Disabled')
                             Log(name+' version ' + previous_version + ' is disabled')
                             SimpleLog(p.plugin_log,name+' version ' + previous_version + ' is disabled')
+                    
+                        try:
+                            Log("Copy status file from old plugin dir to new")
+                            old_plg_dir = plg_dir 
+                            new_plg_dir = os.path.join(LibDir, "{0}-{1}".format(name, version))
+                            old_ext_status_dir = os.path.join(old_plg_dir, "status")
+                            new_ext_status_dir = os.path.join(new_plg_dir, "status")
+                            if os.path.isdir(old_ext_status_dir):
+                                for status_file in os.listdir(old_ext_status_dir):
+                                    status_file_path = os.path.join(old_ext_status_dir, status_file)
+                                    if os.path.isfile(status_file_path):
+                                        shutil.copy2(status_file_path, new_ext_status_dir)
+                            mrseq_file = os.path.join(old_plg_dir, "mrseq")
+                            if os.path.isfile(mrseq_file):
+                                shutil.copy(mrseq_file, new_plg_dir)
+                        except Exception as e:
+                            Error("Failed to copy status file.")
 
                 isupgradeSuccess = True
                 if getcmd=='updateCommand':
@@ -3837,6 +3855,16 @@ class ExtensionsConfig(object):
                         self.SetHandlerState(previous_handler, 'NotInstalled')
                         Log('Uninstall complete'+ previous_handler )
                         SimpleLog(p.plugin_log,'Uninstall complete'+ name +'-' + previous_version)
+                    
+                    try:
+                        #rm old plugin dir
+                        if os.path.isdir(plg_dir):
+                            shutil.rmtree(plg_dir)
+                            Log(name +'-'+ previous_version + ' extension files deleted.')
+                            SimpleLog(p.plugin_log,name +'-'+ previous_version + ' extension files deleted.')
+                    except Exception as e:
+                        Error("Failed to remove old plugin directory")
+
                     AddExtensionEvent(name,WALAEventOperation.Upgrade,isupgradeSuccess,0,previous_version)
                 else :  # run install
                     if self.launchCommand(p.plugin_log,name,version,getcmd) == None :
