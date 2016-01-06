@@ -8,6 +8,8 @@ ConditionPathExists=/etc/waagent.conf
 [Service]
 Type=simple
 ExecStart=/usr/sbin/waagent -daemon
+Restart=always
+RestartSec=15
 
 [Install]
 WantedBy=multi-user.target

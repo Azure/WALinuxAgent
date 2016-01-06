@@ -9,3 +9,7 @@ dist
 WALinuxAgent.pyproj
 WALinuxAgent.pyproj.user
 WALinuxAgent.sln
+
+.coverage
+.ropeproject
+

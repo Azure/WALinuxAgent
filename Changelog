@@ -1,5 +1,13 @@
 WALinuxAgent                                                          Changelog
 |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+6 Jun 2016, WALinuxAgent 2.0.16
+   . add the support for the rdma driver installing/updating.
+|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+5 Jun 2016, WALinuxAgent 2.0.16
+   . Handle 410 when reporting health
+   . Add timeout to http request
+   . Fix multiple issues with extension handling
+
 6 Sep 2015, WALinuxAgent 2.0.15
    . FreeBSD - fix default gateway
    . Oracle - fix distro name detection

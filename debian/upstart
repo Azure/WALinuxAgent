@@ -4,6 +4,11 @@ author "Ben Howard <ben.howard@canonical.com>"
 start on mounted MOUNTPOINT=/
 stop on runlevel [!2345]
 
+respawn
+
+#Delay respwan for 15 seconds
+post-stop exec sleep 15
+
 pre-start script
 
     [ -r /etc/default/walinuxagent ] && . /etc/default/walinuxagent

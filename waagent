@@ -52,6 +52,7 @@ import zipfile
 import json
 import datetime
 import xml.sax.saxutils
+from distutils.version import LooseVersion
 
 if not hasattr(subprocess,'check_output'):
     def check_output(*popenargs, **kwargs):
@@ -468,8 +469,15 @@ class AbstractDistro(object):
     def GetInterfaceName(self):
         return GetFirstActiveNetworkInterfaceNonLoopback()[0]
 
-    def RestartInterface(self, iface):
-        Run("ifdown " + iface + " && ifup " + iface)
+    def RestartInterface(self, iface, max_retry=3):
+        for retry in range(1, max_retry + 1):
+            ret = Run("ifdown " + iface + " && ifup " + iface)
+            if ret == 0:
+                return
+            Log("Failed to restart interface: {0}, ret={1}".format(iface, ret))
+            if retry < max_retry:
+                Log("Retry restart interface in 5 seconds")
+                time.sleep(5)
 
     def CreateAccount(self,user, password, expiration, thumbprint):
         return CreateAccount(user, password, expiration, thumbprint)
@@ -552,6 +560,7 @@ class AbstractDistro(object):
         if not os.path.isfile(mountpoint + "/swapfile"):
             Run("dd if=/dev/zero of=" + mountpoint + "/swapfile bs=1024 count=" + str(sizeKB))
             Run("mkswap " + mountpoint + "/swapfile")
+        Run("chmod 600 " + mountpoint + "/swapfile")
         if not Run("swapon " + mountpoint + "/swapfile"):
             Log("Enabled " + str(sizeKB) + " KB of swap at " + mountpoint + "/swapfile")
         else:
@@ -2991,20 +3000,20 @@ class Util(object):
             if secure:
                 port = 443 if port is None else port
                 if proxyHost is not None and proxyPort is not None:
-                    conn = httplib.HTTPSConnection(proxyHost, proxyPort)
+                    conn = httplib.HTTPSConnection(proxyHost, proxyPort, timeout=10)
                     conn.set_tunnel(host, port)
                     #If proxy is used, full url is needed.
                     path = "https://{0}:{1}{2}".format(host, port, path)
                 else:
-                    conn = httplib.HTTPSConnection(host, port)
+                    conn = httplib.HTTPSConnection(host, port, timeout=10)
             else:
                 port = 80 if port is None else port
                 if proxyHost is not None and proxyPort is not None:
-                    conn = httplib.HTTPConnection(proxyHost, proxyPort)
+                    conn = httplib.HTTPConnection(proxyHost, proxyPort, timeout=10)
                     #If proxy is used, full url is needed.
                     path = "http://{0}:{1}{2}".format(host, port, path)
                 else:
-                    conn = httplib.HTTPConnection(host, port)
+                    conn = httplib.HTTPConnection(host, port, timeout=10)
             if headers == None:
                 conn.request(method, path, data)
             else:
@@ -3143,8 +3152,12 @@ class Util(object):
             "Content-Type": "text/xml; charset=utf-8",
             "x-ms-version": ProtocolVersion
         }
-        return self.HttpPost(url, data=data, headers=headers, 
-                             maxRetry=maxRetry, chkProxy=chkProxy)
+        try:
+            return self.HttpPost(url, data=data, headers=headers, 
+                                 maxRetry=maxRetry, chkProxy=chkProxy)
+        except HttpResourceGoneError as e:
+            Error("Failed to post: {0} {1}".format(url, e))
+            return None
 
 __StorageVersion="2014-02-14"
 
@@ -3177,6 +3190,8 @@ def PutBlockBlob(url, data):
     }, chkProxy=True)
     if ret is None:
         Error("Failed to upload block blob for status.")
+        return -1
+    return 0
 
 def PutPageBlob(url, data):
     restutil = Util()
@@ -3193,7 +3208,7 @@ def PutPageBlob(url, data):
     }, chkProxy=True)
     if ret is None:
         Error("Failed to clean up page blob for status")
-        return
+        return -1
         
     if url.index('?') < 0:
         url = "{0}?comp=page".format(url)
@@ -3221,8 +3236,9 @@ def PutPageBlob(url, data):
         }, chkProxy=True)
         if ret is None:
             Error("Failed to upload page blob for status")
-            return
+            return -1
         start = end
+    return 0
 
 def UploadStatusBlob(url, data):
     LogIfVerbose("Upload status blob")
@@ -3230,12 +3246,12 @@ def UploadStatusBlob(url, data):
     blobType = GetBlobType(url) 
 
     if blobType == "BlockBlob":
-        PutBlockBlob(url, data)    
+        return PutBlockBlob(url, data)    
     elif blobType == "PageBlob":
-        PutPageBlob(url, data)    
+        return PutPageBlob(url, data)    
     else:
         Error("Unknown blob type: {0}".format(blobType))
-        return None
+        return -1
 
 class TCPHandler(SocketServer.BaseRequestHandler):
     """
@@ -3861,15 +3877,29 @@ class ExtensionsConfig(object):
             # if the same plugin exists and the version is newer or
             # does not exist then download and unzip the new plugin
             plg_dir=None
-            for root, dirs, files in os.walk(LibDir):
-                for d in dirs:
-                    if name in d:
-                        plg_dir=os.path.join(root,d)
-                    if plg_dir != None:
-                        break
-            if plg_dir != None :
-                previous_version=plg_dir.rsplit('-')[-1]
-            if plg_dir == None or version > previous_version :
+
+            latest_version_installed = LooseVersion("0.0")
+            for item in os.listdir(LibDir):
+                itemPath = os.path.join(LibDir, item)
+                if os.path.isdir(itemPath) and name in item:
+                    try:
+                        #Split plugin dir name with '-' to get intalled plugin name and version
+                        sperator = item.rfind('-')
+                        if sperator < 0:
+                            continue
+                        installed_plg_name = item[0:sperator]
+                        installed_plg_version = LooseVersion(item[sperator + 1:])
+
+                        #Check installed plugin name and compare installed version to get the latest version installed
+                        if installed_plg_name == name and installed_plg_version > latest_version_installed:
+                            plg_dir = itemPath
+                            previous_version = str(installed_plg_version)
+                            latest_version_installed = installed_plg_version
+                    except Exception as e:
+                        Warn("Invalid plugin dir name: {0} {1}".format(item, e))
+                        continue
+
+            if plg_dir == None or LooseVersion(version) > LooseVersion(previous_version) :
                 location=p.getAttribute("location")
                 Log("Downloading plugin manifest: " + name + " from " + location)
                 SimpleLog(p.plugin_log,"Downloading plugin manifest: " + name + " from " + location)
@@ -3985,7 +4015,7 @@ class ExtensionsConfig(object):
 
                 cmd = ''
                 getcmd='installCommand'
-                if plg_dir != None and previous_version != None and version > previous_version :
+                if plg_dir != None and previous_version != None and LooseVersion(version) > LooseVersion(previous_version):
                     previous_handler=name+'-'+previous_version
                     if self.GetHandlerState(previous_handler) != 'NotInstalled':
                         getcmd='updateCommand'
@@ -3998,6 +4028,23 @@ class ExtensionsConfig(object):
                             self.SetHandlerState(previous_handler, 'Disabled')
                             Log(name+' version ' + previous_version + ' is disabled')
                             SimpleLog(p.plugin_log,name+' version ' + previous_version + ' is disabled')
+                    
+                        try:
+                            Log("Copy status file from old plugin dir to new")
+                            old_plg_dir = plg_dir 
+                            new_plg_dir = os.path.join(LibDir, "{0}-{1}".format(name, version))
+                            old_ext_status_dir = os.path.join(old_plg_dir, "status")
+                            new_ext_status_dir = os.path.join(new_plg_dir, "status")
+                            if os.path.isdir(old_ext_status_dir):
+                                for status_file in os.listdir(old_ext_status_dir):
+                                    status_file_path = os.path.join(old_ext_status_dir, status_file)
+                                    if os.path.isfile(status_file_path):
+                                        shutil.copy2(status_file_path, new_ext_status_dir)
+                            mrseq_file = os.path.join(old_plg_dir, "mrseq")
+                            if os.path.isfile(mrseq_file):
+                                shutil.copy(mrseq_file, new_plg_dir)
+                        except Exception as e:
+                            Error("Failed to copy status file.")
 
                 isupgradeSuccess = True
                 if getcmd=='updateCommand':
@@ -4019,6 +4066,16 @@ class ExtensionsConfig(object):
                         self.SetHandlerState(previous_handler, 'NotInstalled')
                         Log('Uninstall complete'+ previous_handler )
                         SimpleLog(p.plugin_log,'Uninstall complete'+ name +'-' + previous_version)
+                    
+                    try:
+                        #rm old plugin dir
+                        if os.path.isdir(plg_dir):
+                            shutil.rmtree(plg_dir)
+                            Log(name +'-'+ previous_version + ' extension files deleted.')
+                            SimpleLog(p.plugin_log,name +'-'+ previous_version + ' extension files deleted.')
+                    except Exception as e:
+                        Error("Failed to remove old plugin directory")
+
                     AddExtensionEvent(name,WALAEventOperation.Upgrade,isupgradeSuccess,0,previous_version)
                 else :  # run install
                     if self.launchCommand(p.plugin_log,name,version,getcmd) == None :
@@ -4234,7 +4291,7 @@ class ExtensionsConfig(object):
             incarnation=self.Extensions[0].getAttribute("goalStateIncarnation")
         except:
             Error('Error parsing ExtensionsConfig.  Unable to send status reports')
-            return None
+            return -1
         status=''
         statuses=''
         for p in self.Plugins:
@@ -4272,11 +4329,10 @@ class ExtensionsConfig(object):
             uri=GetNodeTextData(self.Extensions[0].getElementsByTagName("StatusUploadBlob")[0]).replace('&amp;','&')
         except:
             Error('Error parsing ExtensionsConfig.  Unable to send status reports')
-            return None
+            return -1
 
-        UploadStatusBlob(uri, status.encode("utf-8"))
         LogIfVerbose('Status report '+status+' sent to ' + uri)
-        return True
+        return UploadStatusBlob(uri, status.encode("utf-8"))
 
     def GetCurrentSequenceNumber(self, plugin_base_dir):
         """
@@ -5833,6 +5889,8 @@ class Agent(Util):
         """
         SetFileContents("/var/run/waagent.pid", str(os.getpid()) + "\n")
 
+        reportHandlerStatusCount = 0
+
         # Determine if we are in VMM.  Spawn VMM_STARTUP_SCRIPT_NAME if found.
         self.SearchForVMMStartup()
         ipv4=''
@@ -5857,11 +5915,10 @@ class Agent(Util):
         Log("Probing for Azure environment.")
         self.Endpoint = self.DoDhcpWork()
 
-        if self.Endpoint == None:
-            Log("Azure environment not detected.")
-            while True:
-                # TODO: find a way to notify the customer, sleep here is not proper.
-                time.sleep(60)
+        while self.Endpoint == None:
+            Log("Retry environment detection in 60 seconds")
+            time.sleep(60)
+            self.Endpoint = self.DoDhcpWork()
 
         Log("Discovered Azure endpoint: " + self.Endpoint)
         if not self.CheckVersions():
@@ -5997,12 +6054,18 @@ class Agent(Util):
                 incarnation = self.ReportReady()
             # Process our extensions.
             if goalState.ExtensionsConfig == None and goalState.ExtensionsConfigXml != None :
+                reportHandlerStatusCount = 0 #Reset count when new goal state comes
                 goalState.ExtensionsConfig = ExtensionsConfig().Parse(goalState.ExtensionsConfigXml)
 
             # report the status/heartbeat results of extension processing
             if goalState.ExtensionsConfig != None :
-                goalState.ExtensionsConfig.ReportHandlerStatus()
-
+                ret = goalState.ExtensionsConfig.ReportHandlerStatus()
+                if ret != 0:
+                    Error("Failed to report handler status")
+                elif reportHandlerStatusCount % 1000 == 0:
+                    #Agent report handler status every 25 seconds. Reduce the log entries by adding a count
+                    Log("Successfully reported handler status")
+                reportHandlerStatusCount += 1
             global LinuxDistro
             if LinuxDistro == "redhat":
                 DoInstallRHUIRPM()
@@ -6397,18 +6460,20 @@ def main():
         sys.exit(Usage())
     global modloaded
     modloaded = False
-    try:
-        SwitchCwd()
-        Log(GuestAgentLongName + " Version: " + GuestAgentVersion)
-        if IsLinux():
-            Log("Linux Distribution Detected      : " + LinuxDistro)
-        global WaAgent
-        WaAgent = Agent()
-        WaAgent.Run()
-    except Exception, e:
-        Error(traceback.format_exc())
 
-        Error("Exception: " + str(e))
-        sys.exit(1)
+    while True:
+        try:
+            SwitchCwd()
+            Log(GuestAgentLongName + " Version: " + GuestAgentVersion)
+            if IsLinux():
+                Log("Linux Distribution Detected      : " + LinuxDistro)
+            global WaAgent
+            WaAgent = Agent()
+            WaAgent.Run()
+        except Exception, e:
+            Error(traceback.format_exc())
+            Error("Exception: " + str(e))
+            Log("Restart agent in 15 seconds")
+            time.sleep(15)
 if __name__ == '__main__' :
     main()
