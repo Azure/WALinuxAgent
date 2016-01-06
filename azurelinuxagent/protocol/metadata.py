@@ -29,9 +29,7 @@ import azurelinuxagent.utils.textutil as textutil
 from azurelinuxagent.utils.cryptutil import CryptUtil
 from azurelinuxagent.protocol.restapi import *
 
-ENDPOINT='169.254.169.254'
-#TODO use http for azure pack test
-#ENDPOINT='localhost'
+METADATA_ENDPOINT='169.254.169.254'
 APIVERSION='2015-05-01-preview'
 BASE_URI = "http://{0}/Microsoft.Compute/{1}?api-version={2}{3}"
 
@@ -50,7 +48,7 @@ def _add_content_type(headers):
 
 class MetadataProtocol(Protocol):
 
-    def __init__(self, apiversion=APIVERSION, endpoint=ENDPOINT):
+    def __init__(self, apiversion=APIVERSION, endpoint=METADATA_ENDPOINT):
         self.apiversion = apiversion
         self.endpoint = endpoint
         self.identity_uri = BASE_URI.format(self.endpoint, "identity",
@@ -128,6 +126,7 @@ class MetadataProtocol(Protocol):
                                 "{0}.crt".format(thumbprint))
         shutil.copyfile(trans_prv_file, prv_file)
         shutil.copyfile(trans_cert_file, crt_file)
+
 
     def get_vminfo(self):
         vminfo = VMInfo()

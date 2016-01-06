@@ -29,7 +29,8 @@ from azurelinuxagent.future import ustr
 import azurelinuxagent.utils.fileutil as fileutil
 from azurelinuxagent.protocol.ovfenv import OvfEnv
 from azurelinuxagent.protocol.wire import WireProtocol
-from azurelinuxagent.protocol.metadata import MetadataProtocol
+from azurelinuxagent.protocol.metadata import MetadataProtocol, METADATA_ENDPOINT
+import azurelinuxagent.utils.shellutil as shellutil
 
 OVF_FILE_NAME = "ovf-env.xml"
 
@@ -135,6 +136,10 @@ class ProtocolUtil(object):
     def _detect_metadata_protocol(self):
         protocol = MetadataProtocol()
         protocol.detect()
+        
+        #Only allow root access METADATA_ENDPOINT
+        self.distro.osutil.set_admin_access_to_ip(METADATA_ENDPOINT)
+
         return protocol
             
     def _detect_protocol(self, protocols):
