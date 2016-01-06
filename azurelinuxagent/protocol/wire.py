@@ -22,7 +22,6 @@ import re
 import time
 import traceback
 import xml.sax.saxutils as saxutils
-import xml.etree.ElementTree as ET
 import azurelinuxagent.conf as conf
 import azurelinuxagent.logger as logger
 from azurelinuxagent.exception import ProtocolError, HttpError, \

@@ -28,6 +28,7 @@ import azurelinuxagent.logger as logger
 from azurelinuxagent.event import WALAEventOperation, add_event
 from azurelinuxagent.exception import EventError, ProtocolError, OSUtilError
 from azurelinuxagent.future import ustr
+from azurelinuxagent.utils.textutil import parse_doc, findall, find, getattrib
 from azurelinuxagent.protocol.restapi import TelemetryEventParam, \
                                              TelemetryEventList, \
                                              TelemetryEvent, \
@@ -35,6 +36,43 @@ from azurelinuxagent.protocol.restapi import TelemetryEventParam, \
 from azurelinuxagent.metadata import DISTRO_NAME, DISTRO_VERSION, \
                                      DISTRO_CODE_NAME, AGENT_VERSION
 
+
+def parse_event(data_str):
+    try:
+        return parse_json_event(data_str)
+    except ValueError:
+        return parse_xml_event(data_str)
+
+def parse_xml_param(param_node):
+    name = getattrib(param_node, "Name")
+    value_str = getattrib(param_node, "Value")
+    attr_type = getattrib(param_node, "T")
+    value = value_str
+    if attr_type == 'mt:uint64':
+        value = int(value_str)
+    elif attr_type == 'mt:bool':
+        value = bool(value_str)
+    elif attr_type == 'mt:float64':
+        value = float(value_str)
+    return TelemetryEventParam(name, value) 
+
+def parse_xml_event(data_str):
+    try:
+        xml_doc = parse_doc(data_str)
+        event_id = getattrib(find(xml_doc, "Event"), 'id')
+        provider_id = getattrib(find(xml_doc, "Provider"), 'id')
+        event = TelemetryEvent(event_id, provider_id) 
+        param_nodes = findall(xml_doc, 'Param')
+        for param_node in param_nodes:
+            event.parameters.append(parse_xml_param(param_node))
+    except Exception as e:
+        raise ValueError(ustr(e))
+
+def parse_json_event(data_str):
+    data = json.loads(data_str)
+    event = TelemetryEvent()
+    set_properties("TelemetryEvent", event, data)
+    return event
 
 
 class MonitorHandler(object):
@@ -79,10 +117,10 @@ class MonitorHandler(object):
             logger.verb("Found event file: {0}", evt_file_name)
             with open(evt_file_name, "rb") as evt_file:
             #if fail to open or delete the file, throw exception
-                json_str = evt_file.read().decode("utf-8",'ignore')
+                data_str = evt_file.read().decode("utf-8",'ignore')
             logger.verb("Processed event file: {0}", evt_file_name)
             os.remove(evt_file_name)
-            return json_str
+            return data_str
         except IOError as e:
             msg = "Failed to process {0}, {1}".format(evt_file_name, e)
             raise EventError(msg)
@@ -100,17 +138,15 @@ class MonitorHandler(object):
             except EventError as e:
                 logger.error("{0}", e)
                 continue
+
             try:
-                data = json.loads(data_str)
-            except ValueError as e:
-                logger.verb(data_str)
-                logger.verb("Failed to decode json event file: {0}", e)
+                event = parse_event(data_str)
+                event_list.events.append(event)
+            except (ValueError, ProtocolError) as e:
+                logger.info("Failed to decode event file: {0}", e)
+                logger.info(data_str)
                 continue
 
-            event = TelemetryEvent()
-            set_properties("event", event, data)
-            event.parameters.extend(self.sysinfo)
-            event_list.events.append(event)
         if len(event_list.events) == 0:
             return
         
@@ -119,7 +155,7 @@ class MonitorHandler(object):
             protocol.report_event(event_list)
         except ProtocolError as e:
             logger.error("{0}", e)
-
+    
     def daemon(self):
         self.init_sysinfo()
         last_heartbeat = datetime.datetime.min
