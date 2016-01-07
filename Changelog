@@ -1,5 +1,8 @@
 WALinuxAgent                                                          Changelog
 |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+6 Jun 2016, WALinuxAgent 2.0.16
+   . add the support for the rdma driver installing/updating.
+|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 5 Jun 2016, WALinuxAgent 2.0.16
    . Handle 410 when reporting health
    . Add timeout to http request

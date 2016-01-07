@@ -5,6 +5,10 @@ tests/status_blob_url.py
 build
 dist
 *.egg-info
+.vs/WALinuxAgent/v14/.suo
+WALinuxAgent.pyproj
+WALinuxAgent.pyproj.user
+WALinuxAgent.sln
 
 .coverage
 .ropeproject
