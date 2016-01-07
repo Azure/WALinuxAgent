@@ -1,6 +1,6 @@
 WALinuxAgent                                                          Changelog
 |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
-6 Jun 2016, WALinuxAgent 2.0.16
+7 Jun 2016, WALinuxAgent 2.0.17.rc0
    . add the support for the rdma driver installing/updating.
 |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 5 Jun 2016, WALinuxAgent 2.0.16
