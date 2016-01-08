@@ -83,9 +83,14 @@ class DataContractList(list):
 Data contract between guest and host
 """
 class VMInfo(DataContract):
-    def __init__(self, subscriptionId=None, vmName=None):
+    def __init__(self, subscriptionId=None, vmName=None, containerId=None,
+                 roleName=None, roleInstanceName=None, tenantName=None):
         self.subscriptionId = subscriptionId
         self.vmName = vmName
+        self.containerId = containerId
+        self.roleName = roleName
+        self.roleInstanceName = roleInstanceName
+        self.tenantName = tenantName
 
 class Cert(DataContract):
     def __init__(self, name=None, thumbprint=None, certificateDataUri=None):

@@ -35,7 +35,7 @@ from azurelinuxagent.protocol.restapi import TelemetryEventParam, \
                                              TelemetryEvent, \
                                              set_properties, get_properties
 from azurelinuxagent.metadata import DISTRO_NAME, DISTRO_VERSION, \
-                                     DISTRO_CODE_NAME, AGENT_VERSION
+                                     DISTRO_CODE_NAME, AGENT_LONG_VERSION
 
 
 def parse_event(data_str):
@@ -95,7 +95,7 @@ class MonitorHandler(object):
         
 
         self.sysinfo.append(TelemetryEventParam("OSVersion", osversion))
-        self.sysinfo.append(TelemetryEventParam("GAVersion", AGENT_VERSION))
+        self.sysinfo.append(TelemetryEventParam("GAVersion", AGENT_LONG_VERSION))
     
         try:
             ram = self.distro.osutil.get_total_mem()
@@ -108,8 +108,14 @@ class MonitorHandler(object):
         try:
             protocol = self.distro.protocol_util.get_protocol()
             vminfo = protocol.get_vminfo()
-            #TODO add more system info
-            self.sysinfo.append(TelemetryEventParam("VMName", vminfo.vmName ))
+            self.sysinfo.append(TelemetryEventParam("TenantName", 
+                                                    vminfo.tenantName)) 
+            self.sysinfo.append(TelemetryEventParam("RoleName", 
+                                                    vminfo.roleName)) 
+            self.sysinfo.append(TelemetryEventParam("RoleInstanceName", 
+                                                    vminfo.roleInstanceName)) 
+            self.sysinfo.append(TelemetryEventParam("ContainerId", 
+                                                    vminfo.containerId)) 
         except ProtocolError as e:
             logger.warn("Failed to get system info: {0}", e)
 

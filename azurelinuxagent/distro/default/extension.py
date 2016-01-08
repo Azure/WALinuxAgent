@@ -110,6 +110,7 @@ class ExtHandlersHandler(object):
         self.distro = distro
         self.ext_handlers = None
         self.last_etag = None
+        self.log_report = False
 
     def run(self):
         ext_handlers, etag = None, None
@@ -122,8 +123,10 @@ class ExtHandlersHandler(object):
 
         if self.last_etag is not None and self.last_etag == etag:
             logger.verb("No change to ext handler config:{0}, skip", etag)
+            self.log_report = False
         else:
             logger.info("Handle new ext handler config")
+            self.log_report = True #Log status report success on new config
             self.handle_ext_handlers(ext_handlers)
             self.last_etag = etag
 
@@ -227,11 +230,16 @@ class ExtHandlersHandler(object):
                     add_event(name="WALA", is_success=False, message=ustr(e))
         
         logger.verb("Report vm agent status")
+        
         try:
             self.protocol.report_vm_status(vm_status)
         except ProtocolError as e:
-            message = "Failed to report ext handler status: {0}".format(e)
+            message = "Failed to report vm agent status: {0}".format(e)
             add_event(name="WALA", is_success=False, message=message)
+
+        if self.log_report:
+            logger.info("Successfully reported vm agent status")
+
 
     def report_ext_handler_status(self, vm_status, ext_handler):
         ext_handler_i = ExtHandlerInstance(ext_handler, self.protocol)

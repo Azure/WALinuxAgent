@@ -86,10 +86,16 @@ class WireProtocol(Protocol):
         self.client.update_goal_state(forced=True)
 
     def get_vminfo(self):
+        goal_state = self.client.get_goal_state()
         hosting_env = self.client.get_hosting_env()
+
         vminfo = VMInfo()
         vminfo.subscriptionId = None
         vminfo.vmName = hosting_env.vm_name
+        vminfo.tenantName = hosting_env.deployment_name
+        vminfo.roleName = hosting_env.role_name
+        vminfo.roleInstanceName = goal_state.role_instance_id
+        vminfo.containerId = goal_state.container_id
         return vminfo
 
     def get_certs(self):

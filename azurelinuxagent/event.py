@@ -53,6 +53,10 @@ class EventLogger(object):
         self.event_dir = None
 
     def save_event(self, data):
+        if self.event_dir is None:
+            logger.warn("Event reporter is not initialized.")
+            return
+
         if not os.path.exists(self.event_dir):
             os.mkdir(self.event_dir)
             os.chmod(self.event_dir, 0o700)
