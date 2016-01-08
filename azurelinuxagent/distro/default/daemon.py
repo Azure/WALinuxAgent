@@ -39,7 +39,15 @@ class DaemonHandler(object):
         self.distro = distro
         self.running = True
 
+
     def run(self):
+        logger.info("{0} Version:{1}", AGENT_LONG_NAME, AGENT_VERSION)
+        logger.info("OS: {0} {1}", DISTRO_NAME, DISTRO_VERSION)
+        logger.info("Python: {0}.{1}.{2}", PY_VERSION_MAJOR, PY_VERSION_MINOR,
+                    PY_VERSION_MICRO)
+
+        self.check_pid()
+
         while self.running:
             try:
                 self.daemon()
@@ -50,19 +58,25 @@ class DaemonHandler(object):
                 logger.info("Sleep 15 seconds and restart daemon")
                 time.sleep(15)
 
+    def check_pid(self):
+        """Check whether daemon is already running"""
+        pid = None
+        pid_file = conf.get_agent_pid_file_path()
+        if os.path.isfile(pid_file):
+            pid = fileutil.read_file(pid_file)
+
+        if pid is not None and os.path.isdir(os.path.join("/proc", pid)):
+            logger.info("Daemon is already running: {0}", pid)
+            sys.exit(0)
+            
+        fileutil.write_file(pid_file, ustr(os.getpid()))
+
     def daemon(self):
-        logger.info("{0} Version:{1}", AGENT_LONG_NAME, AGENT_VERSION)
-        logger.info("OS: {0} {1}", DISTRO_NAME, DISTRO_VERSION)
-        logger.info("Python: {0}.{1}.{2}", PY_VERSION_MAJOR, PY_VERSION_MINOR,
-                    PY_VERSION_MICRO)
-        
+        logger.info("Run daemon") 
         #Create lib dir
         if not os.path.isdir(conf.get_lib_dir()):
             fileutil.mkdir(conf.get_lib_dir(), mode=0o700)
             os.chdir(conf.get_lib_dir())
-
-        #TODO check running daemon
-        fileutil.write_file(conf.get_agent_pid_file_path(), ustr(os.getpid()))
 
         if conf.get_detect_scvmm_env():
             if self.distro.scvmm_handler.run():

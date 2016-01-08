@@ -41,10 +41,24 @@ class TestDaemon(AgentTestCase):
         distro = get_distro()
         mock_daemon = Mock(side_effect=MockDaemonCall(distro.daemon_handler, 2))
         distro.daemon_handler.daemon = mock_daemon
+        distro.daemon_handler.check_pid = Mock()
         distro.daemon_handler.run()
 
         mock_sleep.assert_any_call(15)
         self.assertEquals(2, distro.daemon_handler.daemon.call_count)
+
+    @patch("azurelinuxagent.distro.default.daemon.conf")
+    @patch("azurelinuxagent.distro.default.daemon.sys.exit")
+    def test_check_pid(self, mock_exit, mock_conf, mock_sleep):
+        distro = get_distro()
+        mock_pid_file = os.path.join(self.tmp_dir, "pid")
+        mock_conf.get_agent_pid_file_path = Mock(return_value=mock_pid_file)
+
+        distro.daemon_handler.check_pid()
+        self.assertTrue(os.path.isfile(mock_pid_file))
+
+        distro.daemon_handler.check_pid()
+        mock_exit.assert_any_call(0)
    
 if __name__ == '__main__':
     unittest.main()
