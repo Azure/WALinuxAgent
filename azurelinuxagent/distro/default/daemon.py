@@ -20,9 +20,11 @@
 import os
 import time
 import sys
+import traceback
 import azurelinuxagent.conf as conf
 import azurelinuxagent.logger as logger
 from azurelinuxagent.future import ustr
+from azurelinuxagent.event import add_event, WALAEventOperation
 from azurelinuxagent.exception import ProtocolError
 from azurelinuxagent.metadata import AGENT_LONG_NAME, AGENT_VERSION, \
                                      DISTRO_NAME, DISTRO_VERSION, \
@@ -35,8 +37,20 @@ import azurelinuxagent.utils.fileutil as fileutil
 class DaemonHandler(object):
     def __init__(self, distro):
         self.distro = distro
+        self.running = True
 
     def run(self):
+        while self.running:
+            try:
+                self.daemon()
+            except Exception as e:
+                err_msg = traceback.format_exc()
+                add_event("WALA", is_success=False, message=ustr(err_msg), 
+                          op=WALAEventOperation.UnhandledError)
+                logger.info("Sleep 15 seconds and restart daemon")
+                time.sleep(15)
+
+    def daemon(self):
         logger.info("{0} Version:{1}", AGENT_LONG_NAME, AGENT_VERSION)
         logger.info("OS: {0} {1}", DISTRO_NAME, DISTRO_VERSION)
         logger.info("Python: {0}.{1}.{2}", PY_VERSION_MAJOR, PY_VERSION_MINOR,
@@ -68,7 +82,7 @@ class DaemonHandler(object):
         self.distro.event_handler.run()
         self.distro.env_handler.run()
         
-        while True:
+        while self.running:
             #Handle extensions
             self.distro.ext_handlers_handler.run()
             time.sleep(25)

@@ -154,7 +154,6 @@ class ExtHandlersHandler(object):
                 message = u"Unknown ext handler state:{0}".format(state)
                 raise ExtensionError(message)
         except ExtensionError as e:
-            add_event(name="WALA", is_success=False, message=ustr(e))
             ext_handler_i.set_handler_state(ExtHandlerState.Failed)
             ext_handler_i.set_handler_status(message=ustr(e), code=-1)
             ext_handler_i.report_event(message=ustr(e), is_success=False)

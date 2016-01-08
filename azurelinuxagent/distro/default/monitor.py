@@ -25,6 +25,7 @@ import datetime
 import threading
 import platform
 import azurelinuxagent.logger as logger
+import azurelinuxagent.conf as conf
 from azurelinuxagent.event import WALAEventOperation, add_event
 from azurelinuxagent.exception import EventError, ProtocolError, OSUtilError
 from azurelinuxagent.future import ustr
@@ -127,7 +128,7 @@ class MonitorHandler(object):
 
     def collect_and_send_events(self):
         event_list = TelemetryEventList()
-        event_dir = os.path.join(self.distro.osutil.get_lib_dir(), "event")
+        event_dir = os.path.join(conf.get_lib_dir(), "events")
         event_files = os.listdir(event_dir)
         for event_file in event_files:
             if not event_file.endswith(".tld"):
@@ -165,5 +166,8 @@ class MonitorHandler(object):
                 last_heartbeat = datetime.datetime.now()
                 add_event(op=WALAEventOperation.HeartBeat, name="WALA",
                           is_success=True)
-            self.collect_and_send_events()
+            try:
+                self.collect_and_send_events()
+            except Exception as e:
+                logger.verb("Failed to send events: {0}", e)
             time.sleep(60)
