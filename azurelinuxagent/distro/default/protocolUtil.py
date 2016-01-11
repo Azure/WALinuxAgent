@@ -40,7 +40,7 @@ TAG_FILE_NAME = "useMetadataEndpoint.tag"
 PROTOCOL_FILE_NAME = "Protocol"
 
 #MAX retry times for protocol probing
-MAX_RETRY = 60
+MAX_RETRY = 360
 
 PROBE_INTERVAL = 10
 
