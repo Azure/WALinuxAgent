@@ -1,6 +1,6 @@
-Microsoft Azure Linux Agent README
+## Microsoft Azure Linux Agent README
 
-INTRODUCTION
+### INTRODUCTION
 
 The Microsoft Azure Linux Agent (waagent) manages Linux & FreeBSD provisioning,
 and VM interaction with the Azure Fabric Controller. It provides the following
@@ -39,7 +39,7 @@ functionality for Linux and FreeBSD IaaS deployments:
     - VM Extension reference implementation on https://github.com/Azure/azure-linux-extensions
 
 
-COMMUNICATION
+### COMMUNICATION
 
 The information flow from the platform to the agent occurs via two channels:
 
@@ -51,7 +51,7 @@ The information flow from the platform to the agent occurs via two channels:
     configuration.
 
 
-REQUIREMENTS
+### REQUIREMENTS
 
 The following systems have been tested and are known to work with the Azure
 Linux Agent.  Please note that this list may differ from the official list
@@ -81,14 +81,14 @@ Waagent depends on some system packages in order to function properly:
   * Network tools: ip-route
 
 
-INSTALLATION
+### INSTALLATION
 
 Installation via your distribution's package repository is preferred.
 You can also customize your own RPM or DEB packages using the configuration
 files provided (see debian/README and rpm/README).
 
 For more advanced installation options, such as installing to custom locations 
-or prefixes, you can use setuptools to install from source by running:
+or prefixes, you can use ***setuptools*** to install from source by running:
    
     #sudo python setup.py install --register-service
 
@@ -98,7 +98,7 @@ You can view more installation options by running:
 
 The agent's log file is kept at /var/log/waagent.log.
 
-UPGRADE
+### UPGRADE
 
 Upgrading via your distribution's package repository is preferred.
 
@@ -121,7 +121,7 @@ For CoreOS, use:
 The agent's log file is kept at /var/log/waagent.log.
 
 
-COMMAND LINE OPTIONS
+### COMMAND LINE OPTIONS
 
 Flags:
 
@@ -132,25 +132,6 @@ Flags:
 Commands:
 
   -help: Lists the supported commands and flags.
-
-  -install: Manual installation of the agent
-     * Checks the system for required dependencies
-     * Creates the SysV init script (/etc/init.d/waagent), the logrotate
-       configuration file (/etc/logrotate.d/waagent) and configures the image
-       to run the init script on boot
-     * Writes sample configuration file to /etc/waagent.conf
-     * Any existing configuration file is moved to /etc/waagent.conf.old
-     * Detects kernel version and applies the VNUMA workaround if necessary
-     * Moves udev rules that may interfere with networking
-       (/lib/udev/rules.d/75-persistent-net-generator.rules,
-        /etc/udev/rules.d/70-persistent-net.rules) to /var/lib/waagent/
-
-  -uninstall: Unregisters the init script from the system and deletes it.
-   Deletes the logrotate configuration and the waagent config file in
-   /etc/waagent.conf.  Automatic reverting of the VNUMA workaround is not
-   supported, please edit the GRUB configuration files by hand to re-enable
-   NUMA if required. Restores any moved udev rules that were moved during
-   installation.
 
   -deprovision: Attempt to clean the system and make it suitable for
    re-provisioning. Deletes the following:
@@ -180,15 +161,12 @@ Commands:
 
   -start: Run waagent as a background process
 
-CONFIGURATION
+### CONFIGURATION
 
 A configuration file (/etc/waagent.conf) controls the actions of
 waagent. A sample configuration file is shown below:
 
-#
-# Azure Linux Agent Configuration
-#
-
+```
 Role.StateConsumer=None
 Role.ConfigurationConsumer=None
 Role.TopologyConsumer=None
@@ -212,6 +190,7 @@ OS.RootDeviceScsiTimeout=300
 OS.OpensslPath=None
 HttpProxy.Host=None
 HttpProxy.Port=None
+```
 
 The various configuration options are described in detail below. Configuration
 options are of three types : Boolean, String or Integer. The Boolean
@@ -379,9 +358,11 @@ Type: String Default: None
 
 If set, agent will use proxy server to access internet
 
-APPENDIX
+### APPENDIX
 
 Sample Role Configuration File:
+
+```
 
 <?xml version="1.0" encoding="utf-8"?> <HostingEnvironmentConfig
 version="1.0.0.0" goalStateIncarnation="1">
@@ -440,9 +421,11 @@ version="1.0.0.0" goalStateIncarnation="1">
       disableQuota="false" />
     </ResourceReferences>
   </HostingEnvironmentConfig>
+```
 
 Sample Role Topology File:
 
+```
 <?xml version="1.0" encoding="utf-8"?> <SharedConfig
 version="1.0.0.0" goalStateIncarnation="2">
   <Deployment name="a99549a92e38498f98cf2989330cd2f1"
@@ -544,3 +527,4 @@ version="1.0.0.0" goalStateIncarnation="2">
     </Instance>
   </Instances>
 </SharedConfig>
+```
