@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Microsoft Azure Linux Agent
+# Azure Linux Agent
 #
 # Copyright 2015 Microsoft Corporation
 #
@@ -23,6 +23,8 @@
 # http://msdn.microsoft.com/en-us/library/cc227259%28PROT.13%29.aspx
 #
 
+import crypt
+import random
 import array
 import base64
 import httplib
@@ -50,6 +52,7 @@ import zipfile
 import json
 import datetime
 import xml.sax.saxutils
+from distutils.version import LooseVersion
 
 if not hasattr(subprocess,'check_output'):
     def check_output(*popenargs, **kwargs):
@@ -79,8 +82,8 @@ if not hasattr(subprocess,'check_output'):
     subprocess.CalledProcessError=CalledProcessError
     
 GuestAgentName = "WALinuxAgent"
-GuestAgentLongName = "Microsoft Azure Linux Agent"
-GuestAgentVersion = "WALinuxAgent-2.0.15-pre"
+GuestAgentLongName = "Azure Linux Agent"
+GuestAgentVersion = "WALinuxAgent-2.0.16"
 ProtocolVersion = "2012-11-30" #WARNING this value is used to confirm the correct fabric protocol.
 
 Config = None
@@ -106,7 +109,7 @@ HandlerStatusToAggStatus = {"installed":"Installing", "enabled":"Ready", "uninta
 
 WaagentConf = """\
 #
-# Microsoft Azure Linux Agent Configuration
+# Azure Linux Agent Configuration
 #
 
 Role.StateConsumer=None                 # Specified program is invoked with the argument "Ready" when we report ready status
@@ -126,7 +129,7 @@ ResourceDisk.MountPoint=/mnt/resource   #
 ResourceDisk.EnableSwap=n               # Create and use swapfile on resource disk.
 ResourceDisk.SwapSizeMB=0               # Size of the swapfile.
 
-LBProbeResponder=y                      # Respond to load balancer probes if requested by Microsoft Azure.
+LBProbeResponder=y                      # Respond to load balancer probes if requested by Azure.
 
 Logs.Verbose=n                          # Enable verbose logs
 
@@ -173,8 +176,8 @@ class AbstractDistro(object):
         self.ssh_config_file='/etc/ssh/sshd_config'
         self.hostname_file_path='/etc/hostname'
         self.dhcp_client_name='dhclient'
-        self.requiredDeps = [ 'route', 'shutdown', 'ssh-keygen', 'useradd', 
-                              'openssl', 'sfdisk', 'fdisk', 'mkfs', 'chpasswd', 
+        self.requiredDeps = [ 'route', 'shutdown', 'ssh-keygen', 'useradd', 'usermod',
+                              'openssl', 'sfdisk', 'fdisk', 'mkfs', 
                               'sed', 'grep', 'sudo', 'parted' ]
         self.init_script_file='/etc/init.d/waagent'
         self.agent_package_name='WALinuxAgent'
@@ -187,6 +190,7 @@ class AbstractDistro(object):
         self.sudoers_dir_base = '/etc'
         self.waagent_conf_file = WaagentConf
         self.shadow_file_mode=0600
+        self.shadow_file_path="/etc/shadow"
         self.dhcp_enabled = False
         
     def isSelinuxSystem(self):
@@ -341,8 +345,35 @@ class AbstractDistro(object):
         return 0
     
     def changePass(self,user,password):
-        return RunSendStdin("chpasswd",(user + ":" + password + "\n"))
+        Log("Change user password")
+        crypt_id = Config.get("Provisioning.PasswordCryptId")
+        if crypt_id is None:
+            crypt_id = "6"
+
+        salt_len = Config.get("Provisioning.PasswordCryptSaltLength")
+        try:
+            salt_len = int(salt_len)
+            if salt_len < 0 or salt_len > 10:
+                salt_len = 10
+        except (ValueError, TypeError):
+            salt_len = 10
+
+        return self.chpasswd(user, password, crypt_id=crypt_id, 
+                             salt_len=salt_len)
     
+    def chpasswd(self, username, password, crypt_id=6, salt_len=10):
+        passwd_hash = self.gen_password_hash(password, crypt_id, salt_len)
+        cmd = "usermod -p '{0}' {1}".format(passwd_hash, username)
+        ret, output = RunGetOutput(cmd, log_cmd=False)
+        if ret != 0:
+            return "Failed to set password for {0}: {1}".format(username, output)
+
+    def gen_password_hash(self, password, crypt_id, salt_len):
+        collection = string.ascii_letters + string.digits
+        salt = ''.join(random.choice(collection) for _ in range(salt_len))
+        salt = "${0}${1}".format(crypt_id, salt)
+        return crypt.crypt(password, salt)
+
     def load_ata_piix(self):
         return WaAgent.TryLoadAtapiix()
 
@@ -438,8 +469,15 @@ class AbstractDistro(object):
     def GetInterfaceName(self):
         return GetFirstActiveNetworkInterfaceNonLoopback()[0]
 
-    def RestartInterface(self, iface):
-        Run("ifdown " + iface + " && ifup " + iface)
+    def RestartInterface(self, iface, max_retry=3):
+        for retry in range(1, max_retry + 1):
+            ret = Run("ifdown " + iface + " && ifup " + iface)
+            if ret == 0:
+                return
+            Log("Failed to restart interface: {0}, ret={1}".format(iface, ret))
+            if retry < max_retry:
+                Log("Retry restart interface in 5 seconds")
+                time.sleep(5)
 
     def CreateAccount(self,user, password, expiration, thumbprint):
         return CreateAccount(user, password, expiration, thumbprint)
@@ -522,6 +560,7 @@ class AbstractDistro(object):
         if not os.path.isfile(mountpoint + "/swapfile"):
             Run("dd if=/dev/zero of=" + mountpoint + "/swapfile bs=1024 count=" + str(sizeKB))
             Run("mkswap " + mountpoint + "/swapfile")
+        Run("chmod 600 " + mountpoint + "/swapfile")
         if not Run("swapon " + mountpoint + "/swapfile"):
             Log("Enabled " + str(sizeKB) + " KB of swap at " + mountpoint + "/swapfile")
         else:
@@ -645,6 +684,13 @@ class AbstractDistro(object):
         if ret != 0:
             raise Exception("Failed to config ipv4 for {0}: {1}".format(ifName, 
                                                                         output))
+    def setDefaultGateway(self, gateway):
+        Run("/sbin/route add default gw" + gateway, chk_err=False)
+
+    def routeAdd(self, net, mask, gateway):
+        Run("/sbin/route add -net " + net + " netmask " + mask + " gw " + gateway,
+            chk_err=False)
+
 
 ############################################################
 #	GentooDistro
@@ -656,7 +702,7 @@ command=/usr/sbin/waagent
 pidfile=/var/run/waagent.pid
 command_args=-daemon
 command_background=true
-name="Microsoft Azure Linux Agent"
+name="Azure Linux Agent"
 
 depend()
 {
@@ -725,7 +771,7 @@ class gentooDistro(AbstractDistro):
 suse_init_file = """\
 #! /bin/sh
 #
-# Microsoft Azure Linux Agent sysV init script
+# Azure Linux Agent sysV init script
 #
 # Copyright 2013 Microsoft Corporation
 # Copyright SUSE LLC
@@ -751,12 +797,12 @@ suse_init_file = """\
 # System startup script for the waagent
 #
 ### BEGIN INIT INFO
-# Provides: MicrosoftAzureLinuxAgent
+# Provides: AzureLinuxAgent
 # Required-Start: $network sshd
 # Required-Stop: $network sshd
 # Default-Start: 3 5
 # Default-Stop: 0 1 2 6
-# Description: Start the MicrosoftAzureLinuxAgent
+# Description: Start the AzureLinuxAgent
 ### END INIT INFO
 
 PYTHON=/usr/bin/python
@@ -789,14 +835,14 @@ rc_reset
 
 case "$1" in
     start)
-        echo -n "Starting MicrosoftAzureLinuxAgent"
+        echo -n "Starting AzureLinuxAgent"
         ## Start daemon with startproc(8). If this fails
         ## the echo return value is set appropriate.
         startproc -f ${PYTHON} ${WAZD_BIN} -daemon
         rc_status -v
         ;;
     stop)
-        echo -n "Shutting down MicrosoftAzureLinuxAgent"
+        echo -n "Shutting down AzureLinuxAgent"
         ## Stop daemon with killproc(8) and if this fails
         ## set echo the echo return value.
         killproc -p ${WAZD_PIDFILE} ${PYTHON} ${WAZD_BIN}
@@ -820,7 +866,7 @@ case "$1" in
         rc_status
         ;;
     status)
-        echo -n "Checking for service MicrosoftAzureLinuxAgent "
+        echo -n "Checking for service AzureLinuxAgent "
         ## Check status with checkproc(8), if process is running
         ## checkproc will return with exit status 0.
 
@@ -902,17 +948,17 @@ class SuSEDistro(AbstractDistro):
 redhat_init_file= """\
 #!/bin/bash
 #
-# Init file for MicrosoftAzureLinuxAgent.
+# Init file for AzureLinuxAgent.
 #
 # chkconfig: 2345 60 80
-# description: MicrosoftAzureLinuxAgent
+# description: AzureLinuxAgent
 #
 
 # source function library
 . /etc/rc.d/init.d/functions
 
 RETVAL=0
-FriendlyName="MicrosoftAzureLinuxAgent"
+FriendlyName="AzureLinuxAgent"
 WAZD_BIN=/usr/sbin/waagent
 
 start()
@@ -1014,7 +1060,24 @@ class redhatDistro(AbstractDistro):
         else:
             return 0
 
-
+    def checkDependencies(self):
+        """
+        Generic dependency check.
+        Return 1 unless all dependencies are satisfied.
+        """
+        if DistInfo()[1] < '7.0' and self.checkPackageInstalled('NetworkManager'):
+            Error(GuestAgentLongName + " is not compatible with network-manager.")
+            return 1
+        try:
+            m= __import__('pyasn1')
+        except ImportError:
+            Error(GuestAgentLongName + " requires python-pyasn1 for your Linux distribution.")
+            return 1
+        for a in self.requiredDeps:
+            if Run("which " + a + " > /dev/null 2>&1",chk_err=False):
+                Error("Missing required dependency: " + a)
+                return 1
+        return 0	
 
 ############################################################    
 #	centosDistro
@@ -1027,6 +1090,19 @@ class centosDistro(redhatDistro):
     """
     def __init__(self):
         super(centosDistro,self).__init__()
+
+############################################################    
+#	oracleDistro
+############################################################    
+
+class oracleDistro(redhatDistro):
+    """
+    Oracle Distro concrete class
+    Put Oracle specific behavior here...
+    """
+    def __init__(self):
+        super(oracleDistro, self).__init__()
+
 
 
 ############################################################    
@@ -1150,7 +1226,7 @@ class CoreOSDistro(AbstractDistro):
         else:
             Log("CreateAccount: " + user + " already exists. Will update password.")
         if password != None:
-            RunSendStdin("chpasswd", user + ":" + password + "\n")
+            self.changePass(user, password)
         try:
             if password == None:
                 SetFileContents("/etc/sudoers.d/waagent", user + " ALL = (ALL) NOPASSWD: ALL\n")
@@ -1194,15 +1270,15 @@ class CoreOSDistro(AbstractDistro):
 debian_init_file = """\
 #!/bin/sh
 ### BEGIN INIT INFO
-# Provides:          MicrosoftAzureLinuxAgent
+# Provides:          AzureLinuxAgent
 # Required-Start:    $network $syslog
 # Required-Stop:     $network $syslog
 # Should-Start:      $network $syslog
 # Should-Stop:       $network $syslog
 # Default-Start:     2 3 4 5
 # Default-Stop:      0 1 6
-# Short-Description: MicrosoftAzureLinuxAgent
-# Description:       MicrosoftAzureLinuxAgent
+# Short-Description: AzureLinuxAgent
+# Description:       AzureLinuxAgent
 ### END INIT INFO
 
 . /lib/lsb/init-functions
@@ -1213,7 +1289,7 @@ WAZD_PID=/var/run/waagent.pid
 
 case "$1" in
     start)
-        log_begin_msg "Starting MicrosoftAzureLinuxAgent..."
+        log_begin_msg "Starting AzureLinuxAgent..."
         pid=$( pidofproc $WAZD_BIN )
         if [ -n "$pid" ] ; then
               log_begin_msg "Already running."
@@ -1225,7 +1301,7 @@ case "$1" in
         ;;
 
     stop)
-        log_begin_msg "Stopping MicrosoftAzureLinuxAgent..."
+        log_begin_msg "Stopping AzureLinuxAgent..."
         start-stop-daemon --stop --quiet --oknodo --pidfile $WAZD_PID
         ret=$?
         rm -f $WAZD_PID
@@ -1350,7 +1426,7 @@ class KaliDistro(debianDistro):
 #	UbuntuDistro
 ############################################################    
 ubuntu_upstart_file = """\
-#walinuxagent - start Microsoft Azure agent
+#walinuxagent - start Azure agent
 
 description "walinuxagent"
 author "Ben Howard <ben.howard@canonical.com>"
@@ -1474,7 +1550,7 @@ class LinuxMintDistro(UbuntuDistro):
 ############################################################    
 fedora_systemd_service = """\
 [Unit]
-Description=Microsoft Azure Linux Agent
+Description=Azure Linux Agent
 After=network.target
 After=sshd.service
 ConditionFileIsExecutable=/usr/sbin/waagent
@@ -1599,7 +1675,7 @@ class fedoraDistro(redhatDistro):
 ############################################################    
 FreeBSDWaagentConf = """\
 #
-# Microsoft Azure Linux Agent Configuration
+# Azure Linux Agent Configuration
 #
 
 Role.StateConsumer=None                 # Specified program is invoked with the argument "Ready" when we report ready status
@@ -1619,7 +1695,7 @@ ResourceDisk.MountPoint=/mnt/resource   #
 ResourceDisk.EnableSwap=n               # Create and use swapfile on resource disk.
 ResourceDisk.SwapSizeMB=0               # Size of the swapfile.
 
-LBProbeResponder=y                      # Respond to load balancer probes if requested by Microsoft Azure.
+LBProbeResponder=y                      # Respond to load balancer probes if requested by Azure.
 
 Logs.Verbose=n                          # Enable verbose logs
 
@@ -1661,7 +1737,7 @@ __name__='setupmain' #prevent waagent.__main__ from executing
 waagent=imp.load_source('waagent','/tmp/waagent') 
 waagent.LoggerInit('/var/log/waagent.log','/dev/console')
 from waagent import RunGetOutput,Run
-Config=waagent.ConfigurationProvider()
+Config=waagent.ConfigurationProvider(None)
 format = Config.get("ResourceDisk.Format")
 if format == None or format.lower().startswith("n"):
     sys.exit(0)
@@ -1764,7 +1840,7 @@ class FreeBSDDistro(AbstractDistro):
         return 0
 
     def changePass(self,user,password):
-        return RunSendStdin("pw usermod " + user + " -h 0 ",password)
+        return RunSendStdin("pw usermod " + user + " -h 0 ",password, log_cmd=False)
     
     def load_ata_piix(self):
         return 0
@@ -2059,7 +2135,13 @@ class FreeBSDDistro(AbstractDistro):
     
     def getTotalMemory(self):
         return int(RunGetOutput("sysctl hw.realmem | awk '{print $2}'")[1])/1024
-        
+    
+    def setDefaultGateway(self, gateway):
+        Run("/sbin/route add default " + gateway, chk_err=False)
+
+    def routeAdd(self, net, mask, gateway):
+        Run("/sbin/route add -net " + net + " " + mask + " " + gateway, chk_err=False)
+
 ############################################################
 # END DISTRO CLASS DEFS
 ############################################################  
@@ -2180,41 +2262,43 @@ def Run(cmd,chk_err=True):
     retcode,out=RunGetOutput(cmd,chk_err)
     return retcode
 
-def RunGetOutput(cmd,chk_err=True):
+def RunGetOutput(cmd, chk_err=True, log_cmd=True):
     """
     Wrapper for subprocess.check_output.
     Execute 'cmd'.  Returns return code and STDOUT, trapping expected exceptions.
     Reports exceptions to Error if chk_err parameter is True
     """
-    LogIfVerbose(cmd)
+    if log_cmd:
+        LogIfVerbose(cmd)
     try:                                     
         output=subprocess.check_output(cmd,stderr=subprocess.STDOUT,shell=True)
     except subprocess.CalledProcessError,e :
-        if chk_err :
+        if chk_err and log_cmd:
             Error('CalledProcessError.  Error Code is ' + str(e.returncode)  )
             Error('CalledProcessError.  Command string was ' + e.cmd  )
             Error('CalledProcessError.  Command result was ' + (e.output[:-1]).decode('latin-1'))
         return e.returncode,e.output.decode('latin-1')
     return 0,output.decode('latin-1')
 
-def RunSendStdin(cmd,input,chk_err=True):
+def RunSendStdin(cmd, input, chk_err=True, log_cmd=True):
     """
     Wrapper for subprocess.Popen.
     Execute 'cmd', sending 'input' to STDIN of 'cmd'.
     Returns return code and STDOUT, trapping expected exceptions.
     Reports exceptions to Error if chk_err parameter is True
     """
-    LogIfVerbose(cmd+input)
+    if log_cmd:
+        LogIfVerbose(cmd+input)
     try:                                     
         me=subprocess.Popen([cmd], shell=True, stdin=subprocess.PIPE,stderr=subprocess.STDOUT,stdout=subprocess.PIPE)
         output=me.communicate(input)
     except OSError , e :
-        if chk_err :
+        if chk_err and log_cmd:
             Error('CalledProcessError.  Error Code is ' + str(me.returncode)  )
             Error('CalledProcessError.  Command string was ' + cmd  )
             Error('CalledProcessError.  Command result was ' + output[0].decode('latin-1'))
             return 1,output[0].decode('latin-1')
-    if me.returncode is not 0 and chk_err is True:
+    if me.returncode is not 0 and chk_err is True and log_cmd:
             Error('CalledProcessError.  Error Code is ' + str(me.returncode)  )
             Error('CalledProcessError.  Command string was ' + cmd  )
             Error('CalledProcessError.  Command result was ' + output[0].decode('latin-1'))
@@ -2296,7 +2380,7 @@ def CreateAccount(user, password, expiration, thumbprint):
     else:
         Log("CreateAccount: " + user + " already exists. Will update password.")
     if password != None:
-        RunSendStdin("chpasswd",(user + ":" + password + "\n"))
+        MyDistro.changePass(user, password)
     try:
         # for older distros create sudoers.d
         if not os.path.isdir('/etc/sudoers.d/'):
@@ -2468,7 +2552,6 @@ class Logger(object):
                     message = filter(lambda x : x in string.printable, message)
                     C.write(message.encode('ascii','ignore') + "\n")
             except IOError, e:
-                print e
                 pass
                 
     def Log(self,message):
@@ -2635,6 +2718,53 @@ def DeviceForIdePort(n):
 class HttpResourceGoneError(Exception):
     pass
 
+def DoInstallRHUIRPM():
+    """
+    Install RHUI RPM according to VM region
+    """
+    rhuiRPMinstalled = os.path.exists(LibDir + "/rhuirpminstalled")
+    if rhuiRPMinstalled:
+        return
+    else:
+        SetFileContents(LibDir + "/rhuirpminstalled", "")
+
+    Log("Begin to install RHUI RPM")
+    cmd = "grep '<Location>' /var/lib/waagent/ExtensionsConfig* --no-filename | sed 's/<Location>//g' | sed 's/<\/Location>//g' | sed 's/ //g' | tr 'A-Z' 'a-z' | uniq"
+
+    retcode,out = RunGetOutput(cmd, True)
+    region = out.rstrip("\n")
+
+    #try a few times at most to get the region info
+    retry = 0
+    for i in range(0, 8):
+        if (region != ""):
+            break
+        Log("region info is empty, now wait 15 seconds...")
+        time.sleep(15)
+        retcode,out = RunGetOutput(cmd, True)
+        region = out.rstrip("\n")
+
+    if region == "":
+        Log("could not detect region info, now use the default region: eastus2")
+        region = "eastus2"
+
+    scriptFilePath = "/tmp/install-rhui-rpm.sh"
+
+    if not os.path.exists(scriptFilePath):
+        Error(scriptFilePath + " does not exist, now quit RHUI RPM installation.");
+        return
+    #chmod a+x script file
+    os.chmod(scriptFilePath, 0100)
+    Log("begin to run " + scriptFilePath)
+
+    #execute the downloaded script file
+    retcode,out = RunGetOutput(scriptFilePath, True)
+    if retcode != 0:
+        Error("execute script " + scriptFilePath + " failed, return code: " + str(retcode) + ", now exit RHUI RPM installation.");
+        return
+
+    Log("install RHUI RPM completed")
+    
 class Util(object):
     """
     Http communication class.
@@ -2697,20 +2827,20 @@ class Util(object):
             if secure:
                 port = 443 if port is None else port
                 if proxyHost is not None and proxyPort is not None:
-                    conn = httplib.HTTPSConnection(proxyHost, proxyPort)
+                    conn = httplib.HTTPSConnection(proxyHost, proxyPort, timeout=10)
                     conn.set_tunnel(host, port)
                     #If proxy is used, full url is needed.
                     path = "https://{0}:{1}{2}".format(host, port, path)
                 else:
-                    conn = httplib.HTTPSConnection(host, port)
+                    conn = httplib.HTTPSConnection(host, port, timeout=10)
             else:
                 port = 80 if port is None else port
                 if proxyHost is not None and proxyPort is not None:
-                    conn = httplib.HTTPConnection(proxyHost, proxyPort)
+                    conn = httplib.HTTPConnection(proxyHost, proxyPort, timeout=10)
                     #If proxy is used, full url is needed.
                     path = "http://{0}:{1}{2}".format(host, port, path)
                 else:
-                    conn = httplib.HTTPConnection(host, port)
+                    conn = httplib.HTTPConnection(host, port, timeout=10)
             if headers == None:
                 conn.request(method, path, data)
             else:
@@ -2849,8 +2979,12 @@ class Util(object):
             "Content-Type": "text/xml; charset=utf-8",
             "x-ms-version": ProtocolVersion
         }
-        return self.HttpPost(url, data=data, headers=headers, 
-                             maxRetry=maxRetry, chkProxy=chkProxy)
+        try:
+            return self.HttpPost(url, data=data, headers=headers, 
+                                 maxRetry=maxRetry, chkProxy=chkProxy)
+        except HttpResourceGoneError as e:
+            Error("Failed to post: {0} {1}".format(url, e))
+            return None
 
 __StorageVersion="2014-02-14"
 
@@ -2883,6 +3017,8 @@ def PutBlockBlob(url, data):
     }, chkProxy=True)
     if ret is None:
         Error("Failed to upload block blob for status.")
+        return -1
+    return 0
 
 def PutPageBlob(url, data):
     restutil = Util()
@@ -2899,7 +3035,7 @@ def PutPageBlob(url, data):
     }, chkProxy=True)
     if ret is None:
         Error("Failed to clean up page blob for status")
-        return
+        return -1
         
     if url.index('?') < 0:
         url = "{0}?comp=page".format(url)
@@ -2927,8 +3063,9 @@ def PutPageBlob(url, data):
         }, chkProxy=True)
         if ret is None:
             Error("Failed to upload page blob for status")
-            return
+            return -1
         start = end
+    return 0
 
 def UploadStatusBlob(url, data):
     LogIfVerbose("Upload status blob")
@@ -2936,12 +3073,12 @@ def UploadStatusBlob(url, data):
     blobType = GetBlobType(url) 
 
     if blobType == "BlockBlob":
-        PutBlockBlob(url, data)    
+        return PutBlockBlob(url, data)    
     elif blobType == "PageBlob":
-        PutPageBlob(url, data)    
+        return PutPageBlob(url, data)    
     else:
         Error("Unknown blob type: {0}".format(blobType))
-        return None
+        return -1
 
 class TCPHandler(SocketServer.BaseRequestHandler):
     """
@@ -3529,15 +3666,29 @@ class ExtensionsConfig(object):
             # if the same plugin exists and the version is newer or
             # does not exist then download and unzip the new plugin
             plg_dir=None
-            for root, dirs, files in os.walk(LibDir):
-                for d in dirs:
-                    if name in d:
-                        plg_dir=os.path.join(root,d)
-                    if plg_dir != None:
-                        break
-            if plg_dir != None :
-                previous_version=plg_dir.rsplit('-')[-1]
-            if plg_dir == None or version > previous_version :
+
+            latest_version_installed = LooseVersion("0.0")
+            for item in os.listdir(LibDir):
+                itemPath = os.path.join(LibDir, item)
+                if os.path.isdir(itemPath) and name in item:
+                    try:
+                        #Split plugin dir name with '-' to get intalled plugin name and version
+                        sperator = item.rfind('-')
+                        if sperator < 0:
+                            continue
+                        installed_plg_name = item[0:sperator]
+                        installed_plg_version = LooseVersion(item[sperator + 1:])
+
+                        #Check installed plugin name and compare installed version to get the latest version installed
+                        if installed_plg_name == name and installed_plg_version > latest_version_installed:
+                            plg_dir = itemPath
+                            previous_version = str(installed_plg_version)
+                            latest_version_installed = installed_plg_version
+                    except Exception as e:
+                        Warn("Invalid plugin dir name: {0} {1}".format(item, e))
+                        continue
+
+            if plg_dir == None or LooseVersion(version) > LooseVersion(previous_version) :
                 location=p.getAttribute("location")
                 Log("Downloading plugin manifest: " + name + " from " + location)
                 SimpleLog(p.plugin_log,"Downloading plugin manifest: " + name + " from " + location)
@@ -3653,7 +3804,7 @@ class ExtensionsConfig(object):
 
                 cmd = ''
                 getcmd='installCommand'
-                if plg_dir != None and previous_version != None and version > previous_version :
+                if plg_dir != None and previous_version != None and LooseVersion(version) > LooseVersion(previous_version):
                     previous_handler=name+'-'+previous_version
                     if self.GetHandlerState(previous_handler) != 'NotInstalled':
                         getcmd='updateCommand'
@@ -3666,6 +3817,23 @@ class ExtensionsConfig(object):
                             self.SetHandlerState(previous_handler, 'Disabled')
                             Log(name+' version ' + previous_version + ' is disabled')
                             SimpleLog(p.plugin_log,name+' version ' + previous_version + ' is disabled')
+                    
+                        try:
+                            Log("Copy status file from old plugin dir to new")
+                            old_plg_dir = plg_dir 
+                            new_plg_dir = os.path.join(LibDir, "{0}-{1}".format(name, version))
+                            old_ext_status_dir = os.path.join(old_plg_dir, "status")
+                            new_ext_status_dir = os.path.join(new_plg_dir, "status")
+                            if os.path.isdir(old_ext_status_dir):
+                                for status_file in os.listdir(old_ext_status_dir):
+                                    status_file_path = os.path.join(old_ext_status_dir, status_file)
+                                    if os.path.isfile(status_file_path):
+                                        shutil.copy2(status_file_path, new_ext_status_dir)
+                            mrseq_file = os.path.join(old_plg_dir, "mrseq")
+                            if os.path.isfile(mrseq_file):
+                                shutil.copy(mrseq_file, new_plg_dir)
+                        except Exception as e:
+                            Error("Failed to copy status file.")
 
                 isupgradeSuccess = True
                 if getcmd=='updateCommand':
@@ -3687,6 +3855,16 @@ class ExtensionsConfig(object):
                         self.SetHandlerState(previous_handler, 'NotInstalled')
                         Log('Uninstall complete'+ previous_handler )
                         SimpleLog(p.plugin_log,'Uninstall complete'+ name +'-' + previous_version)
+                    
+                    try:
+                        #rm old plugin dir
+                        if os.path.isdir(plg_dir):
+                            shutil.rmtree(plg_dir)
+                            Log(name +'-'+ previous_version + ' extension files deleted.')
+                            SimpleLog(p.plugin_log,name +'-'+ previous_version + ' extension files deleted.')
+                    except Exception as e:
+                        Error("Failed to remove old plugin directory")
+
                     AddExtensionEvent(name,WALAEventOperation.Upgrade,isupgradeSuccess,0,previous_version)
                 else :  # run install
                     if self.launchCommand(p.plugin_log,name,version,getcmd) == None :
@@ -3902,7 +4080,7 @@ class ExtensionsConfig(object):
             incarnation=self.Extensions[0].getAttribute("goalStateIncarnation")
         except:
             Error('Error parsing ExtensionsConfig.  Unable to send status reports')
-            return None
+            return -1
         status=''
         statuses=''
         for p in self.Plugins:
@@ -3940,11 +4118,10 @@ class ExtensionsConfig(object):
             uri=GetNodeTextData(self.Extensions[0].getElementsByTagName("StatusUploadBlob")[0]).replace('&amp;','&')
         except:
             Error('Error parsing ExtensionsConfig.  Unable to send status reports')
-            return None
+            return -1
 
-        UploadStatusBlob(uri, status.encode("utf-8"))
         LogIfVerbose('Status report '+status+' sent to ' + uri)
-        return True
+        return UploadStatusBlob(uri, status.encode("utf-8"))
 
     def GetCurrentSequenceNumber(self, plugin_base_dir):
         """
@@ -4430,7 +4607,7 @@ class OvfEnv(object):
             if len(CDSection) > 0 :
                 self.CustomData=GetNodeTextData(CDSection[0])
                 if len(self.CustomData)>0:
-                    SetFileContents(LibDir + '/CustomData', MyDistro.translateCustomData(self.CustomData))
+                    SetFileContents(LibDir + '/CustomData', bytearray(MyDistro.translateCustomData(self.CustomData)))
                     Log('Wrote ' + LibDir + '/CustomData')
                 else :
                     Error('<CustomData> contains no data!')
@@ -4999,7 +5176,16 @@ class Agent(Util):
         net = self.IntegerToIpAddressV4String(net)
         mask = self.IntegerToIpAddressV4String(mask)
         gateway = self.IntegerToIpAddressV4String(gateway)
-        Run("/sbin/route add -net " + net + " netmask " + mask + " gw " + gateway,chk_err=False)
+        Log("Route add: net={0}, mask={1}, gateway={2}".format(net, mask, gateway))
+        MyDistro.routeAdd(net, mask, gateway)
+    
+    def SetDefaultGateway(self, gateway):
+        """
+        Set default gateway
+        """
+        gateway = self.IntegerToIpAddressV4String(gateway)
+        Log("Set default gateway: {0}".format(gateway))
+        MyDistro.setDefaultGateway(gateway)
 
     def HandleDhcpResponse(self, sendData, receiveBuffer):
         """
@@ -5082,11 +5268,11 @@ class Agent(Util):
                     gateway = self.UnpackBigEndian(receiveBuffer, i + 2, 4)
                     IpAddress = self.IntegerToIpAddressV4String(gateway)
                     if option == 3:
-                        self.RouteAdd(0, 0, gateway)
+                        self.SetDefaultGateway(gateway)
                         name = "DefaultGateway"
                     else:
                         endpoint = IpAddress
-                        name = "Microsoft Azure wire protocol endpoint"
+                        name = "Azure wire protocol endpoint"
                     LogIfVerbose(name + ": " + IpAddress + " at " + hex(i))
                 else:
                     Error("HandleDhcpResponse: Data too small for option " + str(option))
@@ -5098,7 +5284,7 @@ class Agent(Util):
     def DoDhcpWork(self):
         """
         Discover the wire server via DHCP option 245.
-        And workaround incompatibility with Microsoft Azure DHCP servers.
+        And workaround incompatibility with Azure DHCP servers.
         """
         ShortSleep = False # Sleep 1 second before retrying DHCP queries.
         ifname=None
@@ -5212,7 +5398,7 @@ class Agent(Util):
         if not goalStateXml:
             Error("UpdateGoalState failed.")
             return
-        Log("Retrieved GoalState from Microsoft Azure Fabric.")
+        Log("Retrieved GoalState from Azure Fabric.")
         self.GoalState = GoalState(self).Parse(goalStateXml)
         return self.GoalState
 
@@ -5503,6 +5689,8 @@ class Agent(Util):
         """
         SetFileContents("/var/run/waagent.pid", str(os.getpid()) + "\n")
 
+        reportHandlerStatusCount = 0
+
         # Determine if we are in VMM.  Spawn VMM_STARTUP_SCRIPT_NAME if found.
         self.SearchForVMMStartup()
         ipv4=''
@@ -5524,15 +5712,16 @@ class Agent(Util):
         except:
             pass
 
-        Log("Probing for Microsoft Azure environment.")
+        Log("Probing for Azure environment.")
         self.Endpoint = self.DoDhcpWork()
 
-        if self.Endpoint == None:
-            Log("Microsoft Azure environment not detected.")
-            while True:
-                time.sleep(60)
+        while self.Endpoint == None:
+            Log("Azure environment not detected.")
+            Log("Retry environment detection in 60 seconds")
+            time.sleep(60)
+            self.Endpoint = self.DoDhcpWork()
 
-        Log("Discovered Microsoft Azure endpoint: " + self.Endpoint)
+        Log("Discovered Azure endpoint: " + self.Endpoint)
         if not self.CheckVersions():
             Error("Agent.CheckVersions failed")
             sys.exit(1)
@@ -5647,12 +5836,23 @@ class Agent(Util):
                 incarnation = self.ReportReady()
             # Process our extensions.
             if goalState.ExtensionsConfig == None and goalState.ExtensionsConfigXml != None :
+                reportHandlerStatusCount = 0 #Reset count when new goal state comes
                 goalState.ExtensionsConfig = ExtensionsConfig().Parse(goalState.ExtensionsConfigXml)
 
             # report the status/heartbeat results of extension processing
             if goalState.ExtensionsConfig != None :
-                goalState.ExtensionsConfig.ReportHandlerStatus()
+                ret = goalState.ExtensionsConfig.ReportHandlerStatus()
+                if ret != 0:
+                    Error("Failed to report handler status")
+                elif reportHandlerStatusCount % 1000 == 0:
+                    #Agent report handler status every 25 seconds. Reduce the log entries by adding a count
+                    Log("Successfully reported handler status")
+                reportHandlerStatusCount += 1
             
+            global LinuxDistro
+            if LinuxDistro == "redhat":
+                DoInstallRHUIRPM()
+                
             if not eventMonitor:
                 eventMonitor = WALAEventMonitor(self.HttpPostWithHeaders)
                 eventMonitor.StartEventsLoop()
@@ -5987,11 +6187,6 @@ def main():
     global LinuxDistro
     LinuxDistro=DistInfo()[0]
     
-    #The platform.py lib has issue with detecting oracle linux distribution.
-    #Merge the following patch provided by oracle as a temparory fix.
-    if os.path.exists("/etc/oracle-release"): 
-        LinuxDistro="Oracle Linux" 
-
     global MyDistro
     MyDistro=GetMyDistro()
     if MyDistro == None :
@@ -6051,18 +6246,21 @@ def main():
         sys.exit(Usage())
     global modloaded
     modloaded = False
-    try:
-        SwitchCwd()
-        Log(GuestAgentLongName + " Version: " + GuestAgentVersion)
-        if IsLinux():
-            Log("Linux Distribution Detected      : " + LinuxDistro)
-        global WaAgent
-        WaAgent = Agent()
-        WaAgent.Run()
-    except Exception, e:
-        Error(traceback.format_exc())
-        Error("Exception: " + str(e))
-        sys.exit(1)
+   
+    while True:
+        try:
+            SwitchCwd()
+            Log(GuestAgentLongName + " Version: " + GuestAgentVersion)
+            if IsLinux():
+                Log("Linux Distribution Detected      : " + LinuxDistro)
+            global WaAgent
+            WaAgent = Agent()
+            WaAgent.Run()
+        except Exception, e:
+            Error(traceback.format_exc())
+            Error("Exception: " + str(e))
+            Log("Restart agent in 15 seconds")
+            time.sleep(15)
     
 if __name__ == '__main__' :
     main()
