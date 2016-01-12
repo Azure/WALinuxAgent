@@ -506,7 +506,7 @@ class ExtHandlerInstance(object):
             except ProtocolError as e:
                 self.logger.error(u"Failed to report extension status: {0}", e)
         return active_exts
-
+   
     def collect_heartbeat(self):
         man = self.load_manifest()
         if not man.is_report_heartbeat():
