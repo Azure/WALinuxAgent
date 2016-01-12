@@ -72,7 +72,8 @@ def get_data_files(name, version, fullname):
 
     elif name == 'coreos':
         set_bin_files(data_files, dest="/usr/share/oem/bin")
-        set_conf_files(data_files, dest="/usr/share/oem")
+        set_conf_files(data_files, dest="/usr/share/oem", 
+                       src=["config/coreos/waagent.conf"])
         set_logrotate_files(data_files)
         set_files(data_files, dest="/usr/share/oem", 
                   src="init/coreos/cloud-config.yml")

@@ -141,13 +141,21 @@ class ProvisionHandler(object):
         self.distro.osutil.restart_ssh_service()
 
     def save_customdata(self, ovfenv):
-        logger.info("Save custom data")
         customdata = ovfenv.customdata
         if customdata is None:
             return
+
+        logger.info("Save custom data")
         lib_dir = conf.get_lib_dir()
-        fileutil.write_file(os.path.join(lib_dir, CUSTOM_DATA_FILE),
-                            self.distro.osutil.decode_customdata(customdata))
+        if conf.get_decode_customdata():
+            customdata= self.distro.osutil.decode_customdata(customdata)
+        customdata_file = os.path.join(lib_dir, CUSTOM_DATA_FILE)
+        fileutil.write_file(customdata_file, customdata)
+        
+        if conf.get_execute_customdata():
+            logger.info("Execute custom data")
+            os.chmod(customdata_file, 0o700)
+            shellutil.run(customdata_file)
 
     def deploy_ssh_pubkeys(self, ovfenv):
         for pubkey in ovfenv.ssh_pubkeys:

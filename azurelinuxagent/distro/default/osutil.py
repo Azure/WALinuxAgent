@@ -25,6 +25,7 @@ import struct
 import time
 import pwd
 import fcntl
+import base64
 import azurelinuxagent.logger as logger
 import azurelinuxagent.conf as conf
 from azurelinuxagent.exception import OSUtilError
@@ -59,6 +60,14 @@ class DefaultOSUtil(object):
             return None
 
     def is_sys_user(self, username):
+        """
+        Check whether use is a system user. 
+        If reset sys user is allowed in conf, return False
+        Otherwise, check whether UID is less than UID_MIN
+        """
+        if conf.get_allow_reset_sys_user():
+            return False
+
         userentry = self.get_userentry(username)
         uidmin = None
         try:
@@ -77,9 +86,13 @@ class DefaultOSUtil(object):
 
     def useradd(self, username, expiration=None):
         """
-        Update password and ssh key for user account.
-        New account will be created if not exists.
+        Create user account with 'username'
         """
+        userentry = self.get_userentry(username)
+        if userentry is not None:
+            logger.info("User {0} already exists, skip useradd", username)
+            return
+
         if expiration is not None:
             cmd = "useradd -m {0} -e {1}".format(username, expiration)
         else:
@@ -578,7 +591,7 @@ class DefaultOSUtil(object):
                 raise OSUtilError("Failed to remove sudoer: {0}".format(e))
 
     def decode_customdata(self, data):
-        return data
+        return base64.b64decode(data)
 
     def get_total_mem(self):
         cmd = "grep MemTotal /proc/meminfo |awk '{print $2}'"

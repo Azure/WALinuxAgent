@@ -116,11 +116,20 @@ def get_ssh_host_keypair_type(conf=__conf__):
 def get_provision_enabled(conf=__conf__):
     return conf.get_switch("Provisioning.Enabled", True)
 
+def get_allow_reset_sys_user(conf=__conf__):
+    return conf.get_switch("Provisioning.AllowResetSysUser", False)
+
 def get_regenerate_ssh_host_key(conf=__conf__):
     return conf.get_switch("Provisioning.RegenerateSshHostKeyPair", False)
 
 def get_delete_root_password(conf=__conf__):
     return conf.get_switch("Provisioning.DeleteRootPassword", False)
+
+def get_decode_customdata(conf=__conf__):
+    return conf.get_switch("Provisioning.DecodeCustomData", False)
+
+def get_execute_customdata(conf=__conf__):
+    return conf.get_switch("Provisioning.ExecuteCustomData", False)
 
 def get_password_cryptid(conf=__conf__):
     return conf.get("Provisioning.PasswordCryptId", "6")
