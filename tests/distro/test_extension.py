@@ -49,7 +49,6 @@ class TestExtension(AgentTestCase):
         vm_status = args[0]
         self.assertEquals(0, len(vm_status.vmAgent.extensionHandlers))
 
-
     def _create_mock(self, test_data, mock_http_get, MockCryptUtil, _):
         """Test enable/disable/unistall of an extension"""
         distro = get_distro()
@@ -58,7 +57,6 @@ class TestExtension(AgentTestCase):
         mock_http_get.side_effect = test_data.mock_http_get
         MockCryptUtil.side_effect = test_data.mock_crypt_util
 
-        #TODO replace wire protocol with mock
         protocol = WireProtocol("foo.bar")
         protocol.detect()
         protocol.report_ext_status = MagicMock()
@@ -66,32 +64,38 @@ class TestExtension(AgentTestCase):
         distro.protocol_util.get_protocol = Mock(return_value=protocol)
         
         return distro, protocol
-    
-    def _test_ext_handler(self, test_data, distro, protocol, ext_count=1):
+        
+    def test_ext_handler(self, *args):
+        test_data = WireProtocolData(DATA_FILE)
+        distro, protocol = self._create_mock(test_data, *args)
+
         #Test enable scenario. 
         distro.ext_handlers_handler.run()
-        self._assert_handler_status(protocol.report_vm_status, "Ready", 
-                                    ext_count, "1.0")
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0")
+        self._assert_ext_status(protocol.report_ext_status, "success", 0)
 
         #Test goal state not changed
         distro.ext_handlers_handler.run()
-        self._assert_handler_status(protocol.report_vm_status, "Ready", 
-                                    ext_count, "1.0")
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0")
 
         #Test goal state changed
         test_data.goal_state = test_data.goal_state.replace("<Incarnation>1<",
                                                             "<Incarnation>2<")
+        test_data.ext_conf = test_data.ext_conf.replace("seqNo=\"0\"", 
+                                                        "seqNo=\"1\"")
         distro.ext_handlers_handler.run()
-        self._assert_handler_status(protocol.report_vm_status, "Ready", 
-                                    ext_count, "1.0")
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0")
+        self._assert_ext_status(protocol.report_ext_status, "success", 1)
         
         #Test upgrade
         test_data.goal_state = test_data.goal_state.replace("<Incarnation>2<",
                                                             "<Incarnation>3<")
         test_data.ext_conf = test_data.ext_conf.replace("1.0", "1.1")
+        test_data.ext_conf = test_data.ext_conf.replace("seqNo=\"1\"", 
+                                                        "seqNo=\"2\"")
         distro.ext_handlers_handler.run()
-        self._assert_handler_status(protocol.report_vm_status, "Ready", 
-                                    ext_count, "1.1")
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.1")
+        self._assert_ext_status(protocol.report_ext_status, "success", 2)
 
         #Test disable
         test_data.goal_state = test_data.goal_state.replace("<Incarnation>3<",
@@ -99,7 +103,7 @@ class TestExtension(AgentTestCase):
         test_data.ext_conf = test_data.ext_conf.replace("enabled", "disabled")
         distro.ext_handlers_handler.run()
         self._assert_handler_status(protocol.report_vm_status, "NotReady", 
-                                    0, "1.1")
+                                    1, "1.1")
 
         #Test uninstall
         test_data.goal_state = test_data.goal_state.replace("<Incarnation>4<",
@@ -108,20 +112,25 @@ class TestExtension(AgentTestCase):
         distro.ext_handlers_handler.run()
         self._assert_no_handler_status(protocol.report_vm_status)
 
-    def test_ext_handler(self, *args):
-        test_data = WireProtocolData(DATA_FILE)
-        distro, protocol = self._create_mock(test_data, *args)
-        self._test_ext_handler(test_data, distro, protocol)
-   
+        #Test uninstall again!
+        test_data.goal_state = test_data.goal_state.replace("<Incarnation>5<",
+                                                            "<Incarnation>6<")
+        distro.ext_handlers_handler.run()
+        self._assert_no_handler_status(protocol.report_vm_status)
+
     def test_ext_handler_no_settings(self, *args):
         test_data = WireProtocolData(DATA_FILE_EXT_NO_SETTINGS)
         distro, protocol = self._create_mock(test_data, *args)
-        self._test_ext_handler(test_data, distro, protocol, ext_count=0)
+
+        distro.ext_handlers_handler.run()
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 0, "1.0")
 
     def test_ext_handler_no_public_settings(self, *args):
         test_data = WireProtocolData(DATA_FILE_EXT_NO_PUBLIC)
         distro, protocol = self._create_mock(test_data, *args)
-        self._test_ext_handler(test_data, distro, protocol)
+
+        distro.ext_handlers_handler.run()
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0")
 
     def test_ext_handler_no_ext(self, *args):
         test_data = WireProtocolData(DATA_FILE_NO_EXT)
@@ -143,11 +152,21 @@ class TestExtension(AgentTestCase):
         self.assertEquals("OSTCExtensions.ExampleHandlerLinux", kw['name'])
         self.assertEquals("Download", kw['op'])
 
-    def _assert_ext_status(self, report_ext_status, expected_status):
+    @patch('azurelinuxagent.distro.default.extension.fileutil')
+    def test_ext_handler_io_error(self, mock_fileutil, *args):
+        test_data = WireProtocolData(DATA_FILE)
+        distro, protocol = self._create_mock(test_data, *args)
+    
+        mock_fileutil.write_file.return_value = IOError("Mock IO Error")
+        distro.ext_handlers_handler.run()
+
+    def _assert_ext_status(self, report_ext_status, expected_status, 
+                           expected_seq_no):
         self.assertTrue(report_ext_status.called)
         args, kw = report_ext_status.call_args
         ext_status = args[-1]
         self.assertEquals(expected_status, ext_status.status)
+        self.assertEquals(expected_seq_no, ext_status.sequenceNumber)
 
     def test_ext_handler_no_reporting_status(self, *args):
         test_data = WireProtocolData(DATA_FILE)
@@ -164,7 +183,7 @@ class TestExtension(AgentTestCase):
 
         distro.ext_handlers_handler.run()
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0")
-        self._assert_ext_status(protocol.report_ext_status, "error")
+        self._assert_ext_status(protocol.report_ext_status, "error", 0)
 
 
 if __name__ == '__main__':

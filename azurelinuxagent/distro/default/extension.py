@@ -102,8 +102,6 @@ class ExtHandlerState(object):
     NotInstalled = "NotInstalled"
     Installed = "Installed"
     Enabled = "Enabled"
-    Disabled = "Disabled"
-    Failed = "Failed"
 
 class ExtHandlersHandler(object):
     def __init__(self, distro):
@@ -157,7 +155,6 @@ class ExtHandlersHandler(object):
                 message = u"Unknown ext handler state:{0}".format(state)
                 raise ExtensionError(message)
         except ExtensionError as e:
-            ext_handler_i.set_handler_state(ExtHandlerState.Failed)
             ext_handler_i.set_handler_status(message=ustr(e), code=-1)
             ext_handler_i.report_event(message=ustr(e), is_success=False)
     
@@ -186,23 +183,18 @@ class ExtHandlersHandler(object):
                 ext_handler_i.copy_status_files(old_ext_handler_i)
                 ext_handler_i.update()
                 old_ext_handler_i.uninstall()
+                old_ext_handler_i.rm_ext_handler_dir()
                 ext_handler_i.update_with_install()
+        else:
+            ext_handler_i.update_settings()
 
-        ext_handler_i.set_handler_state(ExtHandlerState.Installed)
-            
         ext_handler_i.enable() 
-        ext_handler_i.set_handler_state(ExtHandlerState.Enabled)
-        ext_handler_i.set_handler_status(status="Ready", 
-                                         message="Plugin enabled")
 
     def handle_disable(self, ext_handler_i):
         handler_state = ext_handler_i.get_handler_state()
         ext_handler_i.logger.info("Current handler state is: {0}", handler_state)
         if handler_state == ExtHandlerState.Enabled:
             ext_handler_i.disable()
-            ext_handler_i.set_handler_state(ExtHandlerState.Disabled)
-            ext_handler_i.set_handler_status(status="NotReady", 
-                                             message="Plugin disabled")
 
     def handle_uninstall(self, ext_handler_i):
         handler_state = ext_handler_i.get_handler_state()
@@ -210,10 +202,8 @@ class ExtHandlersHandler(object):
         if handler_state != ExtHandlerState.NotInstalled:
             if handler_state == ExtHandlerState.Enabled:
                 ext_handler_i.disable()
-                ext_handler_i.set_handler_state(ExtHandlerState.Disabled)
-                ext_handler_i.set_handler_status(status="NotReady", 
-                                                 message="Plugin disabled")
             ext_handler_i.uninstall()
+        ext_handler_i.rm_ext_handler_dir()
     
     def report_ext_handlers_status(self, ext_handlers):
         """Go thru handler_state dir, collect and report status"""
@@ -249,7 +239,7 @@ class ExtHandlersHandler(object):
             return
 
         handler_state = ext_handler_i.get_handler_state()
-        if handler_state == ExtHandlerState.Enabled:
+        if handler_state != ExtHandlerState.NotInstalled:
             try:
                 active_exts = ext_handler_i.report_ext_status()
                 handler_status.extensions.extend(active_exts)
@@ -274,8 +264,12 @@ class ExtHandlerInstance(object):
 
         prefix = "[{0}]".format(self.get_full_name())
         self.logger = logger.Logger(logger.DEFAULT_LOGGER, prefix)
+        
+        try:
+            fileutil.mkdir(self.get_log_dir(), mode=0o744)
+        except IOError as e:
+            self.logger.error(u"Failed to create extension log dir: {0}", e)
 
-        fileutil.mkdir(self.get_log_dir(), mode=0o744)
         log_file = os.path.join(self.get_log_dir(), "CommandExecution.log")
         self.logger.add_appender(logger.AppenderType.FILE,
                                  logger.LogLevel.INFO, log_file)
@@ -331,11 +325,11 @@ class ExtHandlerInstance(object):
         for dir_name in os.listdir(conf.get_lib_dir()):
             path = os.path.join(conf.get_lib_dir(), dir_name)
             if os.path.isdir(path) and dir_name.startswith(ext_handler_name):
-                seprator = dir_name.rfind('-')
-                if seprator < 0:
+                seperator = dir_name.rfind('-')
+                if seperator < 0:
                     continue
-                installed_name = dir_name[0: seprator]
-                installed_version = dir_name[seprator + 1:] 
+                installed_name = dir_name[0: seperator]
+                installed_version = dir_name[seperator + 1:] 
                 if installed_name != ext_handler_name:
                     continue
                 if lastest_version is None or \
@@ -373,7 +367,8 @@ class ExtHandlerInstance(object):
         self.operation = op
 
     def report_event(self, message="", is_success=True):
-        add_event(name=self.ext_handler.name, message=message, 
+        version = self.ext_handler.properties.version
+        add_event(name=self.ext_handler.name, version=version, message=message, 
                   op=self.operation, is_success=is_success)
 
     def download(self):
@@ -395,8 +390,12 @@ class ExtHandlerInstance(object):
         self.logger.info("Unpack extension package")
         pkg_file = os.path.join(conf.get_lib_dir(),
                                 os.path.basename(uri.uri) + ".zip")
-        fileutil.write_file(pkg_file, bytearray(package), asbin=True)
-        zipfile.ZipFile(pkg_file).extractall(self.get_base_dir())
+        try:
+            fileutil.write_file(pkg_file, bytearray(package), asbin=True)
+            zipfile.ZipFile(pkg_file).extractall(self.get_base_dir())
+        except IOError as e:
+            raise ExtensionError(u"Failed to write and unzip plugin", e)
+
         chmod = "find {0} -type f | xargs chmod u+x".format(self.get_base_dir())
         shellutil.run(chmod)
         self.report_event(message="Download succeeded")
@@ -408,15 +407,21 @@ class ExtHandlerInstance(object):
 
         if man_file is None:
             raise ExtensionError("HandlerManifest.json not found")
-
-        man = fileutil.read_file(man_file, remove_bom=True)
-        fileutil.write_file(self.get_manifest_file(), man)
+        
+        try:
+            man = fileutil.read_file(man_file, remove_bom=True)
+            fileutil.write_file(self.get_manifest_file(), man)
+        except IOError as e:
+            raise ExtensionError(u"Failed to save HandlerManifest.json", e)
 
         #Create status and config dir
-        status_dir = self.get_status_dir()
-        fileutil.mkdir(status_dir, mode=0o700)
-        conf_dir = self.get_conf_dir()
-        fileutil.mkdir(conf_dir, mode=0o700)
+        try:
+            status_dir = self.get_status_dir()
+            fileutil.mkdir(status_dir, mode=0o700)
+            conf_dir = self.get_conf_dir()
+            fileutil.mkdir(conf_dir, mode=0o700)
+        except IOError as e:
+            raise ExtensionError(u"Failed to create status or config dir", e)
 
         #Save HandlerEnvironment.json
         self.create_handler_env()
@@ -427,6 +432,8 @@ class ExtHandlerInstance(object):
 
         man = self.load_manifest()
         self.launch_command(man.get_enable_command())
+        self.set_handler_state(ExtHandlerState.Enabled)
+        self.set_handler_status(status="Ready", message="Plugin enabled")
 
     def disable(self):
         self.logger.info("Disable extension.")
@@ -434,6 +441,8 @@ class ExtHandlerInstance(object):
 
         man = self.load_manifest()
         self.launch_command(man.get_disable_command(), timeout=900)
+        self.set_handler_state(ExtHandlerState.Installed)
+        self.set_handler_status(status="NotReady", message="Plugin disabled")
 
     def install(self):
         self.logger.info("Install extension.")
@@ -441,6 +450,7 @@ class ExtHandlerInstance(object):
 
         man = self.load_manifest()
         self.launch_command(man.get_install_command(), timeout=900)
+        self.set_handler_state(ExtHandlerState.Installed)
 
     def uninstall(self):
         self.logger.info("Uninstall extension.")
@@ -451,13 +461,20 @@ class ExtHandlerInstance(object):
             self.launch_command(man.get_uninstall_command())
         except ExtensionError as e:
             self.report_event(message=ustr(e), is_success=False)
-
-        self.logger.info("Remove ext handler dir: {0}", self.get_base_dir())
+    
+    def rm_ext_handler_dir(self):
         try:
-            shutil.rmtree(self.get_base_dir())
-            shutil.rmtree(self.get_handler_state_dir())
+            handler_state_dir = self.get_handler_state_dir()
+            if os.path.isdir(handler_state_dir):
+                self.logger.info("Remove ext handler dir: {0}", handler_state_dir)
+                shutil.rmtree(handler_state_dir)
+            base_dir = self.get_base_dir()
+            if os.path.isdir(base_dir):
+                self.logger.info("Remove ext handler dir: {0}", base_dir)
+                shutil.rmtree(base_dir)
         except IOError as e:
-            raise ExtensionError("Failed to rm ext handler dir: {0}".format(e))
+            message = "Failed to rm ext handler dir: {0}".format(e)
+            self.report_event(message=message, is_success=False)
 
     def update(self):
         self.logger.info("Update extension.")
@@ -473,32 +490,58 @@ class ExtHandlerInstance(object):
         else:
             self.logger.info("UpdateWithInstall not set. "
                              "Skip install during upgrade.")
+        self.set_handler_state(ExtHandlerState.Installed)
+
+    def get_largest_seq_no(self):
+        seq_no = -1
+        conf_dir = self.get_conf_dir()
+        for item in os.listdir(conf_dir):
+            item_path = os.path.join(conf_dir, item)
+            if os.path.isfile(item_path):
+                try:
+                    seperator = item.rfind(".")
+                    if seperator > 0 and item[seperator + 1:] == 'settings':
+                        curr_seq_no = int(item.split('.')[0])
+                        if curr_seq_no > seq_no:
+                            seq_no = curr_seq_no
+                except Exception as e:
+                    self.logger.verb("Failed to parse file name: {0}", item)
+                    continue
+        return seq_no
 
     def collect_ext_status(self, ext):
         self.logger.verb("Collect extension status")
+
+        seq_no = self.get_largest_seq_no()
+        if seq_no == -1:
+            return None
+
         status_dir = self.get_status_dir()
-        ext_status = None
-        ext_status_file = "{0}.status".format(ext.sequenceNumber)
+        ext_status_file = "{0}.status".format(seq_no)
         ext_status_file = os.path.join(status_dir, ext_status_file)
+
+        ext_status = ExtensionStatus(seq_no=seq_no)
         try:
             data_str = fileutil.read_file(ext_status_file)
             data = json.loads(data_str)
-            ext_status = ExtensionStatus()
             parse_ext_status(ext_status, data)
-            return ext_status
         except IOError as e:
-            raise ExtensionError(u"Failed to get status file", e)
+            ext_status.message = u"Failed to get status file {0}".format(e)
+            ext_status.code = -1
+            ext_status.status = "error"
         except ValueError as e:
-            raise ExtensionError(u"Malformed status file", e)
+            ext_status.message = u"Malformed status file {0}".format(e)
+            ext_status.code = -1
+            ext_status.status = "error"
+
+        return ext_status
     
     def report_ext_status(self):
         active_exts = []
         for ext in self.ext_handler.properties.extensions:
-            try:
-                ext_status = self.collect_ext_status(ext)
-            except ExtensionError as e:
-                ext_status = ExtensionStatus(message=str(e), code=-1, 
-                                             status="error")
+            ext_status = self.collect_ext_status(ext)
+            if ext_status is None:
+                continue
             try:
                 self.protocol.report_ext_status(self.ext_handler.name, ext.name, 
                                                 ext_status)
@@ -572,9 +615,20 @@ class ExtHandlerInstance(object):
 
         return HandlerManifest(data[0])
 
+    def update_settings_file(self, settings_file, settings):
+        settings_file = os.path.join(self.get_conf_dir(), settings_file)
+        try:
+            fileutil.write_file(settings_file, settings)
+        except IOError as e:
+            raise ExtensionError(u"Failed to update settings file", e)
+
     def update_settings(self):
-        if self.ext_handler.properties.extensions is None:
-            self.logger.verb("Extension has no settings")
+        if self.ext_handler.properties.extensions is None or \
+                len(self.ext_handler.properties.extensions) == 0:
+            #This is the behavior of waagent 2.0.x
+            #The new agent has to be consistent with the old one.
+            self.logger.info("Extension has no settings, write empty 0.settings")
+            self.update_settings_file("0.settings", "")
             return
         
         for ext in self.ext_handler.properties.extensions:
@@ -589,8 +643,8 @@ class ExtHandlerInstance(object):
                 }]
             }
             settings_file = "{0}.settings".format(ext.sequenceNumber)
-            settings_file = os.path.join(self.get_conf_dir(), settings_file)
-            fileutil.write_file(settings_file, json.dumps(ext_settings))
+            self.logger.info("Update settings file: {0}", settings_file)
+            self.update_settings_file(settings_file, json.dumps(ext_settings))
 
     def create_handler_env(self):
         env = [{
@@ -603,7 +657,10 @@ class ExtHandlerInstance(object):
                 "heartbeatFile" : self.get_heartbeat_file()
             }
         }]
-        fileutil.write_file(self.get_env_file(), json.dumps(env))
+        try:
+            fileutil.write_file(self.get_env_file(), json.dumps(env))
+        except IOError as e:
+            raise ExtensionError(u"Failed to save handler environment", e)
     
     def get_handler_state_dir(self):
         return os.path.join(conf.get_lib_dir(), "handler_state", 
@@ -612,7 +669,10 @@ class ExtHandlerInstance(object):
     def set_handler_state(self, handler_state):
         state_dir = self.get_handler_state_dir()
         if not os.path.exists(state_dir):
-            fileutil.mkdir(state_dir, 0o700)
+            try:
+                fileutil.mkdir(state_dir, 0o700)
+            except IOError as e:
+                self.logger.error("Failed to create state dir: {0}", e)
         
         try:
             state_file = os.path.join(state_dir, "state")
@@ -630,12 +690,16 @@ class ExtHandlerInstance(object):
             return fileutil.read_file(state_file)
         except IOError as e:
             self.logger.error("Failed to get state: {0}", e)
+            return ExtHandlerState.NotInstalled
     
     def set_handler_status(self, status="NotReady", message="", 
                            code=0):
         state_dir = self.get_handler_state_dir()
         if not os.path.exists(state_dir):
-            fileutil.mkdir(state_dir, 0o700)
+            try:
+                fileutil.mkdir(state_dir, 0o700)
+            except IOError as e:
+                self.logger.error("Failed to create state dir: {0}", e)
         
         handler_status = ExtHandlerStatus()
         handler_status.name = self.ext_handler.name
@@ -748,5 +812,6 @@ class HandlerManifest(object):
 
     def is_update_with_install(self):
         update_mode = self.data['handlerManifest'].get('updateMode')
-        return update_mode is not None and \
-               update_mode.low() == "updatewithinstall"
+        if update_mode is None:
+            return True
+        return update_mode.low() == "updatewithinstall"

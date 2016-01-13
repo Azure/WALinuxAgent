@@ -126,8 +126,12 @@ def http_request(method, url, data, headers=None, max_retry=3, chk_proxy=False):
         if retry < max_retry - 1:
             logger.info("Retry={0}, {1} {2}", retry, method, url)
             time.sleep(RETRY_WAITING_INTERVAL)
-
-    raise HttpError("HTTP Err: {0} {1}".format(method, url))
+    
+    if url is not None and len(url) > 100:
+        url_log = url[0: 100] #In case the url is too long
+    else:
+        url_log = url
+    raise HttpError("HTTP Err: {0} {1}".format(method, url_log))
 
 def http_get(url, headers=None, max_retry=3, chk_proxy=False):
     return http_request("GET", url, data=None, headers=headers, 

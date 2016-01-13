@@ -108,6 +108,8 @@ class MonitorHandler(object):
         try:
             protocol = self.distro.protocol_util.get_protocol()
             vminfo = protocol.get_vminfo()
+            self.sysinfo.append(TelemetryEventParam("VMName", 
+                                                    vminfo.vmName)) 
             self.sysinfo.append(TelemetryEventParam("TenantName", 
                                                     vminfo.tenantName)) 
             self.sysinfo.append(TelemetryEventParam("RoleName", 
@@ -148,6 +150,7 @@ class MonitorHandler(object):
 
             try:
                 event = parse_event(data_str)
+                event.parameters.extend(self.sysinfo)
                 event_list.events.append(event)
             except (ValueError, ProtocolError) as e:
                 logger.info("Failed to decode event file: {0}", e)
