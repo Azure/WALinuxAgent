@@ -18,8 +18,10 @@
 #
 
 from azurelinuxagent.distro.default.distro import DefaultDistro
+from azurelinuxagent.distro.freebsd.resourceDisk import FreeBSDResourceDiskHandler
 
 
 class FreeBSDDistro(DefaultDistro):
     def __init__(self):
         super(FreeBSDDistro, self).__init__()
+        self.resource_disk_handler = FreeBSDResourceDiskHandler(self)
