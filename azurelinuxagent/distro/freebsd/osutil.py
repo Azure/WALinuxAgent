@@ -16,16 +16,41 @@
 #
 # Requires Python 2.4+ and Openssl 1.0+
 
+import azurelinuxagent.utils.shellutil as shellutil
+import azurelinuxagent.logger as logger
 from azurelinuxagent.distro.default.osutil import DefaultOSUtil
+from azurelinuxagent.exception import OSUtilError
 
 
 class FreeBSDOSUtil(DefaultOSUtil):
     def __init__(self):
         super(FreeBSDOSUtil, self).__init__()
 
-    def get_mac_addr(self):
-        
-        return 1
+    def get_if_mac(self, ifname):
+        data = self._get_net_info()
+        if data[0] == ifname:
+            return data[2].replace(':', '').upper()
+        return None
+
+    def get_first_if(self):
+        return self._get_net_info()[:2]
+
+    def route_add(self, net, mask, gateway):
+        cmd = 'route add {0} {1} {2}'.format(net, gateway, mask)
+        return shellutil.run(cmd, chk_err=False)
+
+    def is_missing_default_route(self):
+        routes = shellutil.run_get_output("netstat -rn4")[1]
+        for route in routes.split("\n"):
+            if route.startswith("0.0.0.0 ") or route.startswith("default "):
+                return False
+        return True
+
+    def set_route_for_dhcp_broadcast(self, ifname):
+        return shellutil.run("route add 255.255.255.255 0.0.0.0 -ifp {0}".format(ifname), chk_err=False)
+
+    def remove_route_for_dhcp_broadcast(self, ifname):
+        shellutil.run("route delete 255.255.255.255", chk_err=False)
 
     @staticmethod
     def _get_net_info():
@@ -36,39 +61,27 @@ class FreeBSDOSUtil(DefaultOSUtil):
         or 'None,None,None' if unable to parse.
         We will sleep and retry as the network must be up.
         """
-        code,output=RunGetOutput("ifconfig",chk_err=False)
-        Log(output)
-        retries=10
-        cmd='ifconfig | grep -A2 -B2 ether | grep -B3 inet | grep -A4 UP '
-        code=1
+        iface = ''
+        inet = ''
+        mac = ''
 
-        while code > 0 :
-            if code > 0 and retries == 0:
-                Error("GetFreeBSDEthernetInfo - Failed to detect ethernet interface")
-                return None, None, None
-            code,output=RunGetOutput(cmd,chk_err=False)
-            retries-=1
-            if code > 0 and retries > 0 :
-                Log("GetFreeBSDEthernetInfo - Error: retry ethernet detection " + str(retries))
-                if retries == 9 :
-                    c,o=RunGetOutput("ifconfig | grep -A1 -B2 ether",chk_err=False)
-                    if c == 0:
-                        t=o.replace('\n',' ')
-                        t=t.split()
-                        i=t[0][:-1]
-                        Log(RunGetOutput('id')[1])
-                        Run('dhclient '+i)
-                time.sleep(10)
+        err, output = shellutil.run_get_output('ifconfig -l ether', chk_err=False)
+        if err:
+            raise OSUtilError("Can't find ether interface:{0}".format(output))
+        ifaces = output.split()
+        if not ifaces:
+            raise OSUtilError("Can't find ether interface.")
+        iface = ifaces[0]
 
-        j=output.replace('\n',' ')
-        j=j.split()
-        iface=j[0][:-1]
+        err, output = shellutil.run_get_output('ifconfig ' + iface, chk_err=False)
+        if err:
+            raise OSUtilError("Can't get info for interface:{0}".format(iface))
 
-        for i in range(len(j)):
-            if j[i] == 'inet' :
-                inet=j[i+1]
-            elif j[i] == 'ether' :
-                mac=j[i+1]
+        for line in output.split('\n'):
+            if line.find('inet ') != -1:
+                inet = line.split()[1]
+            elif line.find('ether ') != -1:
+                mac = line.split()[1]
+        logger.verb("Interface info: ({0},{1},{2})", iface, inet, mac)
 
         return iface, inet, mac
-
