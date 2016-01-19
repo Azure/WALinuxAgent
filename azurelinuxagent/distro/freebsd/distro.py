@@ -19,9 +19,11 @@
 
 from azurelinuxagent.distro.default.distro import DefaultDistro
 from azurelinuxagent.distro.freebsd.resourceDisk import FreeBSDResourceDiskHandler
+from azurelinuxagent.distro.freebsd.osutil import FreeBSDOSUtil
 
 
 class FreeBSDDistro(DefaultDistro):
     def __init__(self):
         super(FreeBSDDistro, self).__init__()
+        self.osutil = FreeBSDOSUtil()
         self.resource_disk_handler = FreeBSDResourceDiskHandler(self)
