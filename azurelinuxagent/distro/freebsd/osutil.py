@@ -52,6 +52,16 @@ class FreeBSDOSUtil(DefaultOSUtil):
     def remove_route_for_dhcp_broadcast(self, ifname):
         shellutil.run("route delete 255.255.255.255", chk_err=False)
 
+    def eject_dvd(self, chk_err=True):
+        return
+        dvd = self.get_dvd_device()
+        retcode = shellutil.run("cdcontrol -f {0} eject".format(dvd))
+        if chk_err and retcode != 0:
+            raise OSUtilError("Failed to eject dvd: ret={0}".format(retcode))
+
+    def restart_if(self, ifname):
+        shellutil.run("/etc/rc.d/netif restart {0}".format(ifname))
+
     @staticmethod
     def _get_net_info():
         """

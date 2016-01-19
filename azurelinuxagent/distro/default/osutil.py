@@ -267,7 +267,7 @@ class DefaultOSUtil(object):
 
 
     def get_dvd_device(self, dev_dir='/dev'):
-        patten=r'(sr[0-9]|hd[c-z]|cdrom[0-9])'
+        patten=r'(sr[0-9]|hd[c-z]|cdrom[0-9]|cd[0-9])'
         for dvd in [re.match(patten, dev) for dev in os.listdir(dev_dir)]:
             if dvd is not None:
                 return "/dev/{0}".format(dvd.group(0))
@@ -285,7 +285,7 @@ class DefaultOSUtil(object):
             os.makedirs(mount_point)
 
         for retry in range(0, max_retry):
-            retcode = self.mount(dvd, mount_point, option="-o ro -t iso9660,udf",
+            retcode = self.mount(dvd, mount_point, option="-o ro -t udf,iso9660",
                                  chk_err=chk_err)
             if retcode == 0:
                 logger.info("Successfully mounted dvd")
@@ -338,7 +338,7 @@ class DefaultOSUtil(object):
         return False
 
     def mount(self, dvd, mount_point, option="", chk_err=True):
-        cmd = "mount {0} {1} {2}".format(dvd, option,  mount_point)
+        cmd = "mount {0} {1} {2}".format(option, dvd, mount_point)
         return shellutil.run_get_output(cmd, chk_err)[0]
 
     def umount(self, mount_point, chk_err=True):
@@ -492,7 +492,7 @@ class DefaultOSUtil(object):
 
     def set_dhcp_hostname(self, hostname):
         autosend = r'^[^#]*?send\s*host-name.*?(<hostname>|gethostname[(,)])'
-        dhclient_files = ['/etc/dhcp/dhclient.conf', '/etc/dhcp3/dhclient.conf']
+        dhclient_files = ['/etc/dhcp/dhclient.conf', '/etc/dhcp3/dhclient.conf', '/etc/dhclient.conf']
         for conf_file in dhclient_files:
             if not os.path.isfile(conf_file):
                 continue
