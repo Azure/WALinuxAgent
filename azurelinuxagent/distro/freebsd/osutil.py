@@ -17,6 +17,9 @@
 # Requires Python 2.4+ and Openssl 1.0+
 
 import azurelinuxagent.utils.shellutil as shellutil
+import azurelinuxagent.utils.textutil as textutil
+import azurelinuxagent.utils.fileutil as fileutil
+import azurelinuxagent.conf as conf
 import azurelinuxagent.logger as logger
 from azurelinuxagent.distro.default.osutil import DefaultOSUtil
 from azurelinuxagent.exception import OSUtilError
@@ -25,6 +28,51 @@ from azurelinuxagent.exception import OSUtilError
 class FreeBSDOSUtil(DefaultOSUtil):
     def __init__(self):
         super(FreeBSDOSUtil, self).__init__()
+
+    def useradd(self, username, expiration=None):
+        """
+        Create user account with 'username'
+        """
+        userentry = self.get_userentry(username)
+        if userentry is not None:
+            logger.warn("User {0} already exists, skip useradd", username)
+            return
+
+        if expiration is not None:
+            cmd = "pw useradd {0} -e {1} -m".format(username, expiration)
+        else:
+            cmd = "pw useradd {0} -m".format(username)
+        retcode, out = shellutil.run_get_output(cmd)
+        if retcode != 0:
+            raise OSUtilError(("Failed to create user account:{0}, "
+                               "retcode:{1}, "
+                               "output:{2}").format(username, retcode, out))
+
+
+    def chpasswd(self, username, password, crypt_id=6, salt_len=10):
+        if self.is_sys_user(username):
+            raise OSUtilError(("User {0} is a system user. "
+                               "Will not set passwd.").format(username))
+        passwd_hash = textutil.gen_password_hash(password, crypt_id, salt_len)
+        cmd = "echo '{0}'|pw usermod {1} -H 0 ".format(passwd_hash, username)
+        ret, output = shellutil.run_get_output(cmd, log_cmd=False)
+        if ret != 0:
+            raise OSUtilError(("Failed to set password for {0}: {1}"
+                               "").format(username, output))
+
+    def del_root_password(self):
+        try:
+            passwd_file_path = conf.get_passwd_file_path()
+            passwd_content = fileutil.read_file(passwd_file_path)
+            passwd = passwd_content.split('\n')
+            new_passwd = [x for x in passwd if not x.startswith("root:")]
+            new_passwd.insert(0, "root:*LOCK*:0:0::0:0:::")
+            fileutil.write_file(passwd_file_path, "\n".join(new_passwd))
+        except IOError as e:
+            raise OSUtilError("Failed to delete root password:{0}".format(e))
+        err, output = shellutil.run('pwd_mkdb -u root ' + passwd_file_path)
+        if err:
+            raise OSUtilError("Failed to delete root password: Failed to update password database.")
 
     def get_if_mac(self, ifname):
         data = self._get_net_info()
@@ -52,8 +100,11 @@ class FreeBSDOSUtil(DefaultOSUtil):
     def remove_route_for_dhcp_broadcast(self, ifname):
         shellutil.run("route delete 255.255.255.255", chk_err=False)
 
+    def get_dhcp_pid(self):
+        ret = shellutil.run_get_output("pgrep dhclient")
+        return ret[1] if ret[0] == 0 else None
+
     def eject_dvd(self, chk_err=True):
-        return
         dvd = self.get_dvd_device()
         retcode = shellutil.run("cdcontrol -f {0} eject".format(dvd))
         if chk_err and retcode != 0:

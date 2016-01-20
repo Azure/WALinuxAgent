@@ -501,7 +501,7 @@ class DefaultOSUtil(object):
                 return
             fileutil.update_conf_file(conf_file,
                                       'send host-name',
-                                      'send host-name {0}'.format(hostname))
+                                      'send host-name "{0}";'.format(hostname))
 
     def restart_if(self, ifname):
         shellutil.run("ifdown {0} && ifup {1}".format(ifname, ifname))
