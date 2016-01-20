@@ -66,6 +66,7 @@ def parse_xml_event(data_str):
         param_nodes = findall(xml_doc, 'Param')
         for param_node in param_nodes:
             event.parameters.append(parse_xml_param(param_node))
+        return event
     except Exception as e:
         raise ValueError(ustr(e))
 
@@ -153,8 +154,7 @@ class MonitorHandler(object):
                 event.parameters.extend(self.sysinfo)
                 event_list.events.append(event)
             except (ValueError, ProtocolError) as e:
-                logger.info("Failed to decode event file: {0}", e)
-                logger.info(data_str)
+                logger.warn("Failed to decode event file: {0}", e)
                 continue
 
         if len(event_list.events) == 0:
@@ -178,5 +178,5 @@ class MonitorHandler(object):
             try:
                 self.collect_and_send_events()
             except Exception as e:
-                logger.verb("Failed to send events: {0}", e)
+                logger.warn("Failed to send events: {0}", e)
             time.sleep(60)
