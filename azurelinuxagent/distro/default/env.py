@@ -80,7 +80,7 @@ class EnvHandler(object):
     def handle_dhclient_restart(self):
         if self.dhcpid is None:
             logger.warn("Dhcp client is not running. ")
-            self.dhcpid = self.distro.dhcp_handler.get_dhcp_pid()
+            self.dhcpid = self.distro.osutil.get_dhcp_pid()
             return
 
         #The dhcp process hasn't changed since last check
