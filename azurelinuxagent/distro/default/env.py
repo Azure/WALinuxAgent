@@ -84,7 +84,7 @@ class EnvHandler(object):
             return
 
         #The dhcp process hasn't changed since last check
-        if os.path.isdir(os.path.join('/proc', self.dhcpid.strip())):
+        if self.distro.osutil.check_pid_alive(self.dhcpid.strip()):
             return
 
         newpid = self.distro.osutil.get_dhcp_pid()

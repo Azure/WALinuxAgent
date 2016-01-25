@@ -65,7 +65,7 @@ class DaemonHandler(object):
         if os.path.isfile(pid_file):
             pid = fileutil.read_file(pid_file)
 
-        if pid is not None and os.path.isdir(os.path.join("/proc", pid)):
+        if self.distro.osutil.check_pid_alive(pid):
             logger.info("Daemon is already running: {0}", pid)
             sys.exit(0)
             

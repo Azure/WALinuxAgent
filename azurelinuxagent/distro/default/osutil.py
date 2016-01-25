@@ -606,7 +606,7 @@ class DefaultOSUtil(object):
         if ret[0] == 0:
             return int(ret[1])
         else:
-            raise OSUtilError("Failed to get procerssor cores")
+            raise OSUtilError("Failed to get processor cores")
     
     def set_admin_access_to_ip(self, dest_ip):
         #This root allow root to access dest_ip
@@ -621,3 +621,5 @@ class DefaultOSUtil(object):
         shellutil.run(rm_old.format(dest_ip), chk_err=False)
         shellutil.run(rule.format(dest_ip))
 
+    def check_pid_alive(self, pid):
+        return pid is not None and os.path.isdir(os.path.join('/proc', pid))

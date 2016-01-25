@@ -28,6 +28,7 @@ from azurelinuxagent.exception import OSUtilError
 class FreeBSDOSUtil(DefaultOSUtil):
     def __init__(self):
         super(FreeBSDOSUtil, self).__init__()
+        self._scsi_disks_timeout_set = False
 
     def useradd(self, username, expiration=None):
         """
@@ -92,7 +93,7 @@ class FreeBSDOSUtil(DefaultOSUtil):
         shellutil.run("route delete 255.255.255.255", chk_err=False)
 
     def get_dhcp_pid(self):
-        ret = shellutil.run_get_output("pgrep dhclient")
+        ret = shellutil.run_get_output("pgrep -n dhclient")
         return ret[1] if ret[0] == 0 else None
 
     def eject_dvd(self, chk_err=True):
@@ -102,7 +103,34 @@ class FreeBSDOSUtil(DefaultOSUtil):
             raise OSUtilError("Failed to eject dvd: ret={0}".format(retcode))
 
     def restart_if(self, ifname):
-        shellutil.run("/etc/rc.d/netif restart {0}".format(ifname))
+        shellutil.run("/etc/rc.d/netif restart {0}".format(ifname), chk_err=False)
+
+    def get_total_mem(self):
+        cmd = "sysctl hw.physmem |awk '{print $2}'"
+        ret, output = shellutil.run_get_output(cmd)
+        if ret == 0:
+            return int(output)/1024/1024
+        else:
+            raise OSUtilError("Failed to get total memory: {0}".format(output))
+
+    def get_processor_cores(self):
+        ret, output = shellutil.run_get_output("sysctl hw.ncpu |awk '{print $2}'")
+        if ret:
+            raise OSUtilError("Failed to get processor cores.")
+
+        return int(output)
+
+    def set_scsi_disks_timeout(self, timeout):
+        if self._scsi_disks_timeout_set:
+            return
+
+        ret, output = shellutil.run_get_output('sysctl kern.cam.da.default_timeout={0}'.format(timeout))
+        if ret:
+            raise OSUtilError("Failed set SCSI disks timeout: {0}".format(output))
+        self._scsi_disks_timeout_set = True
+
+    def check_pid_alive(self, pid):
+        return shellutil.run('ps -p {0}'.format(pid), chk_err=False) == 0
 
     @staticmethod
     def _get_net_info():
