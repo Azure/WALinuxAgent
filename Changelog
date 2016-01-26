@@ -1,5 +1,12 @@
 WALinuxAgent                                                          Changelog
 |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+29 Jan 2016, WALinuxAgent 2.1.3
+   . Fixed endpoint probing for Azure Stack
+   . Multiple fixes for extension handling
+
+07 Dec 2015, WALinuxAgent 2.1.2
+   . Multiple fixes for extension handling and provisioning
+
 07 Aug 2015, WALinuxAgent 2.1.1
    . Support python3
    . Fixed bugs for metadata protocol
