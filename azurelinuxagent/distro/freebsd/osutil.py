@@ -80,10 +80,11 @@ class FreeBSDOSUtil(DefaultOSUtil):
         return shellutil.run(cmd, chk_err=False)
 
     def is_missing_default_route(self):
-        routes = shellutil.run_get_output("netstat -rn4")[1]
-        for route in routes.split("\n"):
-            if route.startswith("0.0.0.0 ") or route.startswith("default "):
-                return False
+        """
+        For FreeBSD, the default broadcast goes to current default gw, not a all-ones broadcast address, need to
+        specify the route manually to get it work in a VNET environment.
+        SEE ALSO: man ip(4) IP_ONESBCAST,
+        """
         return True
 
     def set_route_for_dhcp_broadcast(self, ifname):
