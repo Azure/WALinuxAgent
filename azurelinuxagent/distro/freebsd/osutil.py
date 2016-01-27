@@ -61,16 +61,7 @@ class FreeBSDOSUtil(DefaultOSUtil):
                                "").format(username, output))
 
     def del_root_password(self):
-        try:
-            passwd_file_path = conf.get_passwd_file_path()
-            passwd_content = fileutil.read_file(passwd_file_path)
-            passwd = passwd_content.split('\n')
-            new_passwd = [x for x in passwd if not x.startswith("root:")]
-            new_passwd.insert(0, "root:*LOCK*:0:0::0:0:::")
-            fileutil.write_file(passwd_file_path, "\n".join(new_passwd))
-        except IOError as e:
-            raise OSUtilError("Failed to delete root password:{0}".format(e))
-        err, output = shellutil.run('pwd_mkdb -u root ' + passwd_file_path)
+        err = shellutil.run('pw mod user root -w no')
         if err:
             raise OSUtilError("Failed to delete root password: Failed to update password database.")
 
