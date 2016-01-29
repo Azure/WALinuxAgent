@@ -104,7 +104,8 @@ class FreeBSDOSUtil(DefaultOSUtil):
             raise OSUtilError("Failed to eject dvd: ret={0}".format(retcode))
 
     def restart_if(self, ifname):
-        shellutil.run("/etc/rc.d/netif restart {0}".format(ifname), chk_err=False)
+        # Restart dhclient only to publish hostname
+        shellutil.run("/etc/rc.d/dhclient restart {0}".format(ifname), chk_err=False)
 
     def get_total_mem(self):
         cmd = "sysctl hw.physmem |awk '{print $2}'"
