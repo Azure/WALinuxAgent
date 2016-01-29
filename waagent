@@ -1296,6 +1296,271 @@ class asianuxDistro(redhatDistro):
         super(asianuxDistro,self).__init__()
 
 ############################################################
+#       NixOSDistro
+############################################################
+
+class NixOSDistro(AbstractDistro):
+    """
+    NixOS Distro concrete class
+    Put NixOS specific behavior here...
+    """
+    def __init__(self):
+        super(NixOSDistro,self).__init__()
+        global RulesFiles
+        RulesFiles = []
+        EtcDhcpClientConfFiles = []
+        # configs are deleted by NixOS
+        self.agent_files_to_uninstall = []
+        self.dhcp_client_name = "dhcpcd"
+        self.dhcp_enabled=True
+        self.fileBlackList = [ "/root/.bash_history" "/etc/machine-id" ]
+        self.requiredDeps.extend([ "mount", "umount", "pidof", "hostname", "systemctl" ])
+        self.requiredDeps.remove('sed')
+        if "--part-type" in RunGetOutput("sfdisk --help")[1]:
+            self.sfdisk_cmd = "sfdisk -q --part-type "
+        else:
+            self.sfdisk_cmd = "sfdisk -q -c "
+
+    def restartService(self, name):
+        return Run("systemctl restart " + name)
+
+    def checkPackageInstalled(self,p):
+        """
+        The only way to install waagent in NixOS is via system config.
+        Return 1 since it must be preinstalled.
+        """
+        return 1
+
+    def installAgentServiceScriptFiles(self):
+        """
+        The only way to install waagent in NixOS is via system config.
+        Return 1 since it must be preinstalled.
+        """
+        return 1
+
+    def registerAgentService(self):
+        """
+        The only way to install waagent in NixOS is via system config.
+        Return 1 since it must be preinstalled.
+        """
+        return 1
+
+    def uninstallAgentService(self):
+        """
+        The only way to uninstall waagent in NixOS is via system config.
+        """
+        return 1
+
+    def unregisterAgentService(self):
+        """
+        The only way to uninstall waagent in NixOS is via system config.
+        """
+        return 1
+
+    def startAgentService(self):
+        return Run("systemctl start waagent")
+
+    def stopAgentService(self):
+        return Run("systemctl stop waagent")
+
+    def restartSshService(self):
+        """
+        Restart the SSH daemon service if it isn't configured as socket-activated
+        """
+        return self.restartService("sshd")
+
+    def sshDeployPublicKey(self,fprint,path):
+        """
+        We support PKCS8.
+        """
+        if Run("ssh-keygen -i -m PKCS8 -f " + fprint + " >> " + path):
+            return 1
+        else :
+            return 0
+
+    def checkPackageUpdateable(self,p):
+        """
+        Packages can only be updated via system config in NixOS.
+        Return 0 since waagent can't update packages.
+        """
+        return 0
+
+    def deleteRootPassword(self):
+        return Run("usermod root -p '!'")
+
+    def load_ata_piix(self):
+        """
+        ata_piix module (un)loading is handled by the NixOS waagent service.
+        """
+        return 0
+
+    def unload_ata_piix(self):
+        """
+        ata_piix module (un)loading is handled by the NixOS waagent service.
+        """
+        return 0
+
+    def deprovisionWarnUser(self):
+        return
+
+    def checkDependencies(self):
+        """
+        Since the waagent service is installed via system config in NixOS,
+        all dependencies are satisfied.
+        """
+        return 1
+
+    def RestartInterface(self, iface):
+        self.restartService(self.dhcp_client_name)
+
+    def Install(self):
+        """
+        Packages must be installed via system config in NixOS.
+        """
+        return 1
+
+    def stopDHCP(self):
+        Run("systemctl stop " + self.dhcp_client_name)
+    def startDHCP(self):
+        Run("systemctl start " + self.dhcp_client_name)
+
+    def setDefaultGateway(self, gateway):
+        Run("route add default gw" + gateway, chk_err=False)
+
+    def routeAdd(self, net, mask, gateway):
+        Run("route add -net " + net + " netmask " + mask + " gw " + gateway,
+            chk_err=False)
+
+    def CreateAccount(self,user, password, expiration, thumbprint):
+        """
+        Create a user account, with 'user', 'password', 'expiration',
+        ssh keys, and sudo permissions.
+        Returns None if successful, error string on failure.
+        """
+        userentry = None
+        try:
+            userentry = pwd.getpwnam(user)
+        except:
+            pass
+        uidmin = None
+        try:
+            uidmin = int(GetLineStartingWith("UID_MIN", "/etc/login.defs").split()[1])
+        except:
+            pass
+        if uidmin == None:
+            uidmin = 100
+        if userentry != None and userentry[2] < uidmin:
+            Error("CreateAccount: " + user + " is a system user. Will not set password.")
+            return "Failed to set password for system user: " + user + " (0x06)."
+        if userentry == None:
+            command = "useradd -m " + user
+            if expiration != None:
+                command += " -e " + expiration.split('.')[0]
+            if Run(command):
+                Error("Failed to create user account: " + user)
+                return "Failed to create user account: " + user + " (0x07)."
+        else:
+            Log("CreateAccount: " + user + " already exists. Will update password.")
+        if password != None:
+            MyDistro.changePass(user, password)
+        Run('usermod ' + user + ' -G wheel')
+        home = MyDistro.GetHome()
+        if thumbprint != None:
+            dir = home + "/" + user + "/.ssh"
+            CreateDir(dir, user, 0700)
+            pub = dir + "/id_rsa.pub"
+            prv = dir + "/id_rsa"
+            Run("ssh-keygen -y -f " + thumbprint + ".prv > " + pub)
+            SetFileContents(prv, GetFileContents(thumbprint + ".prv"))
+            for f in [pub, prv]:
+                os.chmod(f, 0600)
+                ChangeOwner(f, user)
+            SetFileContents(dir + "/authorized_keys", GetFileContents(pub))
+            ChangeOwner(dir + "/authorized_keys", user)
+        Log("Created user account: " + user)
+        return None
+
+    def ActivateResourceDisk(self):
+        """
+        Format, mount, and if specified in the configuration
+        set resource disk as swap.
+        """
+        global DiskActivated
+        format = Config.get("ResourceDisk.Format")
+        if format == None or format.lower().startswith("n"):
+            DiskActivated = True
+            return
+        device = DeviceForIdePort(1)
+        if device == None:
+            Error("ActivateResourceDisk: Unable to detect disk topology.")
+            return
+        device = "/dev/" + device
+
+        mountlist = RunGetOutput("mount")[1]
+        mountpoint = GetMountPoint(mountlist, device)
+
+        if(mountpoint):
+            Log("ActivateResourceDisk: " + device + "1 is already mounted.")
+        else:
+            mountpoint = Config.get("ResourceDisk.MountPoint")
+            if mountpoint == None:
+                mountpoint = "/mnt/resource"
+            CreateDir(mountpoint, "root", 0755)
+            fs = Config.get("ResourceDisk.Filesystem")
+            if fs == None:
+                fs = "ext3"
+
+            partition = device + "1"
+
+            #Check partition type
+            Log("Detect GPT...")
+            ret = RunGetOutput("parted {0} print".format(device))
+            if ret[0] == 0 and "gpt" in ret[1]:
+                Log("GPT detected.")
+                #GPT(Guid Partition Table) is used.
+                #Get partitions.
+                parts = filter(lambda x : re.match("^\s*[0-9]+", x), ret[1].split("\n"))
+                #If there are more than 1 partitions, remove all partitions
+                #and create a new one using the entire disk space.
+                if len(parts) > 1:
+                    for i in range(1, len(parts) + 1):
+                        Run("parted {0} rm {1}".format(device, i))
+                    Run("parted {0} mkpart primary 0% 100%".format(device))
+                    Run("mkfs." + fs + " " + partition + " -F")
+            else:
+                existingFS = RunGetOutput(self.sfdisk_cmd + device + " 1", chk_err=False)[1].strip()
+                if existingFS == "7" and fs != "ntfs":
+                    Run(self.sfdisk_cmd + device + " 1 83")
+                    Run("mkfs." + fs + " " + partition)
+            if Run("mount " + partition + " " + mountpoint, chk_err=False):
+                #If mount failed, try to format the partition and mount again
+                Warn("Failed to mount resource disk. Retry mounting.")
+                Run("mkfs." + fs + " " + partition + " -F")
+                if Run("mount " + partition + " " + mountpoint):
+                    Error("ActivateResourceDisk: Failed to mount resource disk (" + partition + ").")
+                    return
+            Log("Resource disk (" + partition + ") is mounted at " + mountpoint + " with fstype " + fs)
+
+        #Create README file under the root of resource disk
+        SetFileContents(os.path.join(mountpoint,README_FILENAME), README_FILECONTENT)
+        DiskActivated = True
+
+        #Create swap space
+        swap = Config.get("ResourceDisk.EnableSwap")
+        if swap == None or swap.lower().startswith("n"):
+            return
+        sizeKB = int(Config.get("ResourceDisk.SwapSizeMB")) * 1024
+        if os.path.isfile(mountpoint + "/swapfile") and os.path.getsize(mountpoint + "/swapfile") != (sizeKB * 1024):
+            os.remove(mountpoint + "/swapfile")
+        if not os.path.isfile(mountpoint + "/swapfile"):
+            Run("dd if=/dev/zero of=" + mountpoint + "/swapfile bs=1024 count=" + str(sizeKB))
+            Run("mkswap " + mountpoint + "/swapfile")
+        if not Run("swapon " + mountpoint + "/swapfile"):
+            Log("Enabled " + str(sizeKB) + " KB of swap at " + mountpoint + "/swapfile")
+        else:
+            Error("ActivateResourceDisk: Failed to activate swap at " + mountpoint + "/swapfile")
+
+############################################################
 #   CoreOSDistro
 ############################################################
 
@@ -2228,7 +2493,7 @@ class FreeBSDDistro(AbstractDistro):
         Check dependencies.
         Create /etc/waagent.conf and move old version to
         /etc/waagent.conf.old
-        Copy RulesFiles to /var/lib/waagent
+        Copy RulesFiles to LibDir
         Create /etc/logrotate.d/waagent
         Set /etc/ssh/sshd_config ClientAliveInterval to 180
         Call ApplyVNUMAWorkaround()
@@ -3743,7 +4008,7 @@ class RdmaHandler(object):
 
 class ExtensionsConfig(object):
     """
-    Parse ExtensionsConfig, downloading and unpacking them to /var/lib/waagent.
+    Parse ExtensionsConfig, downloading and unpacking them to LibDir.
     Install if <enabled>true</enabled>, remove if it is set to false.
     """
     #<?xml version="1.0" encoding="utf-8"?>
@@ -4933,10 +5198,11 @@ class OvfEnv(object):
         if self.DisableSshPasswordAuthentication:
             filepath = "/etc/ssh/sshd_config"
             # Disable RFC 4252 and RFC 4256 authentication schemes.
-            ReplaceFileContentsAtomic(filepath, "\n".join(filter(lambda a: not
-                (a.startswith("PasswordAuthentication") or a.startswith("ChallengeResponseAuthentication")),
-                GetFileContents(filepath).split('\n'))) + "\nPasswordAuthentication no\nChallengeResponseAuthentication no\n")
-            Log("Disabled SSH password-based authentication methods.")
+            if os.path.exists(filepath):
+                ReplaceFileContentsAtomic(filepath, "\n".join(filter(lambda a: not
+                    (a.startswith("PasswordAuthentication") or a.startswith("ChallengeResponseAuthentication")),
+                    GetFileContents(filepath).split('\n'))) + "\nPasswordAuthentication no\nChallengeResponseAuthentication no\n")
+                Log("Disabled SSH password-based authentication methods.")
         if self.AdminPassword != None:
             MyDistro.changePass('root',self.AdminPassword)
         if self.UserName != None:
@@ -5194,9 +5460,9 @@ class WALAEventMonitor(WALAEvent):
                 self.sysInfo["GAVersion"]=GuestAgentVersion
                 self.sysInfo["RAM"]=MyDistro.getTotalMemory()
                 self.sysInfo["Processors"]=MyDistro.getProcessorCores()
-                sharedConfig = xml.dom.minidom.parse("/var/lib/waagent/SharedConfig.xml").childNodes[0]
-                hostEnvConfig= xml.dom.minidom.parse("/var/lib/waagent/HostingEnvironmentConfig.xml").childNodes[0]
-                gfiles = RunGetOutput("ls -t /var/lib/waagent/GoalState.*.xml")[1]
+                sharedConfig = xml.dom.minidom.parse(LibDir + "/SharedConfig.xml").childNodes[0]
+                hostEnvConfig= xml.dom.minidom.parse(LibDir + "/HostingEnvironmentConfig.xml").childNodes[0]
+                gfiles = RunGetOutput("ls -t " + LibDir + "/GoalState.*.xml")[1]
                 goalStateConfi =  xml.dom.minidom.parse(gfiles.split("\n")[0]).childNodes[0]
                 self.sysInfo["TenantName"]=hostEnvConfig.getElementsByTagName("Deployment")[0].getAttribute("name")
                 self.sysInfo["RoleName"]=hostEnvConfig.getElementsByTagName("Role")[0].getAttribute("name")
@@ -6211,7 +6477,7 @@ def Install():
     Check dependencies.
     Create /etc/waagent.conf and move old version to
     /etc/waagent.conf.old
-    Copy RulesFiles to /var/lib/waagent
+    Copy RulesFiles to LibDir
     Create /etc/logrotate.d/waagent
     Set /etc/ssh/sshd_config ClientAliveInterval to 180
     Call ApplyVNUMAWorkaround()
@@ -6261,6 +6527,11 @@ def GetMyDistro(dist_class_name=''):
         Distro=Distro.strip('"')
         Distro=Distro.strip(' ')
         dist_class_name=Distro+'Distro'
+        # Workaround: python platform library cannot detect NixOS
+        if not Distro and os.path.exists('/etc/os-release'):
+            f = GetFileContents('/etc/os-release')
+            if 'NixOS' in f:
+                dist_class_name = 'NixOSDistro' 
     else:
         Distro=dist_class_name
     if not globals().has_key(dist_class_name):
@@ -6273,10 +6544,14 @@ def DistInfo(fullname=0):
         release = re.sub('\-.*\Z', '', str(platform.release()))
         distinfo = ['FreeBSD', release]
         return distinfo
-    
+
     if 'linux_distribution' in dir(platform):
         distinfo = list(platform.linux_distribution(full_distribution_name=fullname))
         distinfo[0] = distinfo[0].strip() # remove trailing whitespace in distro name
+        # Workaround: python platform library cannot detect NixOS
+        if not distinfo[0] and os.path.exists('/etc/os-release'):
+            if 'NixOS' in GetFileContents('/etc/os-release'):
+                return [ 'NixOS', '', '' ]
         return distinfo
     else:
         return platform.dist()
@@ -6324,7 +6599,7 @@ def Deprovision(force, deluser):
     Stop agent service.
     Remove SSH host keys if they were generated by the provision.
     Set hostname to 'localhost.localdomain'.
-    Delete cached system configuration files in /var/lib and /var/lib/waagent.
+    Delete cached system configuration files in /var/lib and LibDir.
     """
     
     #Append blank line at the end of file, so the ctime of this file is changed every time
@@ -6370,7 +6645,7 @@ def Deprovision(force, deluser):
 
 def SwitchCwd():
     """
-    Switch to cwd to /var/lib/waagent.
+    Switch to cwd to LibDir.
     Create if not present.
     """
     CreateDir(LibDir, "root", 0700)
@@ -6400,7 +6675,6 @@ def main():
     LoggerInit('/var/log/waagent.log','/dev/console')
     global LinuxDistro
     LinuxDistro=DistInfo()[0]
-
     global MyDistro
     MyDistro = GetMyDistro()
     if MyDistro == None :
