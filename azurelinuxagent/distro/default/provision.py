@@ -122,7 +122,7 @@ class ProvisionHandler(object):
                             crypt_id=crypt_id, salt_len=salt_len)
          
         logger.info("Configure sudoer")
-        self.distro.osutil.conf_sudoer(ovfenv.username, ovfenv.user_password is None)
+        self.distro.osutil.conf_sudoer(ovfenv.username, nopasswd=ovfenv.user_password is None)
 
         logger.info("Configure sshd")
         self.distro.osutil.conf_sshd(ovfenv.disable_ssh_password_auth)

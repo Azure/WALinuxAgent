@@ -50,6 +50,12 @@ class FreeBSDOSUtil(DefaultOSUtil):
                                "retcode:{1}, "
                                "output:{2}").format(username, retcode, out))
 
+    def del_account(self, username):
+        if self.is_sys_user(username):
+            logger.error("{0} is a system user. Will not delete it.", username)
+        shellutil.run('> /var/run/utx.active')
+        shellutil.run('rmuser -y ' + username)
+        self.conf_sudoer(username, remove=True)
 
     def chpasswd(self, username, password, crypt_id=6, salt_len=10):
         if self.is_sys_user(username):

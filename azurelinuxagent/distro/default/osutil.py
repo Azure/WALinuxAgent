@@ -114,21 +114,36 @@ class DefaultOSUtil(object):
             raise OSUtilError(("Failed to set password for {0}: {1}"
                                "").format(username, output))
 
-    def conf_sudoer(self, username, nopasswd):
-        # for older distros create sudoers.d
-        if not os.path.isdir('/etc/sudoers.d/'):
-            # create the /etc/sudoers.d/ directory
-            os.mkdir('/etc/sudoers.d/')
-            # add the include of sudoers.d to the /etc/sudoers
-            sudoers = '\n' + '#includedir /etc/sudoers.d/\n'
-            fileutil.append_file('/etc/sudoers', sudoers)
-        sudoer = None
-        if nopasswd:
-            sudoer = "{0} ALL = (ALL) NOPASSWD\n".format(username)
+    def conf_sudoer(self, username, nopasswd=False, remove=False):
+        sudoers_dir = conf.get_sudoers_dir()
+        sudoers_wagent = os.path.join(sudoers_dir, 'waagent')
+
+        if not remove:
+            # for older distros create sudoers.d
+            if not os.path.isdir(sudoers_dir):
+                sudoers_file = os.path.join(sudoers_dir, '../sudoers')
+                # create the sudoers.d directory
+                os.mkdir(sudoers_dir)
+                # add the include of sudoers.d to the /etc/sudoers
+                sudoers = '\n#includedir ' + sudoers_dir + '\n'
+                fileutil.append_file(sudoers_file, sudoers)
+            sudoer = None
+            if nopasswd:
+                sudoer = "{0} ALL=(ALL) NOPASSWD: ALL\n".format(username)
+            else:
+                sudoer = "{0} ALL=(ALL) ALL\n".format(username)
+            fileutil.append_file(sudoers_wagent, sudoer)
+            fileutil.chmod(sudoers_wagent, 0o440)
         else:
-            sudoer = "{0} ALL = (ALL) ALL\n".format(username)
-        fileutil.append_file('/etc/sudoers.d/waagent', sudoer)
-        fileutil.chmod('/etc/sudoers.d/waagent', 0o440)
+            #Remove user from sudoers
+            if os.path.isfile(sudoers_wagent):
+                try:
+                    content = fileutil.read_file(sudoers_wagent)
+                    sudoers = content.split("\n")
+                    sudoers = [x for x in sudoers if username not in x]
+                    fileutil.write_file(sudoers_wagent, "\n".join(sudoers))
+                except IOError as e:
+                    raise OSUtilError("Failed to remove sudoer: {0}".format(e))
 
     def del_root_password(self):
         try:
@@ -579,16 +594,7 @@ class DefaultOSUtil(object):
             logger.error("{0} is a system user. Will not delete it.", username)
         shellutil.run("> /var/run/utmp")
         shellutil.run("userdel -f -r " + username)
-        #Remove user from suders
-        if os.path.isfile("/etc/suders.d/waagent"):
-            try:
-                content = fileutil.read_file("/etc/sudoers.d/waagent")
-                sudoers = content.split("\n")
-                sudoers = [x for x in sudoers if username not in x]
-                fileutil.write_file("/etc/sudoers.d/waagent",
-                                         "\n".join(sudoers))
-            except IOError as e:
-                raise OSUtilError("Failed to remove sudoer: {0}".format(e))
+        self.conf_sudoer(username, remove=True)
 
     def decode_customdata(self, data):
         return base64.b64decode(data)
