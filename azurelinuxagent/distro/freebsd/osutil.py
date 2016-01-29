@@ -117,9 +117,11 @@ class FreeBSDOSUtil(DefaultOSUtil):
     def get_total_mem(self):
         cmd = "sysctl hw.physmem |awk '{print $2}'"
         ret, output = shellutil.run_get_output(cmd)
-        if ret == 0:
+        if ret:
+            raise OSUtilError("Failed to get total memory: {0}".format(output))
+        try:
             return int(output)/1024/1024
-        else:
+        except ValueError:
             raise OSUtilError("Failed to get total memory: {0}".format(output))
 
     def get_processor_cores(self):
@@ -127,7 +129,10 @@ class FreeBSDOSUtil(DefaultOSUtil):
         if ret:
             raise OSUtilError("Failed to get processor cores.")
 
-        return int(output)
+        try:
+            return int(output)
+        except ValueError:
+            raise OSUtilError("Failed to get total memory: {0}".format(output))
 
     def set_scsi_disks_timeout(self, timeout):
         if self._scsi_disks_timeout_set:
