@@ -44,6 +44,15 @@ DATA_FILE_EXT_NO_SETTINGS["ext_conf"] = "wire/ext_conf_no_settings.xml"
 DATA_FILE_EXT_NO_PUBLIC = DATA_FILE.copy()
 DATA_FILE_EXT_NO_PUBLIC["ext_conf"] = "wire/ext_conf_no_public.xml"
 
+DATA_FILE_EXT_AUTOUPGRADE = DATA_FILE.copy()
+DATA_FILE_EXT_AUTOUPGRADE["ext_conf"] = "wire/ext_conf_autoupgrade.xml"
+
+DATA_FILE_EXT_INTERNALVERSION = DATA_FILE.copy()
+DATA_FILE_EXT_INTERNALVERSION["ext_conf"] = "wire/ext_conf_internalversion.xml"
+
+DATA_FILE_EXT_AUTOUPGRADE_INTERNALVERSION = DATA_FILE.copy()
+DATA_FILE_EXT_AUTOUPGRADE_INTERNALVERSION["ext_conf"] = "wire/ext_conf_autoupgrade_internalversion.xml"
+
 class WireProtocolData(object):
     def __init__(self, data_files=DATA_FILE):
         self.version_info = load_data(data_files.get("version_info"))
