@@ -2633,7 +2633,7 @@ def SetFileContents(filepath, contents):
     try:
         with open(filepath, "wb+") as F :
             F.write(contents)
-    except IOError, e:
+    except (IOError,TypeError) as e:
         ErrorWithPrefix('SetFileContents','Writing to file ' + filepath + ' Exception is ' + str(e))
         return None
     return 0
@@ -2647,7 +2647,7 @@ def AppendFileContents(filepath, contents):
     try: 
         with open(filepath, "a+") as F :
             F.write(contents)
-    except IOError, e:
+    except (IOError,TypeError) as e:
         ErrorWithPrefix('AppendFileContents','Appending to file ' + filepath + ' Exception is ' + str(e))
         return None
     return 0
@@ -2661,7 +2661,7 @@ def ReplaceFileContentsAtomic(filepath, contents):
         contents=contents.encode('latin-1')
     try:
         os.write(handle, contents)
-    except IOError, e:
+    except (IOError,TypeError) as e:
         ErrorWithPrefix('ReplaceFileContentsAtomic','Writing to file ' + filepath + ' Exception is ' + str(e))
         return None
     finally:
@@ -3984,7 +3984,7 @@ class RdmaHandler(object):
         try:
             with open(self.dev, "w") as c:
                 c.write(self.data)
-        except IOError, e:
+        except (IOError,TypeError) as e:
             raise RdmaError("Error writing {0}, {1}".format(self.dev, e))
 
     def wait_rdma_dev(self):
