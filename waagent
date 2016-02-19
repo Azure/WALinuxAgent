@@ -181,7 +181,7 @@ class AbstractDistro(object):
                               'sed', 'grep', 'sudo', 'parted' ]
         self.init_script_file='/etc/init.d/waagent'
         self.agent_package_name='WALinuxAgent'
-        self.fileBlackList = [ "/root/.bash_history", "/var/log/waagent.log",'/etc/resolv.conf' ]        
+        self.fileBlackList = [ "/root/.bash_history", "/var/log/waagent.log",'/etc/resolv.conf' ]
         self.agent_files_to_uninstall = ["/etc/waagent.conf", "/etc/logrotate.d/waagent"]
         self.grubKernelBootOptionsFile = '/etc/default/grub'
         self.grubKernelBootOptionsLine = 'GRUB_CMDLINE_LINUX_DEFAULT='
@@ -192,6 +192,11 @@ class AbstractDistro(object):
         self.shadow_file_mode=0600
         self.shadow_file_path="/etc/shadow"
         self.dhcp_enabled = False
+        
+        """
+        the commands related to the rdma packages.
+        """
+        self.hv_kvp_daemon_service_process_name = "hv_kvp_daemon"
 
     def isSelinuxSystem(self):
         """
@@ -655,10 +660,10 @@ class AbstractDistro(object):
 
     def getProcessorCores(self):
         return int(RunGetOutput("grep 'processor.*:' /proc/cpuinfo |wc -l")[1])
-    
+
     def getTotalMemory(self):
         return int(RunGetOutput("grep MemTotal /proc/meminfo |awk '{print $2}'")[1])/1024
-    
+
     def getInterfaceNameByMac(self, mac):
         ret, output = RunGetOutput("ifconfig -a")
         if ret != 0:
@@ -684,12 +689,123 @@ class AbstractDistro(object):
         if ret != 0:
             raise Exception("Failed to config ipv4 for {0}: {1}".format(ifName, 
                                                                         output))
+
     def setDefaultGateway(self, gateway):
         Run("/sbin/route add default gw" + gateway, chk_err=False)
 
     def routeAdd(self, net, mask, gateway):
         Run("/sbin/route add -net " + net + " netmask " + mask + " gw " + gateway,
             chk_err=False)
+
+    def getRdmaPackageVersion(self):
+        error, output = RunGetOutput(self.command_to_get_package_info)
+        if(error == RdmaConfig.process_success):
+            r = re.search(self.version_pattern, output)
+            if r is not None:
+                package_version = r.groups()[0] # e.g.  package_version is "20150707.140.0_k3.12.28_4-3.1."
+                return package_version
+            else:
+                return None
+        else:
+            return None
+
+    def checkInstallHyperV(self):
+        error, output = RunGetOutput(self.ps_path + " -ef")
+        if(error != RdmaConfig.process_success):
+            return RdmaConfig.common_failed
+        else:
+            r = re.search(self.hv_kvp_daemon_service_process_name, output)
+            if r is None :
+                # if the 
+                Log("hv kvp daemon is not running.")
+                error,output = RunGetOutput(self.command_to_detect_hyper_v, chk_err=False,log_cmd=False)
+                if(error == RdmaConfig.process_success):
+                    Log("the hyper-v package is installed, but hv_kvp_daemon not started")
+                    return RdmaConfig.hv_kvp_daemon_not_started
+                else:
+                    error,output = RunGetOutput(self.command_to_install_hyper_v)
+                    Log("install hyper-v return code: " + str(error) + " output:" + str(output))
+                    if(error != RdmaConfig.process_success):
+                        return RdmaConfig.common_failed
+                    else:
+                        self.rebootMachine()
+                        return RdmaConfig.process_success
+            else :
+                Log("KVP daemon  is running")
+                return RdmaConfig.process_success
+
+    def rdmaUpdate(self,updateRdmaRepository=None):
+        # give some time for the hv_hvp_daemon to start up.
+        time.sleep(10)
+        check_install_result = self.checkInstallHyperV()
+        if(check_install_result == RdmaConfig.process_success):
+            # wait for sometime the RDMA Driver not passed in by KVP in time.
+            time.sleep(10)
+
+            nd_driver_version = self.getNdDriverVersion()
+            if(nd_driver_version is None):
+                raise RdmaError(RdmaConfig.driver_version_not_found)
+            else:
+                check_result = self.checkRDMA(nd_driver_version=nd_driver_version)
+                Log("RDMA  version check result is " + str(check_result))
+                if(check_result == RdmaConfig.UpToDate):
+                    return
+                elif(check_result == RdmaConfig.OutOfDate):
+                    update_rdma_driver_result = self.rdmaUpdatePackage(host_version=nd_driver_version,updateRdmaRepository=updateRdmaRepository)
+                elif(check_result == RdmaConfig.DriverVersionNotFound):
+                    raise RdmaError(RdmaConfig.driver_version_not_found)
+                elif(check_result == RdmaConfig.Unknown):
+                    raise RdmaError(RdmaConfig.unknown_error)
+        else:
+            raise RdmaError(RdmaConfig.check_install_hv_utils_failed)
+
+    def rdmaUpdatePackage(self, host_version, updateRdmaRepository = None):
+        # check the repository first
+        if(updateRdmaRepository is not None and updateRdmaRepository.strip() !=""):
+            error,output = RunGetOutput(self.command_to_list_repository)
+            rdma_pack_result = re.search(self.rdma_pack_repository_name, output)
+            if rdma_pack_result is None :
+                Log("rdma_pack_result is None")
+                command_to_add_repository = self.get_command_to_add_repository(updateRdmaRepository)
+                error, output = RunGetOutput(command_to_add_repository)
+                #wait for the cache build.
+                time.sleep(20)
+                Log("error result is " + str(error) + " output is : " + str(output))
+            else:
+                Log("output is: " + str(output))
+                Log("msft-rdma-pack found")
+        # microsoft-hyper-v-rdma-4.0.11.142-20160201
+        returnCode, message = RunGetOutput(self.command_to_refresh_repository)
+        Log("refresh repo return code is " + str(returnCode) + " output is: " + str(message))
+        #install the wrapper package, that will put the driver RPM packages under /opt/microsoft/rdma
+        returnCode, message = RunGetOutput(self.command_to_remove_wrapper_package)
+        Log("remove wrapper package return code is " + str(returnCode) + " output is: " + str(message))
+        returnCode, message = RunGetOutput(self.command_to_install_wrapper_package)
+        Log("install wrapper package return code is " + str(returnCode) + " output is: " + str(message))
+        self.installRdmaDrivers()
+
+    def installRdmaDrivers(self):
+        pass
+
+    def checkRDMA(self, nd_driver_version = None):
+        if(nd_driver_version is None):
+            nd_driver_version = self.getNdDriverVersion()
+        if(nd_driver_version is None or nd_driver_version == ""):
+            return RdmaConfig.DriverVersionNotFound
+        package_version = self.getRdmaPackageVersion()
+        if(package_version is None or package_version == ""):
+            return RdmaConfig.OutOfDate
+        else:
+            # package_version would be like this :20150707_k3.12.28_4-3.1 20150707.140.0_k3.12.28_4-1.1
+            # nd_driver_version 140.0
+            Log("nd_driver_version is " + str(nd_driver_version) + " package_version is " + str(package_version))
+            if(nd_driver_version is not None):
+                r = re.match("^[0-9]+[.](%s).+" % nd_driver_version, package_version)# NdDriverVersion should be at the end of package version
+                if not r :	#host ND version is the same as the package version, do an update
+                    return RdmaConfig.OutOfDate
+                else:
+                    return RdmaConfig.UpToDate
+            return RdmaConfig.Unknown
 
     def getNdDriverVersion(self):
         """
@@ -710,19 +826,9 @@ class AbstractDistro(object):
             Log(errMsg)
             raise RdmaError(RdmaConfig.nd_driver_detect_error)
 
-    def checkInstallHyperV(self):
-        return None
-
-    def getRdmaPackageVersion(self):
-        return None
-
-    def rdmaUpdate(self,updateRdmaRepository=None):
-        Log("rdmaUpdate in base class")
-        pass
-
-    def checkRDMA(self):
-        Log("checkRDMA in base class")
-        pass
+    def rebootMachine(self):
+        Log("rebooting the machine")
+        RunGetOutput(self.reboot_path)
 
 ############################################################
 #	GentooDistro
@@ -943,12 +1049,26 @@ class SuSEDistro(AbstractDistro):
         self.rpm_path = '/bin/rpm'
         self.service_cmd = '/sbin/service'
         self.ssh_service_name ='sshd'
+
         if(dist_info[1] == "11"):
             self.ps_path = '/bin/ps'
         else:
             self.ps_path = '/usr/bin/ps'
-
         self.zypper_path = '/usr/bin/zypper'
+        self.version_pattern = "Version: (\S+)"
+        
+        self.wrapper_package_name = 'msft-rdma-drivers'
+        self.rdma_package_name = 'msft-lis-rdma-kmp-default'
+        self.command_to_get_package_info = self.zypper_path + " info " + self.rdma_package_name
+        self.command_to_detect_hyper_v = self.rpm_path + " -q hyper-v"
+        self.command_to_install_hyper_v = self.zypper_path + " -n install --force hyper-v"
+        self.command_to_list_repository = self.zypper_path + " lr -u"
+        self.rdma_pack_repository_name = "msft-rdma-pack"
+        self.command_to_refresh_repository = self.zypper_path + " --no-gpg-checks refresh"
+        self.command_to_remove_wrapper_package = self.zypper_path + " -n remove " + self.wrapper_package_name
+        self.command_to_install_wrapper_package = self.zypper_path + " --non-interactive install --force " + self.wrapper_package_name
+        self.command_to_remove_rdma_package = self.zypper_path + " --non-interactive remove " + self.rdma_package_name
+        self.command_to_install_rdma_package = self.zypper_path + " --non-interactive install --force /opt/microsoft/rdma/%s"
 
     def checkPackageInstalled(self,p):
         if Run("rpm -q " + p,chk_err=False):
@@ -986,103 +1106,18 @@ class SuSEDistro(AbstractDistro):
     def stopDHCP(self):
         Run("service " + self.dhcp_client_name + " stop", chk_err=False)
 
-    def getRdmaPackageVersion(self):
-        """
-        """
-        error, output = RunGetOutput(self.zypper_path + " info " + RdmaConfig.rmda_package_name)
-        if(error == RdmaConfig.process_success):
-            r = re.search("Version: (\S+)", output)
-            if r is not None:
-                package_version = r.groups()[0] # e.g.  package_version is "20150707.140.0_k3.12.28_4-3.1."
-                return package_version
-            else:
-                return None
-        else:
-            return None
+    def get_command_to_add_repository(self, updateRdmaRepository):
+        return self.zypper_path + " ar " + str(updateRdmaRepository) + " " + self.rdma_pack_repository_name
 
-    def checkInstallHyperV(self):
-        error, output = RunGetOutput(self.ps_path + " -ef")
-        if(error != RdmaConfig.process_success):
-            return RdmaConfig.common_failed
-        else:
-            hv_kvp_daemon_service_process_name = "hv_kvp_daemon"
-            hv_kvp_daemon_service_name = "hv_kvp_daemon"
-            r = re.search(hv_kvp_daemon_service_process_name, output)
-            if r is None :
-                # if the 
-                Log("hv kvp daemon is not running.")
-                error,output = RunGetOutput(self.rpm_path + " -q hyper-v", chk_err=False,log_cmd=False)
-                if(error == RdmaConfig.process_success):
-                    Log("the hyper-v package is installed, but hv_kvp_daemon not started")
-                    return RdmaConfig.hv_kvp_daemon_not_started
-                else:
-                    error,output = RunGetOutput(self.zypper_path + " -n install --force hyper-v")
-                    Log("install hyper-v return code: " + str(error) + " output:" + str(output))
-                    if(error != RdmaConfig.process_success):
-                        return RdmaConfig.common_failed
-                    else:
-                        self.rebootMachine()
-                        return RdmaConfig.process_success
-            else :
-                Log("KVP daemon  is running")
-                return RdmaConfig.process_success
-
-    def rdmaUpdate(self,updateRdmaRepository=None):
-        # give some time for the hv_hvp_daemon to start up.
-        time.sleep(10)
-        check_install_result = self.checkInstallHyperV()
-        if(check_install_result == RdmaConfig.process_success):
-            # wait for sometime the RDMA Driver not passed in by KVP in time.
-            time.sleep(10)
-
-            nd_driver_version = self.getNdDriverVersion()
-            if(nd_driver_version is None):
-                raise RdmaError(RdmaConfig.driver_version_not_found)
-            else:
-                check_result = self.checkRDMA(nd_driver_version=nd_driver_version)
-                Log("RDMA  version check result is " + str(check_result))
-                if(check_result == RdmaConfig.UpToDate):
-                    return
-                elif(check_result == RdmaConfig.OutOfDate):
-                    update_rdma_driver_result = self.rdmaUpdatePackage(host_version=nd_driver_version,updateRdmaRepository=updateRdmaRepository)
-                elif(check_result == RdmaConfig.DriverVersionNotFound):
-                    raise RdmaError(RdmaConfig.driver_version_not_found)
-                elif(check_result == RdmaConfig.Unknown):
-                    raise RdmaError(RdmaConfig.unknown_error)
-        else:
-            raise RdmaError(RdmaConfig.check_install_hv_utils_failed)
-
-    def rdmaUpdatePackage(self, host_version, updateRdmaRepository = None):
-        # check the repository first
-        if(updateRdmaRepository is not None):
-            error,output = RunGetOutput(self.zypper_path + " lr -u")
-            rdma_pack_repository_name = "msft-rdma-pack"
-            rdma_pack_result = re.search(rdma_pack_repository_name, output)
-            if rdma_pack_result is None :
-                Log("rdma_pack_result is None")
-                error, output = RunGetOutput(self.zypper_path + " ar " + str(updateRdmaRepository) + " " + rdma_pack_repository_name)
-                #wait for the cache build.
-                time.sleep(20)
-                Log("error result is " + str(error) + " output is : " + str(output))
-            else:
-                Log("output is: " + str(output))
-                Log("msft-rdma-pack found")
-
-        returnCode, message = RunGetOutput(self.zypper_path + " --no-gpg-checks refresh")
-        Log("refresh repo return code is " + str(returnCode) + " output is: " + str(message))
-        #install the wrapper package, that will put the driver RPM packages under /opt/microsoft/rdma
-        returnCode, message = RunGetOutput(self.zypper_path + " -n remove " + RdmaConfig.wrapper_package_name)
-        Log("remove wrapper package return code is " + str(returnCode) + " output is: " + str(message))
-        returnCode, message = RunGetOutput(self.zypper_path + " --non-interactive install --force " + RdmaConfig.wrapper_package_name)
-        Log("install wrapper package return code is " + str(returnCode) + " output is: " + str(message))
+    def installRdmaDrivers(self):
         r = os.listdir("/opt/microsoft/rdma")
         if r is not None :
             for filename in r :
-                if re.match(RdmaConfig.rmda_package_name + "-\d{8}\.(%s).+" % host_version, filename) :
-                    error, output = RunGetOutput(self.zypper_path + " --non-interactive remove " + RdmaConfig.rmda_package_name)
+                if re.match(self.rdma_package_name + "-\d{8}\.(%s).+" % host_version, filename) :
+                    error, output = RunGetOutput(self.command_to_remove_rdma_package)
                     Log("remove rdma package result is " + str(error) + " output is: " + str(output))
                     Log("Installing RPM /opt/microsoft/rdma/" + filename)
-                    error, output = RunGetOutput(self.zypper_path + " --non-interactive install --force /opt/microsoft/rdma/%s" % filename)
+                    error, output = RunGetOutput(self.command_to_install_rdma_package% filename)
                     Log("Install rdma package result is " + str(error) + " output is: " + str(output))
                     if(error == RdmaConfig.process_success):
                         self.rebootMachine()
@@ -1091,31 +1126,6 @@ class SuSEDistro(AbstractDistro):
         else:
             Log("RDMA drivers not found in /opt/microsoft/rdma")
             raise RdmaError(RdmaConfig.package_not_found)
-
-    def checkRDMA(self, nd_driver_version = None):
-        if(nd_driver_version is None):
-            nd_driver_version = self.getNdDriverVersion()
-        if(nd_driver_version is None or nd_driver_version == ""):
-            return RdmaConfig.DriverVersionNotFound
-        package_version = self.getRdmaPackageVersion()
-        if(package_version is None or package_version == ""):
-            return RdmaConfig.OutOfDate
-        else:
-            # package_version would be like this :20150707_k3.12.28_4-3.1 20150707.140.0_k3.12.28_4-1.1
-            # nd_driver_version 140.0
-            Log("nd_driver_version is " + str(nd_driver_version) + " package_version is " + str(package_version))
-            if(nd_driver_version is not None):
-                r = re.match("^[0-9]+[.](%s).+" % nd_driver_version, package_version)# NdDriverVersion should be at the end of package version
-                if not r :	#host ND version is the same as the package version, do an update
-                    return RdmaConfig.OutOfDate
-                else:
-                    return RdmaConfig.UpToDate
-            return RdmaConfig.Unknown
-
-    def rebootMachine(self):
-        Log("rebooting the machine")
-        RunGetOutput(self.reboot_path)
-
 ############################################################    
 #	redhatDistro
 ############################################################    
@@ -1264,12 +1274,82 @@ class centosDistro(redhatDistro):
     """
     def __init__(self):
         super(centosDistro,self).__init__()
+        dist_info = DistInfo()
+        if(dist_info[1].startswith("6.5")):
+            self.ps_path = '/bin/ps'
+        else:
+            self.ps_path = '/usr/bin/ps'
+        self.yum_path = '/usr/bin/yum'
+        self.version_pattern = "Version\s+: (\S+)"
+        ############################### check the package names
+        self.wrapper_package_name = 'msft-rdma-drivers'
+        self.rdma_package_name = 'microsoft-hyper-v-rdma'
+        self.rdma_kmod_package_name = 'kmod-microsoft-hyper-v-rdma'
+        self.command_to_get_package_info = self.yum_path + " info " + self.rdma_package_name
+        #hyperv-daemons
+        self.command_to_detect_hyper_v = self.rpm_path + " -q hyperv-daemons"
+        self.command_to_install_hyper_v = self.yum_path + " -n install --force hyperv-daemons"
+        self.yum_config_manager = "/usr/bin/yum-config-manager"
+        self.rdma_pack_repository_name = "msft-rdma-pack"
+        self.command_to_list_repository = self.yum_path + " repolist"
+        self.command_to_refresh_repository = self.yum_path + " updateinfo"
+        self.command_to_remove_wrapper_package = self.yum_path + " erase " + self.wrapper_package_name
+        self.command_to_install_wrapper_package = self.yum_path + " install -q -y " + self.wrapper_package_name
+        self.command_to_remove_rdma_package = self.yum_path + " erase -q -y " + self.rdma_package_name
+        self.command_to_install_rdma_package = self.yum_path + " install -q -y %s/%s"
+        self.command_to_remove_rdma_kmod_package = self.yum_path + " -q erase " + self.rdma_kmod_package_name
+        self.command_to_install_rdma_kmod_package = self.yum_path + " -q install %s/%s"
 
-    def rdmaUpdate(self,updateRdmaRepository=None):
-        pass
+    def get_command_to_add_repository(self, updateRdmaRepository):
+        #write the repo file
+        repo_file_path = "/etc/yum.repos.d/" + self.rdma_pack_repository_name
+        if(os.path.exists(repo_file_path)):
+            os.remove(repo_file_path)
+        repo_content = "[" + self.rdma_pack_repository_name + "]\n"\
+                        + "name=" + self.rdma_pack_repository_name + "\n"\
+                        + "baseurl=" + updateRdmaRepository + "\nenabled=1\n"
+        with open(repo_file_path, "wb+") as F :
+            F.write(repo_content)
+        return self.yum_config_manager + " --add-repo=/etc/yum.repos.d/" + repo_file_path
 
-    def checkRDMA(self):
-        pass
+    def installRdmaDrivers(self):
+        if(dist_info[1].startswith("6.5")):
+            extracted_folder = "/opt/microsoft/rdma/rhel65"
+        elif(dist_info[1].startswith("7.1")):
+            extracted_folder = "/opt/microsoft/rdma/rhel71"
+        else:
+            raise RdmaError(RdmaConfig.os_not_supported)
+        r = os.listdir(extracted_folder)
+        if r is not None :
+            for filename in r :
+                #kmod-microsoft-hyper-v-rdma-X.X.X.<NDVERSION>-DDDDDDDD.x86_64.rpm
+                installed= False
+                if re.match(self.rdma_package_name + "-\d\.\d\.\d\.(%s).+" % host_version, filename) :
+                    error, output = RunGetOutput(self.command_to_remove_rdma_package)
+                    Log("remove rdma package result is " + str(error) + " output is: " + str(output))
+                    Log("Installing RPM " + extracted_folder + filename)
+                    error, output = RunGetOutput(self.command_to_install_rdma_package % (extracted_folder,filename))
+                    Log("Install rdma package result is " + str(error) + " output is: " + str(output))
+                    if(error != RdmaConfig.process_success):
+                        raise RdmaError(RdmaConfig.package_install_failed)
+                    else:
+                        installed = True
+                #microsoft-hyper-v-rdma-X.X.X.<NDVERSION>-DDDDDDDD.x86_64.rpm
+                if re.match(self.rdma_kmod_package_name + "-\d\.\d\.\d\.(%s).+" % host_version, filename) :
+                    error, output = RunGetOutput(self.command_to_remove_rdma_kmod_package)
+                    Log("remove rdma package result is " + str(error) + " output is: " + str(output))
+                    Log("Installing RPM " + extracted_folder + filename)
+                    error, output = RunGetOutput(self.command_to_install_rdma_kmod_package % (extracted_folder,filename))
+                    Log("Install rdma package result is " + str(error) + " output is: " + str(output))
+                    if(error != RdmaConfig.process_success):
+                        raise RdmaError(RdmaConfig.package_install_failed)
+                    else:
+                        installed = True
+                if(installed):
+                    self.rebootMachine()
+        else:
+            Log("RDMA drivers not found in /opt/microsoft/rdma")
+            raise RdmaError(RdmaConfig.package_not_found)
 
 ############################################################    
 #	oracleDistro
@@ -3891,11 +3971,6 @@ rdma_configured = False
 
 class RdmaConfig(object):
     """
-    configurations
-    """
-    wrapper_package_name = 'msft-rdma-drivers'
-    rmda_package_name = 'msft-lis-rdma-kmp-default'
-    """
     error code definitions
     """
     process_success = 0
@@ -3907,6 +3982,7 @@ class RdmaConfig(object):
     package_not_found = 6
     package_install_failed = 7
     hv_kvp_daemon_not_started = 8
+    os_not_supported = 9
     """
     check_rdma_result
     """
