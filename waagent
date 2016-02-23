@@ -1287,11 +1287,11 @@ class centosDistro(redhatDistro):
             self.reboot_path = '/sbin/reboot'
         else:
             self.ps_path = '/usr/bin/ps'
-            self.yum_path = '/usr/bin/yum'
             self.rpm_path = '/usr/bin/rpm'
             self.reboot_path = '/usr/sbin/reboot'
             self.yum_config_manager = "/usr/bin/yum-config-manager"
         self.version_pattern = "Version\s+: (\S+)"
+        self.yum_path = '/usr/bin/yum'
         ############################### check the package names
         self.wrapper_package_name = 'msft-rdma-drivers'
         self.rdma_package_name = 'microsoft-hyper-v-rdma'
