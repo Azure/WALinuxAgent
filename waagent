@@ -1347,7 +1347,7 @@ class centosDistro(redhatDistro):
                     else:
                         installed = True
                 #microsoft-hyper-v-rdma-X.X.X.<NDVERSION>-DDDDDDDD.x86_64.rpm
-                if re.match(self.rdma_kmod_package_name + "-\d\.\d\.\d\.(%s).+" % host_version, filename) :
+                if re.match(self.rdma_kmod_package_name + "-(\d+\.)+(%s)(.+)" % host_version, filename) :
                     error, output = RunGetOutput(self.command_to_remove_rdma_kmod_package)
                     Log("remove rdma package result is " + str(error) + " output is: " + str(output))
                     Log("Installing RPM " + extracted_folder + filename)
