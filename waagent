@@ -1334,25 +1334,25 @@ class centosDistro(redhatDistro):
         if r is not None :
             for filename in r :
                 installed= False
-                #microsoft-hyper-v-rdma-X.X.X.<NDVERSION>-DDDDDDDD.x86_64.rpm
-                r = re.match(self.rdma_package_name + "-(\d+\.)+(%s)(.+)" % host_version, filename)
-                if r:
-                    error, output = RunGetOutput(self.command_to_remove_rdma_package)
-                    Log("remove rdma package result is " + str(error) + " output is: " + str(output))
-                    Log("Installing RPM " + extracted_folder + filename)
-                    error, output = RunGetOutput(self.command_to_install_rdma_package % (extracted_folder,filename))
-                    Log("Install rdma package result is " + str(error) + " output is: " + str(output))
-                    if(error != RdmaConfig.process_success):
-                        raise RdmaError(RdmaConfig.package_install_failed)
-                    else:
-                        installed = True
                 #kmod-microsoft-hyper-v-rdma-X.X.X.<NDVERSION>-DDDDDDDD.x86_64.rpm
                 r = re.match(self.rdma_kmod_package_name + "-(\d+\.)+(%s)(.+)" % host_version, filename)
                 if r:
                     error, output = RunGetOutput(self.command_to_remove_rdma_kmod_package)
                     Log("remove rdma package result is " + str(error) + " output is: " + str(output))
-                    Log("Installing RPM " + extracted_folder + filename)
+                    Log("Installing RPM " + extracted_folder + "/" + filename)
                     error, output = RunGetOutput(self.command_to_install_rdma_kmod_package % (extracted_folder,filename))
+                    Log("Install rdma package result is " + str(error) + " output is: " + str(output))
+                    if(error != RdmaConfig.process_success):
+                        raise RdmaError(RdmaConfig.package_install_failed)
+                    else:
+                        installed = True
+                #microsoft-hyper-v-rdma-X.X.X.<NDVERSION>-DDDDDDDD.x86_64.rpm
+                r = re.match(self.rdma_package_name + "-(\d+\.)+(%s)(.+)" % host_version, filename)
+                if r:
+                    error, output = RunGetOutput(self.command_to_remove_rdma_package)
+                    Log("remove rdma package result is " + str(error) + " output is: " + str(output))
+                    Log("Installing RPM " + extracted_folder + "/" + filename)
+                    error, output = RunGetOutput(self.command_to_install_rdma_package % (extracted_folder,filename))
                     Log("Install rdma package result is " + str(error) + " output is: " + str(output))
                     if(error != RdmaConfig.process_success):
                         raise RdmaError(RdmaConfig.package_install_failed)
