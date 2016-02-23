@@ -812,15 +812,19 @@ class AbstractDistro(object):
         if error happens, raise a RdmaError
         """
         try:
-            with open("/var/lib/hyperv/.kvp_pool_0", "r") as f:
-                lines = f.read()
-            r = re.search("NdDriverVersion\0+(\d\d\d\.\d)", lines)
-            if r is not None:
-                NdDriverVersion = r.groups()[0]
-                return NdDriverVersion #e.g.  NdDriverVersion = 142.0
-            else :
-                Log("Error: NdDriverVersion not found.")
-                return None
+            ndDriverVersionHook = Config.get("Host.NdDriverVersion")
+            if(ndDriverVersionHook is not None and ndDriverVersionHook.strip()!=""):
+                return ndDriverVersionHook
+            else:
+                with open("/var/lib/hyperv/.kvp_pool_0", "r") as f:
+                    lines = f.read()
+                r = re.search("NdDriverVersion\0+(\d\d\d\.\d)", lines)
+                if r is not None:
+                    NdDriverVersion = r.groups()[0]
+                    return NdDriverVersion #e.g.  NdDriverVersion = 142.0
+                else :
+                    Log("Error: NdDriverVersion not found.")
+                    return None
         except Exception as e:
             errMsg = 'Cannot update status: Failed to enable the extension with error: %s, stack trace: %s' % (str(e), traceback.format_exc())
             Log(errMsg)
@@ -1126,6 +1130,7 @@ class SuSEDistro(AbstractDistro):
         else:
             Log("RDMA drivers not found in /opt/microsoft/rdma")
             raise RdmaError(RdmaConfig.package_not_found)
+
 ############################################################    
 #	redhatDistro
 ############################################################    
@@ -1274,22 +1279,28 @@ class centosDistro(redhatDistro):
     """
     def __init__(self):
         super(centosDistro,self).__init__()
-        dist_info = DistInfo()
-        if(dist_info[1].startswith("6.5")):
+        self.dist_info = DistInfo()
+        if(self.dist_info[1].startswith("6.5")):
             self.ps_path = '/bin/ps'
+            self.yum_path = '/bin/yum'
+            self.rpm_path = '/bin/rpm'
+            self.reboot_path = '/sbin/reboot'
         else:
             self.ps_path = '/usr/bin/ps'
-        self.yum_path = '/usr/bin/yum'
+            self.yum_path = '/usr/bin/yum'
+            self.rpm_path = '/usr/bin/rpm'
+            self.reboot_path = '/usr/sbin/reboot'
+            self.yum_config_manager = "/usr/bin/yum-config-manager"
         self.version_pattern = "Version\s+: (\S+)"
         ############################### check the package names
         self.wrapper_package_name = 'msft-rdma-drivers'
         self.rdma_package_name = 'microsoft-hyper-v-rdma'
         self.rdma_kmod_package_name = 'kmod-microsoft-hyper-v-rdma'
+        self.hyper_v_package_name = "microsoft-hyper-v"
         self.command_to_get_package_info = self.yum_path + " info " + self.rdma_package_name
         #hyperv-daemons
-        self.command_to_detect_hyper_v = self.rpm_path + " -q hyperv-daemons"
-        self.command_to_install_hyper_v = self.yum_path + " -n install --force hyperv-daemons"
-        self.yum_config_manager = "/usr/bin/yum-config-manager"
+        self.command_to_detect_hyper_v = self.rpm_path + " -q " + self.hyper_v_package_name
+        self.command_to_install_hyper_v = self.yum_path + " -y install " + self.hyper_v_package_name
         self.rdma_pack_repository_name = "msft-rdma-pack"
         self.command_to_list_repository = self.yum_path + " repolist"
         self.command_to_refresh_repository = self.yum_path + " updateinfo"
@@ -1313,9 +1324,9 @@ class centosDistro(redhatDistro):
         return self.yum_config_manager + " --add-repo=/etc/yum.repos.d/" + repo_file_path
 
     def installRdmaDrivers(self):
-        if(dist_info[1].startswith("6.5")):
+        if(self.dist_info[1].startswith("6.5")):
             extracted_folder = "/opt/microsoft/rdma/rhel65"
-        elif(dist_info[1].startswith("7.1")):
+        elif(self.dist_info[1].startswith("7.1")):
             extracted_folder = "/opt/microsoft/rdma/rhel71"
         else:
             raise RdmaError(RdmaConfig.os_not_supported)
