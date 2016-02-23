@@ -1308,7 +1308,7 @@ class centosDistro(redhatDistro):
         self.command_to_install_wrapper_package = self.yum_path + " install -q -y " + self.wrapper_package_name
         self.command_to_remove_rdma_package = self.yum_path + " erase -q -y " + self.rdma_package_name
         self.command_to_install_rdma_package = self.yum_path + " install -q -y %s/%s"
-        self.command_to_remove_rdma_kmod_package = self.yum_path + " erase -q -y" + self.rdma_kmod_package_name
+        self.command_to_remove_rdma_kmod_package = self.yum_path + " erase -q -y " + self.rdma_kmod_package_name
         self.command_to_install_rdma_kmod_package = self.yum_path + " install -q -y  %s/%s"
 
     def get_command_to_add_repository(self, updateRdmaRepository):
