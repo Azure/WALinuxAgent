@@ -1295,7 +1295,7 @@ class centosDistro(redhatDistro):
         ############################### check the package names
         self.wrapper_package_name = 'msft-rdma-drivers'
         self.rdma_package_name = 'microsoft-hyper-v-rdma'
-        self.rdma_kmod_package_name = 'kmod-microsoft-hyper-v-rdma'
+        self.rdma_kmod_package_name = 'microsoft-hyper-v-rdma-kmod'
         self.hyper_v_package_name = "microsoft-hyper-v"
         self.command_to_get_package_info = self.yum_path + " info " + self.rdma_package_name
         #hyperv-daemons
