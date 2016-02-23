@@ -747,7 +747,7 @@ class AbstractDistro(object):
                 raise RdmaError(RdmaConfig.driver_version_not_found)
             else:
                 check_result = self.checkRDMA(nd_driver_version=nd_driver_version)
-                Log("RDMA  version check result is " + str(check_result))
+                Log("RDMA version check result is " + str(check_result))
                 if(check_result == RdmaConfig.UpToDate):
                     return
                 elif(check_result == RdmaConfig.OutOfDate):
@@ -782,9 +782,9 @@ class AbstractDistro(object):
         Log("remove wrapper package return code is " + str(returnCode) + " output is: " + str(message))
         returnCode, message = RunGetOutput(self.command_to_install_wrapper_package)
         Log("install wrapper package return code is " + str(returnCode) + " output is: " + str(message))
-        self.installRdmaDrivers()
+        self.installRdmaDrivers(host_version)
 
-    def installRdmaDrivers(self):
+    def installRdmaDrivers(self, host_version):
         pass
 
     def checkRDMA(self, nd_driver_version = None):
@@ -1113,7 +1113,7 @@ class SuSEDistro(AbstractDistro):
     def get_command_to_add_repository(self, updateRdmaRepository):
         return self.zypper_path + " ar " + str(updateRdmaRepository) + " " + self.rdma_pack_repository_name
 
-    def installRdmaDrivers(self):
+    def installRdmaDrivers(self, host_version):
         r = os.listdir("/opt/microsoft/rdma")
         if r is not None :
             for filename in r :
@@ -1300,16 +1300,16 @@ class centosDistro(redhatDistro):
         self.command_to_get_package_info = self.yum_path + " info " + self.rdma_package_name
         #hyperv-daemons
         self.command_to_detect_hyper_v = self.rpm_path + " -q " + self.hyper_v_package_name
-        self.command_to_install_hyper_v = self.yum_path + " -y install " + self.hyper_v_package_name
+        self.command_to_install_hyper_v = self.yum_path + " install -q -y " + self.hyper_v_package_name
         self.rdma_pack_repository_name = "msft-rdma-pack"
         self.command_to_list_repository = self.yum_path + " repolist"
         self.command_to_refresh_repository = self.yum_path + " updateinfo"
-        self.command_to_remove_wrapper_package = self.yum_path + " erase " + self.wrapper_package_name
+        self.command_to_remove_wrapper_package = self.yum_path + " erase -q -y " + wrapper_package_name
         self.command_to_install_wrapper_package = self.yum_path + " install -q -y " + self.wrapper_package_name
         self.command_to_remove_rdma_package = self.yum_path + " erase -q -y " + self.rdma_package_name
         self.command_to_install_rdma_package = self.yum_path + " install -q -y %s/%s"
-        self.command_to_remove_rdma_kmod_package = self.yum_path + " -q erase " + self.rdma_kmod_package_name
-        self.command_to_install_rdma_kmod_package = self.yum_path + " -q install %s/%s"
+        self.command_to_remove_rdma_kmod_package = self.yum_path + " erase -q -y" + self.rdma_kmod_package_name
+        self.command_to_install_rdma_kmod_package = self.yum_path + " install -q -y  %s/%s"
 
     def get_command_to_add_repository(self, updateRdmaRepository):
         #write the repo file
@@ -1323,7 +1323,7 @@ class centosDistro(redhatDistro):
             F.write(repo_content)
         return self.yum_config_manager + " --add-repo=/etc/yum.repos.d/" + repo_file_path
 
-    def installRdmaDrivers(self):
+    def installRdmaDrivers(self, host_version):
         if(self.dist_info[1].startswith("6.5")):
             extracted_folder = "/opt/microsoft/rdma/rhel65"
         elif(self.dist_info[1].startswith("7.1")):
@@ -1335,6 +1335,7 @@ class centosDistro(redhatDistro):
             for filename in r :
                 #kmod-microsoft-hyper-v-rdma-X.X.X.<NDVERSION>-DDDDDDDD.x86_64.rpm
                 installed= False
+                #microsoft-hyper-v-rdma
                 if re.match(self.rdma_package_name + "-\d\.\d\.\d\.(%s).+" % host_version, filename) :
                     error, output = RunGetOutput(self.command_to_remove_rdma_package)
                     Log("remove rdma package result is " + str(error) + " output is: " + str(output))
@@ -1358,6 +1359,8 @@ class centosDistro(redhatDistro):
                         installed = True
                 if(installed):
                     self.rebootMachine()
+                else:
+                    Log("no rdma package is installed.")
         else:
             Log("RDMA drivers not found in /opt/microsoft/rdma")
             raise RdmaError(RdmaConfig.package_not_found)
