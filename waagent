@@ -1121,7 +1121,7 @@ class SuSEDistro(AbstractDistro):
                     error, output = RunGetOutput(self.command_to_remove_rdma_package)
                     Log("remove rdma package result is " + str(error) + " output is: " + str(output))
                     Log("Installing RPM /opt/microsoft/rdma/" + filename)
-                    error, output = RunGetOutput(self.command_to_install_rdma_package% filename)
+                    error, output = RunGetOutput(self.command_to_install_rdma_package % filename)
                     Log("Install rdma package result is " + str(error) + " output is: " + str(output))
                     if(error == RdmaConfig.process_success):
                         self.rebootMachine()
@@ -1295,7 +1295,7 @@ class centosDistro(redhatDistro):
         ############################### check the package names
         self.wrapper_package_name = 'msft-rdma-drivers'
         self.rdma_package_name = 'microsoft-hyper-v-rdma'
-        self.rdma_kmod_package_name = 'microsoft-hyper-v-rdma-kmod'
+        self.rdma_kmod_package_name = 'kmod-microsoft-hyper-v-rdma'
         self.hyper_v_package_name = "microsoft-hyper-v"
         self.command_to_get_package_info = self.yum_path + " info " + self.rdma_package_name
         #hyperv-daemons
@@ -1304,12 +1304,12 @@ class centosDistro(redhatDistro):
         self.rdma_pack_repository_name = "msft-rdma-pack"
         self.command_to_list_repository = self.yum_path + " repolist"
         self.command_to_refresh_repository = self.yum_path + " updateinfo"
-        self.command_to_remove_wrapper_package = self.yum_path + " erase -q -y " + wrapper_package_name
+        self.command_to_remove_wrapper_package = self.yum_path + " erase -q -y " + self.wrapper_package_name
         self.command_to_install_wrapper_package = self.yum_path + " install -q -y " + self.wrapper_package_name
         self.command_to_remove_rdma_package = self.yum_path + " erase -q -y " + self.rdma_package_name
         self.command_to_install_rdma_package = self.yum_path + " install -q -y %s/%s"
         self.command_to_remove_rdma_kmod_package = self.yum_path + " erase -q -y " + self.rdma_kmod_package_name
-        self.command_to_install_rdma_kmod_package = self.yum_path + " install -q -y  %s/%s"
+        self.command_to_install_rdma_kmod_package = self.yum_path + " install -q -y %s/%s"
 
     def get_command_to_add_repository(self, updateRdmaRepository):
         #write the repo file
@@ -1332,36 +1332,39 @@ class centosDistro(redhatDistro):
             raise RdmaError(RdmaConfig.os_not_supported)
         r = os.listdir(extracted_folder)
         if r is not None :
+            installed = False
             for filename in r :
-                installed= False
+                #first uninstall the rdma_kmod_package_name
                 #kmod-microsoft-hyper-v-rdma-X.X.X.<NDVERSION>-DDDDDDDD.x86_64.rpm
-                r = re.match(self.rdma_kmod_package_name + "-(\d+\.)+(%s)(.+)" % host_version, filename)
+                r = re.match((self.rdma_kmod_package_name + "-(\d+\.)+(%s)-\d{8}\.x86_64.rpm") % host_version, filename)
                 if r:
                     error, output = RunGetOutput(self.command_to_remove_rdma_kmod_package)
-                    Log("remove rdma package result is " + str(error) + " output is: " + str(output))
+                    Log("remove kmod-microsoft-hyper-v-rdma package result is " + str(error) + " output is: " + str(output))
                     Log("Installing RPM " + extracted_folder + "/" + filename)
-                    error, output = RunGetOutput(self.command_to_install_rdma_kmod_package % (extracted_folder,filename))
-                    Log("Install rdma package result is " + str(error) + " output is: " + str(output))
+                    error, output = RunGetOutput(self.command_to_install_rdma_kmod_package % (extracted_folder, filename))
+                    Log("Install kmod-microsoft-hyper-v-rdma package result is " + str(error) + " output is: " + str(output))
                     if(error != RdmaConfig.process_success):
                         raise RdmaError(RdmaConfig.package_install_failed)
                     else:
                         installed = True
+            for filename in r :
+                #first uninstall the rdma_kmod_package_name
                 #microsoft-hyper-v-rdma-X.X.X.<NDVERSION>-DDDDDDDD.x86_64.rpm
-                r = re.match(self.rdma_package_name + "-(\d+\.)+(%s)(.+)" % host_version, filename)
+                r = re.match((self.rdma_package_name + "-(\d+\.)+(%s)-\d{8}\.x86_64.rpm") % host_version, filename)
                 if r:
                     error, output = RunGetOutput(self.command_to_remove_rdma_package)
-                    Log("remove rdma package result is " + str(error) + " output is: " + str(output))
+                    Log("remove microsoft-hyper-v-rdma package result is " + str(error) + " output is: " + str(output))
                     Log("Installing RPM " + extracted_folder + "/" + filename)
                     error, output = RunGetOutput(self.command_to_install_rdma_package % (extracted_folder,filename))
-                    Log("Install rdma package result is " + str(error) + " output is: " + str(output))
+                    Log("Install microsoft-hyper-v-rdma package result is " + str(error) + " output is: " + str(output))
                     if(error != RdmaConfig.process_success):
                         raise RdmaError(RdmaConfig.package_install_failed)
                     else:
                         installed = True
-                if(installed):
-                    self.rebootMachine()
-                else:
-                    Log("no rdma package is installed.")
+            if(installed):
+                self.rebootMachine()
+            else:
+                Log("no rdma package is installed.")
         else:
             Log("RDMA drivers not found in /opt/microsoft/rdma")
             raise RdmaError(RdmaConfig.package_not_found)
