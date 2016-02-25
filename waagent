@@ -586,11 +586,11 @@ class AbstractDistro(object):
         
         See also:
           - os.posix_fallocate(filename,0,bytes) # py 3.3+
-          - Run('mkfile {nbytes} {fn}'.format(fn=filename, nbytes=nbytes)) # even slower than dd, xfs_mkfile on Linux
+          - Run('mkfile {nbytes} {fn}'.format(fn=filename, nbytes=nbytes)) # BSD, xfs_mkfile (slow) on Linux
         """
         if os.path.isfile(filename)
             os.remove(filename)
-        return Run(ShellEscape(['fallocate', '-l', str(bytes), filename]))
+        return Run(['fallocate', '-l', str(bytes), filename])
     
     def GetHome(self):
         return GetHome()
@@ -2735,7 +2735,7 @@ def ShellEscape(wordList):
     byte-literal single quote.
     
     The resulting string is safe for use with ``shell=True`` in ``subprocess``,
-    and ``assert shlex.split(ShellEscape(wordList)) == wordList``.
+    and in ``os.system``. ``assert shlex.split(ShellEscape(wordList)) == wordList``.
     """
     if not isinstance(wordList, (tuple, list)):
         wordList = (wordList,)
@@ -2755,12 +2755,18 @@ def RunGetOutput(cmd, chk_err=True, log_cmd=True):
     """
     Wrapper for subprocess.check_output.
     Execute 'cmd'.  Returns return code and STDOUT, trapping expected exceptions.
-    Reports exceptions to Error if chk_err parameter is True
+    Reports exceptions to Error if chk_err parameter is True.
+    
+    When 'cmd' is a list or a tuple instead of a string, the process ``cmd[0]`` with
+    args ``cmd[1:]`` is started. This gives a safer and more determistic behavior
+    by avoiding all kinds of expansions. Otherwise, the shell will handle the
+    splitting, as well as processing of syntax elemenets like 'if', '&&' and globs.
     """
     if log_cmd:
-        LogIfVerbose(cmd)
+        LogIfVerbose(str(cmd))
     try:
-        output=subprocess.check_output(cmd,stderr=subprocess.STDOUT,shell=True)
+        output=subprocess.check_output(cmd,stderr=subprocess.STDOUT,
+                                       shell=(not isinstance(cmd,(tuple, list))))
     except subprocess.CalledProcessError,e :
         if chk_err and log_cmd:
             Error('CalledProcessError.  Error Code is ' + str(e.returncode)  )
@@ -2775,21 +2781,24 @@ def RunSendStdin(cmd, input, chk_err=True, log_cmd=True):
     Execute 'cmd', sending 'input' to STDIN of 'cmd'.
     Returns return code and STDOUT, trapping expected exceptions.
     Reports exceptions to Error if chk_err parameter is True
+    
+    See RunGetOutput for notes on non-string 'cmd'.
     """
     if log_cmd:
-        LogIfVerbose(cmd+input)
+        LogIfVerbose(str(cmd)+input)
     try:                                     
-        me=subprocess.Popen([cmd], shell=True, stdin=subprocess.PIPE,stderr=subprocess.STDOUT,stdout=subprocess.PIPE)
+        me=subprocess.Popen(cmd, stdin=subprocess.PIPE,stderr=subprocess.STDOUT,stdout=subprocess.PIPE,
+                                 shell=(not isinstance(cmd,(tuple, list))))
         output=me.communicate(input)
     except OSError , e :
         if chk_err and log_cmd:
             Error('CalledProcessError.  Error Code is ' + str(me.returncode)  )
-            Error('CalledProcessError.  Command string was ' + cmd  )
+            Error('CalledProcessError.  Command string was ' + str(cmd)  )
             Error('CalledProcessError.  Command result was ' + output[0].decode('latin-1'))
             return 1,output[0].decode('latin-1')
     if me.returncode is not 0 and chk_err is True and log_cmd:
             Error('CalledProcessError.  Error Code is ' + str(me.returncode)  )
-            Error('CalledProcessError.  Command string was ' + cmd  )
+            Error('CalledProcessError.  Command string was ' + str(cmd)  )
             Error('CalledProcessError.  Command result was ' + output[0].decode('latin-1'))
     return me.returncode,output[0].decode('latin-1')
 
