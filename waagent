@@ -196,7 +196,6 @@ class AbstractDistro(object):
         """
         the commands related to the rdma packages.
         """
-        self.hv_kvp_daemon_service_process_name = "hv_kvp_daemon"
 
     def isSelinuxSystem(self):
         """
@@ -697,47 +696,10 @@ class AbstractDistro(object):
         Run("/sbin/route add -net " + net + " netmask " + mask + " gw " + gateway,
             chk_err=False)
 
-    def getRdmaPackageVersion(self):
-        error, output = RunGetOutput(self.command_to_get_package_info)
-        if(error == RdmaConfig.process_success):
-            r = re.search(self.version_pattern, output)
-            if r is not None:
-                package_version = r.groups()[0] # e.g.  package_version is "20150707.140.0_k3.12.28_4-3.1."
-                return package_version
-            else:
-                return None
-        else:
-            return None
-
-    def checkInstallHyperV(self):
-        error, output = RunGetOutput(self.ps_path + " -ef")
-        if(error != RdmaConfig.process_success):
-            return RdmaConfig.common_failed
-        else:
-            r = re.search(self.hv_kvp_daemon_service_process_name, output)
-            if r is None :
-                # if the 
-                Log("hv kvp daemon is not running.")
-                error,output = RunGetOutput(self.command_to_detect_hyper_v, chk_err=False,log_cmd=False)
-                if(error == RdmaConfig.process_success):
-                    Log("the hyper-v package is installed, but hv_kvp_daemon not started")
-                    return RdmaConfig.hv_kvp_daemon_not_started
-                else:
-                    error,output = RunGetOutput(self.command_to_install_hyper_v)
-                    Log("install hyper-v return code: " + str(error) + " output:" + str(output))
-                    if(error != RdmaConfig.process_success):
-                        return RdmaConfig.common_failed
-                    else:
-                        self.rebootMachine()
-                        return RdmaConfig.process_success
-            else :
-                Log("KVP daemon  is running")
-                return RdmaConfig.process_success
-
     def rdmaUpdate(self,updateRdmaRepository=None):
         # give some time for the hv_hvp_daemon to start up.
         time.sleep(10)
-        check_install_result = self.checkInstallHyperV()
+        check_install_result = self.checkInstallKVPDaemon()
         if(check_install_result == RdmaConfig.process_success):
             # wait for sometime the RDMA Driver not passed in by KVP in time.
             time.sleep(10)
@@ -758,6 +720,64 @@ class AbstractDistro(object):
                     raise RdmaError(RdmaConfig.unknown_error)
         else:
             raise RdmaError(RdmaConfig.check_install_hv_utils_failed)
+
+    def getRdmaPackageVersion(self):
+        error, output = RunGetOutput(self.command_to_get_package_info)
+        if(error == RdmaConfig.process_success):
+            r = re.search(self.version_pattern, output)
+            if r is not None:
+                package_version = r.groups()[0] # e.g.  package_version is "20150707.140.0_k3.12.28_4-3.1."
+                return package_version
+            else:
+                return None
+        else:
+            return None
+
+    def checkInstallKVPDaemon(self):
+        return None
+
+    def getNdDriverVersion(self):
+        """
+        if error happens, raise a RdmaError
+        """
+        try:
+            ndDriverVersionHook = Config.get("Host.NdDriverVersion")
+            if(ndDriverVersionHook is not None and ndDriverVersionHook.strip()!=""):
+                return ndDriverVersionHook
+            else:
+                with open("/var/lib/hyperv/.kvp_pool_0", "r") as f:
+                    lines = f.read()
+                r = re.search("NdDriverVersion\0+(\d\d\d\.\d)", lines)
+                if r is not None:
+                    NdDriverVersion = r.groups()[0]
+                    return NdDriverVersion #e.g.  NdDriverVersion = 142.0
+                else :
+                    Log("Error: NdDriverVersion not found.")
+                    return None
+        except Exception as e:
+            errMsg = 'Cannot update status: Failed to enable the extension with error: %s, stack trace: %s' % (str(e), traceback.format_exc())
+            Log(errMsg)
+            raise RdmaError(RdmaConfig.nd_driver_detect_error)
+
+    def checkRDMA(self, nd_driver_version = None):
+        if(nd_driver_version is None):
+            nd_driver_version = self.getNdDriverVersion()
+        if(nd_driver_version is None or nd_driver_version == ""):
+            return RdmaConfig.DriverVersionNotFound
+        package_version = self.getRdmaPackageVersion()
+        if(package_version is None or package_version == ""):
+            return RdmaConfig.OutOfDate
+        else:
+            # package_version would be like this :20150707_k3.12.28_4-3.1 20150707.140.0_k3.12.28_4-1.1
+            # nd_driver_version 140.0
+            Log("nd_driver_version is " + str(nd_driver_version) + " package_version is " + str(package_version))
+            if(nd_driver_version is not None):
+                r = re.match("^[0-9]+[.](%s).+" % nd_driver_version, package_version)# NdDriverVersion should be at the end of package version
+                if not r :	#host ND version is the same as the package version, do an update
+                    return RdmaConfig.OutOfDate
+                else:
+                    return RdmaConfig.UpToDate
+            return RdmaConfig.Unknown
 
     def rdmaUpdatePackage(self, host_version, updateRdmaRepository = None):
         # check the repository first
@@ -786,49 +806,6 @@ class AbstractDistro(object):
 
     def installRdmaDrivers(self, host_version):
         pass
-
-    def checkRDMA(self, nd_driver_version = None):
-        if(nd_driver_version is None):
-            nd_driver_version = self.getNdDriverVersion()
-        if(nd_driver_version is None or nd_driver_version == ""):
-            return RdmaConfig.DriverVersionNotFound
-        package_version = self.getRdmaPackageVersion()
-        if(package_version is None or package_version == ""):
-            return RdmaConfig.OutOfDate
-        else:
-            # package_version would be like this :20150707_k3.12.28_4-3.1 20150707.140.0_k3.12.28_4-1.1
-            # nd_driver_version 140.0
-            Log("nd_driver_version is " + str(nd_driver_version) + " package_version is " + str(package_version))
-            if(nd_driver_version is not None):
-                r = re.match("^[0-9]+[.](%s).+" % nd_driver_version, package_version)# NdDriverVersion should be at the end of package version
-                if not r :	#host ND version is the same as the package version, do an update
-                    return RdmaConfig.OutOfDate
-                else:
-                    return RdmaConfig.UpToDate
-            return RdmaConfig.Unknown
-
-    def getNdDriverVersion(self):
-        """
-        if error happens, raise a RdmaError
-        """
-        try:
-            ndDriverVersionHook = Config.get("Host.NdDriverVersion")
-            if(ndDriverVersionHook is not None and ndDriverVersionHook.strip()!=""):
-                return ndDriverVersionHook
-            else:
-                with open("/var/lib/hyperv/.kvp_pool_0", "r") as f:
-                    lines = f.read()
-                r = re.search("NdDriverVersion\0+(\d\d\d\.\d)", lines)
-                if r is not None:
-                    NdDriverVersion = r.groups()[0]
-                    return NdDriverVersion #e.g.  NdDriverVersion = 142.0
-                else :
-                    Log("Error: NdDriverVersion not found.")
-                    return None
-        except Exception as e:
-            errMsg = 'Cannot update status: Failed to enable the extension with error: %s, stack trace: %s' % (str(e), traceback.format_exc())
-            Log(errMsg)
-            raise RdmaError(RdmaConfig.nd_driver_detect_error)
 
     def rebootMachine(self):
         Log("rebooting the machine")
@@ -1060,12 +1037,13 @@ class SuSEDistro(AbstractDistro):
             self.ps_path = '/usr/bin/ps'
         self.zypper_path = '/usr/bin/zypper'
         self.version_pattern = "Version: (\S+)"
-        
+        self.hv_kvp_daemon_service_process_name = "hv_kvp_daemon"
         self.wrapper_package_name = 'msft-rdma-drivers'
         self.rdma_package_name = 'msft-lis-rdma-kmp-default'
         self.command_to_get_package_info = self.zypper_path + " info " + self.rdma_package_name
-        self.command_to_detect_hyper_v = self.rpm_path + " -q hyper-v"
-        self.command_to_install_hyper_v = self.zypper_path + " -n install --force hyper-v"
+        self.hyper_v_package_name = "hyper-v"
+        self.command_to_detect_kvp_daemon_package = self.rpm_path + " -q " + self.hyper_v_package_name
+        self.command_to_install_kvp_daemon_package = self.zypper_path + " -n install --force " + self.hyper_v_package_name
         self.command_to_list_repository = self.zypper_path + " lr -u"
         self.rdma_pack_repository_name = "msft-rdma-pack"
         self.command_to_refresh_repository = self.zypper_path + " --no-gpg-checks refresh"
@@ -1112,6 +1090,31 @@ class SuSEDistro(AbstractDistro):
 
     def get_command_to_add_repository(self, updateRdmaRepository):
         return self.zypper_path + " ar " + str(updateRdmaRepository) + " " + self.rdma_pack_repository_name
+
+    def checkInstallKVPDaemon(self):
+        error, output = RunGetOutput(self.ps_path + " -ef")
+        if(error != RdmaConfig.process_success):
+            return RdmaConfig.common_failed
+        else:
+            r = re.search(self.hv_kvp_daemon_service_process_name, output)
+            if r is None :
+                # if the 
+                Log("hv kvp daemon is not running.")
+                error,output = RunGetOutput(self.command_to_detect_kvp_daemon_package, chk_err=False,log_cmd=False)
+                if(error == RdmaConfig.process_success):
+                    Log("the hyper-v package is installed, but hv_kvp_daemon not started")
+                    return RdmaConfig.hv_kvp_daemon_not_started
+                else:
+                    error,output = RunGetOutput(self.command_to_install_kvp_daemon_package)
+                    Log("install hyper-v return code: " + str(error) + " output:" + str(output))
+                    if(error != RdmaConfig.process_success):
+                        return RdmaConfig.common_failed
+                    else:
+                        self.rebootMachine()
+                        return RdmaConfig.process_success
+            else :
+                Log("KVP daemon  is running")
+                return RdmaConfig.process_success
 
     def installRdmaDrivers(self, host_version):
         r = os.listdir("/opt/microsoft/rdma")
@@ -1280,7 +1283,7 @@ class centosDistro(redhatDistro):
     def __init__(self):
         super(centosDistro,self).__init__()
         self.dist_info = DistInfo()
-        if(self.dist_info[1].startswith("6.5")):
+        if(self.dist_info[1].startswith("6.")):
             self.ps_path = '/bin/ps'
             self.yum_path = '/bin/yum'
             self.rpm_path = '/bin/rpm'
@@ -1290,25 +1293,33 @@ class centosDistro(redhatDistro):
             self.rpm_path = '/usr/bin/rpm'
             self.reboot_path = '/usr/sbin/reboot'
             self.yum_config_manager = "/usr/bin/yum-config-manager"
+
         self.version_pattern = "Version\s+: (\S+)"
         self.yum_path = '/usr/bin/yum'
         ############################### check the package names
         self.wrapper_package_name = 'msft-rdma-drivers'
-        self.rdma_package_name = 'microsoft-hyper-v-rdma'
-        self.rdma_kmod_package_name = 'kmod-microsoft-hyper-v-rdma'
-        self.hyper_v_package_name = "microsoft-hyper-v"
-        self.command_to_get_package_info = self.yum_path + " info " + self.rdma_package_name
+        self.user_mode_rdma_package_name = 'microsoft-hyper-v-rdma'
+        self.kernel_mode_rdma_package_name = 'kmod-microsoft-hyper-v-rdma'
+        self.command_to_get_package_info = self.yum_path + " info " + self.user_mode_rdma_package_name
         #hyperv-daemons
-        self.command_to_detect_hyper_v = self.rpm_path + " -q " + self.hyper_v_package_name
-        self.command_to_install_hyper_v = self.yum_path + " install -q -y " + self.hyper_v_package_name
+        self.hv_kvp_daemon_service_process_name = 'hypervkvpd'
+        self.hv_kvp_daemon_service_process_name_new = 'hv_kvp_daemon'
+        self.hyper_v_package_name = "hypervkvpd"
+        self.hyper_v_package_name_new = "microsoft-hyper-v"
+        self.command_to_detect_kvp_daemon_package = self.rpm_path + " -q " + self.hyper_v_package_name
+        self.command_to_install_kvp_daemon_package = self.yum_path + " install -q -y " + self.hyper_v_package_name
+        self.command_to_erase_kvp_daemon_package = self.yum_path + " erase -q -y " + self.hyper_v_package_name
+        self.command_to_detect_kvp_daemon_package_new = self.rpm_path + " -q " + self.hyper_v_package_name_new
+        self.command_to_erase_kvp_daemon_package_new = self.yum_path + " erase -q -y " + self.hyper_v_package_name_new
+
         self.rdma_pack_repository_name = "msft-rdma-pack"
         self.command_to_list_repository = self.yum_path + " repolist"
         self.command_to_refresh_repository = self.yum_path + " updateinfo"
         self.command_to_remove_wrapper_package = self.yum_path + " erase -q -y " + self.wrapper_package_name
         self.command_to_install_wrapper_package = self.yum_path + " install -q -y " + self.wrapper_package_name
-        self.command_to_remove_rdma_package = self.yum_path + " erase -q -y " + self.rdma_package_name
+        self.command_to_remove_rdma_package = self.yum_path + " erase -q -y " + self.user_mode_rdma_package_name
         self.command_to_install_rdma_package = self.yum_path + " install -q -y %s/%s"
-        self.command_to_remove_rdma_kmod_package = self.yum_path + " erase -q -y " + self.rdma_kmod_package_name
+        self.command_to_remove_rdma_kmod_package = self.yum_path + " erase -q -y " + self.kernel_mode_rdma_package_name
         self.command_to_install_rdma_kmod_package = self.yum_path + " install -q -y %s/%s"
 
     def get_command_to_add_repository(self, updateRdmaRepository):
@@ -1323,6 +1334,38 @@ class centosDistro(redhatDistro):
             F.write(repo_content)
         return self.yum_config_manager + " --add-repo=/etc/yum.repos.d/" + repo_file_path
 
+    def checkInstallKVPDaemon(self):
+        # for centos, the hypervkvpd and the hv_kvp_daemon both are ok.
+        error, output = RunGetOutput(self.ps_path + " -ef")
+        if(error != RdmaConfig.process_success):
+            return RdmaConfig.common_failed
+        else:
+            r = re.search(self.hv_kvp_daemon_service_process_name, output)
+            r2 = re.search(self.hv_kvp_daemon_service_process_name_new, output)
+            if (r is None and r2 is None):
+                # if the 
+                Log("hv kvp daemon is not running.")
+                error,output = RunGetOutput(self.command_to_detect_kvp_daemon_package, chk_err=False,log_cmd=False)
+                if(error == RdmaConfig.process_success):
+                    Log("the package:" + self.hyper_v_package_name + "is installed, but kvp daemon not started")
+                    return RdmaConfig.hv_kvp_daemon_not_started
+                else:
+                    error,output = RunGetOutput(self.command_to_detect_kvp_daemon_package_new, chk_err=False,log_cmd=False)
+                    if(error == RdmaConfig.process_success):
+                        Log("the package:" + self.command_to_detect_kvp_daemon_package_new + "is installed, but kvp daemon not started")
+                        return RdmaConfig.hv_kvp_daemon_not_started
+                    else:
+                        error,output = RunGetOutput(self.command_to_install_kvp_daemon_package)
+                        Log("install hyper-v return code: " + str(error) + " output:" + str(output))
+                        if(error != RdmaConfig.process_success):
+                            return RdmaConfig.common_failed
+                        else:
+                            self.rebootMachine()
+                            return RdmaConfig.process_success
+            else :
+                Log("KVP daemon  is running")
+                return RdmaConfig.process_success
+
     def installRdmaDrivers(self, host_version):
         if(self.dist_info[1].startswith("6.5")):
             extracted_folder = "/opt/microsoft/rdma/rhel65"
@@ -1331,12 +1374,23 @@ class centosDistro(redhatDistro):
         else:
             raise RdmaError(RdmaConfig.os_not_supported)
         r = os.listdir(extracted_folder)
+        # we uninstall the standard hyper-v user mode package first.
+        error, output = RunGetOutput(self.command_to_detect_kvp_daemon_package)
+        if(error == RdmaConfig.process_success):
+            error, output = RunGetOutput(self.command_to_erase_kvp_daemon_package)
+            if(error !=RdmaConfig.process_success):
+                Log(self.command_to_erase_kvp_daemon_package+"executed failed")
+        error, output = RunGetOutput(self.command_to_detect_kvp_daemon_package_new)
+        if(error == RdmaConfig.process_success):
+            error, output = RunGetOutput(self.command_to_erase_kvp_daemon_package_new)
+            if(error != RdmaConfig.process_success):
+                Log(self.command_to_erase_kvp_daemon_package_new + "executed failed")
         if r is not None :
             installed = False
             for filename in r :
                 #first uninstall the rdma_kmod_package_name
                 #kmod-microsoft-hyper-v-rdma-X.X.X.<NDVERSION>-DDDDDDDD.x86_64.rpm
-                r = re.match((self.rdma_kmod_package_name + "-(\d+\.)+(%s)-\d{8}\.x86_64.rpm") % host_version, filename)
+                r = re.match((self.kernel_mode_rdma_package_name + "-(\d+\.)+(%s)-\d{8}\.x86_64.rpm") % host_version, filename)
                 if r:
                     error, output = RunGetOutput(self.command_to_remove_rdma_kmod_package)
                     Log("remove kmod-microsoft-hyper-v-rdma package result is " + str(error) + " output is: " + str(output))
@@ -1350,7 +1404,7 @@ class centosDistro(redhatDistro):
             for filename in r :
                 #first uninstall the rdma_kmod_package_name
                 #microsoft-hyper-v-rdma-X.X.X.<NDVERSION>-DDDDDDDD.x86_64.rpm
-                r = re.match((self.rdma_package_name + "-(\d+\.)+(%s)-\d{8}\.x86_64.rpm") % host_version, filename)
+                r = re.match((self.user_mode_rdma_package_name + "-(\d+\.)+(%s)-\d{8}\.x86_64.rpm") % host_version, filename)
                 if r:
                     error, output = RunGetOutput(self.command_to_remove_rdma_package)
                     Log("remove microsoft-hyper-v-rdma package result is " + str(error) + " output is: " + str(output))
