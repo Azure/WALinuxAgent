@@ -1343,7 +1343,6 @@ class centosDistro(redhatDistro):
             r = re.search(self.hv_kvp_daemon_service_process_name, output)
             r2 = re.search(self.hv_kvp_daemon_service_process_name_new, output)
             if (r is None and r2 is None):
-                # if the 
                 Log("hv kvp daemon is not running.")
                 error,output = RunGetOutput(self.command_to_detect_kvp_daemon_package, chk_err=False,log_cmd=False)
                 if(error == RdmaConfig.process_success):
@@ -1356,7 +1355,7 @@ class centosDistro(redhatDistro):
                         return RdmaConfig.hv_kvp_daemon_not_started
                     else:
                         error,output = RunGetOutput(self.command_to_install_kvp_daemon_package)
-                        Log("install hyper-v return code: " + str(error) + " output:" + str(output))
+                        Log(self.command_to_install_kvp_daemon_package + " return code: " + str(error) + " output:" + str(output))
                         if(error != RdmaConfig.process_success):
                             return RdmaConfig.common_failed
                         else:
@@ -1367,27 +1366,28 @@ class centosDistro(redhatDistro):
                 return RdmaConfig.process_success
 
     def installRdmaDrivers(self, host_version):
+        Log("" + self.dist_info[0] + "#" + self.dist_info[1])
         if(self.dist_info[1].startswith("6.5")):
             extracted_folder = "/opt/microsoft/rdma/rhel65"
         elif(self.dist_info[1].startswith("7.1")):
             extracted_folder = "/opt/microsoft/rdma/rhel71"
         else:
             raise RdmaError(RdmaConfig.os_not_supported)
-        r = os.listdir(extracted_folder)
+        file_list = os.listdir(extracted_folder)
         # we uninstall the standard hyper-v user mode package first.
         error, output = RunGetOutput(self.command_to_detect_kvp_daemon_package)
         if(error == RdmaConfig.process_success):
             error, output = RunGetOutput(self.command_to_erase_kvp_daemon_package)
-            if(error !=RdmaConfig.process_success):
-                Log(self.command_to_erase_kvp_daemon_package+"executed failed")
+            if(error != RdmaConfig.process_success):
+                Log(self.command_to_erase_kvp_daemon_package + "executed failed")
         error, output = RunGetOutput(self.command_to_detect_kvp_daemon_package_new)
         if(error == RdmaConfig.process_success):
             error, output = RunGetOutput(self.command_to_erase_kvp_daemon_package_new)
             if(error != RdmaConfig.process_success):
                 Log(self.command_to_erase_kvp_daemon_package_new + "executed failed")
-        if r is not None :
+        if file_list is not None :
             installed = False
-            for filename in r :
+            for filename in file_list :
                 #first uninstall the rdma_kmod_package_name
                 #kmod-microsoft-hyper-v-rdma-X.X.X.<NDVERSION>-DDDDDDDD.x86_64.rpm
                 r = re.match((self.kernel_mode_rdma_package_name + "-(\d+\.)+(%s)-\d{8}\.x86_64.rpm") % host_version, filename)
@@ -1401,7 +1401,7 @@ class centosDistro(redhatDistro):
                         raise RdmaError(RdmaConfig.package_install_failed)
                     else:
                         installed = True
-            for filename in r :
+            for filename in file_list :
                 #first uninstall the rdma_kmod_package_name
                 #microsoft-hyper-v-rdma-X.X.X.<NDVERSION>-DDDDDDDD.x86_64.rpm
                 r = re.match((self.user_mode_rdma_package_name + "-(\d+\.)+(%s)-\d{8}\.x86_64.rpm") % host_version, filename)
