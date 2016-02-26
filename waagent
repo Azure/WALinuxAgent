@@ -734,6 +734,7 @@ class AbstractDistro(object):
             return None
 
     def checkInstallKVPDaemon(self):
+        Log("check and install kvp daemon in abstract distro.")
         return None
 
     def getNdDriverVersion(self):
@@ -805,6 +806,7 @@ class AbstractDistro(object):
         self.installRdmaDrivers(host_version)
 
     def installRdmaDrivers(self, host_version):
+        Log("install rdma drivers in abstract distro.")
         pass
 
     def rebootMachine(self):
