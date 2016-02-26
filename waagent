@@ -4114,7 +4114,7 @@ class ExtensionsConfig(object):
                     continue
                 manifest = GetFileContents(mfile)
                 p.setAttribute('manifestdata',manifest)
-                if self.launchCommand(p.plugin_log,name,version,'disableCommand') == None :
+                if self.launchCommand(p.plugin_log,name,version,'disableCommand') != 0 :
                     self.SetHandlerState(handler, 'Enabled')
                     Error('Unable to disable '+name)
                     SimpleLog(p.plugin_log,'ERROR: Unable to disable '+name)
@@ -4125,7 +4125,7 @@ class ExtensionsConfig(object):
 
                 # uninstall if needed
                 if p.getAttribute("state") == 'uninstall':
-                    if self.launchCommand(p.plugin_log,name,version,'uninstallCommand') == None :
+                    if self.launchCommand(p.plugin_log,name,version,'uninstallCommand') != 0 :
                         self.SetHandlerState(handler, 'Installed')
                         Error('Unable to uninstall '+name)
                         SimpleLog(p.plugin_log,'Unable to uninstall '+name)
@@ -4218,7 +4218,7 @@ class ExtensionsConfig(object):
                 # Download the zipfile archive and save as '.zip'
                 bundle=self.Util.HttpGetWithoutHeaders(bundle_uri, chkProxy=True)
                 if bundle == None:
-                    AddExtensionEvent(name,WALAEventOperation.Download,True,0,version,"Download zip fail "+bundle_uri)
+                    AddExtensionEvent(name,WALAEventOperation.Download,False,0,version,"Download zip fail "+bundle_uri)
                     Error("Unable to download plugin bundle" + bundle_uri )
                     SimpleLog(p.plugin_log,"Unable to download plugin bundle" + bundle_uri )
                     continue
@@ -4285,7 +4285,7 @@ class ExtensionsConfig(object):
                     if self.GetHandlerState(previous_handler) != 'NotInstalled':
                         getcmd='updateCommand'
                         # disable the old plugin if it exists
-                        if self.launchCommand(p.plugin_log,name,previous_version,'disableCommand') == None :
+                        if self.launchCommand(p.plugin_log,name,previous_version,'disableCommand') != 0 :
                             self.SetHandlerState(previous_handler, 'Enabled')
                             Error('Unable to disable old plugin '+name+' version ' + previous_version)
                             SimpleLog(p.plugin_log,'Unable to disable old plugin '+name+' version ' + previous_version)
@@ -4313,7 +4313,7 @@ class ExtensionsConfig(object):
 
                 isupgradeSuccess = True
                 if getcmd=='updateCommand':
-                    if self.launchCommand(p.plugin_log,name,version,getcmd,previous_version) == None :
+                    if self.launchCommand(p.plugin_log,name,version,getcmd,previous_version) != 0 :
                         Error('Update failed for '+name+'-'+version)
                         SimpleLog(p.plugin_log,'Update failed for '+name+'-'+version)
                         isupgradeSuccess=False
@@ -4322,7 +4322,7 @@ class ExtensionsConfig(object):
                         SimpleLog(p.plugin_log,'Update complete'+name+'-'+version)
 
                     # if we updated - call unistall for the old plugin
-                    if self.launchCommand(p.plugin_log,name,previous_version,'uninstallCommand') == None :
+                    if self.launchCommand(p.plugin_log,name,previous_version,'uninstallCommand') != 0 :
                         self.SetHandlerState(previous_handler, 'Installed')
                         Error('Uninstall failed for '+name+'-'+previous_version)
                         SimpleLog(p.plugin_log,'Uninstall failed for '+name+'-'+previous_version)
@@ -4340,10 +4340,11 @@ class ExtensionsConfig(object):
                             SimpleLog(p.plugin_log,name +'-'+ previous_version + ' extension files deleted.')
                     except Exception as e:
                         Error("Failed to remove old plugin directory")
-
-                    AddExtensionEvent(name,WALAEventOperation.Upgrade,isupgradeSuccess,0,previous_version)
+                    
+                    message = "Upgrade succeeded" if isupgradeSuccess else "Upgrade failed"
+                    AddExtensionEvent(name,WALAEventOperation.Upgrade,isupgradeSuccess,0,previous_version, message=message)
                 else :  # run install
-                    if self.launchCommand(p.plugin_log,name,version,getcmd) == None :
+                    if self.launchCommand(p.plugin_log,name,version,getcmd) != 0:
                         self.SetHandlerState(handler, 'NotInstalled')
                         Error('Installation failed for '+name+'-'+version)
                         SimpleLog(p.plugin_log,'Installation failed for '+name+'-'+version)
@@ -4395,7 +4396,7 @@ class ExtensionsConfig(object):
 
             # state is still enable
             if (self.GetHandlerState(handler) == 'NotInstalled'):  # run install first if true
-                if self.launchCommand(p.plugin_log,name,version,'installCommand') == None :
+                if self.launchCommand(p.plugin_log,name,version,'installCommand') != 0:
                     self.SetHandlerState(handler, 'NotInstalled')
                     Error('Installation failed for '+name+'-'+version)
                     SimpleLog(p.plugin_log,'Installation failed for '+name+'-'+version)
@@ -4407,7 +4408,7 @@ class ExtensionsConfig(object):
 
 
             if (self.GetHandlerState(handler) != 'NotInstalled'):
-                if self.launchCommand(p.plugin_log,name,version,'enableCommand') == None :
+                if self.launchCommand(p.plugin_log,name,version,'enableCommand') != 0:
                     self.SetHandlerState(handler, 'Installed')
                     Error('Enable failed for '+name+'-'+version)
                     SimpleLog(p.plugin_log,'Enable failed for '+name+'-'+version)
@@ -4437,15 +4438,23 @@ class ExtensionsConfig(object):
         "enableCommand": WALAEventOperation.Enable,
         "disableCommand": WALAEventOperation.Disable,
         }
-        isSuccess=True
+
         start = datetime.datetime.now()
-        r=self.__launchCommandWithoutEventLog(plugin_log,name,version,command,prev_version)
-        if r==None:
-            isSuccess=False
-        Duration = int((datetime.datetime.now() - start).seconds)
-        if commandToEventOperation.get(command):
-            AddExtensionEvent(name,commandToEventOperation[command],isSuccess,Duration,version)
-        return r
+
+        ret = self.__launchCommandWithoutEventLog(plugin_log, name, version, command, prev_version)
+
+        duration = int((datetime.datetime.now() - start).seconds)
+
+        operation = commandToEventOperation.get(command)
+        if operation:
+            if ret[0] != 0:
+                message = "Failed to launch command : {0}, {1}".format(command, ret[1])
+                AddExtensionEvent(name, operation, False, duration=duration, version=version, message=message)
+            else:
+                message = "Launch command succeeded: {0}".format(command)
+                AddExtensionEvent(name, operation, True, duration=duration, version=version, message=message)
+
+        return ret[0]
 
     def __launchCommandWithoutEventLog(self,plugin_log,name,version,command,prev_version=None):
         # get the manifest and read the command
@@ -4458,31 +4467,33 @@ class ExtensionsConfig(object):
             if mfile != None:
                 break
         if mfile == None :
-            Error('HandlerManifest.json not found.')
-            SimpleLog(plugin_log,'HandlerManifest.json not found.')
-            
-            return None
+            message = 'HandlerManifest.json not found.'
+            Error(message)
+            SimpleLog(plugin_log, message)
+            return -1, message
+
         manifest = GetFileContents(mfile)
         try:
             jsn = json.loads(manifest)
         except:
-            Error('Error parsing HandlerManifest.json.')
-            SimpleLog(plugin_log,'Error parsing HandlerManifest.json.')
+            message = 'Error parsing HandlerManifest.json.'
+            Error(message)
+            SimpleLog(plugin_log, message)
+            return -1, message
 
-            return None
         if type(jsn)==list:
             jsn=jsn[0]
         if jsn.has_key('handlerManifest') :
             cmd = jsn['handlerManifest'][command]
-        else :
+        else:
             Error('Key handlerManifest not found.  Handler cannot be installed.')
             SimpleLog(plugin_log,'Key handlerManifest not found.  Handler cannot be installed.')
 
         if len(cmd) == 0 :
-            Error('Unable to read ' + command )
-            SimpleLog(plugin_log,'Unable to read ' + command )
-
-            return None
+            message = "Unable to read {0}".format(command)
+            Error(message)
+            SimpleLog(plugin_log, message)
+            return -1, message
 
         # for update we send the path of the old installation
         arg=''
@@ -4518,21 +4529,25 @@ class ExtensionsConfig(object):
             time.sleep(5)
             retry-=1
         if retry==0:
-            Error('Process exceeded timeout of ' + str(timeout) + ' seconds. Terminating process ' + str(pid))
-            SimpleLog(plugin_log,'Process exceeded timeout of ' + str(timeout) + ' seconds. Terminating process ' + str(pid))
+            message = "Process exceeded timeout of {0} seconds. Terminating process {1}".format(timeout, pid)
+            Error(message)
+            SimpleLog(plugin_log, message)
 
             os.kill(pid,9)
-            return None
+
+            return -1, message
+
         code = child.wait()
         if code == None or code != 0:
-            Error('Process ' + str(pid) + ' returned non-zero exit code (' + str(code) + ')')
-            SimpleLog(plugin_log,'Process ' + str(pid) + ' returned non-zero exit code (' + str(code) + ')')
+            message = "Process {0} returned non-zero exit code({1})".format(pid, code)
+            Error(message)
+            SimpleLog(plugin_log, message)
+            return -1, message
 
-            return None
         Log(command + ' completed.')
         SimpleLog(plugin_log,command + ' completed.')
 
-        return 0
+        return 0, ""
 
     def ReportHandlerStatus(self):
         """
@@ -5383,7 +5398,7 @@ class WALAEventMonitor(WALAEvent):
             while(True):
                 if (datetime.datetime.now()-LastReportHeartBeatTime) > datetime.timedelta(hours=12):
                     LastReportHeartBeatTime = datetime.datetime.now()
-                    AddExtensionEvent(op=WALAEventOperation.HeartBeat,name="WALA",isSuccess=True)
+                    AddExtensionEvent(op=WALAEventOperation.HeartBeat, message="HeartBeat", name="WALA", isSuccess=True)
                 self.postNumbersInOneLoop=0
                 self.CollectAndSendWALAEvents()
                 time.sleep(60)
