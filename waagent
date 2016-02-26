@@ -2579,14 +2579,15 @@ class FreeBSDDistro(AbstractDistro):
         if os.path.isfile(filename):
             os.remove(filename)
         
-        fn_sh = ShellEscape(filename)
+        fn_sh = ShellQuote(filename)
         
         if nbytes < max_blocksize:
             exitcode = Run(dd_cmd.format(bs=bytes, fn=fn_sh, n=1))
         else:
-            exitcode = Run(dd_cmd.format(bs=max_blocksize, fn=filename, n=bytes/max_blocksize))
+            exitcode = Run(dd_cmd.format(bs=max_blocksize, fn=fn_sh, n=bytes/max_blocksize))
             exitcode <<= 8 # lshift so we have space for another exitcode
-            exitcode += Run(dd.cmd.format(bs=nbytes%max_blocksize, fn=fn_sh, n=1))
+            if nbytes%max_blocksize:
+                exitcode += Run(dd_cmd.format(bs=nbytes%max_blocksize, fn=fn_sh, n=1))
         return exitcode
 
     def GetHome(self):
@@ -2729,13 +2730,16 @@ def GetLineStartingWith(prefix, filepath):
             return line
     return None
 
-def ShellEscape(wordList):
+def ShellQuote(wordList):
     """
-    Escape a list or tuple of strings for Unix Shell as words, using the
+    Quote a list or tuple of strings for Unix Shell as words, using the
     byte-literal single quote.
     
     The resulting string is safe for use with ``shell=True`` in ``subprocess``,
-    and in ``os.system``. ``assert shlex.split(ShellEscape(wordList)) == wordList``.
+    and in ``os.system``. ``assert shlex.split(ShellQuote(wordList)) == wordList``.
+    
+    See POSIX.1:2013 Vol 3, Chap 2, Sec 2.2.2:
+    http://pubs.opengroup.org/onlinepubs/9699919799/utilities/V3_chap02.html#tag_18_02_02
     """
     if not isinstance(wordList, (tuple, list)):
         wordList = (wordList,)
