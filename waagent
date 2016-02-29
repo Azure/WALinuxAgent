@@ -1113,7 +1113,7 @@ class SuSEDistro(AbstractDistro):
                         self.rebootMachine()
                         return RdmaConfig.process_success
             else :
-                Log("KVP daemon  is running")
+                Log("KVP daemon is running")
                 return RdmaConfig.process_success
 
     def installRdmaDrivers(self, host_version):
@@ -1365,7 +1365,7 @@ class centosDistro(redhatDistro):
                             self.rebootMachine()
                             return RdmaConfig.process_success
             else :
-                Log("KVP daemon  is running")
+                Log("KVP daemon is running")
                 return RdmaConfig.process_success
 
     def installRdmaDrivers(self, host_version):
@@ -1382,12 +1382,20 @@ class centosDistro(redhatDistro):
         if(error == RdmaConfig.process_success):
             error, output = RunGetOutput(self.command_to_erase_kvp_daemon_package)
             if(error != RdmaConfig.process_success):
-                Log(self.command_to_erase_kvp_daemon_package + "executed failed")
+                Log(self.command_to_erase_kvp_daemon_package + " executed failed")
+            else:
+                Log(self.command_to_erase_kvp_daemon_package + "done")
+        else:
+            Log(command_to_detect_kvp_daemon_package + " do not return process_success")
         error, output = RunGetOutput(self.command_to_detect_kvp_daemon_package_new)
         if(error == RdmaConfig.process_success):
             error, output = RunGetOutput(self.command_to_erase_kvp_daemon_package_new)
             if(error != RdmaConfig.process_success):
-                Log(self.command_to_erase_kvp_daemon_package_new + "executed failed")
+                Log(self.command_to_erase_kvp_daemon_package_new + " executed failed")
+            else:
+                Log(self.command_to_erase_kvp_daemon_package_new + " done")
+        else:
+            Log(command_to_detect_kvp_daemon_package_new + " do not return process_success")
         if file_list is not None :
             installed = False
             for filename in file_list :
