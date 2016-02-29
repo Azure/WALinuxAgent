@@ -192,10 +192,6 @@ class AbstractDistro(object):
         self.shadow_file_mode=0600
         self.shadow_file_path="/etc/shadow"
         self.dhcp_enabled = False
-        
-        """
-        the commands related to the rdma packages.
-        """
 
     def isSelinuxSystem(self):
         """
@@ -795,7 +791,6 @@ class AbstractDistro(object):
             else:
                 Log("output is: " + str(output))
                 Log("msft-rdma-pack found")
-        # microsoft-hyper-v-rdma-4.0.11.142-20160201
         returnCode, message = RunGetOutput(self.command_to_refresh_repository)
         Log("refresh repo return code is " + str(returnCode) + " output is: " + str(message))
         #install the wrapper package, that will put the driver RPM packages under /opt/microsoft/rdma
@@ -1038,10 +1033,11 @@ class SuSEDistro(AbstractDistro):
         else:
             self.ps_path = '/usr/bin/ps'
         self.zypper_path = '/usr/bin/zypper'
+        # this is the patter to extract the Version info of the rdma package.
         self.version_pattern = "Version: (\S+)"
         self.hv_kvp_daemon_service_process_name = "hv_kvp_daemon"
         self.wrapper_package_name = 'msft-rdma-drivers'
-        # package_version would be like this :20150707_k3.12.28_4-3.1 20150707.140.0_k3.12.28_4-1.1
+        # this is used for judge whether the current package matches with the host driver.
         self.version_match_pattern = '^[0-9]+[.](%s).+'
         self.rdma_package_name = 'msft-lis-rdma-kmp-default'
         self.command_to_get_package_info = self.zypper_path + " info " + self.rdma_package_name
@@ -1298,11 +1294,12 @@ class centosDistro(redhatDistro):
             self.reboot_path = '/usr/sbin/reboot'
             self.yum_config_manager = "/usr/bin/yum-config-manager"
 
+        # this is the patter to extract the Version info of the rdma package.
         self.version_pattern = "Version\s+: (\S+)"
         self.yum_path = '/usr/bin/yum'
         ############################### check the package names
         self.wrapper_package_name = 'msft-rdma-drivers'
-        # in centos output is nd_driver_version is 142 package_version is 4.0.11.142
+        # this is used for judge whether the current package matches with the host driver.
         self.version_match_pattern = '^(\d+\.)+(%s)'
         self.user_mode_rdma_package_name = 'microsoft-hyper-v-rdma'
         self.kernel_mode_rdma_package_name = 'kmod-microsoft-hyper-v-rdma'
