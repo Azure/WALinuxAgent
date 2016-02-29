@@ -773,7 +773,7 @@ class AbstractDistro(object):
             # nd_driver_version 140.0
             Log("nd_driver_version is " + str(nd_driver_version) + " package_version is " + str(package_version))
             if(nd_driver_version is not None):
-                r = re.match("^[0-9]+[.](%s).+" % nd_driver_version, package_version)# NdDriverVersion should be at the end of package version
+                r = re.match(self.version_match_pattern % nd_driver_version, package_version)# NdDriverVersion should be at the end of package version
                 if not r :	#host ND version is the same as the package version, do an update
                     return RdmaConfig.OutOfDate
                 else:
@@ -1041,6 +1041,8 @@ class SuSEDistro(AbstractDistro):
         self.version_pattern = "Version: (\S+)"
         self.hv_kvp_daemon_service_process_name = "hv_kvp_daemon"
         self.wrapper_package_name = 'msft-rdma-drivers'
+        # package_version would be like this :20150707_k3.12.28_4-3.1 20150707.140.0_k3.12.28_4-1.1
+        self.version_match_pattern = '^[0-9]+[.](%s).+'
         self.rdma_package_name = 'msft-lis-rdma-kmp-default'
         self.command_to_get_package_info = self.zypper_path + " info " + self.rdma_package_name
         self.hyper_v_package_name = "hyper-v"
@@ -1300,6 +1302,8 @@ class centosDistro(redhatDistro):
         self.yum_path = '/usr/bin/yum'
         ############################### check the package names
         self.wrapper_package_name = 'msft-rdma-drivers'
+        # in centos output is nd_driver_version is 142 package_version is 4.0.11.142
+        self.version_match_pattern = '^(\d+\.)+(%s)'
         self.user_mode_rdma_package_name = 'microsoft-hyper-v-rdma'
         self.kernel_mode_rdma_package_name = 'kmod-microsoft-hyper-v-rdma'
         self.command_to_get_package_info = self.yum_path + " info " + self.user_mode_rdma_package_name
