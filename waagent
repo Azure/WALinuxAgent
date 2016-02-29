@@ -725,8 +725,9 @@ class AbstractDistro(object):
                 package_version = r.groups()[0] # e.g.  package_version is "20150707.140.0_k3.12.28_4-3.1."
                 return package_version
             else:
-                return None
+                return RdmaError(RdmaConfig.package_info_pattern_error)
         else:
+            Log(self.command_to_get_package_info + " failed, which can be due to the package not installed.")
             return None
 
     def checkInstallKVPDaemon(self):
@@ -762,6 +763,7 @@ class AbstractDistro(object):
         if(nd_driver_version is None or nd_driver_version == ""):
             return RdmaConfig.DriverVersionNotFound
         package_version = self.getRdmaPackageVersion()
+        # this can be an issue. the RdmaPackageVersion is None means what?
         if(package_version is None or package_version == ""):
             return RdmaConfig.OutOfDate
         else:
@@ -4066,6 +4068,7 @@ class RdmaConfig(object):
     package_install_failed = 7
     hv_kvp_daemon_not_started = 8
     os_not_supported = 9
+    package_info_pattern_error = 10
     """
     check_rdma_result
     """
