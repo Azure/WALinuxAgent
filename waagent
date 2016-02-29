@@ -1388,7 +1388,7 @@ class centosDistro(redhatDistro):
             else:
                 Log(self.command_to_erase_kvp_daemon_package + "done")
         else:
-            Log(command_to_detect_kvp_daemon_package + " do not return process_success")
+            Log(self.command_to_detect_kvp_daemon_package + " do not return process_success")
         error, output = RunGetOutput(self.command_to_detect_kvp_daemon_package_new)
         if(error == RdmaConfig.process_success):
             error, output = RunGetOutput(self.command_to_erase_kvp_daemon_package_new)
