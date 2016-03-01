@@ -192,6 +192,7 @@ class AbstractDistro(object):
         self.shadow_file_mode=0600
         self.shadow_file_path="/etc/shadow"
         self.dhcp_enabled = False
+        self.rmda_skip_add_repository = False
 
     def isSelinuxSystem(self):
         """
@@ -720,7 +721,7 @@ class AbstractDistro(object):
     def getRdmaPackageVersion(self):
         error, output = RunGetOutput(self.command_to_get_package_info)
         if(error == RdmaConfig.process_success):
-            r = re.search(self.version_pattern, output)
+            r = re.search(self.rdma_version_pattern, output)
             if r is not None:
                 package_version = r.groups()[0] # e.g.  package_version is "20150707.140.0_k3.12.28_4-3.1."
                 return package_version
@@ -771,8 +772,8 @@ class AbstractDistro(object):
             # nd_driver_version 140.0
             Log("nd_driver_version is " + str(nd_driver_version) + " package_version is " + str(package_version))
             if(nd_driver_version is not None):
-                r = re.match(self.version_match_pattern % nd_driver_version, package_version)# NdDriverVersion should be at the end of package version
-                if not r :	#host ND version is the same as the package version, do an update
+                r = re.match(self.rdma_version_match_pattern % nd_driver_version, package_version)# NdDriverVersion should be at the end of package version
+                if not r :	#host ND version is not the same as the package version, do an update
                     return RdmaConfig.OutOfDate
                 else:
                     return RdmaConfig.UpToDate
@@ -780,8 +781,8 @@ class AbstractDistro(object):
 
     def rdmaUpdatePackage(self, host_version, updateRdmaRepository = None):
         # check the repository first
-        if(updateRdmaRepository is not None and updateRdmaRepository.strip() !=""):
-            error,output = RunGetOutput(self.command_to_list_repository)
+        if((not self.rmda_skip_add_repository) and (updateRdmaRepository is not None) and (updateRdmaRepository.strip() != "")):
+            error,output = RunGetOutput(self.rdma_command_to_list_repository)
             rdma_pack_result = re.search(self.rdma_pack_repository_name, output)
             if rdma_pack_result is None :
                 Log("rdma_pack_result is None")
@@ -796,9 +797,9 @@ class AbstractDistro(object):
         returnCode, message = RunGetOutput(self.command_to_refresh_repository)
         Log("refresh repo return code is " + str(returnCode) + " output is: " + str(message))
         #install the wrapper package, that will put the driver RPM packages under /opt/microsoft/rdma
-        returnCode, message = RunGetOutput(self.command_to_remove_wrapper_package)
+        returnCode, message = RunGetOutput(self.command_to_remove_rdma_wrapper_package)
         Log("remove wrapper package return code is " + str(returnCode) + " output is: " + str(message))
-        returnCode, message = RunGetOutput(self.command_to_install_wrapper_package)
+        returnCode, message = RunGetOutput(self.command_to_install_rdma_wrapper_package)
         Log("install wrapper package return code is " + str(returnCode) + " output is: " + str(message))
         self.installRdmaDrivers(host_version)
 
@@ -1036,23 +1037,23 @@ class SuSEDistro(AbstractDistro):
             self.ps_path = '/usr/bin/ps'
         self.zypper_path = '/usr/bin/zypper'
         # this is the patter to extract the Version info of the rdma package.
-        self.version_pattern = "Version: (\S+)"
+        self.rdma_version_pattern = "Version: (\S+)"
         self.hv_kvp_daemon_service_process_name = "hv_kvp_daemon"
-        self.wrapper_package_name = 'msft-rdma-drivers'
+        self.rdma_wrapper_package_name = 'msft-rdma-drivers'
         # this is used for judge whether the current package matches with the host driver.
-        self.version_match_pattern = '^[0-9]+[.](%s).+'
+        self.rdma_version_match_pattern = '^[0-9]+[.](%s).+'
         self.rdma_package_name = 'msft-lis-rdma-kmp-default'
         self.command_to_get_package_info = self.zypper_path + " info " + self.rdma_package_name
         self.hyper_v_package_name = "hyper-v"
         self.command_to_detect_kvp_daemon_package = self.rpm_path + " -q " + self.hyper_v_package_name
         self.command_to_install_kvp_daemon_package = self.zypper_path + " -n install --force " + self.hyper_v_package_name
-        self.command_to_list_repository = self.zypper_path + " lr -u"
+        self.rdma_command_to_list_repository = self.zypper_path + " lr -u"
         self.rdma_pack_repository_name = "msft-rdma-pack"
         self.command_to_refresh_repository = self.zypper_path + " --no-gpg-checks refresh"
-        self.command_to_remove_wrapper_package = self.zypper_path + " -n remove " + self.wrapper_package_name
-        self.command_to_install_wrapper_package = self.zypper_path + " --non-interactive install --force " + self.wrapper_package_name
-        self.command_to_remove_rdma_package = self.zypper_path + " --non-interactive remove " + self.rdma_package_name
-        self.command_to_install_rdma_package = self.zypper_path + " --non-interactive install --force /opt/microsoft/rdma/%s"
+        self.command_to_remove_rdma_wrapper_package = self.zypper_path + " -n remove " + self.rdma_wrapper_package_name
+        self.command_to_install_rdma_wrapper_package = self.zypper_path + " --non-interactive install --force " + self.rdma_wrapper_package_name
+        self.command_to_remove_rdma_user_mode_package = self.zypper_path + " --non-interactive remove " + self.rdma_package_name
+        self.command_to_install_rdma_user_mode_package = self.zypper_path + " --non-interactive install --force /opt/microsoft/rdma/%s"
 
     def checkPackageInstalled(self,p):
         if Run("rpm -q " + p,chk_err=False):
@@ -1123,10 +1124,10 @@ class SuSEDistro(AbstractDistro):
         if r is not None :
             for filename in r :
                 if re.match(self.rdma_package_name + "-\d{8}\.(%s).+" % host_version, filename) :
-                    error, output = RunGetOutput(self.command_to_remove_rdma_package)
+                    error, output = RunGetOutput(self.command_to_remove_rdma_user_mode_package)
                     Log("remove rdma package result is " + str(error) + " output is: " + str(output))
                     Log("Installing RPM /opt/microsoft/rdma/" + filename)
-                    error, output = RunGetOutput(self.command_to_install_rdma_package % filename)
+                    error, output = RunGetOutput(self.command_to_install_rdma_user_mode_package % filename)
                     Log("Install rdma package result is " + str(error) + " output is: " + str(output))
                     if(error == RdmaConfig.process_success):
                         self.rebootMachine()
@@ -1287,25 +1288,23 @@ class centosDistro(redhatDistro):
         self.dist_info = DistInfo()
         if(self.dist_info[1].startswith("6.")):
             self.ps_path = '/bin/ps'
-            self.yum_path = '/bin/yum'
             self.rpm_path = '/bin/rpm'
             self.reboot_path = '/sbin/reboot'
         else:
             self.ps_path = '/usr/bin/ps'
             self.rpm_path = '/usr/bin/rpm'
             self.reboot_path = '/usr/sbin/reboot'
-            self.yum_config_manager = "/usr/bin/yum-config-manager"
 
         # this is the patter to extract the Version info of the rdma package.
-        self.version_pattern = "Version\s+: (\S+)"
+        self.rdma_version_pattern = "Version\s+: (\S+)"
         self.yum_path = '/usr/bin/yum'
         ############################### check the package names
-        self.wrapper_package_name = 'msft-rdma-drivers'
+        self.rdma_wrapper_package_name = 'msft-rdma-drivers'
         # this is used for judge whether the current package matches with the host driver.
-        self.version_match_pattern = '^(\d+\.)+(%s)'
-        self.user_mode_rdma_package_name = 'microsoft-hyper-v-rdma'
-        self.kernel_mode_rdma_package_name = 'kmod-microsoft-hyper-v-rdma'
-        self.command_to_get_package_info = self.yum_path + " info " + self.user_mode_rdma_package_name
+        self.rdma_version_match_pattern = '^(\d+\.)+(%s)'
+        self.rdma_user_mode_package_name = 'microsoft-hyper-v-rdma'
+        self.rdma_kernel_mode_package_name = 'kmod-microsoft-hyper-v-rdma'
+        self.command_to_get_package_info = self.yum_path + " info " + self.rdma_user_mode_package_name
         #hyperv-daemons
         self.hv_kvp_daemon_service_process_name = 'hypervkvpd'
         self.hv_kvp_daemon_service_process_name_new = 'hv_kvp_daemon'
@@ -1316,28 +1315,19 @@ class centosDistro(redhatDistro):
         self.command_to_erase_kvp_daemon_package = self.yum_path + " erase -q -y " + self.hyper_v_package_name
         self.command_to_detect_kvp_daemon_package_new = self.rpm_path + " -q " + self.hyper_v_package_name_new
         self.command_to_erase_kvp_daemon_package_new = self.yum_path + " erase -q -y " + self.hyper_v_package_name_new
-
+        self.rmda_skip_add_repository = True
         self.rdma_pack_repository_name = "msft-rdma-pack"
-        self.command_to_list_repository = self.yum_path + " repolist"
         self.command_to_refresh_repository = self.yum_path + " updateinfo"
-        self.command_to_remove_wrapper_package = self.yum_path + " erase -q -y " + self.wrapper_package_name
-        self.command_to_install_wrapper_package = self.yum_path + " install -q -y " + self.wrapper_package_name
-        self.command_to_remove_rdma_package = self.yum_path + " erase -q -y " + self.user_mode_rdma_package_name
-        self.command_to_install_rdma_package = self.yum_path + " install -q -y %s/%s"
-        self.command_to_remove_rdma_kmod_package = self.yum_path + " erase -q -y " + self.kernel_mode_rdma_package_name
+        self.command_to_remove_rdma_wrapper_package = self.yum_path + " erase -q -y " + self.rdma_wrapper_package_name
+        self.command_to_install_rdma_wrapper_package = self.yum_path + " install -q -y " + self.rdma_wrapper_package_name
+        self.command_to_remove_rdma_user_mode_package = self.yum_path + " erase -q -y " + self.rdma_user_mode_package_name
+        self.command_to_install_rdma_user_mode_package = self.yum_path + " install -q -y %s/%s"
+        self.command_to_remove_rdma_kmod_package = self.yum_path + " erase -q -y " + self.rdma_kernel_mode_package_name
         self.command_to_install_rdma_kmod_package = self.yum_path + " install -q -y %s/%s"
 
     def get_command_to_add_repository(self, updateRdmaRepository):
-        #write the repo file
-        repo_file_path = "/etc/yum.repos.d/" + self.rdma_pack_repository_name
-        if(os.path.exists(repo_file_path)):
-            os.remove(repo_file_path)
-        repo_content = "[" + self.rdma_pack_repository_name + "]\n"\
-                        + "name=" + self.rdma_pack_repository_name + "\n"\
-                        + "baseurl=" + updateRdmaRepository + "\nenabled=1\n"
-        with open(repo_file_path, "wb+") as F :
-            F.write(repo_content)
-        return self.yum_config_manager + " --add-repo=/etc/yum.repos.d/" + repo_file_path
+        # we do not need to add the repository for centos
+        return None
 
     def checkInstallKVPDaemon(self):
         # for centos, the hypervkvpd and the hv_kvp_daemon both are ok.
@@ -1401,9 +1391,9 @@ class centosDistro(redhatDistro):
         if file_list is not None :
             installed = False
             for filename in file_list :
-                #first uninstall the rdma_kmod_package_name
+                #first uninstall the rdma_kernel_mode_package_name
                 #kmod-microsoft-hyper-v-rdma-X.X.X.<NDVERSION>-DDDDDDDD.x86_64.rpm
-                r = re.match((self.kernel_mode_rdma_package_name + "-(\d+\.)+(%s)-\d{8}\.x86_64.rpm") % host_version, filename)
+                r = re.match((self.rdma_kernel_mode_package_name + "-(\d+\.)+(%s)-\d{8}\.x86_64.rpm") % host_version, filename)
                 if r:
                     error, output = RunGetOutput(self.command_to_remove_rdma_kmod_package)
                     Log("remove kmod-microsoft-hyper-v-rdma package result is " + str(error) + " output is: " + str(output))
@@ -1415,14 +1405,14 @@ class centosDistro(redhatDistro):
                     else:
                         installed = True
             for filename in file_list :
-                #first uninstall the rdma_kmod_package_name
+                #first uninstall the rdma_user_mode_package_name
                 #microsoft-hyper-v-rdma-X.X.X.<NDVERSION>-DDDDDDDD.x86_64.rpm
-                r = re.match((self.user_mode_rdma_package_name + "-(\d+\.)+(%s)-\d{8}\.x86_64.rpm") % host_version, filename)
+                r = re.match((self.rdma_user_mode_package_name + "-(\d+\.)+(%s)-\d{8}\.x86_64.rpm") % host_version, filename)
                 if r:
-                    error, output = RunGetOutput(self.command_to_remove_rdma_package)
+                    error, output = RunGetOutput(self.command_to_remove_rdma_user_mode_package)
                     Log("remove microsoft-hyper-v-rdma package result is " + str(error) + " output is: " + str(output))
                     Log("Installing RPM " + extracted_folder + "/" + filename)
-                    error, output = RunGetOutput(self.command_to_install_rdma_package % (extracted_folder,filename))
+                    error, output = RunGetOutput(self.command_to_install_rdma_user_mode_package % (extracted_folder,filename))
                     Log("Install microsoft-hyper-v-rdma package result is " + str(error) + " output is: " + str(output))
                     if(error != RdmaConfig.process_success):
                         raise RdmaError(RdmaConfig.package_install_failed)
