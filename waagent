@@ -4312,7 +4312,7 @@ class ExtensionsConfig(object):
                     if mfile != None:
                         break
                 if mfile == None :
-                    Error('HandlerManifest.json not found.')
+                    #The plugin is already uninstalled.
                     continue
                 manifest = GetFileContents(mfile)
                 p.setAttribute('manifestdata',manifest)
