@@ -187,7 +187,8 @@ class TestExtension(AgentTestCase):
     def test_ext_handler_version_decide_autoupgrade_internalversion(self, *args):
         for internal in [False, True]:
             for autoupgrade in [False, True]:
-                with self.subTest(autoupgrade=autoupgrade, internal=internal):
+                # only python 3.4+ has subTest
+                # with self.subTest(autoupgrade=autoupgrade, internal=internal):
                     if internal:
                         config_version = '1.2.0'
                         decision_version = '1.2.0'
@@ -263,8 +264,7 @@ class TestExtension(AgentTestCase):
             ext_handler.name = 'OSTCExtensions.ExampleHandlerLinux'
             ext_handler.versionUris = [version_uri]
             ext_handler.properties.version = config_version
-            with self.assertRaises(ExtensionError):
-                ExtHandlerInstance(ext_handler, protocol).decide_version()
+            self.assertRaises(ExtensionError, ExtHandlerInstance(ext_handler, protocol).decide_version)
 
 
 if __name__ == '__main__':
