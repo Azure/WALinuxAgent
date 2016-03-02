@@ -693,7 +693,7 @@ class AbstractDistro(object):
         Run("/sbin/route add -net " + net + " netmask " + mask + " gw " + gateway,
             chk_err=False)
 
-    def rdmaUpdate(self,updateRdmaRepository=None):
+    def rdmaUpdate(self, updateRdmaRepository=None):
         # give some time for the hv_hvp_daemon to start up.
         time.sleep(10)
         check_install_result = self.checkInstallKVPDaemon()
@@ -6376,16 +6376,22 @@ class Agent(Util):
         try:
             updateRdmaDriverConfigured = Config.yes("OS.UpdateRdmaDriver")
             updateRdmaRepository = Config.get("OS.RdmaRepository")
+            rdmaExtraConfigFile = Config.get("OS.RdmaExtraConfig")
+            if(rdmaExtraConfigFile is not None and os.path.exists(rdmaExtraConfigFile)):
+                extraConfigContent = GetFileContents(rdmaExtraConfigFile)
+                extraConfigJson = json.loads(extraConfigContent)
+                preTask = extraConfigJson['PreTask']
+                postTask = extraConfigJson['PostTask']
             if(updateRdmaDriverConfigured):
                 MyDistro.rdmaUpdate(updateRdmaRepository)
             else:
-                Log("OS.UpdateRdmaDriver configured to "+str(updateRdmaDriverConfigured)+" so skip the rdma update.")
+                Log("OS.UpdateRdmaDriver configured to " + str(updateRdmaDriverConfigured) + " so skip the rdma update.")
             checkRdmaDriverConfigured = Config.yes("OS.CheckRdmaDriver")
             if(checkRdmaDriverConfigured):
                 checkRdmaResult = MyDistro.checkRDMA()
                 Log("Rdma check result is " + str(checkRdmaResult))
             else:
-                Log("OS.CheckRdmaDriver configured to "+str(checkRdmaDriverConfigured)+" so skip the rdma check.")
+                Log("OS.CheckRdmaDriver configured to " + str(checkRdmaDriverConfigured) + " so skip the rdma check.")
         except Exception as e:
             errMsg = 'check or update Rdma driver failed with error: %s, stack trace: %s' % (str(e), traceback.format_exc())
             Error(errMsg)

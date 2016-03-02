@@ -1,0 +1,13 @@
+{
+  "PreTask": "",
+  "ExtraRepositories": [
+    {
+      "Name": "MSFT-RDMA-REPO",
+      "Uri": "https://drivers.suse.com/microsoft/Microsoft-LIS-RDMA/sle-12/updates"
+    }
+  ],
+  "PackageNames": [
+    "msft-rdma-drivers"
+  ],
+  "PostTask": ""
+}
