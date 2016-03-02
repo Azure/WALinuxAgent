@@ -112,7 +112,7 @@ class FreeBSDResourceDiskHandler(ResourceDiskHandler):
                                         .format(partition, output))
             err, output = shellutil.run_get_output(mount_cmd, chk_err=False)
             if err:
-                raise ResourceDiskError("Failed to mount partition {0}, error".format(partition, output))
+                raise ResourceDiskError("Failed to mount partition {0}, error {1}".format(partition, output))
 
         logger.info("Resource disk partition {0} is mounted at {1} with fstype {2}", partition, mount_point, fs)
         return mount_point
