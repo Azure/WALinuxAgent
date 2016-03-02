@@ -151,7 +151,7 @@ class KVPReader(object):
     def __init__(self):
         pass
 
-    def read_bytes(pool):
+    def read_bytes(self, pool):
         filepath = "/var/lib/hyperv/.kvp_pool_" + str(pool)
         mode = 'r'
         c = None
@@ -164,7 +164,7 @@ class KVPReader(object):
         b = bytes(c)
         return b
 
-    def bytes_to_str(b, start, end):
+    def bytes_to_str(self, b, start, end):
         buf = None 
         for i in range(start, end):
             if ord(b[i]) == 0:#Found string end
@@ -176,8 +176,8 @@ class KVPReader(object):
         else:
             return None
 
-    def read_raw_kvp(pool):
-        b = read_bytes(pool)
+    def read_raw_kvp(self, pool):
+        b = self.read_bytes(pool)
         key_start = 0
         val_start = 512
         key_len = 512
@@ -185,8 +185,8 @@ class KVPReader(object):
         step = key_len + val_len
         data={}
         while val_start < len(b):
-            key = bytes_to_str(b, key_start, key_start + key_len)
-            val = bytes_to_str(b, val_start, val_start + val_len)
+            key = self.bytes_to_str(b, key_start, key_start + key_len)
+            val = self.bytes_to_str(b, val_start, val_start + val_len)
             data[key] = val
             key_start += step
             val_start += step
@@ -795,7 +795,7 @@ class AbstractDistro(object):
                         Log("Error: NdDriverVersion not found.")
                         return None
                     else:
-                        return None
+                        return ndDriverVersion
         except Exception as e:
             errMsg = 'Cannot update status: Failed to enable the extension with error: %s, stack trace: %s' % (str(e), traceback.format_exc())
             Log(errMsg)
