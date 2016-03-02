@@ -157,8 +157,7 @@ class KVPReader(object):
         c = None
         try:
             with open(filepath, mode) as F:
-                c=F.read()
-                F.close()
+                c = F.read()
         except IOError, e:
             errMsg = 'can not read kvp pool file with error: %s, stack trace: %s' % (str(e), traceback.format_exc())
             Log(errMsg)
@@ -184,7 +183,7 @@ class KVPReader(object):
         key_len = 512
         val_len = 2048
         step = key_len + val_len
-        data={}
+        data = {}
         while val_start < len(b):
             key = self.bytes_to_str(b, key_start, key_start + key_len)
             val = self.bytes_to_str(b, val_start, val_start + val_len)
@@ -786,8 +785,6 @@ class AbstractDistro(object):
             if(ndDriverVersionHook is not None and ndDriverVersionHook.strip()!=""):
                 return ndDriverVersionHook
             else:
-                with open("/var/lib/hyperv/.kvp_pool_0", "r") as f:
-                    lines = f.read()
                 if(lines is not None):
                     kvpReader = KVPReader()
                     keyValues = kvpReader.read_raw_kvp(0)
