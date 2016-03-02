@@ -161,8 +161,11 @@ class KVPReader(object):
         except IOError, e:
             errMsg = 'can not read kvp pool file with error: %s, stack trace: %s' % (str(e), traceback.format_exc())
             Log(errMsg)
-        b = bytes(c)
-        return b
+        if(c is None):
+            return None
+        else:
+            b = bytes(c)
+            return b
 
     def bytes_to_str(self, b, start, end):
         buf = None 
@@ -178,19 +181,22 @@ class KVPReader(object):
 
     def read_raw_kvp(self, pool):
         b = self.read_bytes(pool)
-        key_start = 0
-        val_start = 512
-        key_len = 512
-        val_len = 2048
-        step = key_len + val_len
-        data = {}
-        while val_start < len(b):
-            key = self.bytes_to_str(b, key_start, key_start + key_len)
-            val = self.bytes_to_str(b, val_start, val_start + val_len)
-            data[key] = val
-            key_start += step
-            val_start += step
-        return data;
+        if(b is None):
+            return None
+        else:
+            key_start = 0
+            val_start = 512
+            key_len = 512
+            val_len = 2048
+            step = key_len + val_len
+            data = {}
+            while val_start < len(b):
+                key = self.bytes_to_str(b, key_start, key_start + key_len)
+                val = self.bytes_to_str(b, val_start, val_start + val_len)
+                data[key] = val
+                key_start += step
+                val_start += step
+            return data;
 
 ############################################################
 # BEGIN DISTRO CLASS DEFS
@@ -785,16 +791,15 @@ class AbstractDistro(object):
             if(ndDriverVersionHook is not None and ndDriverVersionHook.strip()!=""):
                 return ndDriverVersionHook
             else:
-                if(lines is not None):
-                    kvpReader = KVPReader()
-                    keyValues = kvpReader.read_raw_kvp(0)
-                    if keyValues.has_key("NdDriverVersion"):
-                        ndDriverVersion = keyValues["NdDriverVersion"]
-                        if(ndDriverVersion is None):
-                            Log("Error: NdDriverVersion not found.")
-                            return None
-                        else:
-                            return ndDriverVersion
+                kvpReader = KVPReader()
+                keyValues = kvpReader.read_raw_kvp(0)
+                if keyValues is not None and keyValues.has_key("NdDriverVersion"):
+                    ndDriverVersion = keyValues["NdDriverVersion"]
+                    if(ndDriverVersion is None):
+                        Log("Error: NdDriverVersion not found.")
+                        return None
+                    else:
+                        return ndDriverVersion
         except Exception as e:
             errMsg = 'Cannot update status: Failed to enable the extension with error: %s, stack trace: %s' % (str(e), traceback.format_exc())
             Log(errMsg)
