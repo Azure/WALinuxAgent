@@ -104,6 +104,9 @@ def get_home_dir(conf=__conf__):
 def get_passwd_file_path(conf=__conf__):
     return conf.get("OS.PasswordPath", "/etc/shadow")
 
+def get_sudoers_dir(conf=__conf__):
+    return conf.get("OS.SudoersDir", "/etc/sudoers.d")
+
 def get_sshd_conf_file_path(conf=__conf__):
     return conf.get("OS.SshdConfigPath", "/etc/ssh/sshd_config")
 

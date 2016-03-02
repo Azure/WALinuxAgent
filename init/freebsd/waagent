@@ -1,0 +1,18 @@
+#!/bin/sh
+
+# PROVIDE: waagent
+# REQUIRE: sshd netif dhclient
+# KEYWORD: nojail
+
+. /etc/rc.subr
+
+PATH=$PATH:/usr/local/bin
+name="waagent"
+rcvar="waagent_enable"
+pidfile="/var/run/waagent.pid"
+command="/usr/local/sbin/${name}"
+command_interpreter="python"
+command_args="start"
+
+load_rc_config $name
+run_rc_command "$1"
