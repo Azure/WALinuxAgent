@@ -160,7 +160,8 @@ class KVPReader(object):
                 c=F.read()
                 F.close()
         except IOError, e:
-            print e
+            errMsg = 'can not read kvp pool file with error: %s, stack trace: %s' % (str(e), traceback.format_exc())
+            Log(errMsg)
         b = bytes(c)
         return b
 
