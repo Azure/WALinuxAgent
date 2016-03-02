@@ -790,12 +790,13 @@ class AbstractDistro(object):
                 if(lines is not None):
                     kvpReader = KVPReader()
                     keyValues = kvpReader.read_raw_kvp(0)
-                    ndDriverVersion = keyValues["NdDriverVersion"]
-                    if(ndDriverVersion is None):
-                        Log("Error: NdDriverVersion not found.")
-                        return None
-                    else:
-                        return ndDriverVersion
+                    if keyValues.has_key("NdDriverVersion"):
+                        ndDriverVersion = keyValues["NdDriverVersion"]
+                        if(ndDriverVersion is None):
+                            Log("Error: NdDriverVersion not found.")
+                            return None
+                        else:
+                            return ndDriverVersion
         except Exception as e:
             errMsg = 'Cannot update status: Failed to enable the extension with error: %s, stack trace: %s' % (str(e), traceback.format_exc())
             Log(errMsg)
