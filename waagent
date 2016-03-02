@@ -742,13 +742,13 @@ class AbstractDistro(object):
             else:
                 with open("/var/lib/hyperv/.kvp_pool_0", "r") as f:
                     lines = f.read()
-                r = re.search("NdDriverVersion\0+(\d\d\d\.\d)", lines)
-                if r is not None:
-                    NdDriverVersion = r.groups()[0]
-                    return NdDriverVersion #e.g.  NdDriverVersion = 142.0
-                else :
-                    Log("Error: NdDriverVersion not found.")
-                    return None
+                if(lines is not None):
+                    strings = re.findall("[^\x00-\x1F\x7F-\xFF]{4,}", lines)
+                    for lineIndex in range(0,len(strings)):
+                        if(strings[lineIndex].strip() == "NdDriverVersion"):
+                            return strings[lineIndex + 1] #e.g.  NdDriverVersion = 142.0
+                Log("Error: NdDriverVersion not found.")
+                return None
         except Exception as e:
             errMsg = 'Cannot update status: Failed to enable the extension with error: %s, stack trace: %s' % (str(e), traceback.format_exc())
             Log(errMsg)
@@ -768,6 +768,7 @@ class AbstractDistro(object):
         else:
             # package_fullname would be like this :microsoft-hyper-v-rdma-4.0.11.142-20160201.x86_64
             # nd_driver_version 140.0
+            nd_driver_version = nd_driver_version.split('.')[0]
             Log("nd_driver_version is " + str(nd_driver_version) + " package_fullname is " + str(package_fullname))
             if(nd_driver_version is not None):
                 r = re.match(self.rdma_version_match_pattern % nd_driver_version, package_fullname)# NdDriverVersion should be at the end of package version
