@@ -147,6 +147,51 @@ Please do not use this disk for storing any personal or application data.
 For additional details to please refer to the MSDN documentation at : http://msdn.microsoft.com/en-us/library/windowsazure/jj672979.aspx
 """
 
+class KVPReader(object):
+    def __init__(self):
+        pass
+
+    def read_bytes(pool):
+        filepath = "/var/lib/hyperv/.kvp_pool_" + str(pool)
+        mode = 'r'
+        c = None
+        try:
+            with open(filepath, mode) as F:
+                c=F.read()
+                F.close()
+        except IOError, e:
+            print e
+        b = bytes(c)
+        return b
+
+    def bytes_to_str(b, start, end):
+        buf = None 
+        for i in range(start, end):
+            if ord(b[i]) == 0:#Found string end
+                buf = bytearray(i - start)
+                buf[:] = b[start : i]
+                break
+        if(buf):
+            return buf.decode('utf-8')
+        else:
+            return None
+
+    def read_raw_kvp(pool):
+        b = read_bytes(pool)
+        key_start = 0
+        val_start = 512
+        key_len = 512
+        val_len = 2048
+        step = key_len + val_len
+        data={}
+        while val_start < len(b):
+            key = bytes_to_str(b, key_start, key_start + key_len)
+            val = bytes_to_str(b, val_start, val_start + val_len)
+            data[key] = val
+            key_start += step
+            val_start += step
+        return data;
+
 ############################################################
 # BEGIN DISTRO CLASS DEFS
 ############################################################
@@ -743,12 +788,14 @@ class AbstractDistro(object):
                 with open("/var/lib/hyperv/.kvp_pool_0", "r") as f:
                     lines = f.read()
                 if(lines is not None):
-                    strings = re.findall("[^\x00-\x1F\x7F-\xFF]{4,}", lines)
-                    for lineIndex in range(0,len(strings)):
-                        if(strings[lineIndex].strip() == "NdDriverVersion"):
-                            return strings[lineIndex + 1] #e.g.  NdDriverVersion = 142.0
-                Log("Error: NdDriverVersion not found.")
-                return None
+                    kvpReader = KVPReader()
+                    keyValues = kvpReader.read_raw_kvp(0)
+                    ndDriverVersion = keyValues["NdDriverVersion"]
+                    if(ndDriverVersion is None):
+                        Log("Error: NdDriverVersion not found.")
+                        return None
+                    else:
+                        return None
         except Exception as e:
             errMsg = 'Cannot update status: Failed to enable the extension with error: %s, stack trace: %s' % (str(e), traceback.format_exc())
             Log(errMsg)
@@ -844,7 +891,7 @@ class gentooDistro(AbstractDistro):
         self.dhcp_client_name='dhcpcd'
         self.shadow_file_mode=0640
         self.init_file=gentoo_init_file
-        
+
     def publishHostname(self,name):
         try:
             if (os.path.isfile(self.hostname_file_path)):
