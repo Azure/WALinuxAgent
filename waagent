@@ -1111,10 +1111,10 @@ class SuSEDistro(AbstractDistro):
     def refreshRepository(self):
         command_to_refresh_repository = self.zypper_path + " --no-gpg-checks refresh"
         error,output = RunGetOutput(command_to_refresh_repository)
-        Log("refreshRepository result is%s output is %s " % (str(error) ,str(output)))
+        Log("refreshRepository result is is there already, so skip add%s output is %s " % (str(error),str(output)))
 
     def addPackageRepository(self, repository):
-        if(repository is not None):
+        if repository is not None:
             error,output = RunGetOutput(self.zypper_path + " lr -u")
             rdma_pack_result = re.search(repository["Name"], output)
             if rdma_pack_result is None :
@@ -1133,12 +1133,12 @@ class SuSEDistro(AbstractDistro):
         if forceReinstall or self.checkPackageInstalled(package["Name"]) == 0:
             command_to_remove_package = self.zypper_path + " --non-interactive remove " + package["Name"]
             error,output = RunGetOutput(command_to_remove_package)
-            Log("remove package %s return code is %s and output is %s " % (package["Name"], str(error) , str(output)))
+            Log("remove package %s return code is %s and output is %s " % (package["Name"], str(error), str(output)))
             command_to_install_package = self.zypper_path + "--non-interactive install --force " + package["Name"]
             error,output = RunGetOutput(command_to_install_package)
-            Log("install package %s return code is %s and output is %s " % (package["Name"], str(error) , str(output)))
+            Log("install package %s return code is %s and output is %s " % (package["Name"], str(error), str(output)))
         else:
-            Log("package %s is already installed " % package["Name"])
+            Log("package %s is already installed" % package["Name"])
 
     def installAgentServiceScriptFiles(self):
         try:
@@ -1189,22 +1189,25 @@ class SuSEDistro(AbstractDistro):
                 return RdmaConfig.process_success
 
     def installRdmaDrivers(self, host_version):
-        r = os.listdir("/opt/microsoft/rdma")
-        if r is not None :
-            for filename in r :
-                if re.match(self.rdma_package_name + "-\d{8}\.(%s).+" % host_version, filename) :
-                    error, output = RunGetOutput(self.command_to_remove_rdma_user_mode_package)
-                    Log("remove rdma package result is " + str(error) + " output is: " + str(output))
-                    Log("Installing RPM /opt/microsoft/rdma/" + filename)
-                    error, output = RunGetOutput(self.command_to_install_rdma_user_mode_package % filename)
-                    Log("Install rdma package result is " + str(error) + " output is: " + str(output))
-                    if(error == RdmaConfig.process_success):
-                        self.rebootMachine()
-                    else:
-                        raise RdmaError(RdmaConfig.package_install_failed)
-        else:
-            Log("RDMA drivers not found in /opt/microsoft/rdma")
+        if not os.path.exists("/opt/microsoft/rdma"):
             raise RdmaError(RdmaConfig.package_not_found)
+        else:
+            r = os.listdir("/opt/microsoft/rdma")
+            if r is not None :
+                for filename in r :
+                    if re.match(self.rdma_package_name + "-\d{8}\.(%s).+" % host_version, filename) :
+                        error, output = RunGetOutput(self.command_to_remove_rdma_user_mode_package)
+                        Log("remove rdma package result is " + str(error) + " output is: " + str(output))
+                        Log("Installing RPM /opt/microsoft/rdma/" + filename)
+                        error, output = RunGetOutput(self.command_to_install_rdma_user_mode_package % filename)
+                        Log("Install rdma package result is " + str(error) + " output is: " + str(output))
+                        if(error == RdmaConfig.process_success):
+                            self.rebootMachine()
+                        else:
+                            raise RdmaError(RdmaConfig.package_install_failed)
+            else:
+                Log("RDMA drivers not found in /opt/microsoft/rdma")
+                raise RdmaError(RdmaConfig.package_not_found)
 
 ############################################################    
 #	redhatDistro
@@ -1391,7 +1394,6 @@ class centosDistro(redhatDistro):
         self.command_to_install_rdma_kmod_package = self.yum_path + " install -q -y %s/%s"
 
     def installPackage(self, package, forceReinstall):
-        #TODO check whether the package is installed or not first.
         if forceReinstall or self.checkPackageInstalled(package["Name"]) == 0:
             command_to_remove_package = self.yum_path + " erase -q -y " + package["Name"]
             error,output = RunGetOutput(command_to_remove_package)
@@ -1411,9 +1413,9 @@ class centosDistro(redhatDistro):
     def addPackageRepository(self, repository):
         #return self.yum_config_manager + " --add-repo=/etc/yum.repos.d/" + repo_file_path
         if(repository is not None):
-            Log("repository with name %s is not found" % repository["Name"])
             repo_file_path = "/etc/yum.repos.d/" + repository["Name"] + ".repo"
             if(not os.path.exists(repo_file_path)):
+                Log("repository with name %s is not found" % repository["Name"])
                 repo_content = "[" + repository["Name"] + "]\n"\
                                 + "name=" + repository["Name"] + "\n"\
                                 + "baseurl=" + repository["Url"] + "\nenabled=1\n"
@@ -1463,63 +1465,66 @@ class centosDistro(redhatDistro):
             extracted_folder = "/opt/microsoft/rdma/rhel71"
         else:
             raise RdmaError(RdmaConfig.os_not_supported)
-        file_list = os.listdir(extracted_folder)
-        # we uninstall the standard hyper-v user mode package first.
-        error, output = RunGetOutput(self.command_to_detect_kvp_daemon_package)
-        if(error == RdmaConfig.process_success):
-            error, output = RunGetOutput(self.command_to_erase_kvp_daemon_package)
-            if(error != RdmaConfig.process_success):
-                Log(self.command_to_erase_kvp_daemon_package + " executed failed")
-            else:
-                Log(self.command_to_erase_kvp_daemon_package + "done")
-        else:
-            Log(self.command_to_detect_kvp_daemon_package + " do not return process_success")
-        error, output = RunGetOutput(self.command_to_detect_kvp_daemon_package_new)
-        if(error == RdmaConfig.process_success):
-            error, output = RunGetOutput(self.command_to_erase_kvp_daemon_package_new)
-            if(error != RdmaConfig.process_success):
-                Log(self.command_to_erase_kvp_daemon_package_new + " executed failed")
-            else:
-                Log(self.command_to_erase_kvp_daemon_package_new + " done")
-        else:
-            Log(self.command_to_detect_kvp_daemon_package_new + " do not return process_success")
-        if file_list is not None :
-            installed = False
-            for filename in file_list :
-                #first uninstall the rdma_kernel_mode_package_name
-                #kmod-microsoft-hyper-v-rdma-X.X.X.<NDVERSION>-DDDDDDDD.x86_64.rpm
-                r = re.match((self.rdma_kernel_mode_package_name + "-(\d+\.)+(%s)-\d{8}\.x86_64.rpm") % host_version, filename)
-                if r:
-                    error, output = RunGetOutput(self.command_to_remove_rdma_kmod_package)
-                    Log("remove kmod-microsoft-hyper-v-rdma package result is " + str(error) + " output is: " + str(output))
-                    Log("Installing RPM " + extracted_folder + "/" + filename)
-                    error, output = RunGetOutput(self.command_to_install_rdma_kmod_package % (extracted_folder, filename))
-                    Log("Install kmod-microsoft-hyper-v-rdma package result is " + str(error) + " output is: " + str(output))
-                    if(error != RdmaConfig.process_success):
-                        raise RdmaError(RdmaConfig.package_install_failed)
-                    else:
-                        installed = True
-            for filename in file_list :
-                #first uninstall the rdma_user_mode_package_name
-                #microsoft-hyper-v-rdma-X.X.X.<NDVERSION>-DDDDDDDD.x86_64.rpm
-                r = re.match((self.rdma_user_mode_package_name + "-(\d+\.)+(%s)-\d{8}\.x86_64.rpm") % host_version, filename)
-                if r:
-                    error, output = RunGetOutput(self.command_to_remove_rdma_user_mode_package)
-                    Log("remove microsoft-hyper-v-rdma package result is " + str(error) + " output is: " + str(output))
-                    Log("Installing RPM " + extracted_folder + "/" + filename)
-                    error, output = RunGetOutput(self.command_to_install_rdma_user_mode_package % (extracted_folder,filename))
-                    Log("Install microsoft-hyper-v-rdma package result is " + str(error) + " output is: " + str(output))
-                    if(error != RdmaConfig.process_success):
-                        raise RdmaError(RdmaConfig.package_install_failed)
-                    else:
-                        installed = True
-            if(installed):
-                self.rebootMachine()
-            else:
-                Log("no rdma package is installed.")
-        else:
-            Log("RDMA drivers not found in /opt/microsoft/rdma")
+        if not os.path.exists(extracted_folder):
             raise RdmaError(RdmaConfig.package_not_found)
+        else:
+            file_list = os.listdir(extracted_folder)
+            # we uninstall the standard hyper-v user mode package first.
+            error, output = RunGetOutput(self.command_to_detect_kvp_daemon_package)
+            if(error == RdmaConfig.process_success):
+                error, output = RunGetOutput(self.command_to_erase_kvp_daemon_package)
+                if(error != RdmaConfig.process_success):
+                    Log(self.command_to_erase_kvp_daemon_package + " executed failed")
+                else:
+                    Log(self.command_to_erase_kvp_daemon_package + "done")
+            else:
+                Log(self.command_to_detect_kvp_daemon_package + " do not return process_success")
+            error, output = RunGetOutput(self.command_to_detect_kvp_daemon_package_new)
+            if(error == RdmaConfig.process_success):
+                error, output = RunGetOutput(self.command_to_erase_kvp_daemon_package_new)
+                if(error != RdmaConfig.process_success):
+                    Log(self.command_to_erase_kvp_daemon_package_new + " executed failed")
+                else:
+                    Log(self.command_to_erase_kvp_daemon_package_new + " done")
+            else:
+                Log(self.command_to_detect_kvp_daemon_package_new + " do not return process_success")
+            if file_list is not None :
+                installed = False
+                for filename in file_list :
+                    #first uninstall the rdma_kernel_mode_package_name
+                    #kmod-microsoft-hyper-v-rdma-X.X.X.<NDVERSION>-DDDDDDDD.x86_64.rpm
+                    r = re.match((self.rdma_kernel_mode_package_name + "-(\d+\.)+(%s)-\d{8}\.x86_64.rpm") % host_version, filename)
+                    if r:
+                        error, output = RunGetOutput(self.command_to_remove_rdma_kmod_package)
+                        Log("remove kmod-microsoft-hyper-v-rdma package result is " + str(error) + " output is: " + str(output))
+                        Log("Installing RPM " + extracted_folder + "/" + filename)
+                        error, output = RunGetOutput(self.command_to_install_rdma_kmod_package % (extracted_folder, filename))
+                        Log("Install kmod-microsoft-hyper-v-rdma package result is " + str(error) + " output is: " + str(output))
+                        if(error != RdmaConfig.process_success):
+                            raise RdmaError(RdmaConfig.package_install_failed)
+                        else:
+                            installed = True
+                for filename in file_list :
+                    #first uninstall the rdma_user_mode_package_name
+                    #microsoft-hyper-v-rdma-X.X.X.<NDVERSION>-DDDDDDDD.x86_64.rpm
+                    r = re.match((self.rdma_user_mode_package_name + "-(\d+\.)+(%s)-\d{8}\.x86_64.rpm") % host_version, filename)
+                    if r:
+                        error, output = RunGetOutput(self.command_to_remove_rdma_user_mode_package)
+                        Log("remove microsoft-hyper-v-rdma package result is " + str(error) + " output is: " + str(output))
+                        Log("Installing RPM " + extracted_folder + "/" + filename)
+                        error, output = RunGetOutput(self.command_to_install_rdma_user_mode_package % (extracted_folder,filename))
+                        Log("Install microsoft-hyper-v-rdma package result is " + str(error) + " output is: " + str(output))
+                        if(error != RdmaConfig.process_success):
+                            raise RdmaError(RdmaConfig.package_install_failed)
+                        else:
+                            installed = True
+                if(installed):
+                    self.rebootMachine()
+                else:
+                    Log("no rdma package is installed.")
+            else:
+                Log("RDMA drivers not found in /opt/microsoft/rdma")
+                raise RdmaError(RdmaConfig.package_not_found)
 
 ############################################################    
 #	oracleDistro
@@ -6511,12 +6516,17 @@ class Agent(Util):
                 Log("pre task execution result is %s, output is: %s" % (error,output))
 
             if(updateRdmaDriverConfigured):
-                MyDistro.rdmaUpdate()
+                try:
+                    MyDistro.rdmaUpdate()
+                except RdmaError as e:
+                    Log("rdmaupdate failed ") 
             else:
                 Log("OS.UpdateRdmaDriver configured to " + str(updateRdmaDriverConfigured) + " so skip the rdma update.")
 
             if(extraRepositories is not None):
+                Log("extraRepositories %s" % extraRepositories)
                 for repository in extraRepositories:
+                    Log("add repository %s" % (repository["Name"]))
                     MyDistro.addPackageRepository(repository)
 
             if(extraPackages is not None):

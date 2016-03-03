@@ -1,10 +1,10 @@
 {
   "PreTask": "echo",
   "ExtraRepositories": [
-    {
-      "Name": "MSFT-RDMA-REPO2",
-      "Url": "https://drivers.suse.com/microsoft/Microsoft-LIS-RDMA/sle-12/updates2"
-    }
+  {
+    "Name": "MSFT-RDMA-REPO",
+    "Url": "http://olcentgbl.trafficmanager.net/openlogic/7/openlogic/x86_64/"
+  }
   ],
   "ForceReinstall": false,
   "Packages": [
