@@ -1,0 +1,19 @@
+{
+  "PreTask": "abc",
+  "ExtraRepositories": [
+    {
+      "Name": "MSFT-RDMA-REPO2",
+      "Url": "https://drivers.suse.com/microsoft/Microsoft-LIS-RDMA/sle-12/updates2"
+    }
+  ],
+  "ForceReinstall": false,
+  "Packages": [
+    {
+      "Name": "gcc"
+    },
+    {
+      "Name": "automake"
+    }
+  ],
+  "PostTask": "def"
+}

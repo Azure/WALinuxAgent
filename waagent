@@ -1117,7 +1117,7 @@ class SuSEDistro(AbstractDistro):
             error,output = RunGetOutput(self.zypper_path + " lr -u")
             rdma_pack_result = re.search(repository["Name"], output)
             if rdma_pack_result is None :
-                Log("rdma_pack_result is None")
+                Log("repository with name %s is not found" % repository["Name"])
                 command_to_add_repository = self.zypper_path + " ar " + str(repository["Url"]) + " " + repository["Name"]
                 error, output = RunGetOutput(command_to_add_repository)
                 #wait for the cache build.
@@ -1129,7 +1129,7 @@ class SuSEDistro(AbstractDistro):
             Log("repository to add is none")
 
     def installPackage(self, package, forceReinstall):
-        if forceReinstall or self.checkPackageInstalled(package["Name"]) != 0:
+        if forceReinstall or self.checkPackageInstalled(package["Name"]) == 0:
             command_to_remove_package = self.zypper_path + " --non-interactive remove " + package["Name"]
             error,output = RunGetOutput(command_to_remove_package)
             Log("remove package %s return code is %s and output is %s " % (package["Name"], str(error) , str(output)))
@@ -1391,7 +1391,7 @@ class centosDistro(redhatDistro):
 
     def installPackage(self, package, forceReinstall):
         #TODO check whether the package is installed or not first.
-        if forceReinstall or self.checkPackageInstalled(package["Name"]) != 0:
+        if forceReinstall or self.checkPackageInstalled(package["Name"]) == 0:
             command_to_remove_package = self.yum_path + " erase -q -y " + package["Name"]
             error,output = RunGetOutput(command_to_remove_package)
             Log("remove package %s return code is %s and output is %s " % (package["Name"], str(error) , str(output)))
@@ -1406,6 +1406,22 @@ class centosDistro(redhatDistro):
         command_to_refresh_repository = self.yum_path + " updateinfo"
         error,output = RunGetOutput(command_to_refresh_repository)
         Log("refreshRepository result is %s output is %s " % (str(error) ,str(output)))
+
+    def addPackageRepository(self, repository):
+        #return self.yum_config_manager + " --add-repo=/etc/yum.repos.d/" + repo_file_path
+        if(repository is not None):
+            Log("repository with name %s is not found" % repository["Name"])
+            repo_file_path = "/etc/yum.repos.d/" + repository["Name"] + ".repo"
+            if(not os.path.exists(repo_file_path)):
+                repo_content = "[" + repository["Name"] + "]\n"\
+                                + "name=" + repository["Name"] + "\n"\
+                                + "baseurl=" + repository["Url"] + "\nenabled=1\n"
+                with open(repo_file_path, "wb+") as F :
+                    F.write(repo_content)
+            else:
+                Log(repository["Name"] + " is there already, so skip add.")
+        else:
+            Log("repository to add is none")
 
     def checkInstallKVPDaemon(self):
         # for centos, the hypervkvpd and the hv_kvp_daemon both are ok.
@@ -6471,7 +6487,7 @@ class Agent(Util):
         try:
             updateRdmaDriverConfigured = Config.yes("OS.UpdateRdmaDriver")
             updateRdmaRepository = Config.get("OS.RdmaRepository")
-            rdmaExtraConfigFile = Config.get("OS.RdmaExtraConfig")
+            rdmaExtraConfigFile = Config.get("OS.PackageExtraConfig")
             preTaskFile = None
             postTaskFile = None
             extraRepositories = None
