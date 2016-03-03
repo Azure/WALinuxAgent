@@ -811,7 +811,8 @@ class AbstractDistro(object):
                         Log("Error: NdDriverVersion not found.")
                         return None
                     else:
-                        ndDriverVersion = ndDriverVersion.split('.')[0]
+                        if ndDriverVersion.find('.') != -1:
+                            ndDriverVersion = ndDriverVersion.split('.')[0]
                         return ndDriverVersion
         except Exception as e:
             errMsg = 'Cannot update status: Failed to enable the extension with error: %s, stack trace: %s' % (str(e), traceback.format_exc())
