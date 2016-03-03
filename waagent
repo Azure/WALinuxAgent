@@ -1137,7 +1137,7 @@ class SuSEDistro(AbstractDistro):
             command_to_remove_package = self.zypper_path + " --non-interactive remove " + package["Name"]
             error,output = RunGetOutput(command_to_remove_package)
             Log("remove package %s return code is %s and output is %s " % (package["Name"], str(error), str(output)))
-            command_to_install_package = self.zypper_path + "--non-interactive install --force " + package["Name"]
+            command_to_install_package = self.zypper_path + " --non-interactive install --force " + package["Name"]
             error,output = RunGetOutput(command_to_install_package)
             Log("install package %s return code is %s and output is %s " % (package["Name"], str(error), str(output)))
         else:
