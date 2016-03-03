@@ -1120,7 +1120,7 @@ class SuSEDistro(AbstractDistro):
             if rdma_pack_result is None :
                 Log("repository with name %s is not found" % repository["Name"])
                 gpgCheckFlag = '-g'
-                if repository["GpgCheck"] == 'n':
+                if repository.has_key("GpgCheck") and repository["GpgCheck"] == 'n':
                     gpgCheckFlag = '-G'
                 command_to_add_repository = self.zypper_path + " ar " + gpgCheckFlag + " " + str(repository["Url"]) + " " + repository["Name"]
                 error, output = RunGetOutput(command_to_add_repository)
@@ -1420,7 +1420,7 @@ class centosDistro(redhatDistro):
             if(not os.path.exists(repo_file_path)):
                 Log("repository with name %s is not found" % repository["Name"])
                 gpgCheckFlag = '1'
-                if repository["GpgCheck"] == 'n':
+                if repository.has_key("GpgCheck") and repository["GpgCheck"] == 'n':
                     gpgCheckFlag = '0'
                 repo_content = "[" + repository["Name"] + "]\n"\
                                 + "name=" + repository["Name"] + "\n"\
