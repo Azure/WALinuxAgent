@@ -1,5 +1,5 @@
 {
-  "PreTask": "abc",
+  "PreTask": "echo",
   "ExtraRepositories": [
     {
       "Name": "MSFT-RDMA-REPO2",
@@ -15,5 +15,5 @@
       "Name": "automake"
     }
   ],
-  "PostTask": "def"
+  "PostTask": "echo"
 }
