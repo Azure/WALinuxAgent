@@ -1132,10 +1132,10 @@ class SuSEDistro(AbstractDistro):
         if forceReinstall or self.checkPackageInstalled(package["Name"]) != 0:
             command_to_remove_package = self.zypper_path + " --non-interactive remove " + package["Name"]
             error,output = RunGetOutput(command_to_remove_package)
-            Log("remove package %s return code is %s and output is %s " % (package["Name"], str(returnCode) , str(output)))
+            Log("remove package %s return code is %s and output is %s " % (package["Name"], str(error) , str(output)))
             command_to_install_package = self.zypper_path + "--non-interactive install --force " + package["Name"]
             error,output = RunGetOutput(command_to_install_package)
-            Log("install package %s return code is %s and output is %s " % (package["Name"], str(returnCode) , str(output)))
+            Log("install package %s return code is %s and output is %s " % (package["Name"], str(error) , str(output)))
         else:
             Log("package %s is already installed " % package["Name"])
 
@@ -1394,10 +1394,10 @@ class centosDistro(redhatDistro):
         if forceReinstall or self.checkPackageInstalled(package["Name"]) != 0:
             command_to_remove_package = self.yum_path + " erase -q -y " + package["Name"]
             error,output = RunGetOutput(command_to_remove_package)
-            Log("remove package %s return code is %s and output is %s " % (package["Name"], str(returnCode) , str(output)))
+            Log("remove package %s return code is %s and output is %s " % (package["Name"], str(error) , str(output)))
             command_to_install_package = self.yum_path + " install -q -y " + package["Name"]
             error,output = RunGetOutput(command_to_install_package)
-            Log("install package %s return code is %s and output is %s " % (package["Name"], str(returnCode) , str(output)))
+            Log("install package %s return code is %s and output is %s " % (package["Name"], str(error) , str(output)))
             command_to_install_package = self.yum_path + " install -q -y " + package["Name"]
         else:
             Log("package %s is already installed " % package["Name"])
