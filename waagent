@@ -1119,7 +1119,10 @@ class SuSEDistro(AbstractDistro):
             rdma_pack_result = re.search(repository["Name"], output)
             if rdma_pack_result is None :
                 Log("repository with name %s is not found" % repository["Name"])
-                command_to_add_repository = self.zypper_path + " ar " + str(repository["Url"]) + " " + repository["Name"]
+                gpgCheckFlag = '-g'
+                if repository["GpgCheck"] == 'n':
+                    gpgCheckFlag = '-G'
+                command_to_add_repository = self.zypper_path + " ar " + gpgCheckFlag + " " + str(repository["Url"]) + " " + repository["Name"]
                 error, output = RunGetOutput(command_to_add_repository)
                 #wait for the cache build.
                 Log("error result is " + str(error) + " output is : " + str(output))
@@ -1416,9 +1419,13 @@ class centosDistro(redhatDistro):
             repo_file_path = "/etc/yum.repos.d/" + repository["Name"] + ".repo"
             if(not os.path.exists(repo_file_path)):
                 Log("repository with name %s is not found" % repository["Name"])
+                gpgCheckFlag = '1'
+                if repository["GpgCheck"] == 'n':
+                    gpgCheckFlag = '0'
                 repo_content = "[" + repository["Name"] + "]\n"\
                                 + "name=" + repository["Name"] + "\n"\
-                                + "baseurl=" + repository["Url"] + "\nenabled=1\n"
+                                + "baseurl=" + repository["Url"] + "\nenabled=1\n"\
+                                + "gpgcheck=" + gpgCheckFlag + "\n"
                 with open(repo_file_path, "wb+") as F :
                     F.write(repo_content)
             else:
