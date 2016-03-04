@@ -14,9 +14,6 @@
 #
 # Requires Python 2.4+ and Openssl 1.0+
 #
-# Implements parts of RFC 2131, 1541, 1497 and
-# http://msdn.microsoft.com/en-us/library/cc227282%28PROT.10%29.aspx
-# http://msdn.microsoft.com/en-us/library/cc227259%28PROT.13%29.aspx
 
 from tests.tools import *
 import uuid
@@ -24,7 +21,7 @@ import unittest
 import os
 import shutil
 import time
-from azurelinuxagent.protocol.restapi import *
+from azurelinuxagent.common.protocol.restapi import *
 
 class SampleDataContract(DataContract):
     def __init__(self):
