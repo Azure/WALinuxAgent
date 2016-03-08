@@ -1409,6 +1409,9 @@ class centosDistro(redhatDistro):
             Log("package %s is already installed " % package["Name"])
 
     def refreshRepository(self):
+        command_to_clean_cache = self.yum_path + " clean all"
+        error,output = RunGetOutput(command_to_clean_cache)
+        Log("clean repository cache result is %s output is %s " % (str(error) ,str(output)))
         command_to_refresh_repository = self.yum_path + " updateinfo"
         error,output = RunGetOutput(command_to_refresh_repository)
         Log("refreshRepository result is %s output is %s " % (str(error) ,str(output)))
