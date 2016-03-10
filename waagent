@@ -5665,7 +5665,10 @@ class WALAEventMonitor(WALAEvent):
             while(True):
                 if (datetime.datetime.now()-LastReportHeartBeatTime) > datetime.timedelta(hours=12):
                     LastReportHeartBeatTime = datetime.datetime.now()
-                    AddExtensionEvent(op=WALAEventOperation.HeartBeat, message="HeartBeat", name="WALA", isSuccess=True)
+                    openPorts = self.GetOpenPorts()
+                    extensions = self.GetExtensions()
+                    message = 'openPorts={0};extensions={1}'.format(openPorts, extensions)
+                    AddExtensionEvent(op=WALAEventOperation.HeartBeat, message=message, name="WALA", isSuccess=True)
                 self.postNumbersInOneLoop=0
                 self.CollectAndSendWALAEvents()
                 time.sleep(60)
@@ -5761,6 +5764,63 @@ class WALAEventMonitor(WALAEvent):
                     node.setAttribute("Value",xml.sax.saxutils.escape(str(self.sysInfo[name])))
 
         return  eventObject.toxml()
+
+    def GetOpenPorts(self):
+        """
+        Find the open/listening ports on this computer
+        Return a string containeing all ports info like program1:protocol1:port1,program2:protocol2:port2,...
+        """
+        openPorts = set()
+        ret, output = RunGetOutput("netstat -tulnp")
+
+        for line in output.split('\n'):
+            protocol = port = program = None
+            try:
+                #parse the output on each line, which contains the info of protocol/port/progam
+                #format for tcp/udp connection:
+                #Proto Recv-Q Send-Q Local Address           Foreign Address         State       PID/Program name
+                #tcp        0      0 0.0.0.0:22              0.0.0.0:*               LISTEN      1096/sshd
+                #udp        0      0 0.0.0.0:68              0.0.0.0:*                           670/dhclient
+                if line.startswith("tcp"):
+                    props = [i for i in line.split()]
+                    protocol = props[0]
+                    port = props[3].split(":")[-1]
+                    program = props[6].split("/")[-1]
+                elif line.startswith("udp"):
+                    props = [i for i in line.split()]
+                    protocol = props[0]
+                    port = props[3].split(":")[-1]
+                    program = props[5].split("/")[-1]
+                if program and program not in ["dhclient", "sshd"]:
+                    app = "{0}:{1}:{2}".format(program, protocol, port)
+                    openPorts.add(app)
+            except:
+                LogIfVerbose("FAIL to parse port for line:{0}".format(line))
+
+        return ",".join(openPorts)
+
+    def GetExtensions(self):
+        """
+        Find the extentions that are installed on this computer
+        Return a string containeing all extension info like extension_name1:version1:state1,extension_name2:version2:state2,...
+        """
+        extensions = set()
+        ret, gfiles = RunGetOutput("ls -t /var/lib/waagent/ExtensionsConfig.*.xml")
+
+        try:
+            gfile = gfiles.split("\n")[0]
+            goalStateConfi =  xml.dom.minidom.parse(gfile)
+            plugins = goalStateConfi.getElementsByTagName("Plugins")[0].getElementsByTagName("Plugin")
+            for plugin in plugins:
+                name = plugin.getAttribute("name")
+                version = plugin.getAttribute("version")
+                state = plugin.getAttribute("state")
+                extension = "{0}:{1}:{2}".format(name, version, state)
+                extensions.add(extension)
+        except:
+            LogIfVerbose("FAIL to get extensions from {0}".format(gfile))
+
+        return ",".join(extensions)
 
 class Agent(Util):
     """
