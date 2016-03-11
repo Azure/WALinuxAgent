@@ -676,7 +676,13 @@ class AbstractDistro(object):
             if(GetFileContents(filePath).splitlines()[0].rstrip() != timeout):
                 SetFileContents(filePath,timeout)
                 Log("SetBlockDeviceTimeout: Update the device " + device + " with timeout " + timeout)
-
+    
+    def waitFor3rdPartyProvision(self):
+        """
+        Provide ad dummy implement of 3rd party provision.
+        """
+        return
+    
     def waitForSshHostKey(self, path):
         """
         Provide a dummy waiting, since by default, ssh host key is created by waagent and the key
@@ -2225,6 +2231,19 @@ class UbuntuDistro(debianDistro):
         else :
             self.dhcp_client_name='dhclient'
         return self.dhcp_client_name
+    
+    def waitFor3rdPartyProvision(self):
+        """
+        Wait for cloud-init to complete provisioning
+        """
+        MAX_RETRY = 60 #60 x 5 = 5 mins
+        for retry in range(0, MAX_RETRY):
+            Log("Wait for cloud init to finish provisioning.")
+            time.sleep(5)
+            if(os.path.isfile("/run/cloud-init/result.json")):
+                Log("Cloud init finished provisioning.")
+                return
+        return "Cloud init failed to finish provision in 5 minutes"
 
     def waitForSshHostKey(self, path):
         """
@@ -6400,7 +6419,9 @@ class Agent(Util):
         """
         enabled = Config.get("Provisioning.Enabled")
         if enabled != None and enabled.lower().startswith("n"):
-            return
+            #If provision is disabled for waagent, wait for 3rd party component, like cloud init to finish provision.
+            return MyDistro.waitFor3rdPartyProvision()
+
         Log("Provisioning image started.")
         type = Config.get("Provisioning.SshHostKeyPairType")
         if type == None:
