@@ -263,22 +263,17 @@ class DefaultOSUtil(object):
         if self.is_selinux_system():
             return shellutil.run('chcon ' + con + ' ' + path)
 
-    def set_ssh_client_alive_interval(self):
-        conf_file_path = conf.get_sshd_conf_file_path()
-        conf_file = fileutil.read_file(conf_file_path).split("\n")
-        textutil.set_ssh_config(conf_file, "ClientAliveInterval", "180")
-        fileutil.write_file(conf_file_path, '\n'.join(conf_file))
-        logger.info("Configured SSH client probing to keep connections alive.")
-
     def conf_sshd(self, disable_password):
         option = "no" if disable_password else "yes"
         conf_file_path = conf.get_sshd_conf_file_path()
         conf_file = fileutil.read_file(conf_file_path).split("\n")
         textutil.set_ssh_config(conf_file, "PasswordAuthentication", option)
-        textutil.set_ssh_config(conf_file, "ChallengeResponseAuthentication", 
-                                option)
+        textutil.set_ssh_config(conf_file, "ChallengeResponseAuthentication", option)
+        textutil.set_ssh_config(conf_file, "ClientAliveInterval", "180")
         fileutil.write_file(conf_file_path, "\n".join(conf_file))
-        logger.info("Disabled SSH password-based authentication methods.")
+        logger.info("{0} SSH password-based authentication methods."
+                    .format("Disabled" if disable_password else "Enabled"))
+        logger.info("Configured SSH client probing to keep connections alive.")
 
 
     def get_dvd_device(self, dev_dir='/dev'):
