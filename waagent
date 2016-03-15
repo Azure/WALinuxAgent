@@ -2234,16 +2234,25 @@ class UbuntuDistro(debianDistro):
     
     def waitFor3rdPartyProvision(self):
         """
-        Wait for cloud-init to complete provisioning
+        Wait for cloud-init to complete provisioning by waiting cloud init file
+        to show up.
+        On Ubuntu 12.04, the file is /var/lib/cloud/instance/boot-finished
+        On Ubuntu 14.04+, the file is /run/cloud-init/result.json
         """
+        FLAG_FILE = "/run/cloud-init/result.json"
+        if DistInfo()[1] == "12.04":
+            FLAG_FILE = "/var/lib/cloud/instance/boot-finished"
+         
         MAX_RETRY = 60 #60 x 5 = 5 mins
         for retry in range(0, MAX_RETRY):
             Log("Wait for cloud init to finish provisioning.")
+            Log("Wait for cloud init file '{0}' to show up".format(FLAG_FILE))
             time.sleep(5)
-            if(os.path.isfile("/run/cloud-init/result.json")):
+            if(os.path.isfile(FLAG_FILE)):
                 Log("Cloud init finished provisioning.")
                 return
-        return "Cloud init failed to finish provision in 5 minutes"
+        Warn("Cloud init file not found: {0}".format(FLAG_FILE))
+        Warn("Cloud init failed to finish provision in 5 minutes")
 
     def waitForSshHostKey(self, path):
         """
@@ -6420,7 +6429,8 @@ class Agent(Util):
         enabled = Config.get("Provisioning.Enabled")
         if enabled != None and enabled.lower().startswith("n"):
             #If provision is disabled for waagent, wait for 3rd party component, like cloud init to finish provision.
-            return MyDistro.waitFor3rdPartyProvision()
+            MyDistro.waitFor3rdPartyProvision()
+            return
 
         Log("Provisioning image started.")
         type = Config.get("Provisioning.SshHostKeyPairType")
