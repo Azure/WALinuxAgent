@@ -83,7 +83,7 @@ if not hasattr(subprocess,'check_output'):
 
 GuestAgentName = "WALinuxAgent"
 GuestAgentLongName = "Azure Linux Agent"
-GuestAgentVersion = "WALinuxAgent-2.0.18.rc5"
+GuestAgentVersion = "WALinuxAgent-2.0.18.rc6"
 ProtocolVersion = "2012-11-30" #WARNING this value is used to confirm the correct fabric protocol.
 
 Config = None
@@ -757,7 +757,8 @@ class AbstractDistro(object):
                                                                         output))
 
     def setDefaultGateway(self, gateway):
-        Run("/sbin/route add default gw" + gateway, chk_err=False)
+        addRouteResult = Run("/sbin/route add default gw " + gateway, chk_err=False)
+        Log("add default gateway result: {0}".format(addRouteResult))
 
     def routeAdd(self, net, mask, gateway):
         Run("/sbin/route add -net " + net + " netmask " + mask + " gw " + gateway,
@@ -1696,7 +1697,8 @@ class NixOSDistro(AbstractDistro):
         Run("systemctl start " + self.dhcp_client_name)
 
     def setDefaultGateway(self, gateway):
-        Run("route add default gw" + gateway, chk_err=False)
+        addRouteResult = Run("route add default gw " + gateway, chk_err=False)
+        Log("add default gateway result: {0}".format(addRouteResult))
 
     def routeAdd(self, net, mask, gateway):
         Run("route add -net " + net + " netmask " + mask + " gw " + gateway,
