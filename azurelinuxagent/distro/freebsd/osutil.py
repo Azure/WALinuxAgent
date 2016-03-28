@@ -94,11 +94,20 @@ class FreeBSDOSUtil(DefaultOSUtil):
         """
         return True
 
+    def is_dhcp_enabled(self):
+        return True
+
+    def start_dhcp_service(self):
+        shellutil.run("/etc/rc.d/dhclient start {0}".format(self.get_if_name()), chk_err=False)
+
+    def allow_dhcp_broadcast(self):
+        pass
+
     def set_route_for_dhcp_broadcast(self, ifname):
-        return shellutil.run("route add 255.255.255.255 0.0.0.0 -ifp {0}".format(ifname), chk_err=False)
+        return shellutil.run("route add 255.255.255.255 -iface {0}".format(ifname), chk_err=False)
 
     def remove_route_for_dhcp_broadcast(self, ifname):
-        shellutil.run("route delete 255.255.255.255", chk_err=False)
+        shellutil.run("route delete 255.255.255.255 -iface {0}".format(ifname), chk_err=False)
 
     def get_dhcp_pid(self):
         ret = shellutil.run_get_output("pgrep -n dhclient")

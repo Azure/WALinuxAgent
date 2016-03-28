@@ -41,6 +41,7 @@ class DhcpHandler(object):
         self.endpoint = None
         self.gateway = None
         self.routes = None
+        self._request_broadcast = False
 
     def run(self):
         """
@@ -95,7 +96,11 @@ class DhcpHandler(object):
         """
         logger.info("Send dhcp request")
         mac_addr = self.distro.osutil.get_mac_addr()
-        req = build_dhcp_request(mac_addr)
+
+        # Do unicast first, then fallback to broadcast if fails.
+        req = build_dhcp_request(mac_addr, self._request_broadcast)
+        if not self._request_broadcast:
+            self._request_broadcast = True
 
         # Temporary allow broadcast for dhcp. Remove the route when done.
         missing_default_route = self.distro.osutil.is_missing_default_route()
@@ -222,7 +227,7 @@ def parse_dhcp_resp(response):
             logger.verb("Default gateway:{0}, at {1}", gateway, hex(i))
         elif option == 245:
             endpoint = parse_ip_addr(response, option, i, length, bytes_recv)
-            logger.verb("Azure wire protocol endpoint:{0}, at {1}", gateway,
+            logger.verb("Azure wire protocol endpoint:{0}, at {1}", endpoint,
                         hex(i))
         else:
             logger.verb("Skipping DHCP option:{0} at {1} with length {2}",
@@ -250,7 +255,7 @@ def socket_send(request):
         if sock is not None:
             sock.close()
 
-def build_dhcp_request(mac_addr):
+def build_dhcp_request(mac_addr, request_broadcast):
     """
     Build DHCP request string.
     """
@@ -300,6 +305,11 @@ def build_dhcp_request(mac_addr):
     logger.verb("BuildDhcpRequest: transactionId:%s,%04X" % (
                    hex_dump2(trans_id),
                    unpack_big_endian(request, 4, 4)))
+
+    if request_broadcast:
+        # set boradcast flag to true to request the dhcp sever to respond to a boradcast address,
+        # this is useful when user dhclient fails.
+        request[0x0A] = 0x80;
 
     # fill in ClientHardwareAddress
     for a in range(0, 6):
