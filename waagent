@@ -1476,13 +1476,12 @@ class centosDistro(redhatDistro):
 
     def installRdmaDrivers(self, host_version):
         Log("" + self.dist_info[0] + "#" + self.dist_info[1])
-        if(self.dist_info[1].startswith("6.5")):
-            extracted_folder = "/opt/microsoft/rdma/rhel65"
-        elif(self.dist_info[1].startswith("7.1")):
-            extracted_folder = "/opt/microsoft/rdma/rhel71"
-        else:
-            raise RdmaError(RdmaConfig.os_not_supported)
+        version_str = self.dist_info[1]
+        major_version = version_str[0]
+        minor_version = version_str[2]
+        extracted_folder = "/opt/microsoft/rdma/rhel{0}{1}".format(major_version,minor_version)
         if not os.path.exists(extracted_folder):
+            Log("the folder not exists {0}".format(extracted_folder))
             raise RdmaError(RdmaConfig.package_not_found)
         else:
             file_list = os.listdir(extracted_folder)
