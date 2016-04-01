@@ -2469,8 +2469,10 @@ import imp
 __name__='setupmain' #prevent waagent.__main__ from executing
 waagent=imp.load_source('waagent','/tmp/waagent') 
 waagent.LoggerInit('/var/log/waagent.log','/dev/console')
-from waagent import RunGetOutput,Run
-Config=waagent.ConfigurationProvider(None)
+from waagent import RunGetOutput, Run, GetMyDistro
+myDistro = GetMyDistro()
+configFile = myDistro.getConfigurationPath()
+Config=waagent.ConfigurationProvider(configFile)
 format = Config.get("ResourceDisk.Format")
 if format == None or format.lower().startswith("n"):
     sys.exit(0)
