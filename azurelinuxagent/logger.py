@@ -74,9 +74,7 @@ class Logger(object):
 
 class ConsoleAppender(object):
     def __init__(self, level, path):
-        self.level = LogLevel.INFO
-        if level >= LogLevel.INFO:
-            self.level = level
+        self.level = level
         self.path = path
 
     def write(self, level, msg):

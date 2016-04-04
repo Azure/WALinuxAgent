@@ -763,7 +763,7 @@ class WireClient(object):
         headers = self.get_header_for_xml_content()
         try:
             resp = self.call_wireserver(restutil.http_post, health_report_uri,
-                                        health_report, headers = headers)
+                                        health_report, headers = headers, max_retry=8)
         except HttpError as e:
             raise ProtocolError((u"Failed to send provision status: {0}"
                                  u"").format(e))

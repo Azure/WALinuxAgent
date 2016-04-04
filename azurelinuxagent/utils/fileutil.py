@@ -66,40 +66,6 @@ def append_file(filepath, contents, asbin=False, encoding='utf-8'):
     """
     write_file(filepath, contents, asbin=asbin, encoding=encoding, append=True)
 
-def replace_file(filepath, contents):
-    """
-    Write 'contents' to 'filepath' by creating a temp file,
-    and replacing original.
-    """
-    handle, temp = tempfile.mkstemp(dir=os.path.dirname(filepath))
-    #if type(contents) == str:
-        #contents=contents.encode('latin-1')
-    try:
-        os.write(handle, contents)
-    except IOError as err:
-        logger.error('Write to file {0}, Exception is {1}', filepath, err)
-        return 1
-    finally:
-        os.close(handle)
-
-    try:
-        os.rename(temp, filepath)
-    except IOError as err:
-        logger.info('Rename {0} to {1}, Exception is {2}', temp, filepath, err)
-        logger.info('Remove original file and retry')
-        try:
-            os.remove(filepath)
-        except IOError as err:
-            logger.error('Remove {0}, Exception is {1}', temp, filepath, err)
-
-        try:
-            os.rename(temp, filepath)
-        except IOError as err:
-            logger.error('Rename {0} to {1}, Exception is {2}', temp, filepath,
-                         err)
-            return 1
-    return 0
-
 
 def base_name(path):
     head, tail = os.path.split(path)
@@ -156,7 +122,7 @@ def update_conf_file(path, line_start, val, chk_err=False):
     conf = read_file(path).split('\n')
     conf = [x for x in conf if not x.startswith(line_start)]
     conf.append(val)
-    replace_file(path, '\n'.join(conf))
+    write_file(path, '\n'.join(conf))
 
 def search_file(target_dir_name, target_file_name):
     for root, dirs, files in os.walk(target_dir_name):

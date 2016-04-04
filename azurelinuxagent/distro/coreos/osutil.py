@@ -85,10 +85,6 @@ class CoreOSUtil(DefaultOSUtil):
         ret= shellutil.run_get_output("pidof systemd-networkd")
         return ret[1] if ret[0] == 0 else None
 
-    def set_ssh_client_alive_interval(self):
-        #In CoreOS, /etc/sshd_config is mount readonly. Skip the setting
-        pass
-
     def conf_sshd(self, disable_password):
         #In CoreOS, /etc/sshd_config is mount readonly. Skip the setting
         pass

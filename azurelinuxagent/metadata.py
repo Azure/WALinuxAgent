@@ -28,7 +28,7 @@ def get_distro():
     if 'FreeBSD' in platform.system():
         release = re.sub('\-.*\Z', '', ustr(platform.release()))
         osinfo = ['freebsd', release, '', 'freebsd']
-    if 'linux_distribution' in dir(platform):
+    elif 'linux_distribution' in dir(platform):
         osinfo = list(platform.linux_distribution(full_distribution_name=0))
         full_name = platform.linux_distribution()[0].strip()
         osinfo.append(full_name)
@@ -47,7 +47,7 @@ def get_distro():
 
 AGENT_NAME = "WALinuxAgent"
 AGENT_LONG_NAME = "Azure Linux Agent"
-AGENT_VERSION = '2.1.3'
+AGENT_VERSION = '2.1.4.rc4'
 AGENT_LONG_VERSION = "{0}-{1}".format(AGENT_NAME, AGENT_VERSION)
 AGENT_DESCRIPTION = """\
 The Azure Linux Agent supports the provisioning and running of Linux
