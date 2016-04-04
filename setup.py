@@ -154,9 +154,10 @@ class InstallData(install):
 
         try:
             self.copy_file('config/99-azure-product-uuid.rules', tgtDir + 'etc/udev/rules.d/99-azure-product-uuid.rules')
+            self.copy_file('config/66-azure-storage.rules', tgtDir + 'etc/udev/rules.d/66-azure-storage.rules')
         except Exception as e:
             print e
-            print 'Could not install product uuid rules file %setc' %tgtDir
+            print 'Could not install udev rules %setc' %tgtDir
             sys.exit(1)
 
         if not os.path.exists(tgtDir + 'etc/logrotate.d'):
