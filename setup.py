@@ -80,7 +80,7 @@ def get_data_files(name, version, fullname):
                        src=["config/coreos/waagent.conf"])
         set_logrotate_files(data_files)
         set_files(data_files, dest="/usr/share/oem", 
-                  src="init/coreos/cloud-config.yml")
+                  src=["init/coreos/cloud-config.yml"])
     elif name == 'ubuntu':
         set_bin_files(data_files)
         set_conf_files(data_files, src=["config/ubuntu/waagent.conf"])
