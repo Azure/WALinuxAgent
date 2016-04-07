@@ -67,7 +67,8 @@ class CoreOSUtil(DefaultOSUtil):
         shellutil.run("systemctl restart systemd-networkd")
 
     def restart_ssh_service(self):
-        return shellutil.run("systemctl restart sshd", chk_err=False)
+        # SSH is socket activated on CoreOS. No need to restart it.
+        pass
 
     def stop_dhcp_service(self):
         return shellutil.run("systemctl stop systemd-networkd", chk_err=False)
