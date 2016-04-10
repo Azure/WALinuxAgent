@@ -19,7 +19,6 @@
 
 from azurelinuxagent.distro.default.distro import DefaultDistro
 from azurelinuxagent.distro.redhat.osutil import RedhatOSUtil, Redhat6xOSUtil
-from azurelinuxagent.distro.coreos.deprovision import CoreOSDeprovisionHandler
 
 class Redhat6xDistro(DefaultDistro):
     def __init__(self):
