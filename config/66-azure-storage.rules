@@ -1,0 +1,18 @@
+ACTION!="add|change", GOTO="azure_end"
+SUBSYSTEM!="block", GOTO="azure_end"
+ATTRS{ID_VENDOR}!="Msft", GOTO="azure_end"
+ATTRS{ID_MODEL}!="Virtual_Disk", GOTO="azure_end"
+
+# Root has a GUID of 0000 as the second value
+# The resource/resource has GUID of 0001 as the second value
+ATTRS{device_id}=="?00000000-0000-*", ENV{fabric_name}="root", GOTO="azure_names"
+ATTRS{device_id}=="?00000000-0001-*", ENV{fabric_name}="resource", GOTO="azure_names"
+GOTO="azure_end"
+
+# Create the symlinks
+LABEL="azure_names"
+ENV{DEVTYPE}=="disk", SYMLINK+="disk/azure/$env{fabric_name}"
+ENV{DEVTYPE}=="partition", SYMLINK+="disk/azure/$env{fabric_name}-part%n"
+
+LABEL="azure_end"
+
