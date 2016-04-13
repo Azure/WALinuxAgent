@@ -75,14 +75,17 @@ class InstallData(install):
         init = self.init_system
         prefix = self.prefix
         tgtDir = self.root
-        if prefix and prefix[-1] != '/':
-            prefix += '/'
-        else:
+
+        if not prefix:
             prefix = '/'
-        if tgtDir and tgtDir[-1] != '/':
-            tgtDir += '/'
-        else:
+        elif prefix[-1] != '/':
+            prefix += '/'
+
+        if not tgtDir:
             tgtDir = '/'
+        elif tgtDir[-1] != '/':
+            tgtDir += '/'
+
         # Handle the different init systems
         if init == 'sysV':
             initdir = 'etc/init.d'
