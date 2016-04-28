@@ -6107,8 +6107,13 @@ class Agent(Util):
                     gateway = self.UnpackBigEndian(receiveBuffer, i + 2, 4)
                     IpAddress = self.IntegerToIpAddressV4String(gateway)
                     if option == 3:
-                        self.SetDefaultGateway(gateway)
                         name = "DefaultGateway"
+                        try:
+                            defaultgw = FindStringInFile('/proc/net/route', 'eth\d[\s]+00000000')
+                            if not defaultgw:
+                                self.SetDefaultGateway(gateway)
+                        except:
+                            pass
                     else:
                         endpoint = IpAddress
                         name = "Azure wire protocol endpoint"
