@@ -1,0 +1,20 @@
+{
+  "PreTask": "echo",
+  "ExtraRepositories": [
+    {
+      "Name": "MSFT-RDMA-REPO",
+      "Url": "http://olcentgbl.trafficmanager.net/openlogic/7/openlogic/x86_64/",
+      "GpgCheck": "y"
+    }
+  ],
+  "ForceReinstall": false,
+  "Packages": [
+    {
+      "Name": "gcc"
+    },
+    {
+      "Name": "automake"
+    }
+  ],
+  "PostTask": "echo"
+}
