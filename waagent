@@ -602,13 +602,24 @@ class AbstractDistro(object):
                 if existingFS == "7" and fs != "ntfs":
                     Run("sfdisk -c " + device + " 1 83")
                     Run("mkfs." + fs + " " + partition)
+
+            Log("Mounting Resource Disk (" + partition + ").")
             if Run("mount " + partition + " " + mountpoint, chk_err=False):
-                #If mount failed, try to format the partition and mount again
-                Warn("Failed to mount resource disk. Retry mounting.")            
-                Run("mkfs." + fs + " " + partition + " -F")
-                if Run("mount " + partition + " " + mountpoint):
-                    Error("ActivateResourceDisk: Failed to mount resource disk (" + partition + ").")
-                    return
+                Warn("Failed to mount resource disk. Retry mounting after re-reading partition info.")
+                # Some kernels seem to issue an async partition re-read after a 'parted' command
+                # invocation. This causes mount to fail if the partition re-read isn't complete
+                # by the time mount is attempted. Seen in CentOS 7.2
+                # Force a sequential re-read of the partition and try mounting.
+                Run("sfdisk -R " + device)
+
+                if Run("mount " + partition + " " + mountpoint, chk_err=False):
+                    #If mount failed, try to format the partition and mount again
+                    Warn("Failed to mount resource disk. Will format " + partition + " and retry.")
+                    Run("mkfs." + fs + " " + partition + " -F")
+                    if Run("mount " + partition + " " + mountpoint):
+                        Error("ActivateResourceDisk: Failed to mount resource disk (" + partition + ").")
+                        return
+
             Log("Resource disk (" + partition + ") is mounted at " + mountpoint + " with fstype " + fs)
 
         #Create README file under the root of resource disk
