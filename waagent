@@ -95,7 +95,7 @@ ExtensionChildren = []
 VMM_STARTUP_SCRIPT_NAME='install'
 VMM_CONFIG_FILE_NAME='linuxosconfiguration.xml'
 global RulesFiles
-RulesFiles = [ "/lib/udev/rules.d/75-persistent-net-generator.rules",
+RulesFiles = [ "/etc/udev/rules.d/75-persistent-net-generator.rules",
                "/etc/udev/rules.d/70-persistent-net.rules" ]
 VarLibDhcpDirectories = ["/var/lib/dhclient", "/var/lib/dhcpcd", "/var/lib/dhcp"]
 EtcDhcpClientConfFiles = ["/etc/dhcp/dhclient.conf", "/etc/dhcp3/dhclient.conf"]
@@ -135,6 +135,7 @@ Logs.Verbose=n                          # Enable verbose logs
 
 OS.RootDeviceScsiTimeout=300            # Root device timeout in seconds.
 OS.OpensslPath=None                     # If "None", the system default version is used.
+OS.PersistentNetNames=n                 # Enable/disable udev rules for persistent NIC<->MAC mapping (default is to disable udev).
 """
 README_FILENAME="DATALOSS_WARNING_README.txt"
 README_FILECONTENT="""\
@@ -2800,7 +2801,7 @@ class FreeBSDDistro(AbstractDistro):
         Check dependencies.
         Create /etc/waagent.conf and move old version to
         /etc/waagent.conf.old
-        Copy RulesFiles to LibDir
+        Symlink RulesFiles to /dev/null.
         Create /etc/logrotate.d/waagent
         Set /etc/ssh/sshd_config ClientAliveInterval to 180
         Call ApplyVNUMAWorkaround()
@@ -2810,11 +2811,12 @@ class FreeBSDDistro(AbstractDistro):
         os.chmod(sys.argv[0], 0755)
         SwitchCwd()
         for a in RulesFiles:
-            if os.path.isfile(a):
-                if os.path.isfile(GetLastPathElement(a)):
-                    os.remove(GetLastPathElement(a))
-                shutil.move(a, ".")
-                Warn("Moved " + a + " -> " + LibDir + "/" + GetLastPathElement(a) )
+            try:
+                os.remove(a)
+            except:
+                pass
+            os.symlink('/dev/null', a)
+            Warn("Created symlink " + a + " -> /dev/null")
         MyDistro.registerAgentService()
         if os.path.isfile("/etc/waagent.conf"):
             try:
@@ -3939,16 +3941,22 @@ class EnvMonitor(object):
         If dhcp clinet process re-start has occurred, reset routes, dhcp with fabric.
         """
         publish = Config.get("Provisioning.MonitorHostName")
+        udevrules = Config.get("OS.PersistentNetNames")
         dhcpcmd = MyDistro.getpidcmd+ ' ' + MyDistro.getDhcpClientName()
         dhcppid = RunGetOutput(dhcpcmd)[1]
         while not self.shutdown:
-            for a in RulesFiles:
-                if os.path.isfile(a):
-                    if os.path.isfile(GetLastPathElement(a)):
-                        os.remove(GetLastPathElement(a))
-                    shutil.move(a, ".")
-                    Log("EnvMonitor: Moved " + a + " -> " + LibDir)
+            if udevrules == None or udevrules.lower().startswith("n"):
+                for a in RulesFiles:
+                    if os.path.isfile(a):
+                        if os.path.isfile(GetLastPathElement(a)):
+                            os.remove(GetLastPathElement(a))
+                        shutil.move(a, ".")
+                    if not os.path.islink(a):
+                        os.symlink('/dev/null', a)
+                        Log("EnvMonitor: Created symlink " + a + " -> /dev/null")
+
             MyDistro.setScsiDiskTimeout()
+
             if publish != None and publish.lower().startswith("y"):
                 try:
                     if socket.gethostname() != self.HostName:
@@ -5404,7 +5412,7 @@ class OvfEnv(object):
             if len(CDSection) > 0 :
                 self.CustomData=GetNodeTextData(CDSection[0])
                 if len(self.CustomData)>0:
-                    SetFileContents(LibDir + '/CustomData', bytearray(MyDistro.translateCustomData(self.CustomData), 'utf-8'))
+                    SetFileContents(LibDir + '/CustomData', bytearray(MyDistro.translateCustomData(self.CustomData)))
                     Log('Wrote ' + LibDir + '/CustomData')
                 else :
                     Error('<CustomData> contains no data!')
@@ -6118,13 +6126,8 @@ class Agent(Util):
                     gateway = self.UnpackBigEndian(receiveBuffer, i + 2, 4)
                     IpAddress = self.IntegerToIpAddressV4String(gateway)
                     if option == 3:
+                        self.SetDefaultGateway(gateway)
                         name = "DefaultGateway"
-                        try:
-                            defaultgw = FindStringInFile('/proc/net/route', 'eth\d[\s]+00000000')
-                            if not defaultgw:
-                                self.SetDefaultGateway(gateway)
-                        except:
-                            pass
                     else:
                         endpoint = IpAddress
                         name = "Azure wire protocol endpoint"
@@ -6911,7 +6914,7 @@ def Install():
     Check dependencies.
     Create /etc/waagent.conf and move old version to
     /etc/waagent.conf.old
-    Copy RulesFiles to LibDir
+    Symlink RulesFiles to /dev/null
     Create /etc/logrotate.d/waagent
     Set /etc/ssh/sshd_config ClientAliveInterval to 180
     Call ApplyVNUMAWorkaround()
@@ -6921,11 +6924,12 @@ def Install():
     os.chmod(sys.argv[0], 0755)
     SwitchCwd()
     for a in RulesFiles:
-        if os.path.isfile(a):
-            if os.path.isfile(GetLastPathElement(a)):
-                os.remove(GetLastPathElement(a))
-            shutil.move(a, ".")
-            Warn("Moved " + a + " -> " + LibDir + "/" + GetLastPathElement(a) )
+        try:
+            os.remove(a)
+        except:
+            pass
+        os.symlink('/dev/null', a)
+        Warn("Created symlink " + a + " -> /dev/null")
     MyDistro.registerAgentService()
     if os.path.isfile("/etc/waagent.conf"):
         try:
@@ -7009,16 +7013,15 @@ def LibraryInstall(buildroot):
 def Uninstall():
     """
     Uninstall the agent service.
-    Copy RulesFiles back to original locations.
+    Remove RulesFiles symlinks.
     Delete agent-related files.
     Call RevertVNUMAWorkaround().
     """
     SwitchCwd()
     for a in RulesFiles:
-        if os.path.isfile(GetLastPathElement(a)):
+        if os.path.islink(a):
             try:
-                shutil.move(GetLastPathElement(a), a)
-                Warn("Moved " + LibDir + "/" + GetLastPathElement(a) + " -> " + a )
+                os.remove(a)
             except:
                 pass
     MyDistro.unregisterAgentService()
@@ -7070,8 +7073,20 @@ def Deprovision(force, deluser):
     if delRootPass != None and delRootPass.lower().startswith("y"):
         MyDistro.deleteRootPassword()
     # Remove distribution specific networking configuration
-
     MyDistro.publishHostname('localhost.localdomain')
+    udevrules = Config.get("OS.PersistentNetNames")
+    if udevrules == None or udevrules.lower().startswith("n"):
+        for a in RulesFiles:
+            try:
+                os.remove(a)
+            except:
+                pass
+            os.symlink('/dev/null', a)
+    else:
+        try:
+            os.remove('/etc/udev/rules.d/70-persistent-net.rules')
+        except:
+            pass
     MyDistro.deprovisionDeleteFiles()
     if deluser == True:
         MyDistro.DeleteAccount(ovfobj.UserName)
