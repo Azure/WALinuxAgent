@@ -228,6 +228,9 @@ class AbstractDistro(object):
         Returns exit result.
         """
         if self.isSelinuxSystem():
+            if not os.path.exists(path):
+                Error("Path does not exist: {0}".format(path))
+                return 1
             return Run('chcon ' + cn + ' ' + path)
         
     def setHostname(self,name):
@@ -2336,7 +2339,10 @@ def ChangeOwner(filepath, user):
     except:
         pass
     if p != None:
-        os.chown(filepath, p[2], p[3])
+        if not os.path.exists(filepath):
+            Error("Path does not exist: {0}".format(filepath))
+        else:
+            os.chown(filepath, p[2], p[3])
 
 def CreateDir(dirpath, user, mode):
     """

@@ -91,11 +91,17 @@ def mkdir(dirpath, mode=None, owner=None):
         chowner(dirpath, owner)
 
 def chowner(path, owner):
-    owner_info = pwd.getpwnam(owner)
-    os.chown(path, owner_info[2], owner_info[3])
+    if not os.path.exists(path):
+        logger.error("Path does not exist: {0}".format(path))
+    else:
+        owner_info = pwd.getpwnam(owner)
+        os.chown(path, owner_info[2], owner_info[3])
 
 def chmod(path, mode):
-    os.chmod(path, mode)
+    if not os.path.exists(path):
+        logger.error("Path does not exist: {0}".format(path))
+    else:
+        os.chmod(path, mode)
 
 def rm_files(*args):
     for path in args:

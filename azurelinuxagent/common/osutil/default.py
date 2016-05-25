@@ -194,7 +194,7 @@ class DefaultOSUtil(object):
         """
         path, thumbprint, value = pubkey
         if path is None:
-            raise OSUtilError("Publich key path is None")
+            raise OSUtilError("Public key path is None")
 
         crytputil = CryptUtil(conf.get_openssl_cmd())
 
@@ -261,6 +261,9 @@ class DefaultOSUtil(object):
         Returns exit result.
         """
         if self.is_selinux_system():
+            if not os.path.exists(path):
+                logger.error("Path does not exist: {0}".format(path))
+                return 1
             return shellutil.run('chcon ' + con + ' ' + path)
 
     def conf_sshd(self, disable_password):
