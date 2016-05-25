@@ -1938,7 +1938,7 @@ class CoreOSDistro(AbstractDistro):
             pass
         if uidmin == None:
             uidmin = 100
-        if userentry != None and userentry[2] < uidmin and userentry[2] != self.CORE_UID:
+        if userentry != None and userentry[2] < uidmin and userentry[2] != self.CORE_UID and password != None:
             Error("CreateAccount: " + user + " is a system user. Will not set password.")
             return "Failed to set password for system user: " + user + " (0x06)."
         if userentry == None:
@@ -2701,7 +2701,7 @@ class FreeBSDDistro(AbstractDistro):
             pass
         if uidmin == None:
             uidmin = 100
-        if userentry != None and userentry[2] < uidmin:
+        if userentry != None and userentry[2] < uidmin and password != None:
             Error("CreateAccount: " + user + " is a system user. Will not set password.")
             return "Failed to set password for system user: " + user + " (0x06)."
         if userentry == None:
@@ -3112,7 +3112,7 @@ def CreateAccount(user, password, expiration, thumbprint):
         pass
     if uidmin == None:
         uidmin = 100
-    if userentry != None and userentry[2] < uidmin:
+    if userentry != None and userentry[2] < uidmin and password != None:
         Error("CreateAccount: " + user + " is a system user. Will not set password.")
         return "Failed to set password for system user: " + user + " (0x06)."
     if userentry == None:
