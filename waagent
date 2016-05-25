@@ -4572,7 +4572,7 @@ class ExtensionsConfig(object):
 
                 SetFileContents(root +"/config/" + seqNo +".settings",  config )
                 #create HandlerEnvironment.json
-                handler_env='[{  "name": "'+name+'", "seqNo": "'+seqNo+'", "version": 1.0,  "handlerEnvironment": {    "logFolder": "'+os.path.dirname(p.plugin_log)+'",    "configFolder": "' + root + '/config",    "statusFolder": "' + root + '/status",    "heartbeatFile": "'+ root + '/heartbeat.log"}}]'
+                handler_env='[{  "name": "'+name+'", "seqNo": "'+seqNo+'", "version": "' + version + '", "handlerEnvironment": {    "logFolder": "'+os.path.dirname(p.plugin_log)+'",    "configFolder": "' + root + '/config",    "statusFolder": "' + root + '/status",    "heartbeatFile": "'+ root + '/heartbeat.log"}}]'
                 SetFileContents(root+'/HandlerEnvironment.json',handler_env)
                 self.SetHandlerState(handler, 'NotInstalled')
 
