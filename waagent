@@ -767,6 +767,12 @@ class AbstractDistro(object):
             raise Exception("Failed to config ipv4 for {0}: {1}".format(ifName, 
                                                                         output))
 
+    def getDefaultGateway(self):
+        try:
+            return RunGetOutput("/sbin/route -n | grep '^0.0.0.0'", chk_err=False)[1].split()[1]
+        except:
+            return None
+
     def setDefaultGateway(self, gateway):
         addRouteResult = Run("/sbin/route add default gw " + gateway, chk_err=False)
         Log("add default gateway result: {0}".format(addRouteResult))
@@ -2880,6 +2886,12 @@ class FreeBSDDistro(AbstractDistro):
 
     def getTotalMemory(self):
         return int(RunGetOutput("sysctl hw.realmem | awk '{print $2}'")[1])/1024
+
+    def getDefaultGateway(self):
+        try:
+            return RunGetOutput("netstat -nr | grep '^default'", chk_err=False)[1].split()[1]
+        except:
+            return None
 
     def setDefaultGateway(self, gateway):
         Run("/sbin/route add default " + gateway, chk_err=False)
@@ -6120,8 +6132,7 @@ class Agent(Util):
                     if option == 3:
                         name = "DefaultGateway"
                         try:
-                            defaultgw = FindStringInFile('/proc/net/route', 'eth\d[\s]+00000000')
-                            if not defaultgw:
+                            if not MyDistro.getDefaultGateway():
                                 self.SetDefaultGateway(gateway)
                         except:
                             pass
