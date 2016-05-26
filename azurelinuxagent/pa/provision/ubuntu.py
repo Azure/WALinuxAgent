@@ -87,12 +87,12 @@ class UbuntuProvisionHandler(ProvisionHandler):
         """
         Wait for cloud-init to generate ssh host key
         """
-        kepair_type = conf.get_ssh_host_keypair_type()
-        path = '/etc/ssh/ssh_host_{0}_key'.format(kepair_type)
+        keypair_type = conf.get_ssh_host_keypair_type()
+        path = '/etc/ssh/ssh_host_{0}_key.pub'.format(keypair_type)
         for retry in range(0, max_retry):
             if os.path.isfile(path):
-                return self.get_ssh_host_key_thumbprint(kepair_type)
+                return self.get_ssh_host_key_thumbprint(keypair_type)
             if retry < max_retry - 1:
                 logger.info("Wait for ssh host key be generated: {0}", path)
                 time.sleep(5)
-        raise ProvisionError("Ssh hsot key is not generated.")
+        raise ProvisionError("ssh host key is not generated.")
