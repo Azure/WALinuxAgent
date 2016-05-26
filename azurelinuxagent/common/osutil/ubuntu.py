@@ -44,6 +44,12 @@ class Ubuntu14OSUtil(DefaultOSUtil):
     def start_agent_service(self):
         return shellutil.run("service walinuxagent start", chk_err=False)
 
+    def remove_rules_files(self, rules_files=""):
+        pass
+
+    def restore_rules_files(self, rules_files=""):
+        pass
+
 class Ubuntu12OSUtil(Ubuntu14OSUtil):
     def __init__(self):
         super(Ubuntu12OSUtil, self).__init__()
@@ -67,9 +73,3 @@ class UbuntuSnappyOSUtil(Ubuntu14OSUtil):
     def __init__(self):
         super(UbuntuSnappyOSUtil, self).__init__()
         self.conf_file_path = '/apps/walinuxagent/current/waagent.conf'
-
-    def remove_rules_files(self, rules_files=""):
-        pass
-
-    def restore_rules_files(self, rules_files=""):
-        pass
