@@ -124,8 +124,6 @@ def get_data_files(name, version, fullname):
 
 class install(_install):
     user_options = _install.user_options + [
-        # This will magically show up in member variable 'init_system'
-        ('init-system=', None, 'deprecated, use --lnx-distro* instead'),
         ('lnx-distro=', None, 'target Linux distribution'),
         ('lnx-distro-version=', None, 'target Linux distribution version'),
         ('lnx-distro-fullname=', None, 'target Linux distribution full name'),
@@ -135,7 +133,6 @@ class install(_install):
 
     def initialize_options(self):
         _install.initialize_options(self)
-        self.init_system=None
         self.lnx_distro = DISTRO_NAME
         self.lnx_distro_version = DISTRO_VERSION
         self.lnx_distro_fullname = DISTRO_FULL_NAME
@@ -147,9 +144,6 @@ class install(_install):
         if self.skip_data_files:
             return
 
-        if self.init_system is not None:
-            print("WARNING: --init-system is deprecated,"
-                  "use --lnx-distro* instead")
         data_files = get_data_files(self.lnx_distro, self.lnx_distro_version,
                                     self.lnx_distro_fullname)
         self.distribution.data_files = data_files
