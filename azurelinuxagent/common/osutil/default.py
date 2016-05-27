@@ -280,25 +280,27 @@ class DefaultOSUtil(object):
 
 
     def get_dvd_device(self, dev_dir='/dev'):
-        patten=r'(sr[0-9]|hd[c-z]|cdrom[0-9]|cd[0-9])'
-        for dvd in [re.match(patten, dev) for dev in os.listdir(dev_dir)]:
+        pattern=r'(sr[0-9]|hd[c-z]|cdrom[0-9]|cd[0-9])'
+        for dvd in [re.match(pattern, dev) for dev in os.listdir(dev_dir)]:
             if dvd is not None:
                 return "/dev/{0}".format(dvd.group(0))
         raise OSUtilError("Failed to get dvd device")
 
-    def mount_dvd(self, max_retry=6, chk_err=True):
-        dvd = self.get_dvd_device()
-        mount_point = conf.get_dvd_mount_point()
+    def mount_dvd(self, max_retry=6, chk_err=True, dvd_device=None, mount_point=None):
+        if dvd_device is None:
+            dvd_device = self.get_dvd_device()
+        if mount_point is None:
+            mount_point = conf.get_dvd_mount_point()
         mountlist = shellutil.run_get_output("mount")[1]
-        existing = self.get_mount_point(mountlist, dvd)
+        existing = self.get_mount_point(mountlist, dvd_device)
         if existing is not None: #Already mounted
-            logger.info("{0} is already mounted at {1}", dvd, existing)
+            logger.info("{0} is already mounted at {1}", dvd_device, existing)
             return
         if not os.path.isdir(mount_point):
             os.makedirs(mount_point)
 
         for retry in range(0, max_retry):
-            retcode = self.mount(dvd, mount_point, option="-o ro -t udf,iso9660",
+            retcode = self.mount(dvd_device, mount_point, option="-o ro -t udf,iso9660",
                                  chk_err=chk_err)
             if retcode == 0:
                 logger.info("Successfully mounted dvd")
@@ -310,8 +312,9 @@ class DefaultOSUtil(object):
         if chk_err:
             raise OSUtilError("Failed to mount dvd.")
 
-    def umount_dvd(self, chk_err=True):
-        mount_point = conf.get_dvd_mount_point()
+    def umount_dvd(self, chk_err=True, mount_point=None):
+        if mount_point is None:
+            mount_point = conf.get_dvd_mount_point()
         retcode = self.umount(mount_point, chk_err=chk_err)
         if chk_err and retcode != 0:
             raise OSUtilError("Failed to umount dvd.")
@@ -322,7 +325,13 @@ class DefaultOSUtil(object):
         if chk_err and retcode != 0:
             raise OSUtilError("Failed to eject dvd: ret={0}".format(retcode))
 
-    def load_atappix_mod(self):
+    def try_load_atapiix_mod(self):
+        try:
+            self.load_atapiix_mod()
+        except Exception as e:
+            logger.warn("Could not load ATAPI driver: {0}".format(e))
+
+    def load_atapiix_mod(self):
         if self.is_atapiix_mod_loaded():
             return
         ret, kern_version = shellutil.run_get_output("uname -r")

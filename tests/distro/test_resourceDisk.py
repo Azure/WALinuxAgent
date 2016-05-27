@@ -19,11 +19,7 @@
 # http://msdn.microsoft.com/en-us/library/cc227259%28PROT.13%29.aspx
 
 from tests.tools import *
-import azurelinuxagent.distro.default.resourceDisk as resourceDisk
-from azurelinuxagent.distro.loader import get_distro
-from azurelinuxagent.distro.default.protocolUtil import *
-import azurelinuxagent.utils.fileutil as fileutil
-
+from azurelinuxagent.daemon.resourcedisk import get_resourcedisk_handler
 
 class TestResourceDisk(AgentTestCase):
     def test_mkfile(self):
@@ -34,7 +30,7 @@ class TestResourceDisk(AgentTestCase):
             os.remove(test_file)
 
         # execute
-        get_distro().resource_disk_handler.mkfile(test_file, file_size)
+        get_resourcedisk_handler().mkfile(test_file, file_size)
 
         # assert
         assert os.path.exists(test_file)
