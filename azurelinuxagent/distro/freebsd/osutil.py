@@ -16,6 +16,7 @@
 #
 # Requires Python 2.4+ and Openssl 1.0+
 
+import azurelinuxagent.utils.fileutil as fileutil
 import azurelinuxagent.utils.shellutil as shellutil
 import azurelinuxagent.utils.textutil as textutil
 import azurelinuxagent.logger as logger
@@ -27,6 +28,10 @@ class FreeBSDOSUtil(DefaultOSUtil):
     def __init__(self):
         super(FreeBSDOSUtil, self).__init__()
         self._scsi_disks_timeout_set = False
+
+    def set_hostname(self, hostname):
+        fileutil.append_file("/etc/rc.conf", "hostname=\"{0}\"\n".format(hostname));
+        shellutil.run("hostname {0}".format(hostname), chk_err=False)
 
     def restart_ssh_service(self):
         return shellutil.run('service sshd restart', chk_err=False)
