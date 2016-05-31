@@ -14,9 +14,6 @@
 #
 # Requires Python 2.4+ and Openssl 1.0+
 #
-# Implements parts of RFC 2131, 1541, 1497 and
-# http://msdn.microsoft.com/en-us/library/cc227282%28PROT.10%29.aspx
-# http://msdn.microsoft.com/en-us/library/cc227259%28PROT.13%29.aspx
 
 """
 Define util functions for unit test
@@ -30,9 +27,9 @@ import shutil
 import json
 import tempfile
 from functools import wraps
-import azurelinuxagent.conf as conf
-import azurelinuxagent.logger as logger
-import azurelinuxagent.event as event
+import azurelinuxagent.common.conf as conf
+import azurelinuxagent.common.logger as logger
+import azurelinuxagent.common.event as event
 
 #Import mock module for Python2 and Python3
 try:
