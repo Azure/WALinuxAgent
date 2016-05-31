@@ -14,14 +14,17 @@
 #
 # Requires Python 2.4+ and Openssl 1.0+
 #
+# Implements parts of RFC 2131, 1541, 1497 and
+# http://msdn.microsoft.com/en-us/library/cc227282%28PROT.10%29.aspx
+# http://msdn.microsoft.com/en-us/library/cc227259%28PROT.13%29.aspx
 
 from tests.tools import AgentTestCase, patch, Mock, MagicMock
 import uuid
 import unittest
 import os
-import azurelinuxagent.common.utils.restutil as restutil
-from azurelinuxagent.common.future import ustr, httpclient
-import azurelinuxagent.common.logger as logger
+import azurelinuxagent.utils.restutil as restutil
+from azurelinuxagent.future import ustr, httpclient
+import azurelinuxagent.logger as logger
 
 class TestHttpOperations(AgentTestCase):
 
@@ -54,8 +57,8 @@ class TestHttpOperations(AgentTestCase):
         self.assertEquals(rel_uri, "None")
 
 
-    @patch("azurelinuxagent.common.future.httpclient.HTTPSConnection")
-    @patch("azurelinuxagent.common.future.httpclient.HTTPConnection")
+    @patch("azurelinuxagent.future.httpclient.HTTPSConnection")
+    @patch("azurelinuxagent.future.httpclient.HTTPConnection")
     def test_http_request(self, HTTPConnection, HTTPSConnection):
         mock_httpconn = MagicMock()
         mock_httpresp = MagicMock()
@@ -95,7 +98,7 @@ class TestHttpOperations(AgentTestCase):
         self.assertEquals("_(:3| <)_", resp.read())
     
     @patch("time.sleep")
-    @patch("azurelinuxagent.common.utils.restutil._http_request")
+    @patch("azurelinuxagent.utils.restutil._http_request")
     def test_http_request_with_retry(self, _http_request, sleep):
         mock_httpresp = MagicMock()
         mock_httpresp.read = Mock(return_value="hehe")

@@ -18,11 +18,11 @@
 #
 
 import os
-from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, \
+from azurelinuxagent.metadata import AGENT_NAME, AGENT_VERSION, \
                                      AGENT_DESCRIPTION, \
                                      DISTRO_NAME, DISTRO_VERSION, DISTRO_FULL_NAME
 
-from azurelinuxagent.common.osutil import get_osutil
+from azurelinuxagent.agent import Agent
 import setuptools
 from setuptools import find_packages
 from setuptools.command.install import install as  _install
@@ -158,7 +158,7 @@ class install(_install):
     def run(self):
         _install.run(self)
         if self.register_service:
-            get_osutil().register_agent_service()
+            Agent(False).register_service()
 
 setuptools.setup(name=AGENT_NAME,
                  version=AGENT_VERSION,
