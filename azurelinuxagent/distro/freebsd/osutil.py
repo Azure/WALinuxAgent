@@ -30,7 +30,10 @@ class FreeBSDOSUtil(DefaultOSUtil):
         self._scsi_disks_timeout_set = False
 
     def set_hostname(self, hostname):
-        fileutil.append_file("/etc/rc.conf", "hostname=\"{0}\"\n".format(hostname));
+        rc_file_path = '/etc/rc.conf'
+        conf_file = fileutil.read_file(rc_file_path).split("\n")
+        textutil.set_ini_config(conf_file, "hostname", hostname)
+        fileutil.write_file(rc_file_path, "\n".join(conf_file))
         shellutil.run("hostname {0}".format(hostname), chk_err=False)
 
     def restart_ssh_service(self):

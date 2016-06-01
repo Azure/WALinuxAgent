@@ -212,6 +212,23 @@ def set_ssh_config(config, name, val):
         config.insert(i, "{0} {1}".format(name, val))
     return config
 
+
+def set_ini_config(config, name, val):
+    notfound = True
+    nameEqual = name + '='
+    length = len(config)
+    text = "{0}=\"{1}\"".format(name, val)
+
+    for i in reversed(range(0, length)):
+        if config[i].startswith(nameEqual):
+            config[i] = text
+            notfound = False
+            break
+
+    if notfound:
+        config.insert(length - 1, text)
+
+
 def remove_bom(c):
     if str_to_ord(c[0]) > 128 and str_to_ord(c[1]) > 128 and \
             str_to_ord(c[2]) > 128:
