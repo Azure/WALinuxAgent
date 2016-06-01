@@ -76,6 +76,9 @@ class DeprovisionHandler(object):
         dirs_to_del = ["/var/lib/dhclient", "/var/lib/dhcpcd", "/var/lib/dhcp"]
         actions.append(DeprovisionAction(fileutil.rm_dirs, dirs_to_del))
 
+        # For Freebsd
+        actions.append(DeprovisionAction(fileutil.rm_files, ["/var/db/dhclient.leases.hn0"]))
+
     def del_lib_dir(self, warnings, actions):
         dirs_to_del = [conf.get_lib_dir()]
         actions.append(DeprovisionAction(fileutil.rm_dirs, dirs_to_del))

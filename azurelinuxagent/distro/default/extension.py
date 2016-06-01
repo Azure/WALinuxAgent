@@ -300,11 +300,12 @@ class ExtHandlerInstance(object):
         else:
             version_prefix = "{0}.{1}.".format(version_frag[0], version_frag[1])
         
-        packages = [x for x in pkg_list.versions \
-                    if x.version.startswith(version_prefix) or \
-                       x.version == version]
+        packages = [x for x in pkg_list.versions
+                    if x.version.startswith(version_prefix) and
+                        Version(x.version) >= Version(version) or
+                        x.version == version]
         
-        packages = sorted(packages, key=lambda x: Version(x.version), 
+        packages = sorted(packages, key=lambda x: (not x.isinternal, Version(x.version)), 
                           reverse=True)
 
         if len(packages) <= 0:

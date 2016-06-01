@@ -763,7 +763,7 @@ class WireClient(object):
         headers = self.get_header_for_xml_content()
         try:
             resp = self.call_wireserver(restutil.http_post, health_report_uri,
-                                        health_report, headers = headers)
+                                        health_report, headers = headers, max_retry=8)
         except HttpError as e:
             raise ProtocolError((u"Failed to send provision status: {0}"
                                  u"").format(e))
@@ -1139,17 +1139,21 @@ class ExtensionManifest(object):
 
     def parse(self, xml_text):
         xml_doc = parse_doc(xml_text)
-        packages = findall(xml_doc, "Plugin")
+        self._handle_packages(findall(find(xml_doc, "Plugins"), "Plugin"), False)
+        self._handle_packages(findall(find(xml_doc, "InternalPlugins"), "Plugin"), True)
+
+    def _handle_packages(self, packages, isinternal):
         for package in packages:
             version = findtext(package, "Version")
             uris = find(package, "Uris")
             uri_list = findall(uris, "Uri")
             uri_list = [gettext(x) for x in uri_list]
-            package = ExtHandlerPackage()
-            package.version = version
+            pkg = ExtHandlerPackage()
+            pkg.version = version
             for uri in uri_list:
                 pkg_uri = ExtHandlerVersionUri()
                 pkg_uri.uri = uri
-                package.uris.append(pkg_uri)
-            self.pkg_list.versions.append(package)
+                pkg.uris.append(pkg_uri)
 
+            pkg.isinternal = isinternal
+            self.pkg_list.versions.append(pkg)

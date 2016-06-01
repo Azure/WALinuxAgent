@@ -140,6 +140,8 @@ class ExtHandlerPackage(DataContract):
     def __init__(self, version = None):
         self.version = version
         self.uris = DataContractList(ExtHandlerPackageUri)
+        # TODO update the naming to align with metadata protocol
+        self.isinternal = False
 
 class ExtHandlerPackageList(DataContract):
     def __init__(self):

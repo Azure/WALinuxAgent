@@ -114,21 +114,36 @@ class DefaultOSUtil(object):
             raise OSUtilError(("Failed to set password for {0}: {1}"
                                "").format(username, output))
 
-    def conf_sudoer(self, username, nopasswd):
-        # for older distros create sudoers.d
-        if not os.path.isdir('/etc/sudoers.d/'):
-            # create the /etc/sudoers.d/ directory
-            os.mkdir('/etc/sudoers.d/')
-            # add the include of sudoers.d to the /etc/sudoers
-            sudoers = '\n' + '#includedir /etc/sudoers.d/\n'
-            fileutil.append_file('/etc/sudoers', sudoers)
-        sudoer = None
-        if nopasswd:
-            sudoer = "{0} ALL = (ALL) NOPASSWD\n".format(username)
+    def conf_sudoer(self, username, nopasswd=False, remove=False):
+        sudoers_dir = conf.get_sudoers_dir()
+        sudoers_wagent = os.path.join(sudoers_dir, 'waagent')
+
+        if not remove:
+            # for older distros create sudoers.d
+            if not os.path.isdir(sudoers_dir):
+                sudoers_file = os.path.join(sudoers_dir, '../sudoers')
+                # create the sudoers.d directory
+                os.mkdir(sudoers_dir)
+                # add the include of sudoers.d to the /etc/sudoers
+                sudoers = '\n#includedir ' + sudoers_dir + '\n'
+                fileutil.append_file(sudoers_file, sudoers)
+            sudoer = None
+            if nopasswd:
+                sudoer = "{0} ALL=(ALL) NOPASSWD: ALL\n".format(username)
+            else:
+                sudoer = "{0} ALL=(ALL) ALL\n".format(username)
+            fileutil.append_file(sudoers_wagent, sudoer)
+            fileutil.chmod(sudoers_wagent, 0o440)
         else:
-            sudoer = "{0} ALL = (ALL) ALL\n".format(username)
-        fileutil.append_file('/etc/sudoers.d/waagent', sudoer)
-        fileutil.chmod('/etc/sudoers.d/waagent', 0o440)
+            #Remove user from sudoers
+            if os.path.isfile(sudoers_wagent):
+                try:
+                    content = fileutil.read_file(sudoers_wagent)
+                    sudoers = content.split("\n")
+                    sudoers = [x for x in sudoers if username not in x]
+                    fileutil.write_file(sudoers_wagent, "\n".join(sudoers))
+                except IOError as e:
+                    raise OSUtilError("Failed to remove sudoer: {0}".format(e))
 
     def del_root_password(self):
         try:
@@ -248,26 +263,21 @@ class DefaultOSUtil(object):
         if self.is_selinux_system():
             return shellutil.run('chcon ' + con + ' ' + path)
 
-    def set_ssh_client_alive_interval(self):
-        conf_file_path = conf.get_sshd_conf_file_path()
-        conf_file = fileutil.read_file(conf_file_path).split("\n")
-        textutil.set_ssh_config(conf_file, "ClientAliveInterval", "180")
-        fileutil.write_file(conf_file_path, '\n'.join(conf_file))
-        logger.info("Configured SSH client probing to keep connections alive.")
-
     def conf_sshd(self, disable_password):
         option = "no" if disable_password else "yes"
         conf_file_path = conf.get_sshd_conf_file_path()
         conf_file = fileutil.read_file(conf_file_path).split("\n")
         textutil.set_ssh_config(conf_file, "PasswordAuthentication", option)
-        textutil.set_ssh_config(conf_file, "ChallengeResponseAuthentication", 
-                                option)
+        textutil.set_ssh_config(conf_file, "ChallengeResponseAuthentication", option)
+        textutil.set_ssh_config(conf_file, "ClientAliveInterval", "180")
         fileutil.write_file(conf_file_path, "\n".join(conf_file))
-        logger.info("Disabled SSH password-based authentication methods.")
+        logger.info("{0} SSH password-based authentication methods."
+                    .format("Disabled" if disable_password else "Enabled"))
+        logger.info("Configured SSH client probing to keep connections alive.")
 
 
     def get_dvd_device(self, dev_dir='/dev'):
-        patten=r'(sr[0-9]|hd[c-z]|cdrom[0-9])'
+        patten=r'(sr[0-9]|hd[c-z]|cdrom[0-9]|cd[0-9])'
         for dvd in [re.match(patten, dev) for dev in os.listdir(dev_dir)]:
             if dvd is not None:
                 return "/dev/{0}".format(dvd.group(0))
@@ -285,7 +295,7 @@ class DefaultOSUtil(object):
             os.makedirs(mount_point)
 
         for retry in range(0, max_retry):
-            retcode = self.mount(dvd, mount_point, option="-o ro -t iso9660,udf",
+            retcode = self.mount(dvd, mount_point, option="-o ro -t udf,iso9660",
                                  chk_err=chk_err)
             if retcode == 0:
                 logger.info("Successfully mounted dvd")
@@ -338,7 +348,7 @@ class DefaultOSUtil(object):
         return False
 
     def mount(self, dvd, mount_point, option="", chk_err=True):
-        cmd = "mount {0} {1} {2}".format(dvd, option,  mount_point)
+        cmd = "mount {0} {1} {2}".format(option, dvd, mount_point)
         return shellutil.run_get_output(cmd, chk_err)[0]
 
     def umount(self, mount_point, chk_err=True):
@@ -492,7 +502,7 @@ class DefaultOSUtil(object):
 
     def set_dhcp_hostname(self, hostname):
         autosend = r'^[^#]*?send\s*host-name.*?(<hostname>|gethostname[(,)])'
-        dhclient_files = ['/etc/dhcp/dhclient.conf', '/etc/dhcp3/dhclient.conf']
+        dhclient_files = ['/etc/dhcp/dhclient.conf', '/etc/dhcp3/dhclient.conf', '/etc/dhclient.conf']
         for conf_file in dhclient_files:
             if not os.path.isfile(conf_file):
                 continue
@@ -501,7 +511,7 @@ class DefaultOSUtil(object):
                 return
             fileutil.update_conf_file(conf_file,
                                       'send host-name',
-                                      'send host-name {0}'.format(hostname))
+                                      'send host-name "{0}";'.format(hostname))
 
     def restart_if(self, ifname):
         shellutil.run("ifdown {0} && ifup {1}".format(ifname, ifname))
@@ -579,16 +589,7 @@ class DefaultOSUtil(object):
             logger.error("{0} is a system user. Will not delete it.", username)
         shellutil.run("> /var/run/utmp")
         shellutil.run("userdel -f -r " + username)
-        #Remove user from suders
-        if os.path.isfile("/etc/suders.d/waagent"):
-            try:
-                content = fileutil.read_file("/etc/sudoers.d/waagent")
-                sudoers = content.split("\n")
-                sudoers = [x for x in sudoers if username not in x]
-                fileutil.write_file("/etc/sudoers.d/waagent",
-                                         "\n".join(sudoers))
-            except IOError as e:
-                raise OSUtilError("Failed to remove sudoer: {0}".format(e))
+        self.conf_sudoer(username, remove=True)
 
     def decode_customdata(self, data):
         return base64.b64decode(data)
@@ -606,7 +607,7 @@ class DefaultOSUtil(object):
         if ret[0] == 0:
             return int(ret[1])
         else:
-            raise OSUtilError("Failed to get procerssor cores")
+            raise OSUtilError("Failed to get processor cores")
     
     def set_admin_access_to_ip(self, dest_ip):
         #This allows root to access dest_ip
@@ -621,3 +622,5 @@ class DefaultOSUtil(object):
         shellutil.run(rm_old.format(dest_ip), chk_err=False)
         shellutil.run(rule.format(dest_ip))
 
+    def check_pid_alive(self, pid):
+        return pid is not None and os.path.isdir(os.path.join('/proc', pid))

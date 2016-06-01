@@ -18,12 +18,11 @@
 # http://msdn.microsoft.com/en-us/library/cc227282%28PROT.10%29.aspx
 # http://msdn.microsoft.com/en-us/library/cc227259%28PROT.13%29.aspx
 
-from tests.tools import *
 from tests.protocol.mockwiredata import *
 from azurelinuxagent.exception import *
 from azurelinuxagent.distro.loader import get_distro
-from azurelinuxagent.protocol.restapi import get_properties
 from azurelinuxagent.protocol.wire import WireProtocol
+from azurelinuxagent.distro.default.extension import ExtHandlerInstance
 
 @patch("time.sleep")
 @patch("azurelinuxagent.protocol.wire.CryptUtil")
@@ -71,12 +70,12 @@ class TestExtension(AgentTestCase):
 
         #Test enable scenario. 
         distro.ext_handlers_handler.run()
-        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0")
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
         self._assert_ext_status(protocol.report_ext_status, "success", 0)
 
         #Test goal state not changed
         distro.ext_handlers_handler.run()
-        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0")
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
 
         #Test goal state changed
         test_data.goal_state = test_data.goal_state.replace("<Incarnation>1<",
@@ -84,17 +83,17 @@ class TestExtension(AgentTestCase):
         test_data.ext_conf = test_data.ext_conf.replace("seqNo=\"0\"", 
                                                         "seqNo=\"1\"")
         distro.ext_handlers_handler.run()
-        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0")
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
         self._assert_ext_status(protocol.report_ext_status, "success", 1)
         
         #Test upgrade
         test_data.goal_state = test_data.goal_state.replace("<Incarnation>2<",
                                                             "<Incarnation>3<")
-        test_data.ext_conf = test_data.ext_conf.replace("1.0", "1.1")
+        test_data.ext_conf = test_data.ext_conf.replace("1.0.0", "1.1.0")
         test_data.ext_conf = test_data.ext_conf.replace("seqNo=\"1\"", 
                                                         "seqNo=\"2\"")
         distro.ext_handlers_handler.run()
-        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.1")
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.1.0")
         self._assert_ext_status(protocol.report_ext_status, "success", 2)
 
         #Test disable
@@ -103,7 +102,7 @@ class TestExtension(AgentTestCase):
         test_data.ext_conf = test_data.ext_conf.replace("enabled", "disabled")
         distro.ext_handlers_handler.run()
         self._assert_handler_status(protocol.report_vm_status, "NotReady", 
-                                    1, "1.1")
+                                    1, "1.1.0")
 
         #Test uninstall
         test_data.goal_state = test_data.goal_state.replace("<Incarnation>4<",
@@ -123,14 +122,14 @@ class TestExtension(AgentTestCase):
         distro, protocol = self._create_mock(test_data, *args)
 
         distro.ext_handlers_handler.run()
-        self._assert_handler_status(protocol.report_vm_status, "Ready", 0, "1.0")
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 0, "1.0.0")
 
     def test_ext_handler_no_public_settings(self, *args):
         test_data = WireProtocolData(DATA_FILE_EXT_NO_PUBLIC)
         distro, protocol = self._create_mock(test_data, *args)
 
         distro.ext_handlers_handler.run()
-        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0")
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
 
     def test_ext_handler_no_ext(self, *args):
         test_data = WireProtocolData(DATA_FILE_NO_EXT)
@@ -172,18 +171,100 @@ class TestExtension(AgentTestCase):
         test_data = WireProtocolData(DATA_FILE)
         distro, protocol = self._create_mock(test_data, *args)
         distro.ext_handlers_handler.run()
-        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0")
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
 
         #Remove status file and re-run collecting extension status
         status_file = os.path.join(self.tmp_dir, 
-                                   "OSTCExtensions.ExampleHandlerLinux-1.0",
+                                   "OSTCExtensions.ExampleHandlerLinux-1.0.0",
                                    "status", "0.status")
         self.assertTrue(os.path.isfile(status_file))
         os.remove(status_file)
 
         distro.ext_handlers_handler.run()
-        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0")
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
         self._assert_ext_status(protocol.report_ext_status, "error", 0)
+
+    def test_ext_handler_version_decide_autoupgrade_internalversion(self, *args):
+        for internal in [False, True]:
+            for autoupgrade in [False, True]:
+                # only python 3.4+ has subTest
+                # with self.subTest(autoupgrade=autoupgrade, internal=internal):
+                    if internal:
+                        config_version = '1.2.0'
+                        decision_version = '1.2.0'
+                        if autoupgrade:
+                            datafile = DATA_FILE_EXT_AUTOUPGRADE_INTERNALVERSION
+                        else:
+                            datafile = DATA_FILE_EXT_INTERNALVERSION
+                    else:
+                        config_version = '1.0.0'
+                        if autoupgrade:
+                            datafile = DATA_FILE_EXT_AUTOUPGRADE
+                            decision_version = '1.1.0'
+                        else:
+                            datafile = DATA_FILE
+                            decision_version = '1.0.0'
+
+                    _, protocol = self._create_mock(WireProtocolData(datafile), *args)
+                    ext_handlers, _ = protocol.get_ext_handlers()
+                    self.assertEqual(1, len(ext_handlers.extHandlers))
+                    ext_handler = ext_handlers.extHandlers[0]
+                    self.assertEqual('OSTCExtensions.ExampleHandlerLinux', ext_handler.name)
+                    self.assertEqual(config_version, ext_handler.properties.version, "config version.")
+                    ExtHandlerInstance(ext_handler, protocol).decide_version()
+                    self.assertEqual(decision_version, ext_handler.properties.version, "decision version.")
+
+    def test_ext_handler_version_decide_between_minor_versions(self, *args):
+        """
+        Using v2.x~v4.x for unit testing
+        Available versions via manifest XML (I stands for internal):
+        2.0.0, 2.1.0, 2.1.1, 2.2.0, 2.3.0(I), 2.4.0(I), 3.0, 3.1, 4.0.0.0, 4.0.0.1, 4.1.0.0
+        """
+
+        # (config_version, exptected_version, autoupgrade_expected_version)
+        cases = [
+            ('2.0',     '2.0.0',    '2.2.0'),
+            ('2.0.0',   '2.0.0',    '2.2.0'),
+            ('2.1.0',   '2.1.1',    '2.2.0'),
+            ('2.2.0',   '2.2.0',    '2.2.0'),
+            ('2.3.0',   '2.3.0',    '2.4.0'),
+            ('2.4.0',   '2.4.0',    '2.4.0'),
+            ('3.0',     '3.0',      '3.1'),
+            ('4.0',     '4.0.0.1',  '4.1.0.0'),
+        ]
+
+        _, protocol = self._create_mock(WireProtocolData(DATA_FILE), *args)
+        version_uri = Mock()
+        version_uri.uri = 'http://some/Microsoft.OSTCExtensions_ExampleHandlerLinux_asiaeast_manifest.xml'
+
+        for (config_version, expected_version, autoupgrade_expected_version) in cases:
+            ext_handler = Mock()
+            ext_handler.properties = Mock()
+            ext_handler.name = 'OSTCExtensions.ExampleHandlerLinux'
+            ext_handler.versionUris = [version_uri]
+            ext_handler.properties.version = config_version
+            ExtHandlerInstance(ext_handler, protocol).decide_version()
+            self.assertEqual(expected_version, ext_handler.properties.version)
+
+            ext_handler.properties.version = config_version
+            ext_handler.properties.upgradePolicy = 'auto'
+            ExtHandlerInstance(ext_handler, protocol).decide_version()
+            self.assertEqual(autoupgrade_expected_version, ext_handler.properties.version)
+
+    def test_ext_handler_version_invalid_versions(self, *args):
+        cases = ['2', '2.5', '2.0.1']
+
+        _, protocol = self._create_mock(WireProtocolData(DATA_FILE), *args)
+        version_uri = Mock()
+        version_uri.uri = 'http://some/Microsoft.OSTCExtensions_ExampleHandlerLinux_asiaeast_manifest.xml'
+
+        for config_version in cases:
+            ext_handler = Mock()
+            ext_handler.properties = Mock()
+            ext_handler.name = 'OSTCExtensions.ExampleHandlerLinux'
+            ext_handler.versionUris = [version_uri]
+            ext_handler.properties.version = config_version
+            self.assertRaises(ExtensionError, ExtHandlerInstance(ext_handler, protocol).decide_version)
 
 
 if __name__ == '__main__':

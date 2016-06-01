@@ -17,15 +17,3 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
-from azurelinuxagent.distro.default.distro import DefaultDistro
-from azurelinuxagent.distro.redhat.osutil import RedhatOSUtil, Redhat6xOSUtil
-
-class Redhat6xDistro(DefaultDistro):
-    def __init__(self):
-        super(Redhat6xDistro, self).__init__()
-        self.osutil = Redhat6xOSUtil()
-
-class RedhatDistro(DefaultDistro):
-    def __init__(self):
-        super(RedhatDistro, self).__init__()
-        self.osutil = RedhatOSUtil()

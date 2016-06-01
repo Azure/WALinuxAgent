@@ -51,6 +51,10 @@ def set_systemd_files(data_files, dest="/lib/systemd/system",
                       src=["init/waagent.service"]):
     data_files.append((dest, src))
 
+def set_rc_files(data_files, dest="/etc/rc.d/", src=["init/freebsd/waagent"]):
+    data_files.append((dest, src))
+
+
 def get_data_files(name, version, fullname):
     """
     Determine data_files according to distro name, version and init system type
@@ -76,7 +80,7 @@ def get_data_files(name, version, fullname):
                        src=["config/coreos/waagent.conf"])
         set_logrotate_files(data_files)
         set_files(data_files, dest="/usr/share/oem", 
-                  src="init/coreos/cloud-config.yml")
+                  src=["init/coreos/cloud-config.yml"])
     elif name == 'ubuntu':
         set_bin_files(data_files)
         set_conf_files(data_files, src=["config/ubuntu/waagent.conf"])
@@ -106,6 +110,10 @@ def get_data_files(name, version, fullname):
         else:
             #sles 12+ and openSUSE 13.2+ use systemd
             set_systemd_files(data_files, dest='/usr/lib/systemd/system')
+    elif name == 'freebsd':
+        set_bin_files(data_files, dest="/usr/local/sbin")
+        set_conf_files(data_files, src=["config/freebsd/waagent.conf"])
+        set_rc_files(data_files)
     else:
         #Use default setting
         set_bin_files(data_files)

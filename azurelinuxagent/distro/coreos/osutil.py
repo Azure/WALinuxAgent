@@ -67,7 +67,8 @@ class CoreOSUtil(DefaultOSUtil):
         shellutil.run("systemctl restart systemd-networkd")
 
     def restart_ssh_service(self):
-        return shellutil.run("systemctl restart sshd", chk_err=False)
+        # SSH is socket activated on CoreOS. No need to restart it.
+        pass
 
     def stop_dhcp_service(self):
         return shellutil.run("systemctl stop systemd-networkd", chk_err=False)
@@ -84,10 +85,6 @@ class CoreOSUtil(DefaultOSUtil):
     def get_dhcp_pid(self):
         ret= shellutil.run_get_output("pidof systemd-networkd")
         return ret[1] if ret[0] == 0 else None
-
-    def set_ssh_client_alive_interval(self):
-        #In CoreOS, /etc/sshd_config is mount readonly. Skip the setting
-        pass
 
     def conf_sshd(self, disable_password):
         #In CoreOS, /etc/sshd_config is mount readonly. Skip the setting

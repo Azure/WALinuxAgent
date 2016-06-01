@@ -18,14 +18,12 @@
 #
 
 from azurelinuxagent.distro.default.distro import DefaultDistro
-from azurelinuxagent.distro.redhat.osutil import RedhatOSUtil, Redhat6xOSUtil
+from azurelinuxagent.distro.freebsd.resourceDisk import FreeBSDResourceDiskHandler
+from azurelinuxagent.distro.freebsd.osutil import FreeBSDOSUtil
 
-class Redhat6xDistro(DefaultDistro):
-    def __init__(self):
-        super(Redhat6xDistro, self).__init__()
-        self.osutil = Redhat6xOSUtil()
 
-class RedhatDistro(DefaultDistro):
+class FreeBSDDistro(DefaultDistro):
     def __init__(self):
-        super(RedhatDistro, self).__init__()
-        self.osutil = RedhatOSUtil()
+        super(FreeBSDDistro, self).__init__()
+        self.osutil = FreeBSDOSUtil()
+        self.resource_disk_handler = FreeBSDResourceDiskHandler(self)
