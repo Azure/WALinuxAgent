@@ -14,9 +14,6 @@
 #
 # Requires Python 2.4+ and Openssl 1.0+
 #
-# Implements parts of RFC 2131, 1541, 1497 and
-# http://msdn.microsoft.com/en-us/library/cc227282%28PROT.10%29.aspx
-# http://msdn.microsoft.com/en-us/library/cc227259%28PROT.13%29.aspx
 
 from tests.tools import *
 from tests.protocol.mockwiredata import *
@@ -24,18 +21,18 @@ import uuid
 import unittest
 import os
 import time
-from azurelinuxagent.utils.restutil import httpclient
-from azurelinuxagent.utils.cryptutil import CryptUtil
-from azurelinuxagent.protocol.restapi import *
-from azurelinuxagent.protocol.wire import WireClient, WireProtocol, \
+from azurelinuxagent.common.utils.restutil import httpclient
+from azurelinuxagent.common.utils.cryptutil import CryptUtil
+from azurelinuxagent.common.protocol.restapi import *
+from azurelinuxagent.common.protocol.wire import WireClient, WireProtocol, \
                                           TRANSPORT_PRV_FILE_NAME, \
                                           TRANSPORT_CERT_FILE_NAME
 
 data_with_bom = b'\xef\xbb\xbfhehe'
 
 @patch("time.sleep")
-@patch("azurelinuxagent.protocol.wire.CryptUtil")
-@patch("azurelinuxagent.protocol.wire.restutil")
+@patch("azurelinuxagent.common.protocol.wire.CryptUtil")
+@patch("azurelinuxagent.common.protocol.wire.restutil")
 class TestWireProtocolGetters(AgentTestCase):
     
     def _test_getters(self, test_data, mock_restutil, MockCryptUtil, _):

@@ -14,13 +14,10 @@
 #
 # Requires Python 2.4+ and Openssl 1.0+
 #
-# Implements parts of RFC 2131, 1541, 1497 and
-# http://msdn.microsoft.com/en-us/library/cc227282%28PROT.10%29.aspx
-# http://msdn.microsoft.com/en-us/library/cc227259%28PROT.13%29.aspx
 
 from tests.tools import *
-from azurelinuxagent.future import httpclient
-from azurelinuxagent.utils.cryptutil import CryptUtil
+from azurelinuxagent.common.future import httpclient
+from azurelinuxagent.common.utils.cryptutil import CryptUtil
 
 DATA_FILE = {
         "version_info": "wire/version_info.xml",
@@ -30,6 +27,7 @@ DATA_FILE = {
         "certs": "wire/certs.xml",
         "ext_conf": "wire/ext_conf.xml",
         "manifest": "wire/manifest.xml",
+        "ga_manifest" : "wire/ga_manifest.xml",
         "trans_prv": "wire/trans_prv",
         "trans_cert": "wire/trans_cert",
         "test_ext": "ext/sample_ext.zip"
@@ -62,6 +60,7 @@ class WireProtocolData(object):
         self.certs = load_data(data_files.get("certs"))
         self.ext_conf = load_data(data_files.get("ext_conf"))
         self.manifest = load_data(data_files.get("manifest"))
+        self.ga_manifest = load_data(data_files.get("ga_manifest"))
         self.trans_prv = load_data(data_files.get("trans_prv"))
         self.trans_cert = load_data(data_files.get("trans_cert"))
         self.ext = load_bin_data(data_files.get("test_ext"))
@@ -82,6 +81,8 @@ class WireProtocolData(object):
             content = self.ext_conf
         elif "manifest.xml" in url:
             content = self.manifest
+        elif "manifest_of_ga.xml" in url:
+            content = self.ga_manifest
         elif "ExampleHandlerLinux" in url:
             content = self.ext
             resp = MagicMock()

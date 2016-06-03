@@ -1,36 +1,16 @@
 <Extensions version="1.0.0.0" goalStateIncarnation="9"><GuestAgentExtension xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
   <GAFamilies>
     <GAFamily>
-      <Name>Win8</Name>
+      <Name>Prod</Name>
       <Uris>
-        <Uri>http://rdfepirv2hknprdstr03.blob.core.windows.net/bfd5c281a7dc4e4b84381eb0b47e3aaf/Microsoft.WindowsAzure.GuestAgent_Win8_asiaeast_manifest.xml</Uri>
-        <Uri>http://rdfepirv2hknprdstr04.blob.core.windows.net/bfd5c281a7dc4e4b84381eb0b47e3aaf/Microsoft.WindowsAzure.GuestAgent_Win8_asiaeast_manifest.xml</Uri>
-        <Uri>http://rdfepirv2hknprdstr05.blob.core.windows.net/bfd5c281a7dc4e4b84381eb0b47e3aaf/Microsoft.WindowsAzure.GuestAgent_Win8_asiaeast_manifest.xml</Uri>
-        <Uri>http://rdfepirv2hknprdstr06.blob.core.windows.net/bfd5c281a7dc4e4b84381eb0b47e3aaf/Microsoft.WindowsAzure.GuestAgent_Win8_asiaeast_manifest.xml</Uri>
-        <Uri>http://rdfepirv2hknprdstr07.blob.core.windows.net/bfd5c281a7dc4e4b84381eb0b47e3aaf/Microsoft.WindowsAzure.GuestAgent_Win8_asiaeast_manifest.xml</Uri>
-        <Uri>http://rdfepirv2hknprdstr08.blob.core.windows.net/bfd5c281a7dc4e4b84381eb0b47e3aaf/Microsoft.WindowsAzure.GuestAgent_Win8_asiaeast_manifest.xml</Uri>
-        <Uri>http://rdfepirv2hknprdstr09.blob.core.windows.net/bfd5c281a7dc4e4b84381eb0b47e3aaf/Microsoft.WindowsAzure.GuestAgent_Win8_asiaeast_manifest.xml</Uri>
-        <Uri>http://rdfepirv2hknprdstr10.blob.core.windows.net/bfd5c281a7dc4e4b84381eb0b47e3aaf/Microsoft.WindowsAzure.GuestAgent_Win8_asiaeast_manifest.xml</Uri>
-        <Uri>http://rdfepirv2hknprdstr11.blob.core.windows.net/bfd5c281a7dc4e4b84381eb0b47e3aaf/Microsoft.WindowsAzure.GuestAgent_Win8_asiaeast_manifest.xml</Uri>
-        <Uri>http://rdfepirv2hknprdstr12.blob.core.windows.net/bfd5c281a7dc4e4b84381eb0b47e3aaf/Microsoft.WindowsAzure.GuestAgent_Win8_asiaeast_manifest.xml</Uri>
-        <Uri>http://zrdfepirv2hk2prdstr01.blob.core.windows.net/bfd5c281a7dc4e4b84381eb0b47e3aaf/Microsoft.WindowsAzure.GuestAgent_Win8_asiaeast_manifest.xml</Uri>
+          <Uri>http://manifest_of_ga.xml</Uri>
       </Uris>
     </GAFamily>
     <GAFamily>
-      <Name>Win7</Name>
+      <Name>Test</Name>
       <Uris>
-        <Uri>http://rdfepirv2hknprdstr03.blob.core.windows.net/bfd5c281a7dc4e4b84381eb0b47e3aaf/Microsoft.WindowsAzure.GuestAgent_Win7_asiaeast_manifest.xml</Uri>
-        <Uri>http://rdfepirv2hknprdstr04.blob.core.windows.net/bfd5c281a7dc4e4b84381eb0b47e3aaf/Microsoft.WindowsAzure.GuestAgent_Win7_asiaeast_manifest.xml</Uri>
-        <Uri>http://rdfepirv2hknprdstr05.blob.core.windows.net/bfd5c281a7dc4e4b84381eb0b47e3aaf/Microsoft.WindowsAzure.GuestAgent_Win7_asiaeast_manifest.xml</Uri>
-        <Uri>http://rdfepirv2hknprdstr06.blob.core.windows.net/bfd5c281a7dc4e4b84381eb0b47e3aaf/Microsoft.WindowsAzure.GuestAgent_Win7_asiaeast_manifest.xml</Uri>
-        <Uri>http://rdfepirv2hknprdstr07.blob.core.windows.net/bfd5c281a7dc4e4b84381eb0b47e3aaf/Microsoft.WindowsAzure.GuestAgent_Win7_asiaeast_manifest.xml</Uri>
-        <Uri>http://rdfepirv2hknprdstr08.blob.core.windows.net/bfd5c281a7dc4e4b84381eb0b47e3aaf/Microsoft.WindowsAzure.GuestAgent_Win7_asiaeast_manifest.xml</Uri>
-        <Uri>http://rdfepirv2hknprdstr09.blob.core.windows.net/bfd5c281a7dc4e4b84381eb0b47e3aaf/Microsoft.WindowsAzure.GuestAgent_Win7_asiaeast_manifest.xml</Uri>
-        <Uri>http://rdfepirv2hknprdstr10.blob.core.windows.net/bfd5c281a7dc4e4b84381eb0b47e3aaf/Microsoft.WindowsAzure.GuestAgent_Win7_asiaeast_manifest.xml</Uri>
-        <Uri>http://rdfepirv2hknprdstr11.blob.core.windows.net/bfd5c281a7dc4e4b84381eb0b47e3aaf/Microsoft.WindowsAzure.GuestAgent_Win7_asiaeast_manifest.xml</Uri>
-        <Uri>http://rdfepirv2hknprdstr12.blob.core.windows.net/bfd5c281a7dc4e4b84381eb0b47e3aaf/Microsoft.WindowsAzure.GuestAgent_Win7_asiaeast_manifest.xml</Uri>
-        <Uri>http://zrdfepirv2hk2prdstr01.blob.core.windows.net/bfd5c281a7dc4e4b84381eb0b47e3aaf/Microsoft.WindowsAzure.GuestAgent_Win7_asiaeast_manifest.xml</Uri>
-      </Uris>
+          <Uri>http://manifest_of_ga.xml</Uri>
+        </Uris>
     </GAFamily>
   </GAFamilies>
 </GuestAgentExtension>
