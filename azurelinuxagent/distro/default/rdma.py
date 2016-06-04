@@ -1,6 +1,6 @@
 # Windows Azure Linux Agent
 #
-# Copyright 2016 Microsoft Corporation, SUSE LLC, Robert Schweikert
+# Copyright 2016 Microsoft Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -32,7 +32,7 @@ class RDMAHandler(object):
         base_kernel_err_msg = 'Kernel does not provide the necessary '
         base_kernel_err_msg += 'information or the hv_kvp_daemon is not '
         base_kernel_err_msg += 'running.'
-        if not os.path.exists(driver_info_source):
+        if not os.path.isfile(driver_info_source):
             error_msg = 'Source file "%s" does not exist. '
             error_msg += base_kernel_err_msg
             logger.error(error_msg % driver_info_source)
@@ -54,11 +54,11 @@ class RDMAHandler(object):
             logger.error(error_msg % driver_info_source)
             return
 
-    def initialize_driver(self):
+    def load_driver_module(self):
         """Load the kernel driver, this depends on the proper driver
            to be installed with the install_driver() method"""
-        driver_module_name = 'modprobe hv_network_direct'
-        result = os.system(driver_module_name)
+        driver_module_name = 'hv_network_direct'
+        result = os.system('modprobe %s' driver_module_name)
         if result != 0:
             error_msg = 'Could not load "%s" kernel module. '
             error_msg += 'Run "modprobe %s" as root for more details'
@@ -69,6 +69,6 @@ class RDMAHandler(object):
 
     def install_driver(self):
         """Install the driver. This is distribution specific and must
-           be overwritted in the child implementation."""
+           be overwritten in the child implementation."""
 
         raise Exception('RDMAHandler.install_driver not implemented')
