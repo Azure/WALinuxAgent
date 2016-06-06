@@ -430,7 +430,7 @@ class DefaultOSUtil(object):
         sock = buff.tostring()
         for i in range(0, struct_size * expected, struct_size):
             iface=sock[i:i+16].split(b'\0', 1)[0]
-            if iface == b'lo':
+            if iface == b'lo' or iface.startswith('lo:'):
                 continue
             else:
                 break
