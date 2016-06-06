@@ -14,17 +14,14 @@
 #
 # Requires Python 2.4+ and Openssl 1.0+
 #
-# Implements parts of RFC 2131, 1541, 1497 and
-# http://msdn.microsoft.com/en-us/library/cc227282%28PROT.10%29.aspx
-# http://msdn.microsoft.com/en-us/library/cc227259%28PROT.13%29.aspx
 
 from tests.tools import *
 import uuid
 import unittest
 import os
-from azurelinuxagent.future import ustr
-import azurelinuxagent.utils.textutil as textutil
-from azurelinuxagent.utils.textutil import Version
+from azurelinuxagent.common.future import ustr
+import azurelinuxagent.common.utils.textutil as textutil
+from azurelinuxagent.common.utils.textutil import Version
 
 class TestTextUtil(AgentTestCase):
     def test_get_password_hash(self):
