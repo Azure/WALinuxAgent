@@ -32,7 +32,7 @@ class Logger(object):
             self.appenders.extend(logger.appenders)
         self.prefix = prefix
 
-    def verb(self, msg_format, *args):
+    def verbose(self, msg_format, *args):
         self.log(LogLevel.VERBOSE, msg_format, *args)
 
     def info(self, msg_format, *args):
@@ -129,8 +129,8 @@ class AppenderType(object):
 def add_logger_appender(appender_type, level=LogLevel.INFO, path=None):
     DEFAULT_LOGGER.add_appender(appender_type, level, path)
 
-def verb(msg_format, *args):
-    DEFAULT_LOGGER.verb(msg_format, *args)
+def verbose(msg_format, *args):
+    DEFAULT_LOGGER.verbose(msg_format, *args)
 
 def info(msg_format, *args):
     DEFAULT_LOGGER.info(msg_format, *args)

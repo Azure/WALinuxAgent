@@ -183,27 +183,27 @@ def validate_dhcp_resp(request, response):
                      bytes_recv)
         return False
 
-    logger.verb("BytesReceived:{0}", hex(bytes_recv))
-    logger.verb("DHCP response:{0}", hex_dump(response, bytes_recv))
+    logger.verbose("BytesReceived:{0}", hex(bytes_recv))
+    logger.verbose("DHCP response:{0}", hex_dump(response, bytes_recv))
 
     # check transactionId, cookie, MAC address cookie should never mismatch
     # transactionId and MAC address may mismatch if we see a response
     # meant from another machine
     if not compare_bytes(request, response, 0xEC, 4):
-        logger.verb("Cookie not match:\nsend={0},\nreceive={1}",
+        logger.verbose("Cookie not match:\nsend={0},\nreceive={1}",
                        hex_dump3(request, 0xEC, 4),
                        hex_dump3(response, 0xEC, 4))
         raise DhcpError("Cookie in dhcp respones doesn't match the request")
 
     if not compare_bytes(request, response, 4, 4):
-        logger.verb("TransactionID not match:\nsend={0},\nreceive={1}",
+        logger.verbose("TransactionID not match:\nsend={0},\nreceive={1}",
                        hex_dump3(request, 4, 4),
                        hex_dump3(response, 4, 4))
         raise DhcpError("TransactionID in dhcp respones "
                             "doesn't match the request")
 
     if not compare_bytes(request, response, 0x1C, 6):
-        logger.verb("Mac Address not match:\nsend={0},\nreceive={1}",
+        logger.verbose("Mac Address not match:\nsend={0},\nreceive={1}",
                        hex_dump3(request, 0x1C, 6),
                        hex_dump3(response, 0x1C, 6))
         raise DhcpError("Mac Addr in dhcp respones "
@@ -211,7 +211,7 @@ def validate_dhcp_resp(request, response):
 
 def parse_route(response, option, i, length, bytes_recv):
     # http://msdn.microsoft.com/en-us/library/cc227282%28PROT.10%29.aspx
-    logger.verb("Routes at offset: {0} with length:{1}", hex(i), hex(length))
+    logger.verbose("Routes at offset: {0} with length:{1}", hex(i), hex(length))
     routes = []
     if length < 5:
         logger.error("Data too small for option:{0}", option)
@@ -249,7 +249,7 @@ def parse_dhcp_resp(response):
     Parse DHCP response:
     Returns endpoint server or None on error.
     """
-    logger.verb("parse Dhcp Response")
+    logger.verbose("parse Dhcp Response")
     bytes_recv = len(response)
     endpoint = None
     gateway = None
@@ -266,22 +266,22 @@ def parse_dhcp_resp(response):
         length = 0
         if (i + 1) < bytes_recv:
             length = str_to_ord(response[i + 1])
-        logger.verb("DHCP option {0} at offset:{1} with length:{2}",
+        logger.verbose("DHCP option {0} at offset:{1} with length:{2}",
                     hex(option), hex(i), hex(length))
         if option == 255:
-            logger.verb("DHCP packet ended at offset:{0}", hex(i))
+            logger.verbose("DHCP packet ended at offset:{0}", hex(i))
             break
         elif option == 249:
             routes = parse_route(response, option, i, length, bytes_recv)
         elif option == 3:
             gateway = parse_ip_addr(response, option, i, length, bytes_recv)
-            logger.verb("Default gateway:{0}, at {1}", gateway, hex(i))
+            logger.verbose("Default gateway:{0}, at {1}", gateway, hex(i))
         elif option == 245:
             endpoint = parse_ip_addr(response, option, i, length, bytes_recv)
-            logger.verb("Azure wire protocol endpoint:{0}, at {1}", endpoint,
+            logger.verbose("Azure wire protocol endpoint:{0}, at {1}", endpoint,
                         hex(i))
         else:
-            logger.verb("Skipping DHCP option:{0} at {1} with length {2}",
+            logger.verbose("Skipping DHCP option:{0} at {1} with length {2}",
                         hex(option), hex(i), hex(length))
         i += length + 2
     return endpoint, gateway, routes
@@ -296,7 +296,7 @@ def socket_send(request):
         sock.bind(("0.0.0.0", 68))
         sock.sendto(request, ("<broadcast>", 67))
         sock.settimeout(10)
-        logger.verb("Send DHCP request: Setting socket.timeout=10, "
+        logger.verbose("Send DHCP request: Setting socket.timeout=10, "
                        "entering recv")
         response = sock.recv(1024)
         return response
@@ -353,7 +353,7 @@ def build_dhcp_request(mac_addr, request_broadcast):
     for a in range(0, 4):
         request[4 + a] = str_to_ord(trans_id[a])
 
-    logger.verb("BuildDhcpRequest: transactionId:%s,%04X" % (
+    logger.verbose("BuildDhcpRequest: transactionId:%s,%04X" % (
                    hex_dump2(trans_id),
                    unpack_big_endian(request, 4, 4)))
 

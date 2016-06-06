@@ -35,17 +35,18 @@ class TestSCVMM(AgentTestCase):
 
         with patch.object(scvmm.ScvmmHandler, 'start_scvmm_agent') as po:
             with patch('os.listdir', return_value=["sr0", "sr1", "sr2"]):
-                # execute
-                failed = False
-                try:
-                    scvmm.get_scvmm_handler().run()
-                except:
-                    failed = True
-                # assert
-                self.assertTrue(failed)
-                self.assertTrue(po.call_count == 1)
-                # cleanup
-                os.remove(scvmm_file)
+                with patch('time.sleep', return_value=0):
+                    # execute
+                    failed = False
+                    try:
+                        scvmm.get_scvmm_handler().run()
+                    except:
+                        failed = True
+                    # assert
+                    self.assertTrue(failed)
+                    self.assertTrue(po.call_count == 1)
+                    # cleanup
+                    os.remove(scvmm_file)
 
 
     def test_scvmm_detection_with_multiple_cdroms(self):

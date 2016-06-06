@@ -131,11 +131,11 @@ class MonitorHandler(object):
 
     def collect_event(self, evt_file_name):
         try:
-            logger.verb("Found event file: {0}", evt_file_name)
+            logger.verbose("Found event file: {0}", evt_file_name)
             with open(evt_file_name, "rb") as evt_file:
             #if fail to open or delete the file, throw exception
                 data_str = evt_file.read().decode("utf-8",'ignore')
-            logger.verb("Processed event file: {0}", evt_file_name)
+            logger.verbose("Processed event file: {0}", evt_file_name)
             os.remove(evt_file_name)
             return data_str
         except IOError as e:

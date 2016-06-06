@@ -142,11 +142,12 @@ class MetadataProtocol(Protocol):
         #TODO download and save certs
         return CertList()
 
-    def get_vmagent_manifests(self):
+    def get_vmagent_manifests(self, last_etag=None):
         manifests = VMAgentManifestList()
-        data = self._get_data(self.vmagent_uri)
-        set_properties("vmAgentManifests", manifests.vmAgentManifests, data)
-        return manifests
+        data, etag = self._get_data(self.vmagent_uri)
+        if last_etag == None or last_etag < etag:
+            set_properties("vmAgentManifests", manifests.vmAgentManifests, data)
+        return manifests, etag
 
     def get_vmagent_pkgs(self, vmagent_manifest):
         #Agent package is the same with extension handler
@@ -163,15 +164,17 @@ class MetadataProtocol(Protocol):
             raise ProtocolError(("Failed to get versions for vm agent: {0}"
                                  "").format(vmagent_manifest.family))
         set_properties("vmAgentVersions", vmagent_pkgs, data)
+        # TODO: What etag should this return?
         return vmagent_pkgs
 
-    def get_ext_handlers(self):
+    def get_ext_handlers(self, last_etag=None):
         headers = {
             "x-ms-vmagent-public-x509-cert": self._get_trans_cert()
         }
         ext_list = ExtHandlerList()
         data, etag = self._get_data(self.ext_uri, headers=headers)
-        set_properties("extensionHandlers", ext_list.extHandlers, data)
+        if last_etag == None or last_etag < etag:
+            set_properties("extensionHandlers", ext_list.extHandlers, data)
         return ext_list, etag
 
     def get_ext_handler_pkgs(self, ext_handler):

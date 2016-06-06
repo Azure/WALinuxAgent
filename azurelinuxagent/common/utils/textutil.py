@@ -21,8 +21,10 @@ import crypt
 import random
 import string
 import struct
+import sys
 import xml.dom.minidom as minidom
-from distutils.version import LooseVersion
+
+from distutils.version import LooseVersion as Version
 
 
 def parse_doc(xml_text):
@@ -275,6 +277,3 @@ def b64encode(s):
     if PY_VERSION_MAJOR > 2:
         return base64.b64encode(bytes(s, 'utf-8')).decode('utf-8')
     return base64.b64encode(s)
-
-
-Version = LooseVersion
