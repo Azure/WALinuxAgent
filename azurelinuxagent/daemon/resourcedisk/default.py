@@ -17,6 +17,7 @@
 
 import os
 import re
+import sys
 import threading
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.future import ustr
@@ -157,10 +158,62 @@ class ResourceDiskHandler(object):
 
         if not os.path.isfile(swapfile):
             logger.info("Create swap file")
-            shellutil.run(("dd if=/dev/zero of={0} bs=1024 "
-                           "count={1}").format(swapfile, size_kb))
+            self.mkfile(swapfile, size_kb * 1024)
             shellutil.run("mkswap {0}".format(swapfile))
         if shellutil.run("swapon {0}".format(swapfile)):
             raise ResourceDiskError("{0}".format(swapfile))
         logger.info("Enabled {0}KB of swap at {1}".format(size_kb, swapfile))
 
+    def mkfile(self, filename, nbytes):
+        """
+        Create a non-sparse file of that size. Deletes and replaces existing file.
+
+        To allow efficient execution, fallocate will be tried first. This includes
+        ``os.posix_fallocate`` on Python 3.3+ (unix) and the ``fallocate`` command
+        in the popular ``util-linux{,-ng}`` package.
+
+        A dd fallback will be tried too. When size < 64M, perform single-pass dd.
+        Otherwise do two-pass dd.
+        """
+
+        if not isinstance(nbytes, int):
+            nbytes = int(nbytes)
+
+        if nbytes < 0:
+            raise ValueError(nbytes)
+
+        if os.path.isfile(filename):
+            os.remove(filename)
+
+        # os.posix_fallocate
+        if sys.version_info >= (3, 3):
+            # Probable errors:
+            #  - OSError: Seen on Cygwin, libc notimpl?
+            #  - AttributeError: What if someone runs this under...
+            with open(filename, 'w') as f:
+                try:
+                    os.posix_fallocate(f.fileno(), 0, nbytes)
+                    return 0
+                except:
+                    # Not confident with this thing, just keep trying...
+                    pass
+
+        # fallocate command
+        fn_sh = shellutil.quote((filename,))
+        ret = shellutil.run(u"fallocate -l {0} {1}".format(nbytes, fn_sh))
+        if ret != 127:  # 127 = command not found
+            return ret
+
+        # dd fallback
+        dd_maxbs = 64 * 1024 ** 2
+        dd_cmd = "dd if=/dev/zero bs={0} count={1} conv=notrunc of={2}"
+
+        blocks = int(nbytes / dd_maxbs)
+        if blocks > 0:
+            ret = shellutil.run(dd_cmd.format(dd_maxbs, fn_sh, blocks)) << 8
+
+        remains = int(nbytes % dd_maxbs)
+        if remains > 0:
+            ret += shellutil.run(dd_cmd.format(remains, fn_sh, 1))
+
+        return ret
