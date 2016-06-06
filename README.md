@@ -61,6 +61,7 @@ http://support.microsoft.com/kb/2805216
   Supported Linux Distributions:
     * CoreOS
     * CentOS 6.2+
+    * Red Hat Enterprise Linux 6.7+
     * Debian 7.0+
     * Ubuntu 12.04+
     * openSUSE 12.3+
