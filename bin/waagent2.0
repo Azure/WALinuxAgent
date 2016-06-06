@@ -4085,7 +4085,7 @@ class ExtensionsConfig(object):
         try:
             incarnation=self.Extensions[0].getAttribute("goalStateIncarnation")
         except:
-            Error('Error parsing ExtensionsConfig.  Unable to send status reports')
+            Error('Error parsing attribute "goalStateIncarnation".  Unable to send status reports')
             return -1
         status=''
         statuses=''
@@ -4123,7 +4123,7 @@ class ExtensionsConfig(object):
         try:
             uri=GetNodeTextData(self.Extensions[0].getElementsByTagName("StatusUploadBlob")[0]).replace('&amp;','&')
         except:
-            Error('Error parsing ExtensionsConfig.  Unable to send status reports')
+            Error('Error parsing element "StatusUploadBlob".  Unable to send status reports')
             return -1
 
         LogIfVerbose('Status report '+status+' sent to ' + uri)
