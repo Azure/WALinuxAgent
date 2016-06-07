@@ -35,5 +35,10 @@ class TestrunCmd(AgentTestCase):
         err = shellutil.run_get_output(u"ls 我")
         self.assertNotEquals(0, err[0])
 
+    def test_shellquote(self):
+        self.assertEqual("\'foo\'", shellutil.quote("foo"))
+        self.assertEqual("\'foo bar\'", shellutil.quote("foo bar"))
+        self.assertEqual("'foo'\\''bar'", shellutil.quote("foo\'bar"))
+
 if __name__ == '__main__':
     unittest.main()
