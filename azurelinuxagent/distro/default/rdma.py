@@ -20,6 +20,7 @@ Handle packages and modules to enable RDMA for IB networking
 """
 
 import os
+import re
 import azurelinuxagent.logger as logger
 
 
@@ -58,7 +59,7 @@ class RDMAHandler(object):
         """Load the kernel driver, this depends on the proper driver
            to be installed with the install_driver() method"""
         driver_module_name = 'hv_network_direct'
-        result = os.system('modprobe %s' driver_module_name)
+        result = os.system('modprobe %s' % driver_module_name)
         if result != 0:
             error_msg = 'Could not load "%s" kernel module. '
             error_msg += 'Run "modprobe %s" as root for more details'
