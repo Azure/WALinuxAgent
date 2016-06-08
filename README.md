@@ -104,7 +104,7 @@ Upgrading via your distribution's package repository is preferred.
 
 If upgrading manually, same with installation above by running:
 
-    #sudo python setup.py install -force
+    #sudo python setup.py install --force
 
 Restart waagent service,for most of linux distributions:
 
