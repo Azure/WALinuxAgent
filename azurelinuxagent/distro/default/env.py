@@ -21,6 +21,7 @@ import os
 import socket
 import threading
 import time
+import azurelinuxagent.utils.shellutil as shellutil
 import azurelinuxagent.logger as logger
 import azurelinuxagent.conf as conf
 
@@ -94,6 +95,22 @@ class EnvHandler(object):
            self.distro.dhcp_handler.conf_routes()
            self.dhcpid = newpid
 
+     def handle_fstab_update(self):
+        # Only try to mount if the fstab has been modified. This avoids background mounts when admins are working on a unmounted partition
+        # If we find an error, backoff and only check every minute to give time to correct it and avoid filling the log
+        fstabCurrentModifiedStamp = shellutil.run_get_output("stat /etc/fstab -c %Y")
+        if (fstabCurrentModifiedStamp != self.fstabModifiedStamp) and (datetime.datetime.now() > self.lastNotice + datetime.timedelta(seconds=60)):
+            ret, output = shellutil.run_get_output("mount -av")
+            if ret != 0:
+                # Notify the logged on users who just modified the file to take action, immediately and then periodically thereafter...
+                notice =  "[AZURE AGENT] Current fstab settings are invalid.  Please correct the /etc/fstab file content before rebooting using the error information in /var/log/waagent.log"
+                shellutil.run_get_output("wall " + notice)
+                self.lastNotice = datetime.datetime.now()
+            else:
+                # no errors during the mount, avoid any warnings
+                self.fstabModifiedStamp = fstabCurrentModifiedStamp
+                logger.info("fstab file was modified and passed mount validation.")
+		   
     def stop(self):
         """
         Stop server comminucation and join the thread to main thread.
