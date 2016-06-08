@@ -21,6 +21,7 @@ import os
 import socket
 import threading
 import time
+import datetime
 import azurelinuxagent.utils.shellutil as shellutil
 import azurelinuxagent.logger as logger
 import azurelinuxagent.conf as conf
@@ -39,6 +40,8 @@ class EnvHandler(object):
         self.hostname = None
         self.dhcpid = None
         self.server_thread=None
+        self.lastNotice = datetime.datetime.min
+        self.fstabModifiedStamp = None
 
     def run(self):
         if not self.stopped:
@@ -46,6 +49,7 @@ class EnvHandler(object):
             self.stop()
 
         self.stopped = False
+        self.fstabModifiedStamp = shellutil.run_get_output("stat /etc/fstab -c %Y")
         logger.info("Start env monitor service.")
         self.distro.dhcp_handler.conf_routes()
         self.hostname = socket.gethostname()
@@ -67,6 +71,7 @@ class EnvHandler(object):
             if conf.get_monitor_hostname():
                 self.handle_hostname_update()
             self.handle_dhclient_restart()
+            self.handle_fstab_update()
             time.sleep(5)
 
     def handle_hostname_update(self):
