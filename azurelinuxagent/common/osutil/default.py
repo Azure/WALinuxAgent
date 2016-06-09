@@ -516,8 +516,18 @@ class DefaultOSUtil(object):
                                       'send host-name',
                                       'send host-name "{0}";'.format(hostname))
 
-    def restart_if(self, ifname):
-        shellutil.run("ifdown {0} && ifup {1}".format(ifname, ifname))
+    def restart_if(self, ifname, retries=3, wait=5):
+        retry_limit=retries+1
+        for attempt in range(1, retry_limit):
+            return_code=shellutil.run("ifdown {0} && ifup {0}".format(ifname))
+            if return_code == 0:
+                return
+            logger.warn("failed to restart {0}: return code {1}".format(ifname, return_code))
+            if attempt < retry_limit:
+                logger.info("retrying in {0} seconds".format(wait))
+                time.sleep(wait)
+            else:
+                logger.warn("exceeded restart retries")
 
     def publish_hostname(self, hostname):
         self.set_dhcp_hostname(hostname)
