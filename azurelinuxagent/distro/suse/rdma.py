@@ -20,6 +20,7 @@
 import glob
 import os
 import azurelinuxagent.logger as logger
+import azurelinuxagent.utils.shellutil as shellutil
 from azurelinuxagent.distro.default.rdma import RDMAHandler
 
 
@@ -28,15 +29,24 @@ class SUSERDMAHandler(RDMAHandler):
         """Install the appropropriate driver package for the RDMA firmware"""
 
         fw_version = self._RDMAHandler__get_rdma_version()
+        if not fw_version:
+            error_msg = 'Could not determine firmware version. Therefore, '
+            error_msg += 'no driver will be installed.'
+            logger.error(error_msg)
+            return
         zypper_install = 'zypper -n in'
         zypper_search = 'zypper se -s'
         package_name = 'msft-rdma-kmp-default'
         cmd = '%s %s' % (zypper_search, package_name)
-        repo_package_info = os.popen(cmd).readlines()
-        for entry in repo_package_info:
+        status, repo_package_info = shellutil.run_get_output(cmd)
+        for entry in repo_package_info.split('\n'):
             if package_name in entry:
-                installed = entry.split('|')[0].strip()
-                version = entry.split('|')[3].strip()
+                sections = entry.split('|')
+                if len(sections) < 4:
+                    error_msg = 'Unexpected output of "%s" with result "%s"'
+                    logger.error(error_msg % (cmd, entry))
+                installed = sections[0].strip()
+                version = sections[3].strip()
                 if fw_version in version:
                     if installed == 'i':
                         info_msg = 'Driver package "%s-%s" '
@@ -53,14 +63,14 @@ class SUSERDMAHandler(RDMAHandler):
         else:
             local_packages = glob.glob('/opt/microsoft/rdma/*.rpm')
             for local_package in local_packages:
-                if 'src.rpm' in local_package:
+                if local_package.endswith('.src.rpm'):
                     continue
                 if (
                         package_name in local_package and
                         fw_version in local_package
                 ):
                     cmd = '%s %s' % (zypper_install, local_package)
-                    result = os.system(cmd)
+                    result = shellutil.run(cmd)
                     if result:
                         error_msg = 'Failed install of package "%s" '
                         error_msg += 'from local package cache'
