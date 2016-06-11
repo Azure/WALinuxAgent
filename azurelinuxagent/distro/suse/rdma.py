@@ -19,14 +19,14 @@
 
 import glob
 import os
-import azurelinuxagent.logger as logger
-import azurelinuxagent.utils.shellutil as shellutil
+import azurelinuxagent.common.logger as logger
+import azurelinuxagent.common.utils.shellutil as shellutil
 from azurelinuxagent.distro.default.rdma import RDMAHandler
 
 
 class SUSERDMAHandler(RDMAHandler):
     def install_driver(self):
-        """Install the appropropriate driver package for the RDMA firmware"""
+        """Install the appropriate driver package for the RDMA firmware"""
 
         fw_version = self._RDMAHandler__get_rdma_version()
         if not fw_version:
@@ -45,6 +45,7 @@ class SUSERDMAHandler(RDMAHandler):
                 if len(sections) < 4:
                     error_msg = 'Unexpected output of "%s" with result "%s"'
                     logger.error(error_msg % (cmd, entry))
+                    continue
                 installed = sections[0].strip()
                 version = sections[3].strip()
                 if fw_version in version:
@@ -59,6 +60,9 @@ class SUSERDMAHandler(RDMAHandler):
                         error_msg = 'Failed install of package "%s-%s" '
                         error_msg += 'from available repositories.'
                         logger.error(error_msg % (package_name, version))
+                    msg = 'Successfully installed "%s-%s" from '
+                    msg += 'configured repositories'
+                    logger.info(msg % (package_name, version))
                     break
         else:
             local_packages = glob.glob('/opt/microsoft/rdma/*.rpm')
@@ -76,6 +80,10 @@ class SUSERDMAHandler(RDMAHandler):
                         error_msg += 'from local package cache'
                         logger.error(error_msg % local_package)
                         break
+                    msg = 'Successfully installed "%s" from '
+                    msg += 'local package cache'
+                    logger.info(msg % (local_package))
+                    break
             else:
                 error_msg = 'Unable to find driver package that matches '
                 error_msg += 'RDMA firmware version "%s"' % fw_version
