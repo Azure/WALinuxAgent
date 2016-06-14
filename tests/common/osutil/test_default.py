@@ -15,6 +15,7 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
+import socket
 import azurelinuxagent.common.osutil.default as osutil
 import azurelinuxagent.common.utils.shellutil as shellutil
 import mock
@@ -36,6 +37,18 @@ class TestOSUtil(AgentTestCase):
             self.assertEqual(run_patch.call_count, retries)
             self.assertEqual(run_patch.call_args_list[0][0][0], 'ifdown {0} && ifup {0}'.format(ifname))
 
+
+    def test_get_first_if(self):
+        ifname, ipaddr = osutil.DefaultOSUtil().get_first_if()
+        self.assertTrue(ifname.startswith('eth'))
+        self.assertIsNotNone(ipaddr)
+        try:
+            socket.inet_aton(ipaddr)
+        except socket.error:
+            self.fail("not a valid ip address")
+
+    def test_isloopback(self):
+        self.assertTrue(osutil.DefaultOSUtil().is_loopback('lo'))
 
 if __name__ == '__main__':
     unittest.main()

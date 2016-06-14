@@ -442,11 +442,19 @@ class DefaultOSUtil(object):
         sock = buff.tostring()
         for i in range(0, struct_size * expected, struct_size):
             iface=sock[i:i+16].split(b'\0', 1)[0]
-            if iface == b'lo' or iface.startswith('lo:'):
+            if self.is_loopback(iface):
                 continue
             else:
                 break
         return iface.decode('latin-1'), socket.inet_ntoa(sock[i+20:i+24])
+
+
+    def is_loopback(self, ifname):
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+        result = fcntl.ioctl(s.fileno(), 0x8913, ifname + '\0'*256)
+        flags, = struct.unpack('H', result[16:18])
+        return flags & 8 == 8
+
 
     def is_missing_default_route(self):
         routes = shellutil.run_get_output("route -n")[1]
