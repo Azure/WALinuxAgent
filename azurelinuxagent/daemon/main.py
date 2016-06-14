@@ -100,7 +100,7 @@ class DaemonHandler(object):
 
         if conf.get_detect_scvmm_env():
             self.scvmm_handler.run()
-        
+
         if conf.get_resourcedisk_format():
             self.resourcedisk_handler.run()
         
