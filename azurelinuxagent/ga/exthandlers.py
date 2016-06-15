@@ -514,7 +514,7 @@ class ExtHandlerInstance(object):
         self.set_operation(WALAEventOperation.Enable)
 
         man = self.load_manifest()
-        self.launch_command(man.get_enable_command())
+        self.launch_command(man.get_enable_command(), timeout=300)
         self.set_handler_state(ExtHandlerState.Enabled)
         self.set_handler_status(status="Ready", message="Plugin enabled")
 
@@ -674,7 +674,7 @@ class ExtHandlerInstance(object):
             raise ExtensionError("Failed to launch: {0}, {1}".format(cmd, e))
 
         retry = timeout / 5
-        while retry > 0 and child.poll == None:
+        while retry > 0 and child.poll is None:
             time.sleep(5)
             retry -= 1
         if retry == 0:
