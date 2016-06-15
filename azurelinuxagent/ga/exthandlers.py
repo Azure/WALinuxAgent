@@ -439,7 +439,7 @@ class ExtHandlerInstance(object):
         self.set_operation(WALAEventOperation.Enable)
 
         man = self.load_manifest()
-        self.launch_command(man.get_enable_command())
+        self.launch_command(man.get_enable_command(), timeout=300)
         self.set_handler_state(ExtHandlerState.Enabled)
         self.set_handler_status(status="Ready", message="Plugin enabled")
 
