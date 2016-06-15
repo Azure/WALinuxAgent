@@ -49,6 +49,64 @@ class TestOSUtil(AgentTestCase):
 
     def test_isloopback(self):
         self.assertTrue(osutil.DefaultOSUtil().is_loopback('lo'))
+        self.assertFalse(osutil.DefaultOSUtil().is_loopback('eth0'))
+
+    def test_isprimary(self):
+        routing_table="\
+        Iface	Destination	Gateway 	Flags	RefCnt	Use	Metric	Mask		MTU	Window	IRTT \n\
+        eth0	00000000	01345B0A	0003	0	    0	5	00000000	0	0	0   \n\
+        eth0	00345B0A	00000000	0001	0	    0	5	00000000	0	0	0   \n\
+        lo	    00000000	01345B0A	0003	0	    0	1	00FCFFFF	0	0	0   \n"
+
+        mo = mock.mock_open(read_data=routing_table)
+        with patch('__builtin__.open', mo):
+            self.assertFalse(osutil.DefaultOSUtil().is_primary_interface('lo'))
+            self.assertTrue(osutil.DefaultOSUtil().is_primary_interface('eth0'))
+
+    def test_multiple_default_routes(self):
+        routing_table="\
+        Iface	Destination	Gateway 	Flags	RefCnt	Use	Metric	Mask		MTU	Window	IRTT \n\
+        high	00000000	01345B0A	0003	0	    0	5	00000000	0	0	0   \n\
+        low1	00000000	01345B0A	0003	0	    0	1	00FCFFFF	0	0	0   \n"
+
+        mo = mock.mock_open(read_data=routing_table)
+        with patch('__builtin__.open', mo):
+            self.assertTrue(osutil.DefaultOSUtil().is_primary_interface('low1'))
+
+    def test_multiple_interfaces(self):
+        routing_table = "\
+        Iface	Destination	Gateway 	Flags	RefCnt	Use	Metric	Mask		MTU	Window	IRTT \n\
+        first	00000000	01345B0A	0003	0	    0	1	00000000	0	0	0   \n\
+        secnd	00000000	01345B0A	0003	0	    0	1	00FCFFFF	0	0	0   \n"
+
+        mo = mock.mock_open(read_data=routing_table)
+        with patch('__builtin__.open', mo):
+            self.assertTrue(osutil.DefaultOSUtil().is_primary_interface('first'))
+
+
+    def test_interface_flags(self):
+        routing_table = "\
+        Iface	Destination	Gateway 	Flags	RefCnt	Use	Metric	Mask		MTU	Window	IRTT \n\
+        nflg	00000000	01345B0A	0001	0	    0	1	00000000	0	0	0   \n\
+        flgs	00000000	01345B0A	0003	0	    0	1	00FCFFFF	0	0	0   \n"
+
+        mo = mock.mock_open(read_data=routing_table)
+        with patch('__builtin__.open', mo):
+            self.assertTrue(osutil.DefaultOSUtil().is_primary_interface('flgs'))
+
+
+    def test_no_interface(self):
+        routing_table = "\
+        Iface	Destination	Gateway 	Flags	RefCnt	Use	Metric	Mask		MTU	Window	IRTT \n\
+        ndst	00000001	01345B0A	0003	0	    0	1	00000000	0	0	0   \n\
+        nflg	00000000	01345B0A	0001	0	    0	1	00FCFFFF	0	0	0   \n"
+
+        mo = mock.mock_open(read_data=routing_table)
+        with patch('__builtin__.open', mo):
+            self.assertFalse(osutil.DefaultOSUtil().is_primary_interface('ndst'))
+            self.assertFalse(osutil.DefaultOSUtil().is_primary_interface('nflg'))
+            self.assertFalse(osutil.DefaultOSUtil().is_primary_interface('invalid'))
+
 
 if __name__ == '__main__':
     unittest.main()

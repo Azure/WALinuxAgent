@@ -400,7 +400,7 @@ class DefaultOSUtil(object):
     def get_mac_addr(self):
         """
         Convienience function, returns mac addr bound to
-        first non-loobback interface.
+        first non-loopback interface.
         """
         ifname=''
         while len(ifname) < 2 :
@@ -440,13 +440,72 @@ class DefaultOSUtil(object):
             logger.warn(('SIOCGIFCONF returned more than {0} up '
                          'network interfaces.'), expected)
         sock = buff.tostring()
+        primary = self.get_primary_interface()
         for i in range(0, struct_size * expected, struct_size):
             iface=sock[i:i+16].split(b'\0', 1)[0]
-            if self.is_loopback(iface):
+            if len(iface) == 0 or self.is_loopback(iface) or iface != primary:
+                # test the next one
                 continue
             else:
+                # use this one
                 break
+
         return iface.decode('latin-1'), socket.inet_ntoa(sock[i+20:i+24])
+
+    def get_primary_interface(self):
+        """
+        Get the name of the primary interface, which is the one with the
+        default route attached to it; if there are multiple default routes,
+        the primary has the lowest Metric.
+        :return: the interface which has the default route
+        """
+        # from linux/route.h
+        RTF_GATEWAY = 0x02
+        DEFAULT_DEST = "00000000"
+
+        hdr_iface = "Iface"
+        hdr_dest = "Destination"
+        hdr_flags = "Flags"
+        hdr_metric = "Metric"
+
+        idx_iface = -1
+        idx_dest = -1
+        idx_flags = -1
+        idx_metric = -1
+        primary = None
+        primary_metric = None
+
+        logger.info("examine /proc/net/route for primary interface")
+        with open('/proc/net/route') as routing_table:
+            idx = 0
+            for header in filter(lambda h: len(h) > 0, routing_table.readline().strip(" \n").split("\t")):
+                if header == hdr_iface:
+                    idx_iface = idx
+                elif header == hdr_dest:
+                    idx_dest = idx
+                elif header == hdr_flags:
+                    idx_flags = idx
+                elif header == hdr_metric:
+                    idx_metric = idx
+                idx = idx + 1
+            for entry in routing_table.readlines():
+                route = entry.strip(" \n").split("\t")
+                if route[idx_dest] == DEFAULT_DEST and int(route[idx_flags]) & RTF_GATEWAY == RTF_GATEWAY:
+                    metric = int(route[idx_metric])
+                    iface = route[idx_iface]
+                    if primary is None or metric < primary_metric:
+                        primary = iface
+                        primary_metric = metric
+        return primary
+
+
+    def is_primary_interface(self, ifname):
+        """
+        Indicate whether the specified interface is the primary.
+        :param ifname: the name of the interface - eth0, lo, etc.
+        :return: True if this interface binds the default route
+        """
+        return self.get_primary_interface() == ifname
 
 
     def is_loopback(self, ifname):
