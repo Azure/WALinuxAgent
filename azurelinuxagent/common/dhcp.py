@@ -56,7 +56,7 @@ class DhcpHandler(object):
         Configure default gateway and routes
         Save wire server endpoint if found
         """
-        if not self.wireserver_route_exists:
+        if not self.wireserver_route_exists and not self.dhcp_lease_exists:
             self.send_dhcp_req()
             self.conf_routes()
 
@@ -99,6 +99,21 @@ class DhcpHandler(object):
             logger.error("could not determine whether route exists to {0}: {1}".format(KNOWN_WIRESERVER_IP, e))
 
         return route_exists
+
+    @property
+    def dhcp_lease_exists(self):
+        """
+        Check whether the dhcp options cache exists and contains the
+        wireserver endpoint.
+        :return: True if the cached endpoint was found in the dhcp lease
+        """
+        exists = False
+        cached_endpoint = self.osutil.get_dhcp_lease_endpoint()
+        if cached_endpoint is not None:
+            self.endpoint = cached_endpoint
+            exists = True
+        return exists
+
 
     def conf_routes(self):
         logger.info("Configure routes")

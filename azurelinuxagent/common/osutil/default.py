@@ -26,6 +26,8 @@ import time
 import pwd
 import fcntl
 import base64
+import glob
+import datetime
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common.exception import OSUtilError
@@ -514,6 +516,63 @@ class DefaultOSUtil(object):
         flags, = struct.unpack('H', result[16:18])
         return flags & 8 == 8
 
+    def get_dhcp_lease_endpoint(self):
+        """
+        OS specific, this should return the decoded endpoint of
+        the wireserver from option 245 in the dhcp leases file
+        if it exists on disk.
+        :return: The endpoint if available, or None
+        """
+        return None
+
+    @staticmethod
+    def get_endpoint_from_leases_path(pathname):
+        """
+        Try to discover and decode the wireserver endpoint in the
+        specified dhcp leases path.
+        :param pathname: The path containing dhcp lease files
+        :return: The endpoint if available, otherwise None
+        """
+        endpoint = None
+
+        HEADER_LEASE = "lease"
+        HEADER_OPTION = "option unknown-245"
+        HEADER_DNS = "option domain-name-servers"
+        HEADER_EXPIRE = "expire"
+        FOOTER_LEASE = "}"
+        FORMAT_DATETIME = "%Y/%m/%d %H:%M:%S"
+
+        for lease_file in glob.glob(pathname):
+            leases = open(lease_file).read()
+            if HEADER_OPTION in leases:
+                cached_endpoint = None
+                has_option_245 = False
+                expired = True  # assume expired
+                for line in leases.splitlines():
+                    if line.startswith(HEADER_LEASE):
+                        cached_endpoint = None
+                        has_option_245 = False
+                    elif HEADER_DNS in line:
+                        cached_endpoint = line.replace(HEADER_DNS, '').strip(" ;")
+                    elif HEADER_OPTION in line:
+                        has_option_245 = True
+                    elif HEADER_EXPIRE in line:
+                        if "never" in line:
+                            expired = False
+                        else:
+                            try:
+                                expire_string = line.split(" ", 4)[-1].strip(";")
+                                expire_date = datetime.datetime.strptime(expire_string, FORMAT_DATETIME)
+                                if expire_date > datetime.datetime.utcnow():
+                                    expired = False
+                            except:
+                                logger.error("could not parse expiry token '{0}'".format(line))
+                    elif FOOTER_LEASE in line:
+                        if not expired and cached_endpoint is not None and has_option_245:
+                            endpoint = cached_endpoint
+                            # return the first valid entry
+                            break
+        return endpoint
 
     def is_missing_default_route(self):
         routes = shellutil.run_get_output("route -n")[1]

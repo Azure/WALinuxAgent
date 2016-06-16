@@ -16,6 +16,7 @@
 #
 
 import azurelinuxagent.common.dhcp as dhcp
+import azurelinuxagent.common.osutil.default as osutil
 from tests.tools import *
 
 
@@ -52,3 +53,13 @@ class TestDHCP(AgentTestCase):
         self.assertIsNone(dhcp_handler.routes)
         self.assertIsNone(dhcp_handler.gateway)
 
+    def test_dhcp_lease_exists(self):
+        dhcp_handler = dhcp.get_dhcp_handler()
+        dhcp_handler.osutil = osutil.DefaultOSUtil()
+        with patch.object(osutil.DefaultOSUtil, 'get_dhcp_lease_endpoint', return_value=None):
+            self.assertFalse(dhcp_handler.dhcp_lease_exists)
+            self.assertIsNone(dhcp_handler.endpoint)
+        with patch.object(osutil.DefaultOSUtil, 'get_dhcp_lease_endpoint', return_value="foo"):
+            self.assertTrue(dhcp_handler.dhcp_lease_exists)
+            self.assertIsNotNone(dhcp_handler.endpoint)
+            self.assertEqual(dhcp_handler.endpoint, "foo")

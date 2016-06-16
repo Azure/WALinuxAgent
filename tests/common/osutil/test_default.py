@@ -16,8 +16,10 @@
 #
 
 import socket
+import glob
 import azurelinuxagent.common.osutil.default as osutil
 import azurelinuxagent.common.utils.shellutil as shellutil
+from azurelinuxagent.common.osutil import get_osutil
 import mock
 from tests.tools import *
 
@@ -106,6 +108,19 @@ class TestOSUtil(AgentTestCase):
             self.assertFalse(osutil.DefaultOSUtil().is_primary_interface('ndst'))
             self.assertFalse(osutil.DefaultOSUtil().is_primary_interface('nflg'))
             self.assertFalse(osutil.DefaultOSUtil().is_primary_interface('invalid'))
+
+    def test_dhcp_lease_default(self):
+        self.assertIsNone(osutil.DefaultOSUtil().get_dhcp_lease_endpoint())
+
+    def test_dhcp_lease_ubuntu(self):
+        with patch.object(glob, "glob", return_value=['/var/lib/dhcp/dhclient.eth0.leases']):
+            with patch('__builtin__.open', mock.mock_open(read_data=load_data("dhcp.leases"))):
+                endpoint = get_osutil(distro_name='ubuntu').get_dhcp_lease_endpoint()
+                self.assertIsNotNone(endpoint)
+                self.assertEqual(endpoint, "168.63.129.16")
+
+                self.assertIsNotNone(get_osutil(distro_name='ubuntu', distro_version='12.04').get_dhcp_lease_endpoint())
+                self.assertIsNotNone(get_osutil(distro_name='ubuntu', distro_version='14.04').get_dhcp_lease_endpoint())
 
 
 if __name__ == '__main__':
