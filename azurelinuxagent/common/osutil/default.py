@@ -442,7 +442,7 @@ class DefaultOSUtil(object):
             logger.warn(('SIOCGIFCONF returned more than {0} up '
                          'network interfaces.'), expected)
         sock = buff.tostring()
-        primary = self.get_primary_interface()
+        primary = bytearray(self.get_primary_interface(), encoding='utf-8')
         for i in range(0, struct_size * expected, struct_size):
             iface=sock[i:i+16].split(b'\0', 1)[0]
             if len(iface) == 0 or self.is_loopback(iface) or iface != primary:
@@ -512,7 +512,7 @@ class DefaultOSUtil(object):
 
     def is_loopback(self, ifname):
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
-        result = fcntl.ioctl(s.fileno(), 0x8913, ifname + '\0'*256)
+        result = fcntl.ioctl(s.fileno(), 0x8913, struct.pack('256s', ifname[:15]))
         flags, = struct.unpack('H', result[16:18])
         return flags & 8 == 8
 

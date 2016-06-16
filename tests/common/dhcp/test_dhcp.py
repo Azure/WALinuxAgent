@@ -24,42 +24,40 @@ class TestDHCP(AgentTestCase):
     def test_wireserver_route_exists(self):
         # setup
         dhcp_handler = dhcp.get_dhcp_handler()
-        self.assertIsNone(dhcp_handler.endpoint)
-        self.assertIsNone(dhcp_handler.routes)
-        self.assertIsNone(dhcp_handler.gateway)
+        self.assertTrue(dhcp_handler.endpoint is None)
+        self.assertTrue(dhcp_handler.routes is None)
+        self.assertTrue(dhcp_handler.gateway is None)
 
         # execute
-        with patch("subprocess.check_output", return_value="1"):
+        with patch("subprocess.check_output", return_value=b'1'):
             self.assertTrue(dhcp_handler.wireserver_route_exists)
 
         # test
-        self.assertIsNotNone(dhcp_handler.endpoint)
-        self.assertIsNone(dhcp_handler.routes)
-        self.assertIsNone(dhcp_handler.gateway)
-
+        self.assertTrue(dhcp_handler.endpoint is not None)
+        self.assertTrue(dhcp_handler.routes is None)
+        self.assertTrue(dhcp_handler.gateway is None)
 
     def test_wireserver_route_not_exists(self):
         # setup
         dhcp_handler = dhcp.get_dhcp_handler()
-        self.assertIsNone(dhcp_handler.endpoint)
-        self.assertIsNone(dhcp_handler.routes)
-        self.assertIsNone(dhcp_handler.gateway)
+        self.assertTrue(dhcp_handler.endpoint is None)
+        self.assertTrue(dhcp_handler.routes is None)
+        self.assertTrue(dhcp_handler.gateway is None)
 
         # execute
         self.assertFalse(dhcp_handler.wireserver_route_exists)
 
         # test
-        self.assertIsNone(dhcp_handler.endpoint)
-        self.assertIsNone(dhcp_handler.routes)
-        self.assertIsNone(dhcp_handler.gateway)
+        self.assertTrue(dhcp_handler.endpoint is None)
+        self.assertTrue(dhcp_handler.routes is None)
+        self.assertTrue(dhcp_handler.gateway is None)
 
     def test_dhcp_lease_exists(self):
         dhcp_handler = dhcp.get_dhcp_handler()
         dhcp_handler.osutil = osutil.DefaultOSUtil()
         with patch.object(osutil.DefaultOSUtil, 'get_dhcp_lease_endpoint', return_value=None):
             self.assertFalse(dhcp_handler.dhcp_lease_exists)
-            self.assertIsNone(dhcp_handler.endpoint)
+            self.assertEqual(dhcp_handler.endpoint, None)
         with patch.object(osutil.DefaultOSUtil, 'get_dhcp_lease_endpoint', return_value="foo"):
             self.assertTrue(dhcp_handler.dhcp_lease_exists)
-            self.assertIsNotNone(dhcp_handler.endpoint)
             self.assertEqual(dhcp_handler.endpoint, "foo")
