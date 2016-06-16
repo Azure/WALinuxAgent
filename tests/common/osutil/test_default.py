@@ -26,16 +26,16 @@ class TestOSUtil(AgentTestCase):
         # setup
         retries = 3
         ifname = 'dummy'
-        patch = mock.patch.object(shellutil, 'run')
-        patch.return_value = 1
-        patch_run = patch.start()
+        with patch.object(shellutil, "run") as run_patch:
+            run_patch.return_value = 1
 
-        # execute
-        osutil.DefaultOSUtil.restart_if(osutil.DefaultOSUtil(), ifname=ifname,retries=retries, wait=0)
+            # execute
+            osutil.DefaultOSUtil.restart_if(osutil.DefaultOSUtil(), ifname=ifname, retries=retries, wait=0)
 
-        # assert
-        self.assertEqual(patch_run.call_count, retries)
-        self.assertEqual(patch_run.call_args_list[0][0][0], 'ifdown {0} && ifup {0}'.format(ifname))
+            # assert
+            self.assertEqual(run_patch.call_count, retries)
+            self.assertEqual(run_patch.call_args_list[0][0][0], 'ifdown {0} && ifup {0}'.format(ifname))
+
 
 if __name__ == '__main__':
     unittest.main()
