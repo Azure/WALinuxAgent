@@ -53,6 +53,10 @@ SHORT_WAITING_INTERVAL = 1  # 1 second
 LONG_WAITING_INTERVAL = 15  # 15 seconds
 
 
+class UploadError(HttpError):
+    pass
+
+
 class WireProtocolResourceGone(ProtocolError):
     pass
 
@@ -345,7 +349,17 @@ class StatusBlob(object):
             else:
                 raise ProtocolError("Unknown blob type: {0}".format(blob_type))
         except HttpError as e:
-            raise ProtocolError("Failed to upload status blob: {0}".format(e))
+            logger.warn("Initial upload failed, falling back to host plugin [{0}]".format(e))
+            try:
+                # host plugin upload
+                pass
+            except HttpError as e:
+                logger.error("Host plugin upload failed [{0}]".format(e))
+                raise ProtocolError("Failed to upload status blob: {0}".format(e))
+            else:
+                logger.info("Secondary upload via host plugin succeeded")
+        else:
+            logger.info("Uploading status blob succeeded")
 
     def get_blob_type(self, url):
         # Check blob type
@@ -370,18 +384,15 @@ class StatusBlob(object):
     def put_block_blob(self, url, data):
         logger.verb("Upload block blob")
         timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-        try:
-            resp = self.client.call_storage_service(restutil.http_put, url,
-                                                    data, {
-                                                        "x-ms-date": timestamp,
-                                                        "x-ms-blob-type": "BlockBlob",
-                                                        "Content-Length": ustr(len(data)),
-                                                        "x-ms-version": self.__class__.__storage_version__
-                                                    })
-        except HttpError as e:
-            raise ProtocolError("HttpError while uploading block blob: {0}".format(e))
+        resp = self.client.call_storage_service(restutil.http_put, url,
+                                                data, {
+                                                    "x-ms-date": timestamp,
+                                                    "x-ms-blob-type": "BlockBlob",
+                                                    "Content-Length": ustr(len(data)),
+                                                    "x-ms-version": self.__class__.__storage_version__
+                                                })
         if resp.status != httpclient.CREATED:
-            raise ProtocolError("Failed to upload block blob: {0}".format(resp.status))
+            raise UploadError("Failed to upload block blob: {0}".format(resp.status))
 
     def put_page_blob(self, url, data):
         logger.verb("Replace old page blob")
@@ -392,19 +403,16 @@ class StatusBlob(object):
 
         # Align to 512 bytes
         page_blob_size = int((len(data) + 511) / 512) * 512
-        try:
-            resp = self.client.call_storage_service(restutil.http_put, url, "",
-                                                    {
-                                                        "x-ms-date": timestamp,
-                                                        "x-ms-blob-type": "PageBlob",
-                                                        "Content-Length": "0",
-                                                        "x-ms-blob-content-length": ustr(page_blob_size),
-                                                        "x-ms-version": self.__class__.__storage_version__
-                                                    })
-        except HttpError as e:
-            raise ProtocolError("HttpError while cleaning up page blob: {0}".format(e))
+        resp = self.client.call_storage_service(restutil.http_put, url, "",
+                                                {
+                                                    "x-ms-date": timestamp,
+                                                    "x-ms-blob-type": "PageBlob",
+                                                    "Content-Length": "0",
+                                                    "x-ms-blob-content-length": ustr(page_blob_size),
+                                                    "x-ms-version": self.__class__.__storage_version__
+                                                })
         if resp.status != httpclient.CREATED:
-            raise ProtocolError("Failed to clean up page blob: {0}".format(resp.status))
+            raise UploadError("Failed to clean up page blob: {0}".format(resp.status))
 
         if url.count("?") < 0:
             url = "{0}?comp=page".format(url)
@@ -423,19 +431,16 @@ class StatusBlob(object):
             buf_size = page_end - start
             buf = bytearray(buf_size)
             buf[0: content_size] = data[start: end]
-            try:
-                resp = self.client.call_storage_service(restutil.http_put, url, bytebuffer(buf),
-                                                        {
-                                                            "x-ms-date": timestamp,
-                                                            "x-ms-range": "bytes={0}-{1}".format(start, page_end - 1),
-                                                            "x-ms-page-write": "update",
-                                                            "x-ms-version": self.__class__.__storage_version__,
-                                                            "Content-Length": ustr(page_end - start)
-                                                        })
-            except HttpError as e:
-                raise ProtocolError("HttpError while uploading page blob: {0}".format(e))
+            resp = self.client.call_storage_service(restutil.http_put, url, bytebuffer(buf),
+                                                    {
+                                                        "x-ms-date": timestamp,
+                                                        "x-ms-range": "bytes={0}-{1}".format(start, page_end - 1),
+                                                        "x-ms-page-write": "update",
+                                                        "x-ms-version": self.__class__.__storage_version__,
+                                                        "Content-Length": ustr(page_end - start)
+                                                    })
             if resp is None or resp.status != httpclient.CREATED:
-                raise ProtocolError("Failed to upload page blob: {0}".format(resp.status))
+                raise UploadError("Failed to upload page blob: {0}".format(resp.status))
             start = end
 
 
