@@ -67,6 +67,9 @@ class SUSERDMAHandler(RDMAHandler):
             # Unloading the particular driver with rmmod does not work
             # We have to reboot after the new driver is installed
             if self.is_driver_loaded():
+                info_msg = 'Currently loaded driver does not match the '
+                info_msg += 'Firmware implementation, rebbot is required.'
+                logger.info(info_msg)
                 requires_reboot = True
             cmd = zypper_remove % package_name
             shellutil.run(cmd)
