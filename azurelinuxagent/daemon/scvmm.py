@@ -68,6 +68,5 @@ class ScvmmHandler(object):
     
     def run(self):
         if self.detect_scvmm_env():
-            self.start_scvmm_agent()
             logger.info("Exiting")
             sys.exit(0)
