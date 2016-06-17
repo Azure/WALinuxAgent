@@ -21,10 +21,14 @@ Handle packages and modules to enable RDMA for IB networking
 
 import os
 import re
-import azurelinuxagent.logger as logger
+import azurelinuxagent.common.logger as logger
+import azurelinuxagent.common.utils.shellutil as shellutil
 
 
 class RDMAHandler(object):
+
+    driver_module_name = 'hv_network_direct'
+
     def __get_rdma_version(self):
         """Retrieve the firmware version information from the system.
            This depends on information provided by the Linux kernel."""
@@ -58,12 +62,13 @@ class RDMAHandler(object):
     def load_driver_module(self):
         """Load the kernel driver, this depends on the proper driver
            to be installed with the install_driver() method"""
-        driver_module_name = 'hv_network_direct'
-        result = os.system('modprobe %s' % driver_module_name)
+        result = shellutil.run('modprobe %s' % self.driver_module_name)
         if result != 0:
             error_msg = 'Could not load "%s" kernel module. '
             error_msg += 'Run "modprobe %s" as root for more details'
-            logger.error(error_msg % (driver_module_name, driver_module_name))
+            logger.error(
+                error_msg % (self.driver_module_name, self.driver_module_name)
+            )
             return
 
         return True
@@ -73,3 +78,16 @@ class RDMAHandler(object):
            be overwritten in the child implementation."""
 
         raise Exception('RDMAHandler.install_driver not implemented')
+
+    def is_driver_loaded(self):
+        """Check if the network module is loaded in kernel space"""
+        cmd = 'lsmod | grep %s' % self.driver_module_name
+        status, loaded_modules = shellutil.run_get_output(cmd)
+        if loaded_modules:
+            return True
+
+    def reboot_system(self):
+        """Reboot the system. This is required as the kernel module for
+           the rdma driver cannot be unloaded with rmmod"""
+        logger.info('System reboot')
+        shellutil.run('shutdown -r now')
