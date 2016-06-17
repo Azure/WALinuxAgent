@@ -26,8 +26,8 @@ import azurelinuxagent.common.utils.shellutil as shellutil
 
 
 class RDMAHandler(object):
-    def __init__(self):
-        self.driver_module_name = 'hv_network_direct'
+
+    driver_module_name = 'hv_network_direct'
 
     def __get_rdma_version(self):
         """Retrieve the firmware version information from the system.
@@ -67,7 +67,7 @@ class RDMAHandler(object):
             error_msg = 'Could not load "%s" kernel module. '
             error_msg += 'Run "modprobe %s" as root for more details'
             logger.error(
-                error_msg % (driver_module_name, self.driver_module_name)
+                error_msg % (self.driver_module_name, self.driver_module_name)
             )
             return
 
@@ -79,8 +79,15 @@ class RDMAHandler(object):
 
         raise Exception('RDMAHandler.install_driver not implemented')
 
-    def remove_driver_module(self):
-        """Force remove the kernel driver"""
-        # Force remove the loaded driver
-        # Potential failure if the module is currently not loaded is ignored
-        shellutil.run('rmmod --force %s' % self.driver_module_name)
+    def is_driver_loaded(self):
+        """Check if the network module is loaded in kernel space"""
+        cmd = 'lsmod | grep %s' % self.driver_module_name
+        status, loaded_modules = shellutil.run_get_output(cmd)
+        if loaded_modules:
+            return True
+
+    def reboot_system(self):
+        """Reboot the system. This is required as the kernel module for
+           the rdma driver cannot be unloaded with rmmod"""
+        shellutil.run('shutdown -r now')
+        

@@ -34,11 +34,11 @@ class SUSERDMAHandler(RDMAHandler):
             error_msg += 'no driver will be installed.'
             logger.error(error_msg)
             return
-        zypper_install = 'zypper -n in'
-        zypper_remove = 'zypper -n rm'
-        zypper_search = 'zypper se -s'
+        zypper_install = 'zypper -n in %s'
+        zypper_remove = 'zypper -n rm %s'
+        zypper_search = 'zypper se -s %s'
         package_name = 'msft-rdma-kmp-default'
-        cmd = '%s %s' % (zypper_search, package_name)
+        cmd = zypper_search % package_name
         status, repo_package_info = shellutil.run_get_output(cmd)
         driver_package_versions = []
         driver_package_installed = False
@@ -62,24 +62,31 @@ class SUSERDMAHandler(RDMAHandler):
 
         # If we get here the driver package is installed but the
         # version doesn't match or no package is installed
+        requires_reboot = False
         if driver_package_installed:
-            self.remove_driver_module()
-            cmd = '%s &s' % (zypper_remove, package_name)
+            # Unloading the particular driver with rmmod does not work
+            # We have to reboot after the new driver is installed
+            if self.is_driver_loaded():
+                requires_reboot = True
+            cmd = zypper_remove % package_name
             shellutil.run(cmd)
 
         for entry in driver_package_versions:
             if fw_version in version:
-                cmd = '%s %s-%s' % (zypper_install, package_name, version)
+                complete_name = '%s-%s' % (package_name, version)
+                cmd = zypper_install % complete_name
                 result = shellutil.run(cmd)
                 if result:
-                    error_msg = 'Failed install of package "%s-%s" '
+                    error_msg = 'Failed install of package "%s" '
                     error_msg += 'from available repositories.'
-                    logger.error(error_msg % (package_name, version))
-                msg = 'Successfully installed "%s-%s" from '
+                    logger.error(error_msg % complete_name)
+                msg = 'Successfully installed "%s" from '
                 msg += 'configured repositories'
-                logger.info(msg % (package_name, version))
+                logger.info(msg % complete_name)
                 self.load_driver_module()
-                break
+                if requires_reboot:
+                    self.reboot_system()
+                return True
         else:
             local_packages = glob.glob('/opt/microsoft/rdma/*.rpm')
             for local_package in local_packages:
@@ -89,7 +96,7 @@ class SUSERDMAHandler(RDMAHandler):
                         package_name in local_package and
                         fw_version in local_package
                 ):
-                    cmd = '%s %s' % (zypper_install, local_package)
+                    cmd = zypper_install % local_package
                     result = shellutil.run(cmd)
                     if result:
                         error_msg = 'Failed install of package "%s" '
@@ -100,8 +107,11 @@ class SUSERDMAHandler(RDMAHandler):
                     msg += 'local package cache'
                     logger.info(msg % (local_package))
                     self.load_driver_module()
-                    break
+                    if requires_reboot:
+                        self.reboot_system()
+                    return True
             else:
                 error_msg = 'Unable to find driver package that matches '
                 error_msg += 'RDMA firmware version "%s"' % fw_version
                 logger.error(error_msg)
+                return
