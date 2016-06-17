@@ -447,9 +447,11 @@ class DefaultOSUtil(object):
             iface=sock[i:i+16].split(b'\0', 1)[0]
             if len(iface) == 0 or self.is_loopback(iface) or iface != primary:
                 # test the next one
+                logger.info('interface [{0}] skipped'.format(iface))
                 continue
             else:
                 # use this one
+                logger.info('interface [{0}] selected'.format(iface))
                 break
 
         return iface.decode('latin-1'), socket.inet_ntoa(sock[i+20:i+24])
@@ -498,6 +500,7 @@ class DefaultOSUtil(object):
                     if primary is None or metric < primary_metric:
                         primary = iface
                         primary_metric = metric
+        logger.info('primary interface is [{0}]'.format(primary))
         return primary
 
 
@@ -514,7 +517,9 @@ class DefaultOSUtil(object):
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
         result = fcntl.ioctl(s.fileno(), 0x8913, struct.pack('256s', ifname[:15]))
         flags, = struct.unpack('H', result[16:18])
-        return flags & 8 == 8
+        isloopback = flags & 8 == 8
+        logger.info('interface [{0}] has flags [{1}], is loopback [{2}]'.format(ifname, flags, isloopback))
+        return isloopback
 
     def get_dhcp_lease_endpoint(self):
         """
@@ -526,11 +531,11 @@ class DefaultOSUtil(object):
         return None
 
     @staticmethod
-    def get_endpoint_from_leases_path(pathname):
+    def get_endpoint_from_leases_path(pathglob):
         """
         Try to discover and decode the wireserver endpoint in the
         specified dhcp leases path.
-        :param pathname: The path containing dhcp lease files
+        :param pathglob: The path containing dhcp lease files
         :return: The endpoint if available, otherwise None
         """
         endpoint = None
@@ -542,7 +547,7 @@ class DefaultOSUtil(object):
         FOOTER_LEASE = "}"
         FORMAT_DATETIME = "%Y/%m/%d %H:%M:%S"
 
-        for lease_file in glob.glob(pathname):
+        for lease_file in glob.glob(pathglob):
             leases = open(lease_file).read()
             if HEADER_OPTION in leases:
                 cached_endpoint = None
