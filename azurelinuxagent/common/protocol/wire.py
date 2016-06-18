@@ -26,6 +26,7 @@ from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, find
 import azurelinuxagent.common.utils.fileutil as fileutil
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.protocol.restapi import *
+from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 
 VERSION_INFO_URI = "http://{0}/?comp=versions"
 GOAL_STATE_URI = "http://{0}/machine/?comp=goalstate"
@@ -66,7 +67,7 @@ class WireProtocol(Protocol):
 
     def __init__(self, endpoint):
         if endpoint is None:
-            raise ProtocolError("WireProtocl endpoint is None")
+            raise ProtocolError("WireProtocol endpoint is None")
         self.endpoint = endpoint
         self.client = WireClient(self.endpoint)
 
@@ -320,6 +321,8 @@ class StatusBlob(object):
         self.vm_status = None
         self.ext_statuses = {}
         self.client = client
+        self.type = None
+        self.data = None
 
     def set_vm_status(self, vm_status):
         validata_param("vmAgent", vm_status, VMStatus)
@@ -338,28 +341,22 @@ class StatusBlob(object):
     def upload(self, url):
         # TODO upload extension only if content has changed
         logger.verb("Upload status blob")
-        blob_type = self.get_blob_type(url)
-
-        data = self.to_json()
+        upload_successful = False
+        self.type = self.get_blob_type(url)
+        self.data = self.to_json()
         try:
-            if blob_type == "BlockBlob":
-                self.put_block_blob(url, data)
-            elif blob_type == "PageBlob":
-                self.put_page_blob(url, data)
+            if self.type == "BlockBlob":
+                self.put_block_blob(url, self.data)
+            elif self.type == "PageBlob":
+                self.put_page_blob(url, self.data)
             else:
-                raise ProtocolError("Unknown blob type: {0}".format(blob_type))
+                raise ProtocolError("Unknown blob type: {0}".format(self.type))
         except HttpError as e:
-            logger.warn("Initial upload failed, falling back to host plugin [{0}]".format(e))
-            try:
-                # host plugin upload
-                pass
-            except HttpError as e:
-                logger.error("Host plugin upload failed [{0}]".format(e))
-                raise ProtocolError("Failed to upload status blob: {0}".format(e))
-            else:
-                logger.info("Secondary upload via host plugin succeeded")
+            logger.warn("Initial upload failed [{0}]".format(e))
         else:
             logger.info("Uploading status blob succeeded")
+            upload_successful = True
+        return upload_successful
 
     def get_blob_type(self, url):
         # Check blob type
@@ -485,6 +482,7 @@ class WireClient(object):
         self.last_request = 0
         self.req_count = 0
         self.status_blob = StatusBlob(self)
+        self.host_plugin = HostPluginProtocol(self.endpoint)
 
     def prevent_throttling(self):
         """
@@ -753,7 +751,8 @@ class WireClient(object):
     def upload_status_blob(self):
         ext_conf = self.get_ext_conf()
         if ext_conf.status_upload_blob is not None:
-            self.status_blob.upload(ext_conf.status_upload_blob)
+            if not self.status_blob.upload(ext_conf.status_upload_blob):
+                self.host_plugin.put_vm_status(self.status_blob, ext_conf.status_upload_blob)
 
     def report_role_prop(self, thumbprint):
         goal_state = self.get_goal_state()
