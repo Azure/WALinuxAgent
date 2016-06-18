@@ -58,7 +58,8 @@ fi
 
 %files
 %attr(0755,root,root) %{_usr}/lib/systemd/system/waagent.service
-%attr(0755,root,root) %{_sysconfdir}/udev/rules.d/99-azure-product-uuid.rules
+%attr(0644,root,root) %{_sysconfdir}/udev/rules.d/99-azure-product-uuid.rules
+%attr(0644,root,root) %{_sysconfdir}/udev/rules.d/66-azure-storage.rules
 %defattr(0644,root,root,0755)
 %doc Changelog LICENSE-2.0.txt NOTICE README
 %attr(0755,root,root) %{_sbindir}/waagent
