@@ -124,7 +124,7 @@ class DefaultOSUtil(object):
             fileutil.append_file('/etc/sudoers', sudoers)
         sudoer = None
         if nopasswd:
-            sudoer = "{0} ALL = (ALL) NOPASSWD\n".format(username)
+            sudoer = "{0} ALL = (ALL) NOPASSWD: ALL\n".format(username)
         else:
             sudoer = "{0} ALL = (ALL) ALL\n".format(username)
         fileutil.append_file('/etc/sudoers.d/waagent', sudoer)
