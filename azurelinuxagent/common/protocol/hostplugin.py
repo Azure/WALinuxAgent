@@ -23,6 +23,7 @@ from azurelinuxagent.common.utils import textutil
 HOST_PLUGIN_PORT = 32526
 URI_FORMAT_GET_API_VERSIONS = "http://{0}:{1}/versions"
 URI_FORMAT_PUT_VM_STATUS = "http://{0}:{1}/status"
+URI_FORMAT_PUT_LOG = "http://{0}:{1}/vmAgentLog"
 API_VERSION = "2015-09-01"
 
 
@@ -79,3 +80,30 @@ class HostPluginProtocol(object):
                 logger.error("put VM status returned status code [{0}]".format(response.status))
         except HttpError as e:
             logger.error("put VM status failed with [{0}]".format(e))
+
+    def put_vm_log(self, content, container_id, deployment_id):
+        """
+        Try to upload the given content to the host plugin
+        :param deployment_id: the deployment id, which is obtained from the goal state (tenant name)
+        :param container_id: the container id, which is obtained from the goal state
+        :param content: the binary content of the zip file to upload
+        :return:
+        """
+        if not self.is_initialized:
+            self.initialize()
+        if not self.is_available:
+            logger.error("host plugin channel is not available")
+            return
+        if content is None or container_id is None or deployment_id is None:
+            logger.error("invalid arguments passed: [{0}], [{1}], [{2}]".format(content, container_id, deployment_id))
+            return
+        url = URI_FORMAT_PUT_LOG.format(self.endpoint, HOST_PLUGIN_PORT)
+
+        headers = {"x-ms-vmagentlog-deploymentid": deployment_id, "x-ms-vmagentlog-containerid": container_id}
+        logger.info("put VM log at [{0}]".format(url))
+        try:
+            response = restutil.http_put(url, content, headers)
+            if response.status != httpclient.OK:
+                logger.error("put log returned status code [{0}]".format(response.status))
+        except HttpError as e:
+            logger.error("put log failed with [{0}]".format(e))
