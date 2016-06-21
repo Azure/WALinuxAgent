@@ -16,25 +16,17 @@
 #
 # Requires Python 2.4+ and Openssl 1.0+
 
-import os
-import json
-import re
 import time
-import traceback
 import xml.sax.saxutils as saxutils
 import azurelinuxagent.common.conf as conf
-import azurelinuxagent.common.logger as logger
-from azurelinuxagent.common.exception import ProtocolError, HttpError, \
-                                      ProtocolNotFoundError
-from azurelinuxagent.common.future import ustr, httpclient, bytebuffer
-import azurelinuxagent.common.utils.restutil as restutil
+from azurelinuxagent.common.exception import ProtocolNotFoundError
+from azurelinuxagent.common.future import httpclient, bytebuffer
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, findtext, \
-                                           getattrib, gettext, remove_bom, \
-                                           get_bytes_from_pem
+    getattrib, gettext, remove_bom, get_bytes_from_pem
 import azurelinuxagent.common.utils.fileutil as fileutil
-import azurelinuxagent.common.utils.shellutil as shellutil
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.protocol.restapi import *
+from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 
 VERSION_INFO_URI = "http://{0}/?comp=versions"
 GOAL_STATE_URI = "http://{0}/machine/?comp=goalstate"
@@ -58,25 +50,31 @@ TRANSPORT_PRV_FILE_NAME = "TransportPrivate.pem"
 PROTOCOL_VERSION = "2012-11-30"
 ENDPOINT_FINE_NAME = "WireServer"
 
-SHORT_WAITING_INTERVAL = 1 # 1 second
-LONG_WAITING_INTERVAL = 15 # 15 seconds
+SHORT_WAITING_INTERVAL = 1  # 1 second
+LONG_WAITING_INTERVAL = 15  # 15 seconds
+
+
+class UploadError(HttpError):
+    pass
+
 
 class WireProtocolResourceGone(ProtocolError):
     pass
 
+
 class WireProtocol(Protocol):
-    """Slim layer to adapte wire protocol data to metadata protocol interface"""
+    """Slim layer to adapt wire protocol data to metadata protocol interface"""
 
     def __init__(self, endpoint):
         if endpoint is None:
-            raise ProtocolError("WireProtocl endpoint is None")
+            raise ProtocolError("WireProtocol endpoint is None")
         self.endpoint = endpoint
         self.client = WireClient(self.endpoint)
 
     def detect(self):
         self.client.check_wire_protocol_version()
 
-        trans_prv_file = os.path.join(conf.get_lib_dir(), 
+        trans_prv_file = os.path.join(conf.get_lib_dir(),
                                       TRANSPORT_PRV_FILE_NAME)
         trans_cert_file = os.path.join(conf.get_lib_dir(),
                                        TRANSPORT_CERT_FILE_NAME)
@@ -103,7 +101,7 @@ class WireProtocol(Protocol):
         return certificates.cert_list
 
     def get_vmagent_manifests(self):
-        #Update goal state to get latest extensions config
+        # Update goal state to get latest extensions config
         self.client.update_goal_state()
         goal_state = self.client.get_goal_state()
         ext_conf = self.client.get_ext_conf()
@@ -116,11 +114,11 @@ class WireProtocol(Protocol):
 
     def get_ext_handlers(self):
         logger.verb("Get extension handler config")
-        #Update goal state to get latest extensions config
+        # Update goal state to get latest extensions config
         self.client.update_goal_state()
         goal_state = self.client.get_goal_state()
         ext_conf = self.client.get_ext_conf()
-        #In wire protocol, incarnation is equivalent to ETag 
+        # In wire protocol, incarnation is equivalent to ETag
         return ext_conf.ext_handlers, goal_state.incarnation
 
     def get_ext_handler_pkgs(self, ext_handler):
@@ -128,7 +126,7 @@ class WireProtocol(Protocol):
         goal_state = self.client.get_goal_state()
         man = self.client.get_ext_manifest(ext_handler, goal_state)
         return man.pkg_list
-   
+
     def report_provision_status(self, provision_status):
         validata_param("provision_status", provision_status, ProvisionStatus)
 
@@ -153,6 +151,7 @@ class WireProtocol(Protocol):
         validata_param("events", events, TelemetryEventList)
         self.client.report_event(events)
 
+
 def _build_role_properties(container_id, role_instance_id, thumbprint):
     xml = (u"<?xml version=\"1.0\" encoding=\"utf-8\"?>"
            u"<RoleProperties>"
@@ -171,9 +170,10 @@ def _build_role_properties(container_id, role_instance_id, thumbprint):
            u"").format(container_id, role_instance_id, thumbprint)
     return xml
 
+
 def _build_health_report(incarnation, container_id, role_instance_id,
                          status, substatus, description):
-    #Escape '&', '<' and '>'
+    # Escape '&', '<' and '>'
     description = saxutils.escape(ustr(description))
     detail = u''
     if substatus is not None:
@@ -207,20 +207,24 @@ def _build_health_report(incarnation, container_id, role_instance_id,
                        detail)
     return xml
 
+
 """
 Convert VMStatus object to status blob format
 """
+
+
 def ga_status_to_v1(ga_status):
     formatted_msg = {
-        'lang' : 'en-US',
-        'message' : ga_status.message
+        'lang': 'en-US',
+        'message': ga_status.message
     }
     v1_ga_status = {
-        'version' : ga_status.version,
-        'status' : ga_status.status,
-        'formattedMessage' : formatted_msg
+        'version': ga_status.version,
+        'status': ga_status.status,
+        'formattedMessage': formatted_msg
     }
     return v1_ga_status
+
 
 def ext_substatus_to_v1(sub_status_list):
     status_list = []
@@ -229,7 +233,7 @@ def ext_substatus_to_v1(sub_status_list):
             "name": substatus.name,
             "status": substatus.status,
             "code": substatus.code,
-            "formattedMessage":{
+            "formattedMessage": {
                 "lang": "en-US",
                 "message": substatus.message
             }
@@ -237,20 +241,21 @@ def ext_substatus_to_v1(sub_status_list):
         status_list.append(status)
     return status_list
 
+
 def ext_status_to_v1(ext_name, ext_status):
     if ext_status is None:
         return None
     timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     v1_sub_status = ext_substatus_to_v1(ext_status.substatusList)
     v1_ext_status = {
-        "status":{
+        "status": {
             "name": ext_name,
             "configurationAppliedTime": ext_status.configurationAppliedTime,
             "operation": ext_status.operation,
             "status": ext_status.status,
             "code": ext_status.code,
             "formattedMessage": {
-                "lang":"en-US",
+                "lang": "en-US",
                 "message": ext_status.message
             }
         },
@@ -260,31 +265,33 @@ def ext_status_to_v1(ext_name, ext_status):
     if len(v1_sub_status) != 0:
         v1_ext_status['substatus'] = v1_sub_status
     return v1_ext_status
-    
+
+
 def ext_handler_status_to_v1(handler_status, ext_statuses, timestamp):
     v1_handler_status = {
-        'handlerVersion' : handler_status.version,
-        'handlerName' : handler_status.name,
-        'status' : handler_status.status,
+        'handlerVersion': handler_status.version,
+        'handlerName': handler_status.name,
+        'status': handler_status.status,
         'code': handler_status.code
     }
     if handler_status.message is not None:
         v1_handler_status["formattedMessage"] = {
-            "lang":"en-US",
+            "lang": "en-US",
             "message": handler_status.message
         }
 
     if len(handler_status.extensions) > 0:
-        #Currently, no more than one extension per handler
+        # Currently, no more than one extension per handler
         ext_name = handler_status.extensions[0]
         ext_status = ext_statuses.get(ext_name)
         v1_ext_status = ext_status_to_v1(ext_name, ext_status)
         if ext_status is not None and v1_ext_status is not None:
             v1_handler_status["runtimeSettingsStatus"] = {
-                'settingsStatus' : v1_ext_status,
-                'sequenceNumber' : ext_status.sequenceNumber
+                'settingsStatus': v1_ext_status,
+                'sequenceNumber': ext_status.sequenceNumber
             }
     return v1_handler_status
+
 
 def vm_status_to_v1(vm_status, ext_statuses):
     timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
@@ -292,19 +299,19 @@ def vm_status_to_v1(vm_status, ext_statuses):
     v1_ga_status = ga_status_to_v1(vm_status.vmAgent)
     v1_handler_status_list = []
     for handler_status in vm_status.vmAgent.extensionHandlers:
-        v1_handler_status = ext_handler_status_to_v1(handler_status, 
+        v1_handler_status = ext_handler_status_to_v1(handler_status,
                                                      ext_statuses, timestamp)
         if v1_handler_status is not None:
             v1_handler_status_list.append(v1_handler_status)
 
     v1_agg_status = {
         'guestAgentStatus': v1_ga_status,
-        'handlerAggregateStatus' : v1_handler_status_list
+        'handlerAggregateStatus': v1_handler_status_list
     }
     v1_vm_status = {
-        'version' : '1.0',
-        'timestampUTC' : timestamp,
-        'aggregateStatus' : v1_agg_status
+        'version': '1.0',
+        'timestampUTC': timestamp,
+        'aggregateStatus': v1_agg_status
     }
     return v1_vm_status
 
@@ -314,15 +321,17 @@ class StatusBlob(object):
         self.vm_status = None
         self.ext_statuses = {}
         self.client = client
+        self.type = None
+        self.data = None
 
     def set_vm_status(self, vm_status):
         validata_param("vmAgent", vm_status, VMStatus)
         self.vm_status = vm_status
-    
+
     def set_ext_status(self, ext_handler_name, ext_status):
         validata_param("extensionStatus", ext_status, ExtensionStatus)
-        self.ext_statuses[ext_handler_name]= ext_status
-        
+        self.ext_statuses[ext_handler_name] = ext_status
+
     def to_json(self):
         report = vm_status_to_v1(self.vm_status, self.ext_statuses)
         return json.dumps(report)
@@ -330,29 +339,33 @@ class StatusBlob(object):
     __storage_version__ = "2014-02-14"
 
     def upload(self, url):
-        #TODO upload extension only if content has changed
+        # TODO upload extension only if content has changed
         logger.verb("Upload status blob")
-        blob_type = self.get_blob_type(url)
-
-        data = self.to_json()
+        upload_successful = False
+        self.type = self.get_blob_type(url)
+        self.data = self.to_json()
         try:
-            if blob_type == "BlockBlob":
-                self.put_block_blob(url, data)
-            elif blob_type == "PageBlob":
-                self.put_page_blob(url, data)
+            if self.type == "BlockBlob":
+                self.put_block_blob(url, self.data)
+            elif self.type == "PageBlob":
+                self.put_page_blob(url, self.data)
             else:
-                raise ProtocolError("Unknown blob type: {0}".format(blob_type))
+                raise ProtocolError("Unknown blob type: {0}".format(self.type))
         except HttpError as e:
-            raise ProtocolError("Failed to upload status blob: {0}".format(e))
+            logger.warn("Initial upload failed [{0}]".format(e))
+        else:
+            logger.info("Uploading status blob succeeded")
+            upload_successful = True
+        return upload_successful
 
     def get_blob_type(self, url):
-        #Check blob type
+        # Check blob type
         logger.verb("Check blob type.")
         timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         try:
             resp = self.client.call_storage_service(restutil.http_head, url, {
-                "x-ms-date" :  timestamp,
-                'x-ms-version' : self.__class__.__storage_version__
+                "x-ms-date": timestamp,
+                'x-ms-version': self.__class__.__storage_version__
             })
         except HttpError as e:
             raise ProtocolError((u"Failed to get status blob type: {0}"
@@ -368,45 +381,37 @@ class StatusBlob(object):
     def put_block_blob(self, url, data):
         logger.verb("Upload block blob")
         timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-        try:
-            resp = self.client.call_storage_service(restutil.http_put, url, 
-                                                    data, {
-                "x-ms-date" :  timestamp,
-                "x-ms-blob-type" : "BlockBlob",
-                "Content-Length": ustr(len(data)),
-                "x-ms-version" : self.__class__.__storage_version__
-            })
-        except HttpError as e:
-            raise ProtocolError((u"Failed to upload block blob: {0}"
-                                 u"").format(e))
+        resp = self.client.call_storage_service(restutil.http_put, url, data,
+                        {
+                            "x-ms-date": timestamp,
+                            "x-ms-blob-type": "BlockBlob",
+                            "Content-Length": ustr(len(data)),
+                            "x-ms-version": self.__class__.__storage_version__
+                        })
         if resp.status != httpclient.CREATED:
-            raise ProtocolError(("Failed to upload block blob: {0}"
-                                 "").format(resp.status))
+            raise UploadError(
+                "Failed to upload block blob: {0}".format(resp.status))
 
     def put_page_blob(self, url, data):
         logger.verb("Replace old page blob")
 
-        #Convert string into bytes
-        data=bytearray(data, encoding='utf-8')
+        # Convert string into bytes
+        data = bytearray(data, encoding='utf-8')
         timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
-        #Align to 512 bytes
+        # Align to 512 bytes
         page_blob_size = int((len(data) + 511) / 512) * 512
-        try:
-            resp = self.client.call_storage_service(restutil.http_put, url, 
-                                                    "", {
-                "x-ms-date" :  timestamp,
-                "x-ms-blob-type" : "PageBlob",
-                "Content-Length": "0",
-                "x-ms-blob-content-length" : ustr(page_blob_size),
-                "x-ms-version" : self.__class__.__storage_version__
-            })
-        except HttpError as e:
-            raise ProtocolError((u"Failed to clean up page blob: {0}"
-                                 u"").format(e))
+        resp = self.client.call_storage_service(restutil.http_put, url, "",
+                        {
+                            "x-ms-date": timestamp,
+                            "x-ms-blob-type": "PageBlob",
+                            "Content-Length": "0",
+                            "x-ms-blob-content-length": ustr(page_blob_size),
+                            "x-ms-version": self.__class__.__storage_version__
+                        })
         if resp.status != httpclient.CREATED:
-            raise ProtocolError(("Failed to clean up page blob: {0}"
-                                 "").format(resp.status))
+            raise UploadError(
+                "Failed to clean up page blob: {0}".format(resp.status))
 
         if url.count("?") < 0:
             url = "{0}?comp=page".format(url)
@@ -414,33 +419,31 @@ class StatusBlob(object):
             url = "{0}&comp=page".format(url)
 
         logger.verb("Upload page blob")
-        page_max = 4 * 1024 * 1024 #Max page size: 4MB
+        page_max = 4 * 1024 * 1024  # Max page size: 4MB
         start = 0
         end = 0
         while end < len(data):
             end = min(len(data), start + page_max)
             content_size = end - start
-            #Align to 512 bytes
+            # Align to 512 bytes
             page_end = int((end + 511) / 512) * 512
             buf_size = page_end - start
             buf = bytearray(buf_size)
             buf[0: content_size] = data[start: end]
-            try:
-                resp = self.client.call_storage_service(restutil.http_put, url, 
-                                                        bytebuffer(buf), {
-                    "x-ms-date" :  timestamp,
-                    "x-ms-range" : "bytes={0}-{1}".format(start, page_end - 1),
-                    "x-ms-page-write" : "update",
-                    "x-ms-version" : self.__class__.__storage_version__,
+            resp = self.client.call_storage_service(
+                restutil.http_put, url, bytebuffer(buf),
+                {
+                    "x-ms-date": timestamp,
+                    "x-ms-range": "bytes={0}-{1}".format(start, page_end - 1),
+                    "x-ms-page-write": "update",
+                    "x-ms-version": self.__class__.__storage_version__,
                     "Content-Length": ustr(page_end - start)
                 })
-            except HttpError as e:
-                raise ProtocolError((u"Failed to upload page blob: {0}"
-                                     u"").format(e))
             if resp is None or resp.status != httpclient.CREATED:
-                raise ProtocolError(("Failed to upload page blob: {0}"
-                                     "").format(resp.status))
+                raise UploadError(
+                    "Failed to upload page blob: {0}".format(resp.status))
             start = end
+
 
 def event_param_to_v1(param):
     param_format = '<Param Name="{0}" Value={1} T="{2}" />'
@@ -459,6 +462,7 @@ def event_param_to_v1(param):
     return param_format.format(param.name, saxutils.quoteattr(ustr(param.value)),
                                attr_type)
 
+
 def event_to_v1(event):
     params = ""
     for param in event.parameters:
@@ -467,6 +471,7 @@ def event_to_v1(event):
                  '<![CDATA[{1}]]>'
                  '</Event>').format(event.eventId, params)
     return event_str
+
 
 class WireClient(object):
     def __init__(self, endpoint):
@@ -481,6 +486,7 @@ class WireClient(object):
         self.last_request = 0
         self.req_count = 0
         self.status_blob = StatusBlob(self)
+        self.host_plugin = HostPluginProtocol(self.endpoint)
 
     def prevent_throttling(self):
         """
@@ -489,14 +495,14 @@ class WireClient(object):
         now = time.time()
         if now - self.last_request < 1:
             logger.verb("Last request issued less than 1 second ago")
-            logger.verb("Sleep {0} second to avoid throttling.", 
+            logger.verb("Sleep {0} second to avoid throttling.",
                         SHORT_WAITING_INTERVAL)
             time.sleep(SHORT_WAITING_INTERVAL)
         self.last_request = now
 
         self.req_count += 1
         if self.req_count % 3 == 0:
-            logger.verb("Sleep {0} second to avoid throttling.", 
+            logger.verb("Sleep {0} second to avoid throttling.",
                         SHORT_WAITING_INTERVAL)
             time.sleep(SHORT_WAITING_INTERVAL)
             self.req_count = 0
@@ -510,7 +516,7 @@ class WireClient(object):
             resp = http_req(*args, **kwargs)
             if resp.status == httpclient.FORBIDDEN:
                 logger.warn("Sending too much request to wire server")
-                logger.info("Sleep {0} second to avoid throttling.", 
+                logger.info("Sleep {0} second to avoid throttling.",
                             LONG_WAITING_INTERVAL)
                 time.sleep(LONG_WAITING_INTERVAL)
             elif resp.status == httpclient.GONE:
@@ -530,12 +536,12 @@ class WireClient(object):
 
     def fetch_config(self, uri, headers):
         try:
-            resp = self.call_wireserver(restutil.http_get, uri, 
+            resp = self.call_wireserver(restutil.http_get, uri,
                                         headers=headers)
         except HttpError as e:
             raise ProtocolError(ustr(e))
 
-        if(resp.status != httpclient.OK):
+        if (resp.status != httpclient.OK):
             raise ProtocolError("{0} - {1}".format(resp.status, uri))
 
         return self.decode_config(resp.read())
@@ -562,7 +568,7 @@ class WireClient(object):
             resp = http_req(*args, **kwargs)
             if resp.status == httpclient.SERVICE_UNAVAILABLE:
                 logger.warn("Storage service is not avaible temporaryly")
-                logger.info("Will retry later, in {0} seconds", 
+                logger.info("Will retry later, in {0} seconds",
                             LONG_WAITING_INTERVAL)
                 time.sleep(LONG_WAITING_INTERVAL)
             else:
@@ -574,28 +580,27 @@ class WireClient(object):
         for version_uri in version_uris:
             logger.verb("Fetch ext handler manifest: {0}", version_uri.uri)
             try:
-                resp = self.call_storage_service(restutil.http_get, 
-                                                 version_uri.uri, None, 
+                resp = self.call_storage_service(restutil.http_get,
+                                                 version_uri.uri, None,
                                                  chk_proxy=True)
             except HttpError as e:
                 raise ProtocolError(ustr(e))
 
             if resp.status == httpclient.OK:
                 return self.decode_config(resp.read())
-            logger.warn("Failed to fetch ExtensionManifest: {0}, {1}", 
+            logger.warn("Failed to fetch ExtensionManifest: {0}, {1}",
                         resp.status, version_uri.uri)
-            logger.info("Will retry later, in {0} seconds", 
+            logger.info("Will retry later, in {0} seconds",
                         LONG_WAITING_INTERVAL)
             time.sleep(LONG_WAITING_INTERVAL)
         raise ProtocolError(("Failed to fetch ExtensionManifest from "
                              "all sources"))
 
-
     def update_hosting_env(self, goal_state):
         if goal_state.hosting_env_uri is None:
             raise ProtocolError("HostingEnvironmentConfig uri is empty")
         local_file = os.path.join(conf.get_lib_dir(), HOSTING_ENV_FILE_NAME)
-        xml_text = self.fetch_config(goal_state.hosting_env_uri, 
+        xml_text = self.fetch_config(goal_state.hosting_env_uri,
                                      self.get_header())
         self.save_cache(local_file, xml_text)
         self.hosting_env = HostingEnv(xml_text)
@@ -604,7 +609,7 @@ class WireClient(object):
         if goal_state.shared_conf_uri is None:
             raise ProtocolError("SharedConfig uri is empty")
         local_file = os.path.join(conf.get_lib_dir(), SHARED_CONF_FILE_NAME)
-        xml_text = self.fetch_config(goal_state.shared_conf_uri, 
+        xml_text = self.fetch_config(goal_state.shared_conf_uri,
                                      self.get_header())
         self.save_cache(local_file, xml_text)
         self.shared_conf = SharedConfig(xml_text)
@@ -613,7 +618,7 @@ class WireClient(object):
         if goal_state.certs_uri is None:
             return
         local_file = os.path.join(conf.get_lib_dir(), CERTS_FILE_NAME)
-        xml_text = self.fetch_config(goal_state.certs_uri, 
+        xml_text = self.fetch_config(goal_state.certs_uri,
                                      self.get_header_for_cert())
         self.save_cache(local_file, xml_text)
         self.certs = Certificates(self, xml_text)
@@ -624,31 +629,31 @@ class WireClient(object):
             self.ext_conf = ExtensionsConfig(None)
             return
         incarnation = goal_state.incarnation
-        local_file = os.path.join(conf.get_lib_dir(), 
-                                 EXT_CONF_FILE_NAME.format(incarnation))
+        local_file = os.path.join(conf.get_lib_dir(),
+                                  EXT_CONF_FILE_NAME.format(incarnation))
         xml_text = self.fetch_config(goal_state.ext_uri, self.get_header())
         self.save_cache(local_file, xml_text)
         self.ext_conf = ExtensionsConfig(xml_text)
-    
+
     def update_goal_state(self, forced=False, max_retry=3):
         uri = GOAL_STATE_URI.format(self.endpoint)
         xml_text = self.fetch_config(uri, self.get_header())
         goal_state = GoalState(xml_text)
 
-        incarnation_file = os.path.join(conf.get_lib_dir(), 
+        incarnation_file = os.path.join(conf.get_lib_dir(),
                                         INCARNATION_FILE_NAME)
 
         if not forced:
             last_incarnation = None
-            if(os.path.isfile(incarnation_file)):
+            if (os.path.isfile(incarnation_file)):
                 last_incarnation = fileutil.read_file(incarnation_file)
             new_incarnation = goal_state.incarnation
             if last_incarnation is not None and \
-                    last_incarnation == new_incarnation:
-                #Goalstate is not updated.
+                            last_incarnation == new_incarnation:
+                # Goalstate is not updated.
                 return
 
-        #Start updating goalstate, retry on 410
+        # Start updating goalstate, retry on 410
         for retry in range(0, max_retry):
             try:
                 self.goal_state = goal_state
@@ -669,8 +674,8 @@ class WireClient(object):
         raise ProtocolError("Exceeded max retry updating goal state")
 
     def get_goal_state(self):
-        if(self.goal_state is None):
-            incarnation_file = os.path.join(conf.get_lib_dir(), 
+        if (self.goal_state is None):
+            incarnation_file = os.path.join(conf.get_lib_dir(),
                                             INCARNATION_FILE_NAME)
             incarnation = self.fetch_cache(incarnation_file)
 
@@ -681,21 +686,21 @@ class WireClient(object):
         return self.goal_state
 
     def get_hosting_env(self):
-        if(self.hosting_env is None):
+        if (self.hosting_env is None):
             local_file = os.path.join(conf.get_lib_dir(), HOSTING_ENV_FILE_NAME)
             xml_text = self.fetch_cache(local_file)
             self.hosting_env = HostingEnv(xml_text)
         return self.hosting_env
 
     def get_shared_conf(self):
-        if(self.shared_conf is None):
+        if (self.shared_conf is None):
             local_file = os.path.join(conf.get_lib_dir(), SHARED_CONF_FILE_NAME)
             xml_text = self.fetch_cache(local_file)
             self.shared_conf = SharedConfig(xml_text)
         return self.shared_conf
 
     def get_certs(self):
-        if(self.certs is None):
+        if (self.certs is None):
             local_file = os.path.join(conf.get_lib_dir(), CERTS_FILE_NAME)
             xml_text = self.fetch_cache(local_file)
             self.certs = Certificates(self, xml_text)
@@ -704,7 +709,7 @@ class WireClient(object):
         return self.certs
 
     def get_ext_conf(self):
-        if(self.ext_conf is None):
+        if (self.ext_conf is None):
             goal_state = self.get_goal_state()
             if goal_state.ext_uri is None:
                 self.ext_conf = ExtensionsConfig(None)
@@ -730,7 +735,7 @@ class WireClient(object):
         xml_text = self.fetch_manifest(vmagent_manifest.versionsManifestUris)
         fileutil.write_file(local_file, xml_text)
         return ExtensionManifest(xml_text)
-    
+
     def check_wire_protocol_version(self):
         uri = VERSION_INFO_URI.format(self.endpoint)
         version_info_xml = self.fetch_config(uri, None)
@@ -746,11 +751,13 @@ class WireClient(object):
             error = ("Agent supported wire protocol version: {0} was not "
                      "advised by Fabric.").format(PROTOCOL_VERSION)
             raise ProtocolNotFoundError(error)
-   
+
     def upload_status_blob(self):
         ext_conf = self.get_ext_conf()
         if ext_conf.status_upload_blob is not None:
-            self.status_blob.upload(ext_conf.status_upload_blob)
+            if not self.status_blob.upload(ext_conf.status_upload_blob):
+                self.host_plugin.put_vm_status(self.status_blob,
+                                               ext_conf.status_upload_blob)
 
     def report_role_prop(self, thumbprint):
         goal_state = self.get_goal_state()
@@ -762,7 +769,7 @@ class WireClient(object):
         headers = self.get_header_for_xml_content()
         try:
             resp = self.call_wireserver(restutil.http_post, role_prop_uri,
-                                        role_prop, headers = headers)
+                                        role_prop, headers=headers)
         except HttpError as e:
             raise ProtocolError((u"Failed to send role properties: {0}"
                                  u"").format(e))
@@ -783,7 +790,7 @@ class WireClient(object):
         headers = self.get_header_for_xml_content()
         try:
             resp = self.call_wireserver(restutil.http_post, health_report_uri,
-                                        health_report, headers = headers, max_retry=8)
+                                        health_report, headers=headers, max_retry=8)
         except HttpError as e:
             raise ProtocolError((u"Failed to send provision status: {0}"
                                  u"").format(e))
@@ -795,8 +802,8 @@ class WireClient(object):
         uri = TELEMETRY_URI.format(self.endpoint)
         data_format = ('<?xml version="1.0"?>'
                        '<TelemetryData version="1.0">'
-                          '<Provider id="{0}">{1}'
-                          '</Provider>'
+                       '<Provider id="{0}">{1}'
+                       '</Provider>'
                        '</TelemetryData>')
         data = data_format.format(provider_id, event_str)
         try:
@@ -811,7 +818,7 @@ class WireClient(object):
 
     def report_event(self, event_list):
         buf = {}
-        #Group events by providerId
+        # Group events by providerId
         for event in event_list.events:
             if event.providerId not in buf:
                 buf[event.providerId] = ""
@@ -824,22 +831,22 @@ class WireClient(object):
                 buf[event.providerId] = ""
             buf[event.providerId] = buf[event.providerId] + event_str
 
-        #Send out all events left in buffer.
+        # Send out all events left in buffer.
         for provider_id in list(buf.keys()):
             if len(buf[provider_id]) > 0:
                 self.send_event(provider_id, buf[provider_id])
 
     def get_header(self):
         return {
-            "x-ms-agent-name":"WALinuxAgent",
-            "x-ms-version":PROTOCOL_VERSION
+            "x-ms-agent-name": "WALinuxAgent",
+            "x-ms-version": PROTOCOL_VERSION
         }
 
     def get_header_for_xml_content(self):
         return {
-            "x-ms-agent-name":"WALinuxAgent",
-            "x-ms-version":PROTOCOL_VERSION,
-            "Content-Type":"text/xml;charset=utf-8"
+            "x-ms-agent-name": "WALinuxAgent",
+            "x-ms-version": PROTOCOL_VERSION,
+            "Content-Type": "text/xml;charset=utf-8"
         }
 
     def get_header_for_cert(self):
@@ -848,11 +855,12 @@ class WireClient(object):
         content = self.fetch_cache(trans_cert_file)
         cert = get_bytes_from_pem(content)
         return {
-            "x-ms-agent-name":"WALinuxAgent",
-            "x-ms-version":PROTOCOL_VERSION,
+            "x-ms-agent-name": "WALinuxAgent",
+            "x-ms-version": PROTOCOL_VERSION,
             "x-ms-cipher-name": "DES_EDE3_CBC",
-            "x-ms-guest-agent-public-x509-cert":cert
+            "x-ms-guest-agent-public-x509-cert": cert
         }
+
 
 class VersionInfo(object):
     def __init__(self, xml_text):
@@ -885,7 +893,6 @@ class VersionInfo(object):
 
 
 class GoalState(object):
-
     def __init__(self, xml_text):
         if xml_text is None:
             raise ValueError("GoalState.xml is None")
@@ -911,7 +918,7 @@ class GoalState(object):
         self.expected_state = findtext(xml_doc, "ExpectedState")
         self.hosting_env_uri = findtext(xml_doc, "HostingEnvironmentConfig")
         self.shared_conf_uri = findtext(xml_doc, "SharedConfig")
-        self.certs_uri = findtext(xml_doc, "Certificates") 
+        self.certs_uri = findtext(xml_doc, "Certificates")
         self.ext_uri = findtext(xml_doc, "ExtensionsConfig")
         role_instance = find(xml_doc, "RoleInstance")
         self.role_instance_id = findtext(role_instance, "InstanceId")
@@ -927,6 +934,7 @@ class HostingEnv(object):
     parse Hosting enviromnet config and store in
     HostingEnvironmentConfig.xml
     """
+
     def __init__(self, xml_text):
         if xml_text is None:
             raise ValueError("HostingEnvironmentConfig.xml is None")
@@ -950,10 +958,12 @@ class HostingEnv(object):
         self.deployment_name = getattrib(deployment, "name")
         return self
 
+
 class SharedConfig(object):
     """
     parse role endpoint server and goal state config.
     """
+
     def __init__(self, xml_text):
         logger.verb("Load SharedConfig.xml")
         self.parse(xml_text)
@@ -962,14 +972,15 @@ class SharedConfig(object):
         """
         parse and write configuration to file SharedConfig.xml.
         """
-        #Not used currently
+        # Not used currently
         return self
 
-class Certificates(object):
 
+class Certificates(object):
     """
     Object containing certificates of host and provisioned user.
     """
+
     def __init__(self, client, xml_text):
         logger.verb("Load Certificates.xml")
         self.client = client
@@ -984,7 +995,7 @@ class Certificates(object):
         data = findtext(xml_doc, "Data")
         if data is None:
             return
-        
+
         cryptutil = CryptUtil(conf.get_openssl_cmd())
         p7m_file = os.path.join(conf.get_lib_dir(), P7M_FILE_NAME)
         p7m = ("MIME-Version:1.0\n"
@@ -995,17 +1006,17 @@ class Certificates(object):
                "{2}").format(p7m_file, p7m_file, data)
 
         self.client.save_cache(p7m_file, p7m)
-        
-        trans_prv_file = os.path.join(conf.get_lib_dir(), 
+
+        trans_prv_file = os.path.join(conf.get_lib_dir(),
                                       TRANSPORT_PRV_FILE_NAME)
         trans_cert_file = os.path.join(conf.get_lib_dir(),
                                        TRANSPORT_CERT_FILE_NAME)
         pem_file = os.path.join(conf.get_lib_dir(), PEM_FILE_NAME)
-        #decrypt certificates
-        cryptutil.decrypt_p7m(p7m_file, trans_prv_file, trans_cert_file, 
-                              pem_file) 
+        # decrypt certificates
+        cryptutil.decrypt_p7m(p7m_file, trans_prv_file, trans_cert_file,
+                              pem_file)
 
-        #The parsing process use public key to match prv and crt.
+        # The parsing process use public key to match prv and crt.
         buf = []
         begin_crt = False
         begin_prv = False
@@ -1032,18 +1043,18 @@ class Certificates(object):
                     pub = cryptutil.get_pubkey_from_crt(tmp_file)
                     thumbprint = cryptutil.get_thumbprint_from_crt(tmp_file)
                     thumbprints[pub] = thumbprint
-                    #Rename crt with thumbprint as the file name
+                    # Rename crt with thumbprint as the file name
                     crt = "{0}.crt".format(thumbprint)
                     v1_cert_list.append({
-                        "name":None,
-                        "thumbprint":thumbprint
+                        "name": None,
+                        "thumbprint": thumbprint
                     })
                     os.rename(tmp_file, os.path.join(conf.get_lib_dir(), crt))
                     buf = []
                     index += 1
                     begin_crt = False
 
-        #Rename prv key with thumbprint as the file name
+        # Rename prv key with thumbprint as the file name
         for pubkey in prvs:
             thumbprint = thumbprints[pubkey]
             if thumbprint:
@@ -1057,7 +1068,7 @@ class Certificates(object):
             self.cert_list.certificates.append(cert)
 
     def write_to_tmp_file(self, index, suffix, buf):
-        file_name = os.path.join(conf.get_lib_dir(), 
+        file_name = os.path.join(conf.get_lib_dir(),
                                  "{0}.{1}".format(index, suffix))
         self.client.save_cache(file_name, "".join(buf))
         return file_name
@@ -1085,7 +1096,7 @@ class ExtensionsConfig(object):
 
         ga_families_list = find(xml_doc, "GAFamilies")
         ga_families = findall(ga_families_list, "GAFamily")
-        
+
         for ga_family in ga_families:
             family = findtext(ga_family, "Name")
             uris_list = find(ga_family, "Uris")
@@ -1131,13 +1142,13 @@ class ExtensionsConfig(object):
 
     def parse_plugin_settings(self, ext_handler, plugin_settings):
         if plugin_settings is None:
-            return 
+            return
 
         name = ext_handler.name
         version = ext_handler.properties.version
         settings = [x for x in plugin_settings \
-                          if getattrib(x, "name") == name and \
-                             getattrib(x ,"version") == version]
+                    if getattrib(x, "name") == name and \
+                    getattrib(x, "version") == version]
 
         if settings is None or len(settings) == 0:
             return
@@ -1155,8 +1166,8 @@ class ExtensionsConfig(object):
         for plugin_settings_list in runtime_settings["runtimeSettings"]:
             handler_settings = plugin_settings_list["handlerSettings"]
             ext = Extension()
-            #There is no "extension name" in wire protocol.
-            #Put
+            # There is no "extension name" in wire protocol.
+            # Put
             ext.name = ext_handler.name
             ext.sequenceNumber = seqNo
             ext.publicSettings = handler_settings.get("publicSettings")
@@ -1164,6 +1175,7 @@ class ExtensionsConfig(object):
             thumbprint = handler_settings.get("protectedSettingsCertThumbprint")
             ext.certificateThumbprint = thumbprint
             ext_handler.properties.extensions.append(ext)
+
 
 class ExtensionManifest(object):
     def __init__(self, xml_text):
