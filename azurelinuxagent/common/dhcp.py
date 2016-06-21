@@ -32,6 +32,10 @@ from azurelinuxagent.common.utils.textutil import hex_dump, hex_dump2, \
 from azurelinuxagent.common.exception import DhcpError
 from azurelinuxagent.common.osutil import get_osutil
 
+# the kernel routing table representation of 168.63.129.16
+KNOWN_WIRESERVER_IP_ENTRY = '10813FA8'
+KNOWN_WIRESERVER_IP = '168.63.129.16'
+
 def get_dhcp_handler():
     return DhcpHandler()
 
@@ -52,8 +56,9 @@ class DhcpHandler(object):
         Configure default gateway and routes
         Save wire server endpoint if found
         """
-        self.send_dhcp_req()
-        self.conf_routes()
+        if not self.wireserver_route_exists and not self.dhcp_lease_exists:
+            self.send_dhcp_req()
+            self.conf_routes()
 
     def wait_for_network(self):
         """
@@ -66,6 +71,49 @@ class DhcpHandler(object):
             logger.info("Try to start network interface.")
             self.osutil.start_network()
             ipv4 = self.osutil.get_ip4_addr()
+
+    @property
+    def wireserver_route_exists(self):
+        """
+        Determine whether a route to the known wireserver
+        ip already exists, and if so use that as the endpoint.
+        This is true when running in a virtual network.
+        :return: True if a route to KNOWN_WIRESERVER_IP exists.
+        """
+        route_exists=False
+        logger.info("test for route to {0}".format(KNOWN_WIRESERVER_IP))
+        try:
+            route = shellutil.run_get_output("grep -c {0} /proc/net/route".format(KNOWN_WIRESERVER_IP_ENTRY))
+            # route[0]: (int) return code
+            # route[1]: (str) output
+            if route is not None and route[0] == 0 and int(route[1]) > 0:
+                # reset self.gateway and self.routes; we do not need to alter the routing table
+                self.endpoint = KNOWN_WIRESERVER_IP
+                self.gateway = None
+                self.routes = None
+                route_exists=True
+                logger.info("route to {0} exists".format(KNOWN_WIRESERVER_IP))
+            else:
+                logger.warn("no route exists to {0}".format(KNOWN_WIRESERVER_IP))
+        except Exception as e:
+            logger.error("could not determine whether route exists to {0}: {1}".format(KNOWN_WIRESERVER_IP, e))
+
+        return route_exists
+
+    @property
+    def dhcp_lease_exists(self):
+        """
+        Check whether the dhcp options cache exists and contains the
+        wireserver endpoint.
+        :return: True if the cached endpoint was found in the dhcp lease
+        """
+        exists = False
+        cached_endpoint = self.osutil.get_dhcp_lease_endpoint()
+        if cached_endpoint is not None:
+            self.endpoint = cached_endpoint
+            exists = True
+        return exists
+
 
     def conf_routes(self):
         logger.info("Configure routes")

@@ -16,19 +16,7 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
-import os
-import re
-import pwd
-import shutil
-import socket
-import array
-import struct
-import fcntl
-import time
-import azurelinuxagent.common.logger as logger
-import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.shellutil as shellutil
-import azurelinuxagent.common.utils.textutil as textutil
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
 
 class Ubuntu14OSUtil(DefaultOSUtil):
@@ -49,6 +37,9 @@ class Ubuntu14OSUtil(DefaultOSUtil):
 
     def restore_rules_files(self, rules_files=""):
         pass
+
+    def get_dhcp_lease_endpoint(self):
+        return self.get_endpoint_from_leases_path('/var/lib/dhcp/dhclient.*.leases')
 
 class Ubuntu12OSUtil(Ubuntu14OSUtil):
     def __init__(self):

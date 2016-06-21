@@ -33,17 +33,19 @@ class TestSCVMM(AgentTestCase):
         scvmm_file = os.path.join(self.tmp_dir, scvmm.VMM_CONF_FILE_NAME)
         fileutil.write_file(scvmm_file, "")
 
-        patch = mock.patch.object(scvmm.ScvmmHandler, 'start_scvmm_agent').start()
-
-        # execute
-        with self.assertRaises(SystemExit):
-            get_daemon_handler().daemon()
-
-        # assert
-        patch.assert_called()
-
-        # cleanup
-        os.remove(scvmm_file)
+        with patch.object(scvmm.ScvmmHandler, 'start_scvmm_agent') as po:
+            with patch('os.listdir', return_value=["sr0", "sr1", "sr2"]):
+                # execute
+                failed = False
+                try:
+                    scvmm.get_scvmm_handler().run()
+                except:
+                    failed = True
+                # assert
+                self.assertTrue(failed)
+                self.assertTrue(po.call_count == 1)
+                # cleanup
+                os.remove(scvmm_file)
 
 
     def test_scvmm_detection_with_multiple_cdroms(self):
@@ -51,17 +53,15 @@ class TestSCVMM(AgentTestCase):
         conf.get_dvd_mount_point = Mock(return_value=self.tmp_dir)
         conf.get_detect_scvmm_env = Mock(return_value=True)
 
-        patch_mount = mock.patch.object(DefaultOSUtil, 'mount_dvd').start()
-
         # execute
-        with patch('os.listdir', return_value=["sr0", "sr1", "sr2"]):
-            scvmm.ScvmmHandler().detect_scvmm_env()
-
-        # assert
-        assert patch_mount.call_count == 3
-        assert patch_mount.call_args_list[0][1]['dvd_device'] == '/dev/sr0'
-        assert patch_mount.call_args_list[1][1]['dvd_device'] == '/dev/sr1'
-        assert patch_mount.call_args_list[2][1]['dvd_device'] == '/dev/sr2'
+        with mock.patch.object(DefaultOSUtil, 'mount_dvd') as patch_mount:
+            with patch('os.listdir', return_value=["sr0", "sr1", "sr2"]):
+                scvmm.ScvmmHandler().detect_scvmm_env()
+                # assert
+                assert patch_mount.call_count == 3
+                assert patch_mount.call_args_list[0][1]['dvd_device'] == '/dev/sr0'
+                assert patch_mount.call_args_list[1][1]['dvd_device'] == '/dev/sr1'
+                assert patch_mount.call_args_list[2][1]['dvd_device'] == '/dev/sr2'
 
 
     def test_scvmm_detection_without_file(self):
@@ -72,13 +72,11 @@ class TestSCVMM(AgentTestCase):
         if os.path.exists(scvmm_file):
             os.remove(scvmm_file)
 
-        patch_start = mock.patch.object(scvmm.ScvmmHandler, 'start_scvmm_agent').start()
-
-        # execute
-        scvmm.ScvmmHandler().detect_scvmm_env()
-
-        # assert
-        patch_start.assert_not_called()
+        with mock.patch.object(scvmm.ScvmmHandler, 'start_scvmm_agent') as patch_start:
+            # execute
+            scvmm.ScvmmHandler().detect_scvmm_env()
+            # assert
+            patch_start.assert_not_called()
 
 
 if __name__ == '__main__':

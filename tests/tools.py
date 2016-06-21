@@ -30,6 +30,7 @@ from functools import wraps
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.event as event
+from azurelinuxagent.common.version import PY_VERSION_MAJOR
 
 #Import mock module for Python2 and Python3
 try:
@@ -94,6 +95,12 @@ supported_distro = [
     ["redhat", "7.0", ""],
 
 ]
+
+def open_patch():
+    open_name = '__builtin__.open'
+    if PY_VERSION_MAJOR == 3:
+        open_name = 'builtins.open'
+    return open_name
 
 def distros(distro_name=".*", distro_version=".*", distro_full_name=".*"):
     """Run test on multiple distros"""

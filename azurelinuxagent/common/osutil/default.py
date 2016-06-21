@@ -26,6 +26,8 @@ import time
 import pwd
 import fcntl
 import base64
+import glob
+import datetime
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common.exception import OSUtilError
@@ -400,7 +402,7 @@ class DefaultOSUtil(object):
     def get_mac_addr(self):
         """
         Convienience function, returns mac addr bound to
-        first non-loobback interface.
+        first non-loopback interface.
         """
         ifname=''
         while len(ifname) < 2 :
@@ -440,13 +442,142 @@ class DefaultOSUtil(object):
             logger.warn(('SIOCGIFCONF returned more than {0} up '
                          'network interfaces.'), expected)
         sock = buff.tostring()
+        primary = bytearray(self.get_primary_interface(), encoding='utf-8')
         for i in range(0, struct_size * expected, struct_size):
             iface=sock[i:i+16].split(b'\0', 1)[0]
-            if iface == b'lo' or iface.startswith('lo:'):
+            if len(iface) == 0 or self.is_loopback(iface) or iface != primary:
+                # test the next one
+                logger.info('interface [{0}] skipped'.format(iface))
                 continue
             else:
+                # use this one
+                logger.info('interface [{0}] selected'.format(iface))
                 break
+
         return iface.decode('latin-1'), socket.inet_ntoa(sock[i+20:i+24])
+
+    def get_primary_interface(self):
+        """
+        Get the name of the primary interface, which is the one with the
+        default route attached to it; if there are multiple default routes,
+        the primary has the lowest Metric.
+        :return: the interface which has the default route
+        """
+        # from linux/route.h
+        RTF_GATEWAY = 0x02
+        DEFAULT_DEST = "00000000"
+
+        hdr_iface = "Iface"
+        hdr_dest = "Destination"
+        hdr_flags = "Flags"
+        hdr_metric = "Metric"
+
+        idx_iface = -1
+        idx_dest = -1
+        idx_flags = -1
+        idx_metric = -1
+        primary = None
+        primary_metric = None
+
+        logger.info("examine /proc/net/route for primary interface")
+        with open('/proc/net/route') as routing_table:
+            idx = 0
+            for header in filter(lambda h: len(h) > 0, routing_table.readline().strip(" \n").split("\t")):
+                if header == hdr_iface:
+                    idx_iface = idx
+                elif header == hdr_dest:
+                    idx_dest = idx
+                elif header == hdr_flags:
+                    idx_flags = idx
+                elif header == hdr_metric:
+                    idx_metric = idx
+                idx = idx + 1
+            for entry in routing_table.readlines():
+                route = entry.strip(" \n").split("\t")
+                if route[idx_dest] == DEFAULT_DEST and int(route[idx_flags]) & RTF_GATEWAY == RTF_GATEWAY:
+                    metric = int(route[idx_metric])
+                    iface = route[idx_iface]
+                    if primary is None or metric < primary_metric:
+                        primary = iface
+                        primary_metric = metric
+        logger.info('primary interface is [{0}]'.format(primary))
+        return primary
+
+
+    def is_primary_interface(self, ifname):
+        """
+        Indicate whether the specified interface is the primary.
+        :param ifname: the name of the interface - eth0, lo, etc.
+        :return: True if this interface binds the default route
+        """
+        return self.get_primary_interface() == ifname
+
+
+    def is_loopback(self, ifname):
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+        result = fcntl.ioctl(s.fileno(), 0x8913, struct.pack('256s', ifname[:15]))
+        flags, = struct.unpack('H', result[16:18])
+        isloopback = flags & 8 == 8
+        logger.info('interface [{0}] has flags [{1}], is loopback [{2}]'.format(ifname, flags, isloopback))
+        return isloopback
+
+    def get_dhcp_lease_endpoint(self):
+        """
+        OS specific, this should return the decoded endpoint of
+        the wireserver from option 245 in the dhcp leases file
+        if it exists on disk.
+        :return: The endpoint if available, or None
+        """
+        return None
+
+    @staticmethod
+    def get_endpoint_from_leases_path(pathglob):
+        """
+        Try to discover and decode the wireserver endpoint in the
+        specified dhcp leases path.
+        :param pathglob: The path containing dhcp lease files
+        :return: The endpoint if available, otherwise None
+        """
+        endpoint = None
+
+        HEADER_LEASE = "lease"
+        HEADER_OPTION = "option unknown-245"
+        HEADER_DNS = "option domain-name-servers"
+        HEADER_EXPIRE = "expire"
+        FOOTER_LEASE = "}"
+        FORMAT_DATETIME = "%Y/%m/%d %H:%M:%S"
+
+        for lease_file in glob.glob(pathglob):
+            leases = open(lease_file).read()
+            if HEADER_OPTION in leases:
+                cached_endpoint = None
+                has_option_245 = False
+                expired = True  # assume expired
+                for line in leases.splitlines():
+                    if line.startswith(HEADER_LEASE):
+                        cached_endpoint = None
+                        has_option_245 = False
+                    elif HEADER_DNS in line:
+                        cached_endpoint = line.replace(HEADER_DNS, '').strip(" ;")
+                    elif HEADER_OPTION in line:
+                        has_option_245 = True
+                    elif HEADER_EXPIRE in line:
+                        if "never" in line:
+                            expired = False
+                        else:
+                            try:
+                                expire_string = line.split(" ", 4)[-1].strip(";")
+                                expire_date = datetime.datetime.strptime(expire_string, FORMAT_DATETIME)
+                                if expire_date > datetime.datetime.utcnow():
+                                    expired = False
+                            except:
+                                logger.error("could not parse expiry token '{0}'".format(line))
+                    elif FOOTER_LEASE in line:
+                        if not expired and cached_endpoint is not None and has_option_245:
+                            endpoint = cached_endpoint
+                            # return the first valid entry
+                            break
+        return endpoint
 
     def is_missing_default_route(self):
         routes = shellutil.run_get_output("route -n")[1]
