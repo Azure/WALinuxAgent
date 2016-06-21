@@ -22,6 +22,7 @@ import sys
 import azurelinuxagent.common.utils.fileutil as fileutil
 from azurelinuxagent.common.future import ustr
 
+
 def get_distro():
     if 'FreeBSD' in platform.system():
         release = re.sub('\-.*\Z', '', ustr(platform.release()))
@@ -33,19 +34,20 @@ def get_distro():
     else:
         osinfo = platform.dist()
 
-    #The platform.py lib has issue with detecting oracle linux distribution.
-    #Merge the following patch provided by oracle as a temparory fix.
+    # The platform.py lib has issue with detecting oracle linux distribution.
+    # Merge the following patch provided by oracle as a temparory fix.
     if os.path.exists("/etc/oracle-release"):
         osinfo[2] = "oracle"
         osinfo[3] = "Oracle Linux"
 
-    #Remove trailing whitespace and quote in distro name
+    # Remove trailing whitespace and quote in distro name
     osinfo[0] = osinfo[0].strip('"').strip(' ').lower()
     return osinfo
 
+
 AGENT_NAME = "WALinuxAgent"
 AGENT_LONG_NAME = "Azure Linux Agent"
-AGENT_VERSION = '2.1.4'
+AGENT_VERSION = '2.1.5.rc0'
 AGENT_LONG_VERSION = "{0}-{1}".format(AGENT_NAME, AGENT_VERSION)
 AGENT_DESCRIPTION = """\
 The Azure Linux Agent supports the provisioning and running of Linux
@@ -64,17 +66,19 @@ PY_VERSION_MAJOR = sys.version_info[0]
 PY_VERSION_MINOR = sys.version_info[1]
 PY_VERSION_MICRO = sys.version_info[2]
 
-
 """
-Add this walk arround for detecting Snappy Ubuntu Core temporarily, until ubuntu 
+Add this workaround for detecting Snappy Ubuntu Core temporarily, until ubuntu
 fixed this bug: https://bugs.launchpad.net/snappy/+bug/1481086
 """
+
+
 def is_snappy():
     if os.path.exists("/etc/motd"):
         motd = fileutil.read_file("/etc/motd")
         if "snappy" in motd:
             return True
     return False
+
 
 if is_snappy():
     DISTRO_FULL_NAME = "Snappy Ubuntu Core"
