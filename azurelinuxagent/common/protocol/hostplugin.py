@@ -36,22 +36,28 @@ class HostPluginProtocol(object):
         self.api_versions = None
         self.endpoint = endpoint
 
-    def initialize(self):
-        self.api_versions = self.get_api_versions()
-        self.is_available = self.api_versions is not None and API_VERSION in self.api_versions
-        self.is_initialized = True
+    def ensure_initialized(self):
+        if not self.is_initialized:
+            self.api_versions = self.get_api_versions()
+            self.is_available = API_VERSION in self.api_versions
+            self.is_initialized = True
+        return self.is_available
 
     def get_api_versions(self):
-        url = URI_FORMAT_GET_API_VERSIONS.format(self.endpoint, HOST_PLUGIN_PORT)
+        url = URI_FORMAT_GET_API_VERSIONS.format(self.endpoint,
+                                                 HOST_PLUGIN_PORT)
         logger.info("getting API versions at [{0}]".format(url))
         try:
             response = restutil.http_get(url)
             if response.status != httpclient.OK:
-                logger.error("get API versions returned status code [{0}]".format(response.status))
-                return None
+                logger.error(
+                    "get API versions returned status code [{0}]".format(
+                        response.status))
+                return []
             return response.read()
         except HttpError as e:
             logger.error("get API versions failed with [{0}]".format(e))
+            return []
 
     def put_vm_status(self, status_blob, sas_url):
         """
@@ -59,9 +65,7 @@ class HostPluginProtocol(object):
         :param sas_url: the blob SAS url to pass to the host plugin
         :type status_blob: StatusBlob
         """
-        if not self.is_initialized:
-            self.initialize()
-        if not self.is_available:
+        if not self.ensure_initialized():
             logger.error("host plugin channel is not available")
             return
         if status_blob is None or status_blob.vm_status is None:
@@ -70,40 +74,51 @@ class HostPluginProtocol(object):
         url = URI_FORMAT_PUT_VM_STATUS.format(self.endpoint, HOST_PLUGIN_PORT)
         status = textutil.b64encode(status_blob.vm_status)
         headers = {"x-ms-version": API_VERSION}
-        blob_headers = [{'headerName': 'x-ms-version', 'headerValue': status_blob.__storage_version__},
-                        {'headerName': 'x-ms-blob-type', 'headerValue': status_blob.type}]
-        data = json.dumps({'requestUri': sas_url, 'headers': blob_headers, 'content': status}, sort_keys=True)
+        blob_headers = [{'headerName': 'x-ms-version',
+                         'headerValue': status_blob.__storage_version__},
+                        {'headerName': 'x-ms-blob-type',
+                         'headerValue': status_blob.type}]
+        data = json.dumps({'requestUri': sas_url, 'headers': blob_headers,
+                           'content': status}, sort_keys=True)
         logger.info("put VM status at [{0}]".format(url))
         try:
             response = restutil.http_put(url, data, headers)
             if response.status != httpclient.OK:
-                logger.error("put VM status returned status code [{0}]".format(response.status))
+                logger.error("put VM status returned status code [{0}]".format(
+                    response.status))
         except HttpError as e:
             logger.error("put VM status failed with [{0}]".format(e))
 
     def put_vm_log(self, content, container_id, deployment_id):
         """
         Try to upload the given content to the host plugin
-        :param deployment_id: the deployment id, which is obtained from the goal state (tenant name)
-        :param container_id: the container id, which is obtained from the goal state
+        :param deployment_id: the deployment id, which is obtained from the
+        goal state (tenant name)
+        :param container_id: the container id, which is obtained from the
+        goal state
         :param content: the binary content of the zip file to upload
         :return:
         """
-        if not self.is_initialized:
-            self.initialize()
-        if not self.is_available:
+        if not self.ensure_initialized():
             logger.error("host plugin channel is not available")
             return
         if content is None or container_id is None or deployment_id is None:
-            logger.error("invalid arguments passed: [{0}], [{1}], [{2}]".format(content, container_id, deployment_id))
+            logger.error(
+                "invalid arguments passed: "
+                "[{0}], [{1}], [{2}]".format(
+                    content,
+                    container_id,
+                    deployment_id))
             return
         url = URI_FORMAT_PUT_LOG.format(self.endpoint, HOST_PLUGIN_PORT)
 
-        headers = {"x-ms-vmagentlog-deploymentid": deployment_id, "x-ms-vmagentlog-containerid": container_id}
+        headers = {"x-ms-vmagentlog-deploymentid": deployment_id,
+                   "x-ms-vmagentlog-containerid": container_id}
         logger.info("put VM log at [{0}]".format(url))
         try:
             response = restutil.http_put(url, content, headers)
             if response.status != httpclient.OK:
-                logger.error("put log returned status code [{0}]".format(response.status))
+                logger.error("put log returned status code [{0}]".format(
+                    response.status))
         except HttpError as e:
             logger.error("put log failed with [{0}]".format(e))

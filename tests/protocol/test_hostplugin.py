@@ -27,22 +27,38 @@ api_versions = '["2015-09-01"]'
 
 class TestHostPlugin(AgentTestCase):
     def test_fallback(self):
-        with patch.object(wire.HostPluginProtocol, "put_vm_status") as patch_put:
+        with patch.object(wire.HostPluginProtocol,
+                          "put_vm_status") as patch_put:
             with patch.object(wire.StatusBlob, "upload") as patch_upload:
                 patch_upload.return_value = False
                 wire_protocol_client = wire.WireProtocol(wireserver_url).client
                 wire_protocol_client.ext_conf = wire.ExtensionsConfig(None)
                 wire_protocol_client.ext_conf.status_upload_blob = sas_url
                 wire_protocol_client.upload_status_blob()
-                self.assertTrue(patch_put.call_count == 1, "Fallback was not engaged")
+                self.assertTrue(patch_put.call_count == 1,
+                                "Fallback was not engaged")
                 self.assertTrue(patch_put.call_args[0][1] == sas_url)
+
+    def test_no_fallback(self):
+        with patch.object(wire.HostPluginProtocol,
+                          "put_vm_status") as patch_put:
+            with patch.object(wire.StatusBlob, "upload") as patch_upload:
+                patch_upload.return_value = True
+                wire_protocol_client = wire.WireProtocol(wireserver_url).client
+                wire_protocol_client.ext_conf = wire.ExtensionsConfig(None)
+                wire_protocol_client.ext_conf.status_upload_blob = sas_url
+                wire_protocol_client.upload_status_blob()
+                self.assertTrue(patch_put.call_count == 0,
+                                "Fallback was engaged")
 
     def test_init_put(self):
         expected_url = "http://168.63.129.16:32526/status"
         expected_headers = {'x-ms-version': '2015-09-01'}
         expected_content = '{"content": "b2s=", ' \
-                           '"headers": [{"headerName": "x-ms-version", "headerValue": "2014-02-14"}, ' \
-                           '{"headerName": "x-ms-blob-type", "headerValue": "BlockBlob"}], ' \
+                           '"headers": [{"headerName": "x-ms-version", ' \
+                           '"headerValue": "2014-02-14"}, ' \
+                           '{"headerName": "x-ms-blob-type", "headerValue": ' \
+                           '"BlockBlob"}], ' \
                            '"requestUri": "http://sas_url"}'
 
         host_client = wire.HostPluginProtocol(wireserver_url)
@@ -51,7 +67,8 @@ class TestHostPlugin(AgentTestCase):
         status_blob = wire.StatusBlob(None)
         status_blob.vm_status = "ok"
         status_blob.type = "BlockBlob"
-        with patch.object(wire.HostPluginProtocol, "get_api_versions") as patch_get:
+        with patch.object(wire.HostPluginProtocol,
+                          "get_api_versions") as patch_get:
             patch_get.return_value = api_versions
             with patch.object(restapi.restutil, "http_put") as patch_put:
                 patch_put.return_value = MagicMock()
