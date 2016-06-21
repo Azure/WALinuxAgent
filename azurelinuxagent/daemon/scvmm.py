@@ -21,6 +21,7 @@ import re
 import os
 import sys
 import subprocess
+import time
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common.osutil import get_osutil
@@ -69,4 +70,5 @@ class ScvmmHandler(object):
     def run(self):
         if self.detect_scvmm_env():
             logger.info("Exiting")
+            time.sleep(300)
             sys.exit(0)
