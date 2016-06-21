@@ -214,6 +214,62 @@ class TestFlexibleVersion(unittest.TestCase):
                 "test: {0} expected: {1} ".format(test, expectation))
         return
 
+    def test_ensure_compatible_separators(self):
+        v1 = FlexibleVersion('1.2.3')
+        v2 = FlexibleVersion('1-2-3', sep='-')
+        try:
+            v1 == v2
+            self.assertTrue(False, "Incompatible separators failed to raise an exception")
+        except ValueError:
+            pass
+        except Exception as e:
+            t = e.__class__.__name__
+            self.assertTrue(False, "Incompatible separators raised an unexpected exception: {0}" \
+                .format(t))
+        return
+
+    def test_ensure_compatible_prerel(self):
+        v1 = FlexibleVersion('1.2.3', prerel_tags=('alpha', 'beta', 'rc'))
+        v2 = FlexibleVersion('1.2.3', prerel_tags=('a', 'b', 'c'))
+        try:
+            v1 == v2
+            self.assertTrue(False, "Incompatible prerel_tags failed to raise an exception")
+        except ValueError:
+            pass
+        except Exception as e:
+            t = e.__class__.__name__
+            self.assertTrue(False, "Incompatible prerel_tags raised an unexpected exception: {0}" \
+                .format(t))
+        return
+
+    def test_ensure_compatible_prerel_length(self):
+        v1 = FlexibleVersion('1.2.3', prerel_tags=('a', 'b', 'c'))
+        v2 = FlexibleVersion('1.2.3', prerel_tags=('a', 'b'))
+        try:
+            v1 == v2
+            self.assertTrue(False, "Incompatible prerel_tags failed to raise an exception")
+        except ValueError:
+            pass
+        except Exception as e:
+            t = e.__class__.__name__
+            self.assertTrue(False, "Incompatible prerel_tags raised an unexpected exception: {0}" \
+                .format(t))
+        return
+
+    def test_ensure_compatible_prerel_order(self):
+        v1 = FlexibleVersion('1.2.3', prerel_tags=('a', 'b'))
+        v2 = FlexibleVersion('1.2.3', prerel_tags=('b', 'a'))
+        try:
+            v1 == v2
+            self.assertTrue(False, "Incompatible prerel_tags failed to raise an exception")
+        except ValueError:
+            pass
+        except Exception as e:
+            t = e.__class__.__name__
+            self.assertTrue(False, "Incompatible prerel_tags raised an unexpected exception: {0}" \
+                .format(t))
+        return
+
     def test_parse(self):
         tests = {
             "1.2.3.4": ((1, 2, 3, 4), None),
@@ -233,6 +289,17 @@ class TestFlexibleVersion(unittest.TestCase):
         for i in range(1,10):
             dst_v -= 1
             self.assertEqual(i, src_v.version[-1] - dst_v.version[-1])
+        return
+
+    def test_decrement_disallows_below_zero(self):
+        try:
+            FlexibleVersion('1.0') - 1
+            self.assertTrue(False, "Decrement failed to raise an exception")
+        except ArithmeticError:
+            pass
+        except Exception as e:
+            t = e.__class__.__name__
+            self.assertTrue(False, "Decrement raised an unexpected exception: {0}".format(t))
         return
 
     def test_increment(self):
@@ -298,7 +365,7 @@ class TestFlexibleVersion(unittest.TestCase):
 
     def test_repr(self):
         v = FlexibleVersion('1,2,3rc4', ',', ['lol', 'rc'])
-        expected = "FlexibleVersion ('1,2,3rc4', ',', ['lol', 'rc'])"
+        expected = "FlexibleVersion ('1,2,3rc4', ',', ('lol', 'rc'))"
         self.assertEqual(expected, repr(v))
 
     def test_order(self):

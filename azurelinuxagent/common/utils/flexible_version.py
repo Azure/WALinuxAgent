@@ -30,9 +30,7 @@ class FlexibleVersion(version.Version):
 
         self.sep = sep
         self.prerel_sep = ''
-        self.prerel_tags = list(prerel_tags)
-        self.prerel_tags.sort()
-        self.prerel_tags = tuple(self.prerel_tags)
+        self.prerel_tags = tuple(prerel_tags) if prerel_tags is not None else ()
 
         self._compile_pattern()
 
@@ -73,6 +71,9 @@ class FlexibleVersion(version.Version):
 
     def __sub__(self, decrement):
         version = list(self.version)
+        if version[-1] <= 0:
+            raise ArithmeticError("Cannot decrement final numeric component of {0} below zero" \
+                .format(self))
         version[-1] -= decrement
         vstring = self._assemble(version, self.sep, self.prerel_sep, self.prerelease)
         return FlexibleVersion(vstring=vstring, sep=self.sep, prerel_tags=self.prerel_tags)
@@ -83,7 +84,7 @@ class FlexibleVersion(version.Version):
                 cls=self.__class__.__name__,
                 vstring=str(self),
                 sep=self.sep,
-                prerel_tags = list(self.prerel_tags.keys()))
+                prerel_tags=self.prerel_tags)
 
     def __str__(self):
         return self._assemble(self.version, self.sep, self.prerel_sep, self.prerelease)
@@ -109,8 +110,8 @@ class FlexibleVersion(version.Version):
         if self.prerelease is None and that.prerelease is not None:
             return False
 
-        this_index = self.prerel_tags[self.prerelease[0]]
-        that_index = self.prerel_tags[that.prerelease[0]]
+        this_index = self.prerel_tags_set[self.prerelease[0]]
+        that_index = self.prerel_tags_set[that.prerelease[0]]
         if this_index == that_index:
             return self.prerelease[1] < that.prerelease[1]
 
@@ -122,12 +123,10 @@ class FlexibleVersion(version.Version):
         if this_version != that_version:
             return False
 
-        if self.prerelease is None and that.prerelease is None:
-            return True
+        if self.prerelease != that.prerelease:
+            return False
 
-        this_index = self.prerel_tags[self.prerelease[0]]
-        that_index = that.prerel_tags[that.prerelease[0]]
-        return self.prerelease[1] == that.prerelease[1] and this_index == that_index
+        return True
 
     def _assemble(self, version, sep, prerel_sep, prerelease):
         s = sep.join(map(str, version))
@@ -144,7 +143,7 @@ class FlexibleVersion(version.Version):
 
         if self.prerel_tags:
             tags = '|'.join(re.escape(tag) for tag in self.prerel_tags)
-            self.prerel_tags = dict(zip(self.prerel_tags, range(len(self.prerel_tags))))
+            self.prerel_tags_set = dict(zip(self.prerel_tags, range(len(self.prerel_tags))))
             release_re = '(?:{prerel_sep}(?P<{tn}>{tags})(?P<{nn}>\d*))?'.format(
                         prerel_sep=self._re_prerel_sep,
                         tags=tags,
