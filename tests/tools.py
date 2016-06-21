@@ -19,24 +19,26 @@
 Define util functions for unit test
 """
 
-import re
-import os
-import sys
-import unittest
-import shutil
 import json
+import os
+import re
+import shutil
+import sys
 import tempfile
+import unittest
+
 from functools import wraps
+
 import azurelinuxagent.common.conf as conf
-import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.event as event
+import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.version import PY_VERSION_MAJOR
 
 #Import mock module for Python2 and Python3
 try:
-    from unittest.mock import Mock, patch, MagicMock
+    from unittest.mock import Mock, patch, MagicMock, DEFAULT
 except ImportError:
-    from mock import Mock, patch, MagicMock
+    from mock import Mock, patch, MagicMock, DEFAULT
 
 test_dir = os.path.dirname(os.path.abspath(__file__))
 data_dir = os.path.join(test_dir, "data")
@@ -54,6 +56,7 @@ class AgentTestCase(unittest.TestCase):
     def setUp(self):
         prefix = "{0}_".format(self.__class__.__name__)
         self.tmp_dir = tempfile.mkdtemp(prefix=prefix)
+        conf.get_autoupdate_enabled = Mock(return_value=True)
         conf.get_lib_dir = Mock(return_value=self.tmp_dir)
         ext_log_dir = os.path.join(self.tmp_dir, "azure")
         conf.get_ext_log_dir = Mock(return_value=ext_log_dir)

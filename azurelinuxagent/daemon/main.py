@@ -63,7 +63,7 @@ class DaemonHandler(object):
         logger.info("{0} Version:{1}", AGENT_LONG_NAME, AGENT_VERSION)
         logger.info("OS: {0} {1}", DISTRO_NAME, DISTRO_VERSION)
         logger.info("Python: {0}.{1}.{2}", PY_VERSION_MAJOR, PY_VERSION_MINOR,
-                    PY_VERSION_MICRO)
+            PY_VERSION_MICRO)
 
         self.check_pid()
 
@@ -113,5 +113,4 @@ class DaemonHandler(object):
         self.env_handler.run()
         
         while self.running:
-            self.update_handler.run()
-            time.sleep(25)
+            self.update_handler.run_latest()

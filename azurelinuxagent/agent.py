@@ -94,21 +94,13 @@ class Agent(object):
         print("Start {0} service".format(AGENT_NAME))
         self.osutil.start_agent_service()
 
-    def update(self):
+    def run_exthandlers(self):
         """
-        Run extension handlers handler
+        Run the update and extension handler
         """
         from azurelinuxagent.ga.update import get_update_handler
         update_handler = get_update_handler()
         update_handler.run()
-
-    def run_exthandlers(self):
-        """
-        Run extension handlers handler
-        """
-        from azurelinuxagent.ga.exthandlers import get_exthandlers_handler
-        exthandlers_handler = get_exthandlers_handler()
-        exthandlers_handler.run()
 
 def main():
     """
@@ -127,16 +119,14 @@ def main():
             agent = Agent(verbose)
             if command == "deprovision+user":
                 agent.deprovision(force, deluser=True)
-            elif command == "provision":
-                agent.provision()
             elif command == "deprovision":
                 agent.deprovision(force, deluser=False)
+            elif command == "provision":
+                agent.provision()
             elif command == "register-service":
                 agent.register_service()
             elif command == "daemon":
                 agent.daemon()
-            elif command == "update":
-                agent.update()
             elif command == "run-exthandlers":
                 agent.run_exthandlers()
         except Exception as e:
@@ -160,8 +150,6 @@ def parse_args(sys_args):
             cmd = "start"
         elif re.match("^([-/]*)register-service", a):
             cmd = "register-service"
-        elif re.match("^([-/]*)update", a):
-            cmd = "update"
         elif re.match("^([-/]*)run-exthandlers", a):
             cmd = "run-exthandlers"
         elif re.match("^([-/]*)version", a):
@@ -192,7 +180,7 @@ def usage():
     print("")
     print((("usage: {0} [-verbose] [-force] [-help]"
            "-deprovision[+user]|-register-service|-version|-daemon|-start|"
-           "-update|-run-exthandlers]"
+           "-run-exthandlers]"
            "").format(sys.argv[0])))
     print("")
 

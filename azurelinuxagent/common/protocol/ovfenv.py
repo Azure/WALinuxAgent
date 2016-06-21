@@ -44,7 +44,7 @@ class OvfEnv(object):
     def __init__(self, xml_text):
         if xml_text is None:
             raise ValueError("ovf-env is None")
-        logger.verb("Load ovf-env.xml")
+        logger.verbose("Load ovf-env.xml")
         self.hostname = None
         self.username = None
         self.user_password = None

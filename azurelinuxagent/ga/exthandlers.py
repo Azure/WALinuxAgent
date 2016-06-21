@@ -123,14 +123,19 @@ class ExtHandlersHandler(object):
             self.protocol = self.protocol_util.get_protocol()
             ext_handlers, etag = self.protocol.get_ext_handlers()
         except ProtocolError as e:
-            add_event(name="WALA", is_success=False, message=ustr(e))
+            msg = u"Exception retrieving extension handlers: {0}".format(
+                ustr(e))
+            logger.warn(msg)
+            add_event(name="WALA", is_success=False, message=msg)
             return
 
         if self.last_etag is not None and self.last_etag == etag:
-            logger.verb("No change to ext handler config:{0}, skip", etag)
+            msg = u"Incarnation {0} has no extension updates".format(etag)
+            logger.info(msg)
             self.log_report = False
         else:
-            logger.info("Handle new ext handler config")
+            msg = u"Handle extensions updates for incarnation {0}".format(etag)
+            logger.info(msg)
             self.log_report = True #Log status report success on new config
             self.handle_ext_handlers(ext_handlers)
             self.last_etag = etag
@@ -226,7 +231,7 @@ class ExtHandlersHandler(object):
                 except ExtensionError as e:
                     add_event(name="WALA", is_success=False, message=ustr(e))
         
-        logger.verb("Report vm agent status")
+        logger.verbose("Report vm agent status")
         
         try:
             self.protocol.report_vm_status(vm_status)
@@ -513,12 +518,12 @@ class ExtHandlerInstance(object):
                         if curr_seq_no > seq_no:
                             seq_no = curr_seq_no
                 except Exception as e:
-                    self.logger.verb("Failed to parse file name: {0}", item)
+                    self.logger.verbose("Failed to parse file name: {0}", item)
                     continue
         return seq_no
 
     def collect_ext_status(self, ext):
-        self.logger.verb("Collect extension status")
+        self.logger.verbose("Collect extension status")
 
         seq_no = self.get_largest_seq_no()
         if seq_no == -1:

@@ -65,6 +65,12 @@ class WireProtocolResourceGone(ProtocolError):
 class WireProtocol(Protocol):
     """Slim layer to adapt wire protocol data to metadata protocol interface"""
 
+    # TODO: Clean-up goal state processing
+    #   At present, some methods magically update GoalState (e.g., get_vmagent_manifests), others (e.g., get_vmagent_pkgs)
+    #   assume its presence. A better approach would make an explicit update call that returns the incarnation number and
+    #   establishes that number the "context" for all other calls (either by updating the internal state of the protocol or
+    #   by having callers pass the incarnation number to the method).
+
     def __init__(self, endpoint):
         if endpoint is None:
             raise ProtocolError("WireProtocol endpoint is None")
@@ -113,7 +119,7 @@ class WireProtocol(Protocol):
         return man.pkg_list
 
     def get_ext_handlers(self):
-        logger.verb("Get extension handler config")
+        logger.verbose("Get extension handler config")
         # Update goal state to get latest extensions config
         self.client.update_goal_state()
         goal_state = self.client.get_goal_state()
@@ -122,7 +128,7 @@ class WireProtocol(Protocol):
         return ext_conf.ext_handlers, goal_state.incarnation
 
     def get_ext_handler_pkgs(self, ext_handler):
-        logger.verb("Get extension handler package")
+        logger.verbose("Get extension handler package")
         goal_state = self.client.get_goal_state()
         man = self.client.get_ext_manifest(ext_handler, goal_state)
         return man.pkg_list
@@ -340,7 +346,7 @@ class StatusBlob(object):
 
     def upload(self, url):
         # TODO upload extension only if content has changed
-        logger.verb("Upload status blob")
+        logger.verbose("Upload status blob")
         upload_successful = False
         self.type = self.get_blob_type(url)
         self.data = self.to_json()
@@ -360,7 +366,7 @@ class StatusBlob(object):
 
     def get_blob_type(self, url):
         # Check blob type
-        logger.verb("Check blob type.")
+        logger.verbose("Check blob type.")
         timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         try:
             resp = self.client.call_storage_service(restutil.http_head, url, {
@@ -375,11 +381,11 @@ class StatusBlob(object):
                                  "").format(resp.status))
 
         blob_type = resp.getheader("x-ms-blob-type")
-        logger.verb("Blob type={0}".format(blob_type))
+        logger.verbose("Blob type={0}".format(blob_type))
         return blob_type
 
     def put_block_blob(self, url, data):
-        logger.verb("Upload block blob")
+        logger.verbose("Upload block blob")
         timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         resp = self.client.call_storage_service(restutil.http_put, url, data,
                         {
@@ -393,7 +399,7 @@ class StatusBlob(object):
                 "Failed to upload block blob: {0}".format(resp.status))
 
     def put_page_blob(self, url, data):
-        logger.verb("Replace old page blob")
+        logger.verbose("Replace old page blob")
 
         # Convert string into bytes
         data = bytearray(data, encoding='utf-8')
@@ -418,7 +424,7 @@ class StatusBlob(object):
         else:
             url = "{0}&comp=page".format(url)
 
-        logger.verb("Upload page blob")
+        logger.verbose("Upload page blob")
         page_max = 4 * 1024 * 1024  # Max page size: 4MB
         start = 0
         end = 0
@@ -494,15 +500,15 @@ class WireClient(object):
         """
         now = time.time()
         if now - self.last_request < 1:
-            logger.verb("Last request issued less than 1 second ago")
-            logger.verb("Sleep {0} second to avoid throttling.",
+            logger.verbose("Last request issued less than 1 second ago")
+            logger.verbose("Sleep {0} second to avoid throttling.", 
                         SHORT_WAITING_INTERVAL)
             time.sleep(SHORT_WAITING_INTERVAL)
         self.last_request = now
 
         self.req_count += 1
         if self.req_count % 3 == 0:
-            logger.verb("Sleep {0} second to avoid throttling.",
+            logger.verbose("Sleep {0} second to avoid throttling.", 
                         SHORT_WAITING_INTERVAL)
             time.sleep(SHORT_WAITING_INTERVAL)
             self.req_count = 0
@@ -578,7 +584,7 @@ class WireClient(object):
 
     def fetch_manifest(self, version_uris):
         for version_uri in version_uris:
-            logger.verb("Fetch ext handler manifest: {0}", version_uri.uri)
+            logger.verbose("Fetch ext handler manifest: {0}", version_uri.uri)
             try:
                 resp = self.call_storage_service(restutil.http_get,
                                                  version_uri.uri, None,
@@ -813,7 +819,7 @@ class WireClient(object):
             raise ProtocolError("Failed to send events:{0}".format(e))
 
         if resp.status != httpclient.OK:
-            logger.verb(resp.read())
+            logger.verbose(resp.read())
             raise ProtocolError("Failed to send events:{0}".format(resp.status))
 
     def report_event(self, event_list):
@@ -868,7 +874,7 @@ class VersionInfo(object):
         Query endpoint server for wire protocol version.
         Fail if our desired protocol version is not seen.
         """
-        logger.verb("Load Version.xml")
+        logger.verbose("Load Version.xml")
         self.parse(xml_text)
 
     def parse(self, xml_text):
@@ -882,7 +888,7 @@ class VersionInfo(object):
         supported_version = findall(supported, "Version")
         for node in supported_version:
             version = gettext(node)
-            logger.verb("Fabric supported wire protocol version:{0}", version)
+            logger.verbose("Fabric supported wire protocol version:{0}", version)
             self.supported.append(version)
 
     def get_preferred(self):
@@ -896,7 +902,7 @@ class GoalState(object):
     def __init__(self, xml_text):
         if xml_text is None:
             raise ValueError("GoalState.xml is None")
-        logger.verb("Load GoalState.xml")
+        logger.verbose("Load GoalState.xml")
         self.incarnation = None
         self.expected_state = None
         self.hosting_env_uri = None
@@ -938,7 +944,7 @@ class HostingEnv(object):
     def __init__(self, xml_text):
         if xml_text is None:
             raise ValueError("HostingEnvironmentConfig.xml is None")
-        logger.verb("Load HostingEnvironmentConfig.xml")
+        logger.verbose("Load HostingEnvironmentConfig.xml")
         self.vm_name = None
         self.role_name = None
         self.deployment_name = None
@@ -965,7 +971,7 @@ class SharedConfig(object):
     """
 
     def __init__(self, xml_text):
-        logger.verb("Load SharedConfig.xml")
+        logger.verbose("Load SharedConfig.xml")
         self.parse(xml_text)
 
     def parse(self, xml_text):
@@ -982,7 +988,7 @@ class Certificates(object):
     """
 
     def __init__(self, client, xml_text):
-        logger.verb("Load Certificates.xml")
+        logger.verbose("Load Certificates.xml")
         self.client = client
         self.cert_list = CertList()
         self.parse(xml_text)
@@ -1081,7 +1087,7 @@ class ExtensionsConfig(object):
     """
 
     def __init__(self, xml_text):
-        logger.verb("Load ExtensionsConfig.xml")
+        logger.verbose("Load ExtensionsConfig.xml")
         self.ext_handlers = ExtHandlerList()
         self.vmagent_manifests = VMAgentManifestList()
         self.status_upload_blob = None
@@ -1181,7 +1187,7 @@ class ExtensionManifest(object):
     def __init__(self, xml_text):
         if xml_text is None:
             raise ValueError("ExtensionManifest is None")
-        logger.verb("Load ExtensionManifest.xml")
+        logger.verbose("Load ExtensionManifest.xml")
         self.pkg_list = ExtHandlerPackageList()
         self.parse(xml_text)
 

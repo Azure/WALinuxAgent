@@ -30,6 +30,13 @@ import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.future import ustr
 import azurelinuxagent.common.utils.textutil as textutil
 
+def copy_file(from_path, to_path=None, to_dir=None):
+    if to_path is None:
+        to_path = os.path.join(to_dir, os.path.basename(from_path))
+    shutil.copyfile(from_path, to_path)
+    return to_path
+
+
 def read_file(filepath, asbin=False, remove_bom=False, encoding='utf-8'):
     """
     Read and return contents of 'filepath'.
@@ -120,6 +127,11 @@ def rm_dirs(*args):
                     os.remove(path)
                 elif os.path.isdir(path):
                     shutil.rmtree(path)
+
+def trim_ext(path, ext):
+    if not ext.startswith("."):
+        ext = "." + ext
+    return path.split(ext)[0] if path.endswith(ext) else path
 
 def update_conf_file(path, line_start, val, chk_err=False):
     conf = []

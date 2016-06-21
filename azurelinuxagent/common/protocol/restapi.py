@@ -26,7 +26,7 @@ from azurelinuxagent.common.exception import ProtocolError, HttpError
 from azurelinuxagent.common.future import ustr
 import azurelinuxagent.common.utils.restutil as restutil
 
-def validata_param(name, val, expected_type):
+def validate_param(name, val, expected_type):
     if val is None:
         raise ProtocolError("{0} is None".format(name))
     if not isinstance(val, expected_type):
@@ -35,7 +35,7 @@ def validata_param(name, val, expected_type):
 
 def set_properties(name, obj, data):
     if isinstance(obj, DataContract):
-        validata_param("Property '{0}'".format(name), data, dict)
+        validate_param("Property '{0}'".format(name), data, dict)
         for prob_name, prob_val in data.items():
             prob_full_name = "{0}.{1}".format(name, prob_name)
             try:
@@ -47,7 +47,7 @@ def set_properties(name, obj, data):
             setattr(obj, prob_name, prob)
         return obj
     elif isinstance(obj, DataContractList):
-        validata_param("List '{0}'".format(name), data, list)
+        validate_param("List '{0}'".format(name), data, list)
         for item_data in data:
             item = obj.item_cls()
             item = set_properties(name, item, item_data)

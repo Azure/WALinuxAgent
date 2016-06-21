@@ -193,6 +193,6 @@ class FreeBSDOSUtil(DefaultOSUtil):
                 inet = line.split()[1]
             elif line.find('ether ') != -1:
                 mac = line.split()[1]
-        logger.verb("Interface info: ({0},{1},{2})", iface, inet, mac)
+        logger.verbose("Interface info: ({0},{1},{2})", iface, inet, mac)
 
         return iface, inet, mac

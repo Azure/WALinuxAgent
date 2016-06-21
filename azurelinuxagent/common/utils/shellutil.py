@@ -72,7 +72,7 @@ def run_get_output(cmd, chk_err=True, log_cmd=True):
     Reports exceptions to Error if chk_err parameter is True
     """
     if log_cmd:
-        logger.verb(u"run cmd '{0}'", cmd)
+        logger.verbose(u"run cmd '{0}'", cmd)
     try:
         output=subprocess.check_output(cmd,stderr=subprocess.STDOUT,shell=True)
         output = ustr(output, encoding='utf-8', errors="backslashreplace")

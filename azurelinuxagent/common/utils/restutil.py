@@ -87,9 +87,9 @@ def http_request(method, url, data, headers=None, max_retry=3, chk_proxy=False):
     Sending http request to server
     On error, sleep 10 and retry max_retry times.
     """
-    logger.verb("HTTP Req: {0} {1}", method, url)
-    logger.verb("    Data={0}", data)
-    logger.verb("    Header={0}", headers)
+    logger.verbose("HTTP Req: {0} {1}", method, url)
+    logger.verbose("    Data={0}", data)
+    logger.verbose("    Header={0}", headers)
     host, port, secure, rel_uri = _parse_url(url)
 
     #Check proxy
@@ -115,8 +115,8 @@ def http_request(method, url, data, headers=None, max_retry=3, chk_proxy=False):
             resp = _http_request(method, host, rel_uri, port=port, data=data, 
                                  secure=secure, headers=headers, 
                                  proxy_host=proxy_host, proxy_port=proxy_port)
-            logger.verb("HTTP Resp: Status={0}", resp.status)
-            logger.verb("    Header={0}", resp.getheaders())
+            logger.verbose("HTTP Resp: Status={0}", resp.status)
+            logger.verbose("    Header={0}", resp.getheaders())
             return resp
         except httpclient.HTTPException as e:
             logger.warn('HTTPException {0}, args:{1}', e, repr(e.args))
