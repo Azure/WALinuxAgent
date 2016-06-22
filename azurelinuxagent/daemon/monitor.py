@@ -16,9 +16,6 @@
 #
 
 import os
-import sys
-import traceback
-import atexit
 import json
 import time
 import datetime
@@ -28,25 +25,26 @@ import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common.event import WALAEventOperation, add_event
 from azurelinuxagent.common.exception import EventError, ProtocolError, \
-                                             OSUtilError
+    OSUtilError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, \
-                                                  getattrib
+    getattrib
 from azurelinuxagent.common.protocol.restapi import TelemetryEventParam, \
-                                             TelemetryEventList, \
-                                             TelemetryEvent, \
-                                             set_properties, get_properties
+    TelemetryEventList, \
+    TelemetryEvent, \
+    set_properties
 from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_VERSION, \
-                                     DISTRO_CODE_NAME, AGENT_LONG_VERSION
-
+    DISTRO_CODE_NAME, AGENT_LONG_VERSION
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol import get_protocol_util
+
 
 def parse_event(data_str):
     try:
         return parse_json_event(data_str)
     except ValueError:
         return parse_xml_event(data_str)
+
 
 def parse_xml_param(param_node):
     name = getattrib(param_node, "Name")
@@ -59,14 +57,15 @@ def parse_xml_param(param_node):
         value = bool(value_str)
     elif attr_type == 'mt:float64':
         value = float(value_str)
-    return TelemetryEventParam(name, value) 
+    return TelemetryEventParam(name, value)
+
 
 def parse_xml_event(data_str):
     try:
         xml_doc = parse_doc(data_str)
         event_id = getattrib(find(xml_doc, "Event"), 'id')
         provider_id = getattrib(find(xml_doc, "Provider"), 'id')
-        event = TelemetryEvent(event_id, provider_id) 
+        event = TelemetryEvent(event_id, provider_id)
         param_nodes = findall(xml_doc, 'Param')
         for param_node in param_nodes:
             event.parameters.append(parse_xml_param(param_node))
@@ -74,23 +73,26 @@ def parse_xml_event(data_str):
     except Exception as e:
         raise ValueError(ustr(e))
 
+
 def parse_json_event(data_str):
     data = json.loads(data_str)
     event = TelemetryEvent()
     set_properties("TelemetryEvent", event, data)
     return event
 
+
 def get_monitor_handler():
     return MonitorHandler()
+
 
 class MonitorHandler(object):
     def __init__(self):
         self.osutil = get_osutil()
         self.protocol_util = get_protocol_util()
         self.sysinfo = []
-  
+
     def run(self):
-        event_thread = threading.Thread(target = self.daemon)
+        event_thread = threading.Thread(target=self.daemon)
         event_thread.setDaemon(True)
         event_thread.start()
 
@@ -100,11 +102,10 @@ class MonitorHandler(object):
                                                  DISTRO_VERSION,
                                                  DISTRO_CODE_NAME,
                                                  platform.release())
-        
-
         self.sysinfo.append(TelemetryEventParam("OSVersion", osversion))
-        self.sysinfo.append(TelemetryEventParam("GAVersion", AGENT_LONG_VERSION))
-    
+        self.sysinfo.append(
+            TelemetryEventParam("GAVersion", AGENT_LONG_VERSION))
+
         try:
             ram = self.osutil.get_total_mem()
             processors = self.osutil.get_processor_cores()
@@ -116,16 +117,16 @@ class MonitorHandler(object):
         try:
             protocol = self.protocol_util.get_protocol()
             vminfo = protocol.get_vminfo()
-            self.sysinfo.append(TelemetryEventParam("VMName", 
-                                                    vminfo.vmName)) 
-            self.sysinfo.append(TelemetryEventParam("TenantName", 
-                                                    vminfo.tenantName)) 
-            self.sysinfo.append(TelemetryEventParam("RoleName", 
-                                                    vminfo.roleName)) 
-            self.sysinfo.append(TelemetryEventParam("RoleInstanceName", 
-                                                    vminfo.roleInstanceName)) 
-            self.sysinfo.append(TelemetryEventParam("ContainerId", 
-                                                    vminfo.containerId)) 
+            self.sysinfo.append(TelemetryEventParam("VMName",
+                                                    vminfo.vmName))
+            self.sysinfo.append(TelemetryEventParam("TenantName",
+                                                    vminfo.tenantName))
+            self.sysinfo.append(TelemetryEventParam("RoleName",
+                                                    vminfo.roleName))
+            self.sysinfo.append(TelemetryEventParam("RoleInstanceName",
+                                                    vminfo.roleInstanceName))
+            self.sysinfo.append(TelemetryEventParam("ContainerId",
+                                                    vminfo.containerId))
         except ProtocolError as e:
             logger.warn("Failed to get system info: {0}", e)
 
@@ -133,8 +134,8 @@ class MonitorHandler(object):
         try:
             logger.verbose("Found event file: {0}", evt_file_name)
             with open(evt_file_name, "rb") as evt_file:
-            #if fail to open or delete the file, throw exception
-                data_str = evt_file.read().decode("utf-8",'ignore')
+                # if fail to open or delete the file, throw exception
+                data_str = evt_file.read().decode("utf-8", 'ignore')
             logger.verbose("Processed event file: {0}", evt_file_name)
             os.remove(evt_file_name)
             return data_str
@@ -166,19 +167,19 @@ class MonitorHandler(object):
 
         if len(event_list.events) == 0:
             return
-        
+
         try:
             protocol = self.protocol_util.get_protocol()
             protocol.report_event(event_list)
         except ProtocolError as e:
             logger.error("{0}", e)
-    
+
     def daemon(self):
         self.init_sysinfo()
         last_heartbeat = datetime.datetime.min
-        period = datetime.timedelta(hours = 12)
-        while(True):
-            if (datetime.datetime.now()-last_heartbeat) > period:
+        period = datetime.timedelta(minutes=30)
+        while True:
+            if (datetime.datetime.now() - last_heartbeat) > period:
                 last_heartbeat = datetime.datetime.now()
                 add_event(op=WALAEventOperation.HeartBeat, name="WALA",
                           is_success=True)
