@@ -134,7 +134,7 @@ class WireProtocol(Protocol):
         return man.pkg_list
 
     def report_provision_status(self, provision_status):
-        validata_param("provision_status", provision_status, ProvisionStatus)
+        validate_param("provision_status", provision_status, ProvisionStatus)
 
         if provision_status.status is not None:
             self.client.report_health(provision_status.status,
@@ -145,16 +145,16 @@ class WireProtocol(Protocol):
             self.client.report_role_prop(thumbprint)
 
     def report_vm_status(self, vm_status):
-        validata_param("vm_status", vm_status, VMStatus)
+        validate_param("vm_status", vm_status, VMStatus)
         self.client.status_blob.set_vm_status(vm_status)
         self.client.upload_status_blob()
 
     def report_ext_status(self, ext_handler_name, ext_name, ext_status):
-        validata_param("ext_status", ext_status, ExtensionStatus)
+        validate_param("ext_status", ext_status, ExtensionStatus)
         self.client.status_blob.set_ext_status(ext_handler_name, ext_status)
 
     def report_event(self, events):
-        validata_param("events", events, TelemetryEventList)
+        validate_param("events", events, TelemetryEventList)
         self.client.report_event(events)
 
 
@@ -331,11 +331,11 @@ class StatusBlob(object):
         self.data = None
 
     def set_vm_status(self, vm_status):
-        validata_param("vmAgent", vm_status, VMStatus)
+        validate_param("vmAgent", vm_status, VMStatus)
         self.vm_status = vm_status
 
     def set_ext_status(self, ext_handler_name, ext_status):
-        validata_param("extensionStatus", ext_status, ExtensionStatus)
+        validate_param("extensionStatus", ext_status, ExtensionStatus)
         self.ext_statuses[ext_handler_name] = ext_status
 
     def to_json(self):

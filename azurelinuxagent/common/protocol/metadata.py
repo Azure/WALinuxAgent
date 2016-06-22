@@ -191,12 +191,12 @@ class MetadataProtocol(Protocol):
         return ext_handler_pkgs
 
     def report_provision_status(self, provision_status):
-        validata_param('provisionStatus', provision_status, ProvisionStatus)
+        validate_param('provisionStatus', provision_status, ProvisionStatus)
         data = get_properties(provision_status)
         self._put_data(self.provision_status_uri, data)
 
     def report_vm_status(self, vm_status):
-        validata_param('vmStatus', vm_status, VMStatus)
+        validate_param('vmStatus', vm_status, VMStatus)
         data = get_properties(vm_status)
         #TODO code field is not implemented for metadata protocol yet. Remove it
         handler_statuses = data['vmAgent']['extensionHandlers']
@@ -209,14 +209,14 @@ class MetadataProtocol(Protocol):
         self._put_data(self.vm_status_uri, data)
 
     def report_ext_status(self, ext_handler_name, ext_name, ext_status):
-        validata_param('extensionStatus', ext_status, ExtensionStatus)
+        validate_param('extensionStatus', ext_status, ExtensionStatus)
         data = get_properties(ext_status)
         uri = self.ext_status_uri.format(ext_name)
         self._put_data(uri, data)
 
     def report_event(self, events):
         #TODO disable telemetry for azure stack test
-        #validata_param('events', events, TelemetryEventList)
+        #validate_param('events', events, TelemetryEventList)
         #data = get_properties(events)
         #self._post_data(self.event_uri, data)
         pass
