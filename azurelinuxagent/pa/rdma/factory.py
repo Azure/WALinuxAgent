@@ -17,15 +17,18 @@
 
 import azurelinuxagent.common.logger as logger
 
-from azurelinuxagent.common.version import DISTRO_NAME
+from azurelinuxagent.common.version import DISTRO_FULL_NAME, DISTRO_VERSION
 from azurelinuxagent.common.rdma import RDMAHandler
 from .suse import SUSERDMAHandler
 
 
-def get_rdma_handler(distro_name=DISTRO_NAME, distro_version=DISTRO_VERSION):
+def get_rdma_handler(
+        distro_full_name=DISTRO_FULL_NAME,
+        distro_version=DISTRO_VERSION
+):
     """Return the handler object for RDMA driver handling"""
     if (
-            distro_name == 'SUSE Linux Enterprise Server' and
+            distro_full_name == 'SUSE Linux Enterprise Server' and
             int(distro_version) > 11
     ):
         return SUSERDMAHandler()
