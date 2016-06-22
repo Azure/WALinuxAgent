@@ -76,8 +76,7 @@ class RDMAHandler(object):
     def install_driver(self):
         """Install the driver. This is distribution specific and must
            be overwritten in the child implementation."""
-
-        raise Exception('RDMAHandler.install_driver not implemented')
+        logger.error('RDMAHandler.install_driver not implemented')
 
     def is_driver_loaded(self):
         """Check if the network module is loaded in kernel space"""

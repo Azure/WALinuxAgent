@@ -1,4 +1,4 @@
-# Copyright 2014 Microsoft Corporation
+# Copyright 2016 Microsoft Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,3 +15,4 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
+from azurelinuxagent.pa.rdma.factory import get_rdma_handler

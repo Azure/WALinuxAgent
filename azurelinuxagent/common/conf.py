@@ -80,6 +80,9 @@ def load_conf_from_file(conf_file_path, conf=__conf__):
         raise AgentConfigError(("Failed to load conf file:{0}, {1}"
                                 "").format(conf_file_path, err))
 
+def enable_rdma(conf=__conf__):
+    return conf.get_switch("OS.EnableRDMA", False)
+
 def get_logs_verbose(conf=__conf__):
     return conf.get_switch("Logs.Verbose", False)
 

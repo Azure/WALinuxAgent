@@ -21,7 +21,7 @@ import glob
 import os
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.shellutil as shellutil
-from azurelinuxagent.distro.default.rdma import RDMAHandler
+from azurelinuxagent.common.rdma import RDMAHandler
 
 
 class SUSERDMAHandler(RDMAHandler):
