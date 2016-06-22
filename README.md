@@ -341,6 +341,12 @@ Type: Boolean Default: n
 If set, log verbosity is boosted. Waagent logs to /var/log/waagent.log and
 leverages the system logrotate functionality to rotate logs.
 
+OS.EnableRDMA:
+Type: Boolean Default: n
+
+If set, the agent will attempt to install and then load an RDMA kernel driver
+that matches the version of the firmware on the underlying hardware.
+
 OS.RootDeviceScsiTimeout:
 Type: Integer Default: 300
 
