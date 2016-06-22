@@ -39,6 +39,7 @@ from azurelinuxagent.daemon.resourcedisk import get_resourcedisk_handler
 from azurelinuxagent.daemon.monitor import get_monitor_handler
 from azurelinuxagent.daemon.env import get_env_handler
 from azurelinuxagent.pa.provision import get_provision_handler
+from azurelinuxagent.pa.rdma import get_rdma_handler
 from azurelinuxagent.ga.update import get_update_handler
 
 def get_daemon_handler():
@@ -54,6 +55,7 @@ class DaemonHandler(object):
         self.protocol_util = get_protocol_util()
         self.scvmm_handler = get_scvmm_handler()
         self.resourcedisk_handler = get_resourcedisk_handler()
+        self.rdma_handler = get_rdma_handler()
         self.monitor_handler = get_monitor_handler()
         self.env_handler = get_env_handler()
         self.provision_handler = get_provision_handler()
@@ -97,6 +99,9 @@ class DaemonHandler(object):
         if not os.path.isdir(conf.get_lib_dir()):
             fileutil.mkdir(conf.get_lib_dir(), mode=0o700)
             os.chdir(conf.get_lib_dir())
+
+        if conf.enable_rdma():
+            self.rdma_handler.install_driver()
 
         if conf.get_detect_scvmm_env():
             self.scvmm_handler.run()
