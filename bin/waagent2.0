@@ -4918,8 +4918,9 @@ class WALAEventMonitor(WALAEvent):
     def EventsLoop(self):
         LastReportHeartBeatTime = datetime.datetime.min
         try:
-            while(True):
-                if (datetime.datetime.now()-LastReportHeartBeatTime) > datetime.timedelta(hours=12):
+            while True:
+                if (datetime.datetime.now()-LastReportHeartBeatTime) > \
+                        datetime.timedelta(minutes=30):
                     LastReportHeartBeatTime = datetime.datetime.now()
                     AddExtensionEvent(op=WALAEventOperation.HeartBeat,name="WALA",isSuccess=True)
                 self.postNumbersInOneLoop=0
