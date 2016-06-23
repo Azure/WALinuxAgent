@@ -38,12 +38,14 @@ class TestExtension(AgentTestCase):
                           handler_status.name)
         self.assertEquals(version, handler_status.version)
         self.assertEquals(expected_ext_count, len(handler_status.extensions))
+        return
     
     def _assert_no_handler_status(self, report_vm_status):
         self.assertTrue(report_vm_status.called)
         args, kw = report_vm_status.call_args
         vm_status = args[0]
         self.assertEquals(0, len(vm_status.vmAgent.extensionHandlers))
+        return
 
     def _create_mock(self, test_data, mock_http_get, MockCryptUtil, _):
         """Test enable/disable/unistall of an extension"""
@@ -59,7 +61,6 @@ class TestExtension(AgentTestCase):
         protocol.report_vm_status = MagicMock()
 
         handler.protocol_util.get_protocol = Mock(return_value=protocol)
-        
         return handler, protocol
         
     def test_ext_handler(self, *args):
@@ -185,84 +186,77 @@ class TestExtension(AgentTestCase):
     def test_ext_handler_version_decide_autoupgrade_internalversion(self, *args):
         for internal in [False, True]:
             for autoupgrade in [False, True]:
-                # only python 3.4+ has subTest
-                # with self.subTest(autoupgrade=autoupgrade, internal=internal):
-                    if internal:
-                        config_version = '1.2.0'
-                        decision_version = '1.2.0'
-                        if autoupgrade:
-                            datafile = DATA_FILE_EXT_AUTOUPGRADE_INTERNALVERSION
-                        else:
-                            datafile = DATA_FILE_EXT_INTERNALVERSION
+                if internal:
+                    config_version = '1.2.0'
+                    decision_version = '1.2.0'
+                    if autoupgrade:
+                        datafile = DATA_FILE_EXT_AUTOUPGRADE_INTERNALVERSION
                     else:
-                        config_version = '1.0.0'
-                        if autoupgrade:
-                            datafile = DATA_FILE_EXT_AUTOUPGRADE
-                            decision_version = '1.1.0'
-                        else:
-                            datafile = DATA_FILE
-                            decision_version = '1.0.0'
+                        datafile = DATA_FILE_EXT_INTERNALVERSION
+                else:
+                    config_version = '1.0.0'
+                    if autoupgrade:
+                        datafile = DATA_FILE_EXT_AUTOUPGRADE
+                        decision_version = '1.1.0'
+                    else:
+                        datafile = DATA_FILE
+                        decision_version = '1.0.0'
 
-                    _, protocol = self._create_mock(WireProtocolData(datafile), *args)
-                    ext_handlers, _ = protocol.get_ext_handlers()
-                    self.assertEqual(1, len(ext_handlers.extHandlers))
-                    ext_handler = ext_handlers.extHandlers[0]
-                    self.assertEqual('OSTCExtensions.ExampleHandlerLinux', ext_handler.name)
-                    self.assertEqual(config_version, ext_handler.properties.version, "config version.")
-                    ExtHandlerInstance(ext_handler, protocol).decide_version()
-                    self.assertEqual(decision_version, ext_handler.properties.version, "decision version.")
+                _, protocol = self._create_mock(WireProtocolData(datafile), *args)
+                ext_handlers, _ = protocol.get_ext_handlers()
+                self.assertEqual(1, len(ext_handlers.extHandlers))
+                ext_handler = ext_handlers.extHandlers[0]
+                self.assertEqual('OSTCExtensions.ExampleHandlerLinux', ext_handler.name)
+                self.assertEqual(config_version, ext_handler.properties.version, "config version.")
+                ExtHandlerInstance(ext_handler, protocol).decide_version()
+                self.assertEqual(decision_version, ext_handler.properties.version, "decision version.")
 
     def test_ext_handler_version_decide_between_minor_versions(self, *args):
         """
         Using v2.x~v4.x for unit testing
         Available versions via manifest XML (I stands for internal):
         2.0.0, 2.1.0, 2.1.1, 2.2.0, 2.3.0(I), 2.4.0(I), 3.0, 3.1, 4.0.0.0, 4.0.0.1, 4.1.0.0
+        See tests/data/wire/manifest.xml for possible versions
         """
 
-        # (config_version, exptected_version, autoupgrade_expected_version)
+        # (installed_version, config_version, exptected_version, autoupgrade_expected_version)
         cases = [
-            ('2.0',     '2.0.0',    '2.2.0'),
-            ('2.0.0',   '2.0.0',    '2.2.0'),
-            ('2.1.0',   '2.1.1',    '2.2.0'),
-            ('2.2.0',   '2.2.0',    '2.2.0'),
-            ('2.3.0',   '2.3.0',    '2.4.0'),
-            ('2.4.0',   '2.4.0',    '2.4.0'),
-            ('3.0',     '3.0',      '3.1'),
-            ('4.0',     '4.0.0.1',  '4.1.0.0'),
+            (None,  '2.0',     '2.0.0',    '2.2.0'),
+            (None,  '2.0.0',   '2.0.0',    '2.2.0'),
+            ('1.0', '1.0.0',   '1.0.0',    '1.1.0'),
+            (None,  '2.1.0',   '2.1.1',    '2.2.0'),
+            (None,  '2.2.0',   '2.2.0',    '2.2.0'),
+            (None,  '2.3.0',   '2.3.0',    '2.3.0'),
+            (None,  '2.4.0',   '2.4.0',    '2.4.0'),
+            (None,  '3.0',     '3.0',      '3.1'),
+            (None,  '4.0',     '4.0.0.1',  '4.1.0.0'),
         ]
 
         _, protocol = self._create_mock(WireProtocolData(DATA_FILE), *args)
         version_uri = Mock()
         version_uri.uri = 'http://some/Microsoft.OSTCExtensions_ExampleHandlerLinux_asiaeast_manifest.xml'
 
-        for (config_version, expected_version, autoupgrade_expected_version) in cases:
+        for (installed_version, config_version, expected_version, autoupgrade_expected_version) in cases:
             ext_handler = Mock()
             ext_handler.properties = Mock()
             ext_handler.name = 'OSTCExtensions.ExampleHandlerLinux'
             ext_handler.versionUris = [version_uri]
             ext_handler.properties.version = config_version
-            ExtHandlerInstance(ext_handler, protocol).decide_version()
+            
+            ext_handler_instance = ExtHandlerInstance(ext_handler, protocol)
+            ext_handler_instance.get_installed_version = Mock(return_value=installed_version)
+
+            ext_handler_instance.decide_version()
             self.assertEqual(expected_version, ext_handler.properties.version)
 
             ext_handler.properties.version = config_version
             ext_handler.properties.upgradePolicy = 'auto'
-            ExtHandlerInstance(ext_handler, protocol).decide_version()
+
+            ext_handler_instance = ExtHandlerInstance(ext_handler, protocol)
+            ext_handler_instance.get_installed_version = Mock(return_value=installed_version)
+
+            ext_handler_instance.decide_version()
             self.assertEqual(autoupgrade_expected_version, ext_handler.properties.version)
-
-    def test_ext_handler_version_invalid_versions(self, *args):
-        cases = ['2', '2.5', '2.0.1']
-
-        _, protocol = self._create_mock(WireProtocolData(DATA_FILE), *args)
-        version_uri = Mock()
-        version_uri.uri = 'http://some/Microsoft.OSTCExtensions_ExampleHandlerLinux_asiaeast_manifest.xml'
-
-        for config_version in cases:
-            ext_handler = Mock()
-            ext_handler.properties = Mock()
-            ext_handler.name = 'OSTCExtensions.ExampleHandlerLinux'
-            ext_handler.versionUris = [version_uri]
-            ext_handler.properties.version = config_version
-            self.assertRaises(ExtensionError, ExtHandlerInstance(ext_handler, protocol).decide_version)
 
 
 if __name__ == '__main__':

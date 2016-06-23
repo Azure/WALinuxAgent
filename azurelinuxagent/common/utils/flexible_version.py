@@ -34,9 +34,11 @@ class FlexibleVersion(version.Version):
 
         self._compile_pattern()
 
+        self.prerelease = None
+        self.version = ()
         if vstring:
-            self.parse(vstring)
-
+            self._parse(vstring)
+        return
 
     _nn_version = 'version'
     _nn_prerel_sep = 'prerel_sep'
@@ -47,10 +49,25 @@ class FlexibleVersion(version.Version):
         pn=_nn_prerel_sep,
         sep='|'.join(map(re.escape, ('.', '-'))))
 
-    def parse(self, vstring):
+    @property
+    def major(self):
+        return self.version[0] if len(self.version) > 0 else 0
+
+    @property
+    def minor(self):
+        return self.version[1] if len(self.version) > 1 else 0
+
+    @property
+    def patch(self):
+        return self.version[2] if len(self.version) > 2 else 0
+
+    def _parse(self, vstring):
         m = self.version_re.match(vstring)
         if not m:
             raise ValueError("Invalid version number '{0}'".format(vstring))
+
+        self.prerelease = None
+        self.version = ()
 
         self.prerel_sep = m.group(self._nn_prerel_sep)
         tag = m.group(self._nn_prerel_tag)
@@ -58,10 +75,9 @@ class FlexibleVersion(version.Version):
 
         if tag is not None and tag_num is not None:
             self.prerelease = (tag, int(tag_num) if len(tag_num) else None)
-        else:
-            self.prerelease = None
 
         self.version = tuple(map(int, self.sep_re.split(m.group(self._nn_version))))
+        return
 
     def __add__(self, increment):
         version = list(self.version)

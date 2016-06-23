@@ -18,6 +18,7 @@
         </Plugin>
         <Plugin>
             <Version>2.1.0</Version><Uris><Uri>http://host/OSTCExtensions.ExampleHandlerLinux__2.1.0</Uri></Uris>
+            <DisallowMajorVersionUpgrade>True</DisallowMajorVersionUpgrade>
         </Plugin>
         <Plugin>
             <Version>2.1.1</Version><Uris><Uri>http://host/OSTCExtensions.ExampleHandlerLinux__2.1.1</Uri></Uris>

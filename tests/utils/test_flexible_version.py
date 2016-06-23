@@ -270,6 +270,48 @@ class TestFlexibleVersion(unittest.TestCase):
                 .format(t))
         return
 
+    def test_major(self):
+        tests = {
+            '1' : 1,
+            '1.2' : 1,
+            '1.2.3' : 1,
+            '1.2.3.4' : 1
+        }
+        for test in iter(tests):
+            expectation = tests[test]
+            self.assertEqual(
+                expectation,
+                FlexibleVersion(test).major)
+        return
+
+    def test_minor(self):
+        tests = {
+            '1' : 0,
+            '1.2' : 2,
+            '1.2.3' : 2,
+            '1.2.3.4' : 2
+        }
+        for test in iter(tests):
+            expectation = tests[test]
+            self.assertEqual(
+                expectation,
+                FlexibleVersion(test).minor)
+        return
+
+    def test_patch(self):
+        tests = {
+            '1' : 0,
+            '1.2' : 0,
+            '1.2.3' : 3,
+            '1.2.3.4' : 3
+        }
+        for test in iter(tests):
+            expectation = tests[test]
+            self.assertEqual(
+                expectation,
+                FlexibleVersion(test).patch)
+        return
+
     def test_parse(self):
         tests = {
             "1.2.3.4": ((1, 2, 3, 4), None),
@@ -279,7 +321,7 @@ class TestFlexibleVersion(unittest.TestCase):
         }
         for test in iter(tests):
             expectation = tests[test]
-            self.v.parse(test)
+            self.v._parse(test)
             self.assertEqual(expectation, (self.v.version, self.v.prerelease))
         return
 

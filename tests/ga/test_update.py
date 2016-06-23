@@ -15,10 +15,11 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
+from __future__ import print_function
+
 import copy
 import glob
 import json
-import mock
 import random
 import subprocess
 import sys
@@ -79,6 +80,12 @@ def get_agent_name():
 
 def get_agent_version():
     return FlexibleVersion(get_agent_name().split("-")[1])
+
+
+def faux_logger():
+    print("STDOUT message")
+    print("STDERR message", file=sys.stderr)
+    return DEFAULT
 
 
 class UpdateTestCase(AgentTestCase):
@@ -576,6 +583,30 @@ class TestUpdate(UpdateTestCase):
         self.assertEqual(
             self._test_run_latest(),
             sys.argv[0])
+        return
+
+    def test_run_latest_forwards_output(self):
+        try:
+            tempdir = tempfile.mkdtemp()
+            stdout_path = os.path.join(tempdir, "stdout")
+            stderr_path = os.path.join(tempdir, "stderr")
+
+            with open(stdout_path, "w") as stdout:
+                with open(stderr_path, "w") as stderr:
+                    saved_stdout, sys.stdout = sys.stdout, stdout
+                    saved_stderr, sys.stderr = sys.stderr, stderr
+                    try:
+                        self._test_run_latest(side_effect=faux_logger)
+                    finally:
+                        sys.stdout = saved_stdout
+                        sys.stderr = saved_stderr
+
+            with open(stdout_path, "r") as stdout:
+                self.assertEqual(1, len(stdout.readlines()))
+            with open(stderr_path, "r") as stderr:
+                self.assertEqual(1, len(stderr.readlines()))
+        finally:
+            shutil.rmtree(tempdir, True)
         return
 
     def test_run_latest_marks_failures(self):
