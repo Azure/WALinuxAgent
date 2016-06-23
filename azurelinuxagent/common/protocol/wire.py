@@ -684,7 +684,7 @@ class WireClient(object):
                     else:
                         logger.info("RDMA capabilities are enabled in configuration")
                         rdma_device_configured = True # do not run again
-                        self.write_ip_on_rdma()
+                        self.setup_rdma_dev()
                 else:
                     logger.info("RDMA capabilities are not enabled, skipping")
 
@@ -884,7 +884,7 @@ class WireClient(object):
             "x-ms-guest-agent-public-x509-cert": cert
         }
 
-    def write_ip_on_rdma(self):
+    def setup_rdma_dev(self):
         logger.verbose("Parsing SharedConfig XML contents for RDMA details")
         xml_doc = parse_doc(self.shared_conf.xml_text)
         if xml_doc is None:
