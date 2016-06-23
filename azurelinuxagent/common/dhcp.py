@@ -82,9 +82,10 @@ class DhcpHandler(object):
         route_exists = False
         logger.info("test for route to {0}".format(KNOWN_WIRESERVER_IP))
         try:
+            # grep -c returns 1 if the count is 0, so ignore the return code
             route = shellutil.run_get_output(
-                "grep -c {0} /proc/net/route".format(
-                    KNOWN_WIRESERVER_IP_ENTRY))
+                "grep -c {0} /proc/net/route".format(KNOWN_WIRESERVER_IP_ENTRY),
+                chk_err=False)
             # route[0]: (int) return code
             # route[1]: (str) output
             if route is not None and route[0] == 0 and int(route[1]) > 0:
