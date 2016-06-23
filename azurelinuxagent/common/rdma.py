@@ -137,7 +137,7 @@ class RDMADeviceHandler(object):
         RDMADeviceHandler.wait_rdma_device(
             self.rdma_dev, self.device_check_timeout_sec, self.device_check_interval_sec)
         RDMADeviceHandler.update_dat_conf(dapl_config_paths, self.ipv4_addr)
-        RDMADeviceHandler.write_rdma_config_on_device(
+        RDMADeviceHandler.write_rdma_config_to_device(
             self.rdma_dev, self.ipv4_addr, self.mac_addr)
         RDMADeviceHandler.update_network_interface(self.mac_addr, self.ipv4_addr)
 
@@ -172,16 +172,16 @@ class RDMADeviceHandler(object):
         return re.sub(old, new, cfg)
 
     @staticmethod
-    def write_rdma_config_on_device(path, ipv4_addr, mac_addr):
-        data = RDMADeviceHandler.get_rdma_config(ipv4_addr, mac_addr)
+    def write_rdma_config_to_device(path, ipv4_addr, mac_addr):
+        data = RDMADeviceHandler.generate_rdma_config(ipv4_addr, mac_addr)
         logger.info(
             "RDMA: Updating device with configuration: {0}".format(data))
-        with open(path, "w") as c:
-            c.write(data)
+        with open(path, "w") as f:
+            f.write(data)
         logger.info("RDMA: Updated device with IPv4/MAC addr successfully")
 
     @staticmethod
-    def get_rdma_config(ipv4_addr, mac_addr):
+    def generate_rdma_config(ipv4_addr, mac_addr):
         return 'rdmaMacAddress="{0}" rdmaIPv4Address="{1}"'.format(mac_addr, ipv4_addr)
 
     @staticmethod
