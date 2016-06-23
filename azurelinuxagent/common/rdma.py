@@ -29,7 +29,8 @@ class RDMAHandler(object):
 
     driver_module_name = 'hv_network_direct'
 
-    def __get_rdma_version(self):
+    @staticmethod
+    def get_rdma_version():
         """Retrieve the firmware version information from the system.
            This depends on information provided by the Linux kernel."""
 
