@@ -25,13 +25,14 @@ from azurelinuxagent.common.rdma import RDMAHandler
 
 
 class SUSERDMAHandler(RDMAHandler):
+
     def install_driver(self):
         """Install the appropriate driver package for the RDMA firmware"""
 
         fw_version = self._RDMAHandler__get_rdma_version()
         if not fw_version:
-            error_msg = 'Could not determine firmware version. Therefore, '
-            error_msg += 'no driver will be installed.'
+            error_msg = 'RDMA: Could not determine firmware version. '
+            error_msg += 'Therefore, no driver will be installed.'
             logger.error(error_msg)
             return
         zypper_install = 'zypper -n in %s'
@@ -46,15 +47,15 @@ class SUSERDMAHandler(RDMAHandler):
             if package_name in entry:
                 sections = entry.split('|')
                 if len(sections) < 4:
-                    error_msg = 'Unexpected output of "%s" with result "%s"'
+                    error_msg = 'RDMA: Unexpected output from"%s": "%s"'
                     logger.error(error_msg % (cmd, entry))
                     continue
                 installed = sections[0].strip()
                 version = sections[3].strip()
                 driver_package_versions.append(version)
                 if fw_version in version and installed == 'i':
-                    info_msg = 'Matching driver package "%s-%s" '
-                    info_msg += 'is already installed, nothing to do'
+                    info_msg = 'RDMA: Matching driver package "%s-%s" '
+                    info_msg += 'is already installed, nothing to do.'
                     logger.info(info_msg % (package_name, version))
                     return True
                 if installed == 'i':
@@ -67,23 +68,29 @@ class SUSERDMAHandler(RDMAHandler):
             # Unloading the particular driver with rmmod does not work
             # We have to reboot after the new driver is installed
             if self.is_driver_loaded():
-                info_msg = 'Currently loaded driver does not match the '
-                info_msg += 'Firmware implementation, rebbot is required.'
+                info_msg = 'RDMA: Currently loaded driver does not match the '
+                info_msg += 'firmware implementation, reboot will be required.'
                 logger.info(info_msg)
                 requires_reboot = True
+            logger.info("RDMA: removing package %s" % package_name)
             cmd = zypper_remove % package_name
             shellutil.run(cmd)
+            logger.info("RDMA: removed package %s" % package_name)
 
+        logger.info("RDMA: looking for fw version %s in packages" % fw_version)
         for entry in driver_package_versions:
-            if fw_version in version:
+            if not fw_version in version:
+                logger.info("Package '%s' is not a match." % entry)
+            else:
+                logger.info("Package '%s' is a match. Installing." % entry)
                 complete_name = '%s-%s' % (package_name, version)
                 cmd = zypper_install % complete_name
                 result = shellutil.run(cmd)
                 if result:
-                    error_msg = 'Failed install of package "%s" '
+                    error_msg = 'RDMA: Failed install of package "%s" '
                     error_msg += 'from available repositories.'
                     logger.error(error_msg % complete_name)
-                msg = 'Successfully installed "%s" from '
+                msg = 'RDMA: Successfully installed "%s" from '
                 msg += 'configured repositories'
                 logger.info(msg % complete_name)
                 self.load_driver_module()
@@ -91,22 +98,25 @@ class SUSERDMAHandler(RDMAHandler):
                     self.reboot_system()
                 return True
         else:
+            logger.info("RDMA: No suitable match in repos. Trying local.")
             local_packages = glob.glob('/opt/microsoft/rdma/*.rpm')
             for local_package in local_packages:
+                logger.info("Examining: %s" % local_package)
                 if local_package.endswith('.src.rpm'):
                     continue
                 if (
                         package_name in local_package and
                         fw_version in local_package
                 ):
+                    logger.info("RDMA: Installing: %s" % local_package)
                     cmd = zypper_install % local_package
                     result = shellutil.run(cmd)
                     if result:
-                        error_msg = 'Failed install of package "%s" '
+                        error_msg = 'RDMA: Failed install of package "%s" '
                         error_msg += 'from local package cache'
                         logger.error(error_msg % local_package)
                         break
-                    msg = 'Successfully installed "%s" from '
+                    msg = 'RDMA: Successfully installed "%s" from '
                     msg += 'local package cache'
                     logger.info(msg % (local_package))
                     self.load_driver_module()

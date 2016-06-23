@@ -92,7 +92,7 @@ class RDMAHandler(object):
     def reboot_system(self):
         """Reboot the system. This is required as the kernel module for
            the rdma driver cannot be unloaded with rmmod"""
-        logger.info('Rebooting system.')
+        logger.info('RDMA: Rebooting system.')
         ret = shellutil.run('shutdown -r now')
         if ret != 0:
-            logger.error('Failed to reboot the system')
+            logger.error('RDMA: Failed to reboot the system')
