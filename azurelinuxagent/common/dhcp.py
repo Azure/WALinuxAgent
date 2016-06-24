@@ -20,6 +20,7 @@ import array
 import time
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.shellutil as shellutil
+from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.textutil import hex_dump, hex_dump2, \
     hex_dump3, \
     compare_bytes, str_to_ord, \
@@ -82,13 +83,9 @@ class DhcpHandler(object):
         route_exists = False
         logger.info("test for route to {0}".format(KNOWN_WIRESERVER_IP))
         try:
-            # grep -c returns 1 if the count is 0, so ignore the return code
-            route = shellutil.run_get_output(
-                "grep -c {0} /proc/net/route".format(KNOWN_WIRESERVER_IP_ENTRY),
-                chk_err=False)
-            # route[0]: (int) return code
-            # route[1]: (str) output
-            if route is not None and route[0] == 0 and int(route[1]) > 0:
+            route_file = '/proc/net/route'
+            if os.path.exists(route_file) and \
+                    KNOWN_WIRESERVER_IP_ENTRY in open(route_file).read():
                 # reset self.gateway and self.routes
                 # we do not need to alter the routing table
                 self.endpoint = KNOWN_WIRESERVER_IP
