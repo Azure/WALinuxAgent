@@ -63,7 +63,7 @@ class RDMAHandler(object):
     def load_driver_module(self):
         """Load the kernel driver, this depends on the proper driver
            to be installed with the install_driver() method"""
-        logger.info('RDMA: Loading the kernel driver.')
+        logger.info("RDMA: probing module '%s'" % self.driver_module_name)
         result = shellutil.run('modprobe %s' % self.driver_module_name)
         if result != 0:
             error_msg = 'Could not load "%s" kernel module. '
@@ -82,7 +82,7 @@ class RDMAHandler(object):
 
     def is_driver_loaded(self):
         """Check if the network module is loaded in kernel space"""
-        cmd = 'lsmod | grep %s' % self.driver_module_name
+        cmd = 'lsmod | grep ^%s' % self.driver_module_name
         status, loaded_modules = shellutil.run_get_output(cmd)
         logger.info('RDMA: Checking if the module loaded.')
         if loaded_modules:
