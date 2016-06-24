@@ -1199,11 +1199,18 @@ class ExtensionManifest(object):
     def _handle_packages(self, packages, isinternal):
         for package in packages:
             version = findtext(package, "Version")
+
+            disallow_major_upgrade = findtext(package, "DisallowMajorVersionUpgrade")
+            if disallow_major_upgrade is None:
+                disallow_major_upgrade = ''
+            disallow_major_upgrade = disallow_major_upgrade.lower() == "true"
+
             uris = find(package, "Uris")
             uri_list = findall(uris, "Uri")
             uri_list = [gettext(x) for x in uri_list]
             pkg = ExtHandlerPackage()
             pkg.version = version
+            pkg.disallow_major_upgrade = disallow_major_upgrade
             for uri in uri_list:
                 pkg_uri = ExtHandlerVersionUri()
                 pkg_uri.uri = uri

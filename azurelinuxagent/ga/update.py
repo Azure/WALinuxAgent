@@ -80,10 +80,9 @@ class UpdateHandler(object):
             agent_bin = latest_agent.get_agent_bin()
             agent_name = latest_agent.name()
 
-        devnull = open(os.devnull, 'w')
         try:
             child = subprocess.Popen([agent_bin, 'run-exthandlers'], 
-                                      stdout=devnull, stderr=devnull)
+                                      stdout=sys.stdout, stderr=sys.stderr)
             ret = child.wait()
             if ret == None:
                 ret = 1

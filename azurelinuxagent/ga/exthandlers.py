@@ -16,14 +16,21 @@
 #
 # Requires Python 2.4+ and Openssl 1.0+
 #
-import os
-import zipfile
-import time
+
+import glob
 import json
-import subprocess
+import os
 import shutil
+import subprocess
+import time
+import zipfile
+
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
+import azurelinuxagent.common.utils.fileutil as fileutil
+import azurelinuxagent.common.utils.restutil as restutil
+import azurelinuxagent.common.utils.shellutil as shellutil
+
 from azurelinuxagent.common.event import add_event, WALAEventOperation
 from azurelinuxagent.common.exception import ExtensionError, ProtocolError, HttpError
 from azurelinuxagent.common.future import ustr
@@ -35,9 +42,7 @@ from azurelinuxagent.common.protocol.restapi import ExtHandlerStatus, \
                                                     VMStatus, ExtHandler, \
                                                     get_properties, \
                                                     set_properties
-import azurelinuxagent.common.utils.fileutil as fileutil
-import azurelinuxagent.common.utils.restutil as restutil
-import azurelinuxagent.common.utils.shellutil as shellutil
+from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.utils.textutil import Version
 from azurelinuxagent.common.protocol import get_protocol_util
 
@@ -287,44 +292,102 @@ class ExtHandlerInstance(object):
                                  logger.LogLevel.INFO, log_file)
 
     def decide_version(self):
-        """
-        If auto-upgrade, get the largest public extension version under 
-        the requested major version family of currently installed plugin version
-
-        Else, get the highest hot-fix for requested version, 
-        """
         self.logger.info("Decide which version to use")
         try:
             pkg_list = self.protocol.get_ext_handler_pkgs(self.ext_handler)
         except ProtocolError as e:
             raise ExtensionError("Failed to get ext handler pkgs", e)
 
-        version = self.ext_handler.properties.version 
-        update_policy = self.ext_handler.properties.upgradePolicy
-        
-        version_frag = version.split('.')
-        if len(version_frag) < 2:
-            raise ExtensionError("Wrong version format: {0}".format(version))
+        # Determine the desired and installed versions
+        requested_version = FlexibleVersion(self.ext_handler.properties.version)
+        installed_version = FlexibleVersion(self.get_installed_version())
+        if installed_version is None:
+            installed_version = requested_version
 
-        version_prefix = None
-        if update_policy is not None and update_policy == 'auto':
-            version_prefix = "{0}.".format(version_frag[0])
+        # Divide packages
+        # - Find the installed package (its version must exactly match)
+        # - Find the internal candidate (its version must exactly match)
+        # - Separate the public packages
+        internal_pkg = None
+        installed_pkg = None
+        public_pkgs = []
+        for pkg in pkg_list.versions:
+            pkg_version = FlexibleVersion(pkg.version)
+            if pkg_version == installed_version:
+                installed_pkg = pkg
+            if pkg.isinternal and pkg_version == requested_version:
+                internal_pkg = pkg
+            if not pkg.isinternal:
+                public_pkgs.append(pkg)
+
+        internal_version = FlexibleVersion(internal_pkg.version) \
+                            if internal_pkg is not None \
+                            else FlexibleVersion()
+        public_pkgs.sort(key=lambda pkg: FlexibleVersion(pkg.version), reverse=True)
+
+        # Determine the preferred version and type of upgrade occurring
+        preferred_version = max(requested_version, installed_version)
+        is_major_upgrade = preferred_version.major > installed_version.major
+        allow_minor_upgrade = self.ext_handler.properties.upgradePolicy == 'auto'
+
+        # Find the first public candidate which
+        # - Matches the preferred major version
+        # - Does not upgrade to a new, disallowed major version
+        # - And only increments the minor version if allowed
+        # Notes:
+        # - The patch / hotfix version is not considered
+        public_pkg = None
+        for pkg in public_pkgs:
+            pkg_version = FlexibleVersion(pkg.version)
+            if pkg_version.major == preferred_version.major \
+                and (not pkg.disallow_major_upgrade or not is_major_upgrade) \
+                and (allow_minor_upgrade or pkg_version.minor == preferred_version.minor):
+                public_pkg = pkg
+                break
+
+        # If there are no candidates, locate the highest public version whose
+        # major matches that installed
+        if internal_pkg is None and public_pkg is None:
+            for pkg in public_pkgs:
+                pkg_version = FlexibleVersion(pkg.version)
+                if pkg_version.major == installed_version.major:
+                    public_pkg = pkg
+                    break
+
+        public_version = FlexibleVersion(public_pkg.version) \
+                            if public_pkg is not None \
+                            else FlexibleVersion()
+
+        # Select the candidate
+        # - Use the public candidate if there is no internal candidate or
+        #   the public is more recent (e.g., a hotfix patch)
+        # - Otherwise use the internal candidate
+        if internal_pkg is None or (public_pkg is not None and public_version > internal_version):
+            selected_pkg = public_pkg
         else:
-            version_prefix = "{0}.{1}.".format(version_frag[0], version_frag[1])
-        
-        packages = [x for x in pkg_list.versions
-                    if x.version.startswith(version_prefix) and
-                        Version(x.version) >= Version(version) or
-                        x.version == version]
-        
-        packages = sorted(packages, key=lambda x: (not x.isinternal, Version(x.version)), 
-                          reverse=True)
+            selected_pkg = internal_pkg
 
-        if len(packages) <= 0:
-            raise ExtensionError("Failed to find and valid extension package")
-        self.pkg = packages[0]
-        self.ext_handler.properties.version = packages[0].version
+        selected_version = FlexibleVersion(selected_pkg.version) \
+                            if selected_pkg is not None \
+                            else FlexibleVersion()
+
+        # Finally, update the version only if not downgrading
+        # Note:
+        #  - A downgrade, which will be bound to the same major version,
+        #    is allowed if the installed version is no longer available
+        if selected_pkg is None \
+            or (installed_pkg is not None and selected_version < installed_version):
+            self.pkg = installed_pkg
+            self.ext_handler.properties.version = installed_version
+        else:
+            self.pkg = selected_pkg
+            self.ext_handler.properties.version = selected_pkg.version
+
+        if self.pkg is None:
+            raise ExtensionError("Failed to find any valid extension package")
+
         self.logger.info("Use version: {0}", self.pkg.version)
+        return
 
     def version_gt(self, other):
         self_version = self.ext_handler.properties.version
@@ -332,31 +395,29 @@ class ExtHandlerInstance(object):
         return Version(self_version) > Version(other_version)
 
     def get_installed_ext_handler(self):
-        lastest_version = None
-        ext_handler_name = self.ext_handler.name
-
-        for dir_name in os.listdir(conf.get_lib_dir()):
-            path = os.path.join(conf.get_lib_dir(), dir_name)
-            if os.path.isdir(path) and dir_name.startswith(ext_handler_name):
-                seperator = dir_name.rfind('-')
-                if seperator < 0:
-                    continue
-                installed_name = dir_name[0: seperator]
-                installed_version = dir_name[seperator + 1:] 
-                if installed_name != ext_handler_name:
-                    continue
-                if lastest_version is None or \
-                        Version(lastest_version) < Version(installed_version):
-                   lastest_version = installed_version
-
+        lastest_version = self.get_installed_version()
         if lastest_version is None:
             return None
         
-        data = get_properties(self.ext_handler)
-        old_ext_handler = ExtHandler()
-        set_properties("ExtHandler", old_ext_handler, data)
-        old_ext_handler.properties.version = lastest_version
-        return ExtHandlerInstance(old_ext_handler, self.protocol)
+        installed_handler = ExtHandler()
+        set_properties("ExtHandler", installed_handler, get_properties(self.ext_handler))
+        installed_handler.properties.version = lastest_version
+        return ExtHandlerInstance(installed_handler, self.protocol)
+
+    def get_installed_version(self):
+        lastest_version = None
+
+        for path in glob.iglob(os.path.join(conf.get_lib_dir(), self.ext_handler.name + "-*")):
+            if not os.path.isdir(path):
+                continue
+
+            separator = path.rfind('-')
+            version = FlexibleVersion(path[separator+1:])
+
+            if lastest_version is None or lastest_version < version:
+                lastest_version = version
+
+        return str(lastest_version) if lastest_version is not None else None
     
     def copy_status_files(self, old_ext_handler_i):
         self.logger.info("Copy status files from old plugin to new")
