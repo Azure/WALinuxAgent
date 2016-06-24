@@ -123,10 +123,10 @@ class ExtHandlersHandler(object):
         self.log_report = False
 
     def run(self):
-        ext_handlers, etag = None, None
+        self.ext_handlers, etag = None, None
         try:
             self.protocol = self.protocol_util.get_protocol()
-            ext_handlers, etag = self.protocol.get_ext_handlers()
+            self.ext_handlers, etag = self.protocol.get_ext_handlers()
         except ProtocolError as e:
             msg = u"Exception retrieving extension handlers: {0}".format(
                 ustr(e))
@@ -142,18 +142,22 @@ class ExtHandlersHandler(object):
             msg = u"Handle extensions updates for incarnation {0}".format(etag)
             logger.info(msg)
             self.log_report = True #Log status report success on new config
-            self.handle_ext_handlers(ext_handlers)
+            self.handle_ext_handlers()
             self.last_etag = etag
 
-        self.report_ext_handlers_status(ext_handlers)
+        self.report_ext_handlers_status()
+
+    def run_status(self):
+        self.report_ext_handlers_status()
+        return
    
-    def handle_ext_handlers(self, ext_handlers):
-        if ext_handlers.extHandlers is None or \
-                len(ext_handlers.extHandlers) == 0:
+    def handle_ext_handlers(self):
+        if self.ext_handlers.extHandlers is None or \
+                len(self.ext_handlers.extHandlers) == 0:
             logger.info("No ext handler config found")
             return
 
-        for ext_handler in ext_handlers.extHandlers:
+        for ext_handler in self.ext_handlers.extHandlers:
             #TODO handle install in sequence, enable in parallel
             self.handle_ext_handler(ext_handler)
     
@@ -222,15 +226,15 @@ class ExtHandlersHandler(object):
             ext_handler_i.uninstall()
         ext_handler_i.rm_ext_handler_dir()
     
-    def report_ext_handlers_status(self, ext_handlers):
+    def report_ext_handlers_status(self):
         """Go thru handler_state dir, collect and report status"""
         vm_status = VMStatus()
         vm_status.vmAgent.version = AGENT_VERSION
         vm_status.vmAgent.status = "Ready"
         vm_status.vmAgent.message = "Guest Agent is running"
 
-        if ext_handlers is not None:
-            for ext_handler in ext_handlers.extHandlers:
+        if self.ext_handlers is not None:
+            for ext_handler in self.ext_handlers.extHandlers:
                 try:
                     self.report_ext_handler_status(vm_status, ext_handler)
                 except ExtensionError as e:
