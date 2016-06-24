@@ -28,7 +28,7 @@ class SUSERDMAHandler(RDMAHandler):
     def install_driver(self):
         """Install the appropriate driver package for the RDMA firmware"""
 
-        fw_version = self._RDMAHandler__get_rdma_version()
+        fw_version = RDMAHandler.get_rdma_version()
         if not fw_version:
             error_msg = 'Could not determine firmware version. Therefore, '
             error_msg += 'no driver will be installed.'
