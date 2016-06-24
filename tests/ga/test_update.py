@@ -94,7 +94,7 @@ class UpdateTestCase(AgentTestCase):
         return
 
     def agent_bin(self, version):
-        return "{0}-{1}.egg".format(AGENT_NAME, version)
+        return "bin/{0}-{1}.egg".format(AGENT_NAME, version)
 
     def agent_count(self):
         return len(self.agent_dirs())
@@ -127,8 +127,7 @@ class UpdateTestCase(AgentTestCase):
 
     def expand_agents(self):
         for agent in self.agent_pkgs():
-            name = fileutil.trim_ext(os.path.basename(agent), "zip")
-            zipfile.ZipFile(agent).extractall(os.path.join(self.tmp_dir, name))
+            zipfile.ZipFile(agent).extractall(os.path.join(self.tmp_dir))
         return
 
     def prepare_agents(self, base_version=AGENT_VERSION, count=5, is_available=True):
@@ -213,33 +212,35 @@ class TestGuestAgentError(UpdateTestCase):
 
     def test_mark_failure(self):
         err = self.create_error()
-        self.assertFalse(err.is_blacklisted())
+        self.assertFalse(err.is_blacklisted)
 
         for i in range(0, MAX_FAILURE):
             err.mark_failure()
         
         # Agent failed >= MAX_FAILURE, it should be blacklisted
-        self.assertTrue(err.is_blacklisted())
+        self.assertTrue(err.is_blacklisted)
         self.assertEqual(MAX_FAILURE, err.failure_count)
         
         # Clear old failure does not clear recent failure
         err.clear_old_failure()
-        self.assertTrue(err.is_blacklisted())
+        self.assertTrue(err.is_blacklisted)
 
         # Clear does remove old, outdated failures
         err.last_failure -= RETAIN_INTERVAL * 2
         err.clear_old_failure()
-        self.assertFalse(err.is_blacklisted())
+        self.assertFalse(err.is_blacklisted)
+        return
 
     def test_mark_failure_permanent(self):
         err = self.create_error()
 
-        self.assertFalse(err.is_blacklisted())
+        self.assertFalse(err.is_blacklisted)
 
         # Fatal errors immediately blacklist
         err.mark_failure(is_fatal=True)
-        self.assertTrue(err.is_blacklisted())
+        self.assertTrue(err.is_blacklisted)
         self.assertTrue(err.failure_count < MAX_FAILURE)
+        return
 
 
 class TestGuestAgent(UpdateTestCase):
@@ -256,47 +257,53 @@ class TestGuestAgent(UpdateTestCase):
         self.assertRaises(UpdateError, GuestAgent, n)
 
         self.assertNotEqual(None, self.agent)
-        self.assertEqual(get_agent_name(), self.agent.name())
+        self.assertEqual(get_agent_name(), self.agent.name)
         self.assertEqual(get_agent_version(), self.agent.version)
-        path = ".".join(
-            (os.path.join(self.agent_path, get_agent_name()),
-            "egg"))
-        self.assertEqual(path, self.agent.get_agent_bin())
+
         self.assertEqual(self.agent_path, self.agent.get_agent_dir())
+
+        path = os.path.join(self.agent_path, AGENT_MANIFEST_FILE)
+        self.assertEqual(path, self.agent.get_agent_manifest_path())
+
+        path = os.path.join(self.agent_path, self.agent.manifest.get_enable_command())
+        self.assertEqual(path, self.agent.get_agent_bin())
+
         self.assertEqual(
             os.path.join(self.agent_path, AGENT_ERROR_FILE),
             self.agent.get_agent_error_file())
+
         path = ".".join(
             (os.path.join(conf.get_lib_dir(), get_agent_name()),
             "zip"))
         self.assertEqual(path, self.agent.get_agent_pkg_file())
-        self.assertFalse(self.agent.is_downloaded())
-        self.assertFalse(self.agent.is_available())
+
+        self.assertFalse(self.agent.is_downloaded)
+        self.assertFalse(self.agent.is_available)
         return
 
     def test_is_available(self):
-        self.assertFalse(self.agent.is_available())
+        self.assertFalse(self.agent.is_available)
         self.agent._unpack()
-        self.assertTrue(self.agent.is_available())
+        self.assertTrue(self.agent.is_available)
         
         self.agent.mark_failure(is_fatal=True)
-        self.assertFalse(self.agent.is_available())
+        self.assertFalse(self.agent.is_available)
         return
 
     def test_is_blacklisted(self):
         self.agent._unpack()
-        self.assertFalse(self.agent.is_blacklisted())
-        self.assertEqual(self.agent.is_blacklisted(), self.agent.error.is_blacklisted())
+        self.assertFalse(self.agent.is_blacklisted)
+        self.assertEqual(self.agent.is_blacklisted, self.agent.error.is_blacklisted)
         
         self.agent.mark_failure(is_fatal=True)
-        self.assertTrue(self.agent.is_blacklisted())
-        self.assertEqual(self.agent.is_blacklisted(), self.agent.error.is_blacklisted())
+        self.assertTrue(self.agent.is_blacklisted)
+        self.assertEqual(self.agent.is_blacklisted, self.agent.error.is_blacklisted)
         return
 
     def test_is_downloaded(self):
-        self.assertFalse(self.agent.is_downloaded())
+        self.assertFalse(self.agent.is_downloaded)
         self.agent._unpack()
-        self.assertTrue(self.agent.is_downloaded())
+        self.assertTrue(self.agent.is_downloaded)
         return
 
     def test_mark_failure(self):
@@ -305,7 +312,7 @@ class TestGuestAgent(UpdateTestCase):
 
         self.agent.mark_failure(is_fatal=True)
         self.assertEqual(2, self.agent.error.failure_count)
-        self.assertTrue(self.agent.is_blacklisted())
+        self.assertTrue(self.agent.is_blacklisted)
         return
 
     def test_unpack(self):
@@ -313,6 +320,40 @@ class TestGuestAgent(UpdateTestCase):
         self.agent._unpack()
         self.assertTrue(os.path.isdir(self.agent.get_agent_dir()))
         self.assertTrue(os.path.isfile(self.agent.get_agent_bin()))
+        return
+
+    def test_unpack_fail(self):
+        self.assertFalse(os.path.isdir(self.agent.get_agent_dir()))
+        os.remove(self.agent.get_agent_pkg_file())
+        self.agent._unpack()
+        self.assertTrue(self.agent.is_blacklisted)
+        return
+
+    def test_load_manifest_missing(self):
+        self.assertFalse(os.path.isdir(self.agent.get_agent_dir()))
+        self.agent._unpack()
+        os.remove(self.agent.get_agent_manifest_path())
+        self.assertRaises(UpdateError, self.agent._load_manifest)
+        return
+
+    def test_load_manifest_is_empty(self):
+        self.assertFalse(os.path.isdir(self.agent.get_agent_dir()))
+        self.agent._unpack()
+        self.assertTrue(os.path.isfile(self.agent.get_agent_manifest_path()))
+
+        with open(self.agent.get_agent_manifest_path(), "w") as file:
+            json.dump(EMPTY_MANIFEST, file)
+        self.assertRaises(UpdateError, self.agent._load_manifest)
+        return
+
+    def test_load_manifest_is_malformed(self):
+        self.assertFalse(os.path.isdir(self.agent.get_agent_dir()))
+        self.agent._unpack()
+        self.assertTrue(os.path.isfile(self.agent.get_agent_manifest_path()))
+
+        with open(self.agent.get_agent_manifest_path(), "w") as file:
+            file.write("This is not JSON data")
+        self.assertRaises(UpdateError, self.agent._load_manifest)
         return
 
     @patch("azurelinuxagent.ga.update.restutil.http_get")
@@ -324,7 +365,7 @@ class TestGuestAgent(UpdateTestCase):
         agent_pkg_resp.status = restutil.httpclient.OK
         agent_pkg_resp.read = Mock(return_value=agent_pkg)
         mock_http_get.return_value= agent_pkg_resp
-        
+
         pkg = ExtHandlerPackage(version=str(get_agent_version()))
         pkg.uris.append(ExtHandlerPackageUri())
         self.agent = GuestAgent(pkg=pkg)
@@ -348,7 +389,7 @@ class TestGuestAgent(UpdateTestCase):
         self.agent._download()
         self.assertFalse(os.path.isdir(self.agent.get_agent_dir()))
         self.assertFalse(os.path.isfile(self.agent.get_agent_bin()))
-        self.assertFalse(self.agent.is_downloaded())
+        self.assertFalse(self.agent.is_downloaded)
         return
 
     @patch("azurelinuxagent.ga.update.restutil.http_get")
@@ -367,7 +408,7 @@ class TestGuestAgent(UpdateTestCase):
         self.agent._download()
         self.assertTrue(os.path.isdir(self.agent.get_agent_dir()))
         self.assertTrue(os.path.isfile(self.agent.get_agent_bin()))
-        self.assertTrue(self.agent.is_downloaded())
+        self.assertTrue(self.agent.is_downloaded)
         return
 
 
@@ -491,7 +532,7 @@ class TestUpdate(UpdateTestCase):
 
         latest_version = self.prepare_agents(count=self.agent_count()+1, is_available=False)
         latest_path = os.path.join(self.tmp_dir, "{0}-{1}".format(AGENT_NAME, latest_version))
-        self.assertFalse(GuestAgent(latest_path).is_available())
+        self.assertFalse(GuestAgent(latest_path).is_available)
 
         latest_agent = self.update_handler.get_latest_agent()
         self.assertTrue(latest_agent.version < latest_version)
@@ -614,21 +655,21 @@ class TestUpdate(UpdateTestCase):
         self.prepare_agents()
         
         latest_agent = self.update_handler.get_latest_agent()
-        self.assertTrue(latest_agent.is_available())
+        self.assertTrue(latest_agent.is_available)
         self.assertEqual(None, latest_agent.error.last_failure)
         self.assertEqual(0, latest_agent.error.failure_count)
 
         # Any non-zero return code marks a failure
         self._test_run_latest(return_value=1)
 
-        self.assertTrue(latest_agent.is_available())
+        self.assertTrue(latest_agent.is_available)
         self.assertNotEqual(None, latest_agent.error.last_failure)
         self.assertEqual(1, latest_agent.error.failure_count)
 
         # Absence of a return code marks a failure
         self._test_run_latest(return_value=None)
 
-        self.assertTrue(latest_agent.is_available())
+        self.assertTrue(latest_agent.is_available)
         self.assertNotEqual(None, latest_agent.error.last_failure)
         self.assertEqual(2, latest_agent.error.failure_count)
         return
@@ -638,14 +679,14 @@ class TestUpdate(UpdateTestCase):
         self.prepare_agents()
         
         latest_agent = self.update_handler.get_latest_agent()
-        self.assertTrue(latest_agent.is_available())
+        self.assertTrue(latest_agent.is_available)
         self.assertEqual(None, latest_agent.error.last_failure)
         self.assertEqual(0, latest_agent.error.failure_count)
 
         self._test_run_latest(side_effect=Exception("Force blacklisting"))
 
-        self.assertFalse(latest_agent.is_available())
-        self.assertTrue(latest_agent.error.is_blacklisted())
+        self.assertFalse(latest_agent.is_available)
+        self.assertTrue(latest_agent.error.is_blacklisted)
         self.assertNotEqual(None, latest_agent.error.last_failure)
         self.assertEqual(1, latest_agent.error.failure_count)
         return

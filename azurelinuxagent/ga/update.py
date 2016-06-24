@@ -41,6 +41,8 @@ from azurelinuxagent.common.protocol import get_protocol_util
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION
 
+from azurelinuxagent.ga.exthandlers import HandlerManifest
+
 
 AGENT_DIR_GLOB = "{0}-*".format(AGENT_NAME)
 AGENT_PKG_GLOB = "{0}-*.zip".format(AGENT_NAME)
@@ -48,8 +50,26 @@ AGENT_PKG_GLOB = "{0}-*.zip".format(AGENT_NAME)
 AGENT_NAME_PATTERN = re.compile(".*/{0}-(.*)".format(AGENT_NAME))
 
 AGENT_ERROR_FILE = "error.json" # File name for guest agent error record
+AGENT_MANIFEST_FILE = "HandlerManifest.json"
+
+EMPTY_MANIFEST = {
+    "name": "WALinuxAgent",
+    "version": 1.0,
+    "handlerManifest": {
+        "installCommand": "",
+        "uninstallCommand": "",
+        "updateCommand": "",
+        "enableCommand": "",
+        "disableCommand": "",
+        "rebootAfterInstall": False,
+        "reportHeartbeat": False
+    }
+}
 
 MAX_FAILURE = 3 # Max failure allowed for guest agent before blacklisted
+
+GOAL_STATE_INTERVAL = 25
+REPORT_STATUS_INTERVAL = 15
 RETAIN_INTERVAL = 24 * 60 * 60 # Retain interval for black list
 
 
@@ -78,7 +98,7 @@ class UpdateHandler(object):
             agent_name = "'Installed'"
         else:
             agent_bin = latest_agent.get_agent_bin()
-            agent_name = latest_agent.name()
+            agent_name = latest_agent.name
 
         try:
             child = subprocess.Popen([agent_bin, 'run-exthandlers'], 
@@ -100,6 +120,7 @@ class UpdateHandler(object):
                 latest_agent.mark_failure(is_fatal=True)
 
         sys.exit(0)
+        return
 
     def run(self):
         """
@@ -133,7 +154,7 @@ class UpdateHandler(object):
             return None
         
         self._load_agents()
-        available_agents = [agent for agent in self.agents if agent.is_available()]
+        available_agents = [agent for agent in self.agents if agent.is_available]
         return available_agents[0] if len(available_agents) >= 1 else None
 
     def _ensure_latest_agent(self):
@@ -201,7 +222,7 @@ class UpdateHandler(object):
         return len(self.agents) > 0 and self.agents[0].version > current_version
 
     def _filter_blacklisted_agents(self):
-        self.agents = [agent for agent in self.agents if not agent.is_blacklisted()]
+        self.agents = [agent for agent in self.agents if not agent.is_blacklisted]
         return
 
     def _load_agents(self):
@@ -259,57 +280,67 @@ class GuestAgent(object):
 
         if version == None:
             raise UpdateError("Illegal agent version: {0}".format(version))
-        
         self.version = FlexibleVersion(version)
+
+        self.error = GuestAgentError(self.get_agent_error_file())
+        self.manifest = HandlerManifest(EMPTY_MANIFEST)
+
         self.ensure_downloaded()
 
+    @property
     def name(self):
         return "{0}-{1}".format(AGENT_NAME, self.version)
 
     def get_agent_bin(self):
-        return ".".join((os.path.join(self.get_agent_dir(), self.name()), "egg"))
+        return os.path.join(self.get_agent_dir(), self.manifest.get_enable_command())
 
     def get_agent_dir(self):
-        return os.path.join(conf.get_lib_dir(), self.name())
+        return os.path.join(conf.get_lib_dir(), self.name)
 
     def get_agent_error_file(self):
-        return os.path.join(conf.get_lib_dir(), self.name(), AGENT_ERROR_FILE)
+        return os.path.join(conf.get_lib_dir(), self.name, AGENT_ERROR_FILE)
+
+    def get_agent_manifest_path(self):
+        return os.path.join(self.get_agent_dir(), AGENT_MANIFEST_FILE)
 
     def get_agent_pkg_file(self):
-        return ".".join((os.path.join(conf.get_lib_dir(), self.name()), "zip"))
+        return ".".join((os.path.join(conf.get_lib_dir(), self.name), "zip"))
 
+    @property
     def is_available(self):
-        return self.is_downloaded() and not self.is_blacklisted()
+        return self.is_downloaded and not self.is_blacklisted
 
+    @property
     def is_blacklisted(self):
-        return self.error is not None and self.error.is_blacklisted()
+        return self.error is not None and self.error.is_blacklisted
 
+    @property
     def is_downloaded(self):
-        return os.path.isfile(self.get_agent_bin())
+        return os.path.isfile(self.get_agent_manifest_path())
 
     def mark_failure(self, is_fatal=False):
         self.error.mark_failure(is_fatal)
         self.error.save()
         if is_fatal:
-            msg = u"{0} is permenantly blacklisted".format(self.name())
+            msg = u"{0} is permenantly blacklisted".format(self.name)
             logger.warn(msg)
             add_event(u"WALA", is_success=False, message=msg)
         return
 
     def ensure_downloaded(self):
-        if not self.is_downloaded():
+        if not self.is_downloaded:
             if self.pkg is None:
-                msg = u"{0} is missing binary and URIs".format(self.name())
+                msg = u"{0} is missing binary and URIs".format(self.name)
                 logger.warn(msg)
                 add_event(u"WALA", is_success=False, message=msg)
             else:
                 self._download()
 
-        self.error = GuestAgentError(self.get_agent_error_file())
+        self.error.load()
         return
 
     def _download(self):
-        msg = u"Initiating download of guest agent {0}".format(self.name())
+        msg = u"Initiating download of guest agent {0}".format(self.name)
         logger.info(msg)
         add_event(u"WALA", message=msg)
         package = None
@@ -322,28 +353,76 @@ class GuestAgent(object):
                     fileutil.write_file(self.get_agent_pkg_file(), bytearray(package), asbin=True)
                     break
             except restutil.HttpError as e:
-                msg = u"Guest agent {0} download from {1} failed".format(self.name(), uri.uri)
+                msg = u"Guest agent {0} download from {1} failed".format(self.name, uri.uri)
                 logger.warn(msg)
                 add_event(u"WALA", is_success=False, message=msg)
 
         if package is None:
-            msg = u"All attempts to download {0} failed".format(self.name())
+            msg = u"All attempts to download {0} failed".format(self.name)
             logger.warn(msg)
             add_event(u"WALA", message=msg)
         else:
             self._unpack()
         return
 
+    def _load_manifest(self):
+        logger.info("Loading guest agent manifest from {0}", self.get_agent_manifest_path())
+
+        path = self.get_agent_manifest_path()
+        if not os.path.isfile(path):
+            msg = u"Guest Agent {0} is missing the {1} file".format(self.name, AGENT_MANIFEST_FILE)
+            logger.warn(msg)
+            add_event(u"WALA", is_success=False, message=msg)
+            raise UpdateError(msg)
+
+        with open(path, "r") as manifest_file:
+            try:
+                manifests = json.load(manifest_file)
+            except Exception as e:
+                msg = u"Guest Agent {0} has a malformed {1}".format(self.name, AGENT_MANIFEST_FILE)
+                logger.warn(msg)
+                add_event(u"WALA", is_success=False, message=msg)
+                raise UpdateError(msg)
+            if type(manifests) is list:
+                if len(manifests) <= 0:
+                    msg = u"Guest Agent {0} has an empty {1}".format(
+                        self.name,
+                        AGENT_MANIFEST_FILE)
+                    logger.warn(msg)
+                    add_event(u"WALA", is_success=False, message=msg)
+                    raise UpdateError(msg)
+                manifest = manifests[0]
+            else:
+                manifest = manifests
+
+        try:
+            self.manifest = HandlerManifest(manifest)
+            if len(self.manifest.get_enable_command()) <= 0:
+                raise Exception
+        except Exception:
+            msg = u"Guest Agent {0} has an empty {1}".format(self.name, AGENT_MANIFEST_FILE)
+            logger.warn(msg)
+            add_event(u"WALA", is_success=False, message=msg)
+            raise UpdateError(msg)
+
+        logger.verbose("Successfully loaded Guest Agent {0} {1}: {2}",
+            self.name,
+            AGENT_MANIFEST_FILE,
+            str(self.manifest.data))
+        return
+
     def _unpack(self):
-        logger.info("Unpacking guest agent package {0}", self.name())
+        logger.info("Unpacking guest agent package {0}", self.name)
         pkg_file = self.get_agent_pkg_file()
         try:
-            zipfile.ZipFile(pkg_file).extractall(self.get_agent_dir())
-            msg = "Download of guest agent {0} succeeded".format(self.name())
+            zipfile.ZipFile(pkg_file).extractall(conf.get_lib_dir())
+            self._load_manifest()
+            msg = "Download of guest agent {0} succeeded".format(self.name)
             logger.info(msg)
             add_event(u"WALA", message=msg)
         except Exception as e:
-            msg = "Exception unpacking guest agent {0}: {1}".format(self.name(), ustr(e))
+            self.mark_failure(is_fatal=True)
+            msg = "Exception unpacking guest agent {0}: {1}".format(self.name, ustr(e))
             logger.warn(msg)
             add_event(u"WALA", is_success=False, message=msg)
         return
@@ -355,6 +434,7 @@ class GuestAgentError(object):
             raise UpdateError(u"GuestAgentError requires a path")
         self.path = path
         self.load()
+        return
    
     def mark_failure(self, is_fatal=False):
         self.last_failure = time.time()
@@ -371,6 +451,7 @@ class GuestAgentError(object):
             self.was_fatal = False
         return
 
+    @property
     def is_blacklisted(self):
         return self.was_fatal or self.failure_count >= MAX_FAILURE
 
