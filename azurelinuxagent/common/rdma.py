@@ -39,14 +39,14 @@ class RDMAHandler(object):
         base_kernel_err_msg += 'information or the hv_kvp_daemon is not '
         base_kernel_err_msg += 'running.'
         if not os.path.isfile(driver_info_source):
-            error_msg = 'Source file "%s" does not exist. '
+            error_msg = 'RDMA: Source file "%s" does not exist. '
             error_msg += base_kernel_err_msg
             logger.error(error_msg % driver_info_source)
             return
 
         lines = open(driver_info_source).read()
         if not lines:
-            error_msg = 'Source file "%s" is empty. '
+            error_msg = 'RDMA: Source file "%s" is empty. '
             error_msg += base_kernel_err_msg
             logger.error(error_msg % driver_info_source)
             return
@@ -56,13 +56,14 @@ class RDMAHandler(object):
             NdDriverVersion = r.groups()[0]
             return NdDriverVersion
         else:
-            error_msg = 'NdDriverVersion not found in "%s"'
+            error_msg = 'RDMA: NdDriverVersion not found in "%s"'
             logger.error(error_msg % driver_info_source)
             return
 
     def load_driver_module(self):
         """Load the kernel driver, this depends on the proper driver
            to be installed with the install_driver() method"""
+        logger.info('RDMA: Loading the kernel driver.')
         result = shellutil.run('modprobe %s' % self.driver_module_name)
         if result != 0:
             error_msg = 'Could not load "%s" kernel module. '
@@ -71,7 +72,7 @@ class RDMAHandler(object):
                 error_msg % (self.driver_module_name, self.driver_module_name)
             )
             return
-
+        logger.info('RDMA: Loaded the kernel driver successfully.')
         return True
 
     def install_driver(self):
@@ -83,11 +84,16 @@ class RDMAHandler(object):
         """Check if the network module is loaded in kernel space"""
         cmd = 'lsmod | grep %s' % self.driver_module_name
         status, loaded_modules = shellutil.run_get_output(cmd)
+        logger.info('RDMA: Checking if the module loaded.')
         if loaded_modules:
+            logger.info('RDMA: module loaded.')
             return True
+        logger.info('RDMA: module not loaded.')
 
     def reboot_system(self):
         """Reboot the system. This is required as the kernel module for
            the rdma driver cannot be unloaded with rmmod"""
-        logger.info('System reboot')
-        shellutil.run('shutdown -r now')
+        logger.info('RDMA: Rebooting system.')
+        ret = shellutil.run('shutdown -r now')
+        if ret != 0:
+            logger.error('RDMA: Failed to reboot the system')
