@@ -26,6 +26,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import threading
 import time
 import zipfile
 
@@ -70,8 +71,9 @@ EMPTY_MANIFEST = {
 
 MAX_FAILURE = 3 # Max failure allowed for guest agent before blacklisted
 
-GOAL_STATE_INTERVAL = 25
-REPORT_STATUS_INTERVAL = 15
+GOAL_STATE_INTERVAL = 25 # Frequency at which to fetch goal state
+REPORT_STATUS_INTERVAL = 15 # Frequency at which to report status
+REPORT_STATUS_TIMEOUT = 2 * 60 # Timeout to wait for report thread to exit
 RETAIN_INTERVAL = 24 * 60 * 60 # Retain interval for black list
 
 
@@ -90,7 +92,9 @@ class UpdateHandler(object):
         self.osutil = get_osutil()
         self.protocol_util = get_protocol_util()
 
-        self.running = True
+        self.running = threading.Event()
+        self.running_reports = threading.Event()
+
         self.last_etag = None
         self.last_attempt_time = None
 
@@ -98,6 +102,9 @@ class UpdateHandler(object):
 
         self.child_process = None
         self.signal_handler = None
+
+        self.exthandlers_handler = None
+        return
 
     def run_latest(self):
         """
@@ -156,20 +163,53 @@ class UpdateHandler(object):
         This is the main loop which watches for agent and extension updates.
         """
         from azurelinuxagent.ga.exthandlers import get_exthandlers_handler
-        exthandlers_handler = get_exthandlers_handler()
+        self.exthandlers_handler = get_exthandlers_handler()
 
-        # TODO: Add means to stop running
-        while self.running:
+        # Run status reports on separate thread (if possible)
+        report_thread = None
+        try:
+            report_thread = threading.Thread(target=self.run_reports)
+            report_thread.start()
+            self.running_reports.set()
+        except Exception as e:
+            self.report_thread = None
+            msg = u"Status reporting will run on main thread due exception {0}".format(str(e))
+            logger.warn(msg)
+            add_event(u"WALA", is_success=False, message=msg)
+
+
+        # TODO: Listen for SIGTERM etc. and clear the running event
+        self.running.set()
+        while self.running.is_set():
             # Check for a new agent.
             # If a new agent exists (that is, ensure_latest_agent returns
             # true), exit to allow the daemon to respawn using that agent.
             if self._ensure_latest_agent():
-                sys.exit(0)
+                break
 
             # Process extensions
-            exthandlers_handler.run()
+            self.exthandlers_handler.run()
+
+            # Report status (if on main thread)
+            if report_thread is None:
+                self.exthandlers_handler.run_status()
             
-            time.sleep(25)
+            time.sleep(GOAL_STATE_INTERVAL)
+        
+        if report_thread is not None:
+            self.running_reports.clear()
+            report_thread.join(REPORT_STATUS_TIMEOUT)
+
+        sys.exit(0)
+        return
+
+    def run_reports(self):
+        """
+        This is a secondary thread used to upload status reports
+        """
+        while self.running_reports.is_set():
+            self.exthandlers_handler.run_status()
+            time.sleep(REPORT_STATUS_INTERVAL)
         return
 
     def forward_signal(self, signum, frame):
@@ -190,7 +230,6 @@ class UpdateHandler(object):
         non-blacklisted agent (if any).
         Otherwise, return None (implying to use the installed agent).
         """
-
         if not conf.get_autoupdate_enabled():
             return None
         

@@ -683,8 +683,8 @@ class TestUpdate(UpdateTestCase):
         with patch('sys.exit', return_value=0) as mock_exit:
             with patch('subprocess.Popen', return_value=mock_child) as mock_popen:
                 self.update_handler.run_latest()
-                self.assertEqual(1, len(mock_popen.mock_calls))
-                self.assertEqual(1, len(mock_exit.mock_calls))
+                self.assertEqual(1, mock_popen.call_count)
+                self.assertEqual(1, mock_exit.call_count)
 
                 return mock_popen.call_args
 
@@ -785,18 +785,32 @@ class TestUpdate(UpdateTestCase):
         self.assertEqual(1, latest_agent.error.failure_count)
         return
 
-    def _test_run(self, invocations=1, enable_updates=False):
+    def _test_run(self, invocations=1, calls=[call.run()], enable_updates=False):
         conf.get_autoupdate_enabled = Mock(return_value=enable_updates)
-        
-        mock_sleep = _IterationMock(self.update_handler, invocations=invocations)
+
+        # Note:
+        # - Python only allows mutations of objects to which a function has
+        #   a reference. Incrementing an integer directly changes the
+        #   reference. Incrementing an item of a list changes an item to
+        #   which the code has a reference.
+        #   See http://stackoverflow.com/questions/26408941/python-nested-functions-and-variable-scope
+        iterations = [0]
+        def iterator(*args, **kwargs):
+            iterations[0] += 1
+            if iterations[0] >= invocations:
+                self.update_handler.running.clear()
+            return
+
+        calls = calls * invocations
+
         with patch('azurelinuxagent.ga.exthandlers.get_exthandlers_handler') as mock_handler:
-            with  patch('time.sleep', new=mock_sleep):
-                try:
+            with patch('time.sleep', side_effect=iterator) as mock_sleep:
+                with patch('sys.exit') as mock_exit:
                     self.update_handler.run()
-                except:
-                    pass
-                self.assertEqual(invocations + 1, len(mock_handler.mock_calls))
-                self.assertEqual(invocations, len(mock_sleep.mock_calls))
+                    self.assertEqual(1, mock_handler.call_count)
+                    self.assertEqual(mock_handler.return_value.method_calls, calls)
+                    self.assertEqual(invocations, mock_sleep.call_count)
+                    self.assertEqual(1, mock_exit.call_count)
         return
 
     def test_run(self):
@@ -809,9 +823,22 @@ class TestUpdate(UpdateTestCase):
 
     def test_run_stops_if_update_available(self):
         self.update_handler._ensure_latest_agent = Mock(return_value=True)
-        with patch('sys.exit', side_effect=Exception("System Exit")) as mock_exit:
-            self._test_run(invocations=0, enable_updates=True)
-            self.assertEqual(1, len(mock_exit.mock_calls))
+        self._test_run(invocations=0, calls=[], enable_updates=True)
+        return
+
+    def test_run_sends_reports_on_thread(self):
+        with patch('threading.Thread') as mock_thread:
+            self._test_run(invocations=1)
+            calls = [
+                call(target=self.update_handler.run_reports),
+                call().start(),
+                call().join(REPORT_STATUS_TIMEOUT)]
+            self.assertEqual(mock_thread.mock_calls, calls)
+        return
+
+    @patch('threading.Thread', new=None)
+    def test_run_sends_reports_if_no_thread(self):
+        self._test_run(calls=[call.run(), call.run_status()])
         return
 
     def test_set_agents(self):
@@ -824,20 +851,6 @@ class TestUpdate(UpdateTestCase):
         for a in self.update_handler.agents:
             self.assertTrue(v > a.version)
             v = a.version
-        return
-
-
-class _IterationMock(object):
-    def __init__(self, update_handler, invocations=1):
-        self.update_handler = update_handler
-        self.invocations = invocations
-        self.mock_calls = []
-        return
-    
-    def __call__(self, *args, **kwargs):
-        self.mock_calls.append((args, kwargs))
-        if len(self.mock_calls) >= self.invocations:
-            self.update_handler.running = False
         return
 
 
@@ -895,6 +908,19 @@ class ResponseMock(Mock):
 
     def read(self):
         return self.response
+
+
+class ThreadMock(Mock):
+    def __init__(self, *args, **kwargs):
+        Mock.__init__(self)
+        print(args)
+        print(kwargs)
+        return
+
+    def start(self):
+        if self.target is not None:
+            self.target()
+        return
 
 
 if __name__ == '__main__':

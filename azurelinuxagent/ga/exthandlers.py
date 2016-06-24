@@ -144,8 +144,7 @@ class ExtHandlersHandler(object):
             self.log_report = True #Log status report success on new config
             self.handle_ext_handlers()
             self.last_etag = etag
-
-        self.report_ext_handlers_status()
+        return
 
     def run_status(self):
         self.report_ext_handlers_status()

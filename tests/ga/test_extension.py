@@ -69,11 +69,13 @@ class TestExtension(AgentTestCase):
 
         #Test enable scenario. 
         exthandlers_handler.run()
+        exthandlers_handler.run_status()
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
         self._assert_ext_status(protocol.report_ext_status, "success", 0)
 
         #Test goal state not changed
         exthandlers_handler.run()
+        exthandlers_handler.run_status()
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
 
         #Test goal state changed
@@ -82,6 +84,7 @@ class TestExtension(AgentTestCase):
         test_data.ext_conf = test_data.ext_conf.replace("seqNo=\"0\"", 
                                                         "seqNo=\"1\"")
         exthandlers_handler.run()
+        exthandlers_handler.run_status()
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
         self._assert_ext_status(protocol.report_ext_status, "success", 1)
         
@@ -92,6 +95,7 @@ class TestExtension(AgentTestCase):
         test_data.ext_conf = test_data.ext_conf.replace("seqNo=\"1\"", 
                                                         "seqNo=\"2\"")
         exthandlers_handler.run()
+        exthandlers_handler.run_status()
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.1.0")
         self._assert_ext_status(protocol.report_ext_status, "success", 2)
 
@@ -100,6 +104,7 @@ class TestExtension(AgentTestCase):
                                                             "<Incarnation>4<")
         test_data.ext_conf = test_data.ext_conf.replace("enabled", "disabled")
         exthandlers_handler.run()
+        exthandlers_handler.run_status()
         self._assert_handler_status(protocol.report_vm_status, "NotReady", 
                                     1, "1.1.0")
 
@@ -108,12 +113,14 @@ class TestExtension(AgentTestCase):
                                                             "<Incarnation>5<")
         test_data.ext_conf = test_data.ext_conf.replace("disabled", "uninstall")
         exthandlers_handler.run()
+        exthandlers_handler.run_status()
         self._assert_no_handler_status(protocol.report_vm_status)
 
         #Test uninstall again!
         test_data.goal_state = test_data.goal_state.replace("<Incarnation>5<",
                                                             "<Incarnation>6<")
         exthandlers_handler.run()
+        exthandlers_handler.run_status()
         self._assert_no_handler_status(protocol.report_vm_status)
 
     def test_ext_handler_no_settings(self, *args):
@@ -121,6 +128,7 @@ class TestExtension(AgentTestCase):
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
 
         exthandlers_handler.run()
+        exthandlers_handler.run_status()
         self._assert_handler_status(protocol.report_vm_status, "Ready", 0, "1.0.0")
 
     def test_ext_handler_no_public_settings(self, *args):
@@ -128,6 +136,7 @@ class TestExtension(AgentTestCase):
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
 
         exthandlers_handler.run()
+        exthandlers_handler.run_status()
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
 
     def test_ext_handler_no_ext(self, *args):
@@ -136,6 +145,7 @@ class TestExtension(AgentTestCase):
 
         #Assert no extension handler status
         exthandlers_handler.run()
+        exthandlers_handler.run_status()
         self._assert_no_handler_status(protocol.report_vm_status)
     
     @patch('azurelinuxagent.ga.exthandlers.add_event')
@@ -170,6 +180,7 @@ class TestExtension(AgentTestCase):
         test_data = WireProtocolData(DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
         exthandlers_handler.run()
+        exthandlers_handler.run_status()
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
 
         #Remove status file and re-run collecting extension status
@@ -180,6 +191,7 @@ class TestExtension(AgentTestCase):
         os.remove(status_file)
 
         exthandlers_handler.run()
+        exthandlers_handler.run_status()
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
         self._assert_ext_status(protocol.report_ext_status, "error", 0)
 
