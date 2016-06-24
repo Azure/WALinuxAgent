@@ -92,6 +92,8 @@ class MonitorHandler(object):
         self.sysinfo = []
 
     def run(self):
+        self.init_sysinfo()
+
         event_thread = threading.Thread(target=self.daemon)
         event_thread.setDaemon(True)
         event_thread.start()
@@ -175,7 +177,6 @@ class MonitorHandler(object):
             logger.error("{0}", e)
 
     def daemon(self):
-        self.init_sysinfo()
         last_heartbeat = datetime.datetime.min
         period = datetime.timedelta(minutes=30)
         while True:

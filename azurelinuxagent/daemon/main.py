@@ -52,14 +52,6 @@ class DaemonHandler(object):
     def __init__(self):
         self.running = True
         self.osutil = get_osutil()
-        self.protocol_util = get_protocol_util()
-        self.scvmm_handler = get_scvmm_handler()
-        self.resourcedisk_handler = get_resourcedisk_handler()
-        self.rdma_handler = get_rdma_handler()
-        self.monitor_handler = get_monitor_handler()
-        self.env_handler = get_env_handler()
-        self.provision_handler = get_provision_handler()
-        self.update_handler = get_update_handler()
 
     def run(self):
         logger.info("{0} Version:{1}", AGENT_LONG_NAME, AGENT_VERSION)
@@ -95,6 +87,16 @@ class DaemonHandler(object):
 
     def daemon(self):
         logger.info("Run daemon") 
+
+        self.protocol_util = get_protocol_util()
+        self.scvmm_handler = get_scvmm_handler()
+        self.resourcedisk_handler = get_resourcedisk_handler()
+        self.rdma_handler = get_rdma_handler()
+        self.monitor_handler = get_monitor_handler()
+        self.env_handler = get_env_handler()
+        self.provision_handler = get_provision_handler()
+        self.update_handler = get_update_handler()
+
         #Create lib dir
         if not os.path.isdir(conf.get_lib_dir()):
             fileutil.mkdir(conf.get_lib_dir(), mode=0o700)
