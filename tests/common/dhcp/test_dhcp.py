@@ -15,6 +15,7 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
+import mock
 import azurelinuxagent.common.dhcp as dhcp
 import azurelinuxagent.common.osutil.default as osutil
 from tests.tools import *
@@ -29,8 +30,20 @@ class TestDHCP(AgentTestCase):
         self.assertTrue(dhcp_handler.gateway is None)
 
         # execute
-        with patch("subprocess.check_output", return_value=b'1'):
-            self.assertTrue(dhcp_handler.wireserver_route_exists)
+        routing_table = "\
+            Iface	Destination	Gateway 	Flags	RefCnt	Use	Metric	" \
+                        "Mask		MTU	Window	IRTT \n\
+            eth0	00000000	10813FA8	0003	0	    0	5	" \
+                        "00000000	0	0	0   \n\
+            eth0	00345B0A	00000000	0001	0	    0	5	" \
+                        "00000000	0	0	0   \n\
+            lo	    00000000	01345B0A	0003	0	    0	1	" \
+                        "00FCFFFF	0	0	0   \n"
+
+        with patch("os.path.exists", return_value=True):
+            mo = mock.mock_open(read_data=routing_table)
+            with patch(open_patch(), mo):
+                self.assertTrue(dhcp_handler.wireserver_route_exists)
 
         # test
         self.assertTrue(dhcp_handler.endpoint is not None)

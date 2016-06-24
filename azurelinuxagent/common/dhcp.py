@@ -18,17 +18,14 @@ import os
 import socket
 import array
 import time
-import threading
 import azurelinuxagent.common.logger as logger
-import azurelinuxagent.common.conf as conf
-import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.shellutil as shellutil
+from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.textutil import hex_dump, hex_dump2, \
-                                                  hex_dump3, \
-                                                  compare_bytes, str_to_ord, \
-                                                  unpack_big_endian, \
-                                                  unpack_little_endian, \
-                                                  int_to_ip4_addr
+    hex_dump3, \
+    compare_bytes, str_to_ord, \
+    unpack_big_endian, \
+    int_to_ip4_addr
 from azurelinuxagent.common.exception import DhcpError
 from azurelinuxagent.common.osutil import get_osutil
 
@@ -36,13 +33,16 @@ from azurelinuxagent.common.osutil import get_osutil
 KNOWN_WIRESERVER_IP_ENTRY = '10813FA8'
 KNOWN_WIRESERVER_IP = '168.63.129.16'
 
+
 def get_dhcp_handler():
     return DhcpHandler()
+
 
 class DhcpHandler(object):
     """
     Azure use DHCP option 245 to pass endpoint ip to VMs.
     """
+
     def __init__(self):
         self.osutil = get_osutil()
         self.endpoint = None
@@ -80,23 +80,26 @@ class DhcpHandler(object):
         This is true when running in a virtual network.
         :return: True if a route to KNOWN_WIRESERVER_IP exists.
         """
-        route_exists=False
+        route_exists = False
         logger.info("test for route to {0}".format(KNOWN_WIRESERVER_IP))
         try:
-            route = shellutil.run_get_output("grep -c {0} /proc/net/route".format(KNOWN_WIRESERVER_IP_ENTRY))
-            # route[0]: (int) return code
-            # route[1]: (str) output
-            if route is not None and route[0] == 0 and int(route[1]) > 0:
-                # reset self.gateway and self.routes; we do not need to alter the routing table
+            route_file = '/proc/net/route'
+            if os.path.exists(route_file) and \
+                    KNOWN_WIRESERVER_IP_ENTRY in open(route_file).read():
+                # reset self.gateway and self.routes
+                # we do not need to alter the routing table
                 self.endpoint = KNOWN_WIRESERVER_IP
                 self.gateway = None
                 self.routes = None
-                route_exists=True
+                route_exists = True
                 logger.info("route to {0} exists".format(KNOWN_WIRESERVER_IP))
             else:
-                logger.warn("no route exists to {0}".format(KNOWN_WIRESERVER_IP))
+                logger.warn(
+                    "no route exists to {0}".format(KNOWN_WIRESERVER_IP))
         except Exception as e:
-            logger.error("could not determine whether route exists to {0}: {1}".format(KNOWN_WIRESERVER_IP, e))
+            logger.error(
+                "could not determine whether route exists to {0}: {1}".format(
+                    KNOWN_WIRESERVER_IP, e))
 
         return route_exists
 
@@ -114,19 +117,18 @@ class DhcpHandler(object):
             exists = True
         return exists
 
-
     def conf_routes(self):
         logger.info("Configure routes")
         logger.info("Gateway:{0}", self.gateway)
         logger.info("Routes:{0}", self.routes)
-        #Add default gateway
+        # Add default gateway
         if self.gateway is not None:
-            self.osutil.route_add(0 , 0, self.gateway)
+            self.osutil.route_add(0, 0, self.gateway)
         if self.routes is not None:
             for route in self.routes:
                 self.osutil.route_add(route[0], route[1], route[2])
 
-    def _send_dhcp_req(self, request):    
+    def _send_dhcp_req(self, request):
         __waiting_duration__ = [0, 10, 30, 60, 60]
         for duration in __waiting_duration__:
             try:
@@ -165,7 +167,7 @@ class DhcpHandler(object):
             self.osutil.stop_dhcp_service()
 
         resp = self._send_dhcp_req(req)
-        
+
         if self.osutil.is_dhcp_enabled():
             self.osutil.start_dhcp_service()
 
@@ -175,6 +177,7 @@ class DhcpHandler(object):
         if resp is None:
             raise DhcpError("Failed to receive dhcp response.")
         self.endpoint, self.gateway, self.routes = parse_dhcp_resp(resp)
+
 
 def validate_dhcp_resp(request, response):
     bytes_recv = len(response)
@@ -200,18 +203,20 @@ def validate_dhcp_resp(request, response):
                        hex_dump3(request, 4, 4),
                        hex_dump3(response, 4, 4))
         raise DhcpError("TransactionID in dhcp respones "
-                            "doesn't match the request")
+                        "doesn't match the request")
 
     if not compare_bytes(request, response, 0x1C, 6):
         logger.verbose("Mac Address not match:\nsend={0},\nreceive={1}",
                        hex_dump3(request, 0x1C, 6),
                        hex_dump3(response, 0x1C, 6))
         raise DhcpError("Mac Addr in dhcp respones "
-                            "doesn't match the request")
+                        "doesn't match the request")
+
 
 def parse_route(response, option, i, length, bytes_recv):
     # http://msdn.microsoft.com/en-us/library/cc227282%28PROT.10%29.aspx
-    logger.verbose("Routes at offset: {0} with length:{1}", hex(i), hex(length))
+    logger.verbose("Routes at offset: {0} with length:{1}", hex(i),
+                   hex(length))
     routes = []
     if length < 5:
         logger.error("Data too small for option:{0}", option)
@@ -232,6 +237,7 @@ def parse_route(response, option, i, length, bytes_recv):
         logger.error("Unable to parse routes")
     return routes
 
+
 def parse_ip_addr(response, option, i, length, bytes_recv):
     if i + 5 < bytes_recv:
         if length != 4:
@@ -243,6 +249,7 @@ def parse_ip_addr(response, option, i, length, bytes_recv):
     else:
         logger.error("Data too small for option:{0}", option)
     return None
+
 
 def parse_dhcp_resp(response):
     """
@@ -256,18 +263,18 @@ def parse_dhcp_resp(response):
     routes = None
 
     # Walk all the returned options, parsing out what we need, ignoring the
-    # others. We need the custom option 245 to find the the endpoint we talk to,
-    # as well as, to handle some Linux DHCP client incompatibilities,
-    # options 3 for default gateway and 249 for routes. And 255 is end.
+    # others. We need the custom option 245 to find the the endpoint we talk to
+    # as well as to handle some Linux DHCP client incompatibilities;
+    # options 3 for default gateway and 249 for routes; 255 is end.
 
-    i = 0xF0 # offset to first option
+    i = 0xF0  # offset to first option
     while i < bytes_recv:
         option = str_to_ord(response[i])
         length = 0
         if (i + 1) < bytes_recv:
             length = str_to_ord(response[i + 1])
         logger.verbose("DHCP option {0} at offset:{1} with length:{2}",
-                    hex(option), hex(i), hex(length))
+                       hex(option), hex(i), hex(length))
         if option == 255:
             logger.verbose("DHCP packet ended at offset:{0}", hex(i))
             break
@@ -278,13 +285,15 @@ def parse_dhcp_resp(response):
             logger.verbose("Default gateway:{0}, at {1}", gateway, hex(i))
         elif option == 245:
             endpoint = parse_ip_addr(response, option, i, length, bytes_recv)
-            logger.verbose("Azure wire protocol endpoint:{0}, at {1}", endpoint,
-                        hex(i))
+            logger.verbose("Azure wire protocol endpoint:{0}, at {1}",
+                           endpoint,
+                           hex(i))
         else:
             logger.verbose("Skipping DHCP option:{0} at {1} with length {2}",
-                        hex(option), hex(i), hex(length))
+                           hex(option), hex(i), hex(length))
         i += length + 2
     return endpoint, gateway, routes
+
 
 def socket_send(request):
     sock = None
@@ -306,27 +315,28 @@ def socket_send(request):
         if sock is not None:
             sock.close()
 
+
 def build_dhcp_request(mac_addr, request_broadcast):
     """
     Build DHCP request string.
     """
     #
     # typedef struct _DHCP {
-    #     UINT8   Opcode;                    /* op:    BOOTREQUEST or BOOTREPLY */
-    #     UINT8   HardwareAddressType;       /* htype: ethernet */
-    #     UINT8   HardwareAddressLength;     /* hlen:  6 (48 bit mac address) */
-    #     UINT8   Hops;                      /* hops:  0 */
-    #     UINT8   TransactionID[4];          /* xid:   random */
-    #     UINT8   Seconds[2];                /* secs:  0 */
-    #     UINT8   Flags[2];                  /* flags: 0 or 0x8000 for broadcast */
-    #     UINT8   ClientIpAddress[4];        /* ciaddr: 0 */
-    #     UINT8   YourIpAddress[4];          /* yiaddr: 0 */
-    #     UINT8   ServerIpAddress[4];        /* siaddr: 0 */
-    #     UINT8   RelayAgentIpAddress[4];    /* giaddr: 0 */
-    #     UINT8   ClientHardwareAddress[16]; /* chaddr: 6 byte eth MAC address */
-    #     UINT8   ServerName[64];            /* sname:  0 */
-    #     UINT8   BootFileName[128];         /* file:   0  */
-    #     UINT8   MagicCookie[4];            /*   99  130   83   99 */
+    #  UINT8   Opcode;                    /* op:    BOOTREQUEST or BOOTREPLY */
+    #  UINT8   HardwareAddressType;       /* htype: ethernet */
+    #  UINT8   HardwareAddressLength;     /* hlen:  6 (48 bit mac address) */
+    #  UINT8   Hops;                      /* hops:  0 */
+    #  UINT8   TransactionID[4];          /* xid:   random */
+    #  UINT8   Seconds[2];                /* secs:  0 */
+    #  UINT8   Flags[2];                  /* flags: 0 or 0x8000 for broadcast*/
+    #  UINT8   ClientIpAddress[4];        /* ciaddr: 0 */
+    #  UINT8   YourIpAddress[4];          /* yiaddr: 0 */
+    #  UINT8   ServerIpAddress[4];        /* siaddr: 0 */
+    #  UINT8   RelayAgentIpAddress[4];    /* giaddr: 0 */
+    #  UINT8   ClientHardwareAddress[16]; /* chaddr: 6 byte eth MAC address */
+    #  UINT8   ServerName[64];            /* sname:  0 */
+    #  UINT8   BootFileName[128];         /* file:   0  */
+    #  UINT8   MagicCookie[4];            /*   99  130   83   99 */
     #                                        /* 0x63 0x82 0x53 0x63 */
     #     /* options -- hard code ours */
     #
@@ -354,11 +364,12 @@ def build_dhcp_request(mac_addr, request_broadcast):
         request[4 + a] = str_to_ord(trans_id[a])
 
     logger.verbose("BuildDhcpRequest: transactionId:%s,%04X" % (
-                   hex_dump2(trans_id),
-                   unpack_big_endian(request, 4, 4)))
+        hex_dump2(trans_id),
+        unpack_big_endian(request, 4, 4)))
 
     if request_broadcast:
-        # set boradcast flag to true to request the dhcp sever to respond to a boradcast address,
+        # set broadcast flag to true to request the dhcp sever
+        # to respond to a boradcast address,
         # this is useful when user dhclient fails.
         request[0x0A] = 0x80;
 
@@ -374,6 +385,7 @@ def build_dhcp_request(mac_addr, request_broadcast):
     for a in range(0, 8):
         request[0xEC + a] = [99, 130, 83, 99, 53, 1, 1, 255][a]
     return array.array("B", request)
+
 
 def gen_trans_id():
     return os.urandom(4)
