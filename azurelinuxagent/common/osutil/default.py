@@ -547,6 +547,7 @@ class DefaultOSUtil(object):
         FOOTER_LEASE = "}"
         FORMAT_DATETIME = "%Y/%m/%d %H:%M:%S"
 
+        logger.info("looking for leases in path [{0}]".format(pathglob))
         for lease_file in glob.glob(pathglob):
             leases = open(lease_file).read()
             if HEADER_OPTION in leases:
@@ -557,6 +558,7 @@ class DefaultOSUtil(object):
                     if line.startswith(HEADER_LEASE):
                         cached_endpoint = None
                         has_option_245 = False
+                        expired = True
                     elif HEADER_DNS in line:
                         cached_endpoint = line.replace(HEADER_DNS, '').strip(" ;")
                     elif HEADER_OPTION in line:
@@ -570,13 +572,21 @@ class DefaultOSUtil(object):
                                 expire_date = datetime.datetime.strptime(expire_string, FORMAT_DATETIME)
                                 if expire_date > datetime.datetime.utcnow():
                                     expired = False
+                                    logger.info("entry is not expired")
+                                else:
+                                    logger.info("entry is expired")
                             except:
                                 logger.error("could not parse expiry token '{0}'".format(line))
                     elif FOOTER_LEASE in line:
                         if not expired and cached_endpoint is not None and has_option_245:
                             endpoint = cached_endpoint
-                            # return the first valid entry
-                            break
+                            logger.info("found endpoint [{0}]".format(endpoint))
+                            # we want to return the last valid entry, so
+                            # keep searching
+        if endpoint is not None:
+            logger.info("cached endpoint found [{0}]".format(endpoint))
+        else:
+            logger.info("cached endpoint not found")
         return endpoint
 
     def is_missing_default_route(self):
