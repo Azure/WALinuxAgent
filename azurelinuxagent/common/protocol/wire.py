@@ -24,7 +24,6 @@ from azurelinuxagent.common.future import httpclient, bytebuffer
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, findtext, \
     getattrib, gettext, remove_bom, get_bytes_from_pem
 import azurelinuxagent.common.utils.fileutil as fileutil
-from azurelinuxagent.common.rdma import RDMADeviceHandler
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.protocol.restapi import *
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
@@ -54,9 +53,6 @@ ENDPOINT_FINE_NAME = "WireServer"
 SHORT_WAITING_INTERVAL = 1  # 1 second
 LONG_WAITING_INTERVAL = 15  # 15 seconds
 
-# rdma_device_configured variable limits RDMA device updating code within the
-# GoalState loop to be executed only once
-rdma_device_configured = False
 
 class UploadError(HttpError):
     pass
@@ -646,8 +642,6 @@ class WireClient(object):
         self.ext_conf = ExtensionsConfig(xml_text)
 
     def update_goal_state(self, forced=False, max_retry=3):
-        global rdma_device_configured
-
         uri = GOAL_STATE_URI.format(self.endpoint)
         xml_text = self.fetch_config(uri, self.get_header())
         goal_state = GoalState(xml_text)
@@ -677,17 +671,6 @@ class WireClient(object):
                 self.update_shared_conf(goal_state)
                 self.update_certs(goal_state)
                 self.update_ext_conf(goal_state)
-
-                if conf.enable_rdma():
-                    if rdma_device_configured:
-                        logger.info("RDMA device already configured, skipping")
-                    else:
-                        logger.info("RDMA capabilities are enabled in configuration")
-                        rdma_device_configured = True # do not run again
-                        self.setup_rdma_dev()
-                else:
-                    logger.info("RDMA capabilities are not enabled, skipping")
-
                 return
             except WireProtocolResourceGone:
                 logger.info("Incarnation is out of date. Update goalstate.")
@@ -884,37 +867,6 @@ class WireClient(object):
             "x-ms-guest-agent-public-x509-cert": cert
         }
 
-    def setup_rdma_dev(self):
-        logger.verbose("Parsing SharedConfig XML contents for RDMA details")
-        xml_doc = parse_doc(self.shared_conf.xml_text)
-        if xml_doc is None:
-            logger.error("Could not parse SharedConfig XML document")
-            return
-        instance_elem = find(xml_doc, "Instance")
-        if not instance_elem:
-            logger.error("Could not find <Instance> in SharedConfig document")
-            return
-
-        rdma_ipv4_addr = getattrib(instance_elem, "rdmaIPv4Address")
-        if not rdma_ipv4_addr:
-            logger.error("Could not find rdmaIPv4Address attribute on Instance element of SharedConfig.xml document")
-            return
-
-        rdma_mac_addr = getattrib(instance_elem, "rdmaMacAddress")
-        if not rdma_mac_addr:
-            logger.error("Could not find rdmaMacAddress attribute on Instance element of SharedConfig.xml document")
-            return
-
-        rdma_mac_addr=self.format_mac_addr(rdma_mac_addr)
-        logger.info("Found RDMA details. IPv4={0} MAC={1}".format(rdma_ipv4_addr, rdma_mac_addr))
-        RDMADeviceHandler(rdma_ipv4_addr, rdma_mac_addr).start()
-
-    def format_mac_addr(self, addr):
-        """
-        Formats a MAC addr like 00155D33FF1D into "00:15:5D:33:FF:1D"
-        """
-        return ':'.join([addr[i:i+2] for i in range(0, len(addr), 2)])
-
 class VersionInfo(object):
     def __init__(self, xml_text):
         """
@@ -1014,16 +966,19 @@ class HostingEnv(object):
 
 class SharedConfig(object):
     """
-    Holds SharedConfig XML data
+    parse role endpoint server and goal state config.
     """
-    xml_text=None
 
     def __init__(self, xml_text):
-        logger.verbose("Loading SharedConfig.xml")
-        self.xml_text=xml_text
+        logger.verbose("Load SharedConfig.xml")
+        self.parse(xml_text)
 
-    def parse(self):
-       pass
+    def parse(self, xml_text):
+        """
+        parse and write configuration to file SharedConfig.xml.
+        """
+        # Not used currently
+        return self
 
 class Certificates(object):
     """
