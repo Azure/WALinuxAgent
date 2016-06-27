@@ -234,4 +234,3 @@ class RDMADeviceHandler(object):
         if eths is None or len(eths) == 0:
             raise Exception("ifname with mac: {0} not found".format(mac))
         return eths[-1]
->>>>>>> Update RDMA IB interface from SharedConfig

@@ -898,10 +898,13 @@ class WireClient(object):
         rdma_ipv4_addr = getattrib(instance_elem, "rdmaIPv4Address")
         if not rdma_ipv4_addr:
             logger.error("Could not find rdmaIPv4Address attribute on Instance element of SharedConfig.xml document")
+            return
 
         rdma_mac_addr = getattrib(instance_elem, "rdmaMacAddress")
         if not rdma_mac_addr:
             logger.error("Could not find rdmaMacAddress attribute on Instance element of SharedConfig.xml document")
+            return
+
         rdma_mac_addr=self.format_mac_addr(rdma_mac_addr)
         logger.info("Found RDMA details. IPv4={0} MAC={1}".format(rdma_ipv4_addr, rdma_mac_addr))
         RDMADeviceHandler(rdma_ipv4_addr, rdma_mac_addr).start()
