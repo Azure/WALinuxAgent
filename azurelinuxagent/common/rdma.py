@@ -186,7 +186,7 @@ class RDMADeviceHandler(object):
 
     @staticmethod
     def wait_rdma_device(path, timeout_sec, check_interval_sec):
-        logger.info("RDMA: waiting for device={0} timeout={0}s".format(path, timeout_sec))
+        logger.info("RDMA: waiting for device={0} timeout={1}s".format(path, timeout_sec))
         total_retries = timeout_sec/check_interval_sec
         n = 0
         while n < total_retries:
