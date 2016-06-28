@@ -139,6 +139,7 @@ class ProtocolUtil(object):
         except ProtocolError as e:
             logger.info("WireServer is not responding. Reset endpoint")
             self.dhcp_handler.endpoint = None
+            self.dhcp_handler.skip_cache = True
             raise e
 
     def _detect_metadata_protocol(self):

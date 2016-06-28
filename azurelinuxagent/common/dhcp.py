@@ -49,6 +49,7 @@ class DhcpHandler(object):
         self.gateway = None
         self.routes = None
         self._request_broadcast = False
+        self.skip_cache = False
 
     def run(self):
         """
@@ -56,9 +57,11 @@ class DhcpHandler(object):
         Configure default gateway and routes
         Save wire server endpoint if found
         """
-        if not self.wireserver_route_exists and not self.dhcp_lease_exists:
-            self.send_dhcp_req()
-            self.conf_routes()
+        if self.wireserver_route_exists or self.dhcp_cache_exists:
+            return
+
+        self.send_dhcp_req()
+        self.conf_routes()
 
     def wait_for_network(self):
         """
@@ -104,17 +107,23 @@ class DhcpHandler(object):
         return route_exists
 
     @property
-    def dhcp_lease_exists(self):
+    def dhcp_cache_exists(self):
         """
         Check whether the dhcp options cache exists and contains the
-        wireserver endpoint.
+        wireserver endpoint, unless skip_cache is True.
         :return: True if the cached endpoint was found in the dhcp lease
         """
+        if self.skip_cache:
+            return False
+
         exists = False
+
+        logger.info("checking for dhcp lease cache")
         cached_endpoint = self.osutil.get_dhcp_lease_endpoint()
         if cached_endpoint is not None:
             self.endpoint = cached_endpoint
             exists = True
+        logger.info("cache exists [{0}]".format(exists))
         return exists
 
     def conf_routes(self):

@@ -124,5 +124,12 @@ class TestOSUtil(AgentTestCase):
                 self.assertTrue(endpoint is not None)
                 self.assertEqual(endpoint, "168.63.129.16")
 
+    def test_dhcp_lease_multi(self):
+        with patch.object(glob, "glob", return_value=['/var/lib/dhcp/dhclient.eth0.leases']):
+            with patch(open_patch(), mock.mock_open(read_data=load_data("dhcp.leases.multi"))):
+                endpoint = get_osutil(distro_name='ubuntu', distro_version='12.04').get_dhcp_lease_endpoint()
+                self.assertTrue(endpoint is not None)
+                self.assertEqual(endpoint, "second")
+
 if __name__ == '__main__':
     unittest.main()
