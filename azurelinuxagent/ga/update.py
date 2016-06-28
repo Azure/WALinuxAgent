@@ -19,7 +19,9 @@
 import glob
 import json
 import os
+import platform
 import re
+import shlex
 import shutil
 import signal
 import subprocess
@@ -77,6 +79,11 @@ def get_update_handler():
     return UpdateHandler()
 
 
+def get_python_cmd():
+    major_version = platform.python_version_tuple()[0]
+    return "python" if int(major_version) <= 2 else "python{0}".format(major_version)
+
+
 class UpdateHandler(object):
 
     def __init__(self):
@@ -94,26 +101,33 @@ class UpdateHandler(object):
         """
         latest_agent = self.get_latest_agent()
         if latest_agent == None:
-            agent_bin = sys.argv[0]
+            agent_cmd = "python -u {0} -run-exthandlers".format(sys.argv[0])
+            agent_dir = os.getcwd()
             agent_name = "'Installed'"
         else:
-            agent_bin = latest_agent.get_agent_bin()
+            agent_cmd = latest_agent.get_agent_cmd()
+            agent_dir = latest_agent.get_agent_dir()
             agent_name = latest_agent.name
 
         try:
-            child = subprocess.Popen([agent_bin, 'run-exthandlers'], 
-                                      stdout=sys.stdout, stderr=sys.stderr)
+
+            # Launch the correct Python version for python-based agents
+            cmds = shlex.split(agent_cmd)
+            if cmds[0].lower() == "python":
+                cmds[0] = get_python_cmd()
+
+            child = subprocess.Popen(cmds, cwd=agent_dir, stdout=sys.stdout, stderr=sys.stderr)
             ret = child.wait()
             if ret == None:
                 ret = 1
             if ret != 0:
-                msg = u"'{0} -run-exthandlers' failed with code: {1}".format(agent_bin, ret)
+                msg = u"'{0} -run-exthandlers' failed with code: {1}".format(agent_cmd, ret)
                 logger.warn(msg)
                 add_event(u"WALA", is_success=False, message=msg)
                 if latest_agent is not None:
                     latest_agent.mark_failure()
         except Exception as e:
-            msg = u"Exception launching guest agent {0}: {1}".format(agent_bin, ustr(e))
+            msg = u"Exception launching guest agent {0}: {1}".format(agent_cmd, ustr(e))
             logger.warn(msg)
             add_event(u"WALA", is_success=False, message=msg)
             if latest_agent is not None:
@@ -282,17 +296,15 @@ class GuestAgent(object):
             raise UpdateError("Illegal agent version: {0}".format(version))
         self.version = FlexibleVersion(version)
 
-        self.error = GuestAgentError(self.get_agent_error_file())
-        self.manifest = HandlerManifest(EMPTY_MANIFEST)
-
-        self.ensure_downloaded()
+        self._load_error()
+        self._ensure_downloaded()
 
     @property
     def name(self):
         return "{0}-{1}".format(AGENT_NAME, self.version)
 
-    def get_agent_bin(self):
-        return os.path.join(self.get_agent_dir(), self.manifest.get_enable_command())
+    def get_agent_cmd(self):
+        return self.manifest.get_enable_command()
 
     def get_agent_dir(self):
         return os.path.join(conf.get_lib_dir(), self.name)
@@ -303,7 +315,7 @@ class GuestAgent(object):
     def get_agent_manifest_path(self):
         return os.path.join(self.get_agent_dir(), AGENT_MANIFEST_FILE)
 
-    def get_agent_pkg_file(self):
+    def get_agent_pkg_path(self):
         return ".".join((os.path.join(conf.get_lib_dir(), self.name), "zip"))
 
     @property
@@ -319,6 +331,8 @@ class GuestAgent(object):
         return os.path.isfile(self.get_agent_manifest_path())
 
     def mark_failure(self, is_fatal=False):
+        if not os.path.isdir(self.get_agent_dir()):
+            os.makedirs(self.get_agent_dir())
         self.error.mark_failure(is_fatal)
         self.error.save()
         if is_fatal:
@@ -327,20 +341,33 @@ class GuestAgent(object):
             add_event(u"WALA", is_success=False, message=msg)
         return
 
-    def ensure_downloaded(self):
-        if not self.is_downloaded:
-            if self.pkg is None:
-                msg = u"{0} is missing binary and URIs".format(self.name)
-                logger.warn(msg)
-                add_event(u"WALA", is_success=False, message=msg)
-            else:
-                self._download()
+    def _ensure_downloaded(self):
+        if self.is_downloaded:
+            self._load_manifest()
+            return
 
-        self.error.load()
+        try:
+            if self.pkg is None:
+                raise UpdateError(u"{0} is missing binary and URIs".format(self.name))
+            
+            self._download()
+            self._unpack()
+            self._load_manifest()
+            self._load_error()
+
+        except Exception as e:
+            # Note the failure, blacklist the agent if the package downloaded
+            # - An exception with a downloaded package indicates the package
+            #   is corrupt (e.g., missing the HandlerManifest.json file)
+            self.mark_failure(is_fatal=os.path.isfile(self.get_agent_pkg_path()))
+
+            msg = u"Exception occurred downloading {0}: {1}".format(self.name, str(e))
+            logger.warn(msg)
+            add_event(u"WALA", is_success=False, message=msg)
         return
 
     def _download(self):
-        msg = u"Initiating download of guest agent {0}".format(self.name)
+        msg = u"Initiating download of agent {0}".format(self.name)
         logger.info(msg)
         add_event(u"WALA", message=msg)
         package = None
@@ -350,46 +377,46 @@ class GuestAgent(object):
                 resp = restutil.http_get(uri.uri, chk_proxy=True)
                 if resp.status == restutil.httpclient.OK:
                     package = resp.read()
-                    fileutil.write_file(self.get_agent_pkg_file(), bytearray(package), asbin=True)
+                    fileutil.write_file(self.get_agent_pkg_path(), bytearray(package), asbin=True)
                     break
             except restutil.HttpError as e:
-                msg = u"Guest agent {0} download from {1} failed".format(self.name, uri.uri)
+                msg = u"Agent {0} download from {1} failed".format(self.name, uri.uri)
                 logger.warn(msg)
                 add_event(u"WALA", is_success=False, message=msg)
 
-        if package is None:
-            msg = u"All attempts to download {0} failed".format(self.name)
-            logger.warn(msg)
-            add_event(u"WALA", message=msg)
-        else:
-            self._unpack()
+        if not os.path.isfile(self.get_agent_pkg_path()):
+            msg = u"Unable to download {0} from any URI".format(self.name)
+            raise UpdateError(msg)
+        return
+
+    def _load_error(self):
+        self.error = GuestAgentError(self.get_agent_error_file())
         return
 
     def _load_manifest(self):
-        logger.info("Loading guest agent manifest from {0}", self.get_agent_manifest_path())
+        if not os.path.isdir(self.get_agent_dir()):
+            self.manifest = HandlerManifest(EMPTY_MANIFEST)
+            msg = "Agent {0} is not unpacked, using an empty manifest".format(self.name)
+            logger.warn(msg)
+            add_event(u"WALA", is_success=False, message=msg)
+            return
+
+        logger.info("Loading Agent manifest from {0}", self.get_agent_manifest_path())
 
         path = self.get_agent_manifest_path()
         if not os.path.isfile(path):
-            msg = u"Guest Agent {0} is missing the {1} file".format(self.name, AGENT_MANIFEST_FILE)
-            logger.warn(msg)
-            add_event(u"WALA", is_success=False, message=msg)
+            msg = u"Agent {0} is missing the {1} file".format(self.name, AGENT_MANIFEST_FILE)
             raise UpdateError(msg)
 
         with open(path, "r") as manifest_file:
             try:
                 manifests = json.load(manifest_file)
             except Exception as e:
-                msg = u"Guest Agent {0} has a malformed {1}".format(self.name, AGENT_MANIFEST_FILE)
-                logger.warn(msg)
-                add_event(u"WALA", is_success=False, message=msg)
+                msg = u"Agent {0} has a malformed {1}".format(self.name, AGENT_MANIFEST_FILE)
                 raise UpdateError(msg)
             if type(manifests) is list:
                 if len(manifests) <= 0:
-                    msg = u"Guest Agent {0} has an empty {1}".format(
-                        self.name,
-                        AGENT_MANIFEST_FILE)
-                    logger.warn(msg)
-                    add_event(u"WALA", is_success=False, message=msg)
+                    msg = u"Agent {0} has an empty {1}".format(self.name, AGENT_MANIFEST_FILE)
                     raise UpdateError(msg)
                 manifest = manifests[0]
             else:
@@ -398,14 +425,15 @@ class GuestAgent(object):
         try:
             self.manifest = HandlerManifest(manifest)
             if len(self.manifest.get_enable_command()) <= 0:
-                raise Exception
-        except Exception:
-            msg = u"Guest Agent {0} has an empty {1}".format(self.name, AGENT_MANIFEST_FILE)
-            logger.warn(msg)
-            add_event(u"WALA", is_success=False, message=msg)
+                raise Exception("Manifest is missing the enable command")
+        except Exception as e:
+            msg = u"Agent {0} has an illegal {1}: {2}".format(
+                self.name,
+                AGENT_MANIFEST_FILE,
+                str(e))
             raise UpdateError(msg)
 
-        logger.verbose("Successfully loaded Guest Agent {0} {1}: {2}",
+        logger.verbose("Successfully loaded Agent {0} {1}: {2}",
             self.name,
             AGENT_MANIFEST_FILE,
             str(self.manifest.data))
@@ -413,18 +441,21 @@ class GuestAgent(object):
 
     def _unpack(self):
         logger.info("Unpacking guest agent package {0}", self.name)
-        pkg_file = self.get_agent_pkg_file()
+
         try:
-            zipfile.ZipFile(pkg_file).extractall(conf.get_lib_dir())
-            self._load_manifest()
-            msg = "Download of guest agent {0} succeeded".format(self.name)
-            logger.info(msg)
-            add_event(u"WALA", message=msg)
+            if os.path.isdir(self.get_agent_dir()):
+                shutil.rmtree(self.get_agent_dir())
+
+            zipfile.ZipFile(self.get_agent_pkg_path()).extractall(conf.get_lib_dir())
         except Exception as e:
-            self.mark_failure(is_fatal=True)
-            msg = "Exception unpacking guest agent {0}: {1}".format(self.name, ustr(e))
-            logger.warn(msg)
-            add_event(u"WALA", is_success=False, message=msg)
+            msg = u"Exception unpacking Agent {0} from {1}".format(
+                self.name,
+                self.get_agent_pkg_path())
+            raise UpdateError(msg)
+
+        msg = "Agent {0} successfully unpacked".format(self.name)
+        logger.info(msg)
+        add_event(u"WALA", message=msg)
         return
 
 
@@ -433,6 +464,7 @@ class GuestAgentError(object):
         if path is None:
             raise UpdateError(u"GuestAgentError requires a path")
         self.path = path
+
         self.load()
         return
    
@@ -459,6 +491,7 @@ class GuestAgentError(object):
         self.last_failure = None
         self.failure_count = 0
         self.was_fatal = False
+
         if self.path is not None and os.path.isfile(self.path):
             try:
                 with open(self.path, 'r') as f:
@@ -470,13 +503,14 @@ class GuestAgentError(object):
         return
 
     def save(self):
-        try:
-            with open(self.path, 'w') as f:
-                json.dump(self.to_json(), f)
-        except Exception as e:
-            msg = "Exception saving error record to {0}: {1}".format(self.path, ustr(e))
-            logger.warn(msg)
-            add_event(u"WALA", is_success=False, message=msg)
+        if os.path.isdir(os.path.dirname(self.path)):
+            try:
+                with open(self.path, 'w') as f:
+                    json.dump(self.to_json(), f)
+            except Exception as e:
+                msg = "Exception saving error record to {0}: {1}".format(self.path, ustr(e))
+                logger.warn(msg)
+                add_event(u"WALA", is_success=False, message=msg)
         return
     
     def from_json(self, data):
