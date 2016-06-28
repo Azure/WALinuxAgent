@@ -73,7 +73,7 @@ class DefaultOSUtil(object):
         userentry = self.get_userentry(username)
         uidmin = None
         try:
-            uidmin_def = fileutil.get_line_startingwith("UID_MIN", 
+            uidmin_def = fileutil.get_line_startingwith("UID_MIN",
                                                         "/etc/login.defs")
             if uidmin_def is not None:
                 uidmin = int(uidmin_def.split()[1])
@@ -215,7 +215,7 @@ class DefaultOSUtil(object):
             pub_path = os.path.join(lib_dir, thumbprint + '.pub')
             pub = crytputil.get_pubkey_from_crt(crt_path)
             fileutil.write_file(pub_path, pub)
-            self.set_selinux_context(pub_path, 
+            self.set_selinux_context(pub_path,
                                      'unconfined_u:object_r:ssh_home_t:s0')
             self.openssl_to_openssh(pub_path, path)
             fileutil.chmod(pub_path, 0o600)
@@ -320,7 +320,7 @@ class DefaultOSUtil(object):
         retcode = self.umount(mount_point, chk_err=chk_err)
         if chk_err and retcode != 0:
             raise OSUtilError("Failed to umount dvd.")
-    
+
     def eject_dvd(self, chk_err=True):
         dvd = self.get_dvd_device()
         retcode = shellutil.run("eject {0}".format(dvd))
@@ -572,12 +572,11 @@ class DefaultOSUtil(object):
                                 expire_date = datetime.datetime.strptime(expire_string, FORMAT_DATETIME)
                                 if expire_date > datetime.datetime.utcnow():
                                     expired = False
-                                    logger.info("entry is not expired")
-                                else:
-                                    logger.info("entry is expired")
                             except:
                                 logger.error("could not parse expiry token '{0}'".format(line))
                     elif FOOTER_LEASE in line:
+                        logger.info("dhcp entry:{0}, 245:{1}, expired:{2}".format(
+                            cached_endpoint, has_option_245, expired))
                         if not expired and cached_endpoint is not None and has_option_245:
                             endpoint = cached_endpoint
                             logger.info("found endpoint [{0}]".format(endpoint))
@@ -771,7 +770,7 @@ class DefaultOSUtil(object):
             return int(ret[1])
         else:
             raise OSUtilError("Failed to get processor cores")
-    
+
     def set_admin_access_to_ip(self, dest_ip):
         #This allows root to access dest_ip
         rm_old= "iptables -D OUTPUT -d {0} -j ACCEPT -m owner --uid-owner 0"
