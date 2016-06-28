@@ -30,8 +30,10 @@ from azurelinuxagent.common.version import AGENT_LONG_NAME, AGENT_VERSION, \
                                      DISTRO_NAME, DISTRO_VERSION, \
                                      DISTRO_FULL_NAME, PY_VERSION_MAJOR, \
                                      PY_VERSION_MINOR, PY_VERSION_MICRO
+from azurelinuxagent.common.protocol.wire import SHARED_CONF_FILE_NAME
 import azurelinuxagent.common.event as event
 import azurelinuxagent.common.utils.fileutil as fileutil
+from azurelinuxagent.common.utils.textutil import parse_doc, find, getattrib
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol import get_protocol_util
 from azurelinuxagent.daemon.scvmm import get_scvmm_handler
@@ -41,6 +43,7 @@ from azurelinuxagent.daemon.env import get_env_handler
 from azurelinuxagent.pa.provision import get_provision_handler
 from azurelinuxagent.pa.rdma import get_rdma_handler
 from azurelinuxagent.ga.update import get_update_handler
+from azurelinuxagent.common.rdma import RDMADeviceHandler
 
 def get_daemon_handler():
     return DaemonHandler()
@@ -118,6 +121,52 @@ class DaemonHandler(object):
         self.monitor_handler.run()
 
         self.env_handler.run()
+
+        # Enable RDMA, continue in errors
+        if conf.enable_rdma():
+                logger.info("RDMA capabilities are enabled in configuration")
+                try:
+                    self.setup_rdma_device()
+                except Exception as e:
+                    logger.error("Error setting up rdma device: %s" % e)
+        else:
+            logger.info("RDMA capabilities are not enabled, skipping")
         
         while self.running:
             self.update_handler.run_latest()
+
+
+    def setup_rdma_device(self):
+        logger.verbose("Parsing SharedConfig XML contents for RDMA details")
+        xml_doc = parse_doc(
+            fileutil.read_file(os.path.join(conf.get_lib_dir(), SHARED_CONF_FILE_NAME)))
+        if xml_doc is None:
+            logger.error("Could not parse SharedConfig XML document")
+            return
+        instance_elem = find(xml_doc, "Instance")
+        if not instance_elem:
+            logger.error("Could not find <Instance> in SharedConfig document")
+            return
+
+        rdma_ipv4_addr = getattrib(instance_elem, "rdmaIPv4Address")
+        if not rdma_ipv4_addr:
+            logger.error(
+                "Could not find rdmaIPv4Address attribute on Instance element of SharedConfig.xml document")
+            return
+
+        rdma_mac_addr = getattrib(instance_elem, "rdmaMacAddress")
+        if not rdma_mac_addr:
+            logger.error(
+                "Could not find rdmaMacAddress attribute on Instance element of SharedConfig.xml document")
+            return
+
+        # add colons to the MAC address (e.g. 00155D33FF1D ->
+        # 00:15:5D:33:FF:1D)
+        rdma_mac_addr = ':'.join([rdma_mac_addr[i:i+2]
+                                  for i in range(0, len(rdma_mac_addr), 2)])
+        logger.info("Found RDMA details. IPv4={0} MAC={1}".format(
+            rdma_ipv4_addr, rdma_mac_addr))
+
+        # Set up the RDMA device with collected informatino
+        RDMADeviceHandler(rdma_ipv4_addr, rdma_mac_addr).start()
+        logger.info("RDMA: device is set up")

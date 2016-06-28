@@ -867,7 +867,6 @@ class WireClient(object):
             "x-ms-guest-agent-public-x509-cert": cert
         }
 
-
 class VersionInfo(object):
     def __init__(self, xml_text):
         """
@@ -980,7 +979,6 @@ class SharedConfig(object):
         """
         # Not used currently
         return self
-
 
 class Certificates(object):
     """
