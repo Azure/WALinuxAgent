@@ -118,21 +118,13 @@ def get_exthandlers_handler():
 class ExtHandlersHandler(object):
     def __init__(self):
         self.protocol_util = get_protocol_util()
+        self.protocol = None
         self.ext_handlers = None
         self.last_etag = None
         self.log_report = False
 
     def run(self):
-        self.ext_handlers, etag = None, None
-        try:
-            self.protocol = self.protocol_util.get_protocol()
-            self.ext_handlers, etag = self.protocol.get_ext_handlers()
-        except ProtocolError as e:
-            msg = u"Exception retrieving extension handlers: {0}".format(
-                ustr(e))
-            logger.warn(msg)
-            add_event(name="WALA", is_success=False, message=msg)
-            return
+        self.ext_handlers, etag = self.refresh_extensions()
 
         if self.last_etag is not None and self.last_etag == etag:
             msg = u"Incarnation {0} has no extension updates".format(etag)
@@ -144,12 +136,26 @@ class ExtHandlersHandler(object):
             self.log_report = True #Log status report success on new config
             self.handle_ext_handlers()
             self.last_etag = etag
-
-        self.report_ext_handlers_status()
+        return
 
     def run_status(self):
         self.report_ext_handlers_status()
         return
+
+    def refresh_extensions(self):
+        ext_handlers, etag = None, self.last_etag
+        try:
+            if self.protocol is None:
+                self.protocol = self.protocol_util.get_protocol()
+
+            ext_handlers, etag = self.protocol.get_ext_handlers()
+        except ProtocolError as e:
+            msg = u"Exception retrieving extension handlers: {0}".format(
+                ustr(e))
+            logger.warn(msg)
+            add_event(name="WALA", is_success=False, message=msg)
+        
+        return None, self.last_etag
    
     def handle_ext_handlers(self):
         if self.ext_handlers.extHandlers is None or \
@@ -227,14 +233,15 @@ class ExtHandlersHandler(object):
         ext_handler_i.rm_ext_handler_dir()
     
     def report_ext_handlers_status(self):
-        """Go thru handler_state dir, collect and report status"""
+        ext_handlers, etag = self.refresh_extensions()
+        
         vm_status = VMStatus()
         vm_status.vmAgent.version = AGENT_VERSION
         vm_status.vmAgent.status = "Ready"
         vm_status.vmAgent.message = "Guest Agent is running"
 
-        if self.ext_handlers is not None:
-            for ext_handler in self.ext_handlers.extHandlers:
+        if ext_handlers is not None:
+            for ext_handler in ext_handlers.extHandlers:
                 try:
                     self.report_ext_handler_status(vm_status, ext_handler)
                 except ExtensionError as e:
