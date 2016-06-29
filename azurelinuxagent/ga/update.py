@@ -97,7 +97,7 @@ class UpdateHandler(object):
         self.agents = []
 
         self.child = None
-        self.sigterm_handler = None
+        self.signal_handler = None
 
     def run_latest(self):
         """
@@ -119,7 +119,7 @@ class UpdateHandler(object):
 
         try:
 
-            self.sigterm_handler = signal.signal(signal.SIGTERM, self.forward_sigterm)
+            self.signal_handler = signal.signal(signal.SIGTERM, self.forward_signal)
 
             # Launch the correct Python version for python-based agents
             cmds = shlex.split(agent_cmd)
@@ -168,11 +168,15 @@ class UpdateHandler(object):
             time.sleep(25)
         return
 
-    def forward_sigterm(self):
-        if self.child is not None:
+    def forward_signal(self, signum, frame):
+        if self.child is None:
+            return
+        
+        if signum is signal.SIGTERM:
             self.child.send_signal(signal.SIGTERM)
-        if self.sigterm_handler is not None:
-            self.sigterm_handler()
+
+        if self.signal_handler is not None:
+            self.signal_handler(signum, frame)
         return
 
     def get_latest_agent(self):
