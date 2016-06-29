@@ -96,8 +96,8 @@ class UpdateHandler(object):
 
         self.agents = []
 
-        self.child = None
-        self.sigterm_handler = None
+        self.child_process = None
+        self.signal_handler = None
 
     def run_latest(self):
         """
@@ -114,21 +114,25 @@ class UpdateHandler(object):
             agent_dir = latest_agent.get_agent_dir()
             agent_name = latest_agent.name
 
-        if self.child is not None:
+        if self.child_process is not None:
             raise Exception("Illegal attempt to launch multiple child processes")
 
         try:
 
-            self.sigterm_handler = signal.signal(signal.SIGTERM, self.forward_sigterm)
+            self.signal_handler = signal.signal(signal.SIGTERM, self.forward_signal)
 
             # Launch the correct Python version for python-based agents
             cmds = shlex.split(agent_cmd)
             if cmds[0].lower() == "python":
                 cmds[0] = get_python_cmd()
 
-            child = subprocess.Popen(cmds, cwd=agent_dir, stdout=sys.stdout, stderr=sys.stderr)
+            self.child_process = subprocess.Popen(
+                cmds,
+                cwd=agent_dir,
+                stdout=sys.stdout,
+                stderr=sys.stderr)
 
-            ret = child.wait()
+            ret = self.child_process.wait()
             if ret == None:
                 ret = 1
             if ret != 0:
@@ -168,11 +172,16 @@ class UpdateHandler(object):
             time.sleep(25)
         return
 
-    def forward_sigterm(self):
-        if self.child is not None:
-            self.child.send_signal(signal.SIGTERM)
-        if self.sigterm_handler is not None:
-            self.sigterm_handler()
+    def forward_signal(self, signum, frame):
+        if self.child_process is None:
+            return
+        
+        if signum is signal.SIGTERM:
+            self.child_process.send_signal(signal.SIGTERM)
+
+        if self.signal_handler is not None:
+          if not self.signal_handler in (signal.SIG_IGN, signal.SIG_DFL):
+            self.signal_handler(signum, frame)
         return
 
     def get_latest_agent(self):

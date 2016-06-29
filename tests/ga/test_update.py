@@ -736,34 +736,42 @@ class TestUpdate(UpdateTestCase):
             shutil.rmtree(tempdir, True)
         return
 
-    def test_run_latest_marks_failures(self):
+    def test_run_latest_nonzero_code_marks_failures(self):
         # logger.add_logger_appender(logger.AppenderType.STDOUT)
         self.prepare_agents()
-        
+
         latest_agent = self.update_handler.get_latest_agent()
         self.assertTrue(latest_agent.is_available)
         self.assertEqual(None, latest_agent.error.last_failure)
         self.assertEqual(0, latest_agent.error.failure_count)
 
-        # Any non-zero return code marks a failure
         self._test_run_latest(return_value=1)
 
         self.assertTrue(latest_agent.is_available)
         self.assertNotEqual(None, latest_agent.error.last_failure)
         self.assertEqual(1, latest_agent.error.failure_count)
+        return
 
-        # Absence of a return code marks a failure
+    def test_run_latest_missing_code_marks_failures(self):
+        # logger.add_logger_appender(logger.AppenderType.STDOUT)
+        self.prepare_agents()
+
+        latest_agent = self.update_handler.get_latest_agent()
+        self.assertTrue(latest_agent.is_available)
+        self.assertEqual(None, latest_agent.error.last_failure)
+        self.assertEqual(0, latest_agent.error.failure_count)
+
         self._test_run_latest(return_value=None)
 
         self.assertTrue(latest_agent.is_available)
         self.assertNotEqual(None, latest_agent.error.last_failure)
-        self.assertEqual(2, latest_agent.error.failure_count)
+        self.assertEqual(1, latest_agent.error.failure_count)
         return
 
     def test_run_latest_exception_blacklists(self):
         # logger.add_logger_appender(logger.AppenderType.STDOUT)
         self.prepare_agents()
-        
+
         latest_agent = self.update_handler.get_latest_agent()
         self.assertTrue(latest_agent.is_available)
         self.assertEqual(None, latest_agent.error.last_failure)
