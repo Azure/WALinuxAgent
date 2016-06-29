@@ -360,7 +360,7 @@ class StatusBlob(object):
         except HttpError as e:
             logger.warn("Initial upload failed [{0}]".format(e))
         else:
-            logger.info("Uploading status blob succeeded")
+            logger.verbose("Uploading status blob succeeded")
             upload_successful = True
         return upload_successful
 
