@@ -96,7 +96,7 @@ class UpdateHandler(object):
 
         self.agents = []
 
-        self.child = None
+        self.child_process = None
         self.signal_handler = None
 
     def run_latest(self):
@@ -114,7 +114,7 @@ class UpdateHandler(object):
             agent_dir = latest_agent.get_agent_dir()
             agent_name = latest_agent.name
 
-        if self.child is not None:
+        if self.child_process is not None:
             raise Exception("Illegal attempt to launch multiple child processes")
 
         try:
@@ -126,9 +126,13 @@ class UpdateHandler(object):
             if cmds[0].lower() == "python":
                 cmds[0] = get_python_cmd()
 
-            child = subprocess.Popen(cmds, cwd=agent_dir, stdout=sys.stdout, stderr=sys.stderr)
+            self.child_process = subprocess.Popen(
+                cmds,
+                cwd=agent_dir,
+                stdout=sys.stdout,
+                stderr=sys.stderr)
 
-            ret = child.wait()
+            ret = self.child_process.wait()
             if ret == None:
                 ret = 1
             if ret != 0:
@@ -169,13 +173,14 @@ class UpdateHandler(object):
         return
 
     def forward_signal(self, signum, frame):
-        if self.child is None:
+        if self.child_process is None:
             return
         
         if signum is signal.SIGTERM:
-            self.child.send_signal(signal.SIGTERM)
+            self.child_process.send_signal(signal.SIGTERM)
 
         if self.signal_handler is not None:
+          if not self.signal_handler in (signal.SIG_IGN, signal.SIG_DFL):
             self.signal_handler(signum, frame)
         return
 
