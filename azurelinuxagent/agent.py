@@ -102,12 +102,14 @@ class Agent(object):
         update_handler = get_update_handler()
         update_handler.run()
 
-def main():
+def main(args=[]):
     """
     Parse command line arguments, exit with usage() on error.
     Invoke different methods according to different command
     """
-    command, force, verbose = parse_args(sys.argv[1:])
+    if len(args) <= 0:
+        args = sys.argv[1:]
+    command, force, verbose = parse_args(args)
     if command == "version":
         version()
     elif command == "help":
@@ -178,7 +180,7 @@ def usage():
     Show agent usage
     """
     print("")
-    print((("usage: {0} [-verbose] [-force] [-help]"
+    print((("usage: {0} [-verbose] [-force] [-help] "
            "-deprovision[+user]|-register-service|-version|-daemon|-start|"
            "-run-exthandlers]"
            "").format(sys.argv[0])))
@@ -192,3 +194,5 @@ def start():
     devnull = open(os.devnull, 'w')
     subprocess.Popen([sys.argv[0], '-daemon'], stdout=devnull, stderr=devnull)
 
+if __name__ == '__main__' :
+    main()
