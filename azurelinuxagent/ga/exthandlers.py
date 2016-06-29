@@ -136,7 +136,7 @@ class ExtHandlersHandler(object):
 
         if self.last_etag is not None and self.last_etag == etag:
             msg = u"Incarnation {0} has no extension updates".format(etag)
-            logger.info(msg)
+            logger.verbose(msg)
             self.log_report = False
         else:
             msg = u"Handle extensions updates for incarnation {0}".format(etag)
@@ -249,7 +249,7 @@ class ExtHandlersHandler(object):
             add_event(name="WALA", is_success=False, message=message)
 
         if self.log_report:
-            logger.info("Successfully reported vm agent status")
+            logger.verbose("Successfully reported vm agent status")
 
 
     def report_ext_handler_status(self, vm_status, ext_handler):
