@@ -500,6 +500,10 @@ class DefaultOSUtil(object):
                     if primary is None or metric < primary_metric:
                         primary = iface
                         primary_metric = metric
+
+        if primary is None:
+            primary = ''
+
         logger.info('primary interface is [{0}]'.format(primary))
         return primary
 
