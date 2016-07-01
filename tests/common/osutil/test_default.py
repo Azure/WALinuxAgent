@@ -106,6 +106,17 @@ class TestOSUtil(AgentTestCase):
             self.assertFalse(osutil.DefaultOSUtil().is_primary_interface('nflg'))
             self.assertFalse(osutil.DefaultOSUtil().is_primary_interface('invalid'))
 
+    def test_no_primary_does_not_throw(self):
+        with patch.object(osutil.DefaultOSUtil, 'get_primary_interface') \
+                as patch_primary:
+            exception = False
+            patch_primary.return_value = ''
+            try:
+                osutil.DefaultOSUtil().get_first_if()[0]
+            except Exception as e:
+                exception = True
+            self.assertFalse(exception)
+
     def test_dhcp_lease_default(self):
         self.assertTrue(osutil.DefaultOSUtil().get_dhcp_lease_endpoint() is None)
 
