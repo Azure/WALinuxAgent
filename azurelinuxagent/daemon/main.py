@@ -105,9 +105,6 @@ class DaemonHandler(object):
             fileutil.mkdir(conf.get_lib_dir(), mode=0o700)
             os.chdir(conf.get_lib_dir())
 
-        if conf.enable_rdma():
-            self.rdma_handler.install_driver()
-
         if conf.get_detect_scvmm_env():
             self.scvmm_handler.run()
 
@@ -117,6 +114,9 @@ class DaemonHandler(object):
         self.protocol_util.clear_protocol()
 
         self.provision_handler.run()
+
+        if conf.enable_rdma():
+            self.rdma_handler.install_driver()
 
         self.monitor_handler.run()
 
