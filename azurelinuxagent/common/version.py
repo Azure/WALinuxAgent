@@ -19,7 +19,10 @@ import os
 import re
 import platform
 import sys
+
+import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.utils.fileutil as fileutil
+from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.future import ustr
 
 
@@ -54,6 +57,29 @@ The Azure Linux Agent supports the provisioning and running of Linux
 VMs in the Azure cloud. This package should be installed on Linux disk
 images that are built to run in the Azure environment.
 """
+
+AGENT_DIR_GLOB = "{0}-*".format(AGENT_NAME)
+AGENT_PKG_GLOB = "{0}-*.zip".format(AGENT_NAME)
+
+AGENT_PATTERN = "{0}-(.*)".format(AGENT_NAME)
+AGENT_NAME_PATTERN = re.compile(AGENT_PATTERN)
+AGENT_DIR_PATTERN = re.compile(".*/{0}".format(AGENT_PATTERN))
+
+
+def set_current_agent():
+    path = os.getcwd()
+    lib_dir = conf.get_lib_dir()
+    if lib_dir[-1] != os.path.sep:
+        lib_dir += os.path.sep
+    if path[:len(lib_dir)] != lib_dir:
+        agent = AGENT_LONG_VERSION
+        version = AGENT_VERSION
+    else:
+        agent = path[len(lib_dir):].split(os.path.sep)[0]
+        version = AGENT_NAME_PATTERN.match(agent).group(1)
+    return agent, FlexibleVersion(version)
+CURRENT_AGENT, CURRENT_VERSION = set_current_agent()
+
 
 __distro__ = get_distro()
 DISTRO_NAME = __distro__[0]

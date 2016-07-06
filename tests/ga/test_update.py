@@ -53,6 +53,20 @@ WITH_ERROR = {
     "was_fatal" : False
 }
 
+EMPTY_MANIFEST = {
+    "name": "WALinuxAgent",
+    "version": 1.0,
+    "handlerManifest": {
+        "installCommand": "",
+        "uninstallCommand": "",
+        "updateCommand": "",
+        "enableCommand": "",
+        "disableCommand": "",
+        "rebootAfterInstall": False,
+        "reportHeartbeat": False
+    }
+}
+
 
 def get_agent_pkgs(in_dir=os.path.join(data_dir, "ga")):
     path = os.path.join(in_dir, AGENT_PKG_GLOB)
@@ -116,7 +130,7 @@ class UpdateTestCase(AgentTestCase):
         return get_agent_pkgs(in_dir=self.tmp_dir)
 
     def agent_versions(self):
-        v = [FlexibleVersion(AGENT_NAME_PATTERN.match(a).group(1)) for a in self.agent_dirs()]
+        v = [FlexibleVersion(AGENT_DIR_PATTERN.match(a).group(1)) for a in self.agent_dirs()]
         v.sort(reverse=True)
         return v
 
@@ -638,20 +652,6 @@ class TestUpdate(UpdateTestCase):
             v = a.version
         return
 
-    @patch("os.getcwd", return_value="/default/install/directory")
-    def test_extract_name_finds_installed(self, mock_cwd):
-        self.assertEqual("Installed", self.update_handler._extract_name())
-        return
-
-    @patch("os.getcwd")
-    def test_extract_name_finds_latest_agent(self, mock_cwd):
-        self.prepare_agents()
-        mock_cwd.return_value = self.agent_dirs()[0]
-        self.assertEqual(
-            os.path.basename(self.agent_dirs()[0]),
-            self.update_handler._extract_name())
-        return
-
     def test_filter_blacklisted_agents(self):
         self.prepare_agents()
 
@@ -759,13 +759,11 @@ class TestUpdate(UpdateTestCase):
     def _test_run_latest(self, return_value=0, side_effect=None):
         mock_child = Mock()
         mock_child.wait = Mock(return_value=return_value, side_effect=side_effect)
-        with patch('sys.exit', return_value=0) as mock_exit:
-            with patch('subprocess.Popen', return_value=mock_child) as mock_popen:
-                self.update_handler.run_latest()
-                self.assertEqual(1, len(mock_popen.mock_calls))
-                self.assertEqual(1, len(mock_exit.mock_calls))
+        with patch('subprocess.Popen', return_value=mock_child) as mock_popen:
+            self.update_handler.run_latest()
+            self.assertEqual(1, len(mock_popen.mock_calls))
 
-                return mock_popen.call_args
+            return mock_popen.call_args
 
     def test_run_latest(self):
         self.prepare_agents()

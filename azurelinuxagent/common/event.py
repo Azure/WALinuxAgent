@@ -71,11 +71,11 @@ class EventLogger(object):
         except IOError as e:
             raise EventError("Failed to write events to file:{0}", e)
 
-    def add_event(self, name, op="", is_success=True, duration=0, version="1.0",
+    def add_event(self, name, op="", is_success=True, duration=0, version=AGENT_VERSION,
                   message="", evt_type="", is_internal=False):
         event = TelemetryEvent(1, "69B669B9-4AF8-4C50-BDC4-6006FA76E975")
         event.parameters.append(TelemetryEventParam('Name', name))
-        event.parameters.append(TelemetryEventParam('Version', version))
+        event.parameters.append(TelemetryEventParam('Version', str(version)))
         event.parameters.append(TelemetryEventParam('IsInternal', is_internal))
         event.parameters.append(TelemetryEventParam('Operation', op))
         event.parameters.append(TelemetryEventParam('OperationSuccess', 
@@ -92,7 +92,7 @@ class EventLogger(object):
 
 __event_logger__ = EventLogger()
 
-def add_event(name, op="", is_success=True, duration=0, version="1.0",
+def add_event(name, op="", is_success=True, duration=0, version=AGENT_VERSION,
               message="", evt_type="", is_internal=False,
               reporter=__event_logger__):
     log = logger.info if is_success else logger.error
@@ -102,7 +102,7 @@ def add_event(name, op="", is_success=True, duration=0, version="1.0",
         logger.warn("Event reporter is not initialized.")
         return
     reporter.add_event(name, op=op, is_success=is_success, duration=duration,
-                       version=version, message=message, evt_type=evt_type,
+                       version=str(version), message=message, evt_type=evt_type,
                        is_internal=is_internal)
 
 def init_event_logger(event_dir, reporter=__event_logger__):

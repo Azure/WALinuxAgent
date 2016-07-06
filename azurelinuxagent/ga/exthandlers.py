@@ -45,6 +45,7 @@ from azurelinuxagent.common.protocol.restapi import ExtHandlerStatus, \
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.utils.textutil import Version
 from azurelinuxagent.common.protocol import get_protocol_util
+from azurelinuxagent.common.version import AGENT_NAME, CURRENT_AGENT, CURRENT_VERSION
 
 #HandlerEnvironment.json schema version
 HANDLER_ENVIRONMENT_VERSION = 1.0
@@ -131,7 +132,7 @@ class ExtHandlersHandler(object):
             msg = u"Exception retrieving extension handlers: {0}".format(
                 ustr(e))
             logger.warn(msg)
-            add_event(name="WALA", is_success=False, message=msg)
+            add_event(AGENT_NAME, version=CURRENT_VERSION, is_success=False, message=msg)
             return
 
         if self.last_etag is not None and self.last_etag == etag:
@@ -238,7 +239,11 @@ class ExtHandlersHandler(object):
                 try:
                     self.report_ext_handler_status(vm_status, ext_handler)
                 except ExtensionError as e:
-                    add_event(name="WALA", is_success=False, message=ustr(e))
+                    add_event(
+                        AGENT_NAME,
+                        version=CURRENT_VERSION,
+                        is_success=False,
+                        message=ustr(e))
         
         logger.verbose("Report vm agent status")
         
@@ -246,7 +251,7 @@ class ExtHandlersHandler(object):
             self.protocol.report_vm_status(vm_status)
         except ProtocolError as e:
             message = "Failed to report vm agent status: {0}".format(e)
-            add_event(name="WALA", is_success=False, message=message)
+            add_event(AGENT_NAME, version=CURRENT_VERSION, is_success=False, message=message)
 
         if self.log_report:
             logger.verbose("Successfully reported vm agent status")

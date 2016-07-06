@@ -35,38 +35,22 @@ import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.restutil as restutil
 import azurelinuxagent.common.utils.textutil as textutil
 
-from azurelinuxagent.common.event import add_event
+from azurelinuxagent.common.event import add_event, WALAEventOperation
 from azurelinuxagent.common.exception import UpdateError, ProtocolError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol import get_protocol_util
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
-from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION
+from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, AGENT_LONG_VERSION, \
+                                            AGENT_DIR_GLOB, AGENT_PKG_GLOB, \
+                                            AGENT_PATTERN, AGENT_NAME_PATTERN, AGENT_DIR_PATTERN, \
+                                            CURRENT_AGENT, CURRENT_VERSION
 
 from azurelinuxagent.ga.exthandlers import HandlerManifest
 
 
-AGENT_DIR_GLOB = "{0}-*".format(AGENT_NAME)
-AGENT_PKG_GLOB = "{0}-*.zip".format(AGENT_NAME)
-
-AGENT_NAME_PATTERN = re.compile(".*/{0}-(.*)".format(AGENT_NAME))
-
 AGENT_ERROR_FILE = "error.json" # File name for agent error record
 AGENT_MANIFEST_FILE = "HandlerManifest.json"
-
-EMPTY_MANIFEST = {
-    "name": "WALinuxAgent",
-    "version": 1.0,
-    "handlerManifest": {
-        "installCommand": "",
-        "uninstallCommand": "",
-        "updateCommand": "",
-        "enableCommand": "",
-        "disableCommand": "",
-        "rebootAfterInstall": False,
-        "reportHeartbeat": False
-    }
-}
 
 MAX_FAILURE = 3 # Max failure allowed for agent before blacklisted
 
@@ -98,24 +82,27 @@ class UpdateHandler(object):
 
         self.child_process = None
         self.signal_handler = None
-
-        self.current_agent = self._extract_name()
         return
 
     def run_latest(self):
         """
         This method is called from the daemon to find and launch the most
         current, downloaded agent.
+
+        Note:
+        - Most events should be tagged to the launched agent (agent_version)
         """
         latest_agent = self.get_latest_agent()
         if latest_agent == None:
             agent_cmd = "python -u {0} -run-exthandlers".format(sys.argv[0])
             agent_dir = os.getcwd()
-            agent_name = "'Installed'"
+            agent_name = CURRENT_AGENT
+            agent_version = CURRENT_VERSION
         else:
             agent_cmd = latest_agent.get_agent_cmd()
             agent_dir = latest_agent.get_agent_dir()
             agent_name = latest_agent.name
+            agent_version = latest_agent.version
 
         if self.child_process is not None:
             raise Exception("Illegal attempt to launch multiple child processes")
@@ -137,7 +124,7 @@ class UpdateHandler(object):
 
             msg = u"Agent {0} launched with command '{1}'".format(agent_name, agent_cmd)
             logger.info(msg)
-            add_event(u"WALA", is_success=True, message=msg)
+            add_event(AGENT_NAME, version=agent_version, message=msg)
 
             ret = self.child_process.wait()
             if ret == None:
@@ -148,7 +135,12 @@ class UpdateHandler(object):
                     agent_cmd,
                     ret)
                 logger.warn(msg)
-                add_event(u"WALA", is_success=False, message=msg)
+                add_event(
+                    AGENT_NAME,
+                    version=agent_version,
+                    op=WALAEventOperation.Enable,
+                    is_success=False,
+                    message=msg)
                 if latest_agent is not None:
                     latest_agent.mark_failure()
             else:
@@ -156,18 +148,36 @@ class UpdateHandler(object):
                     agent_name,
                     agent_cmd)
                 logger.info(msg)
-                add_event(u"WALA", is_success=True, message=msg)
+                add_event(
+                    AGENT_NAME,
+                    version=agent_version,
+                    op=WALAEventOperation.Enable,
+                    is_success=True,
+                    message=msg)
         except Exception as e:
             msg = u"Agent {0} launch failed with command '{1}' failed with exception: {2}".format(
                 agent_name,
                 agent_cmd,
                 ustr(e))
             logger.warn(msg)
-            add_event(u"WALA", is_success=False, message=msg)
+            add_event(
+                AGENT_NAME,
+                version=agent_version,
+                op=WALAEventOperation.Enable,
+                is_success=False,
+                message=msg)
             if latest_agent is not None:
                 latest_agent.mark_failure(is_fatal=True)
+                msg = u"Agent {0} is blacklisted".format(agent_name)
+                logger.info(msg)
+                add_event(
+                    AGENT_NAME,
+                    version=agent_version,
+                    op=WALAEventOperation.Enable,
+                    is_success=False,
+                    message=msg)
 
-        sys.exit(0)
+        self.child_process = None
         return
 
     def run(self):
@@ -178,9 +188,9 @@ class UpdateHandler(object):
         exthandlers_handler = get_exthandlers_handler()
 
         msg = u"Agent {0} is running as the current agent".format(
-            self.current_agent)
+            CURRENT_AGENT)
         logger.info(msg)
-        add_event(u"WALA", is_success=True, message=msg)
+        add_event(AGENT_NAME, version=CURRENT_VERSION, is_success=True, message=msg)
 
         # TODO: Add means to stop running
         try:
@@ -190,9 +200,13 @@ class UpdateHandler(object):
                 # true), exit to allow the daemon to respawn using that agent.
                 if self._ensure_latest_agent():
                     msg = u"Agent {0} discovered agent update and will exit".format(
-                        self.current_agent)
+                        CURRENT_AGENT)
                     logger.info(msg)
-                    add_event(u"WALA", is_success=True, message=msg)
+                    add_event(
+                        AGENT_NAME,
+                        version=CURRENT_VERSION,
+                        is_success=True,
+                        message=msg)
                     break
 
                 # Process extensions
@@ -201,9 +215,14 @@ class UpdateHandler(object):
                 time.sleep(25)
 
         except Exception as e:
-            msg = u"Agent {0} failed with exception: {1}".format(self.current_agent, ustr(e))
+            msg = u"Agent {0} failed with exception: {1}".format(CURRENT_AGENT, ustr(e))
             logger.warn(msg)
-            add_event(u"WALA", is_success=False, message=msg)
+            add_event(
+                AGENT_NAME,
+                version=CURRENT_VERSION,
+                op=WALAEventOperation.Enable,
+                is_success=False,
+                message=msg)
             sys.exit(1)
         sys.exit(0)
         return
@@ -254,13 +273,17 @@ class UpdateHandler(object):
         except Exception as e:
             msg = u"Exception retrieving agent manifests: {0}".format(ustr(e))
             logger.warn(msg)
-            add_event(u"WALA", is_success=False, message=msg)
+            add_event(
+                AGENT_NAME,
+                version=CURRENT_VERSION,
+                is_success=False,
+                message=msg)
             return False
 
         if self.last_etag is not None and self.last_etag == etag:
             msg = u"Incarnation {0} has no agent updates".format(etag)
             logger.info(msg)
-            add_event(u"WALA", message=msg)
+            add_event(AGENT_NAME, version=CURRENT_VERSION, message=msg)
             return False
 
         logger.info("Check for agent updates")
@@ -270,7 +293,7 @@ class UpdateHandler(object):
         if len(manifests) == 0:
             msg = u"Incarnation {0} has no agent family {1} updates".format(etag, family)
             logger.info(msg)
-            add_event(u"WALA", message=msg)
+            add_event(AGENT_NAME, version=CURRENT_VERSION, message=msg)
             return False
 
         try:
@@ -280,7 +303,11 @@ class UpdateHandler(object):
                                                                                family,
                                                                                ustr(e))
             logger.warn(msg)
-            add_event("WALA", is_success=False, message=msg)
+            add_event(
+                AGENT_NAME,
+                version=CURRENT_VERSION,
+                is_success=False,
+                message=msg)
             return False
 
         # Set the agents to those available for download at least as current as the existing agent
@@ -298,15 +325,6 @@ class UpdateHandler(object):
         # Return True if agents more recent than the current are available
         return len(self.agents) > 0 and self.agents[0].version > current_version
 
-    def _extract_name(self):
-        path = os.getcwd()
-        lib_dir = conf.get_lib_dir()
-        if lib_dir[-1] != os.path.sep:
-            lib_dir += os.path.sep
-        if path[:len(lib_dir)] != lib_dir:
-            return "Installed"
-        return path[len(lib_dir):].split(os.path.sep)[0]
-
     def _filter_blacklisted_agents(self):
         self.agents = [agent for agent in self.agents if not agent.is_blacklisted]
         return
@@ -323,7 +341,11 @@ class UpdateHandler(object):
                 self._filter_blacklisted_agents()
             except Exception as e:
                 msg = u"Exception occurred loading available agents: {0}".format(ustr(e))
-                add_event(u"WALA", is_success=False, message=msg)
+                add_event(
+                    AGENT_NAME,
+                    version=CURRENT_VERSION,
+                    is_success=False,
+                    message=msg)
         return
 
     def _purge_agents(self):
@@ -335,7 +357,7 @@ class UpdateHandler(object):
         for agent_path in glob.iglob(path):
             try:
                 name = fileutil.trim_ext(agent_path, "zip")
-                m = AGENT_NAME_PATTERN.match(name)
+                m = AGENT_DIR_PATTERN.match(name)
                 if m is not None and not FlexibleVersion(m.group(1)) in known_versions:
                     if os.path.isfile(agent_path):
                         os.remove(agent_path)
@@ -344,7 +366,11 @@ class UpdateHandler(object):
             except Exception as e:
                 msg = u"Exception purging {0}: {1}".format(agent_path, ustr(e))
                 logger.warn(msg)
-                add_event(u"WALA", is_success=False, message=msg)
+                add_event(
+                    AGENT_NAME,
+                    version=CURRENT_VERSION,
+                    is_success=False,
+                    message=msg)
         return
 
     def _set_agents(self, agents=[]):
@@ -357,7 +383,7 @@ class GuestAgent(object):
     def __init__(self, path=None, pkg=None):
         self.pkg = pkg
         if path is not None:
-            m = AGENT_NAME_PATTERN.match(path)
+            m = AGENT_DIR_PATTERN.match(path)
             if m == None:
                 raise UpdateError(u"Illegal agent directory: {0}".format(path))
             version = m.group(1)
@@ -408,14 +434,19 @@ class GuestAgent(object):
         return os.path.isfile(self.get_agent_manifest_path())
 
     def mark_failure(self, is_fatal=False):
-        if not os.path.isdir(self.get_agent_dir()):
-            os.makedirs(self.get_agent_dir())
-        self.error.mark_failure(is_fatal)
-        self.error.save()
-        if is_fatal:
-            msg = u"Agent {0} is permenantly blacklisted".format(self.name)
+        try:
+            if not os.path.isdir(self.get_agent_dir()):
+                os.makedirs(self.get_agent_dir())
+            self.error.mark_failure(is_fatal)
+            self.error.save()
+            if is_fatal:
+                msg = u"Agent {0} is permenantly blacklisted".format(self.name)
+                logger.warn(msg)
+                add_event(AGENT_NAME, version=self.version, is_success=False, message=msg)
+        except Exception as e:
+            msg = u"Agent {0} failed recording error state: {1}".format(ustr(e))
             logger.warn(msg)
-            add_event(u"WALA", is_success=False, message=msg)
+            add_event(AGENT_NAME, version=self.version, is_success=False, message=msg)
         return
 
     def _ensure_downloaded(self):
@@ -423,7 +454,7 @@ class GuestAgent(object):
             if self.is_blacklisted:
                 msg = u"Agent {0} is blacklisted - skipping download".format(self.name)
                 logger.info(msg)
-                add_event(u"WALA", is_success=True, message=msg)
+                add_event(AGENT_NAME, version=self.version, is_success=True, message=msg)
                 return
 
             if self.is_downloaded:
@@ -439,6 +470,15 @@ class GuestAgent(object):
             self._load_manifest()
             self._load_error()
 
+            msg = u"Agent {0} downloaded successfully".format(self.name)
+            logger.info(msg)
+            add_event(
+                AGENT_NAME,
+                version=self.version,
+                op=WALAEventOperation.Install,
+                is_success=True,
+                message=msg)
+
         except Exception as e:
             # Note the failure, blacklist the agent if the package downloaded
             # - An exception with a downloaded package indicates the package
@@ -447,13 +487,18 @@ class GuestAgent(object):
 
             msg = u"Agent {0} download failed with exception: {1}".format(self.name, ustr(e))
             logger.warn(msg)
-            add_event(u"WALA", is_success=False, message=msg)
+            add_event(
+                AGENT_NAME,
+                version=self.version,
+                op=WALAEventOperation.Install,
+                is_success=False,
+                message=msg)
         return
 
     def _download(self):
         msg = u"Initiating download of Agent {0}".format(self.name)
         logger.info(msg)
-        add_event(u"WALA", message=msg)
+        add_event(AGENT_NAME, version=self.version, message=msg)
         package = None
 
         for uri in self.pkg.uris:
@@ -466,7 +511,7 @@ class GuestAgent(object):
             except restutil.HttpError as e:
                 msg = u"Agent {0} download from {1} failed".format(self.name, uri.uri)
                 logger.warn(msg)
-                add_event(u"WALA", is_success=False, message=msg)
+                add_event(AGENT_NAME, version=self.version, is_success=False, message=msg)
 
         if not os.path.isfile(self.get_agent_pkg_path()):
             msg = u"Unable to download Agent {0} from any URI".format(self.name)
@@ -474,9 +519,14 @@ class GuestAgent(object):
         return
 
     def _load_error(self):
-        if self.error is None:
-            self.error = GuestAgentError(self.get_agent_error_file())
-        self.error.load()
+        try:
+            if self.error is None:
+                self.error = GuestAgentError(self.get_agent_error_file())
+            self.error.load()
+        except Exception as e:
+            msg = u"Agent {0} failed loading error state: {1}".format(ustr(e))
+            logger.warn(msg)
+            add_event(AGENT_NAME, version=self.version, is_success=False, message=msg)
         return
 
     def _load_manifest(self):
@@ -541,7 +591,7 @@ class GuestAgent(object):
 
         msg = u"Agent {0} successfully unpacked".format(self.name)
         logger.info(msg)
-        add_event(u"WALA", message=msg)
+        add_event(AGENT_NAME, version=self.version, message=msg)
         return
 
 
@@ -580,24 +630,14 @@ class GuestAgentError(object):
 
     def load(self):
         if self.path is not None and os.path.isfile(self.path):
-            try:
-                with open(self.path, 'r') as f:
-                    self.from_json(json.load(f))
-            except Exception as e:
-                msg = u"Exception reading error record from {0}: {1}".format(self.path, ustr(e))
-                logger.warn(msg)
-                add_event(u"WALA", is_success=False, message=msg)
+            with open(self.path, 'r') as f:
+                self.from_json(json.load(f))
         return
 
     def save(self):
         if os.path.isdir(os.path.dirname(self.path)):
-            try:
-                with open(self.path, 'w') as f:
-                    json.dump(self.to_json(), f)
-            except Exception as e:
-                msg = u"Exception saving error record to {0}: {1}".format(self.path, ustr(e))
-                logger.warn(msg)
-                add_event(u"WALA", is_success=False, message=msg)
+            with open(self.path, 'w') as f:
+                json.dump(self.to_json(), f)
         return
     
     def from_json(self, data):
