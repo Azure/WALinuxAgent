@@ -42,7 +42,7 @@ from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION
 from azurelinuxagent.ga.update import *
 
 NO_ERROR = {
-    "last_failure" : None,
+    "last_failure" : 0.0,
     "failure_count" : 0,
     "was_fatal" : False
 }
@@ -129,7 +129,9 @@ class UpdateTestCase(AgentTestCase):
 
     def expand_agents(self):
         for agent in self.agent_pkgs():
-            zipfile.ZipFile(agent).extractall(os.path.join(self.tmp_dir))
+            zipfile.ZipFile(agent).extractall(os.path.join(
+                self.tmp_dir,
+                fileutil.trim_ext(agent, "zip")))
         return
 
     def prepare_agents(self, base_version=AGENT_VERSION, count=5, is_available=True):
@@ -212,6 +214,32 @@ class TestGuestAgentError(UpdateTestCase):
         self.assertEqual(WITH_ERROR["last_failure"], err.last_failure)
         self.assertEqual(WITH_ERROR["failure_count"], err.failure_count)
         self.assertEqual(WITH_ERROR["was_fatal"], err.was_fatal)
+        return
+
+    def test_clear(self):
+        with self.get_error_file(error_data=WITH_ERROR) as path:
+            err = GuestAgentError(path.name)
+            self.assertEqual(path.name, err.path)
+        self.assertNotEqual(None, err)
+
+        err.clear()
+        self.assertEqual(NO_ERROR["last_failure"], err.last_failure)
+        self.assertEqual(NO_ERROR["failure_count"], err.failure_count)
+        self.assertEqual(NO_ERROR["was_fatal"], err.was_fatal)
+        return
+
+    def test_load_preserves_error_state(self):
+        with self.get_error_file(error_data=WITH_ERROR) as path:
+            err = GuestAgentError(path.name)
+            self.assertEqual(path.name, err.path)
+        self.assertNotEqual(None, err)
+
+        with self.get_error_file(error_data=NO_ERROR):
+            err.load()
+        self.assertEqual(WITH_ERROR["last_failure"], err.last_failure)
+        self.assertEqual(WITH_ERROR["failure_count"], err.failure_count)
+        self.assertEqual(WITH_ERROR["was_fatal"], err.was_fatal)
+        return
 
     def test_save(self):
         err1 = self.create_error()
@@ -291,6 +319,23 @@ class TestGuestAgent(UpdateTestCase):
 
         self.assertFalse(agent.is_downloaded)
         self.assertFalse(agent.is_available)
+        return
+
+    @patch("azurelinuxagent.ga.update.GuestAgent._ensure_downloaded")
+    def test_clear_error(self, mock_ensure):
+        agent = GuestAgent(path=self.agent_path)
+        agent.mark_failure(is_fatal=True)
+
+        self.assertTrue(agent.error.last_failure > 0.0)
+        self.assertEqual(1, agent.error.failure_count)
+        self.assertTrue(agent.is_blacklisted)
+        self.assertEqual(agent.is_blacklisted, agent.error.is_blacklisted)
+
+        agent.clear_error()
+        self.assertEqual(0.0, agent.error.last_failure)
+        self.assertEqual(0, agent.error.failure_count)
+        self.assertFalse(agent.is_blacklisted)
+        self.assertEqual(agent.is_blacklisted, agent.error.is_blacklisted)
         return
 
     @patch("azurelinuxagent.ga.update.GuestAgent._ensure_downloaded")
@@ -489,6 +534,26 @@ class TestGuestAgent(UpdateTestCase):
         self.assertTrue(agent.is_blacklisted)
         return
 
+    @patch("azurelinuxagent.ga.update.GuestAgent._download")
+    @patch("azurelinuxagent.ga.update.GuestAgent._unpack")
+    @patch("azurelinuxagent.ga.update.GuestAgent._load_manifest")
+    def test_ensure_download_skips_blacklisted(self, mock_download, mock_unpack, mock_manifest):
+        agent = GuestAgent(path=self.agent_path)
+        agent.clear_error()
+        agent.mark_failure(is_fatal=True)
+
+        pkg = ExtHandlerPackage(version=str(get_agent_version()))
+        pkg.uris.append(ExtHandlerPackageUri())
+        agent = GuestAgent(pkg=pkg)
+
+        self.assertEqual(1, agent.error.failure_count)
+        self.assertTrue(agent.error.was_fatal)
+        self.assertTrue(agent.is_blacklisted)
+        self.assertEqual(0, mock_download.call_count)
+        self.assertEqual(0, mock_unpack.call_count)
+        self.assertEqual(0, mock_manifest.call_count)
+        return
+
 
 class TestUpdate(UpdateTestCase):
     def setUp(self):
@@ -571,6 +636,20 @@ class TestUpdate(UpdateTestCase):
         for a in self.update_handler.agents:
             self.assertTrue(v > a.version)
             v = a.version
+        return
+
+    @patch("os.getcwd", return_value="/default/install/directory")
+    def test_extract_name_finds_installed(self, mock_cwd):
+        self.assertEqual("Installed", self.update_handler._extract_name())
+        return
+
+    @patch("os.getcwd")
+    def test_extract_name_finds_latest_agent(self, mock_cwd):
+        self.prepare_agents()
+        mock_cwd.return_value = self.agent_dirs()[0]
+        self.assertEqual(
+            os.path.basename(self.agent_dirs()[0]),
+            self.update_handler._extract_name())
         return
 
     def test_filter_blacklisted_agents(self):
@@ -742,13 +821,13 @@ class TestUpdate(UpdateTestCase):
 
         latest_agent = self.update_handler.get_latest_agent()
         self.assertTrue(latest_agent.is_available)
-        self.assertEqual(None, latest_agent.error.last_failure)
+        self.assertEqual(0.0, latest_agent.error.last_failure)
         self.assertEqual(0, latest_agent.error.failure_count)
 
         self._test_run_latest(return_value=1)
 
         self.assertTrue(latest_agent.is_available)
-        self.assertNotEqual(None, latest_agent.error.last_failure)
+        self.assertNotEqual(0.0, latest_agent.error.last_failure)
         self.assertEqual(1, latest_agent.error.failure_count)
         return
 
@@ -758,13 +837,13 @@ class TestUpdate(UpdateTestCase):
 
         latest_agent = self.update_handler.get_latest_agent()
         self.assertTrue(latest_agent.is_available)
-        self.assertEqual(None, latest_agent.error.last_failure)
+        self.assertEqual(0.0, latest_agent.error.last_failure)
         self.assertEqual(0, latest_agent.error.failure_count)
 
         self._test_run_latest(return_value=None)
 
         self.assertTrue(latest_agent.is_available)
-        self.assertNotEqual(None, latest_agent.error.last_failure)
+        self.assertNotEqual(0.0, latest_agent.error.last_failure)
         self.assertEqual(1, latest_agent.error.failure_count)
         return
 
@@ -774,14 +853,14 @@ class TestUpdate(UpdateTestCase):
 
         latest_agent = self.update_handler.get_latest_agent()
         self.assertTrue(latest_agent.is_available)
-        self.assertEqual(None, latest_agent.error.last_failure)
+        self.assertEqual(0.0, latest_agent.error.last_failure)
         self.assertEqual(0, latest_agent.error.failure_count)
 
         self._test_run_latest(side_effect=Exception("Force blacklisting"))
 
         self.assertFalse(latest_agent.is_available)
         self.assertTrue(latest_agent.error.is_blacklisted)
-        self.assertNotEqual(None, latest_agent.error.last_failure)
+        self.assertNotEqual(0.0, latest_agent.error.last_failure)
         self.assertEqual(1, latest_agent.error.failure_count)
         return
 
@@ -811,7 +890,7 @@ class TestUpdate(UpdateTestCase):
         self.update_handler._ensure_latest_agent = Mock(return_value=True)
         with patch('sys.exit', side_effect=Exception("System Exit")) as mock_exit:
             self._test_run(invocations=0, enable_updates=True)
-            self.assertEqual(1, len(mock_exit.mock_calls))
+            self.assertEqual(1, mock_exit.call_count)
         return
 
     def test_set_agents(self):
@@ -833,7 +912,7 @@ class _IterationMock(object):
         self.invocations = invocations
         self.mock_calls = []
         return
-    
+
     def __call__(self, *args, **kwargs):
         self.mock_calls.append((args, kwargs))
         if len(self.mock_calls) >= self.invocations:
