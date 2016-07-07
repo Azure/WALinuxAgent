@@ -87,6 +87,9 @@ class Redhat6xOSUtil(DefaultOSUtil):
         fileutil.update_conf_file(filepath, 'DHCP_HOSTNAME',
                                   'DHCP_HOSTNAME={0}'.format(hostname))
 
+    def get_dhcp_lease_endpoint(self):
+        return self.get_endpoint_from_leases_path('/var/lib/dhclient/dhclient-*.leases')
+
 class RedhatOSUtil(Redhat6xOSUtil):
     def __init__(self):
         super(RedhatOSUtil, self).__init__()
@@ -113,3 +116,7 @@ class RedhatOSUtil(Redhat6xOSUtil):
 
     def openssl_to_openssh(self, input_file, output_file):
         DefaultOSUtil.openssl_to_openssh(self, input_file, output_file)
+
+    def get_dhcp_lease_endpoint(self):
+        # centos7 has this weird naming with double hyphen like /var/lib/dhclient/dhclient--eth0.lease
+        return self.get_endpoint_from_leases_path('/var/lib/dhclient/dhclient-*.lease')
