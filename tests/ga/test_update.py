@@ -577,6 +577,7 @@ class TestUpdate(UpdateTestCase):
 
     def _test_ensure_latest_agent(
             self,
+            base_version=FlexibleVersion(AGENT_VERSION),
             protocol=None,
             versions=None):
         
@@ -591,7 +592,7 @@ class TestUpdate(UpdateTestCase):
         self.update_handler.protocol_util = protocol
         conf.get_autoupdate_gafamily = Mock(return_value=protocol.family)
 
-        return self.update_handler._ensure_latest_agent()
+        return self.update_handler._ensure_latest_agent(base_version=base_version)
 
     def test_ensure_latest_agent_returns_true_on_first_use(self):
         self.assertEqual(None, self.update_handler.last_etag)
@@ -633,7 +634,13 @@ class TestUpdate(UpdateTestCase):
         self.assertFalse(self._test_ensure_latest_agent())
         return
 
-    def test_ensure_latest_agent_skips_when_no_new_versions(self):
+    def test_ensure_latest_agent_skips_if_when_no_new_versions(self):
+        self.prepare_agents()
+        base_version = self.agent_versions()[0] + 1
+        self.assertFalse(self._test_ensure_latest_agent(base_version=base_version))
+        return
+
+    def test_ensure_latest_agent_skips_when_no_versions(self):
         self.assertFalse(self._test_ensure_latest_agent(protocol=ProtocolMock()))
         return
 

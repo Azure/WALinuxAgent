@@ -115,6 +115,7 @@ class UpdateHandler(object):
             cmds = shlex.split(agent_cmd)
             if cmds[0].lower() == "python":
                 cmds[0] = get_python_cmd()
+                agent_cmd = " ".join(cmds)
 
             self.child_process = subprocess.Popen(
                 cmds,
@@ -264,7 +265,7 @@ class UpdateHandler(object):
         available_agents = [agent for agent in self.agents if agent.is_available]
         return available_agents[0] if len(available_agents) >= 1 else None
 
-    def _ensure_latest_agent(self):
+    def _ensure_latest_agent(self, base_version=CURRENT_VERSION):
         # Ignore new agents if updating is disabled
         if not conf.get_autoupdate_enabled():
             return False
@@ -326,15 +327,14 @@ class UpdateHandler(object):
         # Note:
         #  The code leaves on disk available, but blacklisted, agents so as to preserve the state.
         #  Otherwise, those agents could be again downloaded and inappropriately retried.
-        current_version = FlexibleVersion(AGENT_VERSION)
         self._set_agents([GuestAgent(pkg=pkg) for pkg in
                             [pkg for pkg in pkg_list.versions
-                                if FlexibleVersion(pkg.version) > current_version]])
+                                if FlexibleVersion(pkg.version) > base_version]])
         self._purge_agents()
         self._filter_blacklisted_agents()
 
         # Return True if agents more recent than the current are available
-        return len(self.agents) > 0 and self.agents[0].version > current_version
+        return len(self.agents) > 0 and self.agents[0].version > base_version
 
     def _filter_blacklisted_agents(self):
         self.agents = [agent for agent in self.agents if not agent.is_blacklisted]
