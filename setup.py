@@ -168,15 +168,18 @@ class install(_install):
         if self.register_service:
             get_osutil().register_agent_service()
 
-setuptools.setup(name=AGENT_NAME,
-                 version=AGENT_VERSION,
-                 long_description=AGENT_DESCRIPTION,
-                 author= 'Yue Zhang, Stephen Zarkos, Eric Gable',
-                 author_email = 'walinuxagent@microsoft.com',
-                 platforms = 'Linux',
-                 url='https://github.com/Azure/WALinuxAgent',
-                 license = 'Apache License Version 2.0',
-                 packages=find_packages(exclude=["tests"]),
-                 cmdclass = {
-                     'install': install
-                 })
+setuptools.setup(
+    name=AGENT_NAME,
+    version=AGENT_VERSION,
+    long_description=AGENT_DESCRIPTION,
+    author= 'Yue Zhang, Stephen Zarkos, Eric Gable',
+    author_email = 'walinuxagent@microsoft.com',
+    platforms = 'Linux',
+    url='https://github.com/Azure/WALinuxAgent',
+    license = 'Apache License Version 2.0',
+    packages=find_packages(exclude=["tests"]),
+    py_modules=["__main__"],
+    cmdclass = {
+        'install': install
+    }
+)
