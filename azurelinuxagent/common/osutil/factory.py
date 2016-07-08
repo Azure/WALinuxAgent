@@ -28,6 +28,7 @@ from .redhat import RedhatOSUtil, Redhat6xOSUtil
 from .suse import SUSEOSUtil, SUSE11OSUtil
 from .ubuntu import UbuntuOSUtil, Ubuntu12OSUtil, Ubuntu14OSUtil, \
                     UbuntuSnappyOSUtil
+from .alpine import AlpineOSUtil
 
 def get_osutil(distro_name=DISTRO_NAME, distro_version=DISTRO_VERSION,
                distro_full_name=DISTRO_FULL_NAME):
@@ -42,6 +43,8 @@ def get_osutil(distro_name=DISTRO_NAME, distro_version=DISTRO_VERSION,
             return UbuntuSnappyOSUtil()
         else:
             return UbuntuOSUtil()
+    if distro_name == "alpine":
+        return AlpineOSUtil()
     if distro_name == "coreos":
         return CoreOSUtil()
     if distro_name == "suse":
