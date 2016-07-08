@@ -19,12 +19,14 @@
 
 import os
 import socket
-import threading
 import time
-import azurelinuxagent.common.logger as logger
+import threading
+
 import azurelinuxagent.common.conf as conf
-from azurelinuxagent.common.osutil import get_osutil
+import azurelinuxagent.common.logger as logger
+
 from azurelinuxagent.common.dhcp import get_dhcp_handler
+from azurelinuxagent.common.osutil import get_osutil
 
 def get_env_handler():
     return EnvHandler()
