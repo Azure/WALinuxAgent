@@ -659,6 +659,51 @@ class TestUpdate(UpdateTestCase):
             v = a.version
         return
 
+    def _test_evaluate_agent_health(self, child_agent_index=0):
+        self.prepare_agents()
+
+        latest_agent = self.update_handler.get_latest_agent()
+        self.assertTrue(latest_agent.is_available)
+        self.assertFalse(latest_agent.is_blacklisted)
+        self.assertTrue(len(self.update_handler.agents) > 1)
+
+        child_agent = self.update_handler.agents[child_agent_index]
+        self.assertTrue(child_agent.is_available)
+        self.assertFalse(child_agent.is_blacklisted)
+        self.update_handler.child_agent = child_agent
+
+        self.update_handler._evaluate_agent_health(latest_agent)
+        return
+
+    def test_evaluate_agent_health_ignores_installed_agent(self):
+        self.update_handler._evaluate_agent_health(None)
+        return
+
+    def test_evaluate_agent_health_raises_exception_for_restarting_agent(self):
+        self.update_handler.child_launch_time = time.time() - (4 * 60)
+        self.update_handler.child_launch_attempts = CHILD_LAUNCH_RESTART_MAX - 1
+        self.assertRaises(Exception, self._test_evaluate_agent_health)
+        return
+
+    def test_evaluate_agent_health_will_not_raise_exception_for_long_restarts(self):
+        self.update_handler.child_launch_time = time.time() - 24 * 60
+        self.update_handler.child_launch_attempts = CHILD_LAUNCH_RESTART_MAX
+        self._test_evaluate_agent_health()
+        return
+
+    def test_evaluate_agent_health_will_not_raise_exception_too_few_restarts(self):
+        self.update_handler.child_launch_time = time.time()
+        self.update_handler.child_launch_attempts = CHILD_LAUNCH_RESTART_MAX - 2
+        self._test_evaluate_agent_health()
+        return
+
+    def test_evaluate_agent_health_resets_with_new_agent(self):
+        self.update_handler.child_launch_time = time.time() - (4 * 60)
+        self.update_handler.child_launch_attempts = CHILD_LAUNCH_RESTART_MAX - 1
+        self._test_evaluate_agent_health(child_agent_index=1)
+        self.assertEqual(1, self.update_handler.child_launch_attempts)
+        return
+
     def test_filter_blacklisted_agents(self):
         self.prepare_agents()
 
@@ -763,12 +808,12 @@ class TestUpdate(UpdateTestCase):
             self.assertTrue(os.path.exists(agent_path + ".zip"))
         return
 
-    def _test_run_latest(self, return_value=0, side_effect=None):
+    def _test_run_latest(self, return_value=0, side_effect=None, child_calls=1):
         mock_child = Mock()
         mock_child.wait = Mock(return_value=return_value, side_effect=side_effect)
         with patch('subprocess.Popen', return_value=mock_child) as mock_popen:
             self.update_handler.run_latest()
-            self.assertEqual(1, len(mock_popen.mock_calls))
+            self.assertEqual(child_calls, mock_popen.call_count)
 
             return mock_popen.call_args
 

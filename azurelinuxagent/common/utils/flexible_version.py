@@ -133,6 +133,9 @@ class FlexibleVersion(version.Version):
 
         return this_index < that_index
 
+    def __ne__(self, that):
+        return not self.__eq__(that)
+
     def __eq__(self, that):
         this_version, that_version = self._ensure_compatible(that)
 

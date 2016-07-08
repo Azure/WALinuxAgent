@@ -52,6 +52,9 @@ from azurelinuxagent.ga.exthandlers import HandlerManifest
 AGENT_ERROR_FILE = "error.json" # File name for agent error record
 AGENT_MANIFEST_FILE = "HandlerManifest.json"
 
+CHILD_LAUNCH_INTERVAL = 5 * 60
+CHILD_LAUNCH_RESTART_MAX = 3
+
 MAX_FAILURE = 3 # Max failure allowed for agent before blacklisted
 
 GOAL_STATE_INTERVAL = 25
@@ -80,6 +83,9 @@ class UpdateHandler(object):
 
         self.agents = []
 
+        self.child_agent = None
+        self.child_launch_time = None
+        self.child_launch_attempts = 0
         self.child_process = None
         self.signal_handler = None
         return
@@ -116,6 +122,8 @@ class UpdateHandler(object):
             if cmds[0].lower() == "python":
                 cmds[0] = get_python_cmd()
                 agent_cmd = " ".join(cmds)
+
+            self._evaluate_agent_health(latest_agent)
 
             self.child_process = subprocess.Popen(
                 cmds,
@@ -335,6 +343,33 @@ class UpdateHandler(object):
 
         # Return True if agents more recent than the current are available
         return len(self.agents) > 0 and self.agents[0].version > base_version
+
+    def _evaluate_agent_health(self, latest_agent):
+        """
+        Evaluate the health of the selected agent: If it is restarting
+        too frequently, raise an Exception to force blacklisting.
+        """
+        if latest_agent is None:
+            return
+
+        if self.child_agent is None or latest_agent.version != self.child_agent.version:
+            self.child_agent = latest_agent
+            self.child_launch_time = None
+            self.child_launch_attempts = 0
+
+        if self.child_launch_time is None:
+            self.child_launch_time = time.time()
+
+        self.child_launch_attempts += 1
+
+        if (time.time() - self.child_launch_time) <= CHILD_LAUNCH_INTERVAL \
+            and self.child_launch_attempts >= CHILD_LAUNCH_RESTART_MAX:
+                msg = u"Agent {0} restarted more than {1} times in {2} seconds".format(
+                    self.child_agent.name,
+                    CHILD_LAUNCH_RESTART_MAX,
+                    CHILD_LAUNCH_INTERVAL)
+                raise Exception(msg)
+        return
 
     def _filter_blacklisted_agents(self):
         self.agents = [agent for agent in self.agents if not agent.is_blacklisted]

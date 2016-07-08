@@ -467,6 +467,9 @@ class TestFlexibleVersion(unittest.TestCase):
         self.assertTrue(FlexibleVersion("1.0") == FlexibleVersion("1.0"))
         self.assertTrue(FlexibleVersion("1.0") >= FlexibleVersion("1.0"))
         self.assertTrue(FlexibleVersion("1.0") <= FlexibleVersion("1.0"))
+
+        self.assertFalse(FlexibleVersion("1.0") != FlexibleVersion("1.0"))
+        self.assertTrue(FlexibleVersion("1.1") != FlexibleVersion("1.0"))
         return
 
 
