@@ -129,7 +129,7 @@ class UpdateHandler(object):
             ret = self.child_process.wait()
             if ret == None:
                 ret = 1
-            if ret != 0:
+            if ret > 0:
                 msg = u"Agent {0} launched with command '{1}' failed with code: {2}".format(
                     agent_name,
                     agent_cmd,
@@ -144,9 +144,10 @@ class UpdateHandler(object):
                 if latest_agent is not None:
                     latest_agent.mark_failure()
             else:
-                msg = u"Agent {0} launched with command '{1}' returned 0".format(
+                msg = u"Agent {0} launched with command '{1}' returned {2}".format(
                     agent_name,
-                    agent_cmd)
+                    agent_cmd,
+                    ret)
                 logger.info(msg)
                 add_event(
                     AGENT_NAME,
@@ -184,13 +185,21 @@ class UpdateHandler(object):
         """
         This is the main loop which watches for agent and extension updates.
         """
-        from azurelinuxagent.ga.exthandlers import get_exthandlers_handler
-        exthandlers_handler = get_exthandlers_handler()
 
         msg = u"Agent {0} is running as the current agent".format(
             CURRENT_AGENT)
         logger.info(msg)
         add_event(AGENT_NAME, version=CURRENT_VERSION, is_success=True, message=msg)
+
+        # Launch monitoring threads
+        from azurelinuxagent.ga.monitor import get_monitor_handler
+        get_monitor_handler().run()
+
+        from azurelinuxagent.ga.env import get_env_handler
+        get_env_handler().run()
+
+        from azurelinuxagent.ga.exthandlers import get_exthandlers_handler
+        exthandlers_handler = get_exthandlers_handler()
 
         # TODO: Add means to stop running
         try:
@@ -224,6 +233,7 @@ class UpdateHandler(object):
                 is_success=False,
                 message=msg)
             sys.exit(1)
+
         sys.exit(0)
         return
 
@@ -231,12 +241,13 @@ class UpdateHandler(object):
         if self.child_process is None:
             return
         
-        if signum is signal.SIGTERM:
-            self.child_process.send_signal(signal.SIGTERM)
+        self.child_process.send_signal(signum)
 
-        if self.signal_handler is not None:
-          if not self.signal_handler in (signal.SIG_IGN, signal.SIG_DFL):
+        if not self.signal_handler in (None, signal.SIG_IGN, signal.SIG_DFL):
             self.signal_handler(signum, frame)
+        elif self.signal_handler is signal.SIG_DFL:
+            if signum == signal.SIGTERM:
+                sys.exit(0)
         return
 
     def get_latest_agent(self):

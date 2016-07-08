@@ -17,7 +17,7 @@
 
 from tests.tools import *
 from azurelinuxagent.common.exception import *
-from azurelinuxagent.daemon.monitor import *
+from azurelinuxagent.ga.monitor import *
 
 class TestMonitor(AgentTestCase):
     def test_parse_xml_event(self):

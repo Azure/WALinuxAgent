@@ -7,9 +7,9 @@ import azurelinuxagent.pa.deprovision as deprovision
 import azurelinuxagent.daemon as daemon
 import azurelinuxagent.daemon.resourcedisk as resourcedisk
 import azurelinuxagent.daemon.scvmm as scvmm
-import azurelinuxagent.daemon.monitor as monitor
-import azurelinuxagent.ga.update as update
 import azurelinuxagent.ga.exthandlers as exthandlers
+import azurelinuxagent.ga.monitor as monitor
+import azurelinuxagent.ga.update as update
 
 class TestImportHandler(AgentTestCase):
     def test_get_handler(self):

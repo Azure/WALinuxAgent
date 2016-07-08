@@ -15,28 +15,28 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
-import os
-import json
-import time
 import datetime
-import threading
+import json
+import os
 import platform
-import azurelinuxagent.common.logger as logger
+import time
+import threading
+
 import azurelinuxagent.common.conf as conf
+import azurelinuxagent.common.logger as logger
+
 from azurelinuxagent.common.event import WALAEventOperation, add_event
-from azurelinuxagent.common.exception import EventError, ProtocolError, \
-    OSUtilError
+from azurelinuxagent.common.exception import EventError, ProtocolError, OSUtilError
 from azurelinuxagent.common.future import ustr
-from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, \
-    getattrib
-from azurelinuxagent.common.protocol.restapi import TelemetryEventParam, \
-    TelemetryEventList, \
-    TelemetryEvent, \
-    set_properties
-from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_VERSION, \
-    DISTRO_CODE_NAME, AGENT_LONG_VERSION
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol import get_protocol_util
+from azurelinuxagent.common.protocol.restapi import TelemetryEventParam, \
+                                                    TelemetryEventList, \
+                                                    TelemetryEvent, \
+                                                    set_properties
+from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, getattrib
+from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_VERSION, \
+                                            DISTRO_CODE_NAME, AGENT_LONG_VERSION
 
 
 def parse_event(data_str):
