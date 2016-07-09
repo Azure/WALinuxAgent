@@ -21,7 +21,6 @@ from azurelinuxagent.common.protocol import get_protocol_util
 from azurelinuxagent.ga.exthandlers import *
 from azurelinuxagent.common.protocol.wire import WireProtocol
 
-@patch("time.sleep")
 @patch("azurelinuxagent.common.protocol.wire.CryptUtil")
 @patch("azurelinuxagent.common.utils.restutil.http_get")
 class TestExtension(AgentTestCase):
@@ -47,14 +46,14 @@ class TestExtension(AgentTestCase):
         self.assertEquals(0, len(vm_status.vmAgent.extensionHandlers))
         return
 
-    def _create_mock(self, test_data, mock_http_get, MockCryptUtil, _):
-        """Test enable/disable/unistall of an extension"""
+    def _create_mock(self, test_data, mock_http_get, MockCryptUtil):
+        """Test enable/disable/uninstall of an extension"""
         handler = get_exthandlers_handler()
 
         #Mock protocol to return test data
         mock_http_get.side_effect = test_data.mock_http_get
         MockCryptUtil.side_effect = test_data.mock_crypt_util
- 
+
         protocol = WireProtocol("foo.bar")
         protocol.detect()
         protocol.report_ext_status = MagicMock()
