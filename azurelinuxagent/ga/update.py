@@ -396,10 +396,12 @@ class UpdateHandler(object):
 
     def _purge_agents(self):
         """
-        Remove from disk all directories and .zip files of unknown agents.
+        Remove from disk all directories and .zip files of unknown agents
+        (wihtout removing the current, running agent).
         """
         path = os.path.join(conf.get_lib_dir(), "{0}-*".format(AGENT_NAME))
         known_versions = [agent.version for agent in self.agents]
+        known_versions.append(CURRENT_VERSION)
         for agent_path in glob.iglob(path):
             try:
                 name = fileutil.trim_ext(agent_path, "zip")
