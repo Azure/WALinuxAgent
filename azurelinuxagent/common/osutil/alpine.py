@@ -17,8 +17,8 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
-import azurelinuxagent.utils.shellutil as shellutil
-from azurelinuxagent.distro.default.osutil import DefaultOSUtil
+import azurelinuxagent.common.utils.shellutil as shellutil
+from azurelinuxagent.common.osutil.default import DefaultOSUtil
 
 class AlpineOSUtil(DefaultOSUtil):
     def __init__(self):
