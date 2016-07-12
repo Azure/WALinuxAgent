@@ -397,7 +397,7 @@ class UpdateHandler(object):
     def _purge_agents(self):
         """
         Remove from disk all directories and .zip files of unknown agents
-        (wihtout removing the current, running agent).
+        (without removing the current, running agent).
         """
         path = os.path.join(conf.get_lib_dir(), "{0}-*".format(AGENT_NAME))
         known_versions = [agent.version for agent in self.agents]
@@ -488,7 +488,7 @@ class GuestAgent(object):
             self.error.mark_failure(is_fatal)
             self.error.save()
             if is_fatal:
-                msg = u"Agent {0} is permenantly blacklisted".format(self.name)
+                msg = u"Agent {0} is permanently blacklisted".format(self.name)
                 logger.warn(msg)
                 add_event(AGENT_NAME, version=self.version, is_success=False, message=msg)
         except Exception as e:
