@@ -134,6 +134,16 @@ class UpdateTestCase(AgentTestCase):
         v.sort(reverse=True)
         return v
 
+    def get_error_file(self, error_data=NO_ERROR):
+        fp = tempfile.NamedTemporaryFile(mode="w")
+        json.dump(error_data if error_data is not None else NO_ERROR, fp)
+        fp.seek(0)
+        return fp
+
+    def create_error(self, error_data=NO_ERROR):
+        with self.get_error_file(error_data) as path:
+            return GuestAgentError(path.name)
+
     def copy_agents(self, *agents):
         if len(agents) <= 0:
             agents = get_agent_pkgs()
@@ -206,16 +216,6 @@ class UpdateTestCase(AgentTestCase):
 
 
 class TestGuestAgentError(UpdateTestCase):
-    def get_error_file(self, error_data=NO_ERROR):
-        fp = tempfile.NamedTemporaryFile(mode="w")
-        json.dump(error_data if error_data is not None else NO_ERROR, fp)
-        fp.seek(0)
-        return fp
-
-    def create_error(self, error_data=NO_ERROR):
-        with self.get_error_file(error_data) as path:
-            return GuestAgentError(path.name)
-
     def test_creation(self):
         self.assertRaises(TypeError, GuestAgentError)
         self.assertRaises(UpdateError, GuestAgentError, None)
@@ -297,6 +297,22 @@ class TestGuestAgentError(UpdateTestCase):
         self.assertTrue(err.failure_count < MAX_FAILURE)
         return
 
+    def test_str(self):
+        err = self.create_error(error_data=NO_ERROR)
+        s = "Last Failure: {0}, Total Failures: {1}, Fatal: {2}".format(
+            NO_ERROR["last_failure"],
+            NO_ERROR["failure_count"],
+            NO_ERROR["was_fatal"])
+        self.assertEqual(s, str(err))
+
+        err = self.create_error(error_data=WITH_ERROR)
+        s = "Last Failure: {0}, Total Failures: {1}, Fatal: {2}".format(
+            WITH_ERROR["last_failure"],
+            WITH_ERROR["failure_count"],
+            WITH_ERROR["was_fatal"])
+        self.assertEqual(s, str(err))
+        return
+
 
 class TestGuestAgent(UpdateTestCase):
     def setUp(self):
@@ -331,7 +347,9 @@ class TestGuestAgent(UpdateTestCase):
         path = ".".join((os.path.join(conf.get_lib_dir(), get_agent_name()), "zip"))
         self.assertEqual(path, agent.get_agent_pkg_path())
 
-        self.assertFalse(agent.is_downloaded)
+        self.assertTrue(agent.is_downloaded)
+        # Note: Agent will get blacklisted since the package for this test is invalid
+        self.assertTrue(agent.is_blacklisted)
         self.assertFalse(agent.is_available)
         return
 
@@ -455,6 +473,14 @@ class TestGuestAgent(UpdateTestCase):
         self.assertRaises(UpdateError, agent._load_manifest)
         return
 
+    def test_load_error(self):
+        agent = GuestAgent(path=self.agent_path)
+        agent.error = None
+
+        agent._load_error()
+        self.assertTrue(agent.error is not None)
+        return
+
     @patch("azurelinuxagent.ga.update.GuestAgent._ensure_downloaded")
     @patch("azurelinuxagent.ga.update.restutil.http_get")
     def test_download(self, mock_http_get, mock_ensure):
@@ -573,6 +599,22 @@ class TestUpdate(UpdateTestCase):
     def setUp(self):
         UpdateTestCase.setUp(self)
         self.update_handler = get_update_handler()
+        return
+
+    def test_creation(self):
+        self.assertTrue(self.update_handler.running)
+
+        self.assertEqual(None, self.update_handler.last_etag)
+        self.assertEqual(None, self.update_handler.last_attempt_time)
+
+        self.assertEqual(0, len(self.update_handler.agents))
+
+        self.assertEqual(None, self.update_handler.child_agent)
+        self.assertEqual(None, self.update_handler.child_launch_time)
+        self.assertEqual(0, self.update_handler.child_launch_attempts)
+        self.assertEqual(None, self.update_handler.child_process)
+
+        self.assertEqual(None, self.update_handler.signal_handler)
         return
 
     def _test_ensure_latest_agent(
@@ -912,6 +954,19 @@ class TestUpdate(UpdateTestCase):
         self.assertTrue(latest_agent.error.is_blacklisted)
         self.assertNotEqual(0.0, latest_agent.error.last_failure)
         self.assertEqual(1, latest_agent.error.failure_count)
+        return
+
+    @patch('signal.signal')
+    def test_run_latest_captures_signals(self, mock_signal):
+        self._test_run_latest()
+        self.assertEqual(1, mock_signal.call_count)
+        return
+
+    @patch('signal.signal')
+    def test_run_latest_creates_only_one_signal_handler(self, mock_signal):
+        self.update_handler.signal_handler = "Not None"
+        self._test_run_latest()
+        self.assertEqual(0, mock_signal.call_count)
         return
 
     def _test_run(self, invocations=1, calls=[call.run()], enable_updates=False):

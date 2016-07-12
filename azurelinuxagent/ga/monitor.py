@@ -36,7 +36,8 @@ from azurelinuxagent.common.protocol.restapi import TelemetryEventParam, \
                                                     set_properties
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, getattrib
 from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_VERSION, \
-                                            DISTRO_CODE_NAME, AGENT_LONG_VERSION
+                                            DISTRO_CODE_NAME, AGENT_LONG_VERSION, \
+                                            CURRENT_AGENT, CURRENT_VERSION
 
 
 def parse_event(data_str):
@@ -106,7 +107,7 @@ class MonitorHandler(object):
                                                  platform.release())
         self.sysinfo.append(TelemetryEventParam("OSVersion", osversion))
         self.sysinfo.append(
-            TelemetryEventParam("GAVersion", AGENT_LONG_VERSION))
+            TelemetryEventParam("GAVersion", CURRENT_AGENT))
 
         try:
             ram = self.osutil.get_total_mem()

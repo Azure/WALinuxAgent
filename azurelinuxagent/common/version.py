@@ -66,6 +66,9 @@ AGENT_NAME_PATTERN = re.compile(AGENT_PATTERN)
 AGENT_DIR_PATTERN = re.compile(".*/{0}".format(AGENT_PATTERN))
 
 
+# Set the CURRENT_AGENT and CURRENT_VERSION to match the agent directory name
+# - This ensures the agent will "see itself" using the same name and version
+#   as the code that downloads agents.
 def set_current_agent():
     path = os.getcwd()
     lib_dir = conf.get_lib_dir()
@@ -79,6 +82,9 @@ def set_current_agent():
         version = AGENT_NAME_PATTERN.match(agent).group(1)
     return agent, FlexibleVersion(version)
 CURRENT_AGENT, CURRENT_VERSION = set_current_agent()
+
+def is_current_agent_installed():
+    return CURRENT_AGENT == AGENT_LONG_VERSION
 
 
 __distro__ = get_distro()
