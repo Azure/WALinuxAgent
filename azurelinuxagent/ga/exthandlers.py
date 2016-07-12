@@ -230,7 +230,7 @@ class ExtHandlersHandler(object):
     def report_ext_handlers_status(self):
         """Go thru handler_state dir, collect and report status"""
         vm_status = VMStatus()
-        vm_status.vmAgent.version = AGENT_VERSION
+        vm_status.vmAgent.version = str(CURRENT_VERSION)
         vm_status.vmAgent.status = "Ready"
         vm_status.vmAgent.message = "Guest Agent is running"
 
