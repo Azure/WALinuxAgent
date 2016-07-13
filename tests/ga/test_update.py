@@ -627,7 +627,6 @@ class TestUpdate(UpdateTestCase):
         if versions is None or len(versions) <= 0:
             versions = [latest_version]
 
-        self.update_handler.protocol_util = Mock(return_value=ProtocolMock)
         etag = self.update_handler.last_etag if self.update_handler.last_etag is not None else 42
         if protocol is None:
             protocol = ProtocolMock(etag=etag, versions=versions)
@@ -641,7 +640,7 @@ class TestUpdate(UpdateTestCase):
         self.assertTrue(self._test_ensure_latest_agent())
         return
 
-    def test_ensure_latest_agent_ignores_old_agents(self):
+    def test_ensure_latest_agent_includes_old_agents(self):
         self.prepare_agents()
 
         old_count = FlexibleVersion(AGENT_VERSION).version[-1]
@@ -651,7 +650,7 @@ class TestUpdate(UpdateTestCase):
         all_count = len(self.agent_versions())
 
         self.assertTrue(self._test_ensure_latest_agent(versions=self.agent_versions()))
-        self.assertEqual(all_count - old_count, len(self.update_handler.agents))
+        self.assertEqual(all_count, len(self.update_handler.agents))
         return
 
     def test_ensure_lastest_agent_purges_old_agents(self):
@@ -829,7 +828,7 @@ class TestUpdate(UpdateTestCase):
         kept_agents = self.update_handler.agents[1::2]
         purged_agents = self.update_handler.agents[::2]
 
-        # Reload and assert only the kept agents remain on disk        
+        # Reload and assert only the kept agents remain on disk
         self.update_handler.agents = kept_agents
         self.update_handler._purge_agents()
         self.update_handler._load_agents()
@@ -850,14 +849,19 @@ class TestUpdate(UpdateTestCase):
             self.assertTrue(os.path.exists(agent_path + ".zip"))
         return
 
-    def _test_run_latest(self, return_value=0, side_effect=None, child_calls=1):
-        mock_child = Mock()
-        mock_child.wait = Mock(return_value=return_value, side_effect=side_effect)
-        with patch('subprocess.Popen', return_value=mock_child) as mock_popen:
-            self.update_handler.run_latest()
-            self.assertEqual(child_calls, mock_popen.call_count)
+    def _test_run_latest(self, mock_child=None, mock_time=None):
+        if mock_child is None:
+            mock_child = ChildMock()
+        if mock_time is None:
+            mock_time = TimeMock()
 
-            return mock_popen.call_args
+        with patch('subprocess.Popen', return_value=mock_child) as mock_popen:
+            with patch('time.time', side_effect=mock_time.time):
+                with patch('time.sleep', return_value=mock_time.sleep):
+                    self.update_handler.run_latest()
+                    self.assertEqual(1, mock_popen.call_count)
+
+                    return mock_popen.call_args
 
     def test_run_latest(self):
         self.prepare_agents()
@@ -871,6 +875,31 @@ class TestUpdate(UpdateTestCase):
         self.assertEqual(args[0], cmds)
         self.assertEqual(True, 'cwd' in kwargs)
         self.assertEqual(agent.get_agent_dir(), kwargs['cwd'])
+        return
+
+    def test_run_latest_polls_and_waits_for_success(self):
+        mock_child = ChildMock(return_value=None)
+        mock_time = TimeMock(time_increment=CHILD_HEALTH_INTERVAL/3)
+        self._test_run_latest(mock_child=mock_child, mock_time=mock_time)
+        self.assertEqual(2, mock_child.poll.call_count)
+        self.assertEqual(1, mock_child.wait.call_count)
+        return
+
+    def test_run_latest_polling_stops_at_success(self):
+        mock_child = ChildMock(return_value=0)
+        mock_time = TimeMock(time_increment=CHILD_HEALTH_INTERVAL/3)
+        self._test_run_latest(mock_child=mock_child, mock_time=mock_time)
+        self.assertEqual(1, mock_child.poll.call_count)
+        self.assertEqual(0, mock_child.wait.call_count)
+        return
+
+    def test_run_latest_polling_stops_at_failure(self):
+        mock_child = ChildMock(return_value=42)
+        mock_time = TimeMock()
+        self._test_run_latest(mock_child=mock_child, mock_time=mock_time)
+        self.assertEqual(1, mock_child.poll.call_count)
+        self.assertEqual(0, mock_child.wait.call_count)
+        self.assertEqual(2, mock_time.time_call_count)
         return
 
     def test_run_latest_defaults_to_current(self):
@@ -894,7 +923,7 @@ class TestUpdate(UpdateTestCase):
                     saved_stdout, sys.stdout = sys.stdout, stdout
                     saved_stderr, sys.stderr = sys.stderr, stderr
                     try:
-                        self._test_run_latest(side_effect=faux_logger)
+                        self._test_run_latest(mock_child=ChildMock(side_effect=faux_logger))
                     finally:
                         sys.stdout = saved_stdout
                         sys.stderr = saved_stderr
@@ -916,23 +945,7 @@ class TestUpdate(UpdateTestCase):
         self.assertEqual(0.0, latest_agent.error.last_failure)
         self.assertEqual(0, latest_agent.error.failure_count)
 
-        self._test_run_latest(return_value=1)
-
-        self.assertTrue(latest_agent.is_available)
-        self.assertNotEqual(0.0, latest_agent.error.last_failure)
-        self.assertEqual(1, latest_agent.error.failure_count)
-        return
-
-    def test_run_latest_missing_code_marks_failures(self):
-        # logger.add_logger_appender(logger.AppenderType.STDOUT)
-        self.prepare_agents()
-
-        latest_agent = self.update_handler.get_latest_agent()
-        self.assertTrue(latest_agent.is_available)
-        self.assertEqual(0.0, latest_agent.error.last_failure)
-        self.assertEqual(0, latest_agent.error.failure_count)
-
-        self._test_run_latest(return_value=None)
+        self._test_run_latest(mock_child=ChildMock(return_value=1))
 
         self.assertTrue(latest_agent.is_available)
         self.assertNotEqual(0.0, latest_agent.error.last_failure)
@@ -948,7 +961,7 @@ class TestUpdate(UpdateTestCase):
         self.assertEqual(0.0, latest_agent.error.last_failure)
         self.assertEqual(0, latest_agent.error.failure_count)
 
-        self._test_run_latest(side_effect=Exception("Force blacklisting"))
+        self._test_run_latest(mock_child=ChildMock(side_effect=Exception("Force blacklisting")))
 
         self.assertFalse(latest_agent.is_available)
         self.assertTrue(latest_agent.error.is_blacklisted)
@@ -1016,16 +1029,32 @@ class TestUpdate(UpdateTestCase):
         self._test_run(invocations=0, calls=[], enable_updates=True)
         return
 
-    def test_set_agents(self):
+    def test_set_agents_sets_agents(self):
         self.prepare_agents()
 
         self.update_handler._set_agents([GuestAgent(path=path) for path in self.agent_dirs()])
+        self.assertTrue(len(self.update_handler.agents) > 0)
         self.assertEqual(len(self.agent_dirs()), len(self.update_handler.agents))
+        return
+
+    def test_set_agents_sorts_agents(self):
+        self.prepare_agents()
+
+        self.update_handler._set_agents([GuestAgent(path=path) for path in self.agent_dirs()])
 
         v = FlexibleVersion("100000")
         for a in self.update_handler.agents:
             self.assertTrue(v > a.version)
             v = a.version
+        return
+
+
+class ChildMock(Mock):
+    def __init__(self, return_value=0, side_effect=None):
+        Mock.__init__(self, return_value=return_value, side_effect=side_effect)
+
+        self.poll = Mock(return_value=return_value, side_effect=side_effect)
+        self.wait = Mock(return_value=return_value, side_effect=side_effect)
         return
 
 
@@ -1083,6 +1112,23 @@ class ResponseMock(Mock):
 
     def read(self):
         return self.response
+
+
+class TimeMock(Mock):
+    def __init__(self, time_increment=1):
+        Mock.__init__(self)
+        self.next_time = time.time()
+        self.time_call_count = 0
+        self.time_increment = time_increment
+
+        self.sleep = Mock(return_value=0)
+        return
+
+    def time(self):
+        self.time_call_count += 1
+        current_time = self.next_time
+        self.next_time += self.time_increment
+        return current_time
 
 
 if __name__ == '__main__':

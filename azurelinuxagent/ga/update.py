@@ -53,8 +53,10 @@ from azurelinuxagent.ga.exthandlers import HandlerManifest
 AGENT_ERROR_FILE = "error.json" # File name for agent error record
 AGENT_MANIFEST_FILE = "HandlerManifest.json"
 
+CHILD_HEALTH_INTERVAL = 15 * 60
 CHILD_LAUNCH_INTERVAL = 5 * 60
 CHILD_LAUNCH_RESTART_MAX = 3
+CHILD_POLL_INTERVAL = 60
 
 MAX_FAILURE = 3 # Max failure allowed for agent before blacklisted
 
@@ -139,27 +141,50 @@ class UpdateHandler(object):
 
             logger.info(u"Agent {0} launched with command '{1}'", agent_name, agent_cmd)
 
-            ret = self.child_process.wait()
-            if ret is None:
-                ret = 1
+            ret = None
+            start_time = time.time()
+            while (time.time() - start_time) < CHILD_HEALTH_INTERVAL:
+                time.sleep(CHILD_POLL_INTERVAL)
+                ret = self.child_process.poll()
+                if ret is not None:
+                    break
 
-            msg = u"Agent {0} launched with command '{1}' returned code: {2}".format(
-                agent_name,
-                agent_cmd,
-                ret)
-            add_event(
-                AGENT_NAME,
-                version=agent_version,
-                op=WALAEventOperation.Enable,
-                is_success=(ret <= 0),
-                message=msg)
+            if ret is None or ret <= 0:
+                msg = u"Agent {0} launched with command '{1}' is successfully running".format(
+                    agent_name,
+                    agent_cmd)
+                logger.info(msg)
+                add_event(
+                    AGENT_NAME,
+                    version=agent_version,
+                    op=WALAEventOperation.Enable,
+                    is_success=True,
+                    message=msg)
 
-            if ret > 0:
+                if ret is None:
+                    ret = self.child_process.wait()
+
+            else:
+                msg = u"Agent {0} launched with command '{1}' failed with return code: {2}".format(
+                    agent_name,
+                    agent_cmd,
+                    ret)
+                logger.warn(msg)
+                add_event(
+                    AGENT_NAME,
+                    version=agent_version,
+                    op=WALAEventOperation.Enable,
+                    is_success=False,
+                    message=msg)
+
+            if ret is not None and ret > 0:
+                msg = u"Agent {0} launched with command '{1}' returned code: {2}".format(
+                    agent_name,
+                    agent_cmd,
+                    ret)
                 logger.warn(msg)
                 if latest_agent is not None:
                     latest_agent.mark_failure()
-            else:
-                logger.info(msg)
 
         except Exception as e:
             msg = u"Agent {0} launched with command '{1}' failed with exception: {2}".format(
@@ -311,9 +336,7 @@ class UpdateHandler(object):
         # Note:
         #  The code leaves on disk available, but blacklisted, agents so as to preserve the state.
         #  Otherwise, those agents could be again downloaded and inappropriately retried.
-        self._set_agents([GuestAgent(pkg=pkg) for pkg in
-                            [pkg for pkg in pkg_list.versions
-                                if FlexibleVersion(pkg.version) > base_version]])
+        self._set_agents([GuestAgent(pkg=pkg) for pkg in pkg_list.versions])
         self._purge_agents()
         self._filter_blacklisted_agents()
 
@@ -469,7 +492,7 @@ class GuestAgent(object):
             if is_fatal:
                 logger.warn(u"Agent {0} is permanently blacklisted", self.name)
         except Exception as e:
-            logger.warn(u"Agent {0} failed recording error state: {1}", ustr(e))
+            logger.warn(u"Agent {0} failed recording error state: {1}", self.name, ustr(e))
         return
 
     def _ensure_downloaded(self):
