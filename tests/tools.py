@@ -14,31 +14,31 @@
 #
 # Requires Python 2.4+ and Openssl 1.0+
 #
-# Implements parts of RFC 2131, 1541, 1497 and
-# http://msdn.microsoft.com/en-us/library/cc227282%28PROT.10%29.aspx
-# http://msdn.microsoft.com/en-us/library/cc227259%28PROT.13%29.aspx
 
 """
 Define util functions for unit test
 """
 
-import re
-import os
-import sys
-import unittest
-import shutil
 import json
+import os
+import re
+import shutil
+import sys
 import tempfile
+import unittest
+
 from functools import wraps
-import azurelinuxagent.conf as conf
-import azurelinuxagent.logger as logger
-import azurelinuxagent.event as event
+
+import azurelinuxagent.common.conf as conf
+import azurelinuxagent.common.event as event
+import azurelinuxagent.common.logger as logger
+from azurelinuxagent.common.version import PY_VERSION_MAJOR
 
 #Import mock module for Python2 and Python3
 try:
-    from unittest.mock import Mock, patch, MagicMock
+    from unittest.mock import Mock, patch, MagicMock, DEFAULT, call
 except ImportError:
-    from mock import Mock, patch, MagicMock
+    from mock import Mock, patch, MagicMock, DEFAULT, call
 
 test_dir = os.path.dirname(os.path.abspath(__file__))
 data_dir = os.path.join(test_dir, "data")
@@ -56,6 +56,7 @@ class AgentTestCase(unittest.TestCase):
     def setUp(self):
         prefix = "{0}_".format(self.__class__.__name__)
         self.tmp_dir = tempfile.mkdtemp(prefix=prefix)
+        conf.get_autoupdate_enabled = Mock(return_value=True)
         conf.get_lib_dir = Mock(return_value=self.tmp_dir)
         ext_log_dir = os.path.join(self.tmp_dir, "azure")
         conf.get_ext_log_dir = Mock(return_value=ext_log_dir)
@@ -97,6 +98,12 @@ supported_distro = [
     ["redhat", "7.0", ""],
 
 ]
+
+def open_patch():
+    open_name = '__builtin__.open'
+    if PY_VERSION_MAJOR == 3:
+        open_name = 'builtins.open'
+    return open_name
 
 def distros(distro_name=".*", distro_version=".*", distro_full_name=".*"):
     """Run test on multiple distros"""

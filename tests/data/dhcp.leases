@@ -1,0 +1,56 @@
+lease {
+  interface "eth0";
+  fixed-address 10.0.1.4;
+  server-name "RDE41D2D9BB18C";
+  option subnet-mask 255.255.255.0;
+  option dhcp-lease-time 4294967295;
+  option routers 10.0.1.1;
+  option dhcp-message-type 5;
+  option dhcp-server-identifier 168.63.129.16;
+  option domain-name-servers invalid;
+  option dhcp-renewal-time 4294967295;
+  option rfc3442-classless-static-routes 0,10,0,1,1,32,168,63,129,16,10,0,1,1;
+  option unknown-245 a8:3f:81:10;
+  option dhcp-rebinding-time 4294967295;
+  option domain-name "qylsde3bnlhu5dstzf3bav5inc.fx.internal.cloudapp.net";
+  renew 0 2152/07/23 23:27:10;
+  rebind 0 2152/07/23 23:27:10;
+  expire 0 never;
+}
+lease {
+  interface "eth0";
+  fixed-address 10.0.1.4;
+  server-name "RDE41D2D9BB18C";
+  option subnet-mask 255.255.255.0;
+  option dhcp-lease-time 4294967295;
+  option routers 10.0.1.1;
+  option dhcp-message-type 5;
+  option dhcp-server-identifier 168.63.129.16;
+  option domain-name-servers expired;
+  option dhcp-renewal-time 4294967295;
+  option unknown-245 a8:3f:81:10;
+  option dhcp-rebinding-time 4294967295;
+  option domain-name "qylsde3bnlhu5dstzf3bav5inc.fx.internal.cloudapp.net";
+  renew 4 2015/06/16 16:58:54;
+  rebind 4 2015/06/16 16:58:54;
+  expire 4 2015/06/16 16:58:54;
+}
+lease {
+  interface "eth0";
+  fixed-address 10.0.1.4;
+  server-name "RDE41D2D9BB18C";
+  option subnet-mask 255.255.255.0;
+  option dhcp-lease-time 4294967295;
+  option routers 10.0.1.1;
+  option dhcp-message-type 5;
+  option dhcp-server-identifier 168.63.129.16;
+  option domain-name-servers 168.63.129.16;
+  option dhcp-renewal-time 4294967295;
+  option rfc3442-classless-static-routes 0,10,0,1,1,32,168,63,129,16,10,0,1,1;
+  option unknown-245 a8:3f:81:10;
+  option dhcp-rebinding-time 4294967295;
+  option domain-name "qylsde3bnlhu5dstzf3bav5inc.fx.internal.cloudapp.net";
+  renew 0 2152/07/23 23:27:10;
+  rebind 0 2152/07/23 23:27:10;
+  expire 0 2152/07/23 23:27:10;
+}

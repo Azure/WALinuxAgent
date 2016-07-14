@@ -14,17 +14,14 @@
 #
 # Requires Python 2.4+ and Openssl 1.0+
 #
-# Implements parts of RFC 2131, 1541, 1497 and
-# http://msdn.microsoft.com/en-us/library/cc227282%28PROT.10%29.aspx
-# http://msdn.microsoft.com/en-us/library/cc227259%28PROT.13%29.aspx
 
 from tests.tools import *
 from tests.protocol.mockmetadata import *
-from azurelinuxagent.utils.restutil import httpclient
-from azurelinuxagent.protocol.metadata import MetadataProtocol
+from azurelinuxagent.common.utils.restutil import httpclient
+from azurelinuxagent.common.protocol.metadata import MetadataProtocol
 
 @patch("time.sleep")
-@patch("azurelinuxagent.protocol.metadata.restutil")
+@patch("azurelinuxagent.common.protocol.metadata.restutil")
 class TestWireProtocolGetters(AgentTestCase):
     def _test_getters(self, test_data, mock_restutil ,_):
         mock_restutil.http_get.side_effect = test_data.mock_http_get
@@ -33,7 +30,7 @@ class TestWireProtocolGetters(AgentTestCase):
         protocol.detect()
         protocol.get_vminfo()
         protocol.get_certs()
-        ext_handlers, etag= protocol.get_ext_handlers()
+        ext_handlers, etag = protocol.get_ext_handlers()
         for ext_handler in ext_handlers.extHandlers:
             protocol.get_ext_handler_pkgs(ext_handler)
 

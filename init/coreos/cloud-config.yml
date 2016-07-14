@@ -47,6 +47,6 @@ coreos:
   oem:
     id: azure
     name: Microsoft Azure
-    version-id: 2.1.0
+    version-id: 2.1.4
     home-url: https://azure.microsoft.com/
     bug-report-url: https://github.com/coreos/bugs/issues

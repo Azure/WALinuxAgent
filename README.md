@@ -61,6 +61,7 @@ http://support.microsoft.com/kb/2805216
   Supported Linux Distributions:
     * CoreOS
     * CentOS 6.2+
+    * Red Hat Enterprise Linux 6.7+
     * Debian 7.0+
     * Ubuntu 12.04+
     * openSUSE 12.3+
@@ -104,7 +105,7 @@ Upgrading via your distribution's package repository is preferred.
 
 If upgrading manually, same with installation above by running:
 
-    #sudo python setup.py install -force
+    #sudo python setup.py install --force
 
 Restart waagent service,for most of linux distributions:
 
@@ -340,6 +341,12 @@ Type: Boolean Default: n
 If set, log verbosity is boosted. Waagent logs to /var/log/waagent.log and
 leverages the system logrotate functionality to rotate logs.
 
+OS.EnableRDMA:
+Type: Boolean Default: n
+
+If set, the agent will attempt to install and then load an RDMA kernel driver
+that matches the version of the firmware on the underlying hardware.
+
 OS.RootDeviceScsiTimeout:
 Type: Integer Default: 300
 
@@ -528,3 +535,6 @@ version="1.0.0.0" goalStateIncarnation="2">
   </Instances>
 </SharedConfig>
 ```
+
+-----
+This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/). For more information see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/) or contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additional questions or comments.

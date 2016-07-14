@@ -15,15 +15,12 @@
 #
 # Requires Python 2.4+ and Openssl 1.0+
 #
-# Implements parts of RFC 2131, 1541, 1497 and
-# http://msdn.microsoft.com/en-us/library/cc227282%28PROT.10%29.aspx
-# http://msdn.microsoft.com/en-us/library/cc227259%28PROT.13%29.aspx
 
 from tests.tools import *
 import uuid
 import unittest
 import os
-import azurelinuxagent.utils.shellutil as shellutil
+import azurelinuxagent.common.utils.shellutil as shellutil
 import test
 
 class TestrunCmd(AgentTestCase):
@@ -37,6 +34,11 @@ class TestrunCmd(AgentTestCase):
             
         err = shellutil.run_get_output(u"ls 我")
         self.assertNotEquals(0, err[0])
+
+    def test_shellquote(self):
+        self.assertEqual("\'foo\'", shellutil.quote("foo"))
+        self.assertEqual("\'foo bar\'", shellutil.quote("foo bar"))
+        self.assertEqual("'foo'\\''bar'", shellutil.quote("foo\'bar"))
 
 if __name__ == '__main__':
     unittest.main()

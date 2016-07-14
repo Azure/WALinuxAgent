@@ -2,6 +2,9 @@
 __pycache__/
 *.py[cod]
 
+# Virtualenv
+py3env/
+
 # C extensions
 *.so
 
@@ -21,6 +24,9 @@ var/
 *.egg-info/
 .installed.cfg
 *.egg
+
+# PyCharm
+.idea/
 
 # PyInstaller
 #  Usually these files are written by a python script from a template

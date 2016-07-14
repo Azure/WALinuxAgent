@@ -228,6 +228,9 @@ class AbstractDistro(object):
         Returns exit result.
         """
         if self.isSelinuxSystem():
+            if not os.path.exists(path):
+                Error("Path does not exist: {0}".format(path))
+                return 1
             return Run('chcon ' + cn + ' ' + path)
         
     def setHostname(self,name):
@@ -2336,7 +2339,10 @@ def ChangeOwner(filepath, user):
     except:
         pass
     if p != None:
-        os.chown(filepath, p[2], p[3])
+        if not os.path.exists(filepath):
+            Error("Path does not exist: {0}".format(filepath))
+        else:
+            os.chown(filepath, p[2], p[3])
 
 def CreateDir(dirpath, user, mode):
     """
@@ -4079,7 +4085,7 @@ class ExtensionsConfig(object):
         try:
             incarnation=self.Extensions[0].getAttribute("goalStateIncarnation")
         except:
-            Error('Error parsing ExtensionsConfig.  Unable to send status reports')
+            Error('Error parsing attribute "goalStateIncarnation".  Unable to send status reports')
             return -1
         status=''
         statuses=''
@@ -4117,7 +4123,7 @@ class ExtensionsConfig(object):
         try:
             uri=GetNodeTextData(self.Extensions[0].getElementsByTagName("StatusUploadBlob")[0]).replace('&amp;','&')
         except:
-            Error('Error parsing ExtensionsConfig.  Unable to send status reports')
+            Error('Error parsing element "StatusUploadBlob".  Unable to send status reports')
             return -1
 
         LogIfVerbose('Status report '+status+' sent to ' + uri)
@@ -4607,7 +4613,7 @@ class OvfEnv(object):
             if len(CDSection) > 0 :
                 self.CustomData=GetNodeTextData(CDSection[0])
                 if len(self.CustomData)>0:
-                    SetFileContents(LibDir + '/CustomData', bytearray(MyDistro.translateCustomData(self.CustomData)))
+                    SetFileContents(LibDir + '/CustomData', bytearray(MyDistro.translateCustomData(self.CustomData), 'utf-8'))
                     Log('Wrote ' + LibDir + '/CustomData')
                 else :
                     Error('<CustomData> contains no data!')
@@ -4912,8 +4918,9 @@ class WALAEventMonitor(WALAEvent):
     def EventsLoop(self):
         LastReportHeartBeatTime = datetime.datetime.min
         try:
-            while(True):
-                if (datetime.datetime.now()-LastReportHeartBeatTime) > datetime.timedelta(hours=12):
+            while True:
+                if (datetime.datetime.now()-LastReportHeartBeatTime) > \
+                        datetime.timedelta(minutes=30):
                     LastReportHeartBeatTime = datetime.datetime.now()
                     AddExtensionEvent(op=WALAEventOperation.HeartBeat,name="WALA",isSuccess=True)
                 self.postNumbersInOneLoop=0

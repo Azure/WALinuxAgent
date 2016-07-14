@@ -2,17 +2,59 @@
 <PluginVersionManifest xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
     <Plugins>
         <Plugin>
-            <Version>1.0</Version>
+            <Version>1.0.0</Version>
             <Uris>
-                <Uri>http://foo.bar/zar/OSTCExtensions.ExampleHandlerLinux</Uri>
+                <Uri>http://foo.bar/zar/OSTCExtensions.ExampleHandlerLinux__1.0.0</Uri>
             </Uris>
         </Plugin>
         <Plugin>
-            <Version>1.1</Version>
+            <Version>1.1.0</Version>
             <Uris>
-                <Uri>http://foo.bar/zar/OSTCExtensions.ExampleHandlerLinux</Uri>
+                <Uri>http://foo.bar/zar/OSTCExtensions.ExampleHandlerLinux__1.1.0</Uri>
             </Uris>
         </Plugin>
+        <Plugin>
+            <Version>2.0.0</Version><Uris><Uri>http://host/OSTCExtensions.ExampleHandlerLinux__2.0.0</Uri></Uris>
+        </Plugin>
+        <Plugin>
+            <Version>2.1.0</Version><Uris><Uri>http://host/OSTCExtensions.ExampleHandlerLinux__2.1.0</Uri></Uris>
+            <DisallowMajorVersionUpgrade>True</DisallowMajorVersionUpgrade>
+        </Plugin>
+        <Plugin>
+            <Version>2.1.1</Version><Uris><Uri>http://host/OSTCExtensions.ExampleHandlerLinux__2.1.1</Uri></Uris>
+        </Plugin>
+        <Plugin>
+            <Version>2.2.0</Version><Uris><Uri>http://host/OSTCExtensions.ExampleHandlerLinux__2.2.0</Uri></Uris>
+        </Plugin>
+        <Plugin>
+            <Version>3.0</Version><Uris><Uri>http://host/OSTCExtensions.ExampleHandlerLinux__3.0</Uri></Uris>
+        </Plugin>
+        <Plugin>
+            <Version>3.1</Version><Uris><Uri>http://host/OSTCExtensions.ExampleHandlerLinux__3.1</Uri></Uris>
+        </Plugin>
+        <Plugin>
+            <Version>4.0.0.0</Version><Uris><Uri>http://host/OSTCExtensions.ExampleHandlerLinux__3.0</Uri></Uris>
+        </Plugin>
+        <Plugin>
+            <Version>4.0.0.1</Version><Uris><Uri>http://host/OSTCExtensions.ExampleHandlerLinux__3.1</Uri></Uris>
+        </Plugin>
+        <Plugin>
+            <Version>4.1.0.0</Version><Uris><Uri>http://host/OSTCExtensions.ExampleHandlerLinux__3.1</Uri></Uris>
+        </Plugin>
     </Plugins>
+    <InternalPlugins>
+        <Plugin>
+            <Version>1.2.0</Version>
+            <Uris>
+                <Uri>http://foo.bar/zar/OSTCExtensions.ExampleHandlerLinux__1.2.0</Uri>
+            </Uris>
+        </Plugin>
+        <Plugin>
+            <Version>2.3.0</Version><Uris><Uri>http://host/OSTCExtensions.ExampleHandlerLinux__2.3.0</Uri></Uris>
+        </Plugin>
+        <Plugin>
+            <Version>2.4.0</Version><Uris><Uri>http://host/OSTCExtensions.ExampleHandlerLinux__2.3.0</Uri></Uris>
+        </Plugin>
+    </InternalPlugins>
 </PluginVersionManifest>
 
