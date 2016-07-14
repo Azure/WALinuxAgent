@@ -24,9 +24,12 @@ import re
 import time
 import threading
 
+import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.shellutil as shellutil
+from azurelinuxagent.common.utils.textutil import parse_doc, find, getattrib
+
 
 from azurelinuxagent.common.protocol.wire import SHARED_CONF_FILE_NAME
 
@@ -36,7 +39,7 @@ dapl_config_paths = [
     '/usr/local/etc/dat.conf'
 ]
 
-def setup_rdma_device(self):
+def setup_rdma_device():
     logger.verbose("Parsing SharedConfig XML contents for RDMA details")
     xml_doc = parse_doc(
         fileutil.read_file(os.path.join(conf.get_lib_dir(), SHARED_CONF_FILE_NAME)))
