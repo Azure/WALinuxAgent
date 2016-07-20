@@ -200,13 +200,13 @@ class ResourceDiskHandler(object):
 
         # fallocate command
         fn_sh = shellutil.quote((filename,))
-        ret = shellutil.run(u"fallocate -l {0} {1}".format(nbytes, fn_sh))
+        ret = shellutil.run(u"umask 0077 && fallocate -l {0} {1}".format(nbytes, fn_sh))
         if ret != 127:  # 127 = command not found
             return ret
 
         # dd fallback
         dd_maxbs = 64 * 1024 ** 2
-        dd_cmd = "dd if=/dev/zero bs={0} count={1} conv=notrunc of={2}"
+        dd_cmd = "umask 0077 && dd if=/dev/zero bs={0} count={1} conv=notrunc of={2}"
 
         blocks = int(nbytes / dd_maxbs)
         if blocks > 0:
