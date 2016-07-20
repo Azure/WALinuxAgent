@@ -20,6 +20,7 @@
 import glob
 import os
 import re
+import time
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.shellutil as shellutil
 from azurelinuxagent.common.rdma import RDMAHandler
@@ -47,6 +48,17 @@ class CentOSRDMAHandler(RDMAHandler):
         Install the KVP daemon and the appropriate RDMA driver package for the
         RDMA firmware.
         """
+
+        # Check and install the KVP deamon if it not running
+        time.sleep(10) # give some time for the hv_hvp_daemon to start up.
+        kvpd_running = RDMAHandler.is_kvp_daemon_running()
+        logger.info('RDMA: kvp daemon running: %s' % kvpd_running)
+        if not kvpd_running:
+            self.check_or_install_kvp_daemon()
+        time.sleep(10) # wait for post-install reboot or kvp to come up
+
+        # Find out RDMA firmware version and see if the existing package needs
+        # updating or if the package is missing altogether (and install it)
         fw_version = RDMAHandler.get_rdma_version()
         if not fw_version:
             raise Exception('Cannot determine RDMA firmware version')
@@ -187,12 +199,20 @@ class CentOSRDMAHandler(RDMAHandler):
             raise Exception(
                 "Failed to install RDMA {0} package".format(pkg_type))
 
+    @staticmethod
+    def is_package_installed(pkg):
+        """Runs rpm -q and checks return code to find out if a package
+        is installed"""
+        return shellutil.run("rpm -q %s" % pkg, chk_err=False) == 0
+
     def uninstall_kvp_driver_package_if_exists(self):
+        logger.info('RDMA: deleting existing kvp driver packages')
+
         kvp_pkgs = [self.hyper_v_package_name,
                     self.hyper_v_package_name_new]
 
         for kvp_pkg in kvp_pkgs:
-            if shellutil.run("rpm -q %s" % kvp_pkg, chk_err=False) != 0:
+            if not self.is_package_installed(kvp_pkg):
                 logger.info(
                     "RDMA: kvp package %s does not exist, skipping" % kvp_pkg)
             else:
@@ -201,3 +221,26 @@ class CentOSRDMAHandler(RDMAHandler):
                     logger.info("RDMA: successfully erased package")
                 else:
                     logger.error("RDMA: failed to erase package")
+
+    def check_or_install_kvp_daemon(self):
+        """Checks if kvp daemon package is installed, if not installs the
+        package and reboots the machine.
+        """
+        logger.info("RDMA: Checking kvp daemon packages.")
+        kvp_pkgs = [self.hyper_v_package_name,
+                    self.hyper_v_package_name_new]
+
+        for pkg in kvp_pkgs:
+            logger.info("RDMA: Checking if package %s installed" % pkg)
+            installed = self.is_package_installed(pkg)
+            if installed:
+                raise Exception('RDMA: package %s is installed, but the kvp daemon is not running' % pkg)
+
+        kvp_pkg_to_install=self.hyper_v_package_name
+        logger.info("RDMA: no kvp drivers installed, will install '%s'" % kvp_pkg_to_install)
+        logger.info("RDMA: trying to install kvp package '%s'" % kvp_pkg_to_install)
+        if self.install_package(kvp_pkg_to_install) != 0:
+            raise Exception("RDMA: failed to install kvp daemon package '%s'" % kvp_pkg_to_install)
+        logger.info("RDMA: package '%s' successfully installed" % kvp_pkg_to_install)
+        logger.info("RDMA: Machine will now be rebooted.")
+        self.reboot_system()
