@@ -7,9 +7,9 @@ import shutil
 import subprocess
 import sys
 
-from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, AGENT_LONG_VERSION
+from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, \
+    AGENT_LONG_VERSION
 from azurelinuxagent.ga.update import AGENT_MANIFEST_FILE
-
 
 MANIFEST = '''[{{
     "name": "{0}",
@@ -25,13 +25,13 @@ MANIFEST = '''[{{
     }}
 }}]'''
 
-
 output_path = os.path.join(os.getcwd(), "eggs")
 target_path = os.path.join(output_path, AGENT_LONG_VERSION)
 bin_path = os.path.join(target_path, "bin")
 egg_path = os.path.join(bin_path, AGENT_LONG_VERSION + ".egg")
 manifest_path = os.path.join(target_path, AGENT_MANIFEST_FILE)
 pkg_name = os.path.join(output_path, AGENT_LONG_VERSION + ".zip")
+
 
 def do(*args):
     try:
@@ -41,6 +41,7 @@ def do(*args):
         print "\t{0}".format(" ".join(args))
         print e.output
         sys.exit(1)
+
 
 if os.path.isdir(target_path):
     shutil.rmtree(target_path)
@@ -58,7 +59,8 @@ args.append("--dist-dir={0}".format(bin_path))
 print "Creating egg {0}".format(egg_path)
 do(*args)
 
-egg_name = os.path.join("bin", os.path.basename(glob.glob(os.path.join(bin_path, "*"))[0]))
+egg_name = os.path.join("bin", os.path.basename(
+    glob.glob(os.path.join(bin_path, "*"))[0]))
 
 print "Writing {0}".format(manifest_path)
 with open(manifest_path, mode='w') as manifest:
