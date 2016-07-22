@@ -23,6 +23,7 @@ import json
 import os
 import platform
 import random
+import re
 import subprocess
 import sys
 import tempfile
@@ -598,6 +599,7 @@ class TestGuestAgent(UpdateTestCase):
 class TestUpdate(UpdateTestCase):
     def setUp(self):
         UpdateTestCase.setUp(self)
+        self.event_patch = patch('azurelinuxagent.common.event.add_event')
         self.update_handler = get_update_handler()
         return
 
@@ -615,6 +617,23 @@ class TestUpdate(UpdateTestCase):
         self.assertEqual(None, self.update_handler.child_process)
 
         self.assertEqual(None, self.update_handler.signal_handler)
+        return
+
+    def test_emit_restart_event_writes_sentinal_file(self):
+        self.assertFalse(os.path.isfile(self.update_handler._sentinal_file_path()))
+        self.update_handler._emit_restart_event()
+        self.assertTrue(os.path.isfile(self.update_handler._sentinal_file_path()))
+        return
+
+    def test_emit_restart_event_emits_event_if_not_clean_start(self):
+        try:
+            mock_event = self.event_patch.start()
+            self.update_handler._set_sentinal()
+            self.update_handler._emit_restart_event()
+            self.assertEqual(1, mock_event.call_count)
+        except Exception as e:
+            pass
+        self.event_patch.stop()
         return
 
     def _test_ensure_latest_agent(
@@ -698,6 +717,58 @@ class TestUpdate(UpdateTestCase):
         for a in self.update_handler.agents:
             self.assertTrue(v > a.version)
             v = a.version
+        return
+
+    def _test_ensure_no_orphans(self, invocations=3, interval=ORPHAN_WAIT_INTERVAL):
+        with patch.object(self.update_handler, 'osutil') as mock_util:
+            # Note:
+            # - Python only allows mutations of objects to which a function has
+            #   a reference. Incrementing an integer directly changes the
+            #   reference. Incrementing an item of a list changes an item to
+            #   which the code has a reference.
+            #   See http://stackoverflow.com/questions/26408941/python-nested-functions-and-variable-scope
+            iterations = [0]
+            def iterator(*args, **kwargs):
+                iterations[0] += 1
+                return iterations[0] < invocations
+
+            mock_util.check_pid_alive = Mock(side_effect=iterator)
+            
+            with patch('os.getpid', return_value=42):
+                with patch('time.sleep', return_value=None) as mock_sleep:
+                    self.update_handler._ensure_no_orphans(orphan_wait_interval=interval)
+                    return mock_util.check_pid_alive.call_count, mock_sleep.call_count
+        return
+
+    def test_ensure_no_orphans(self):
+        fileutil.write_file(os.path.join(self.tmp_dir, "0_waagent.pid"), ustr(41))
+        calls, sleeps = self._test_ensure_no_orphans(invocations=3)
+        self.assertEqual(3, calls)
+        self.assertEqual(2, sleeps)
+        return
+
+    def test_ensure_no_orphans_skips_if_no_orphans(self):
+        calls, sleeps = self._test_ensure_no_orphans(invocations=3)
+        self.assertEqual(0, calls)
+        self.assertEqual(0, sleeps)
+        return
+
+    def test_ensure_no_orphans_ignores_exceptions(self):
+        with patch('azurelinuxagent.common.utils.fileutil.read_file', side_effect=Exception):
+            calls, sleeps = self._test_ensure_no_orphans(invocations=3)
+            self.assertEqual(0, calls)
+            self.assertEqual(0, sleeps)
+        return
+
+    def test_ensure_no_orphans_kills_after_interval(self):
+        fileutil.write_file(os.path.join(self.tmp_dir, "0_waagent.pid"), ustr(41))
+        with patch('os.kill') as mock_kill:
+            calls, sleeps = self._test_ensure_no_orphans(
+                                        invocations=4,
+                                        interval=3*GOAL_STATE_INTERVAL)
+            self.assertEqual(3, calls)
+            self.assertEqual(2, sleeps)
+            self.assertEqual(1, mock_kill.call_count)
         return
 
     def _test_evaluate_agent_health(self, child_agent_index=0):
@@ -787,6 +858,59 @@ class TestUpdate(UpdateTestCase):
         latest_agent = self.update_handler.get_latest_agent()
         self.assertTrue(latest_agent.version < latest_version)
         self.assertEqual(latest_agent.version, prior_agent.version)
+        return
+
+    def test_get_pid_files(self):
+        previous_pid_file, pid_file, = self.update_handler._get_pid_files()
+        self.assertEqual(None, previous_pid_file)
+        self.assertEqual("0_waagent.pid", os.path.basename(pid_file))
+        return
+
+    def test_get_pid_files_returns_previous(self):
+        for n in range(1250):
+            fileutil.write_file(os.path.join(self.tmp_dir, str(n)+"_waagent.pid"), ustr(n+1))
+        previous_pid_file, pid_file, = self.update_handler._get_pid_files()
+        self.assertEqual("1249_waagent.pid", os.path.basename(previous_pid_file))
+        self.assertEqual("1250_waagent.pid", os.path.basename(pid_file))
+        return
+
+    def test_is_clean_start_returns_true_when_no_sentinal(self):
+        self.assertFalse(os.path.isfile(self.update_handler._sentinal_file_path()))
+        self.assertTrue(self.update_handler._is_clean_start)
+        return
+
+    def test_is_clean_start_returns_true_sentinal_agent_is_not_current(self):
+        self.update_handler._set_sentinal(agent="Not the Current Agent")
+        self.assertTrue(os.path.isfile(self.update_handler._sentinal_file_path()))
+        self.assertTrue(self.update_handler._is_clean_start)
+        return
+
+    def test_is_clean_start_returns_false_for_current_agent(self):
+        self.update_handler._set_sentinal(agent=CURRENT_AGENT)
+        self.assertFalse(self.update_handler._is_clean_start)
+        return
+
+    def test_is_clean_start_returns_false_for_exceptions(self):
+        self.update_handler._set_sentinal()
+        with patch("azurelinuxagent.common.utils.fileutil.read_file", side_effect=Exception):
+            self.assertFalse(self.update_handler._is_clean_start)
+        return
+
+    def test_is_orphaned_returns_false_if_parent_exists(self):
+        fileutil.write_file(conf.get_agent_pid_file_path(), ustr(42))
+        with patch('os.getppid', return_value=42):
+            self.assertFalse(self.update_handler._is_orphaned)
+        return
+
+    def test_is_orphaned_returns_true_if_parent_is_init(self):
+        with patch('os.getppid', return_value=1):
+            self.assertTrue(self.update_handler._is_orphaned)
+        return
+
+    def test_is_orphaned_returns_true_if_parent_does_not_exist(self):
+        fileutil.write_file(conf.get_agent_pid_file_path(), ustr(24))
+        with patch('os.getppid', return_value=42):
+            self.assertTrue(self.update_handler._is_orphaned)
         return
 
     def test_load_agents(self):
@@ -991,7 +1115,7 @@ class TestUpdate(UpdateTestCase):
         #   reference. Incrementing an item of a list changes an item to
         #   which the code has a reference.
         #   See http://stackoverflow.com/questions/26408941/python-nested-functions-and-variable-scope
-        iterations = [0]
+        iterations = [0] 
         def iterator(*args, **kwargs):
             iterations[0] += 1
             if iterations[0] >= invocations:
@@ -999,14 +1123,19 @@ class TestUpdate(UpdateTestCase):
             return
 
         calls = calls * invocations
-        
+
+        fileutil.write_file(conf.get_agent_pid_file_path(), ustr(42))
+
         with patch('azurelinuxagent.ga.exthandlers.get_exthandlers_handler') as mock_handler:
             with patch('azurelinuxagent.ga.monitor.get_monitor_handler') as mock_monitor:
                 with patch('azurelinuxagent.ga.env.get_env_handler') as mock_env:
                     with patch('time.sleep', side_effect=iterator) as mock_sleep:
                         with patch('sys.exit') as mock_exit:
-
-                            self.update_handler.run()
+                            if isinstance(os.getppid, MagicMock):
+                                self.update_handler.run()
+                            else:
+                                with patch('os.getppid', return_value=42):
+                                    self.update_handler.run()
 
                             self.assertEqual(1, mock_handler.call_count)
                             self.assertEqual(mock_handler.return_value.method_calls, calls)
@@ -1014,6 +1143,7 @@ class TestUpdate(UpdateTestCase):
                             self.assertEqual(1, mock_monitor.call_count)
                             self.assertEqual(1, mock_env.call_count)
                             self.assertEqual(1, mock_exit.call_count)
+
         return
 
     def test_run(self):
@@ -1027,6 +1157,28 @@ class TestUpdate(UpdateTestCase):
     def test_run_stops_if_update_available(self):
         self.update_handler._ensure_latest_agent = Mock(return_value=True)
         self._test_run(invocations=0, calls=[], enable_updates=True)
+        return
+
+    def test_run_stops_if_orphaned(self):
+        with patch('os.getppid', return_value=1):
+            self._test_run(invocations=0, calls=[], enable_updates=True)
+        return
+
+    def test_run_clears_sentinal_on_successful_exit(self):
+        self._test_run()
+        self.assertFalse(os.path.isfile(self.update_handler._sentinal_file_path()))
+        return
+
+    def test_run_leaves_sentinal_on_unsuccessful_exit(self):
+        self.update_handler._ensure_latest_agent = Mock(side_effect=Exception)
+        self._test_run(invocations=0, calls=[], enable_updates=True)
+        self.assertTrue(os.path.isfile(self.update_handler._sentinal_file_path()))
+        return
+
+    def test_run_emits_restart_event(self):
+        self.update_handler._emit_restart_event = Mock()
+        self._test_run()
+        self.assertEqual(1, self.update_handler._emit_restart_event.call_count)
         return
 
     def test_set_agents_sets_agents(self):
@@ -1046,6 +1198,59 @@ class TestUpdate(UpdateTestCase):
         for a in self.update_handler.agents:
             self.assertTrue(v > a.version)
             v = a.version
+        return
+
+    def test_set_sentinal(self):
+        self.assertFalse(os.path.isfile(self.update_handler._sentinal_file_path()))
+        self.update_handler._set_sentinal()
+        self.assertTrue(os.path.isfile(self.update_handler._sentinal_file_path()))
+        return
+
+    def test_set_sentinal_writes_current_agent(self):
+        self.update_handler._set_sentinal()
+        self.assertTrue(
+            fileutil.read_file(self.update_handler._sentinal_file_path()),
+            CURRENT_AGENT)
+        return
+
+    def test_shutdown(self):
+        self.update_handler._set_sentinal()
+        self.update_handler._shutdown()
+        self.assertFalse(os.path.isfile(self.update_handler._sentinal_file_path()))
+        return
+
+    def test_shutdown_ignores_missing_sentinal_file(self):
+        self.assertFalse(os.path.isfile(self.update_handler._sentinal_file_path()))
+        self.update_handler._shutdown()
+        self.assertFalse(os.path.isfile(self.update_handler._sentinal_file_path()))
+        return
+
+    def test_shutdown_ignores_exceptions(self):
+        self.update_handler._set_sentinal()
+
+        try:
+            with patch("os.remove", side_effect=Exception):
+                self.update_handler._shutdown()
+        except Exception as e:
+            self.assertTrue(False, "Unexpected exception")
+        return
+
+    def test_write_pid_file(self):
+        for n in range(1112):
+            fileutil.write_file(os.path.join(self.tmp_dir, str(n)+"_waagent.pid"), ustr(n+1))
+        with patch('os.getpid', return_value=1112):
+            previous_pid_file, pid_file = self.update_handler._write_pid_file()
+            self.assertEqual("1111_waagent.pid", os.path.basename(previous_pid_file))
+            self.assertEqual("1112_waagent.pid", os.path.basename(pid_file))
+            self.assertEqual(fileutil.read_file(pid_file), ustr(1112))
+        return
+
+    def test_write_pid_file_ignores_exceptions(self):
+        with patch('azurelinuxagent.common.utils.fileutil.write_file', side_effect=Exception):
+            with patch('os.getpid', return_value=42):
+                previous_pid_file, pid_file = self.update_handler._write_pid_file()
+                self.assertEqual(None, previous_pid_file)
+                self.assertEqual(None, pid_file)
         return
 
 

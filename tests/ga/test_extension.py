@@ -15,11 +15,140 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
+import azurelinuxagent.common.utils.fileutil as fileutil
+
 from tests.protocol.mockwiredata import *
+
 from azurelinuxagent.common.exception import *
 from azurelinuxagent.common.protocol import get_protocol_util
+from azurelinuxagent.common.protocol.restapi import ExtHandlerStatus, \
+                                                    ExtensionStatus, \
+                                                    ExtensionSubStatus, \
+                                                    Extension, \
+                                                    VMStatus, ExtHandler, \
+                                                    get_properties
 from azurelinuxagent.ga.exthandlers import *
 from azurelinuxagent.common.protocol.wire import WireProtocol
+
+class TestHandlerStateMigration(AgentTestCase):
+    def setUp(self):
+        AgentTestCase.setUp(self)
+
+        handler_name = "Not.A.Real.Extension"
+        handler_version = "1.2.3"
+
+        self.ext_handler = ExtHandler(handler_name)
+        self.ext_handler.properties.version = handler_version
+        self.ext_handler_i = ExtHandlerInstance(self.ext_handler, "dummy protocol")
+
+        self.handler_state = "Enabled"
+        self.handler_status = ExtHandlerStatus(
+            name=handler_name,
+            version=handler_version,
+            status="Ready",
+            message="Uninteresting message")
+        return
+
+    def _prepare_handler_state(self):
+        handler_state_path = os.path.join(
+                                self.tmp_dir,
+                                "handler_state",
+                                self.ext_handler_i.get_full_name())
+        os.makedirs(handler_state_path)
+        fileutil.write_file(
+            os.path.join(handler_state_path, "state"),
+            self.handler_state)
+        fileutil.write_file(
+            os.path.join(handler_state_path, "status"),
+            json.dumps(get_properties(self.handler_status)))
+        return
+
+    def _prepare_handler_config(self):
+        handler_config_path = os.path.join(
+                                self.tmp_dir,
+                                self.ext_handler_i.get_full_name(),
+                                "config")
+        os.makedirs(handler_config_path)
+        return
+
+    def test_migration_migrates(self):
+        self._prepare_handler_state()
+        self._prepare_handler_config()
+
+        migrate_handler_state()
+
+        self.assertEquals(self.ext_handler_i.get_handler_state(), self.handler_state)
+        self.assertEquals(
+            self.ext_handler_i.get_handler_status().status,
+            self.handler_status.status)
+        return
+
+    def test_migration_skips_if_empty(self):
+        self._prepare_handler_config()
+
+        migrate_handler_state()
+
+        self.assertFalse(
+            os.path.isfile(os.path.join(self.ext_handler_i.get_conf_dir(), "HandlerState")))
+        self.assertFalse(
+            os.path.isfile(os.path.join(self.ext_handler_i.get_conf_dir(), "HandlerStatus")))
+        return
+
+    def test_migration_cleans_up(self):
+        self._prepare_handler_state()
+        self._prepare_handler_config()
+
+        migrate_handler_state()
+
+        self.assertFalse(os.path.isdir(os.path.join(conf.get_lib_dir(), "handler_state")))
+        return
+
+    def test_migration_does_not_overwrite(self):
+        self._prepare_handler_state()
+        self._prepare_handler_config()
+
+        state = "Installed"
+        status = "NotReady"
+        code = 1
+        message = "A message"
+        self.assertNotEquals(state, self.handler_state)
+        self.assertNotEquals(status, self.handler_status.status)
+        self.assertNotEquals(code, self.handler_status.code)
+        self.assertNotEquals(message, self.handler_status.message)
+
+        self.ext_handler_i.set_handler_state(state)
+        self.ext_handler_i.set_handler_status(status=status, code=code, message=message)
+
+        migrate_handler_state()
+
+        self.assertEquals(self.ext_handler_i.get_handler_state(), state)
+        handler_status = self.ext_handler_i.get_handler_status()
+        self.assertEquals(handler_status.status, status)
+        self.assertEquals(handler_status.code, code)
+        self.assertEquals(handler_status.message, message)
+        return
+
+    @patch("shutil.move", side_effect=Exception)
+    def test_migration_ignores_move_errors(self, shutil_mock):
+        self._prepare_handler_state()
+        self._prepare_handler_config()
+
+        try:
+            migrate_handler_state()
+        except Exception as e:
+            self.assertTrue(False, "Unexpected exception: {0}".format(str(e)))
+        return
+
+    @patch("shutil.rmtree", side_effect=Exception)
+    def test_migration_ignores_tree_remove_errors(self, shutil_mock):
+        self._prepare_handler_state()
+        self._prepare_handler_config()
+
+        try:
+            migrate_handler_state()
+        except Exception as e:
+            self.assertTrue(False, "Unexpected exception: {0}".format(str(e)))
+        return
 
 @patch("azurelinuxagent.common.protocol.wire.CryptUtil")
 @patch("azurelinuxagent.common.utils.restutil.http_get")
