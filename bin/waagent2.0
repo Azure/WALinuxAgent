@@ -561,9 +561,8 @@ class AbstractDistro(object):
         if os.path.isfile(mountpoint + "/swapfile") and os.path.getsize(mountpoint + "/swapfile") != (sizeKB * 1024):
             os.remove(mountpoint + "/swapfile")
         if not os.path.isfile(mountpoint + "/swapfile"):
-            Run("dd if=/dev/zero of=" + mountpoint + "/swapfile bs=1024 count=" + str(sizeKB))
+            Run("umask 0077 && dd if=/dev/zero of=" + mountpoint + "/swapfile bs=1024 count=" + str(sizeKB))
             Run("mkswap " + mountpoint + "/swapfile")
-        Run("chmod 600 " + mountpoint + "/swapfile")
         if not Run("swapon " + mountpoint + "/swapfile"):
             Log("Enabled " + str(sizeKB) + " KB of swap at " + mountpoint + "/swapfile")
         else:
@@ -1769,7 +1768,7 @@ sizeKB = int(Config.get("ResourceDisk.SwapSizeMB")) * 1024
 if os.path.isfile(mountpoint + "/swapfile") and os.path.getsize(mountpoint + "/swapfile") != (sizeKB * 1024):
     os.remove(mountpoint + "/swapfile")
 if not os.path.isfile(mountpoint + "/swapfile"):
-    Run("dd if=/dev/zero of=" + mountpoint + "/swapfile bs=1024 count=" + str(sizeKB))
+    Run("umask 0077 && dd if=/dev/zero of=" + mountpoint + "/swapfile bs=1024 count=" + str(sizeKB))
 if Run("mdconfig -a -t vnode -f " + mountpoint + "/swapfile -u 0"):
     waagent.Error("ActivateResourceDisk: Configuring swap - Failed to create md0")
 if not Run("swapon /dev/md0"):
