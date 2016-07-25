@@ -19,34 +19,29 @@ from tests.tools import *
 from azurelinuxagent.common.exception import *
 from azurelinuxagent.daemon import *
 from azurelinuxagent.common.conf import *
+from azurelinuxagent.daemon.resourcedisk.default import ResourceDiskHandler
+from mock import patch
 
 class TestResourceDisk(AgentTestCase):
     def test_mount_flags_empty(self):
         partition = '/dev/sdb1'
         mountpoint = '/mnt/resource'
-        opts = ''
-        correct = 'mount {0} {1}'.format(part, mp)  
-    
+        options = ''
+        correct = 'mount {0} {1}'.format(partition, mountpoint)  
+
         mount_string = ResourceDiskHandler.get_mount_string(options, partition, mountpoint)
         self.assertEqual(correct, mount_string)
-
-    def test_mount_flags_one(self):
+    
+    @patch.object()
+    def test_mount_flags_many(self, conf):
         partition = '/dev/sdb1'
         mountpoint = '/mnt/resource'
-        options = 'nodev'
+        options = get_switch("noexec") 
         correct = 'mount -o {0} {1} {2}'.format(options, partition, mountpoint)
 
         mount_string = ResourceDiskHandler.get_mount_string(options, partition, mountpoint)
         self.assertEqual(correct, mount_string)
 
-    def test_mount_flags_many(self):
-        partition = '/dev/sdb1'
-        mountpoint = '/mnt/resource'
-        options = 'nodev nosuid noexec'
-        correct = 'mount -o {0} {1} {2}'.format(options,partition, mountpoint)
-        
-        mount_string = ResourceDiskHandler.get_mount_string(options, partition, mountpoint)
-        self.assertEqual(correct, mount_string)
 
 if __name__ == '__main__':
     unittest.main()

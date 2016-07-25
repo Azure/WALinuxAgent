@@ -142,10 +142,10 @@ class ResourceDiskHandler(object):
         logger.info("Resource disk ({0}) is mounted at {1} with fstype {2}",
                     device, mount_point, fs)
         return mount_point
-    def get_mount_string(mount_options, partition, mountpoint)
+    def get_mount_string(mount_options, partition, mountpoint):
         if mount_options:
-            mount_options = '-o ' + mount_options
-        return 'mount {0} {1} {2}'.format(mount_options, partition, mountpoint)
+            mount_options = ' -o ' + mount_options
+        return 'mount{0} {1} {2}'.format(mount_options, partition, mountpoint)
 
     def create_swap_space(self, mount_point, size_mb):
         size_kb = size_mb * 1024
