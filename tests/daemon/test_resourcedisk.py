@@ -33,11 +33,10 @@ class TestResourceDisk(AgentTestCase):
         mount_string = ResourceDiskHandler.get_mount_string(options, partition, mountpoint)
         self.assertEqual(correct, mount_string)
 
-    @patch('azurelinuxagent.common.conf.ConfigurationProvider')
     def test_mount_flags_many(self, mock_ConfigurationProvider):
         partition = '/dev/sdb1'
         mountpoint = '/mnt/resource'
-        options = mock_ConfigurationProvider('nodev,noexec,nosuid')
+        options = 'noexec,noguid,nodev' 
         correct = 'mount -o {0} {1} {2}'.format(options, partition, mountpoint)
         mount_string = ResourceDiskHandler.get_mount_string(options, partition, mountpoint)
         self.assertTrue(correct, mount_string)
