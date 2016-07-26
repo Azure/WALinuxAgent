@@ -183,6 +183,7 @@ Provisioning.PasswordCryptSaltLength=10
 ResourceDisk.Format=y
 ResourceDisk.Filesystem=ext4
 ResourceDisk.MountPoint=/mnt/resource
+ResourceDisk.MountOptions=n
 ResourceDisk.EnableSwap=n
 ResourceDisk.SwapSizeMB=0
 LBProbeResponder=y
@@ -317,6 +318,11 @@ ResourceDisk.MountPoint:
 Type: String Default: /mnt/resource
 
 This specifies the path at which the resource disk is mounted.
+
+ResourceDisk.MountOptions:
+Type: String Default: n  
+
+This specifies disk mount options.
 
 ResourceDisk.EnableSwap:
 Type: Boolean Default: n
