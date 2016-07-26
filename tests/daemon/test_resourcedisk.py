@@ -20,7 +20,9 @@ from azurelinuxagent.common.exception import *
 from azurelinuxagent.daemon import *
 from azurelinuxagent.common.conf import *
 from azurelinuxagent.daemon.resourcedisk.default import ResourceDiskHandler
-from mock import patch
+from mock import *
+from azurelinuxagent.common.conf import ConfigurationProvider
+
 
 class TestResourceDisk(AgentTestCase):
     def test_mount_flags_empty(self):
@@ -28,19 +30,17 @@ class TestResourceDisk(AgentTestCase):
         mountpoint = '/mnt/resource'
         options = ''
         correct = 'mount {0} {1}'.format(partition, mountpoint)  
-
         mount_string = ResourceDiskHandler.get_mount_string(options, partition, mountpoint)
         self.assertEqual(correct, mount_string)
-    
-    @patch.object()
-    def test_mount_flags_many(self, conf):
+
+    @patch('azurelinuxagent.common.conf.ConfigurationProvider')
+    def test_mount_flags_many(self, mock_ConfigurationProvider):
         partition = '/dev/sdb1'
         mountpoint = '/mnt/resource'
-        options = get_switch("noexec") 
+        options = mock_ConfigurationProvider('nodev,noexec,nosuid')
         correct = 'mount -o {0} {1} {2}'.format(options, partition, mountpoint)
-
         mount_string = ResourceDiskHandler.get_mount_string(options, partition, mountpoint)
-        self.assertEqual(correct, mount_string)
+        self.assertTrue(correct, mount_string)
 
 
 if __name__ == '__main__':
