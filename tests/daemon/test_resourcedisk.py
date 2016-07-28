@@ -29,17 +29,17 @@ class TestResourceDisk(AgentTestCase):
         partition = '/dev/sdb1'
         mountpoint = '/mnt/resource'
         options = ''
-        correct = 'mount {0} {1}'.format(partition, mountpoint)  
+        expected = 'mount /dev/sdb1 /mnt/resource'
         mount_string = ResourceDiskHandler.get_mount_string(options, partition, mountpoint)
-        self.assertEqual(correct, mount_string)
+        self.assertEqual(expected, mount_string)
 
     def test_mount_flags_many(self):
         partition = '/dev/sdb1'
         mountpoint = '/mnt/resource'
         options = 'noexec,noguid,nodev' 
-        correct = 'mount -o {0} {1} {2}'.format(options, partition, mountpoint)
+        expected = 'mount -o noexec,noguid,nodev /dev/sdb1 /mnt/resource'
         mount_string = ResourceDiskHandler.get_mount_string(options, partition, mountpoint)
-        self.assertTrue(correct, mount_string)
+        self.assertEqual(expected, mount_string)
 
 if __name__ == '__main__':
     unittest.main()
