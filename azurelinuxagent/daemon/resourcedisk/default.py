@@ -129,7 +129,7 @@ class ResourceDiskHandler(object):
 
         logger.info("Mount resource disk")
 
-        mount_options = conf.get_resourcedisk_mountopts
+        mount_options = conf.get_resourcedisk_mountoptions
         mount_string = self.get_mount_string(mount_options, partition, mount_point)
         ret = shellutil.run(mount_string, chk_err=False)
         if ret:
