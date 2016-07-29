@@ -183,8 +183,11 @@ class MonitorHandler(object):
         while True:
             if (datetime.datetime.now() - last_heartbeat) > period:
                 last_heartbeat = datetime.datetime.now()
-                add_event(op=WALAEventOperation.HeartBeat, name="WALA",
-                          is_success=True)
+                add_event(
+                    op=WALAEventOperation.HeartBeat,
+                    name=CURRENT_AGENT,
+                    version=CURRENT_VERSION,
+                    is_success=True)
             try:
                 self.collect_and_send_events()
             except Exception as e:

@@ -32,21 +32,23 @@ from azurelinuxagent.common.protocol.restapi import TelemetryEventParam, \
                                              TelemetryEvent, \
                                              set_properties, get_properties
 from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_VERSION, \
-                                     DISTRO_CODE_NAME, AGENT_VERSION
+                                     DISTRO_CODE_NAME, AGENT_VERSION, \
+                                     CURRENT_AGENT, CURRENT_VERSION
 
 
 class WALAEventOperation:
-    HeartBeat="HeartBeat"
-    Provision = "Provision"
-    Install = "Install"
-    UnInstall = "UnInstall"
+    ActivateResourceDisk="ActivateResourceDisk"
     Disable = "Disable"
-    Enable = "Enable"
     Download = "Download"
+    Enable = "Enable"
+    HeartBeat="HeartBeat"
+    Install = "Install"
+    Provision = "Provision"
+    Restart="Restart"
+    UnhandledError="UnhandledError"
+    UnInstall = "UnInstall"
     Upgrade = "Upgrade"
     Update = "Update"
-    ActivateResourceDisk="ActivateResourceDisk"
-    UnhandledError="UnhandledError"
 
 class EventLogger(object):
     def __init__(self):
@@ -71,7 +73,7 @@ class EventLogger(object):
         except IOError as e:
             raise EventError("Failed to write events to file:{0}", e)
 
-    def add_event(self, name, op="", is_success=True, duration=0, version=AGENT_VERSION,
+    def add_event(self, name, op="", is_success=True, duration=0, version=CURRENT_VERSION,
                   message="", evt_type="", is_internal=False):
         event = TelemetryEvent(1, "69B669B9-4AF8-4C50-BDC4-6006FA76E975")
         event.parameters.append(TelemetryEventParam('Name', name))
@@ -92,7 +94,7 @@ class EventLogger(object):
 
 __event_logger__ = EventLogger()
 
-def add_event(name, op="", is_success=True, duration=0, version=AGENT_VERSION,
+def add_event(name, op="", is_success=True, duration=0, version=CURRENT_VERSION,
               message="", evt_type="", is_internal=False,
               reporter=__event_logger__):
     log = logger.info if is_success else logger.error

@@ -108,6 +108,45 @@ def parse_ext_status(ext_status, data):
     for substatus in substatus_list:
         ext_status.substatusList.append(parse_ext_substatus(substatus))
 
+# This code migrates, if it exists, handler state and status from an
+# agent-owned directory into the handler-owned config directory
+#
+# Notes:
+#  - The v2.0.x branch wrote all handler-related state into the handler-owned
+#    config directory (e.g., /var/lib/waagent/Microsoft.Azure.Extensions.LinuxAsm-2.0.1/config).
+#  - The v2.1.x branch original moved that state into an agent-owned handler
+#    state directory (e.g., /var/lib/waagent/handler_state).
+#  - This move can cause v2.1.x agents to multiply invoke a handler's install
+#    command. It also makes clean-up more difficult since the agent must
+#    remove the state as well as the handler directory.
+def migrate_handler_state():
+    handler_state_path = os.path.join(conf.get_lib_dir(), "handler_state")
+    if not os.path.isdir(handler_state_path):
+        return
+
+    for handler_path in glob.iglob(os.path.join(handler_state_path, "*")):
+        handler = os.path.basename(handler_path)
+        handler_config_path = os.path.join(conf.get_lib_dir(), handler, "config")
+        if os.path.isdir(handler_config_path):
+            for file in ("State", "Status"):
+                from_path = os.path.join(handler_state_path, handler, file.lower())
+                to_path = os.path.join(handler_config_path, "Handler" + file)
+                if os.path.isfile(from_path) and not os.path.isfile(to_path):
+                    try:
+                        shutil.move(from_path, to_path)
+                    except Exception as e:
+                        logger.warn(
+                            "Exception occurred migrating {0} {1} file: {2}",
+                            handler,
+                            file,
+                            str(e))
+
+    try:
+        shutil.rmtree(handler_state_path)
+    except Exception as e:
+        logger.warn("Exception occurred removing {0}: {1}", handler_state_path, str(e))
+    return
+
 class ExtHandlerState(object):
     NotInstalled = "NotInstalled"
     Installed = "Installed"
@@ -547,10 +586,6 @@ class ExtHandlerInstance(object):
     
     def rm_ext_handler_dir(self):
         try:
-            handler_state_dir = self.get_handler_state_dir()
-            if os.path.isdir(handler_state_dir):
-                self.logger.info("Remove ext handler dir: {0}", handler_state_dir)
-                shutil.rmtree(handler_state_dir)
             base_dir = self.get_base_dir()
             if os.path.isdir(base_dir):
                 self.logger.info("Remove ext handler dir: {0}", base_dir)
@@ -746,28 +781,18 @@ class ExtHandlerInstance(object):
             fileutil.write_file(self.get_env_file(), json.dumps(env))
         except IOError as e:
             raise ExtensionError(u"Failed to save handler environment", e)
-    
-    def get_handler_state_dir(self):
-        return os.path.join(conf.get_lib_dir(), "handler_state", 
-                            self.get_full_name())
 
     def set_handler_state(self, handler_state):
-        state_dir = self.get_handler_state_dir()
-        if not os.path.exists(state_dir):
-            try:
-                fileutil.mkdir(state_dir, 0o700)
-            except IOError as e:
-                self.logger.error("Failed to create state dir: {0}", e)
-        
+        state_dir = self.get_conf_dir()
         try:
-            state_file = os.path.join(state_dir, "state")
+            state_file = os.path.join(state_dir, "HandlerState")
             fileutil.write_file(state_file, handler_state)
         except IOError as e:
             self.logger.error("Failed to set state: {0}", e)
     
     def get_handler_state(self):
-        state_dir = self.get_handler_state_dir()
-        state_file = os.path.join(state_dir, "state")
+        state_dir = self.get_conf_dir()
+        state_file = os.path.join(state_dir, "HandlerState")
         if not os.path.isfile(state_file):
             return ExtHandlerState.NotInstalled
 
@@ -777,32 +802,25 @@ class ExtHandlerInstance(object):
             self.logger.error("Failed to get state: {0}", e)
             return ExtHandlerState.NotInstalled
     
-    def set_handler_status(self, status="NotReady", message="", 
-                           code=0):
-        state_dir = self.get_handler_state_dir()
-        if not os.path.exists(state_dir):
-            try:
-                fileutil.mkdir(state_dir, 0o700)
-            except IOError as e:
-                self.logger.error("Failed to create state dir: {0}", e)
-        
+    def set_handler_status(self, status="NotReady", message="", code=0):
+        state_dir = self.get_conf_dir()
+
         handler_status = ExtHandlerStatus()
         handler_status.name = self.ext_handler.name
         handler_status.version = self.ext_handler.properties.version
         handler_status.message = message
         handler_status.code = code
         handler_status.status = status
-        status_file = os.path.join(state_dir, "status")
+        status_file = os.path.join(state_dir, "HandlerStatus")
 
         try:
-            fileutil.write_file(status_file, 
-                                json.dumps(get_properties(handler_status)))
+            fileutil.write_file(status_file, json.dumps(get_properties(handler_status)))
         except (IOError, ValueError, ProtocolError) as e:
             self.logger.error("Failed to save handler status: {0}", e)
         
     def get_handler_status(self):
-        state_dir = self.get_handler_state_dir()
-        status_file = os.path.join(state_dir, "status")
+        state_dir = self.get_conf_dir()
+        status_file = os.path.join(state_dir, "HandlerStatus")
         if not os.path.isfile(status_file):
             return None
         
