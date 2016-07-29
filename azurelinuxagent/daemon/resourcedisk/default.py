@@ -135,7 +135,7 @@ class ResourceDiskHandler(object):
         if ret:
             logger.warn("Failed to mount resource disk. Retry mounting")
             shellutil.run("mkfs." + fs + " " + partition + " -F")
-            ret = shellutil.run(mountstring)
+            ret = shellutil.run(mount_string)
             if ret:
                 raise ResourceDiskError("({0}) {1}".format(partition, ret))
 
@@ -143,10 +143,10 @@ class ResourceDiskHandler(object):
                     device, mount_point, fs)
         return mount_point
 
-    def get_mount_string(mount_options, partition, mountpoint):
+    def get_mount_string(mount_options, partition, mount_point):
         if mount_options:
             mount_options = ' -o ' + mount_options
-        return 'mount{0} {1} {2}'.format(mount_options, partition, mountpoint)
+        return 'mount{0} {1} {2}'.format(mount_options, partition, mount_point)
 
     def create_swap_space(self, mount_point, size_mb):
         size_kb = size_mb * 1024

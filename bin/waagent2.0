@@ -126,7 +126,7 @@ Provisioning.MonitorHostName=y          # Monitor host name changes and publish 
 ResourceDisk.Format=y                   # Format if unformatted. If 'n', resource disk will not be mounted.
 ResourceDisk.Filesystem=ext4            # Typically ext3 or ext4. FreeBSD images should use 'ufs2' here.
 ResourceDisk.MountPoint=/mnt/resource   #
-ResourceDisk.MountOptions=None             # Takes a comma seperated list of mount options, check man pages.
+ResourceDisk.MountOptions=None          # Comma-seperated list of options, check man(8) for valid options.
 ResourceDisk.EnableSwap=n               # Create and use swapfile on resource disk.
 ResourceDisk.SwapSizeMB=0               # Size of the swapfile.
 

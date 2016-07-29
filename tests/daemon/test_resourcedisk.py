@@ -18,10 +18,7 @@
 from tests.tools import *
 from azurelinuxagent.common.exception import *
 from azurelinuxagent.daemon import *
-from azurelinuxagent.common.conf import *
 from azurelinuxagent.daemon.resourcedisk.default import ResourceDiskHandler
-from mock import *
-from azurelinuxagent.common.conf import ConfigurationProvider
 
 
 class TestResourceDisk(AgentTestCase):
