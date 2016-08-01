@@ -25,15 +25,15 @@ class TestResourceDisk(AgentTestCase):
         partition = '/dev/sdb1'
         mountpoint = '/mnt/resource'
         options = None
-        rdh = ResourceDiskHandler() 
         expected = 'mount /dev/sdb1 /mnt/resource'
+        rdh = ResourceDiskHandler()
         mount_string = rdh.get_mount_string(options, partition, mountpoint)
         self.assertEqual(expected, mount_string)
 
     def test_mount_flags_many(self):
         partition = '/dev/sdb1'
         mountpoint = '/mnt/resource'
-        options = 'noexec,noguid,nodev' 
+        options = 'noexec,noguid,nodev'
         expected = 'mount -o noexec,noguid,nodev /dev/sdb1 /mnt/resource'
         rdh = ResourceDiskHandler()
         mount_string = rdh.get_mount_string(options, partition, mountpoint)
@@ -41,4 +41,3 @@ class TestResourceDisk(AgentTestCase):
 
 if __name__ == '__main__':
     unittest.main()
-
