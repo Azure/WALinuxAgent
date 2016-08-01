@@ -147,7 +147,7 @@ class ResourceDiskHandler(object):
         if mount_options is not None:
             return 'mount -o {0} {1} {2}'.format(mount_options, partition, mount_point)
         else:
-            return 'mount{0} {1} {2}'.format(partition, mount_point)
+            return 'mount {0} {1}'.format(partition, mount_point)
 
     def create_swap_space(self, mount_point, size_mb):
         size_kb = size_mb * 1024
