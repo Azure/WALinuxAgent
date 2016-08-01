@@ -144,7 +144,7 @@ class ResourceDiskHandler(object):
         return mount_point
 
     def get_mount_string(mount_options, partition, mount_point):
-        if mount_options:
+        if mount_options is not None:
             mount_options = ' -o ' + mount_options
         return 'mount{0} {1} {2}'.format(mount_options, partition, mount_point)
 
