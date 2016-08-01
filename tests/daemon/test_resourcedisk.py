@@ -20,14 +20,14 @@ from azurelinuxagent.common.exception import *
 from azurelinuxagent.daemon import *
 from azurelinuxagent.daemon.resourcedisk.default import ResourceDiskHandler
 
-
 class TestResourceDisk(AgentTestCase):
     def test_mount_flags_empty(self):
         partition = '/dev/sdb1'
         mountpoint = '/mnt/resource'
-        options = ''
+        options = None
+        rdh = ResourceDiskHandler() 
         expected = 'mount /dev/sdb1 /mnt/resource'
-        mount_string = ResourceDiskHandler.get_mount_string(options, partition, mountpoint)
+        mount_string = rdh.get_mount_string(options, partition, mountpoint)
         self.assertEqual(expected, mount_string)
 
     def test_mount_flags_many(self):
@@ -35,7 +35,8 @@ class TestResourceDisk(AgentTestCase):
         mountpoint = '/mnt/resource'
         options = 'noexec,noguid,nodev' 
         expected = 'mount -o noexec,noguid,nodev /dev/sdb1 /mnt/resource'
-        mount_string = ResourceDiskHandler.get_mount_string(options, partition, mountpoint)
+        rdh = ResourceDiskHandler()
+        mount_string = rdh.get_mount_string(options, partition, mountpoint)
         self.assertEqual(expected, mount_string)
 
 if __name__ == '__main__':

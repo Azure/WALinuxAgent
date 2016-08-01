@@ -165,7 +165,7 @@ def get_resourcedisk_mountpoint(conf=__conf__):
     return conf.get("ResourceDisk.MountPoint", "/mnt/resource")
 
 def get_resourcedisk_mountoptions(conf=__conf__):
-    return conf.get_switch("ResourceDisk.MountOptions", None)
+    return conf.get("ResourceDisk.MountOptions", None)
 
 def get_resourcedisk_filesystem(conf=__conf__):
     return conf.get("ResourceDisk.Filesystem", "ext3")
