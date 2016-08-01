@@ -130,7 +130,7 @@ class ResourceDiskHandler(object):
         logger.info("Mount resource disk")
 
         mount_options = conf.get_resourcedisk_mountoptions
-        mount_string = self.get_mount_string(self, mount_options, partition, mount_point)
+        mount_string = self.get_mount_string(mount_options, partition, mount_point)
         ret = shellutil.run(mount_string, chk_err=False)
         if ret:
             logger.warn("Failed to mount resource disk. Retry mounting")
@@ -143,7 +143,7 @@ class ResourceDiskHandler(object):
                     device, mount_point, fs)
         return mount_point
 
-    def get_mount_string(mount_options, partition, mount_point):
+    def get_mount_string(self, mount_options, partition, mount_point):
         if mount_options is not None:
             mount_options = ' -o ' + mount_options
         return 'mount{0} {1} {2}'.format(mount_options, partition, mount_point)
