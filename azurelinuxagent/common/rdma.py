@@ -197,12 +197,15 @@ class RDMADeviceHandler(object):
         threading.Thread(target=self.process).start()
 
     def process(self):
-        RDMADeviceHandler.update_network_interface(self.mac_addr, self.ipv4_addr)
-        RDMADeviceHandler.wait_rdma_device(
-            self.rdma_dev, self.device_check_timeout_sec, self.device_check_interval_sec)
-        RDMADeviceHandler.write_rdma_config_to_device(
-            self.rdma_dev, self.ipv4_addr, self.mac_addr)
-        RDMADeviceHandler.update_dat_conf(dapl_config_paths, self.ipv4_addr)
+        try:
+            RDMADeviceHandler.update_network_interface(self.mac_addr, self.ipv4_addr)
+            RDMADeviceHandler.wait_rdma_device(
+                self.rdma_dev, self.device_check_timeout_sec, self.device_check_interval_sec)
+            RDMADeviceHandler.write_rdma_config_to_device(
+                self.rdma_dev, self.ipv4_addr, self.mac_addr)
+            RDMADeviceHandler.update_dat_conf(dapl_config_paths, self.ipv4_addr)
+        except Exception as e:
+            logger.error("RDMA: device processing failed: {0}".format(e))
 
     @staticmethod
     def update_dat_conf(paths, ipv4_addr):

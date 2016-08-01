@@ -10,3 +10,7 @@
   * Publishing to Production requires incrementing the revision and dropping the build number
   * We do not use pre-release labels on any builds
   
+### Version updates
+
+  * The version of the agent can be found at https://github.com/Azure/WALinuxAgent/blob/master/azurelinuxagent/common/version.py#L53 assigned to AGENT_VERSION
+  * Update the version here and send for PR before declaring a release via GitHub
