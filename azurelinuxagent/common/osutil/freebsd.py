@@ -121,12 +121,6 @@ class FreeBSDOSUtil(DefaultOSUtil):
         ret = shellutil.run_get_output("pgrep -n dhclient")
         return ret[1] if ret[0] == 0 else None
 
-    def eject_dvd(self, chk_err=True):
-        dvd = self.get_dvd_device()
-        retcode = shellutil.run("cdcontrol -f {0} eject".format(dvd))
-        if chk_err and retcode != 0:
-            raise OSUtilError("Failed to eject dvd: ret={0}".format(retcode))
-
     def restart_if(self, ifname):
         # Restart dhclient only to publish hostname
         shellutil.run("/etc/rc.d/dhclient restart {0}".format(ifname), chk_err=False)

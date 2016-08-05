@@ -321,12 +321,6 @@ class DefaultOSUtil(object):
         if chk_err and retcode != 0:
             raise OSUtilError("Failed to umount dvd.")
 
-    def eject_dvd(self, chk_err=True):
-        dvd = self.get_dvd_device()
-        retcode = shellutil.run("eject {0}".format(dvd))
-        if chk_err and retcode != 0:
-            raise OSUtilError("Failed to eject dvd: ret={0}".format(retcode))
-
     def try_load_atapiix_mod(self):
         try:
             self.load_atapiix_mod()
