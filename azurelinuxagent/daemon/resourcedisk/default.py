@@ -201,7 +201,7 @@ class ResourceDiskHandler(object):
         # fallocate command
         fn_sh = shellutil.quote((filename,))
         ret = shellutil.run(u"umask 0077 && fallocate -l {0} {1}".format(nbytes, fn_sh))
-        if ret != 127:  # 127 = command not found
+        if ret == 0:
             return ret
 
         # dd fallback

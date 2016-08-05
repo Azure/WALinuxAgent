@@ -18,8 +18,10 @@
 # http://msdn.microsoft.com/en-us/library/cc227282%28PROT.10%29.aspx
 # http://msdn.microsoft.com/en-us/library/cc227259%28PROT.13%29.aspx
 
-from tests.tools import *
+from azurelinuxagent.common.utils import shellutil
 from azurelinuxagent.daemon.resourcedisk import get_resourcedisk_handler
+from tests.tools import *
+
 
 class TestResourceDisk(AgentTestCase):
     def test_mkfile(self):
@@ -37,6 +39,27 @@ class TestResourceDisk(AgentTestCase):
 
         # cleanup
         os.remove(test_file)
+
+    def test_mkfile_dd_fallback(self):
+        with patch.object(shellutil, "run") as run_patch:
+            # setup
+            run_patch.return_value = 1
+            test_file = os.path.join(self.tmp_dir, 'test_file')
+            file_size = 1024 * 128
+
+            # execute
+            if sys.version_info >= (3,3):
+                with patch("os.posix_fallocate",
+                           side_effect=Exception('failure')):
+                    get_resourcedisk_handler().mkfile(test_file, file_size)
+            else:
+                get_resourcedisk_handler().mkfile(test_file, file_size)
+
+            # assert
+            assert run_patch.call_count > 1
+            assert "fallocate" in run_patch.call_args_list[0][0][0]
+            assert "dd if" in run_patch.call_args_list[-1][0][0]
+
 
 if __name__ == '__main__':
     unittest.main()
