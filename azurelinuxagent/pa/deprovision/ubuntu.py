@@ -18,30 +18,25 @@
 #
 
 import os
-import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
 from azurelinuxagent.pa.deprovision.default import DeprovisionHandler, \
-                                                   DeprovisionAction
-
-def del_resolv():
-    if os.path.realpath('/etc/resolv.conf') != '/run/resolvconf/resolv.conf':
-        logger.info("resolvconf is not configured. Removing /etc/resolv.conf")
-        fileutil.rm_files('/etc/resolv.conf')
-    else:
-        logger.info("resolvconf is enabled; leaving /etc/resolv.conf intact")
-        fileutil.rm_files('/etc/resolvconf/resolv.conf.d/tail',
-                             '/etc/resolvconf/resolv.conf.d/originial')
+    DeprovisionAction
 
 
 class UbuntuDeprovisionHandler(DeprovisionHandler):
     def __init__(self):
         super(UbuntuDeprovisionHandler, self).__init__()
 
-    def setup(self, deluser):
-        warnings, actions = super(UbuntuDeprovisionHandler, self).setup(deluser)
-        warnings.append("WARNING! Nameserver configuration in "
-                        "/etc/resolvconf/resolv.conf.d/{tail,originial} "
-                        "will be deleted.")
-        actions.append(DeprovisionAction(del_resolv))
-        return warnings, actions
-
+    def del_resolv(self, warnings, actions):
+        if os.path.realpath(
+                '/etc/resolv.conf') != '/run/resolvconf/resolv.conf':
+            warnings.append("WARNING! /etc/resolv.conf will be deleted.")
+            files_to_del = ["/etc/resolv.conf"]
+            actions.append(DeprovisionAction(fileutil.rm_files, files_to_del))
+        else:
+            warnings.append("WARNING! /etc/resolvconf/resolv.conf.d/tail "
+                            "and /etc/resolvconf/resolv.conf.d/original will "
+                            "be deleted.")
+            files_to_del = ["/etc/resolvconf/resolv.conf.d/tail",
+                            "/etc/resolvconf/resolv.conf.d/original"]
+            actions.append(DeprovisionAction(fileutil.rm_files, files_to_del))

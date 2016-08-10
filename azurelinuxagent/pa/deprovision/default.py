@@ -74,6 +74,11 @@ class DeprovisionHandler(object):
         files_to_del = ['/root/.bash_history', '/var/log/waagent.log']
         actions.append(DeprovisionAction(fileutil.rm_files, files_to_del))
 
+    def del_resolv(self, warnings, actions):
+        warnings.append("WARNING! /etc/resolv.conf will be deleted.")
+        files_to_del = ["/etc/resolv.conf"]
+        actions.append(DeprovisionAction(fileutil.rm_files, files_to_del))
+
     def del_dhcp_lease(self, warnings, actions):
         warnings.append("WARNING! Cached DHCP leases will be deleted.")
         dirs_to_del = ["/var/lib/dhclient", "/var/lib/dhcpcd", "/var/lib/dhcp"]
@@ -109,6 +114,7 @@ class DeprovisionHandler(object):
 
         self.del_lib_dir(warnings, actions)
         self.del_files(warnings, actions)
+        self.del_resolv(warnings, actions)
 
         if deluser:
             self.del_user(warnings, actions)
