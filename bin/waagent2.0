@@ -518,8 +518,9 @@ class AbstractDistro(object):
             fs = Config.get("ResourceDisk.Filesystem")
             if fs == None:
                 fs = "ext3"
+            partition = device + "1"
             mountOpts = Config.get("ResourceDisk.MountOpts")
-            if mountOpts == None:
+            if mountOpts is None:
                 mountOpts = ""
 
             #Check partition type
