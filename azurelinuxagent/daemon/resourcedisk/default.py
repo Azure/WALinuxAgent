@@ -204,16 +204,23 @@ class ResourceDiskHandler(object):
         if ret == 0:
             return ret
 
+        logger.info("fallocate unsuccessful, falling back to dd")
+
         # dd fallback
         dd_maxbs = 64 * 1024 ** 2
         dd_cmd = "umask 0077 && dd if=/dev/zero bs={0} count={1} conv=notrunc of={2}"
 
         blocks = int(nbytes / dd_maxbs)
         if blocks > 0:
-            ret = shellutil.run(dd_cmd.format(dd_maxbs, fn_sh, blocks)) << 8
+            ret = shellutil.run(dd_cmd.format(dd_maxbs, blocks, fn_sh)) << 8
 
         remains = int(nbytes % dd_maxbs)
         if remains > 0:
-            ret += shellutil.run(dd_cmd.format(remains, fn_sh, 1))
+            ret += shellutil.run(dd_cmd.format(remains, 1, fn_sh))
+
+        if ret == 0:
+            logger.info("dd successful")
+        else:
+            logger.error("dd unsuccessful")
 
         return ret
