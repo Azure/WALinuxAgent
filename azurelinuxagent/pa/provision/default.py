@@ -67,6 +67,7 @@ class ProvisionHandler(object):
             self.provision(ovfenv)
             fileutil.write_file(provisioned, "")
             thumbprint = self.reg_ssh_host_key()
+            self.osutil.restart_ssh_service()
             logger.info("Finished provisioning")
         except ProvisionError as e:
             logger.error("Provision failed: {0}", e)
@@ -141,8 +142,6 @@ class ProvisionHandler(object):
 
         if sel:
             self.osutil.set_selinux_enforce(1)
-
-        self.osutil.restart_ssh_service()
 
     def save_customdata(self, ovfenv):
         customdata = ovfenv.customdata
