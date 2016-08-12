@@ -662,8 +662,8 @@ class TestUpdate(UpdateTestCase):
     def test_ensure_latest_agent_includes_old_agents(self):
         self.prepare_agents()
 
-        old_count = FlexibleVersion(AGENT_VERSION).version[-1]
         old_version = self.agent_versions()[-1]
+        old_count = old_version.version[-1]
 
         self.replicate_agents(src_v=old_version, count=old_count, increment=-1)
         all_count = len(self.agent_versions())
