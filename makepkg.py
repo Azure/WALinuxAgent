@@ -29,7 +29,7 @@ PUBLISH_MANIFEST = '''<?xml version="1.0" encoding="utf-8" ?>
 <ExtensionImage xmlns="http://schemas.microsoft.com/windowsazure"  xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
   <!-- WARNING: Ordering of fields matter in this file. -->
   <ProviderNameSpace>Microsoft.OSTCLinuxAgent</ProviderNameSpace>
-  <Type>Test</Type>
+  <Type>{1}</Type>
   <Version>{0}</Version>
   <Label>Microsoft Azure Guest Agent for Linux IaaS</Label>
   <HostingResources>VmRole</HostingResources>
@@ -44,7 +44,7 @@ PUBLISH_MANIFEST = '''<?xml version="1.0" encoding="utf-8" ?>
   <SupportedOS>Linux</SupportedOS>
   <Regions>South Central US</Regions>
 </ExtensionImage>
-'''.format(AGENT_VERSION)
+'''
 
 PUBLISH_MANIFEST_FILE = 'manifest.xml'
 
@@ -56,6 +56,9 @@ manifest_path = os.path.join(target_path, AGENT_MANIFEST_FILE)
 publish_manifest_path = os.path.join(target_path, PUBLISH_MANIFEST_FILE)
 pkg_name = os.path.join(output_path, AGENT_LONG_VERSION + ".zip")
 
+family = 'Test'
+if len(sys.argv) > 1:
+    family = sys.argv[1]
 
 def do(*args):
     try:
@@ -90,7 +93,7 @@ with open(manifest_path, mode='w') as manifest:
 
 print("Writing {0}".format(publish_manifest_path))
 with open(publish_manifest_path, mode='w') as publish_manifest:
-    publish_manifest.write(PUBLISH_MANIFEST)
+    publish_manifest.write(PUBLISH_MANIFEST.format(AGENT_VERSION, family))
 
 
 cwd = os.getcwd()
