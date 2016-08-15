@@ -126,7 +126,6 @@ Provisioning.MonitorHostName=y          # Monitor host name changes and publish 
 ResourceDisk.Format=y                   # Format if unformatted. If 'n', resource disk will not be mounted.
 ResourceDisk.Filesystem=ext4            # Typically ext3 or ext4. FreeBSD images should use 'ufs2' here.
 ResourceDisk.MountPoint=/mnt/resource   #
-ResourceDisk.MountOptions=None          # Comma-seperated list of options, check man(8) for valid options.
 ResourceDisk.EnableSwap=n               # Create and use swapfile on resource disk.
 ResourceDisk.SwapSizeMB=0               # Size of the swapfile.
 
@@ -229,9 +228,6 @@ class AbstractDistro(object):
         Returns exit result.
         """
         if self.isSelinuxSystem():
-            if not os.path.exists(path):
-                Error("Path does not exist: {0}".format(path))
-                return 1
             return Run('chcon ' + cn + ' ' + path)
         
     def setHostname(self,name):
@@ -518,10 +514,8 @@ class AbstractDistro(object):
             fs = Config.get("ResourceDisk.Filesystem")
             if fs == None:
                 fs = "ext3"
+
             partition = device + "1"
-            mountOpts = Config.get("ResourceDisk.MountOpts")
-            if mountOpts is None:
-                mountOpts = ""
 
             #Check partition type
             Log("Detect GPT...")
@@ -543,11 +537,11 @@ class AbstractDistro(object):
                 if existingFS == "7" and fs != "ntfs":
                     Run("sfdisk -c " + device + " 1 83")
                     Run("mkfs." + fs + " " + partition)
-            if Run("mount " + mountOpts + " " + partition + " " + mountpoint, chk_err=False):
+            if Run("mount " + partition + " " + mountpoint, chk_err=False):
                 #If mount failed, try to format the partition and mount again
                 Warn("Failed to mount resource disk. Retry mounting.")            
                 Run("mkfs." + fs + " " + partition + " -F")
-                if Run("mount " + mountOpts + " " + partition + " " + mountpoint):
+                if Run("mount " + partition + " " + mountpoint):
                     Error("ActivateResourceDisk: Failed to mount resource disk (" + partition + ").")
                     return
             Log("Resource disk (" + partition + ") is mounted at " + mountpoint + " with fstype " + fs)
@@ -564,8 +558,9 @@ class AbstractDistro(object):
         if os.path.isfile(mountpoint + "/swapfile") and os.path.getsize(mountpoint + "/swapfile") != (sizeKB * 1024):
             os.remove(mountpoint + "/swapfile")
         if not os.path.isfile(mountpoint + "/swapfile"):
-            Run("umask 0077 && dd if=/dev/zero of=" + mountpoint + "/swapfile bs=1024 count=" + str(sizeKB))
+            Run("dd if=/dev/zero of=" + mountpoint + "/swapfile bs=1024 count=" + str(sizeKB))
             Run("mkswap " + mountpoint + "/swapfile")
+        Run("chmod 600 " + mountpoint + "/swapfile")
         if not Run("swapon " + mountpoint + "/swapfile"):
             Log("Enabled " + str(sizeKB) + " KB of swap at " + mountpoint + "/swapfile")
         else:
@@ -1771,7 +1766,7 @@ sizeKB = int(Config.get("ResourceDisk.SwapSizeMB")) * 1024
 if os.path.isfile(mountpoint + "/swapfile") and os.path.getsize(mountpoint + "/swapfile") != (sizeKB * 1024):
     os.remove(mountpoint + "/swapfile")
 if not os.path.isfile(mountpoint + "/swapfile"):
-    Run("umask 0077 && dd if=/dev/zero of=" + mountpoint + "/swapfile bs=1024 count=" + str(sizeKB))
+    Run("dd if=/dev/zero of=" + mountpoint + "/swapfile bs=1024 count=" + str(sizeKB))
 if Run("mdconfig -a -t vnode -f " + mountpoint + "/swapfile -u 0"):
     waagent.Error("ActivateResourceDisk: Configuring swap - Failed to create md0")
 if not Run("swapon /dev/md0"):
@@ -2341,10 +2336,7 @@ def ChangeOwner(filepath, user):
     except:
         pass
     if p != None:
-        if not os.path.exists(filepath):
-            Error("Path does not exist: {0}".format(filepath))
-        else:
-            os.chown(filepath, p[2], p[3])
+        os.chown(filepath, p[2], p[3])
 
 def CreateDir(dirpath, user, mode):
     """
@@ -4087,7 +4079,7 @@ class ExtensionsConfig(object):
         try:
             incarnation=self.Extensions[0].getAttribute("goalStateIncarnation")
         except:
-            Error('Error parsing attribute "goalStateIncarnation".  Unable to send status reports')
+            Error('Error parsing ExtensionsConfig.  Unable to send status reports')
             return -1
         status=''
         statuses=''
@@ -4125,7 +4117,7 @@ class ExtensionsConfig(object):
         try:
             uri=GetNodeTextData(self.Extensions[0].getElementsByTagName("StatusUploadBlob")[0]).replace('&amp;','&')
         except:
-            Error('Error parsing element "StatusUploadBlob".  Unable to send status reports')
+            Error('Error parsing ExtensionsConfig.  Unable to send status reports')
             return -1
 
         LogIfVerbose('Status report '+status+' sent to ' + uri)
@@ -4615,7 +4607,7 @@ class OvfEnv(object):
             if len(CDSection) > 0 :
                 self.CustomData=GetNodeTextData(CDSection[0])
                 if len(self.CustomData)>0:
-                    SetFileContents(LibDir + '/CustomData', bytearray(MyDistro.translateCustomData(self.CustomData), 'utf-8'))
+                    SetFileContents(LibDir + '/CustomData', bytearray(MyDistro.translateCustomData(self.CustomData)))
                     Log('Wrote ' + LibDir + '/CustomData')
                 else :
                     Error('<CustomData> contains no data!')
@@ -4920,9 +4912,8 @@ class WALAEventMonitor(WALAEvent):
     def EventsLoop(self):
         LastReportHeartBeatTime = datetime.datetime.min
         try:
-            while True:
-                if (datetime.datetime.now()-LastReportHeartBeatTime) > \
-                        datetime.timedelta(minutes=30):
+            while(True):
+                if (datetime.datetime.now()-LastReportHeartBeatTime) > datetime.timedelta(hours=12):
                     LastReportHeartBeatTime = datetime.datetime.now()
                     AddExtensionEvent(op=WALAEventOperation.HeartBeat,name="WALA",isSuccess=True)
                 self.postNumbersInOneLoop=0
