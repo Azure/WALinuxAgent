@@ -19,8 +19,8 @@
 
 import os
 from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, \
-                                     AGENT_DESCRIPTION, \
-                                     DISTRO_NAME, DISTRO_VERSION, DISTRO_FULL_NAME
+    AGENT_DESCRIPTION, \
+    DISTRO_NAME, DISTRO_VERSION, DISTRO_FULL_NAME
 
 from azurelinuxagent.common.osutil import get_osutil
 import setuptools
@@ -30,31 +30,41 @@ from setuptools.command.install import install as  _install
 root_dir = os.path.dirname(os.path.abspath(__file__))
 os.chdir(root_dir)
 
+
 def set_files(data_files, dest=None, src=None):
     data_files.append((dest, src))
 
-def set_bin_files(data_files, dest="/usr/sbin", 
+
+def set_bin_files(data_files, dest="/usr/sbin",
                   src=["bin/waagent", "bin/waagent2.0"]):
     data_files.append((dest, src))
+
 
 def set_conf_files(data_files, dest="/etc", src=["config/waagent.conf"]):
     data_files.append((dest, src))
 
-def set_logrotate_files(data_files, dest="/etc/logrotate.d", 
+
+def set_logrotate_files(data_files, dest="/etc/logrotate.d",
                         src=["config/waagent.logrotate"]):
     data_files.append((dest, src))
+
 
 def set_sysv_files(data_files, dest="/etc/rc.d/init.d", src=["init/waagent"]):
     data_files.append((dest, src))
 
-def set_systemd_files(data_files, dest="/lib/systemd/system", 
+
+def set_systemd_files(data_files, dest="/lib/systemd/system",
                       src=["init/waagent.service"]):
     data_files.append((dest, src))
+
 
 def set_rc_files(data_files, dest="/etc/rc.d/", src=["init/freebsd/waagent"]):
     data_files.append((dest, src))
 
-def set_udev_files(data_files, dest="/etc/udev/rules.d/", src=["config/66-azure-storage.rules", "config/99-azure-product-uuid.rules"]):
+
+def set_udev_files(data_files, dest="/etc/udev/rules.d/",
+                   src=["config/66-azure-storage.rules",
+                        "config/99-azure-product-uuid.rules"]):
     data_files.append((dest, src))
 
 
@@ -62,7 +72,7 @@ def get_data_files(name, version, fullname):
     """
     Determine data_files according to distro name, version and init system type
     """
-    data_files=[]
+    data_files = []
 
     if name == 'redhat' or name == 'centos':
         set_bin_files(data_files)
@@ -72,19 +82,19 @@ def get_data_files(name, version, fullname):
         if version.startswith("6"):
             set_sysv_files(data_files)
         else:
-            #redhat7.0+ use systemd
+            # redhat7.0+ use systemd
             set_systemd_files(data_files, dest="/usr/lib/systemd/system")
             if version.startswith("7.1"):
-                #TODO this is a mitigation to systemctl bug on 7.1
+                # TODO this is a mitigation to systemctl bug on 7.1
                 set_sysv_files(data_files)
 
     elif name == 'coreos':
         set_bin_files(data_files, dest="/usr/share/oem/bin")
-        set_conf_files(data_files, dest="/usr/share/oem", 
+        set_conf_files(data_files, dest="/usr/share/oem",
                        src=["config/coreos/waagent.conf"])
         set_logrotate_files(data_files)
         set_udev_files(data_files)
-        set_files(data_files, dest="/usr/share/oem", 
+        set_files(data_files, dest="/usr/share/oem",
                   src=["init/coreos/cloud-config.yml"])
     elif name == 'ubuntu':
         set_bin_files(data_files)
@@ -92,17 +102,17 @@ def get_data_files(name, version, fullname):
         set_logrotate_files(data_files)
         set_udev_files(data_files, src=["config/99-azure-product-uuid.rules"])
         if version.startswith("12") or version.startswith("14"):
-            #Ubuntu12.04/14.04 - uses upstart
+            # Ubuntu12.04/14.04 - uses upstart
             set_files(data_files, dest="/etc/init",
                       src=["init/ubuntu/walinuxagent.conf"])
-            set_files(data_files, dest='/etc/default', 
+            set_files(data_files, dest='/etc/default',
                       src=['init/ubuntu/walinuxagent'])
         elif fullname == 'Snappy Ubuntu Core':
-            set_files(data_files, dest="<TODO>", 
+            set_files(data_files, dest="<TODO>",
                       src=["init/ubuntu/snappy/walinuxagent.yml"])
         else:
-            #Ubuntu15.04+ uses systemd
-            set_systemd_files(data_files, 
+            # Ubuntu15.04+ uses systemd
+            set_systemd_files(data_files,
                               src=["init/ubuntu/walinuxagent.service"])
     elif name == 'suse':
         set_bin_files(data_files)
@@ -111,24 +121,26 @@ def get_data_files(name, version, fullname):
         set_udev_files(data_files)
         if fullname == 'SUSE Linux Enterprise Server' and \
                 version.startswith('11') or \
-                fullname == 'openSUSE' and version.startswith('13.1'):
-            set_sysv_files(data_files, dest='/etc/init.d', 
+                                fullname == 'openSUSE' and version.startswith(
+                    '13.1'):
+            set_sysv_files(data_files, dest='/etc/init.d',
                            src=["init/suse/waagent"])
         else:
-            #sles 12+ and openSUSE 13.2+ use systemd
+            # sles 12+ and openSUSE 13.2+ use systemd
             set_systemd_files(data_files, dest='/usr/lib/systemd/system')
     elif name == 'freebsd':
         set_bin_files(data_files, dest="/usr/local/sbin")
         set_conf_files(data_files, src=["config/freebsd/waagent.conf"])
         set_rc_files(data_files)
     else:
-        #Use default setting
+        # Use default setting
         set_bin_files(data_files)
         set_conf_files(data_files)
         set_logrotate_files(data_files)
         set_udev_files(data_files)
         set_sysv_files(data_files)
     return data_files
+
 
 class install(_install):
     user_options = _install.user_options + [
@@ -146,7 +158,7 @@ class install(_install):
         self.lnx_distro_fullname = DISTRO_FULL_NAME
         self.register_service = False
         self.skip_data_files = False
-        
+
     def finalize_options(self):
         _install.finalize_options(self)
         if self.skip_data_files:
@@ -162,18 +174,19 @@ class install(_install):
         if self.register_service:
             get_osutil().register_agent_service()
 
+
 setuptools.setup(
     name=AGENT_NAME,
     version=AGENT_VERSION,
     long_description=AGENT_DESCRIPTION,
-    author= 'Yue Zhang, Stephen Zarkos, Eric Gable',
-    author_email = 'walinuxagent@microsoft.com',
-    platforms = 'Linux',
+    author='Yue Zhang, Stephen Zarkos, Eric Gable',
+    author_email='walinuxagent@microsoft.com',
+    platforms='Linux',
     url='https://github.com/Azure/WALinuxAgent',
-    license = 'Apache License Version 2.0',
+    license='Apache License Version 2.0',
     packages=find_packages(exclude=["tests"]),
     py_modules=["__main__"],
-    cmdclass = {
+    cmdclass={
         'install': install
     }
 )
