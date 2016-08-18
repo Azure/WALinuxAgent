@@ -72,7 +72,8 @@ class HostPluginProtocol(object):
             logger.error("no status data was provided")
             return
         url = URI_FORMAT_PUT_VM_STATUS.format(self.endpoint, HOST_PLUGIN_PORT)
-        status = textutil.b64encode(status_blob.vm_status)
+        logger.verbose("Posting VM status to host channel [{0}]".format(url))
+        status = textutil.b64encode(status_blob.vm_status.vmAgent.status)
         headers = {"x-ms-version": API_VERSION}
         blob_headers = [{'headerName': 'x-ms-version',
                          'headerValue': status_blob.__storage_version__},
@@ -80,7 +81,6 @@ class HostPluginProtocol(object):
                          'headerValue': status_blob.type}]
         data = json.dumps({'requestUri': sas_url, 'headers': blob_headers,
                            'content': status}, sort_keys=True)
-        logger.info("put VM status at [{0}]".format(url))
         try:
             response = restutil.http_put(url, data, headers)
             if response.status != httpclient.OK:
