@@ -65,10 +65,10 @@ class CoreOSUtil(DefaultOSUtil):
         return shellutil.run("systemctl start systemd-networkd", chk_err=False)
 
     def start_agent_service(self):
-        return shellutil.run("systemctl start wagent", chk_err=False)
+        return shellutil.run("systemctl start waagent", chk_err=False)
 
     def stop_agent_service(self):
-        return shellutil.run("systemctl stop wagent", chk_err=False)
+        return shellutil.run("systemctl stop waagent", chk_err=False)
 
     def get_dhcp_pid(self):
         ret = shellutil.run_get_output("pidof systemd-networkd")
