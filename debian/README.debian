@@ -21,6 +21,6 @@ To compile the package:
     2. Build the package:
         sudo pbuilder build ../walinuxagent_1.3-0ubuntu1.dsc
 
-    3. Fetch the built package, usually from /var/cache/pbuilder/results
+    3. Fetch the built package, usually from /var/cache/pbuilder/result
 
 
