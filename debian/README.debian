@@ -8,7 +8,7 @@ too many extra packages, and keep your source directory clean.
 
 Run once:
     1. Install required packages:
-        sudo apt-get -y install ubuntu-dev-tools pbuilder
+        sudo apt-get -y install ubuntu-dev-tools pbuilder python-all debhelper
     2. Create the pbuilder environment:
         sudo pbuilder create --debootstrapopts --variant=buildd
 
