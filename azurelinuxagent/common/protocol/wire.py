@@ -269,7 +269,7 @@ def ext_status_to_v1(ext_name, ext_status):
         "timestampUTC": timestamp
     }
     if len(v1_sub_status) != 0:
-        v1_ext_status['substatus'] = v1_sub_status
+        v1_ext_status['status']['substatus'] = v1_sub_status
     return v1_ext_status
 
 
