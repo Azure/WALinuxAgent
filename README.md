@@ -183,6 +183,7 @@ Provisioning.PasswordCryptSaltLength=10
 ResourceDisk.Format=y
 ResourceDisk.Filesystem=ext4
 ResourceDisk.MountPoint=/mnt/resource
+ResourceDisk.MountOptions=None
 ResourceDisk.EnableSwap=n
 ResourceDisk.SwapSizeMB=0
 LBProbeResponder=y
@@ -317,6 +318,12 @@ ResourceDisk.MountPoint:
 Type: String Default: /mnt/resource
 
 This specifies the path at which the resource disk is mounted.
+
+ResourceDisk.MountOptions:
+Type: String Default: None  
+
+Specifies disk mount options to be passed to the mount -o command. This is a comma
+separated list of values, ex. 'nodev,nosuid'. See mount(8) for details.
 
 ResourceDisk.EnableSwap:
 Type: Boolean Default: n
