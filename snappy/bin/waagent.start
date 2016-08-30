@@ -1,5 +1,0 @@
-#!/bin/bash
-
-export PYTHONPATH="${PATH}:${SNAP_APP_PATH}/lib"
-
-python3 ${SNAP_APP_PATH}/bin/waagent -daemon
