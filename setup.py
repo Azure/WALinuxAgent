@@ -147,7 +147,7 @@ class install(_install):
         ('lnx-distro=', None, 'target Linux distribution'),
         ('lnx-distro-version=', None, 'target Linux distribution version'),
         ('lnx-distro-fullname=', None, 'target Linux distribution full name'),
-        ('register-service', None, 'register as startup service'),
+        ('register-service', None, 'register as startup service and start'),
         ('skip-data-files', None, 'skip data files installation'),
     ]
 
@@ -172,14 +172,16 @@ class install(_install):
     def run(self):
         _install.run(self)
         if self.register_service:
-            get_osutil().register_agent_service()
+            osutil = get_osutil()
+            osutil.register_agent_service()
+            osutil.start_agent_service()
 
 
 setuptools.setup(
     name=AGENT_NAME,
     version=AGENT_VERSION,
     long_description=AGENT_DESCRIPTION,
-    author='Yue Zhang, Stephen Zarkos, Eric Gable',
+    author='Microsoft Corporation',
     author_email='walinuxagent@microsoft.com',
     platforms='Linux',
     url='https://github.com/Azure/WALinuxAgent',
