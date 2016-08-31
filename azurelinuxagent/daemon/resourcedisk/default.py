@@ -106,7 +106,10 @@ class ResourceDiskHandler(object):
             raise ResourceDiskError("Could not determine partition info for "
                                     "{0}: {1}".format(device, ret[1]))
 
-        mkfs_string = "mkfs.{0} {1} -F".format(fs, partition)
+        force_option = 'F'
+        if fs == 'xfs':
+            force_option = 'f'
+        mkfs_string = "mkfs.{0} {1} -{2}".format(fs, partition, force_option)
 
         if "gpt" in ret[1]:
             logger.info("GPT detected, finding partitions")
