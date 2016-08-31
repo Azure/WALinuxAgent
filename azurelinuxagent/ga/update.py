@@ -16,12 +16,12 @@
 #
 # Requires Python 2.4+ and Openssl 1.0+
 #
+
 import glob
 import json
 import os
 import platform
 import re
-import shlex
 import shutil
 import signal
 import subprocess
@@ -130,7 +130,7 @@ class UpdateHandler(object):
         try:
 
             # Launch the correct Python version for python-based agents
-            cmds = shlex.split(agent_cmd)
+            cmds = textutil.safe_shlex_split(agent_cmd)
             if cmds[0].lower() == "python":
                 cmds[0] = get_python_cmd()
                 agent_cmd = " ".join(cmds)
