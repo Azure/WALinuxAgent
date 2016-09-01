@@ -438,7 +438,8 @@ class TestGuestAgent(UpdateTestCase):
         agent = GuestAgent(path=self.agent_path)
         agent._unpack()
         agent._load_manifest()
-        self.assertEqual(agent.manifest.get_enable_command(), agent.get_agent_cmd())
+        self.assertEqual(agent.manifest.get_enable_command(),
+                         agent.get_agent_cmd())
         return
 
     @patch("azurelinuxagent.ga.update.GuestAgent._ensure_downloaded")
@@ -992,13 +993,14 @@ class TestUpdate(UpdateTestCase):
 
         agent = self.update_handler.get_latest_agent()
         args, kwargs = self._test_run_latest()
-        cmds = shlex.split(agent.get_agent_cmd())
+        cmds = textutil.safe_shlex_split(agent.get_agent_cmd())
         if cmds[0].lower() == "python":
             cmds[0] = get_python_cmd()
 
         self.assertEqual(args[0], cmds)
         self.assertEqual(True, 'cwd' in kwargs)
         self.assertEqual(agent.get_agent_dir(), kwargs['cwd'])
+        self.assertEqual(False, '\x00' in cmds[0])
         return
 
     def test_run_latest_polls_and_waits_for_success(self):
