@@ -16,13 +16,16 @@
 #
 # Requires Python 2.4+ and Openssl 1.0+
 
+import json
+import os
+import re
 import time
 import xml.sax.saxutils as saxutils
 import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common.exception import ProtocolNotFoundError
 from azurelinuxagent.common.future import httpclient, bytebuffer
-from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, findtext, \
-    getattrib, gettext, remove_bom, get_bytes_from_pem
+from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, \
+    findtext, getattrib, gettext, remove_bom, get_bytes_from_pem
 import azurelinuxagent.common.utils.fileutil as fileutil
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.protocol.restapi import *
@@ -66,10 +69,13 @@ class WireProtocol(Protocol):
     """Slim layer to adapt wire protocol data to metadata protocol interface"""
 
     # TODO: Clean-up goal state processing
-    #   At present, some methods magically update GoalState (e.g., get_vmagent_manifests), others (e.g., get_vmagent_pkgs)
-    #   assume its presence. A better approach would make an explicit update call that returns the incarnation number and
-    #   establishes that number the "context" for all other calls (either by updating the internal state of the protocol or
-    #   by having callers pass the incarnation number to the method).
+    #  At present, some methods magically update GoalState (e.g.,
+    #  get_vmagent_manifests), others (e.g., get_vmagent_pkgs)
+    #  assume its presence. A better approach would make an explicit update
+    #  call that returns the incarnation number and
+    #  establishes that number the "context" for all other calls (either by
+    #  updating the internal state of the protocol or
+    #  by having callers pass the incarnation number to the method).
 
     def __init__(self, endpoint):
         if endpoint is None:
@@ -369,10 +375,13 @@ class StatusBlob(object):
         logger.verbose("Check blob type.")
         timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         try:
-            resp = self.client.call_storage_service(restutil.http_head, url, {
-                "x-ms-date": timestamp,
-                'x-ms-version': self.__class__.__storage_version__
-            })
+            resp = self.client.call_storage_service(
+                restutil.http_head,
+                url,
+                {
+                    "x-ms-date": timestamp,
+                    'x-ms-version': self.__class__.__storage_version__
+                })
         except HttpError as e:
             raise ProtocolError((u"Failed to get status blob type: {0}"
                                  u"").format(e))
@@ -387,13 +396,16 @@ class StatusBlob(object):
     def put_block_blob(self, url, data):
         logger.verbose("Upload block blob")
         timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-        resp = self.client.call_storage_service(restutil.http_put, url, data,
-                        {
-                            "x-ms-date": timestamp,
-                            "x-ms-blob-type": "BlockBlob",
-                            "Content-Length": ustr(len(data)),
-                            "x-ms-version": self.__class__.__storage_version__
-                        })
+        resp = self.client.call_storage_service(
+            restutil.http_put,
+            url,
+            data,
+            {
+                "x-ms-date": timestamp,
+                "x-ms-blob-type": "BlockBlob",
+                "Content-Length": ustr(len(data)),
+                "x-ms-version": self.__class__.__storage_version__
+            })
         if resp.status != httpclient.CREATED:
             raise UploadError(
                 "Failed to upload block blob: {0}".format(resp.status))
@@ -407,14 +419,17 @@ class StatusBlob(object):
 
         # Align to 512 bytes
         page_blob_size = int((len(data) + 511) / 512) * 512
-        resp = self.client.call_storage_service(restutil.http_put, url, "",
-                        {
-                            "x-ms-date": timestamp,
-                            "x-ms-blob-type": "PageBlob",
-                            "Content-Length": "0",
-                            "x-ms-blob-content-length": ustr(page_blob_size),
-                            "x-ms-version": self.__class__.__storage_version__
-                        })
+        resp = self.client.call_storage_service(
+            restutil.http_put,
+            url,
+            "",
+            {
+                "x-ms-date": timestamp,
+                "x-ms-blob-type": "PageBlob",
+                "Content-Length": "0",
+                "x-ms-blob-content-length": ustr(page_blob_size),
+                "x-ms-version": self.__class__.__storage_version__
+            })
         if resp.status != httpclient.CREATED:
             raise UploadError(
                 "Failed to clean up page blob: {0}".format(resp.status))
@@ -437,7 +452,9 @@ class StatusBlob(object):
             buf = bytearray(buf_size)
             buf[0: content_size] = data[start: end]
             resp = self.client.call_storage_service(
-                restutil.http_put, url, bytebuffer(buf),
+                restutil.http_put,
+                url,
+                bytebuffer(buf),
                 {
                     "x-ms-date": timestamp,
                     "x-ms-range": "bytes={0}-{1}".format(start, page_end - 1),
@@ -465,7 +482,8 @@ def event_param_to_v1(param):
         attr_type = 'mt:bool'
     elif param_type is float:
         attr_type = 'mt:float64'
-    return param_format.format(param.name, saxutils.quoteattr(ustr(param.value)),
+    return param_format.format(param.name,
+                               saxutils.quoteattr(ustr(param.value)),
                                attr_type)
 
 
@@ -501,15 +519,15 @@ class WireClient(object):
         now = time.time()
         if now - self.last_request < 1:
             logger.verbose("Last request issued less than 1 second ago")
-            logger.verbose("Sleep {0} second to avoid throttling.", 
-                        SHORT_WAITING_INTERVAL)
+            logger.verbose("Sleep {0} second to avoid throttling.",
+                           SHORT_WAITING_INTERVAL)
             time.sleep(SHORT_WAITING_INTERVAL)
         self.last_request = now
 
         self.req_count += 1
         if self.req_count % 3 == 0:
-            logger.verbose("Sleep {0} second to avoid throttling.", 
-                        SHORT_WAITING_INTERVAL)
+            logger.verbose("Sleep {0} second to avoid throttling.",
+                           SHORT_WAITING_INTERVAL)
             time.sleep(SHORT_WAITING_INTERVAL)
             self.req_count = 0
 
@@ -566,29 +584,36 @@ class WireClient(object):
         except IOError as e:
             raise ProtocolError("Failed to write cache: {0}".format(e))
 
-    def call_storage_service(self, http_req, *args, **kwargs):
+    @staticmethod
+    def call_storage_service(http_req, *args, **kwargs):
         """ 
         Call storage service, handle SERVICE_UNAVAILABLE(503)
         """
+
+        # force the chk_proxy arg to True, since all calls to storage should
+        #  use a configured proxy
+        kwargs['chk_proxy'] = True
+
         for retry in range(0, 3):
             resp = http_req(*args, **kwargs)
             if resp.status == httpclient.SERVICE_UNAVAILABLE:
-                logger.warn("Storage service is not avaible temporaryly")
-                logger.info("Will retry later, in {0} seconds",
+                logger.warn("Storage service is temporarily unavailable. ")
+                logger.info("Will retry in {0} seconds. ",
                             LONG_WAITING_INTERVAL)
                 time.sleep(LONG_WAITING_INTERVAL)
             else:
                 return resp
-        raise ProtocolError(("Calling storage endpoint failed: {0}"
-                             "").format(resp.status))
+        raise ProtocolError(("Calling storage endpoint failed: "
+                             "{0}").format(resp.status))
 
     def fetch_manifest(self, version_uris):
         for version_uri in version_uris:
             logger.verbose("Fetch ext handler manifest: {0}", version_uri.uri)
             try:
-                resp = self.call_storage_service(restutil.http_get,
-                                                 version_uri.uri, None,
-                                                 chk_proxy=True)
+                resp = self.call_storage_service(
+                    restutil.http_get,
+                    version_uri.uri,
+                    None)
             except HttpError as e:
                 raise ProtocolError(ustr(e))
 
@@ -693,14 +718,16 @@ class WireClient(object):
 
     def get_hosting_env(self):
         if (self.hosting_env is None):
-            local_file = os.path.join(conf.get_lib_dir(), HOSTING_ENV_FILE_NAME)
+            local_file = os.path.join(conf.get_lib_dir(),
+                                      HOSTING_ENV_FILE_NAME)
             xml_text = self.fetch_cache(local_file)
             self.hosting_env = HostingEnv(xml_text)
         return self.hosting_env
 
     def get_shared_conf(self):
         if (self.shared_conf is None):
-            local_file = os.path.join(conf.get_lib_dir(), SHARED_CONF_FILE_NAME)
+            local_file = os.path.join(conf.get_lib_dir(),
+                                      SHARED_CONF_FILE_NAME)
             xml_text = self.fetch_cache(local_file)
             self.shared_conf = SharedConfig(xml_text)
         return self.shared_conf
@@ -796,7 +823,8 @@ class WireClient(object):
         headers = self.get_header_for_xml_content()
         try:
             resp = self.call_wireserver(restutil.http_post, health_report_uri,
-                                        health_report, headers=headers, max_retry=8)
+                                        health_report, headers=headers,
+                                        max_retry=8)
         except HttpError as e:
             raise ProtocolError((u"Failed to send provision status: {0}"
                                  u"").format(e))
@@ -820,7 +848,8 @@ class WireClient(object):
 
         if resp.status != httpclient.OK:
             logger.verbose(resp.read())
-            raise ProtocolError("Failed to send events:{0}".format(resp.status))
+            raise ProtocolError(
+                "Failed to send events:{0}".format(resp.status))
 
     def report_event(self, event_list):
         buf = {}
@@ -867,6 +896,7 @@ class WireClient(object):
             "x-ms-guest-agent-public-x509-cert": cert
         }
 
+
 class VersionInfo(object):
     def __init__(self, xml_text):
         """
@@ -880,14 +910,16 @@ class VersionInfo(object):
         xml_doc = parse_doc(xml_text)
         preferred = find(xml_doc, "Preferred")
         self.preferred = findtext(preferred, "Version")
-        logger.info("Fabric preferred wire protocol version:{0}", self.preferred)
+        logger.info("Fabric preferred wire protocol version:{0}",
+                    self.preferred)
 
         self.supported = []
         supported = find(xml_doc, "Supported")
         supported_version = findall(supported, "Version")
         for node in supported_version:
             version = gettext(node)
-            logger.verbose("Fabric supported wire protocol version:{0}", version)
+            logger.verbose("Fabric supported wire protocol version:{0}",
+                           version)
             self.supported.append(version)
 
     def get_preferred(self):
@@ -979,6 +1011,7 @@ class SharedConfig(object):
         """
         # Not used currently
         return self
+
 
 class Certificates(object):
     """
@@ -1176,7 +1209,8 @@ class ExtensionsConfig(object):
             ext.sequenceNumber = seqNo
             ext.publicSettings = handler_settings.get("publicSettings")
             ext.protectedSettings = handler_settings.get("protectedSettings")
-            thumbprint = handler_settings.get("protectedSettingsCertThumbprint")
+            thumbprint = handler_settings.get(
+                "protectedSettingsCertThumbprint")
             ext.certificateThumbprint = thumbprint
             ext_handler.properties.extensions.append(ext)
 
@@ -1191,14 +1225,21 @@ class ExtensionManifest(object):
 
     def parse(self, xml_text):
         xml_doc = parse_doc(xml_text)
-        self._handle_packages(findall(find(xml_doc, "Plugins"), "Plugin"), False)
-        self._handle_packages(findall(find(xml_doc, "InternalPlugins"), "Plugin"), True)
+        self._handle_packages(findall(find(xml_doc,
+                                           "Plugins"),
+                                      "Plugin"),
+                              False)
+        self._handle_packages(findall(find(xml_doc,
+                                           "InternalPlugins"),
+                                      "Plugin"),
+                              True)
 
     def _handle_packages(self, packages, isinternal):
         for package in packages:
             version = findtext(package, "Version")
 
-            disallow_major_upgrade = findtext(package, "DisallowMajorVersionUpgrade")
+            disallow_major_upgrade = findtext(package,
+                                              "DisallowMajorVersionUpgrade")
             if disallow_major_upgrade is None:
                 disallow_major_upgrade = ''
             disallow_major_upgrade = disallow_major_upgrade.lower() == "true"
