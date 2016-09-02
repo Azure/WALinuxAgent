@@ -1,5 +1,18 @@
 WALinuxAgent                                                          Changelog
 |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+
+12 August 2016, v2.1.6
+   . Improved RDMA support
+   . Extension state migration
+   . Alpine Linux support
+   . Fixes for #347, #351, #353
+
+15 July 2016, v2.1.5
+   . Goal state processing extension
+   . Multi-nic improvements
+   . Bug fixes for #145, #141, #133, #116, #187, #169, #104, #127, #163,
+    #190, #185, #174
+
 09 Mar 2016, WALinuxAgent 2.1.4
    . Add support for FreeBSD
    . Fix a bug for internal extension version resolving
