@@ -533,23 +533,28 @@ class WireClient(object):
 
     def call_wireserver(self, http_req, *args, **kwargs):
         """
-        Call wire server. Handle throttling(403) and Resource Gone(410)
+        Call wire server; handle throttling (403), resource gone (410) and
+        service unavailable (503).
         """
         self.prevent_throttling()
         for retry in range(0, 3):
             resp = http_req(*args, **kwargs)
             if resp.status == httpclient.FORBIDDEN:
-                logger.warn("Sending too much request to wire server")
-                logger.info("Sleep {0} second to avoid throttling.",
+                logger.warn("Sending too many requests to wire server. ")
+                logger.info("Sleeping {0}s to avoid throttling.",
                             LONG_WAITING_INTERVAL)
+                time.sleep(LONG_WAITING_INTERVAL)
+            elif resp.status == httpclient.SERVICE_UNAVAILABLE:
+                logger.warn("Service temporarily unavailable, sleeping {0}s "
+                            "before retrying.", LONG_WAITING_INTERVAL)
                 time.sleep(LONG_WAITING_INTERVAL)
             elif resp.status == httpclient.GONE:
                 msg = args[0] if len(args) > 0 else ""
                 raise WireProtocolResourceGone(msg)
             else:
                 return resp
-        raise ProtocolError(("Calling wire server failed: {0}"
-                             "").format(resp.status))
+        raise ProtocolError(("Calling wire server failed: "
+                             "{0}").format(resp.status))
 
     def decode_config(self, data):
         if data is None:
@@ -560,12 +565,13 @@ class WireClient(object):
 
     def fetch_config(self, uri, headers):
         try:
-            resp = self.call_wireserver(restutil.http_get, uri,
+            resp = self.call_wireserver(restutil.http_get,
+                                        uri,
                                         headers=headers)
         except HttpError as e:
             raise ProtocolError(ustr(e))
 
-        if (resp.status != httpclient.OK):
+        if resp.status != httpclient.OK:
             raise ProtocolError("{0} - {1}".format(resp.status, uri))
 
         return self.decode_config(resp.read())
@@ -801,14 +807,17 @@ class WireClient(object):
         role_prop_uri = ROLE_PROP_URI.format(self.endpoint)
         headers = self.get_header_for_xml_content()
         try:
-            resp = self.call_wireserver(restutil.http_post, role_prop_uri,
-                                        role_prop, headers=headers)
+            resp = self.call_wireserver(restutil.http_post,
+                                        role_prop_uri,
+                                        role_prop,
+                                        headers=headers)
         except HttpError as e:
-            raise ProtocolError((u"Failed to send role properties: {0}"
-                                 u"").format(e))
+            raise ProtocolError((u"Failed to send role properties: "
+                                 u"{0}").format(e))
         if resp.status != httpclient.ACCEPTED:
-            raise ProtocolError((u"Failed to send role properties: {0}"
-                                 u", {1}").format(resp.status, resp.read()))
+            raise ProtocolError((u"Failed to send role properties: "
+                                 u",{0}: {1}").format(resp.status,
+                                                      resp.read()))
 
     def report_health(self, status, substatus, description):
         goal_state = self.get_goal_state()
@@ -822,15 +831,21 @@ class WireClient(object):
         health_report_uri = HEALTH_REPORT_URI.format(self.endpoint)
         headers = self.get_header_for_xml_content()
         try:
-            resp = self.call_wireserver(restutil.http_post, health_report_uri,
-                                        health_report, headers=headers,
-                                        max_retry=8)
+            # 30 retries with 10s sleep gives ~5min for wireserver updates;
+            # this is retried 3 times with 15s sleep before throwing a
+            # ProtocolError, for a total of ~15min.
+            resp = self.call_wireserver(restutil.http_post,
+                                        health_report_uri,
+                                        health_report,
+                                        headers=headers,
+                                        max_retry=30)
         except HttpError as e:
-            raise ProtocolError((u"Failed to send provision status: {0}"
-                                 u"").format(e))
+            raise ProtocolError((u"Failed to send provision status: "
+                                 u"{0}").format(e))
         if resp.status != httpclient.OK:
-            raise ProtocolError((u"Failed to send provision status: {0}"
-                                 u", {1}").format(resp.status, resp.read()))
+            raise ProtocolError((u"Failed to send provision status: "
+                                 u",{0}: {1}").format(resp.status,
+                                                      resp.read()))
 
     def send_event(self, provider_id, event_str):
         uri = TELEMETRY_URI.format(self.endpoint)
