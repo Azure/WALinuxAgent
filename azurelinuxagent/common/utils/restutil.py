@@ -108,10 +108,8 @@ def http_request(method, url, data, headers=None, max_retry=3,
         secure = False
 
     # If httplib module doesn't support https tunnelling. Fallback to http
-    if secure and \
-                    proxy_host is not None and \
-                    proxy_port is not None and \
-            not hasattr(httpclient.HTTPSConnection, "set_tunnel"):
+    if secure and proxy_host is not None and proxy_port is not None \
+            and not hasattr(httpclient.HTTPSConnection, "set_tunnel"):
         logger.warn("httplib does not support https tunnelling "
                     "(new in python 2.7)")
         secure = False
