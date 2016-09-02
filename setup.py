@@ -174,6 +174,7 @@ class install(_install):
         if self.register_service:
             osutil = get_osutil()
             osutil.register_agent_service()
+            osutil.stop_agent_service()
             osutil.start_agent_service()
 
 
