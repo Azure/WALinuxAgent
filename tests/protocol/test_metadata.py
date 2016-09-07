@@ -22,7 +22,7 @@ from azurelinuxagent.common.protocol.metadata import MetadataProtocol
 
 @patch("time.sleep")
 @patch("azurelinuxagent.common.protocol.metadata.restutil")
-class TestWireProtocolGetters(AgentTestCase):
+class TestMetadataProtocolGetters(AgentTestCase):
     def _test_getters(self, test_data, mock_restutil ,_):
         mock_restutil.http_get.side_effect = test_data.mock_http_get
 
