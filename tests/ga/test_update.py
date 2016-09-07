@@ -159,8 +159,31 @@ class UpdateTestCase(AgentTestCase):
                 fileutil.trim_ext(agent, "zip")))
         return
 
-    def prepare_agents(self, base_version=AGENT_VERSION, count=5, is_available=True):
-        base_v = FlexibleVersion(base_version)
+    def prepare_agent(self, version):
+        """
+        Create a download for the current agent version, copied from test data
+        """
+        self.copy_agents(get_agent_pkgs()[0])
+        self.expand_agents()
+
+        versions = self.agent_versions()
+        src_v = FlexibleVersion(str(versions[0]))
+
+        from_path = self.agent_dir(src_v)
+        dst_v = FlexibleVersion(str(version))
+        to_path = self.agent_dir(dst_v)
+
+        shutil.move(from_path + ".zip", to_path + ".zip")
+        shutil.move(from_path, to_path)
+        shutil.move(
+            os.path.join(to_path, self.agent_bin(src_v)),
+            os.path.join(to_path, self.agent_bin(dst_v)))
+
+        return
+
+    def prepare_agents(self,
+                       count=5,
+                       is_available=True):
 
         # Ensure the test data is copied over
         agent_count = self.agent_count()
@@ -172,10 +195,6 @@ class UpdateTestCase(AgentTestCase):
         # Determine the most recent agent version
         versions = self.agent_versions()
         src_v = FlexibleVersion(str(versions[0]))
-
-        # If the most recent agent is newer the minimum requested, use the agent version
-        if base_v < src_v:
-            base_v = src_v
 
         # Create agent packages and directories
         return self.replicate_agents(
@@ -194,15 +213,14 @@ class UpdateTestCase(AgentTestCase):
                 pass
         return
 
-    def replicate_agents(
-        self,
-        count=5,
-        src_v=AGENT_VERSION,
-        is_available=True,
-        increment=1):
+    def replicate_agents(self,
+                         count=5,
+                         src_v=AGENT_VERSION,
+                         is_available=True,
+                         increment=1):
         from_path = self.agent_dir(src_v)
         dst_v = FlexibleVersion(str(src_v))
-        for i in range(0,count):
+        for i in range(0, count):
             dst_v += increment
             to_path = self.agent_dir(dst_v)
             shutil.copyfile(from_path + ".zip", to_path + ".zip")
@@ -212,7 +230,6 @@ class UpdateTestCase(AgentTestCase):
                 os.path.join(to_path, self.agent_bin(dst_v)))
             if not is_available:
                 GuestAgent(to_path).mark_failure(is_fatal=True)
-        
         return dst_v
 
 
@@ -637,13 +654,14 @@ class TestUpdate(UpdateTestCase):
         self.event_patch.stop()
         return
 
-    def _test_ensure_latest_agent(
+    def _test_upgrade_available(
             self,
             base_version=FlexibleVersion(AGENT_VERSION),
             protocol=None,
-            versions=None):
+            versions=None,
+            count=5):
         
-        latest_version = self.prepare_agents()
+        latest_version = self.prepare_agents(count=count)
         if versions is None or len(versions) <= 0:
             versions = [latest_version]
 
@@ -653,11 +671,19 @@ class TestUpdate(UpdateTestCase):
         self.update_handler.protocol_util = protocol
         conf.get_autoupdate_gafamily = Mock(return_value=protocol.family)
 
-        return self.update_handler._ensure_latest_agent(base_version=base_version)
+        return self.update_handler._upgrade_available(base_version=base_version)
 
     def test_ensure_latest_agent_returns_true_on_first_use(self):
         self.assertEqual(None, self.update_handler.last_etag)
-        self.assertTrue(self._test_ensure_latest_agent())
+        self.assertTrue(self._test_upgrade_available())
+        return
+
+    def test_ensure_current_agent_excluded(self):
+        self.prepare_agent(AGENT_VERSION)
+        self.assertFalse(self._test_upgrade_available(
+                                versions=self.agent_versions(),
+                                count=1))
+        self.assertEqual(None, self.update_handler.get_latest_agent())
         return
 
     def test_ensure_latest_agent_includes_old_agents(self):
@@ -669,7 +695,7 @@ class TestUpdate(UpdateTestCase):
         self.replicate_agents(src_v=old_version, count=old_count, increment=-1)
         all_count = len(self.agent_versions())
 
-        self.assertTrue(self._test_ensure_latest_agent(versions=self.agent_versions()))
+        self.assertTrue(self._test_upgrade_available(versions=self.agent_versions()))
         self.assertEqual(all_count, len(self.update_handler.agents))
         return
 
@@ -679,7 +705,7 @@ class TestUpdate(UpdateTestCase):
         self.assertEqual(5, agent_count)
         
         agent_versions = self.agent_versions()[:3]
-        self.assertTrue(self._test_ensure_latest_agent(versions=agent_versions))
+        self.assertTrue(self._test_upgrade_available(versions=agent_versions))
         self.assertEqual(len(agent_versions), len(self.update_handler.agents))
         self.assertEqual(agent_versions, self.agent_versions())
         return
@@ -687,32 +713,32 @@ class TestUpdate(UpdateTestCase):
     def test_ensure_latest_agent_skips_if_too_frequent(self):
         conf.get_autoupdate_frequency = Mock(return_value=10000)
         self.update_handler.last_attempt_time = time.time()
-        self.assertFalse(self._test_ensure_latest_agent())
+        self.assertFalse(self._test_upgrade_available())
         return
 
     def test_ensure_latest_agent_skips_when_etag_matches(self):
         self.update_handler.last_etag = 42
-        self.assertFalse(self._test_ensure_latest_agent())
+        self.assertFalse(self._test_upgrade_available())
         return
 
     def test_ensure_latest_agent_skips_if_when_no_new_versions(self):
         self.prepare_agents()
         base_version = self.agent_versions()[0] + 1
-        self.assertFalse(self._test_ensure_latest_agent(base_version=base_version))
+        self.assertFalse(self._test_upgrade_available(base_version=base_version))
         return
 
     def test_ensure_latest_agent_skips_when_no_versions(self):
-        self.assertFalse(self._test_ensure_latest_agent(protocol=ProtocolMock()))
+        self.assertFalse(self._test_upgrade_available(protocol=ProtocolMock()))
         return
 
     def test_ensure_latest_agent_skips_when_updates_are_disabled(self):
         conf.get_autoupdate_enabled = Mock(return_value=False)
-        self.assertFalse(self._test_ensure_latest_agent())
+        self.assertFalse(self._test_upgrade_available())
         return
 
     def test_ensure_latest_agent_sorts(self):
         self.prepare_agents()
-        self._test_ensure_latest_agent()
+        self._test_upgrade_available()
 
         v = FlexibleVersion("100000")
         for a in self.update_handler.agents:
@@ -1157,7 +1183,7 @@ class TestUpdate(UpdateTestCase):
         return
 
     def test_run_stops_if_update_available(self):
-        self.update_handler._ensure_latest_agent = Mock(return_value=True)
+        self.update_handler._upgrade_available = Mock(return_value=True)
         self._test_run(invocations=0, calls=[], enable_updates=True)
         return
 
@@ -1172,7 +1198,7 @@ class TestUpdate(UpdateTestCase):
         return
 
     def test_run_leaves_sentinal_on_unsuccessful_exit(self):
-        self.update_handler._ensure_latest_agent = Mock(side_effect=Exception)
+        self.update_handler._upgrade_available = Mock(side_effect=Exception)
         self._test_run(invocations=0, calls=[], enable_updates=True)
         self.assertTrue(os.path.isfile(self.update_handler._sentinal_file_path()))
         return
