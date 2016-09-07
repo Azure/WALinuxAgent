@@ -91,6 +91,8 @@ class Agent(object):
         """
         print("Register {0} service".format(AGENT_NAME))
         self.osutil.register_agent_service()
+        print("Stop {0} service".format(AGENT_NAME))
+        self.osutil.stop_agent_service()
         print("Start {0} service".format(AGENT_NAME))
         self.osutil.start_agent_service()
 
