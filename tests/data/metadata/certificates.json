@@ -2,6 +2,6 @@
     "certificates":[{
         "name":"foo", 
         "thumbprint":"bar",
-        "certificateDataUri":"baz"
+        "certificateDataUri":"certificates_data"
     }]
 }
