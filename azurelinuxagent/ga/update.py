@@ -236,7 +236,7 @@ class UpdateHandler(object):
                     logger.info("Goal state agent {0} was orphaned -- exiting", CURRENT_AGENT)
                     break
 
-                if self._ensure_latest_agent():
+                if self._upgrade_available():
                     if len(self.agents) > 0:
                         logger.info(
                             u"Agent {0} discovered {1} as an update and will exit",
@@ -287,7 +287,7 @@ class UpdateHandler(object):
     def get_latest_agent(self):
         """
         If autoupdate is enabled, return the most current, downloaded,
-        non-blacklisted agent (if any).
+        non-blacklisted agent which is not the current version (if any).
         Otherwise, return None (implying to use the installed agent).
         """
 
@@ -295,7 +295,10 @@ class UpdateHandler(object):
             return None
         
         self._load_agents()
-        available_agents = [agent for agent in self.agents if agent.is_available]
+        available_agents = [agent for agent in self.agents
+                            if agent.is_available
+                            and agent.version > FlexibleVersion(AGENT_VERSION)]
+
         return available_agents[0] if len(available_agents) >= 1 else None
 
     def _emit_restart_event(self):
@@ -312,7 +315,7 @@ class UpdateHandler(object):
         self._set_sentinal() 
         return
 
-    def _ensure_latest_agent(self, base_version=CURRENT_VERSION):
+    def _upgrade_available(self, base_version=CURRENT_VERSION):
         # Ignore new agents if updating is disabled
         if not conf.get_autoupdate_enabled():
             return False
@@ -355,7 +358,8 @@ class UpdateHandler(object):
         try:
             pkg_list = protocol.get_vmagent_pkgs(manifests[0])
         except ProtocolError as e:
-            msg= u"Incarnation {0} failed to get {1} package list: {2}".format(
+            msg = u"Incarnation {0} failed to get {1} package list: " \
+                  u"{2}".format(
                 etag,
                 family,
                 ustr(e))
@@ -368,11 +372,13 @@ class UpdateHandler(object):
                 message=msg)
             return False
 
-        # Set the agents to those available for download at least as current as the existing agent
-        # and remove from disk any agent no longer reported to the VM.
+        # Set the agents to those available for download at least as current
+        # as the existing agent and remove from disk any agent no longer
+        # reported to the VM.
         # Note:
-        #  The code leaves on disk available, but blacklisted, agents so as to preserve the state.
-        #  Otherwise, those agents could be again downloaded and inappropriately retried.
+        #  The code leaves on disk available, but blacklisted, agents so as to
+        #  preserve the state. Otherwise, those agents could be again
+        #  downloaded and inappropriately retried.
         self._set_agents([GuestAgent(pkg=pkg) for pkg in pkg_list.versions])
         self._purge_agents()
         self._filter_blacklisted_agents()
