@@ -32,12 +32,14 @@ from azurelinuxagent.pa.provision.default import ProvisionHandler
 """
 On ubuntu image, provision could be disabled.
 """
+
+
 class UbuntuProvisionHandler(ProvisionHandler):
     def __init__(self):
         super(UbuntuProvisionHandler, self).__init__()
 
     def run(self):
-        #If provision is enabled, run default provision handler
+        # If provision is enabled, run default provision handler
         if conf.get_provision_enabled():
             super(UbuntuProvisionHandler, self).run()
             return
@@ -49,23 +51,22 @@ class UbuntuProvisionHandler(ProvisionHandler):
 
         logger.info("Waiting cloud-init to copy ovf-env.xml.")
         self.wait_for_ovfenv()
-
-        protocol = self.protocol_util.get_protocol()
+        self.protocol_util.get_protocol()
         self.report_not_ready("Provisioning", "Starting")
         logger.info("Sleep 15 seconds to prevent throttling")
-        time.sleep(15) #Sleep to prevent throttling
+        time.sleep(15)  # Sleep to prevent throttling
+
         try:
             logger.info("Wait for ssh host key to be generated.")
             thumbprint = self.wait_for_ssh_host_key()
             fileutil.write_file(provisioned, "")
             logger.info("Finished provisioning")
-           
         except ProvisionError as e:
             logger.error("Provision failed: {0}", e)
             self.report_not_ready("ProvisioningFailed", ustr(e))
             self.report_event(ustr(e))
             return
-            
+
         self.report_ready(thumbprint)
         self.report_event("Provision succeed", is_success=True)
 
