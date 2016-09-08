@@ -22,7 +22,7 @@ import azurelinuxagent.common.utils.textutil as textutil
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.exception import OSUtilError
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
-
+from azurelinuxagent.common.future import ustr
 
 class FreeBSDOSUtil(DefaultOSUtil):
     def __init__(self):
@@ -196,3 +196,50 @@ class FreeBSDOSUtil(DefaultOSUtil):
         logger.verbose("Interface info: ({0},{1},{2})", iface, inet, mac)
 
         return iface, inet, mac
+
+    def device_for_ide_port(self, port_id):
+        """
+        Return device name attached to ide port 'n'.
+        """
+        if port_id > 3:
+            return None
+        g0 = "00000000"
+        if port_id > 1:
+            g0 = "00000001"
+            port_id = port_id - 2
+        err, output = shellutil.run_get_output('sysctl dev.storvsc | grep pnpinfo | grep deviceid=')
+        if err:
+            return None
+        g1 = "000" + ustr(port_id)
+        g0g1 = "{0}-{1}".format(g0, g1)
+        """
+        search 'X' from 'dev.storvsc.X.%pnpinfo: classid=32412632-86cb-44a2-9b5c-50d1417354f5 deviceid=00000000-0001-8899-0000-000000000000'
+        """
+        cmd_search_ide = "sysctl dev.storvsc | grep pnpinfo | grep deviceid={0}".format(g0g1)
+        err, output = shellutil.run_get_output(cmd_search_ide)
+        if err:
+            return None
+        cmd_extract_id = cmd_search_ide + "|awk -F . '{print $3}'"
+        err, output = shellutil.run_get_output(cmd_extract_id)
+        """
+        try to search 'blkvscX' and 'storvscX' to find device name
+        """
+        output = output.rstrip()
+        cmd_search_blkvsc = "camcontrol devlist -b | grep blkvsc{0} | awk '{{print $1}}'".format(output)
+        err, output = shellutil.run_get_output(cmd_search_blkvsc)
+        if err == 0:
+            output = output.rstrip()
+            cmd_search_dev="camcontrol devlist | grep {0} | awk -F \( '{{print $2}}'|awk -F , '{{print $1}}'".format(output)
+            err, output = shellutil.run_get_output(cmd_search_dev)
+            if err == 0:
+                return output.rstrip()
+
+        cmd_search_storvsc = "camcontrol devlist -b | grep storvsc{0} | awk '{{print $1}}'".format(output)
+        err, output = shellutil.run_get_output(cmd_search_storvsc)
+        if err == 0:
+            output = output.rstrip()
+            cmd_search_dev="camcontrol devlist | grep {0} | awk -F \( '{{print $2}}'|awk -F , '{{print $1}}'".format(output)
+            err, output = shellutil.run_get_output(cmd_search_dev)
+            if err == 0:
+                return output.rstrip()
+        return None

@@ -57,19 +57,24 @@ class FreeBSDResourceDiskHandler(ResourceDiskHandler):
             raise ResourceDiskError("Unable to detect resource disk device:{0}".format(output))
         disks = self.parse_gpart_list(output)
 
-        err, output = shellutil.run_get_output('camcontrol periphlist 2:1:0')
-        if err:
-            raise ResourceDiskError("Unable to detect resource disk device:{0}".format(output))
+        device = self.osutil.device_for_ide_port(1)
+        if device is None:
+        # fallback logic to find device
+            err, output = shellutil.run_get_output('camcontrol periphlist 2:1:0')
+            if err:
+                # try again on "3:1:0"
+                err, output = shellutil.run_get_output('camcontrol periphlist 3:1:0')
+                if err:
+                    raise ResourceDiskError("Unable to detect resource disk device:{0}".format(output))
 
         # 'da1:  generation: 4 index: 1 status: MORE\npass2:  generation: 4 index: 2 status: LAST\n'
-        device = None
-        for line in output.split('\n'):
-            index = line.find(':')
-            if index > 0:
-                geom_name = line[:index]
-                if geom_name in disks:
-                    device = geom_name
-                    break
+            for line in output.split('\n'):
+                index = line.find(':')
+                if index > 0:
+                    geom_name = line[:index]
+                    if geom_name in disks:
+                        device = geom_name
+                        break
 
         if not device:
             raise ResourceDiskError("Unable to detect resource disk device.")
