@@ -96,6 +96,9 @@ class VMInfo(DataContract):
         self.roleInstanceName = roleInstanceName
         self.tenantName = tenantName
 
+class CertificateData(DataContract):
+    def __init__(self, certificateData=None):
+        self.certificateData = certificateData
 
 class Cert(DataContract):
     def __init__(self, name=None, thumbprint=None, certificateDataUri=None):
