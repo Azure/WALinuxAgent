@@ -45,6 +45,8 @@ def get_osutil(distro_name=DISTRO_NAME, distro_version=DISTRO_VERSION,
             return UbuntuOSUtil()
     if distro_name == "alpine":
         return AlpineOSUtil()
+    if distro_name == "kali":
+        return DebianOSUtil()    
     if distro_name == "coreos":
         return CoreOSUtil()
     if distro_name == "suse":
@@ -66,7 +68,7 @@ def get_osutil(distro_name=DISTRO_NAME, distro_version=DISTRO_VERSION,
     elif distro_name == "freebsd":
         return FreeBSDOSUtil()
     else:
-        logger.warn("Unable to load distro implemetation for {0}.", distro_name)
-        logger.warn("Use default distro implemetation instead.")
+        logger.warn("Unable to load distro implementation for {0}.", distro_name)
+        logger.warn("Use default distro implementation instead.")
         return DefaultOSUtil()
 
