@@ -271,7 +271,7 @@ class Protocol(DataContract):
     def get_vmagent_manifests(self):
         raise NotImplementedError()
 
-    def get_vmagent_pkgs(self):
+    def get_vmagent_pkgs(self, manifest):
         raise NotImplementedError()
 
     def get_ext_handlers(self):
