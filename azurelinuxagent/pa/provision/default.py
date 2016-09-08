@@ -41,42 +41,42 @@ class ProvisionHandler(object):
         self.protocol_util = get_protocol_util()
 
     def run(self):
-        # If provision is not enabled, return
-        if not conf.get_provision_enabled():
-            logger.info("Provisioning is disabled. Skip.")
-            return
-
+        # if provisioning is already done, return
         provisioned = os.path.join(conf.get_lib_dir(), "provisioned")
         if os.path.isfile(provisioned):
+            logger.info("Provisioning already completed, skipping.")
             return
 
-        logger.info("Run provision handler.")
-        logger.info("Copy ovf-env.xml.")
-        try:
-            ovfenv = self.protocol_util.copy_ovf_env()
-        except ProtocolError as e:
-            self.report_event("Failed to copy ovf-env.xml: {0}".format(e))
-            return
-
-        self.protocol_util.get_protocol_by_file()
-
-        self.report_not_ready("Provisioning", "Starting")
-
-        try:
-            logger.info("Start provisioning")
-            self.provision(ovfenv)
-            fileutil.write_file(provisioned, "")
-            thumbprint = self.reg_ssh_host_key()
-            self.osutil.restart_ssh_service()
-            logger.info("Finished provisioning")
-        except ProvisionError as e:
-            logger.error("Provision failed: {0}", e)
-            self.report_not_ready("ProvisioningFailed", ustr(e))
-            self.report_event(ustr(e))
-            return
-
+        thumbprint = None
+        # If provision is not enabled, report ready and then return
+        if not conf.get_provision_enabled():
+            logger.info("Provisioning is disabled, skipping.")
+        else:
+            logger.info("Running provisioning handler")
+            try:
+                logger.info("Copying ovf-env.xml")
+                ovf_env = self.protocol_util.copy_ovf_env()
+                self.protocol_util.get_protocol_by_file()
+                self.report_not_ready("Provisioning", "Starting")
+                logger.info("Starting provisioning")
+                self.provision(ovf_env)
+                thumbprint = self.reg_ssh_host_key()
+                self.osutil.restart_ssh_service()
+                self.report_event("Provision succeed", is_success=True)
+            except ProtocolError as e:
+                logger.error("[ProtocolError] Provisioning failed: {0}", e)
+                self.report_not_ready("ProvisioningFailed", ustr(e))
+                self.report_event("Failed to copy ovf-env.xml: {0}".format(e))
+                return
+            except ProvisionError as e:
+                logger.error("[ProvisionError] Provisioning failed: {0}", e)
+                self.report_not_ready("ProvisioningFailed", ustr(e))
+                self.report_event(ustr(e))
+                return
+        # write out provisioned file and report Ready
+        fileutil.write_file(provisioned, "")
         self.report_ready(thumbprint)
-        self.report_event("Provision succeed", is_success=True)
+        logger.info("Provisioning complete")
 
     def reg_ssh_host_key(self):
         keypair_type = conf.get_ssh_host_keypair_type()
@@ -184,6 +184,7 @@ class ProvisionHandler(object):
             protocol = self.protocol_util.get_protocol()
             protocol.report_provision_status(status)
         except ProtocolError as e:
+            logger.error("Reporting NotReady failed: {0}", e)
             self.report_event(ustr(e))
 
     def report_ready(self, thumbprint=None):
@@ -193,4 +194,5 @@ class ProvisionHandler(object):
             protocol = self.protocol_util.get_protocol()
             protocol.report_provision_status(status)
         except ProtocolError as e:
+            logger.error("Reporting Ready failed: {0}", e)
             self.report_event(ustr(e))
