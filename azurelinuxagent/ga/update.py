@@ -297,7 +297,7 @@ class UpdateHandler(object):
         self._load_agents()
         available_agents = [agent for agent in self.agents
                             if agent.is_available
-                            and agent.version != FlexibleVersion(AGENT_VERSION)]
+                            and agent.version > FlexibleVersion(AGENT_VERSION)]
 
         return available_agents[0] if len(available_agents) >= 1 else None
 
