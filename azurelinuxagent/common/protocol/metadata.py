@@ -26,8 +26,6 @@ import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.restutil as restutil
 import azurelinuxagent.common.utils.textutil as textutil
-from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, findtext, \
-    getattrib, gettext, remove_bom, get_bytes_from_pem
 import azurelinuxagent.common.utils.fileutil as fileutil
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.protocol.restapi import *
@@ -43,7 +41,7 @@ P7M_FILE_NAME = "Certificates.p7m"
 P7B_FILE_NAME = "Certificates.p7b"
 PEM_FILE_NAME = "Certificates.pem"
 
-#TODO remote workarround for azure stack 
+#TODO remote workarround for azure stack
 MAX_PING = 30
 RETRY_PING_INTERVAL = 10
 
@@ -71,7 +69,7 @@ class MetadataProtocol(Protocol):
                                                     self.apiversion, "")
         self.vm_status_uri = BASE_URI.format(self.endpoint, "status/vmagent",
                                              self.apiversion, "")
-        self.ext_status_uri = BASE_URI.format(self.endpoint, 
+        self.ext_status_uri = BASE_URI.format(self.endpoint,
                                               "status/extensions/{0}",
                                               self.apiversion, "")
         self.event_uri = BASE_URI.format(self.endpoint, "status/telemetry",
@@ -95,7 +93,7 @@ class MetadataProtocol(Protocol):
         return data, etag
 
     def _put_data(self, url, data, headers=None):
-        headers = _add_content_type(headers) 
+        headers = _add_content_type(headers)
         try:
             resp = restutil.http_put(url, json.dumps(data), headers=headers)
         except HttpError as e:
@@ -104,16 +102,16 @@ class MetadataProtocol(Protocol):
             raise ProtocolError("{0} - PUT: {1}".format(resp.status, url))
 
     def _post_data(self, url, data, headers=None):
-        headers = _add_content_type(headers) 
+        headers = _add_content_type(headers)
         try:
             resp = restutil.http_post(url, json.dumps(data), headers=headers)
         except HttpError as e:
             raise ProtocolError(ustr(e))
         if resp.status != httpclient.CREATED:
             raise ProtocolError("{0} - POST: {1}".format(resp.status, url))
-    
+
     def _get_trans_cert(self):
-        trans_crt_file = os.path.join(conf.get_lib_dir(), 
+        trans_crt_file = os.path.join(conf.get_lib_dir(),
                                       TRANSPORT_CERT_FILE_NAME)
         if not os.path.isfile(trans_crt_file):
             raise ProtocolError("{0} is missing.".format(trans_crt_file))
@@ -122,18 +120,18 @@ class MetadataProtocol(Protocol):
 
     def detect(self):
         self.get_vminfo()
-        trans_prv_file = os.path.join(conf.get_lib_dir(), 
+        trans_prv_file = os.path.join(conf.get_lib_dir(),
                                       TRANSPORT_PRV_FILE_NAME)
-        trans_cert_file = os.path.join(conf.get_lib_dir(), 
+        trans_cert_file = os.path.join(conf.get_lib_dir(),
                                        TRANSPORT_CERT_FILE_NAME)
         cryptutil = CryptUtil(conf.get_openssl_cmd())
         cryptutil.gen_transport_cert(trans_prv_file, trans_cert_file)
 
         #"Install" the cert and private key to /var/lib/waagent
         thumbprint = cryptutil.get_thumbprint_from_crt(trans_cert_file)
-        prv_file = os.path.join(conf.get_lib_dir(), 
+        prv_file = os.path.join(conf.get_lib_dir(),
                                 "{0}.prv".format(thumbprint))
-        crt_file = os.path.join(conf.get_lib_dir(), 
+        crt_file = os.path.join(conf.get_lib_dir(),
                                 "{0}.crt".format(thumbprint))
         shutil.copyfile(trans_prv_file, prv_file)
         shutil.copyfile(trans_cert_file, crt_file)
