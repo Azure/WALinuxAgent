@@ -175,6 +175,7 @@ class ExtHandlerPackage(DataContract):
         self.uris = DataContractList(ExtHandlerPackageUri)
         # TODO update the naming to align with metadata protocol
         self.isinternal = False
+        self.disallow_major_upgrade = False
 
 
 class ExtHandlerPackageList(DataContract):
