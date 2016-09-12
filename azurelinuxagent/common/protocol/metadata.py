@@ -85,9 +85,8 @@ class MetadataProtocol(Protocol):
 
         data = resp.read()
         etag = resp.getheader('ETag')
-        if data is None:
-            return None
-        data = json.loads(ustr(data, encoding="utf-8"))
+        if data is not None:
+            data = json.loads(ustr(data, encoding="utf-8"))
         return data, etag
 
     def _put_data(self, url, data, headers=None):
@@ -206,17 +205,26 @@ class MetadataProtocol(Protocol):
         return ext_list, etag
 
     def get_ext_handler_pkgs(self, ext_handler):
-        ext_handler_pkgs = ExtHandlerPackageList()
-        data = None
+        logger.info("Get extension handler packages")
+        pkg_list = ExtHandlerPackageList()
+
+        manifest = None
         for version_uri in ext_handler.versionUris:
             try:
-                data, etag = self._get_data(version_uri.uri)
+                manifest, etag = self._get_data(version_uri.uri)
+                logger.info("Successfully downloaded manifest")
                 break
             except ProtocolError as e:
-                logger.warn("Failed to get version uris: {0}", e)
-                logger.info("Retry getting version uris")
-        set_properties("extensionPackages", ext_handler_pkgs, data)
-        return ext_handler_pkgs
+                logger.warn("Failed to fetch manifest: {0}", e)
+
+        if manifest is None:
+            raise ValueError("Extension manifest is empty")
+
+        # todo: parse manifest
+
+        set_properties("extensionPackages", pkg_list, manifest)
+
+        return pkg_list
 
     def report_provision_status(self, provision_status):
         validate_param('provisionStatus', provision_status, ProvisionStatus)
