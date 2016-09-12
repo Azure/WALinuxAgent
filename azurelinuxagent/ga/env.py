@@ -45,7 +45,8 @@ class EnvHandler(object):
         self.stopped = True
         self.hostname = None
         self.dhcpid = None
-        self.server_thread=None
+        self.server_thread = None
+        self.dhcp_warning_enabled = True
 
     def run(self):
         if not self.stopped:
@@ -87,8 +88,11 @@ class EnvHandler(object):
 
     def handle_dhclient_restart(self):
         if self.dhcpid is None:
-            logger.warn("Dhcp client is not running. ")
+            if self.dhcp_warning_enabled:
+                logger.warn("Dhcp client is not running. ")
             self.dhcpid = self.osutil.get_dhcp_pid()
+            # disable subsequent error logging
+            self.dhcp_warning_enabled = self.dhcpid is not None
             return
 
         #The dhcp process hasn't changed since last check

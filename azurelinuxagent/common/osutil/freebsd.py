@@ -118,7 +118,7 @@ class FreeBSDOSUtil(DefaultOSUtil):
         shellutil.run("route delete 255.255.255.255 -iface {0}".format(ifname), chk_err=False)
 
     def get_dhcp_pid(self):
-        ret = shellutil.run_get_output("pgrep -n dhclient")
+        ret = shellutil.run_get_output("pgrep -n dhclient", chk_err=False)
         return ret[1] if ret[0] == 0 else None
 
     def eject_dvd(self, chk_err=True):

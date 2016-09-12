@@ -45,9 +45,9 @@ class Ubuntu12OSUtil(Ubuntu14OSUtil):
     def __init__(self):
         super(Ubuntu12OSUtil, self).__init__()
 
-    #Override
+    # Override
     def get_dhcp_pid(self):
-        ret= shellutil.run_get_output("pidof dhclient3")
+        ret = shellutil.run_get_output("pidof dhclient3", chk_err=False)
         return ret[1] if ret[0] == 0 else None
 
 class UbuntuOSUtil(Ubuntu14OSUtil):

@@ -649,7 +649,7 @@ class DefaultOSUtil(object):
         return shellutil.run(cmd, chk_err=False)
 
     def get_dhcp_pid(self):
-        ret= shellutil.run_get_output("pidof dhclient")
+        ret = shellutil.run_get_output("pidof dhclient", chk_err=False)
         return ret[1] if ret[0] == 0 else None
 
     def set_hostname(self, hostname):
