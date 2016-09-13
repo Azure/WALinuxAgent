@@ -66,7 +66,7 @@ AGENT_PATTERN = "{0}-(.*)".format(AGENT_NAME)
 AGENT_NAME_PATTERN = re.compile(AGENT_PATTERN)
 AGENT_DIR_PATTERN = re.compile(".*/{0}".format(AGENT_PATTERN))
 
-EXT_HANDLER_PATTERN = ".*/WALinuxAgent-(\w.\w.\w[.\w]*)-.*-run-exthandlers"
+EXT_HANDLER_PATTERN = b".*/WALinuxAgent-(\w.\w.\w[.\w]*)-.*-run-exthandlers"
 EXT_HANDLER_REGEX = re.compile(EXT_HANDLER_PATTERN)
 
 # Set the CURRENT_AGENT and CURRENT_VERSION to match the agent directory name
