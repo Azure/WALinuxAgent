@@ -175,6 +175,7 @@ class ExtHandlerPackage(DataContract):
         self.uris = DataContractList(ExtHandlerPackageUri)
         # TODO update the naming to align with metadata protocol
         self.isinternal = False
+        self.disallow_major_upgrade = False
 
 
 class ExtHandlerPackageList(DataContract):
@@ -271,7 +272,7 @@ class Protocol(DataContract):
     def get_vmagent_manifests(self):
         raise NotImplementedError()
 
-    def get_vmagent_pkgs(self):
+    def get_vmagent_pkgs(self, manifest):
         raise NotImplementedError()
 
     def get_ext_handlers(self):

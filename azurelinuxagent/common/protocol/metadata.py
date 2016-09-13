@@ -17,22 +17,19 @@
 # Requires Python 2.4+ and Openssl 1.0+
 
 import json
-import shutil
 import os
-import time
-from azurelinuxagent.common.exception import ProtocolError, HttpError
-from azurelinuxagent.common.future import httpclient, ustr
+import shutil
+import re
 import azurelinuxagent.common.conf as conf
-import azurelinuxagent.common.logger as logger
-import azurelinuxagent.common.utils.restutil as restutil
-import azurelinuxagent.common.utils.textutil as textutil
 import azurelinuxagent.common.utils.fileutil as fileutil
-from azurelinuxagent.common.utils.cryptutil import CryptUtil
-from azurelinuxagent.common.protocol.restapi import *
 import azurelinuxagent.common.utils.shellutil as shellutil
+import azurelinuxagent.common.utils.textutil as textutil
+from azurelinuxagent.common.future import httpclient
+from azurelinuxagent.common.protocol.restapi import *
+from azurelinuxagent.common.utils.cryptutil import CryptUtil
 
-METADATA_ENDPOINT='169.254.169.254'
-APIVERSION='2015-05-01-preview'
+METADATA_ENDPOINT = '169.254.169.254'
+APIVERSION = '2015-05-01-preview'
 BASE_URI = "http://{0}/Microsoft.Compute/{1}?api-version={2}{3}"
 
 TRANSPORT_PRV_FILE_NAME = "V2TransportPrivate.pem"
@@ -41,9 +38,10 @@ P7M_FILE_NAME = "Certificates.p7m"
 P7B_FILE_NAME = "Certificates.p7b"
 PEM_FILE_NAME = "Certificates.pem"
 
-#TODO remote workarround for azure stack
+# TODO remote workaround for azure stack
 MAX_PING = 30
 RETRY_PING_INTERVAL = 10
+
 
 def _add_content_type(headers):
     if headers is None:
@@ -51,8 +49,8 @@ def _add_content_type(headers):
     headers["content-type"] = "application/json"
     return headers
 
-class MetadataProtocol(Protocol):
 
+class MetadataProtocol(Protocol):
     def __init__(self, apiversion=APIVERSION, endpoint=METADATA_ENDPOINT):
         self.apiversion = apiversion
         self.endpoint = endpoint
@@ -87,9 +85,8 @@ class MetadataProtocol(Protocol):
 
         data = resp.read()
         etag = resp.getheader('ETag')
-        if data is None:
-            return None
-        data = json.loads(ustr(data, encoding="utf-8"))
+        if data is not None:
+            data = json.loads(ustr(data, encoding="utf-8"))
         return data, etag
 
     def _put_data(self, url, data, headers=None):
@@ -127,7 +124,7 @@ class MetadataProtocol(Protocol):
         cryptutil = CryptUtil(conf.get_openssl_cmd())
         cryptutil.gen_transport_cert(trans_prv_file, trans_cert_file)
 
-        #"Install" the cert and private key to /var/lib/waagent
+        # "Install" the cert and private key to /var/lib/waagent
         thumbprint = cryptutil.get_thumbprint_from_crt(trans_cert_file)
         prv_file = os.path.join(conf.get_lib_dir(),
                                 "{0}.prv".format(thumbprint))
@@ -172,12 +169,14 @@ class MetadataProtocol(Protocol):
         manifests = VMAgentManifestList()
         self.update_goal_state()
         data, etag = self._get_data(self.vmagent_uri)
-        if last_etag == None or last_etag < etag:
-            set_properties("vmAgentManifests", manifests.vmAgentManifests, data)
+        if last_etag is None or last_etag < etag:
+            set_properties("vmAgentManifests",
+                           manifests.vmAgentManifests,
+                           data)
         return manifests, etag
 
     def get_vmagent_pkgs(self, vmagent_manifest):
-        #Agent package is the same with extension handler
+        # Agent package is the same with extension handler
         vmagent_pkgs = ExtHandlerPackageList()
         data = None
         for manifest_uri in vmagent_manifest.versionsManifestUris:
@@ -201,22 +200,29 @@ class MetadataProtocol(Protocol):
         }
         ext_list = ExtHandlerList()
         data, etag = self._get_data(self.ext_uri, headers=headers)
-        if last_etag == None or last_etag < etag:
+        if last_etag is None or last_etag < etag:
             set_properties("extensionHandlers", ext_list.extHandlers, data)
         return ext_list, etag
 
     def get_ext_handler_pkgs(self, ext_handler):
-        ext_handler_pkgs = ExtHandlerPackageList()
-        data = None
+        logger.info("Get extension handler packages")
+        pkg_list = ExtHandlerPackageList()
+
+        manifest = None
         for version_uri in ext_handler.versionUris:
             try:
-                data, etag = self._get_data(version_uri.uri)
+                manifest, etag = self._get_data(version_uri.uri)
+                logger.info("Successfully downloaded manifest")
                 break
             except ProtocolError as e:
-                logger.warn("Failed to get version uris: {0}", e)
-                logger.info("Retry getting version uris")
-        set_properties("extensionPackages", ext_handler_pkgs, data)
-        return ext_handler_pkgs
+                logger.warn("Failed to fetch manifest: {0}", e)
+
+        if manifest is None:
+            raise ValueError("Extension manifest is empty")
+
+        set_properties("extensionPackages", pkg_list, manifest)
+
+        return pkg_list
 
     def report_provision_status(self, provision_status):
         validate_param('provisionStatus', provision_status, ProvisionStatus)
@@ -226,7 +232,8 @@ class MetadataProtocol(Protocol):
     def report_vm_status(self, vm_status):
         validate_param('vmStatus', vm_status, VMStatus)
         data = get_properties(vm_status)
-        #TODO code field is not implemented for metadata protocol yet. Remove it
+        # TODO code field is not implemented for metadata protocol yet.
+        # Remove it
         handler_statuses = data['vmAgent']['extensionHandlers']
         for handler_status in handler_statuses:
             try:
@@ -243,27 +250,26 @@ class MetadataProtocol(Protocol):
         self._put_data(uri, data)
 
     def report_event(self, events):
-        #TODO disable telemetry for azure stack test
-        #validate_param('events', events, TelemetryEventList)
-        #data = get_properties(events)
-        #self._post_data(self.event_uri, data)
+        # TODO disable telemetry for azure stack test
+        # validate_param('events', events, TelemetryEventList)
+        # data = get_properties(events)
+        # self._post_data(self.event_uri, data)
         pass
 
     def update_certs(self):
-        logger.info("Inside MetadataClient.update_certs")
+        logger.verbose("Inside MetadataClient.update_certs")
         certificates = self.get_certs()
         return certificates.cert_list
 
     def update_goal_state(self, forced=False, max_retry=3):
-        logger.info("Inside update_goal_state")
+        logger.verbose("Inside update_goal_state")
         # Start updating goalstate, retry on 410
         for retry in range(0, max_retry):
             try:
                 self.update_certs()
                 return
-            except :
-                logger.info("Incarnation is out of date. Update goalstate.")
-
+            except:
+                logger.verbose("Incarnation is out of date. Update goalstate.")
         raise ProtocolError("Exceeded max retry updating goal state")
 
 
@@ -287,11 +293,13 @@ class Certificates(object):
             return
 
         cryptutil = CryptUtil(conf.get_openssl_cmd())
-
         p7b_file = os.path.join(conf.get_lib_dir(), P7B_FILE_NAME)
+
         # Wrapping the certificate lines.
-        shellutil.run_get_output("echo " + data + " | base64 -d > " + p7b_file)
-        ret, data = shellutil.run_get_output("openssl pkcs7 -text -in " + p7b_file + " -inform der | grep -v '^-----' ")
+        b64_cmd = "echo {0} | base64 -d > {1}"
+        shellutil.run(b64_cmd.format(data, p7b_file))
+        ssl_cmd = "openssl pkcs7 -text -in {0} -inform der | grep -v '^-----' "
+        ret, data = shellutil.run_get_output(ssl_cmd.format(p7b_file))
 
         p7m_file = os.path.join(conf.get_lib_dir(), P7M_FILE_NAME)
         p7m = ("MIME-Version:1.0\n"
