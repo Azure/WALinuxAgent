@@ -257,12 +257,10 @@ class MetadataProtocol(Protocol):
         pass
 
     def update_certs(self):
-        logger.verbose("Inside MetadataClient.update_certs")
         certificates = self.get_certs()
         return certificates.cert_list
 
     def update_goal_state(self, forced=False, max_retry=3):
-        logger.verbose("Inside update_goal_state")
         # Start updating goalstate, retry on 410
         for retry in range(0, max_retry):
             try:
