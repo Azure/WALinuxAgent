@@ -31,7 +31,7 @@ import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common.version import AGENT_NAME, AGENT_LONG_VERSION, \
                                      DISTRO_NAME, DISTRO_VERSION, \
                                      PY_VERSION_MAJOR, PY_VERSION_MINOR, \
-                                     PY_VERSION_MICRO
+                                     PY_VERSION_MICRO, GOAL_STATE_AGENT_VERSION
 from azurelinuxagent.common.osutil import get_osutil
 
 class Agent(object):
@@ -173,10 +173,14 @@ def version():
     """
     Show agent version
     """
-    print(("{0} running on {1} {2}".format(AGENT_LONG_VERSION, DISTRO_NAME,
-                                          DISTRO_VERSION)))
-    print("Python: {0}.{1}.{2}".format(PY_VERSION_MAJOR, PY_VERSION_MINOR,
+    print(("{0} running on {1} {2}".format(AGENT_LONG_VERSION,
+                                           DISTRO_NAME,
+                                           DISTRO_VERSION)))
+    print("Python: {0}.{1}.{2}".format(PY_VERSION_MAJOR,
+                                       PY_VERSION_MINOR,
                                        PY_VERSION_MICRO))
+    print("Goal state agent: {0}".format(GOAL_STATE_AGENT_VERSION))
+
 def usage():
     """
     Show agent usage
