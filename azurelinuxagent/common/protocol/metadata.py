@@ -220,8 +220,6 @@ class MetadataProtocol(Protocol):
         if manifest is None:
             raise ValueError("Extension manifest is empty")
 
-        # todo: parse manifest
-
         set_properties("extensionPackages", pkg_list, manifest)
 
         return pkg_list
@@ -259,20 +257,19 @@ class MetadataProtocol(Protocol):
         pass
 
     def update_certs(self):
-        logger.info("Inside MetadataClient.update_certs")
+        logger.verbose("Inside MetadataClient.update_certs")
         certificates = self.get_certs()
         return certificates.cert_list
 
     def update_goal_state(self, forced=False, max_retry=3):
-        logger.info("Inside update_goal_state")
+        logger.verbose("Inside update_goal_state")
         # Start updating goalstate, retry on 410
         for retry in range(0, max_retry):
             try:
                 self.update_certs()
                 return
             except:
-                logger.info("Incarnation is out of date. Update goalstate.")
-
+                logger.verbose("Incarnation is out of date. Update goalstate.")
         raise ProtocolError("Exceeded max retry updating goal state")
 
 
