@@ -247,16 +247,6 @@ class DefaultOSUtil(object):
         else:
             return False
 
-    def set_selinux_enforce(self, state):
-        """
-        Calls shell command 'setenforce' with 'state'
-        and returns resulting exit code.
-        """
-        if self.is_selinux_system():
-            if state: s = '1'
-            else: s='0'
-            return shellutil.run("setenforce "+s)
-
     def set_selinux_context(self, path, con):
         """
         Calls shell 'chcon' with 'path' and 'con' context.
