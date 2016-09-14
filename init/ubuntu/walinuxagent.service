@@ -7,8 +7,8 @@
 [Unit]
 Description=Azure Linux Agent
 
-After=network-online.target cloud-final.service
-Wants=network-online.target sshd.service sshd-keygen.service cloud-final.service
+After=network-online.target cloud-init.service
+Wants=network-online.target sshd.service sshd-keygen.service
 
 ConditionFileIsExecutable=/usr/sbin/waagent
 ConditionPathExists=/etc/waagent.conf
