@@ -51,7 +51,7 @@ def get_distro():
 
 AGENT_NAME = "WALinuxAgent"
 AGENT_LONG_NAME = "Azure Linux Agent"
-AGENT_VERSION = '2.1.6.1'
+AGENT_VERSION = '2.1.6.2'
 AGENT_LONG_VERSION = "{0}-{1}".format(AGENT_NAME, AGENT_VERSION)
 AGENT_DESCRIPTION = """\
 The Azure Linux Agent supports the provisioning and running of Linux
@@ -66,6 +66,8 @@ AGENT_PATTERN = "{0}-(.*)".format(AGENT_NAME)
 AGENT_NAME_PATTERN = re.compile(AGENT_PATTERN)
 AGENT_DIR_PATTERN = re.compile(".*/{0}".format(AGENT_PATTERN))
 
+EXT_HANDLER_PATTERN = b".*/WALinuxAgent-(\w.\w.\w[.\w]*)-.*-run-exthandlers"
+EXT_HANDLER_REGEX = re.compile(EXT_HANDLER_PATTERN)
 
 # Set the CURRENT_AGENT and CURRENT_VERSION to match the agent directory name
 # - This ensures the agent will "see itself" using the same name and version
@@ -83,6 +85,23 @@ def set_current_agent():
         version = AGENT_NAME_PATTERN.match(agent).group(1)
     return agent, FlexibleVersion(version)
 CURRENT_AGENT, CURRENT_VERSION = set_current_agent()
+
+def set_goal_state_agent():
+    agent = None
+    pids = [pid for pid in os.listdir('/proc') if pid.isdigit()]
+    for pid in pids:
+        try:
+            pname = open(os.path.join('/proc', pid, 'cmdline'), 'rb').read()
+            match = EXT_HANDLER_REGEX.match(pname)
+            if match:
+                agent = match.group(1)
+                break
+        except IOError:
+            continue
+    if agent is None:
+        agent = CURRENT_VERSION
+    return agent
+GOAL_STATE_AGENT_VERSION = set_goal_state_agent()
 
 def is_current_agent_installed():
     return CURRENT_AGENT == AGENT_LONG_VERSION
