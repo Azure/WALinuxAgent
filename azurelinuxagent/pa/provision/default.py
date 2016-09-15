@@ -134,16 +134,8 @@ class ProvisionHandler(object):
         logger.info("Configure sshd")
         self.osutil.conf_sshd(ovfenv.disable_ssh_password_auth)
 
-        # Disable selinux temporary
-        sel = self.osutil.is_selinux_enforcing()
-        if sel:
-            self.osutil.set_selinux_enforce(0)
-
         self.deploy_ssh_pubkeys(ovfenv)
         self.deploy_ssh_keypairs(ovfenv)
-
-        if sel:
-            self.osutil.set_selinux_enforce(1)
 
     def save_customdata(self, ovfenv):
         customdata = ovfenv.customdata
