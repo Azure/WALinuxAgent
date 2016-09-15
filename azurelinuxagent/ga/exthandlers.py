@@ -174,16 +174,11 @@ class ExtHandlersHandler(object):
             add_event(AGENT_NAME, version=CURRENT_VERSION, is_success=False, message=msg)
             return
 
-        if self.last_etag is not None and self.last_etag == etag:
-            msg = u"Incarnation {0} has no extension updates".format(etag)
-            logger.verbose(msg)
-            self.log_report = False
-        else:
-            msg = u"Handle extensions updates for incarnation {0}".format(etag)
-            logger.info(msg)
-            self.log_report = True #Log status report success on new config
-            self.handle_ext_handlers()
-            self.last_etag = etag
+        msg = u"Handle extensions updates for incarnation {0}".format(etag)
+        logger.info(msg)
+        self.log_report = True #Log status report success on new config
+        self.handle_ext_handlers(etag)
+        self.last_etag = etag
 
         self.report_ext_handlers_status()
 
@@ -191,7 +186,7 @@ class ExtHandlersHandler(object):
         self.report_ext_handlers_status()
         return
    
-    def handle_ext_handlers(self):
+    def handle_ext_handlers(self, etag=None):
         if self.ext_handlers.extHandlers is None or \
                 len(self.ext_handlers.extHandlers) == 0:
             logger.info("No ext handler config found")
@@ -199,10 +194,16 @@ class ExtHandlersHandler(object):
 
         for ext_handler in self.ext_handlers.extHandlers:
             #TODO handle install in sequence, enable in parallel
-            self.handle_ext_handler(ext_handler)
+            self.handle_ext_handler(ext_handler, etag)
     
-    def handle_ext_handler(self, ext_handler):
+    def handle_ext_handler(self, ext_handler, etag):
         ext_handler_i = ExtHandlerInstance(ext_handler, self.protocol)
+
+        ext_handler_i.decide_version()
+        if not ext_handler_i.is_upgrade and self.last_etag == etag:
+            ext_handler_i.logger.info("No upgrade detected for etag {0}", etag)
+            return
+
         try:
             state = ext_handler.properties.state
             ext_handler_i.logger.info("Expected handler state: {0}", state)
@@ -221,12 +222,10 @@ class ExtHandlersHandler(object):
     
     def handle_enable(self, ext_handler_i):
 
-        ext_handler_i.decide_version() 
-
         old_ext_handler_i = ext_handler_i.get_installed_ext_handler()
         if old_ext_handler_i is not None and \
            old_ext_handler_i.version_gt(ext_handler_i):
-            raise ExtensionError(u"Downgrade not allowed")  
+            raise ExtensionError(u"Downgrade not allowed")
 
         handler_state = ext_handler_i.get_handler_state()
         ext_handler_i.logger.info("Current handler state is: {0}", handler_state)
@@ -326,6 +325,7 @@ class ExtHandlerInstance(object):
         self.protocol = protocol
         self.operation = None
         self.pkg = None
+        self.is_upgrade = False
 
         prefix = "[{0}]".format(self.get_full_name())
         self.logger = logger.Logger(logger.DEFAULT_LOGGER, prefix)
@@ -430,6 +430,11 @@ class ExtHandlerInstance(object):
         else:
             self.pkg = selected_pkg
             self.ext_handler.properties.version = selected_pkg.version
+
+        # Note if the selected package is greater than that installed
+        if installed_pkg is None \
+            or FlexibleVersion(self.pkg.version) > FlexibleVersion(installed_pkg.version):
+            self.is_upgrade = True
 
         if self.pkg is None:
             raise ExtensionError("Failed to find any valid extension package")

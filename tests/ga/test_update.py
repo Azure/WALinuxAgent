@@ -624,7 +624,6 @@ class TestUpdate(UpdateTestCase):
     def test_creation(self):
         self.assertTrue(self.update_handler.running)
 
-        self.assertEqual(None, self.update_handler.last_etag)
         self.assertEqual(None, self.update_handler.last_attempt_time)
 
         self.assertEqual(0, len(self.update_handler.agents))
@@ -665,16 +664,14 @@ class TestUpdate(UpdateTestCase):
         if versions is None or len(versions) <= 0:
             versions = [latest_version]
 
-        etag = self.update_handler.last_etag if self.update_handler.last_etag is not None else 42
         if protocol is None:
-            protocol = ProtocolMock(etag=etag, versions=versions)
+            protocol = ProtocolMock(versions=versions)
         self.update_handler.protocol_util = protocol
         conf.get_autoupdate_gafamily = Mock(return_value=protocol.family)
 
         return self.update_handler._upgrade_available(base_version=base_version)
 
     def test_ensure_latest_agent_returns_true_on_first_use(self):
-        self.assertEqual(None, self.update_handler.last_etag)
         self.assertTrue(self._test_upgrade_available())
         return
 
@@ -713,11 +710,6 @@ class TestUpdate(UpdateTestCase):
     def test_ensure_latest_agent_skips_if_too_frequent(self):
         conf.get_autoupdate_frequency = Mock(return_value=10000)
         self.update_handler.last_attempt_time = time.time()
-        self.assertFalse(self._test_upgrade_available())
-        return
-
-    def test_ensure_latest_agent_skips_when_etag_matches(self):
-        self.update_handler.last_etag = 42
         self.assertFalse(self._test_upgrade_available())
         return
 
