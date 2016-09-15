@@ -101,11 +101,12 @@ class CertificateData(DataContract):
         self.certificateData = certificateData
 
 class Cert(DataContract):
-    def __init__(self, name=None, thumbprint=None, certificateDataUri=None):
+    def __init__(self, name=None, thumbprint=None, certificateDataUri=None, storeName=None, storeLocation=None):
         self.name = name
         self.thumbprint = thumbprint
         self.certificateDataUri = certificateDataUri
-
+        self.storeLocation = storeLocation
+        self.storeName = storeName
 
 class CertList(DataContract):
     def __init__(self):
