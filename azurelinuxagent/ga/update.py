@@ -85,7 +85,6 @@ class UpdateHandler(object):
         self.protocol_util = get_protocol_util()
 
         self.running = True
-        self.last_etag = None
         self.last_attempt_time = None
 
         self.agents = []
@@ -344,10 +343,6 @@ class UpdateHandler(object):
                 version=CURRENT_VERSION,
                 is_success=False,
                 message=msg)
-            return False
-
-        if self.last_etag is not None and self.last_etag == etag:
-            logger.info(u"Incarnation {0} has no agent updates", etag)
             return False
 
         manifests = [m for m in manifest_list.vmAgentManifests if m.family == family]
