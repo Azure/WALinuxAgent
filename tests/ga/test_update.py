@@ -940,14 +940,14 @@ class TestUpdate(UpdateTestCase):
         self.assertEqual(len(get_agents(self.tmp_dir)), len(self.update_handler.agents))
         return
 
-    def test_load_agents_does_not_reload(self):
+    def test_load_agents_does_reload(self):
         self.prepare_agents()
 
         self.update_handler._load_agents()
         agents = self.update_handler.agents
 
         self.update_handler._load_agents()
-        self.assertEqual(agents, self.update_handler.agents)
+        self.assertNotEqual(agents, self.update_handler.agents)
         return
 
     def test_load_agents_sorts(self):
@@ -1089,7 +1089,8 @@ class TestUpdate(UpdateTestCase):
         self.assertEqual(0.0, latest_agent.error.last_failure)
         self.assertEqual(0, latest_agent.error.failure_count)
 
-        self._test_run_latest(mock_child=ChildMock(return_value=1))
+        with patch('azurelinuxagent.ga.update.UpdateHandler.get_latest_agent', return_value=latest_agent):
+            self._test_run_latest(mock_child=ChildMock(return_value=1))
 
         self.assertTrue(latest_agent.is_available)
         self.assertNotEqual(0.0, latest_agent.error.last_failure)
@@ -1105,7 +1106,8 @@ class TestUpdate(UpdateTestCase):
         self.assertEqual(0.0, latest_agent.error.last_failure)
         self.assertEqual(0, latest_agent.error.failure_count)
 
-        self._test_run_latest(mock_child=ChildMock(side_effect=Exception("Force blacklisting")))
+        with patch('azurelinuxagent.ga.update.UpdateHandler.get_latest_agent', return_value=latest_agent):
+            self._test_run_latest(mock_child=ChildMock(side_effect=Exception("Force blacklisting")))
 
         self.assertFalse(latest_agent.is_available)
         self.assertTrue(latest_agent.error.is_blacklisted)
