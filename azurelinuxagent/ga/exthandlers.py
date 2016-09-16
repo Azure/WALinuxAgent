@@ -175,8 +175,9 @@ class ExtHandlersHandler(object):
             return
 
         msg = u"Handle extensions updates for incarnation {0}".format(etag)
-        logger.info(msg)
-        self.log_report = True #Log status report success on new config
+        logger.verbose(msg)
+        # Log status report success on new config
+        self.log_report = True
         self.handle_ext_handlers(etag)
         self.last_etag = etag
 
@@ -189,7 +190,7 @@ class ExtHandlersHandler(object):
     def handle_ext_handlers(self, etag=None):
         if self.ext_handlers.extHandlers is None or \
                 len(self.ext_handlers.extHandlers) == 0:
-            logger.info("No ext handler config found")
+            logger.verbose("No ext handler config found")
             return
 
         for ext_handler in self.ext_handlers.extHandlers:
