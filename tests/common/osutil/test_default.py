@@ -142,5 +142,27 @@ class TestOSUtil(AgentTestCase):
                 self.assertTrue(endpoint is not None)
                 self.assertEqual(endpoint, "second")
 
+    def test_get_total_mem(self):
+        """
+        Validate the returned value matches to the one retrieved by invoking shell command
+        """
+        cmd = "grep MemTotal /proc/meminfo |awk '{print $2}'"
+        ret = shellutil.run_get_output(cmd)
+        if ret[0] == 0:
+            self.assertEqual(int(ret[1]) / 1024, get_osutil().get_total_mem())
+        else:
+            self.fail("Cannot retrieve total memory using shell command.")
+
+    def test_get_processor_cores(self):
+        """
+        Validate the returned value matches to the one retrieved by invoking shell command
+        """
+        cmd = "grep 'processor.*:' /proc/cpuinfo |wc -l"
+        ret = shellutil.run_get_output(cmd)
+        if ret[0] == 0:
+            self.assertEqual(int(ret[1]), get_osutil().get_processor_cores())
+        else:
+            self.fail("Cannot retrieve number of process cores using shell command.")
+
 if __name__ == '__main__':
     unittest.main()

@@ -63,8 +63,8 @@ class DeprovisionHandler(object):
 
     def regen_ssh_host_key(self, warnings, actions):
         warnings.append("WARNING! All SSH host key pairs will be deleted.")
-        actions.append(DeprovisionAction(shellutil.run,
-                                         ['rm -f /etc/ssh/ssh_host_*key*']))
+        actions.append(DeprovisionAction(fileutil.rm_files,
+                                         ['/etc/ssh/ssh_host_*key*']))
 
     def stop_agent_service(self, warnings, actions):
         warnings.append("WARNING! The waagent service will be stopped.")

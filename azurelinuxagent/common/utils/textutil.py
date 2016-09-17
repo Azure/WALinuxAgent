@@ -278,6 +278,11 @@ def b64encode(s):
         return base64.b64encode(bytes(s, 'utf-8')).decode('utf-8')
     return base64.b64encode(s)
 
+def b64decode(s):
+    from azurelinuxagent.common.version import PY_VERSION_MAJOR
+    if PY_VERSION_MAJOR > 2:
+        return base64.b64decode(s).decode('utf-8')
+    return base64.b64decode(s)
 
 def safe_shlex_split(s):
     import shlex
