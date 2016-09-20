@@ -21,6 +21,7 @@ import glob
 import json
 import os
 import shutil
+import stat
 import subprocess
 import time
 import zipfile
@@ -524,8 +525,10 @@ class ExtHandlerInstance(object):
         except IOError as e:
             raise ExtensionError(u"Failed to write and unzip plugin", e)
 
-        chmod = "find {0} -type f | xargs chmod u+x".format(self.get_base_dir())
-        shellutil.run(chmod)
+        #Add user execute permission to all files under the base dir
+        for file in fileutil.get_all_files(self.get_base_dir()):
+            fileutil.chmod(file, os.stat(file).st_mode | stat.S_IXUSR)
+
         self.report_event(message="Download succeeded")
 
         self.logger.info("Initialize extension directory")

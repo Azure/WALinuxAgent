@@ -21,11 +21,11 @@
 File operation util functions
 """
 
+import glob
 import os
 import re
 import shutil
 import pwd
-import tempfile
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.future import ustr
 import azurelinuxagent.common.utils.textutil as textutil
@@ -111,9 +111,11 @@ def chmod(path, mode):
         os.chmod(path, mode)
 
 def rm_files(*args):
-    for path in args:
-        if os.path.isfile(path):
-            os.remove(path)
+    for paths in args:
+        #Find all possible file paths
+        for path in glob.glob(paths):
+            if os.path.isfile(path):
+                os.remove(path)
 
 def rm_dirs(*args):
     """
@@ -169,3 +171,12 @@ def findstr_in_file(file_path, pattern_str):
 
     return None
 
+def get_all_files(root_path):
+    """
+    Find all files under the given root path
+    """
+    result = []
+    for root, dirs, files in os.walk(root_path):
+        result.extend([os.path.join(root, file) for file in files])
+
+    return result

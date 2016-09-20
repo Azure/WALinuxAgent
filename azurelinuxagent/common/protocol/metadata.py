@@ -16,6 +16,7 @@
 #
 # Requires Python 2.4+ and Openssl 1.0+
 
+import base64
 import json
 import os
 import shutil
@@ -294,8 +295,11 @@ class Certificates(object):
         p7b_file = os.path.join(conf.get_lib_dir(), P7B_FILE_NAME)
 
         # Wrapping the certificate lines.
-        b64_cmd = "echo {0} | base64 -d > {1}"
-        shellutil.run(b64_cmd.format(data, p7b_file))
+        # decode and save the result into p7b_file
+        fileStream = open(p7b_file, 'w')
+        fileStream.write(textutil.b64decode(data))
+        fileStream.close()
+
         ssl_cmd = "openssl pkcs7 -text -in {0} -inform der | grep -v '^-----' "
         ret, data = shellutil.run_get_output(ssl_cmd.format(p7b_file))
 

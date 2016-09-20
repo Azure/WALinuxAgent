@@ -81,7 +81,7 @@ class ProvisionHandler(object):
     def reg_ssh_host_key(self):
         keypair_type = conf.get_ssh_host_keypair_type()
         if conf.get_regenerate_ssh_host_key():
-            shellutil.run("rm -f /etc/ssh/ssh_host_*key*")
+            fileutil.rm_files("/etc/ssh/ssh_host_*key*")
             keygen_cmd = "ssh-keygen -N '' -t {0} -f /etc/ssh/ssh_host_{1}_key"
             shellutil.run(keygen_cmd.format(keypair_type, keypair_type))
         thumbprint = self.get_ssh_host_key_thumbprint(keypair_type)

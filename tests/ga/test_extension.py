@@ -162,7 +162,7 @@ class TestExtension(AgentTestCase):
         self.assertNotEquals(0, len(vm_status.vmAgent.extensionHandlers))
         handler_status = vm_status.vmAgent.extensionHandlers[0]
         self.assertEquals(expected_status, handler_status.status)
-        self.assertEquals("OSTCExtensions.ExampleHandlerLinux", 
+        self.assertEquals("OSTCExtensions.ExampleHandlerLinux",
                           handler_status.name)
         self.assertEquals(version, handler_status.version)
         self.assertEquals(expected_ext_count, len(handler_status.extensions))
