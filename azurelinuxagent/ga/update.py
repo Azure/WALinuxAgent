@@ -489,14 +489,13 @@ class UpdateHandler(object):
         """
         Load all non-blacklisted agents currently on disk.
         """
-        if len(self.agents) <= 0:
-            try:
-                path = os.path.join(conf.get_lib_dir(), "{0}-*".format(AGENT_NAME))
-                self._set_agents([GuestAgent(path=agent_dir)
-                                    for agent_dir in glob.iglob(path) if os.path.isdir(agent_dir)])
-                self._filter_blacklisted_agents()
-            except Exception as e:
-                logger.warn(u"Exception occurred loading available agents: {0}", ustr(e))
+        try:
+            path = os.path.join(conf.get_lib_dir(), "{0}-*".format(AGENT_NAME))
+            self._set_agents([GuestAgent(path=agent_dir)
+                                for agent_dir in glob.iglob(path) if os.path.isdir(agent_dir)])
+            self._filter_blacklisted_agents()
+        except Exception as e:
+            logger.warn(u"Exception occurred loading available agents: {0}", ustr(e))
         return
 
     def _purge_agents(self):
