@@ -59,7 +59,7 @@ class HostPluginProtocol(object):
             logger.error("get API versions failed with [{0}]".format(e))
             return []
 
-    def put_vm_status(self, status_blob, sas_url):
+    def put_vm_status(self, status_blob, sas_url, container_id, host_config_name):
         """
         Try to upload the VM status via the host plugin /status channel
         :param sas_url: the blob SAS url to pass to the host plugin
@@ -74,7 +74,10 @@ class HostPluginProtocol(object):
         url = URI_FORMAT_PUT_VM_STATUS.format(self.endpoint, HOST_PLUGIN_PORT)
         logger.verbose("Posting VM status to host channel [{0}]".format(url))
         status = textutil.b64encode(status_blob.vm_status.vmAgent.status)
-        headers = {"x-ms-version": API_VERSION}
+        headers = {"x-ms-version": API_VERSION,
+                   "Content-type": "application/json",
+                   "x-ms-containerid": container_id,
+                   "x-ms-host-config-name": host_config_name}
         blob_headers = [{'headerName': 'x-ms-version',
                          'headerValue': status_blob.__storage_version__},
                         {'headerName': 'x-ms-blob-type',

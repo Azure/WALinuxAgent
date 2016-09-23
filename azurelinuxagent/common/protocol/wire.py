@@ -795,8 +795,11 @@ class WireClient(object):
         ext_conf = self.get_ext_conf()
         if ext_conf.status_upload_blob is not None:
             if not self.status_blob.upload(ext_conf.status_upload_blob):
+                goal_state = self.get_goal_state()
                 self.host_plugin.put_vm_status(self.status_blob,
-                                               ext_conf.status_upload_blob)
+                                               ext_conf.status_upload_blob,
+                                               goal_state.container_id,
+                                               goal_state.role_instance_config_name)
 
     def report_role_prop(self, thumbprint):
         goal_state = self.get_goal_state()
@@ -956,6 +959,7 @@ class GoalState(object):
         self.certs_uri = None
         self.ext_uri = None
         self.role_instance_id = None
+        self.role_instance_config_name = None
         self.container_id = None
         self.load_balancer_probe_port = None
         self.parse(xml_text)
@@ -974,6 +978,8 @@ class GoalState(object):
         self.ext_uri = findtext(xml_doc, "ExtensionsConfig")
         role_instance = find(xml_doc, "RoleInstance")
         self.role_instance_id = findtext(role_instance, "InstanceId")
+        role_config = find(role_instance, "Configuration")
+        self.role_instance_config_name = findtext(role_config, "ConfigName")
         container = find(xml_doc, "Container")
         self.container_id = findtext(container, "ContainerId")
         lbprobe_ports = find(xml_doc, "LBProbePorts")

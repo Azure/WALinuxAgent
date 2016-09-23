@@ -20,6 +20,7 @@
          <Certificates>http://certificatesuri/</Certificates>
          <ExtensionsConfig>http://extensionsconfiguri/</ExtensionsConfig>
          <FullConfig>http://fullconfiguri/</FullConfig>
+         <ConfigName>DummyRoleConfigName.xml</ConfigName>
          </Configuration>
        </RoleInstance>
      </RoleInstanceList>
