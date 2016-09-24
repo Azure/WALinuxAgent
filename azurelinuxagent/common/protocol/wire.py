@@ -509,8 +509,8 @@ class WireClient(object):
         self.ext_conf = None
         self.last_request = 0
         self.req_count = 0
+        self.host_plugin = None
         self.status_blob = StatusBlob(self)
-        self.host_plugin = HostPluginProtocol(self.endpoint)
 
     def prevent_throttling(self):
         """
@@ -702,6 +702,8 @@ class WireClient(object):
                 self.update_shared_conf(goal_state)
                 self.update_certs(goal_state)
                 self.update_ext_conf(goal_state)
+                if self.host_plugin is not None:
+                    self.host_plugin.goal_state = goal_state
                 return
             except WireProtocolResourceGone:
                 logger.info("Incarnation is out of date. Update goalstate.")
@@ -795,11 +797,7 @@ class WireClient(object):
         ext_conf = self.get_ext_conf()
         if ext_conf.status_upload_blob is not None:
             if not self.status_blob.upload(ext_conf.status_upload_blob):
-                goal_state = self.get_goal_state()
-                self.host_plugin.put_vm_status(self.status_blob,
-                                               ext_conf.status_upload_blob,
-                                               goal_state.container_id,
-                                               goal_state.role_instance_config_name)
+                self.get_host_plugin().put_vm_status(self.status_blob, ext_conf.status_upload_blob)
 
     def report_role_prop(self, thumbprint):
         goal_state = self.get_goal_state()
@@ -914,6 +912,10 @@ class WireClient(object):
             "x-ms-guest-agent-public-x509-cert": cert
         }
 
+    def get_host_plugin(self):
+        if self.host_plugin is None:
+            self.host_plugin = HostPluginProtocol(self.endpoint, self.get_goal_state())
+        return self.host_plugin
 
 class VersionInfo(object):
     def __init__(self, xml_text):

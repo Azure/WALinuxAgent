@@ -28,13 +28,14 @@ API_VERSION = "2015-09-01"
 
 
 class HostPluginProtocol(object):
-    def __init__(self, endpoint):
+    def __init__(self, endpoint, goal_state):
         if endpoint is None:
             raise ProtocolError("Host plugin endpoint not provided")
         self.is_initialized = False
         self.is_available = False
         self.api_versions = None
         self.endpoint = endpoint
+        self.goal_state = goal_state
 
     def ensure_initialized(self):
         if not self.is_initialized:
@@ -48,7 +49,8 @@ class HostPluginProtocol(object):
                                                  HOST_PLUGIN_PORT)
         logger.info("getting API versions at [{0}]".format(url))
         try:
-            response = restutil.http_get(url)
+            headers = { "x-ms-containerid": self.goal_state.container_id }
+            response = restutil.http_get(url, headers)
             if response.status != httpclient.OK:
                 logger.error(
                     "get API versions returned status code [{0}]".format(
@@ -59,7 +61,7 @@ class HostPluginProtocol(object):
             logger.error("get API versions failed with [{0}]".format(e))
             return []
 
-    def put_vm_status(self, status_blob, sas_url, container_id, host_config_name):
+    def put_vm_status(self, status_blob, sas_url):
         """
         Try to upload the VM status via the host plugin /status channel
         :param sas_url: the blob SAS url to pass to the host plugin
@@ -76,8 +78,8 @@ class HostPluginProtocol(object):
         status = textutil.b64encode(status_blob.vm_status.vmAgent.status)
         headers = {"x-ms-version": API_VERSION,
                    "Content-type": "application/json",
-                   "x-ms-containerid": container_id,
-                   "x-ms-host-config-name": host_config_name}
+                   "x-ms-containerid": self.goal_state.container_id,
+                   "x-ms-host-config-name": self.goal_state.role_instance_config_name}
         blob_headers = [{'headerName': 'x-ms-version',
                          'headerValue': status_blob.__storage_version__},
                         {'headerName': 'x-ms-blob-type',
@@ -92,7 +94,7 @@ class HostPluginProtocol(object):
         except HttpError as e:
             logger.error("put VM status failed with [{0}]".format(e))
 
-    def put_vm_log(self, content, container_id, deployment_id):
+    def put_vm_log(self, content):
         """
         Try to upload the given content to the host plugin
         :param deployment_id: the deployment id, which is obtained from the
@@ -105,18 +107,18 @@ class HostPluginProtocol(object):
         if not self.ensure_initialized():
             logger.error("host plugin channel is not available")
             return
-        if content is None or container_id is None or deployment_id is None:
+        if content is None or self.goal_state.container_id is None or self.goal_state.deployment_id is None:
             logger.error(
                 "invalid arguments passed: "
                 "[{0}], [{1}], [{2}]".format(
                     content,
-                    container_id,
-                    deployment_id))
+                    self.goal_state.container_id,
+                    self.goal_state.deployment_id))
             return
         url = URI_FORMAT_PUT_LOG.format(self.endpoint, HOST_PLUGIN_PORT)
 
-        headers = {"x-ms-vmagentlog-deploymentid": deployment_id,
-                   "x-ms-vmagentlog-containerid": container_id}
+        headers = {"x-ms-vmagentlog-deploymentid": self.goal_state.deployment_id,
+                   "x-ms-vmagentlog-containerid": self.goal_state.container_id}
         logger.info("put VM log at [{0}]".format(url))
         try:
             response = restutil.http_put(url, content, headers)
