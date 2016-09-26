@@ -162,6 +162,7 @@ class ExtHandlersHandler(object):
         self.ext_handlers = None
         self.last_etag = None
         self.log_report = False
+        self.log_etag = True
 
     def run(self):
         self.ext_handlers, etag = None, None
@@ -203,8 +204,14 @@ class ExtHandlersHandler(object):
 
         ext_handler_i.decide_version()
         if not ext_handler_i.is_upgrade and self.last_etag == etag:
-            ext_handler_i.logger.info("No upgrade detected for etag {0}", etag)
+            if self.log_etag:
+                ext_handler_i.logger.info("Version {0} is current for etag {1}",
+                                          ext_handler_i.pkg.version,
+                                          etag)
+                self.log_etag = False
             return
+
+        self.log_etag = True
 
         try:
             state = ext_handler.properties.state
@@ -342,7 +349,7 @@ class ExtHandlerInstance(object):
                                  logger.LogLevel.INFO, log_file)
 
     def decide_version(self):
-        self.logger.info("Decide which version to use")
+        self.logger.verbose("Decide which version to use")
         try:
             pkg_list = self.protocol.get_ext_handler_pkgs(self.ext_handler)
         except ProtocolError as e:
@@ -441,7 +448,7 @@ class ExtHandlerInstance(object):
         if self.pkg is None:
             raise ExtensionError("Failed to find any valid extension package")
 
-        self.logger.info("Use version: {0}", self.pkg.version)
+        self.logger.verbose("Use version: {0}", self.pkg.version)
         return
 
     def version_gt(self, other):
