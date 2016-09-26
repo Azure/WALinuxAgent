@@ -933,4 +933,4 @@ class HandlerManifest(object):
         update_mode = self.data['handlerManifest'].get('updateMode')
         if update_mode is None:
             return True
-        return update_mode.low() == "updatewithinstall"
+        return update_mode.lower() == "updatewithinstall"
