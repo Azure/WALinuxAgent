@@ -162,6 +162,7 @@ class ExtHandlersHandler(object):
         self.ext_handlers = None
         self.last_etag = None
         self.log_report = False
+        self.log_etag = True
 
     def run(self):
         self.ext_handlers, etag = None, None
@@ -203,8 +204,14 @@ class ExtHandlersHandler(object):
 
         ext_handler_i.decide_version()
         if not ext_handler_i.is_upgrade and self.last_etag == etag:
-            ext_handler_i.logger.verbose("No upgrade detected for etag {0}", etag)
+            if self.log_etag:
+                ext_handler_i.logger.info("Version {0} is current for etag {1}",
+                                          ext_handler_i.pkg.version,
+                                          etag)
+                self.log_etag = False
             return
+
+        self.log_etag = True
 
         try:
             state = ext_handler.properties.state
