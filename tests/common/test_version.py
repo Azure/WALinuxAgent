@@ -20,12 +20,14 @@ from __future__ import print_function
 import copy
 import glob
 import json
+import mock
 import os
 import platform
 import random
 import subprocess
 import sys
 import tempfile
+import textwrap
 import zipfile
 
 from tests.protocol.mockwiredata import *
@@ -34,6 +36,7 @@ from tests.tools import *
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
+import azurelinuxagent.common.version as version
 
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import *
@@ -63,3 +66,67 @@ class TestCurrentAgentName(AgentTestCase):
         self.assertEqual(agent, current_agent)
         self.assertEqual(version, str(current_version))
         return
+
+class TestGetF5Platforms(AgentTestCase):
+    def test_get_f5_platform_bigip_12_1_1(self):
+        version_file = textwrap.dedent("""
+        Product: BIG-IP
+        Version: 12.1.1
+        Build: 0.0.184
+        Sequence: 12.1.1.0.0.184.0
+        BaseBuild: 0.0.184
+        Edition: Final
+        Date: Thu Aug 11 17:09:01 PDT 2016
+        Built: 160811170901
+        Changelist: 1874858
+        JobID: 705993""")
+
+        mo = mock.mock_open(read_data=version_file)
+        with patch(open_patch(), mo):
+            platform = version.get_f5_platform()
+            self.assertTrue(platform[0] == 'bigip')
+            self.assertTrue(platform[1] == '12.1.1')
+            self.assertTrue(platform[2] == 'bigip')
+            self.assertTrue(platform[3] == 'BIG-IP')
+
+    def test_get_f5_platform_bigip_12_1_0_hf1(self):
+        version_file = textwrap.dedent("""
+        Product: BIG-IP
+        Version: 12.1.0
+        Build: 1.0.1447
+        Sequence: 12.1.0.1.0.1447.0
+        BaseBuild: 0.0.1434
+        Edition: Hotfix HF1
+        Date: Wed Jun  8 13:41:59 PDT 2016
+        Built: 160608134159
+        Changelist: 1773831
+        JobID: 673467""")
+
+        mo = mock.mock_open(read_data=version_file)
+        with patch(open_patch(), mo):
+            platform = version.get_f5_platform()
+            self.assertTrue(platform[0] == 'bigip')
+            self.assertTrue(platform[1] == '12.1.0')
+            self.assertTrue(platform[2] == 'bigip')
+            self.assertTrue(platform[3] == 'BIG-IP')
+
+    def test_get_f5_platform_bigip_12_0_0(self):
+        version_file = textwrap.dedent("""
+        Product: BIG-IP
+        Version: 12.0.0
+        Build: 0.0.606
+        Sequence: 12.0.0.0.0.606.0
+        BaseBuild: 0.0.606
+        Edition: Final
+        Date: Fri Aug 21 13:29:22 PDT 2015
+        Built: 150821132922
+        Changelist: 1486072
+        JobID: 536212""")
+
+        mo = mock.mock_open(read_data=version_file)
+        with patch(open_patch(), mo):
+            platform = version.get_f5_platform()
+            self.assertTrue(platform[0] == 'bigip')
+            self.assertTrue(platform[1] == '12.0.0')
+            self.assertTrue(platform[2] == 'bigip')
+            self.assertTrue(platform[3] == 'BIG-IP')
