@@ -75,7 +75,7 @@ class HostPluginProtocol(object):
             return
         url = URI_FORMAT_PUT_VM_STATUS.format(self.endpoint, HOST_PLUGIN_PORT)
         logger.verbose("Posting VM status to host channel [{0}]".format(url))
-        status = textutil.b64encode(status_blob.vm_status.vmAgent.status)
+        status = textutil.b64encode(status_blob.data)
         headers = {"x-ms-version": API_VERSION,
                    "Content-type": "application/json",
                    "x-ms-containerid": self.goal_state.container_id,
