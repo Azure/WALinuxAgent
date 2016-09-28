@@ -60,28 +60,39 @@ def _http_request(method, host, rel_uri, port=None, data=None, secure=False,
     if secure:
         port = 443 if port is None else port
         if proxy_host is not None and proxy_port is not None:
-            conn = httpclient.HTTPSConnection(proxy_host, proxy_port,
+            conn = httpclient.HTTPSConnection(proxy_host,
+                                              proxy_port,
                                               timeout=10)
             conn.set_tunnel(host, port)
             # If proxy is used, full url is needed.
             url = "https://{0}:{1}{2}".format(host, port, rel_uri)
         else:
-            conn = httpclient.HTTPSConnection(host, port, timeout=10)
+            conn = httpclient.HTTPSConnection(host,
+                                              port,
+                                              timeout=10)
             url = rel_uri
     else:
         port = 80 if port is None else port
         if proxy_host is not None and proxy_port is not None:
-            conn = httpclient.HTTPConnection(proxy_host, proxy_port,
+            conn = httpclient.HTTPConnection(proxy_host,
+                                             proxy_port,
                                              timeout=10)
             # If proxy is used, full url is needed.
             url = "http://{0}:{1}{2}".format(host, port, rel_uri)
         else:
-            conn = httpclient.HTTPConnection(host, port, timeout=10)
+            conn = httpclient.HTTPConnection(host,
+                                             port,
+                                             timeout=10)
             url = rel_uri
-    if headers is None:
-        conn.request(method, url, data)
-    else:
-        conn.request(method, url, data, headers)
+
+    logger.verbose("HTTPConnection [{0}] [{1}] [{2}] [{3}]",
+                   method,
+                   url,
+                   data,
+                   headers)
+
+    headers = {} if headers is None else headers
+    conn.request(method=method, url=url, body=data, headers=headers)
     resp = conn.getresponse()
     return resp
 
@@ -92,9 +103,6 @@ def http_request(method, url, data, headers=None, max_retry=3,
     Sending http request to server
     On error, sleep 10 and retry max_retry times.
     """
-    logger.verbose("HTTP Req: {0} {1}", method, url)
-    logger.verbose("    Data={0}", data)
-    logger.verbose("    Header={0}", headers)
     host, port, secure, rel_uri = _parse_url(url)
 
     # Check proxy
@@ -114,28 +122,44 @@ def http_request(method, url, data, headers=None, max_retry=3,
                     "(new in python 2.7)")
         secure = False
 
+    logger.verbose("HTTP method: [{0}]", method)
+    logger.verbose("HTTP host: [{0}]", host)
+    logger.verbose("HTTP uri: [{0}]", rel_uri)
+    logger.verbose("HTTP port: [{0}]", port)
+    logger.verbose("HTTP data: [{0}]", data)
+    logger.verbose("HTTP secure: [{0}]", secure)
+    logger.verbose("HTTP headers: [{0}]", headers)
+    logger.verbose("HTTP proxy: [{0}:{1}]", proxy_host, proxy_port)
+
     for retry in range(0, max_retry):
         try:
-            resp = _http_request(method, host, rel_uri, port=port, data=data,
-                                 secure=secure, headers=headers,
-                                 proxy_host=proxy_host, proxy_port=proxy_port)
-            logger.verbose("HTTP Resp: Status={0}", resp.status)
-            logger.verbose("    Header={0}", resp.getheaders())
+            resp = _http_request(method,
+                                 host,
+                                 rel_uri,
+                                 port=port,
+                                 data=data,
+                                 secure=secure,
+                                 headers=headers,
+                                 proxy_host=proxy_host,
+                                 proxy_port=proxy_port)
+            logger.verbose("HTTP response status: [{0}]", resp.status)
             return resp
         except httpclient.HTTPException as e:
-            logger.warn('HTTPException {0}, args:{1}', e, repr(e.args))
+            logger.warn('HTTPException: [{0}]', e)
         except IOError as e:
-            logger.warn('Socket IOError {0}, args:{1}', e, repr(e.args))
+            logger.warn('IOError: [{0}]', e)
 
         if retry < max_retry - 1:
-            logger.info("Retry={0}, {1} {2}", retry, method, url)
+            logger.info("Retry {0}", retry)
             time.sleep(RETRY_WAITING_INTERVAL)
+        else:
+            logger.error("All retries failed")
 
     if url is not None and len(url) > 100:
         url_log = url[0: 100]  # In case the url is too long
     else:
         url_log = url
-    raise HttpError("HTTP Err: {0} {1}".format(method, url_log))
+    raise HttpError("HTTPError: {0} {1}".format(method, url_log))
 
 
 def http_get(url, headers=None, max_retry=3, chk_proxy=False):

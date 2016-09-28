@@ -380,7 +380,7 @@ class StatusBlob(object):
                 url,
                 {
                     "x-ms-date": timestamp,
-                    'x-ms-version': self.__class__.__storage_version__
+                    "x-ms-version": self.__class__.__storage_version__
                 })
         except HttpError as e:
             raise ProtocolError((u"Failed to get status blob type: {0}"
