@@ -22,6 +22,7 @@ from azurelinuxagent.common.utils import textutil
 
 HOST_PLUGIN_PORT = 32526
 URI_FORMAT_GET_API_VERSIONS = "http://{0}:{1}/versions"
+URI_FORMAT_GET_EXTENSION_ARTIFACT = "http://{0}:{1}/extensionArtifact"
 URI_FORMAT_PUT_VM_STATUS = "http://{0}:{1}/status"
 URI_FORMAT_PUT_LOG = "http://{0}:{1}/vmAgentLog"
 API_VERSION = "2015-09-01"
@@ -60,6 +61,40 @@ class HostPluginProtocol(object):
         except HttpError as e:
             logger.error("get API versions failed with [{0}]".format(e))
             return []
+
+    def get_extension_artifact(self, artifact_url, artifact_manifest_url = None):
+        if not self.ensure_initialized():
+            logger.error("host plugin channel is not available")
+            return
+        if artifact_url is None or artifact_url.isspace():
+            logger.error("no extension artifact url was provided")
+            return
+
+        url = URI_FORMAT_GET_EXTENSION_ARTIFACT.format(self.endpoint,
+                                                       HOST_PLUGIN_PORT)
+
+        logger.info("getting Extension Artifact at [{0}]".format(artifact_url))
+        try:
+            headers = {"x-ms-version": API_VERSION,
+                       "x-ms-containerid": self.goal_state.container_id,
+                       "x-ms-host-config-name": self.goal_state.role_instance_config_name,
+                       "x-ms-artifact-location": artifact_url}
+            if artifact_manifest_url is not None:
+                headers["x-ms-artifact-manifest-location"] = artifact_manifest_url
+
+            response = restutil.http_get(url, headers)
+            if response.status != httpclient.OK:
+                logger.error(
+                    "get Extension Artifact returned status code [{0}]".format(
+                        response.status))
+                return None
+            resp_body = response.read()
+            if resp_body:
+                return remove_bom(bytearray(resp_body)).decode('utf-8')
+
+        except HttpError as e:
+            logger.error("get Extension Artifact failed with [{0}]".format(e))
+            return None
 
     def put_vm_status(self, status_blob, sas_url):
         """
