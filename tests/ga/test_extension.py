@@ -305,7 +305,7 @@ class TestExtension(AgentTestCase):
 
         #Test when is_extension_handlers_handling_on_hold returns False
         from azurelinuxagent.common.protocol.wire import InVMArtifactsProfile
-        mock_in_vm_artifacts_profile = InVMArtifactsProfile(MagicMock(), None)
+        mock_in_vm_artifacts_profile = InVMArtifactsProfile(MagicMock())
         mock_in_vm_artifacts_profile.is_extension_handlers_handling_on_hold = Mock(return_value=False)
         protocol.get_in_vm_artifacts_profile = Mock(return_value=mock_in_vm_artifacts_profile)
         with patch.object(ExtHandlersHandler, 'handle_ext_handler') as patch_handle_ext_handler:

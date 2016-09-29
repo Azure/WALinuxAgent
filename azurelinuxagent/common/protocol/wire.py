@@ -925,9 +925,35 @@ class WireClient(object):
     def get_in_vm_artifacts_profile(self):
         ext_conf = self.ext_conf
         if ext_conf and \
-           ext_conf.in_vm_artifacts_profile_blob and not \
-           ext_conf.in_vm_artifacts_profile_blob.isspace():
-            return InVMArtifactsProfile(self, self.ext_conf.in_vm_artifacts_profile_blob)
+                ext_conf.in_vm_artifacts_profile_blob and not \
+                ext_conf.in_vm_artifacts_profile_blob.isspace():
+            # try with the default protocol
+            in_vm_artifacts_profile_json = \
+                self._get_in_vm_artifacts_profile_using_default_protocol(ext_conf.in_vm_artifacts_profile_blob)
+
+            # try with host GA plugin
+            if in_vm_artifacts_profile_json is None:
+                in_vm_artifacts_profile_json = \
+                    self.get_host_plugin().get_extension_artifact(ext_conf.in_vm_artifacts_profile_blob)
+
+            if in_vm_artifacts_profile_json and not in_vm_artifacts_profile_json.isspace():
+                return InVMArtifactsProfile(in_vm_artifacts_profile_json)
+
+    def _get_in_vm_artifacts_profile_using_default_protocol(self, blob_url):
+        try:
+            resp = self.call_storage_service(
+                restutil.http_get,
+                blob_url,
+                None)
+        except HttpError as e:
+            raise ProtocolError(ustr(e))
+
+        if resp.status == httpclient.OK:
+            return resp.read()
+
+        logger.warn("Failed to get InVMArtifactsProfile: {0}, {1} using the default protocol",
+                    resp.status, blob_url)
+
 
 class VersionInfo(object):
     def __init__(self, xml_text):
@@ -1295,6 +1321,7 @@ class ExtensionManifest(object):
             pkg.isinternal = isinternal
             self.pkg_list.versions.append(pkg)
 
+
 # Do not extend this class
 class InVMArtifactsProfile(object):
     '''
@@ -1307,40 +1334,15 @@ class InVMArtifactsProfile(object):
     * encryptedHealthChecks (optional)
     * encryptedApplicationProfile (optional)
     '''
-    def __init__(self, protocol, blob_url):
-        self.protocol = protocol
-        self.blob_url = blob_url
-        if protocol and blob_url:
-            self.__retrieve()
 
-    def __retrieve(self):
-        if not self.__get_in_vm_artifacts_profile():
-            # if default route fails, use HostGAPlugin
-            json_str = self.protocol.get_host_plugin().get_extension_artifact(self.blob_url)
-            self.__parse(json_str)
-
-    def __get_in_vm_artifacts_profile(self):
-        try:
-            resp = self.protocol.call_storage_service(
-                restutil.http_get,
-                self.blob_url,
-                None)
-        except HttpError as e:
-            raise ProtocolError(ustr(e))
-
-        if resp.status == httpclient.OK:
-            self.__parse(resp.read())
-            return True
-        else:
-            logger.warn("Failed to fetch InVMArtifactsProfile: {0}, {1}",
-                resp.status, self.blob_url)
-            return False
+    def __init__(self, in_vm_artifacts_profile_json):
+        if in_vm_artifacts_profile_json and not in_vm_artifacts_profile_json.isspace():
+            self.__parse(in_vm_artifacts_profile_json)
 
     def __parse(self, json_str):
-        if (json_str and not json_str.isspace()):
-            #trim null and whitespaces
-            trimmed = json_str.rstrip(' \t\r\n\0')
-            self.__dict__.update(json.loads(trimmed))
+        # trim null and whitespaces
+        trimmed = json_str.rstrip(' \t\r\n\0')
+        self.__dict__.update(json.loads(trimmed))
 
     def is_extension_handlers_handling_on_hold(self):
         # hasattr() is not available in Python 2.6
