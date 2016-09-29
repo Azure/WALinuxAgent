@@ -73,7 +73,7 @@ class HostPluginProtocol(object):
         url = URI_FORMAT_GET_EXTENSION_ARTIFACT.format(self.endpoint,
                                                        HOST_PLUGIN_PORT)
 
-        logger.info("getting Extension Artifact at [{0}]".format(artifact_url))
+        logger.info("getting Extension Artifact at [{0}] using host GA plugin".format(artifact_url))
         try:
             headers = {"x-ms-version": API_VERSION,
                        "x-ms-containerid": self.goal_state.container_id,
