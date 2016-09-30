@@ -509,8 +509,8 @@ class WireClient(object):
         self.ext_conf = None
         self.last_request = 0
         self.req_count = 0
+        self.host_plugin = None
         self.status_blob = StatusBlob(self)
-        self.host_plugin = HostPluginProtocol(self.endpoint)
 
     def prevent_throttling(self):
         """
@@ -702,6 +702,8 @@ class WireClient(object):
                 self.update_shared_conf(goal_state)
                 self.update_certs(goal_state)
                 self.update_ext_conf(goal_state)
+                if self.host_plugin is not None:
+                    self.host_plugin.goal_state = goal_state
                 return
             except WireProtocolResourceGone:
                 logger.info("Incarnation is out of date. Update goalstate.")
@@ -795,8 +797,7 @@ class WireClient(object):
         ext_conf = self.get_ext_conf()
         if ext_conf.status_upload_blob is not None:
             if not self.status_blob.upload(ext_conf.status_upload_blob):
-                self.host_plugin.put_vm_status(self.status_blob,
-                                               ext_conf.status_upload_blob)
+                self.get_host_plugin().put_vm_status(self.status_blob, ext_conf.status_upload_blob)
 
     def report_role_prop(self, thumbprint):
         goal_state = self.get_goal_state()
@@ -911,6 +912,10 @@ class WireClient(object):
             "x-ms-guest-agent-public-x509-cert": cert
         }
 
+    def get_host_plugin(self):
+        if self.host_plugin is None:
+            self.host_plugin = HostPluginProtocol(self.endpoint, self.get_goal_state())
+        return self.host_plugin
 
 class VersionInfo(object):
     def __init__(self, xml_text):
@@ -956,6 +961,7 @@ class GoalState(object):
         self.certs_uri = None
         self.ext_uri = None
         self.role_instance_id = None
+        self.role_instance_config_name = None
         self.container_id = None
         self.load_balancer_probe_port = None
         self.parse(xml_text)
@@ -974,6 +980,8 @@ class GoalState(object):
         self.ext_uri = findtext(xml_doc, "ExtensionsConfig")
         role_instance = find(xml_doc, "RoleInstance")
         self.role_instance_id = findtext(role_instance, "InstanceId")
+        role_config = find(role_instance, "Configuration")
+        self.role_instance_config_name = findtext(role_config, "ConfigName")
         container = find(xml_doc, "Container")
         self.container_id = findtext(container, "ContainerId")
         lbprobe_ports = find(xml_doc, "LBProbePorts")
