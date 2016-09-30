@@ -52,7 +52,7 @@ class TestHostPlugin(AgentTestCase):
         from azurelinuxagent.common.utils import restutil
         exp_method = 'PUT'
         exp_url = 'http://{0}:32526/status'.format(wireserver_url)
-        exp_data = '{"content": "UmVhZHk=", "headers": [{"headerName": ' \
+        exp_data = '{"content": "eyJkdW1teSI6ICJkYXRhIn0=", "headers": [{"headerName": ' \
                    '"x-ms-version", "headerValue": "2014-02-14"}, ' \
                    '{"headerName": "x-ms-blob-type", "headerValue": null}], ' \
                    '"requestUri": "http://sas_url"}'
@@ -64,7 +64,7 @@ class TestHostPlugin(AgentTestCase):
             plugin = wire_protocol_client.get_host_plugin()
             blob = wire_protocol_client.status_blob
             blob.vm_status = restapi.VMStatus()
-            blob.vm_status.vmAgent.status = 'Ready'
+            blob.data = '{"dummy": "data"}'
             with patch.object(plugin, 'get_api_versions') as patch_api:
                 patch_api.return_value = API_VERSION
                 plugin.put_vm_status(blob, sas_url)
@@ -102,7 +102,7 @@ class TestHostPlugin(AgentTestCase):
                             "Content-type": "application/json",
                             "x-ms-containerid": test_goal_state.container_id,
                             "x-ms-host-config-name": test_goal_state.role_instance_config_name}
-        expected_content = '{"content": "b2s=", ' \
+        expected_content = '{"content": "eyJkdW1teSI6ICJkYXRhIn0=", ' \
                            '"headers": [{"headerName": "x-ms-version", ' \
                            '"headerValue": "2014-02-14"}, ' \
                            '{"headerName": "x-ms-blob-type", "headerValue": ' \
@@ -114,7 +114,7 @@ class TestHostPlugin(AgentTestCase):
         self.assertTrue(host_client.api_versions is None)
         status_blob = wire.StatusBlob(None)
         status_blob.vm_status = restapi.VMStatus()
-        status_blob.vm_status.vmAgent.status = 'ok'
+        status_blob.data = '{"dummy": "data"}'
         status_blob.type = "BlockBlob"
         with patch.object(wire.HostPluginProtocol,
                           "get_api_versions") as patch_get:
