@@ -25,7 +25,7 @@ import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common.exception import ProtocolNotFoundError
 from azurelinuxagent.common.future import httpclient, bytebuffer
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, \
-    findtext, getattrib, gettext, remove_bom, get_bytes_from_pem
+    findtext, getattrib, gettext, remove_bom, get_bytes_from_pem, parse_json
 import azurelinuxagent.common.utils.fileutil as fileutil
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.protocol.restapi import *
@@ -770,7 +770,6 @@ class WireClient(object):
                                                goal_state.incarnation)
         local_file = os.path.join(conf.get_lib_dir(), local_file)
         xml_text = self.fetch_manifest(ext_handler.versionUris)
-        print(xml_text)
         self.save_cache(local_file, xml_text)
         return ExtensionManifest(xml_text)
 
@@ -1337,12 +1336,7 @@ class InVMArtifactsProfile(object):
 
     def __init__(self, in_vm_artifacts_profile_json):
         if in_vm_artifacts_profile_json and not in_vm_artifacts_profile_json.isspace():
-            self.__parse(in_vm_artifacts_profile_json)
-
-    def __parse(self, json_str):
-        # trim null and whitespaces
-        trimmed = json_str.rstrip(' \t\r\n\0')
-        self.__dict__.update(json.loads(trimmed))
+            self.__dict__.update(parse_json(in_vm_artifacts_profile_json))
 
     def is_extension_handlers_handling_on_hold(self):
         # hasattr() is not available in Python 2.6
