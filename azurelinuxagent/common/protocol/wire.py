@@ -939,19 +939,22 @@ class WireClient(object):
                 return InVMArtifactsProfile(in_vm_artifacts_profile_json)
 
     def _get_in_vm_artifacts_profile_using_default_protocol(self, blob_url):
+        result = None
         try:
             resp = self.call_storage_service(
                 restutil.http_get,
                 blob_url,
                 None)
         except HttpError as e:
-            raise ProtocolError(ustr(e))
-
-        if resp.status == httpclient.OK:
-            return resp.read()
-
-        logger.warn("Failed to get InVMArtifactsProfile: {0}, {1} using the default protocol",
-                    resp.status, blob_url)
+            logger.warn("Encountered HttpError while getting InVMArtifactsProfile from '{0}' "
+                        "using the default protocol: [{1}]", blob_url, e)
+        else:
+            if resp.status == httpclient.OK:
+                result = resp.read()
+            else:
+                logger.warn("Failed to get InVMArtifactsProfile with status [{0}] from '{1}' "
+                            "using the default protocol", resp.status, blob_url)
+        return result
 
 
 class VersionInfo(object):
