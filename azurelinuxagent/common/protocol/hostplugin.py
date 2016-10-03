@@ -26,6 +26,9 @@ URI_FORMAT_GET_EXTENSION_ARTIFACT = "http://{0}:{1}/extensionArtifact"
 URI_FORMAT_PUT_VM_STATUS = "http://{0}:{1}/status"
 URI_FORMAT_PUT_LOG = "http://{0}:{1}/vmAgentLog"
 API_VERSION = "2015-09-01"
+HEADER_CONTAINER_ID = "x-ms-containerid"
+HEADER_VERSION = "x-ms-version"
+HEADER_HOST_CONFIG_NAME = "x-ms-host-config-name"
 
 
 class HostPluginProtocol(object):
@@ -50,7 +53,7 @@ class HostPluginProtocol(object):
                                                  HOST_PLUGIN_PORT)
         logger.info("getting API versions at [{0}]".format(url))
         try:
-            headers = { "x-ms-containerid": self.goal_state.container_id }
+            headers = { HEADER_CONTAINER_ID: self.goal_state.container_id }
             response = restutil.http_get(url, headers)
             if response.status != httpclient.OK:
                 logger.error(
@@ -74,10 +77,11 @@ class HostPluginProtocol(object):
                                                        HOST_PLUGIN_PORT)
 
         logger.info("getting Extension Artifact at [{0}] using host GA plugin".format(artifact_url))
+        result = None
         try:
-            headers = {"x-ms-version": API_VERSION,
-                       "x-ms-containerid": self.goal_state.container_id,
-                       "x-ms-host-config-name": self.goal_state.role_instance_config_name,
+            headers = {HEADER_VERSION: API_VERSION,
+                       HEADER_CONTAINER_ID: self.goal_state.container_id,
+                       HEADER_HOST_CONFIG_NAME: self.goal_state.role_instance_config_name,
                        "x-ms-artifact-location": artifact_url}
             if artifact_manifest_url is not None:
                 headers["x-ms-artifact-manifest-location"] = artifact_manifest_url
@@ -87,14 +91,13 @@ class HostPluginProtocol(object):
                 logger.error(
                     "get Extension Artifact returned status code [{0}]".format(
                         response.status))
-                return None
             resp_body = response.read()
             if resp_body:
-                return remove_bom(bytearray(resp_body)).decode('utf-8')
-
+                result = remove_bom(bytearray(resp_body)).decode('utf-8')
         except HttpError as e:
             logger.error("get Extension Artifact failed with [{0}]".format(e))
-            return None
+
+        return result
 
     def put_vm_status(self, status_blob, sas_url):
         """
@@ -111,10 +114,10 @@ class HostPluginProtocol(object):
         url = URI_FORMAT_PUT_VM_STATUS.format(self.endpoint, HOST_PLUGIN_PORT)
         logger.verbose("Posting VM status to host channel [{0}]".format(url))
         status = textutil.b64encode(status_blob.data)
-        headers = {"x-ms-version": API_VERSION,
+        headers = {HEADER_VERSION: API_VERSION,
                    "Content-type": "application/json",
-                   "x-ms-containerid": self.goal_state.container_id,
-                   "x-ms-host-config-name": self.goal_state.role_instance_config_name}
+                   HEADER_CONTAINER_ID: self.goal_state.container_id,
+                   HEADER_HOST_CONFIG_NAME: self.goal_state.role_instance_config_name}
         blob_headers = [{'headerName': 'x-ms-version',
                          'headerValue': status_blob.__storage_version__},
                         {'headerName': 'x-ms-blob-type',
