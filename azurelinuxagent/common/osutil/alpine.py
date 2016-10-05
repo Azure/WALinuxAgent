@@ -29,7 +29,7 @@ class AlpineOSUtil(DefaultOSUtil):
         return True
 
     def get_dhcp_pid(self):
-        ret = shellutil.run_get_output("pidof udhcpc", chk_err=False)
+        ret = shellutil.run_get_output('pidof dhcpcd', chk_err=False)
         return ret[1] if ret[0] == 0 else None
 
     def set_ssh_client_alive_interval(self):
