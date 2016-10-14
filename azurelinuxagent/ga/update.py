@@ -302,7 +302,7 @@ class UpdateHandler(object):
 
     def _emit_restart_event(self):
         if not self._is_clean_start:
-            msg = u"{0} unexpectedly restarted".format(CURRENT_AGENT)
+            msg = u"{0} did not terminate cleanly".format(CURRENT_AGENT)
             logger.info(msg)
             add_event(
                 AGENT_NAME,
