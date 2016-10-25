@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?> 
+<Extensions version="1.0.0.0" goalStateIncarnation="1">
+    <GuestAgentExtension 
+        xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
+        <GAFamilies>
+            <GAFamily>
+                <Name>Prod</Name>
+                <Uris />
+            </GAFamily>
+            <GAFamily>
+                <Name>Test</Name>
+                <Uris>
+                    <Uri>https://rdfepirv2bl2prdstr01.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Test_useast_manifest.xml</Uri>
+                    <Uri>https://rdfepirv2bl2prdstr02.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Test_useast_manifest.xml</Uri>
+                    <Uri>https://rdfepirv2bl2prdstr03.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Test_useast_manifest.xml</Uri>
+                    <Uri>https://rdfepirv2bl2prdstr04.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Test_useast_manifest.xml</Uri>
+                    <Uri>https://rdfepirv2bl3prdstr01.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Test_useast_manifest.xml</Uri>
+                    <Uri>https://rdfepirv2bl3prdstr02.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Test_useast_manifest.xml</Uri>
+                    <Uri>https://rdfepirv2bl3prdstr03.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Test_useast_manifest.xml</Uri>
+                    <Uri>https://zrdfepirv2bl4prdstr01.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Test_useast_manifest.xml</Uri>
+                    <Uri>https://zrdfepirv2bl4prdstr03.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Test_useast_manifest.xml</Uri>
+                    <Uri>https://zrdfepirv2bl5prdstr02.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Test_useast_manifest.xml</Uri>
+                    <Uri>https://zrdfepirv2bl5prdstr04.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Test_useast_manifest.xml</Uri>
+                    <Uri>https://zrdfepirv2bl5prdstr06.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Test_useast_manifest.xml</Uri>
+                    <Uri>https://zrdfepirv2bl5prdstr09a.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Test_useast_manifest.xml</Uri>
+                    <Uri>https://zrdfepirv2bl6prdstr02a.blob.core.windows.net/7d89d439b79f4452950452399add2c90/Microsoft.OSTCLinuxAgent_Test_useast_manifest.xml</Uri>
+                </Uris>
+            </GAFamily>
+        </GAFamilies>
+        <Location>eastus</Location>
+    </GuestAgentExtension>
+    <StatusUploadBlob statusBlobType="BlockBlob">https://walaautoasmeastus.blob.core.windows.net/vhds/walaautos73small.walaautos73small.walaautos73small.status?sr=b&amp;sp=rw&amp;se=9999-01-01&amp;sk=key1&amp;sv=2014-02-14&amp;sig=u%2BCA2Cxb7ticiEBRIW8HWgNW7gl2NPuOGQl0u95ApQE%3D</StatusUploadBlob>
+</Extensions>

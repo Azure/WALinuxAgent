@@ -345,7 +345,8 @@ class UpdateHandler(object):
                 message=msg)
             return False
 
-        manifests = [m for m in manifest_list.vmAgentManifests if m.family == family]
+        manifests = [m for m in manifest_list.vmAgentManifests \
+                        if m.family == family and len(m.versionsManifestUris) > 0]
         if len(manifests) == 0:
             logger.info(u"Incarnation {0} has no agent family {1} updates", etag, family)
             return False
