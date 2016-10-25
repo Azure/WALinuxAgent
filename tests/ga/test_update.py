@@ -672,11 +672,11 @@ class TestUpdate(UpdateTestCase):
 
         return self.update_handler._upgrade_available(base_version=base_version)
 
-    def test_ensure_latest_agent_returns_true_on_first_use(self):
+    def test_upgrade_available_returns_true_on_first_use(self):
         self.assertTrue(self._test_upgrade_available())
         return
 
-    def test_ensure_current_agent_excluded(self):
+    def test_get_latest_agent_excluded(self):
         self.prepare_agent(AGENT_VERSION)
         self.assertFalse(self._test_upgrade_available(
                                 versions=self.agent_versions(),
@@ -684,7 +684,19 @@ class TestUpdate(UpdateTestCase):
         self.assertEqual(None, self.update_handler.get_latest_agent())
         return
 
-    def test_ensure_latest_agent_includes_old_agents(self):
+    def test_upgrade_available_handles_missing_family(self):
+        extensions_config = ExtensionsConfig(load_data("wire/ext_conf_missing_family.xml"))
+        protocol = ProtocolMock()
+        protocol.family = "Prod"
+        protocol.agent_manifests = extensions_config.vmagent_manifests
+        self.update_handler.protocol_util = protocol
+        with patch('azurelinuxagent.common.logger.warn') as mock_logger:
+            with patch('tests.ga.test_update.ProtocolMock.get_vmagent_pkgs', side_effect=ProtocolError):
+                self.assertFalse(self.update_handler._upgrade_available(base_version=CURRENT_VERSION))
+                self.assertEqual(0, mock_logger.call_count)
+        return
+
+    def test_upgrade_available_includes_old_agents(self):
         self.prepare_agents()
 
         old_version = self.agent_versions()[-1]
@@ -697,7 +709,7 @@ class TestUpdate(UpdateTestCase):
         self.assertEqual(all_count, len(self.update_handler.agents))
         return
 
-    def test_ensure_lastest_agent_purges_old_agents(self):
+    def test_upgrade_available_purges_old_agents(self):
         self.prepare_agents()
         agent_count = self.agent_count()
         self.assertEqual(5, agent_count)
@@ -708,28 +720,28 @@ class TestUpdate(UpdateTestCase):
         self.assertEqual(agent_versions, self.agent_versions())
         return
 
-    def test_ensure_latest_agent_skips_if_too_frequent(self):
+    def test_upgrade_available_skips_if_too_frequent(self):
         conf.get_autoupdate_frequency = Mock(return_value=10000)
         self.update_handler.last_attempt_time = time.time()
         self.assertFalse(self._test_upgrade_available())
         return
 
-    def test_ensure_latest_agent_skips_if_when_no_new_versions(self):
+    def test_upgrade_available_skips_if_when_no_new_versions(self):
         self.prepare_agents()
         base_version = self.agent_versions()[0] + 1
         self.assertFalse(self._test_upgrade_available(base_version=base_version))
         return
 
-    def test_ensure_latest_agent_skips_when_no_versions(self):
+    def test_upgrade_available_skips_when_no_versions(self):
         self.assertFalse(self._test_upgrade_available(protocol=ProtocolMock()))
         return
 
-    def test_ensure_latest_agent_skips_when_updates_are_disabled(self):
+    def test_upgrade_available_skips_when_updates_are_disabled(self):
         conf.get_autoupdate_enabled = Mock(return_value=False)
         self.assertFalse(self._test_upgrade_available())
         return
 
-    def test_ensure_latest_agent_sorts(self):
+    def test_upgrade_available_sorts(self):
         self.prepare_agents()
         self._test_upgrade_available()
 
