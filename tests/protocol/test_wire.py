@@ -156,22 +156,26 @@ class TestWireProtocolGetters(AgentTestCase):
         goal_state = GoalState(WireProtocolData(DATA_FILE).goal_state)
         wire_protocol_client.get_goal_state = Mock(return_value=goal_state)
 
-        #Test when response body is None
-        wire_protocol_client.call_storage_service = Mock(return_value=MockResponse(None, 200))
-        in_vm_artifacts_profile = wire_protocol_client.get_in_vm_artifacts_profile()
-        self.assertTrue(in_vm_artifacts_profile is None)
+        with patch.object(HostPluginProtocol, "get_extension_artifact_url_and_headers",
+                          return_value = ['dummy_url', {}]) as host_plugin_get_artifact_url_and_headers:
+            #Test when response body is None
+            wire_protocol_client.call_storage_service = Mock(return_value=MockResponse(None, 200))
+            in_vm_artifacts_profile = wire_protocol_client.get_in_vm_artifacts_profile()
+            self.assertTrue(in_vm_artifacts_profile is None)
 
-        #Test when response body is None
-        wire_protocol_client.call_storage_service = Mock(return_value=MockResponse('   ', 200))
-        in_vm_artifacts_profile = wire_protocol_client.get_in_vm_artifacts_profile()
-        self.assertTrue(in_vm_artifacts_profile is None)
+            #Test when response body is None
+            wire_protocol_client.call_storage_service = Mock(return_value=MockResponse('   '.encode('utf-8'), 200))
+            in_vm_artifacts_profile = wire_protocol_client.get_in_vm_artifacts_profile()
+            self.assertTrue(in_vm_artifacts_profile is None)
 
-        #Test when response body is None
-        wire_protocol_client.call_storage_service = Mock(return_value=MockResponse('{ }', 200))
-        in_vm_artifacts_profile = wire_protocol_client.get_in_vm_artifacts_profile()
-        self.assertEqual(dict(), in_vm_artifacts_profile.__dict__,
-                         'If in_vm_artifacts_profile_blob has empty json dictionary, in_vm_artifacts_profile '
-                         'should contain nothing')
+            #Test when response body is None
+            wire_protocol_client.call_storage_service = Mock(return_value=MockResponse('{ }'.encode('utf-8'), 200))
+            in_vm_artifacts_profile = wire_protocol_client.get_in_vm_artifacts_profile()
+            self.assertEqual(dict(), in_vm_artifacts_profile.__dict__,
+                             'If in_vm_artifacts_profile_blob has empty json dictionary, in_vm_artifacts_profile '
+                             'should contain nothing')
+
+            host_plugin_get_artifact_url_and_headers.assert_called_with(testurl)
 
 
     def test_get_in_vm_artifacts_profile_default(self, *args):
@@ -181,7 +185,7 @@ class TestWireProtocolGetters(AgentTestCase):
         goal_state = GoalState(WireProtocolData(DATA_FILE).goal_state)
         wire_protocol_client.get_goal_state = Mock(return_value=goal_state)
 
-        wire_protocol_client.call_storage_service = Mock(return_value=MockResponse('{"onHold": "true"}', 200))
+        wire_protocol_client.call_storage_service = Mock(return_value=MockResponse('{"onHold": "true"}'.encode('utf-8'), 200))
         in_vm_artifacts_profile = wire_protocol_client.get_in_vm_artifacts_profile()
         self.assertEqual(dict(onHold='true'), in_vm_artifacts_profile.__dict__)
         self.assertTrue(in_vm_artifacts_profile.is_extension_handlers_handling_on_hold())
@@ -193,13 +197,15 @@ class TestWireProtocolGetters(AgentTestCase):
         goal_state = GoalState(WireProtocolData(DATA_FILE).goal_state)
         wire_protocol_client.get_goal_state = Mock(return_value=goal_state)
 
-        with patch.object(HostPluginProtocol, "get_extension_artifact", return_value='{"onHold": "true"}') \
-             as patch_host_ga_plugin_get:
-            InVMArtifactsProfile.__get_in_vm_artifacts_profile = Mock(return_value=False)
+        wire_protocol_client._get_in_vm_artifacts_profile = Mock(side_effect=[None, '{"onHold": "true"}'.encode('utf-8')])
+
+        with patch.object(HostPluginProtocol, "get_extension_artifact_url_and_headers",
+                          return_value = ['dummy_url', {}]) as host_plugin_get_artifact_url_and_headers:
             in_vm_artifacts_profile = wire_protocol_client.get_in_vm_artifacts_profile()
             self.assertEqual(dict(onHold='true'), in_vm_artifacts_profile.__dict__)
             self.assertTrue(in_vm_artifacts_profile.is_extension_handlers_handling_on_hold())
-            patch_host_ga_plugin_get.assert_called_once_with(testurl)
+            host_plugin_get_artifact_url_and_headers.assert_called_once_with(testurl)
+
 
 class MockResponse:
     def __init__(self, body, status_code):

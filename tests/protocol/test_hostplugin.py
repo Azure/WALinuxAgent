@@ -137,48 +137,19 @@ class TestHostPlugin(AgentTestCase):
                             "x-ms-containerid": test_goal_state.container_id,
                             "x-ms-host-config-name": test_goal_state.role_instance_config_name,
                             "x-ms-artifact-location": sas_url}
-        expected_response = '{"key1": "value1", "key2": "value2"}'
-
-        host_client = wire.HostPluginProtocol(wireserver_url, test_goal_state)
-        self.assertFalse(host_client.is_initialized)
-        self.assertTrue(host_client.api_versions is None)
-        ret_byte_arr = []
-        ret_byte_arr.extend(bytearray(expected_response, 'utf-8'))
-
-        with patch.object(wire.HostPluginProtocol, "get_api_versions", return_value=api_versions) as patch_get:
-            with patch.object(restapi.restutil, "http_get", return_value=MockResponse(ret_byte_arr, 200)) as patch_get:
-                extension_artifact = host_client.get_extension_artifact(sas_url)
-                self.assertTrue(host_client.is_initialized)
-                self.assertFalse(host_client.api_versions is None)
-                self.assertTrue(patch_get.call_count == 1)
-                self.assertTrue(patch_get.call_args[0][0] == expected_url)
-                self.assertTrue(patch_get.call_args[0][1] == expected_headers)
-                self.assertEqual(expected_response, extension_artifact)
-
-    def test_validate_get_extension_artifacts_failure(self):
-        test_goal_state = wire.GoalState(WireProtocolData(DATA_FILE).goal_state)
-        expected_url = hostplugin.URI_FORMAT_GET_EXTENSION_ARTIFACT.format(wireserver_url,
-                                                                           hostplugin.HOST_PLUGIN_PORT)
-        expected_headers = {'x-ms-version': '2015-09-01',
-                            "x-ms-containerid": test_goal_state.container_id,
-                            "x-ms-host-config-name": test_goal_state.role_instance_config_name,
-                            "x-ms-artifact-location": sas_url}
 
         host_client = wire.HostPluginProtocol(wireserver_url, test_goal_state)
         self.assertFalse(host_client.is_initialized)
         self.assertTrue(host_client.api_versions is None)
 
         with patch.object(wire.HostPluginProtocol, "get_api_versions", return_value=api_versions) as patch_get:
-            with patch.object(restapi.restutil, "http_get",
-                              return_value=MockResponse(None, 500)) as patch_get:
-                extension_artifact = host_client.get_extension_artifact(sas_url)
-                self.assertTrue(host_client.is_initialized)
-                self.assertFalse(host_client.api_versions is None)
-                self.assertTrue(patch_get.call_count == 1)
-                self.assertTrue(patch_get.call_args[0][0] == expected_url)
-                self.assertTrue(patch_get.call_args[0][1] == expected_headers)
-                self.assertTrue(extension_artifact == None)
-
+            actual_url, actual_headers = host_client.get_extension_artifact_url_and_headers(sas_url)
+            self.assertTrue(host_client.is_initialized)
+            self.assertFalse(host_client.api_versions is None)
+            self.assertEqual(expected_url, actual_url)
+            for k in expected_headers:
+                self.assertTrue(k in actual_headers)
+                self.assertEqual(expected_headers[k], actual_headers[k])
 
 class MockResponse:
     def __init__(self, body, status_code):

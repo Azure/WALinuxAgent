@@ -65,7 +65,7 @@ class HostPluginProtocol(object):
             logger.error("get API versions failed with [{0}]".format(e))
             return []
 
-    def get_extension_artifact(self, artifact_url, artifact_manifest_url = None):
+    def get_extension_artifact_url_and_headers(self, artifact_url, artifact_manifest_url = None):
         if not self.ensure_initialized():
             logger.error("host plugin channel is not available")
             return
@@ -73,31 +73,15 @@ class HostPluginProtocol(object):
             logger.error("no extension artifact url was provided")
             return
 
-        url = URI_FORMAT_GET_EXTENSION_ARTIFACT.format(self.endpoint,
-                                                       HOST_PLUGIN_PORT)
+        url = URI_FORMAT_GET_EXTENSION_ARTIFACT.format(self.endpoint, HOST_PLUGIN_PORT)
+        headers = {HEADER_VERSION: API_VERSION,
+                   HEADER_CONTAINER_ID: self.goal_state.container_id,
+                   HEADER_HOST_CONFIG_NAME: self.goal_state.role_instance_config_name,
+                   "x-ms-artifact-location": artifact_url}
+        if artifact_manifest_url is not None:
+            headers["x-ms-artifact-manifest-location"] = artifact_manifest_url
 
-        logger.info("getting Extension Artifact at [{0}] using host GA plugin".format(artifact_url))
-        result = None
-        try:
-            headers = {HEADER_VERSION: API_VERSION,
-                       HEADER_CONTAINER_ID: self.goal_state.container_id,
-                       HEADER_HOST_CONFIG_NAME: self.goal_state.role_instance_config_name,
-                       "x-ms-artifact-location": artifact_url}
-            if artifact_manifest_url is not None:
-                headers["x-ms-artifact-manifest-location"] = artifact_manifest_url
-
-            response = restutil.http_get(url, headers)
-            if response.status != httpclient.OK:
-                logger.error(
-                    "get Extension Artifact returned status code [{0}]".format(
-                        response.status))
-            resp_body = response.read()
-            if resp_body:
-                result = remove_bom(bytearray(resp_body)).decode('utf-8')
-        except HttpError as e:
-            logger.error("get Extension Artifact failed with [{0}]".format(e))
-
-        return result
+        return url, headers
 
     def put_vm_status(self, status_blob, sas_url):
         """

@@ -927,24 +927,35 @@ class WireClient(object):
                 ext_conf.in_vm_artifacts_profile_blob and not \
                 ext_conf.in_vm_artifacts_profile_blob.isspace():
             # try with the default protocol
-            in_vm_artifacts_profile_json = \
-                self._get_in_vm_artifacts_profile_using_default_protocol(ext_conf.in_vm_artifacts_profile_blob)
+            in_vm_artifacts_profile_byte_arr = \
+                self._get_in_vm_artifacts_profile(ext_conf.in_vm_artifacts_profile_blob)
 
             # try with host GA plugin
-            if in_vm_artifacts_profile_json is None:
-                in_vm_artifacts_profile_json = \
-                    self.get_host_plugin().get_extension_artifact(ext_conf.in_vm_artifacts_profile_blob)
+            if in_vm_artifacts_profile_byte_arr is None:
+                logger.warn(
+                    "Failed to get extension artifacts profile using the default protocol. Try with HostGAPlugin")
+                host_plugin_endpoint, headers = \
+                    self.get_host_plugin().get_extension_artifact_url_and_headers(ext_conf.in_vm_artifacts_profile_blob)
+                in_vm_artifacts_profile_byte_arr = self._get_in_vm_artifacts_profile(host_plugin_endpoint, headers)
 
+            in_vm_artifacts_profile_json = self.decode_config(in_vm_artifacts_profile_byte_arr)
             if in_vm_artifacts_profile_json and not in_vm_artifacts_profile_json.isspace():
                 return InVMArtifactsProfile(in_vm_artifacts_profile_json)
 
-    def _get_in_vm_artifacts_profile_using_default_protocol(self, blob_url):
+    def _get_in_vm_artifacts_profile(self, blob_url, headers=None):
         result = None
         try:
-            resp = self.call_storage_service(
-                restutil.http_get,
-                blob_url,
-                None)
+            resp = self.call_storage_service(restutil.http_get, blob_url, headers=headers)
+            response_body = resp.read()
+            if resp.status < 400:
+                decoded = self.decode_config(response_body)
+                if decoded and not decoded.isspace():
+                    result = InVMArtifactsProfile(decoded)
+            else:
+                logger.warn("Unexpected http status '{0}' is returned with the message '{1}'",
+                            resp.status,
+                            response_body)
+
         except HttpError as e:
             logger.warn("Encountered HttpError while getting InVMArtifactsProfile from '{0}' "
                         "using the default protocol: [{1}]", blob_url, e)
