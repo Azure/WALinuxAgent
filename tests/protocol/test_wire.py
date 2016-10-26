@@ -106,7 +106,8 @@ class TestWireProtocolGetters(AgentTestCase):
 
         with patch.object(WireClient, "get_goal_state", return_value = goal_state) as patch_get_goal_state:
             host_plugin = wire_protocol_client.get_host_plugin()
-            self.assertEqual(goal_state, host_plugin.goal_state)
+            self.assertEqual(goal_state.container_id, host_plugin.container_id)
+            self.assertEqual(goal_state.role_instance_config_name, host_plugin.role_config_name)
             patch_get_goal_state.assert_called_once()
 
     def test_upload_status_blob_default(self, *args):
