@@ -110,7 +110,9 @@ class TestHostPlugin(AgentTestCase):
                            '"BlockBlob"}], ' \
                            '"requestUri": "http://sas_url"}'
 
-        host_client = wire.HostPluginProtocol(wireserver_url, test_goal_state)
+        host_client = wire.HostPluginProtocol(wireserver_url,
+                                              test_goal_state.container_id,
+                                              test_goal_state.role_instance_config_name)
         self.assertFalse(host_client.is_initialized)
         self.assertTrue(host_client.api_versions is None)
         status_blob = wire.StatusBlob(None)
@@ -138,7 +140,9 @@ class TestHostPlugin(AgentTestCase):
                             "x-ms-host-config-name": test_goal_state.role_instance_config_name,
                             "x-ms-artifact-location": sas_url}
 
-        host_client = wire.HostPluginProtocol(wireserver_url, test_goal_state)
+        host_client = wire.HostPluginProtocol(wireserver_url,
+                                              test_goal_state.container_id,
+                                              test_goal_state.role_instance_config_name)
         self.assertFalse(host_client.is_initialized)
         self.assertTrue(host_client.api_versions is None)
 

@@ -918,7 +918,10 @@ class WireClient(object):
 
     def get_host_plugin(self):
         if self.host_plugin is None:
-            self.host_plugin = HostPluginProtocol(self.endpoint, self.get_goal_state())
+            goal_state = self.get_goal_state()
+            self.host_plugin = HostPluginProtocol(self.endpoint,
+                                                  goal_state.container_id,
+                                                  goal_state.role_instance_config_name)
         return self.host_plugin
 
     def get_in_vm_artifacts_profile(self):

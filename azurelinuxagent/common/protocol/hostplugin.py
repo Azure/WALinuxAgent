@@ -32,14 +32,15 @@ HEADER_HOST_CONFIG_NAME = "x-ms-host-config-name"
 
 
 class HostPluginProtocol(object):
-    def __init__(self, endpoint, goal_state):
+    def __init__(self, endpoint, container_id, role_config_name):
         if endpoint is None:
             raise ProtocolError("Host plugin endpoint not provided")
         self.is_initialized = False
         self.is_available = False
         self.api_versions = None
         self.endpoint = endpoint
-        self.goal_state = goal_state
+        self.container_id = container_id
+        self.role_config_name = role_config_name
 
     def ensure_initialized(self):
         if not self.is_initialized:
@@ -53,7 +54,7 @@ class HostPluginProtocol(object):
                                                  HOST_PLUGIN_PORT)
         logger.info("getting API versions at [{0}]".format(url))
         try:
-            headers = { HEADER_CONTAINER_ID: self.goal_state.container_id }
+            headers = { HEADER_CONTAINER_ID: self.container_id }
             response = restutil.http_get(url, headers)
             if response.status != httpclient.OK:
                 logger.error(
@@ -75,8 +76,8 @@ class HostPluginProtocol(object):
 
         url = URI_FORMAT_GET_EXTENSION_ARTIFACT.format(self.endpoint, HOST_PLUGIN_PORT)
         headers = {HEADER_VERSION: API_VERSION,
-                   HEADER_CONTAINER_ID: self.goal_state.container_id,
-                   HEADER_HOST_CONFIG_NAME: self.goal_state.role_instance_config_name,
+                   HEADER_CONTAINER_ID: self.container_id,
+                   HEADER_HOST_CONFIG_NAME: self.role_config_name,
                    "x-ms-artifact-location": artifact_url}
         if artifact_manifest_url is not None:
             headers["x-ms-artifact-manifest-location"] = artifact_manifest_url
@@ -100,8 +101,8 @@ class HostPluginProtocol(object):
         status = textutil.b64encode(status_blob.data)
         headers = {HEADER_VERSION: API_VERSION,
                    "Content-type": "application/json",
-                   HEADER_CONTAINER_ID: self.goal_state.container_id,
-                   HEADER_HOST_CONFIG_NAME: self.goal_state.role_instance_config_name}
+                   HEADER_CONTAINER_ID: self.container_id,
+                   HEADER_HOST_CONFIG_NAME: self.role_config_name}
         blob_headers = [{'headerName': 'x-ms-version',
                          'headerValue': status_blob.__storage_version__},
                         {'headerName': 'x-ms-blob-type',
