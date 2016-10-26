@@ -707,7 +707,8 @@ class WireClient(object):
                 self.update_certs(goal_state)
                 self.update_ext_conf(goal_state)
                 if self.host_plugin is not None:
-                    self.host_plugin.goal_state = goal_state
+                    self.host_plugin.container_id = goal_state.container_id
+                    self.host_plugin.role_config_name = goal_state.role_instance_config_name
                 return
             except WireProtocolResourceGone:
                 logger.info("Incarnation is out of date. Update goalstate.")
