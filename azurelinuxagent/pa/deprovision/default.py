@@ -17,6 +17,8 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
+import signal
+import sys
 import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common.exception import ProtocolError
 from azurelinuxagent.common.future import read_input
@@ -38,6 +40,7 @@ class DeprovisionHandler(object):
     def __init__(self):
         self.osutil = get_osutil()
         self.protocol_util = get_protocol_util()
+        signal.signal(signal.SIGINT, self.handle_interrupt_signal)
 
     def del_root_password(self, warnings, actions):
         warnings.append("WARNING! root password will be disabled. "
@@ -133,5 +136,9 @@ class DeprovisionHandler(object):
 
         for action in actions:
             action.invoke()
+
+    def handle_interrupt_signal(self, frame):
+        print("Deprovision is interrupted.")
+        sys.exit(0)
 
 
