@@ -189,7 +189,7 @@ class TestWireProtocolGetters(AgentTestCase):
         wire_protocol_client.call_storage_service = Mock(return_value=MockResponse('{"onHold": "true"}'.encode('utf-8'), 200))
         in_vm_artifacts_profile = wire_protocol_client.get_in_vm_artifacts_profile()
         self.assertEqual(dict(onHold='true'), in_vm_artifacts_profile.__dict__)
-        self.assertTrue(in_vm_artifacts_profile.is_extension_handlers_handling_on_hold())
+        self.assertTrue(in_vm_artifacts_profile.is_extension_handling_on_hold())
 
     def test_get_in_vm_artifacts_profile_host_ga_plugin(self, *args):
         wire_protocol_client = WireProtocol(wireserver_url).client
@@ -204,9 +204,28 @@ class TestWireProtocolGetters(AgentTestCase):
                           return_value = ['dummy_url', {}]) as host_plugin_get_artifact_url_and_headers:
             in_vm_artifacts_profile = wire_protocol_client.get_in_vm_artifacts_profile()
             self.assertEqual(dict(onHold='true'), in_vm_artifacts_profile.__dict__)
-            self.assertTrue(in_vm_artifacts_profile.is_extension_handlers_handling_on_hold())
+            self.assertTrue(in_vm_artifacts_profile.is_extension_handling_on_hold())
             host_plugin_get_artifact_url_and_headers.assert_called_once_with(testurl)
 
+    def test_update_hosting_env_in_a_restored_vm(self, *args):
+        wire_protocol_client = WireProtocol(wireserver_url).client
+        wire_protocol_client.ext_conf = ExtensionsConfig(None)
+        wire_protocol_data = WireProtocolData(DATA_FILE)
+        goal_state = GoalState(wire_protocol_data.goal_state)
+        mock_lib_dir = self.tmp_dir
+
+        # create WAS_ON_HOLD_EVER_SET_TO_FASLE which should be cleaned up after invoking update_hosting_env
+        was_on_hold_ever_set_to_false_path = os.path.join(mock_lib_dir, WAS_ON_HOLD_EVER_SET_TO_FALSE)
+        fileutil.write_file(was_on_hold_ever_set_to_false_path, "")
+
+        # Mock the case where the VM is a restored one
+        conf.get_lib_dir = Mock(return_value=mock_lib_dir)
+        wire_protocol_client._is_in_a_restored_vm = Mock(return_value=True)
+        wire_protocol_client.fetch_config = Mock(return_value=wire_protocol_data.hosting_env)
+
+        wire_protocol_client.update_hosting_env(goal_state)
+
+        self.assertFalse(os.path.isfile(was_on_hold_ever_set_to_false_path))
 
 class MockResponse:
     def __init__(self, body, status_code):
