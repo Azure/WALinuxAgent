@@ -27,6 +27,7 @@ from azurelinuxagent.common.future import httpclient, bytebuffer
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, \
     findtext, getattrib, gettext, remove_bom, get_bytes_from_pem, parse_json
 import azurelinuxagent.common.utils.fileutil as fileutil
+import azurelinuxagent.common.utils.textutil as textutil
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.protocol.restapi import *
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
@@ -927,9 +928,7 @@ class WireClient(object):
 
     def get_in_vm_artifacts_profile(self):
         ext_conf = self.ext_conf
-        if ext_conf and \
-                ext_conf.in_vm_artifacts_profile_blob and not \
-                ext_conf.in_vm_artifacts_profile_blob.isspace():
+        if ext_conf and not textutil.is_str_none_or_whitespace(ext_conf.in_vm_artifacts_profile_blob):
             # try with the default protocol
             in_vm_artifacts_profile_byte_arr = \
                 self._get_in_vm_artifacts_profile(ext_conf.in_vm_artifacts_profile_blob)
@@ -943,7 +942,7 @@ class WireClient(object):
                 in_vm_artifacts_profile_byte_arr = self._get_in_vm_artifacts_profile(host_plugin_endpoint, headers)
 
             in_vm_artifacts_profile_json = self.decode_config(in_vm_artifacts_profile_byte_arr)
-            if in_vm_artifacts_profile_json and not in_vm_artifacts_profile_json.isspace():
+            if not textutil.is_str_none_or_whitespace(in_vm_artifacts_profile_json):
                 return InVMArtifactsProfile(in_vm_artifacts_profile_json)
 
     def _get_in_vm_artifacts_profile(self, blob_url, headers=None):
@@ -953,7 +952,7 @@ class WireClient(object):
             response_body = resp.read()
             if resp.status < 400:
                 decoded = self.decode_config(response_body)
-                if decoded and not decoded.isspace():
+                if not textutil.is_str_none_or_whitespace(decoded):
                     result = InVMArtifactsProfile(decoded)
             else:
                 logger.warn("Unexpected http status '{0}' is returned with the message '{1}'",
@@ -1353,7 +1352,7 @@ class InVMArtifactsProfile(object):
     '''
 
     def __init__(self, in_vm_artifacts_profile_json):
-        if in_vm_artifacts_profile_json and not in_vm_artifacts_profile_json.isspace():
+        if not textutil.is_str_none_or_whitespace(in_vm_artifacts_profile_json):
             self.__dict__.update(parse_json(in_vm_artifacts_profile_json))
 
     def is_extension_handlers_handling_on_hold(self):
