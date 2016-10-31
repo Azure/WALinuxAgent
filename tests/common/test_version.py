@@ -130,3 +130,45 @@ class TestGetF5Platforms(AgentTestCase):
             self.assertTrue(platform[1] == '12.0.0')
             self.assertTrue(platform[2] == 'bigip')
             self.assertTrue(platform[3] == 'BIG-IP')
+
+    def test_get_f5_platform_iworkflow_2_0_1(self):
+        version_file = textwrap.dedent("""
+        Product: iWorkflow
+        Version: 2.0.1
+        Build: 0.0.9842
+        Sequence: 2.0.1.0.0.9842.0
+        BaseBuild: 0.0.9842
+        Edition: Final
+        Date: Sat Oct  1 22:52:08 PDT 2016
+        Built: 161001225208
+        Changelist: 1924048
+        JobID: 734712""")
+
+        mo = mock.mock_open(read_data=version_file)
+        with patch(open_patch(), mo):
+            platform = version.get_f5_platform()
+            self.assertTrue(platform[0] == 'iworkflow')
+            self.assertTrue(platform[1] == '2.0.1')
+            self.assertTrue(platform[2] == 'iworkflow')
+            self.assertTrue(platform[3] == 'iWorkflow')
+
+    def test_get_f5_platform_bigiq_5_1_0(self):
+        version_file = textwrap.dedent("""
+        Product: BIG-IQ
+        Version: 5.1.0
+        Build: 0.0.631
+        Sequence: 5.1.0.0.0.631.0
+        BaseBuild: 0.0.631
+        Edition: Final
+        Date: Thu Sep 15 19:55:43 PDT 2016
+        Built: 160915195543
+        Changelist: 1907534
+        JobID: 726344""")
+
+        mo = mock.mock_open(read_data=version_file)
+        with patch(open_patch(), mo):
+            platform = version.get_f5_platform()
+            self.assertTrue(platform[0] == 'bigiq')
+            self.assertTrue(platform[1] == '5.1.0')
+            self.assertTrue(platform[2] == 'bigiq')
+            self.assertTrue(platform[3] == 'BIG-IQ')
