@@ -53,8 +53,6 @@ class UbuntuProvisionHandler(ProvisionHandler):
         self.wait_for_ovfenv()
         self.protocol_util.get_protocol()
         self.report_not_ready("Provisioning", "Starting")
-        logger.info("Sleep 15 seconds to prevent throttling")
-        time.sleep(15)  # Sleep to prevent throttling
 
         try:
             logger.info("Wait for ssh host key to be generated.")
@@ -95,5 +93,5 @@ class UbuntuProvisionHandler(ProvisionHandler):
                 return self.get_ssh_host_key_thumbprint(keypair_type)
             if retry < max_retry - 1:
                 logger.info("Wait for ssh host key be generated: {0}", path)
-                time.sleep(5)
+                time.sleep(1)
         raise ProvisionError("ssh host key is not generated.")
