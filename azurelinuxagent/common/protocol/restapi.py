@@ -282,6 +282,9 @@ class Protocol(DataContract):
     def get_ext_handler_pkgs(self, extension):
         raise NotImplementedError()
 
+    def get_in_vm_artifacts_profile(self):
+        raise NotImplementedError()
+
     def download_ext_handler_pkg(self, uri):
         try:
             resp = restutil.http_get(uri, chk_proxy=True)

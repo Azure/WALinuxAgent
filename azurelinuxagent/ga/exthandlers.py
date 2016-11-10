@@ -195,6 +195,12 @@ class ExtHandlersHandler(object):
             logger.verbose("No ext handler config found")
             return
 
+        in_vm_artifacts_profile = self.protocol.get_in_vm_artifacts_profile()
+        if in_vm_artifacts_profile and \
+           in_vm_artifacts_profile.is_extension_handlers_handling_on_hold():
+            logger.info("Handling Extension handlers is on hold")
+            return
+
         for ext_handler in self.ext_handlers.extHandlers:
             #TODO handle install in sequence, enable in parallel
             self.handle_ext_handler(ext_handler, etag)

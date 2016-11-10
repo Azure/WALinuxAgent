@@ -25,7 +25,7 @@ import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common.exception import ProtocolNotFoundError
 from azurelinuxagent.common.future import httpclient, bytebuffer
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, \
-    findtext, getattrib, gettext, remove_bom, get_bytes_from_pem
+    findtext, getattrib, gettext, remove_bom, get_bytes_from_pem, parse_json
 import azurelinuxagent.common.utils.fileutil as fileutil
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.protocol.restapi import *
@@ -138,6 +138,10 @@ class WireProtocol(Protocol):
         goal_state = self.client.get_goal_state()
         man = self.client.get_ext_manifest(ext_handler, goal_state)
         return man.pkg_list
+
+    def get_in_vm_artifacts_profile(self):
+        logger.verbose("Get In-VM Artifacts Profile")
+        return self.client.get_in_vm_artifacts_profile()
 
     def report_provision_status(self, provision_status):
         validate_param("provision_status", provision_status, ProvisionStatus)
@@ -703,7 +707,8 @@ class WireClient(object):
                 self.update_certs(goal_state)
                 self.update_ext_conf(goal_state)
                 if self.host_plugin is not None:
-                    self.host_plugin.goal_state = goal_state
+                    self.host_plugin.container_id = goal_state.container_id
+                    self.host_plugin.role_config_name = goal_state.role_instance_config_name
                 return
             except WireProtocolResourceGone:
                 logger.info("Incarnation is out of date. Update goalstate.")
@@ -914,8 +919,58 @@ class WireClient(object):
 
     def get_host_plugin(self):
         if self.host_plugin is None:
-            self.host_plugin = HostPluginProtocol(self.endpoint, self.get_goal_state())
+            goal_state = self.get_goal_state()
+            self.host_plugin = HostPluginProtocol(self.endpoint,
+                                                  goal_state.container_id,
+                                                  goal_state.role_instance_config_name)
         return self.host_plugin
+
+    def get_in_vm_artifacts_profile(self):
+        ext_conf = self.ext_conf
+        if ext_conf and \
+                ext_conf.in_vm_artifacts_profile_blob and not \
+                ext_conf.in_vm_artifacts_profile_blob.isspace():
+            # try with the default protocol
+            in_vm_artifacts_profile_byte_arr = \
+                self._get_in_vm_artifacts_profile(ext_conf.in_vm_artifacts_profile_blob)
+
+            # try with host GA plugin
+            if in_vm_artifacts_profile_byte_arr is None:
+                logger.warn(
+                    "Failed to get extension artifacts profile using the default protocol. Try with HostGAPlugin")
+                host_plugin_endpoint, headers = \
+                    self.get_host_plugin().get_extension_artifact_url_and_headers(ext_conf.in_vm_artifacts_profile_blob)
+                in_vm_artifacts_profile_byte_arr = self._get_in_vm_artifacts_profile(host_plugin_endpoint, headers)
+
+            in_vm_artifacts_profile_json = self.decode_config(in_vm_artifacts_profile_byte_arr)
+            if in_vm_artifacts_profile_json and not in_vm_artifacts_profile_json.isspace():
+                return InVMArtifactsProfile(in_vm_artifacts_profile_json)
+
+    def _get_in_vm_artifacts_profile(self, blob_url, headers=None):
+        result = None
+        try:
+            resp = self.call_storage_service(restutil.http_get, blob_url, headers=headers)
+            response_body = resp.read()
+            if resp.status < 400:
+                decoded = self.decode_config(response_body)
+                if decoded and not decoded.isspace():
+                    result = InVMArtifactsProfile(decoded)
+            else:
+                logger.warn("Unexpected http status '{0}' is returned with the message '{1}'",
+                            resp.status,
+                            response_body)
+
+        except HttpError as e:
+            logger.warn("Encountered HttpError while getting InVMArtifactsProfile from '{0}' "
+                        "using the default protocol: [{1}]", blob_url, e)
+        else:
+            if resp.status == httpclient.OK:
+                result = resp.read()
+            else:
+                logger.warn("Failed to get InVMArtifactsProfile with status [{0}] from '{1}' "
+                            "using the default protocol", resp.status, blob_url)
+        return result
+
 
 class VersionInfo(object):
     def __init__(self, xml_text):
@@ -1145,6 +1200,7 @@ class ExtensionsConfig(object):
         self.ext_handlers = ExtHandlerList()
         self.vmagent_manifests = VMAgentManifestList()
         self.status_upload_blob = None
+        self.in_vm_artifacts_profile_blob = None
         if xml_text is not None:
             self.parse(xml_text)
 
@@ -1179,6 +1235,7 @@ class ExtensionsConfig(object):
             self.parse_plugin_settings(ext_handler, plugin_settings)
 
         self.status_upload_blob = findtext(xml_doc, "StatusUploadBlob")
+        self.in_vm_artifacts_profile_blob = findtext(xml_doc, "InVMArtifactsProfileBlob")
 
     def parse_plugin(self, plugin):
         ext_handler = ExtHandler()
@@ -1280,3 +1337,27 @@ class ExtensionManifest(object):
 
             pkg.isinternal = isinternal
             self.pkg_list.versions.append(pkg)
+
+
+# Do not extend this class
+class InVMArtifactsProfile(object):
+    '''
+    deserialized json string of InVMArtifactsProfile.
+    It is expected to contain the following fields:
+    * inVMArtifactsProfileBlobSeqNo
+    * profileId (optional)
+    * onHold (optional)
+    * certificateThumbprint (optional)
+    * encryptedHealthChecks (optional)
+    * encryptedApplicationProfile (optional)
+    '''
+
+    def __init__(self, in_vm_artifacts_profile_json):
+        if in_vm_artifacts_profile_json and not in_vm_artifacts_profile_json.isspace():
+            self.__dict__.update(parse_json(in_vm_artifacts_profile_json))
+
+    def is_extension_handlers_handling_on_hold(self):
+        # hasattr() is not available in Python 2.6
+        if 'onHold' in self.__dict__:
+            return self.onHold.lower() == 'true'
+        return False

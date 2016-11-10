@@ -278,11 +278,13 @@ def b64encode(s):
         return base64.b64encode(bytes(s, 'utf-8')).decode('utf-8')
     return base64.b64encode(s)
 
+
 def b64decode(s):
     from azurelinuxagent.common.version import PY_VERSION_MAJOR
     if PY_VERSION_MAJOR > 2:
         return base64.b64decode(s).decode('utf-8')
     return base64.b64decode(s)
+
 
 def safe_shlex_split(s):
     import shlex
@@ -290,3 +292,16 @@ def safe_shlex_split(s):
     if PY_VERSION[:2] == (2, 6):
         return shlex.split(s.encode('utf-8'))
     return shlex.split(s)
+
+
+def parse_json(json_str):
+    """
+    Parse json string and return a resulting dictionary
+    """
+    # trim null and whitespaces
+    result = None
+    if json_str and not json_str.isspace():
+        import json
+        result = json.loads(json_str.rstrip(' \t\r\n\0'))
+
+    return result
