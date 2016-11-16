@@ -360,9 +360,12 @@ class ExtHandlerInstance(object):
 
         # Determine the desired and installed versions
         requested_version = FlexibleVersion(self.ext_handler.properties.version)
-        installed_version = FlexibleVersion(self.get_installed_version())
-        if installed_version is None:
+
+        installed_version_string = self.get_installed_version()
+        if installed_version_string is None:
             installed_version = requested_version
+        else:
+            installed_version = FlexibleVersion(installed_version_string)
 
         # Divide packages
         # - Find the installed package (its version must exactly match)
