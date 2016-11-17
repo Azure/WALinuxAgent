@@ -251,8 +251,10 @@ def set_ini_config(config, name, val):
 
 
 def remove_bom(c):
-    if str_to_ord(c[0]) > 128 and str_to_ord(c[1]) > 128 and \
-                    str_to_ord(c[2]) > 128:
+    if len(c) > 2 \
+            and str_to_ord(c[0]) > 128 \
+            and str_to_ord(c[1]) > 128 \
+            and str_to_ord(c[2]) > 128:
         c = c[3:]
     return c
 
