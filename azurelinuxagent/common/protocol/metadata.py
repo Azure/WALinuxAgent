@@ -296,9 +296,7 @@ class Certificates(object):
 
         # Wrapping the certificate lines.
         # decode and save the result into p7b_file
-        fileStream = open(p7b_file, 'w')
-        fileStream.write(base64.b64decode(data))
-        fileStream.close()
+        fileutil.write_file(p7b_file, base64.b64decode(data), asbin=True) 
 
         ssl_cmd = "openssl pkcs7 -text -in {0} -inform der | grep -v '^-----' "
         ret, data = shellutil.run_get_output(ssl_cmd.format(p7b_file))
