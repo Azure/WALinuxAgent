@@ -39,10 +39,15 @@ def get_distro():
         osinfo = platform.dist()
 
     # The platform.py lib has issue with detecting oracle linux distribution.
-    # Merge the following patch provided by oracle as a temparory fix.
+    # Merge the following patch provided by oracle as a temporary fix.
     if os.path.exists("/etc/oracle-release"):
         osinfo[2] = "oracle"
         osinfo[3] = "Oracle Linux"
+
+    # The platform.py lib has issue with detecting BIG-IP linux distribution.
+    # Merge the following patch provided by F5.
+    if os.path.exists("/shared/vadc"):
+        osinfo = get_f5_platform()
 
     # Remove trailing whitespace and quote in distro name
     osinfo[0] = osinfo[0].strip('"').strip(' ').lower()
@@ -134,3 +139,33 @@ def is_snappy():
 
 if is_snappy():
     DISTRO_FULL_NAME = "Snappy Ubuntu Core"
+
+"""
+Add this workaround for detecting F5 products because BIG-IP/IQ/etc do not show
+their version info in the /etc/product-version location. Instead, the version
+and product information is contained in the /VERSION file.
+"""
+def get_f5_platform():
+    result = [None,None,None,None]
+    f5_version = re.compile("^Version: (\d+\.\d+\.\d+)")
+    f5_product = re.compile("^Product: ([\w-]+)")
+
+    with open('/VERSION', 'r') as fh:
+        content = fh.readlines()
+        for line in content:
+            version_matches = f5_version.match(line)
+            product_matches = f5_product.match(line)
+            if version_matches:
+                result[1] = version_matches.group(1)
+            elif product_matches:
+                result[3] = product_matches.group(1)
+                if result[3] == "BIG-IP":
+                    result[0] = "bigip"
+                    result[2] = "bigip"
+                elif result[3] == "BIG-IQ":
+                    result[0] = "bigiq"
+                    result[2] = "bigiq"
+                elif result[3] == "iWorkflow":
+                    result[0] = "iworkflow"
+                    result[2] = "iworkflow"
+    return result

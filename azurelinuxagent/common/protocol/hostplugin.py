@@ -22,20 +22,25 @@ from azurelinuxagent.common.utils import textutil
 
 HOST_PLUGIN_PORT = 32526
 URI_FORMAT_GET_API_VERSIONS = "http://{0}:{1}/versions"
+URI_FORMAT_GET_EXTENSION_ARTIFACT = "http://{0}:{1}/extensionArtifact"
 URI_FORMAT_PUT_VM_STATUS = "http://{0}:{1}/status"
 URI_FORMAT_PUT_LOG = "http://{0}:{1}/vmAgentLog"
 API_VERSION = "2015-09-01"
+HEADER_CONTAINER_ID = "x-ms-containerid"
+HEADER_VERSION = "x-ms-version"
+HEADER_HOST_CONFIG_NAME = "x-ms-host-config-name"
 
 
 class HostPluginProtocol(object):
-    def __init__(self, endpoint, goal_state):
+    def __init__(self, endpoint, container_id, role_config_name):
         if endpoint is None:
             raise ProtocolError("Host plugin endpoint not provided")
         self.is_initialized = False
         self.is_available = False
         self.api_versions = None
         self.endpoint = endpoint
-        self.goal_state = goal_state
+        self.container_id = container_id
+        self.role_config_name = role_config_name
 
     def ensure_initialized(self):
         if not self.is_initialized:
@@ -49,7 +54,7 @@ class HostPluginProtocol(object):
                                                  HOST_PLUGIN_PORT)
         logger.info("getting API versions at [{0}]".format(url))
         try:
-            headers = { "x-ms-containerid": self.goal_state.container_id }
+            headers = { HEADER_CONTAINER_ID: self.container_id }
             response = restutil.http_get(url, headers)
             if response.status != httpclient.OK:
                 logger.error(
@@ -60,6 +65,24 @@ class HostPluginProtocol(object):
         except HttpError as e:
             logger.error("get API versions failed with [{0}]".format(e))
             return []
+
+    def get_extension_artifact_url_and_headers(self, artifact_url, artifact_manifest_url = None):
+        if not self.ensure_initialized():
+            logger.error("host plugin channel is not available")
+            return
+        if artifact_url is None or artifact_url.isspace():
+            logger.error("no extension artifact url was provided")
+            return
+
+        url = URI_FORMAT_GET_EXTENSION_ARTIFACT.format(self.endpoint, HOST_PLUGIN_PORT)
+        headers = {HEADER_VERSION: API_VERSION,
+                   HEADER_CONTAINER_ID: self.container_id,
+                   HEADER_HOST_CONFIG_NAME: self.role_config_name,
+                   "x-ms-artifact-location": artifact_url}
+        if artifact_manifest_url is not None:
+            headers["x-ms-artifact-manifest-location"] = artifact_manifest_url
+
+        return url, headers
 
     def put_vm_status(self, status_blob, sas_url):
         """
@@ -76,10 +99,10 @@ class HostPluginProtocol(object):
         url = URI_FORMAT_PUT_VM_STATUS.format(self.endpoint, HOST_PLUGIN_PORT)
         logger.verbose("Posting VM status to host channel [{0}]".format(url))
         status = textutil.b64encode(status_blob.data)
-        headers = {"x-ms-version": API_VERSION,
+        headers = {HEADER_VERSION: API_VERSION,
                    "Content-type": "application/json",
-                   "x-ms-containerid": self.goal_state.container_id,
-                   "x-ms-host-config-name": self.goal_state.role_instance_config_name}
+                   HEADER_CONTAINER_ID: self.container_id,
+                   HEADER_HOST_CONFIG_NAME: self.role_config_name}
         blob_headers = [{'headerName': 'x-ms-version',
                          'headerValue': status_blob.__storage_version__},
                         {'headerName': 'x-ms-blob-type',

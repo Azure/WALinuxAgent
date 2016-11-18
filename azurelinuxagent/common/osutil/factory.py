@@ -21,6 +21,7 @@ from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_VERSION, \
                                      DISTRO_FULL_NAME
 
 from .default import DefaultOSUtil
+from .clearlinux import ClearLinuxUtil
 from .coreos import CoreOSUtil
 from .debian import DebianOSUtil
 from .freebsd import FreeBSDOSUtil
@@ -32,6 +33,8 @@ from .alpine import AlpineOSUtil
 
 def get_osutil(distro_name=DISTRO_NAME, distro_version=DISTRO_VERSION,
                distro_full_name=DISTRO_FULL_NAME):
+    if distro_name == "clear linux software for intel architecture":
+        return ClearLinuxUtil()
     if distro_name == "ubuntu":
         if Version(distro_version) == Version("12.04") or \
            Version(distro_version) == Version("12.10"):
