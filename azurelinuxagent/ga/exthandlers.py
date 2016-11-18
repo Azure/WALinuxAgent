@@ -211,9 +211,9 @@ class ExtHandlersHandler(object):
         ext_handler_i.decide_version()
         if not ext_handler_i.is_upgrade and self.last_etag == etag:
             if self.log_etag:
-                ext_handler_i.logger.info("Version {0} is current for etag {1}",
-                                          ext_handler_i.pkg.version,
-                                          etag)
+                ext_handler_i.logger.verbose("Version {0} is current for etag {1}",
+                                             ext_handler_i.pkg.version,
+                                             etag)
                 self.log_etag = False
             return
 
