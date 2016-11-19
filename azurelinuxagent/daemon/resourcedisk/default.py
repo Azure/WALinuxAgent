@@ -129,12 +129,12 @@ class ResourceDiskHandler(object):
                 shellutil.run(mkfs_string)
         else:
             logger.info("GPT not detected, determining filesystem")
-            ret = shellutil.run_get_output("sfdisk -q -c {0} 1".format(device))
-            ptype = ret[1].rstrip()
+            ret = shellutil.run_get_output("sfdisk -q --part-type {0} 1".format(device))
+            ptype = ret[1].strip()
             if ptype == "7" and fs != "ntfs":
                 logger.info("The partition is formatted with ntfs, updating "
                             "partition type to 83")
-                shellutil.run("sfdisk -c {0} 1 83".format(device))
+                shellutil.run("sfdisk --part-type {0} 1 83".format(device))
                 logger.info("Format partition [{0}]", mkfs_string)
                 shellutil.run(mkfs_string)
             else:
