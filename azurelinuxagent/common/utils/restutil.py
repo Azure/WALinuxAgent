@@ -131,7 +131,10 @@ def http_request(method, url, data, headers=None, max_retry=3,
     logger.verbose("HTTP headers: [{0}]", headers)
     logger.verbose("HTTP proxy: [{0}:{1}]", proxy_host, proxy_port)
 
+    retry_msg = ''
+    log_msg = "HTTP {0}".format(method)
     for retry in range(0, max_retry):
+        retry_interval = RETRY_WAITING_INTERVAL
         try:
             resp = _http_request(method,
                                  host,
@@ -145,21 +148,22 @@ def http_request(method, url, data, headers=None, max_retry=3,
             logger.verbose("HTTP response status: [{0}]", resp.status)
             return resp
         except httpclient.HTTPException as e:
-            logger.warn('HTTPException: [{0}]', e)
+            retry_msg = 'HTTP exception: {0} {1}'.format(log_msg, e)
+            retry_interval = 5
         except IOError as e:
-            logger.warn('IOError: [{0}]', e)
+            retry_msg = 'IO error: {0} {1}'.format(log_msg, e)
+            retry_interval = 0
+            max_retry = 0
 
-        if retry < max_retry - 1:
-            logger.info("Retry {0}", retry)
-            time.sleep(RETRY_WAITING_INTERVAL)
-        else:
-            logger.error("All retries failed")
+        if retry < max_retry:
+            logger.info("Retry [{0}/{1} - {3}]",
+                        retry+1,
+                        max_retry,
+                        retry_interval,
+                        retry_msg)
+            time.sleep(retry_interval)
 
-    if url is not None and len(url) > 100:
-        url_log = url[0: 100]  # In case the url is too long
-    else:
-        url_log = url
-    raise HttpError("HTTPError: {0} {1}".format(method, url_log))
+    raise HttpError("{0} failed".format(log_msg))
 
 
 def http_get(url, headers=None, max_retry=3, chk_proxy=False):

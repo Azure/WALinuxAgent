@@ -282,16 +282,16 @@ class Protocol(DataContract):
     def get_ext_handler_pkgs(self, extension):
         raise NotImplementedError()
 
-    def get_in_vm_artifacts_profile(self):
+    def get_artifacts_profile(self):
         raise NotImplementedError()
 
-    def download_ext_handler_pkg(self, uri):
+    def download_ext_handler_pkg(self, uri, headers=None):
         try:
-            resp = restutil.http_get(uri, chk_proxy=True)
+            resp = restutil.http_get(uri, chk_proxy=True, headers=headers)
             if resp.status == restutil.httpclient.OK:
                 return resp.read()
-        except HttpError as e:
-            raise ProtocolError("Failed to download from: {0}".format(uri), e)
+        except Exception as e:
+            logger.warn("Failed to download from: {0}".format(uri), e)
 
     def report_provision_status(self, provision_status):
         raise NotImplementedError()

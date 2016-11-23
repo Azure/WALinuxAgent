@@ -20,6 +20,7 @@ from tests.protocol.mockwiredata import *
 
 data_with_bom = b'\xef\xbb\xbfhehe'
 testurl = 'http://foo'
+testtype = 'BlockBlob'
 wireserver_url = '168.63.129.16'
 
 @patch("time.sleep")
@@ -100,6 +101,18 @@ class TestWireProtocolGetters(AgentTestCase):
             for c in http_patch.call_args_list:
                 self.assertTrue(c[-1]['chk_proxy'] == True)
 
+    def test_status_blob_parsing(self, *args):
+        wire_protocol_client = WireProtocol(wireserver_url).client
+        wire_protocol_client.ext_conf = ExtensionsConfig(WireProtocolData(DATA_FILE).ext_conf)
+        self.assertEqual(wire_protocol_client.ext_conf.status_upload_blob,
+                         u'https://yuezhatest.blob.core.windows.net/vhds/test'
+                         u'-cs12.test-cs12.test-cs12.status?sr=b&sp=rw&se'
+                         u'=9999-01-01&sk=key1&sv=2014-02-14&sig'
+                         u'=hfRh7gzUE7sUtYwke78IOlZOrTRCYvkec4hGZ9zZzXo%3D')
+        self.assertEqual(wire_protocol_client.ext_conf.status_upload_blob_type,
+                         u'BlockBlob')
+        pass
+
     def test_get_host_ga_plugin(self, *args):
         wire_protocol_client = WireProtocol(wireserver_url).client
         goal_state = GoalState(WireProtocolData(DATA_FILE).goal_state)
@@ -107,8 +120,32 @@ class TestWireProtocolGetters(AgentTestCase):
         with patch.object(WireClient, "get_goal_state", return_value = goal_state) as patch_get_goal_state:
             host_plugin = wire_protocol_client.get_host_plugin()
             self.assertEqual(goal_state.container_id, host_plugin.container_id)
-            self.assertEqual(goal_state.role_instance_config_name, host_plugin.role_config_name)
+            self.assertEqual(goal_state.role_config_name, host_plugin.role_config_name)
             patch_get_goal_state.assert_called_once()
+
+    def test_download_ext_handler_pkg_fallback(self, *args):
+        ext_uri = 'extension_uri'
+        host_uri = 'host_uri'
+        mock_host = HostPluginProtocol(host_uri, 'container_id', 'role_config')
+        with patch.object(restutil,
+                          "http_request",
+                          side_effect=IOError) as patch_http:
+            with patch.object(WireClient,
+                              "get_host_plugin",
+                              return_value=mock_host):
+                with patch.object(HostPluginProtocol,
+                                  "get_artifact_request",
+                                  return_value=[host_uri, {}]) as patch_request:
+
+                    WireProtocol(wireserver_url).download_ext_handler_pkg(ext_uri)
+
+                    self.assertEqual(patch_http.call_count, 2)
+                    self.assertEqual(patch_request.call_count, 1)
+
+                    self.assertEqual(patch_http.call_args_list[0][0][1],
+                                     ext_uri)
+                    self.assertEqual(patch_http.call_args_list[1][0][1],
+                                     host_uri)
 
     def test_upload_status_blob_default(self, *args):
         wire_protocol_client = WireProtocol(wireserver_url).client
@@ -128,6 +165,7 @@ class TestWireProtocolGetters(AgentTestCase):
         wire_protocol_client = WireProtocol(wireserver_url).client
         wire_protocol_client.ext_conf = ExtensionsConfig(None)
         wire_protocol_client.ext_conf.status_upload_blob = testurl
+        wire_protocol_client.ext_conf.status_upload_blob_type = testtype
         goal_state = GoalState(WireProtocolData(DATA_FILE).goal_state)
 
         with patch.object(HostPluginProtocol, "put_vm_status") as patch_host_ga_plugin_upload:
@@ -137,43 +175,43 @@ class TestWireProtocolGetters(AgentTestCase):
 
                 patch_default_upload.assert_called_once_with(testurl)
                 wire_protocol_client.get_goal_state.assert_called_once()
-                patch_host_ga_plugin_upload.assert_called_once_with(wire_protocol_client.status_blob, testurl)
+                patch_host_ga_plugin_upload.assert_called_once_with(wire_protocol_client.status_blob, testurl, testtype)
 
     def test_get_in_vm_artifacts_profile_blob_not_available(self, *args):
         wire_protocol_client = WireProtocol(wireserver_url).client
         wire_protocol_client.ext_conf = ExtensionsConfig(None)
 
-        # Test when in_vm_artifacts_profile_blob is null/None
-        self.assertEqual(None, wire_protocol_client.get_in_vm_artifacts_profile())
+        # Test when artifacts_profile_blob is null/None
+        self.assertEqual(None, wire_protocol_client.get_artifacts_profile())
 
-        #Test when in_vm_artifacts_profile_blob is whitespace
-        wire_protocol_client.ext_conf.in_vm_artifacts_profile_blob = "  "
-        self.assertEqual(None, wire_protocol_client.get_in_vm_artifacts_profile())
+        #Test when artifacts_profile_blob is whitespace
+        wire_protocol_client.ext_conf.artifacts_profile_blob = "  "
+        self.assertEqual(None, wire_protocol_client.get_artifacts_profile())
 
     def test_get_in_vm_artifacts_profile_response_body_not_valid(self, *args):
         wire_protocol_client = WireProtocol(wireserver_url).client
         wire_protocol_client.ext_conf = ExtensionsConfig(None)
-        wire_protocol_client.ext_conf.in_vm_artifacts_profile_blob = testurl
+        wire_protocol_client.ext_conf.artifacts_profile_blob = testurl
         goal_state = GoalState(WireProtocolData(DATA_FILE).goal_state)
         wire_protocol_client.get_goal_state = Mock(return_value=goal_state)
 
-        with patch.object(HostPluginProtocol, "get_extension_artifact_url_and_headers",
+        with patch.object(HostPluginProtocol, "get_artifact_request",
                           return_value = ['dummy_url', {}]) as host_plugin_get_artifact_url_and_headers:
             #Test when response body is None
             wire_protocol_client.call_storage_service = Mock(return_value=MockResponse(None, 200))
-            in_vm_artifacts_profile = wire_protocol_client.get_in_vm_artifacts_profile()
+            in_vm_artifacts_profile = wire_protocol_client.get_artifacts_profile()
             self.assertTrue(in_vm_artifacts_profile is None)
 
             #Test when response body is None
             wire_protocol_client.call_storage_service = Mock(return_value=MockResponse('   '.encode('utf-8'), 200))
-            in_vm_artifacts_profile = wire_protocol_client.get_in_vm_artifacts_profile()
+            in_vm_artifacts_profile = wire_protocol_client.get_artifacts_profile()
             self.assertTrue(in_vm_artifacts_profile is None)
 
             #Test when response body is None
             wire_protocol_client.call_storage_service = Mock(return_value=MockResponse('{ }'.encode('utf-8'), 200))
-            in_vm_artifacts_profile = wire_protocol_client.get_in_vm_artifacts_profile()
+            in_vm_artifacts_profile = wire_protocol_client.get_artifacts_profile()
             self.assertEqual(dict(), in_vm_artifacts_profile.__dict__,
-                             'If in_vm_artifacts_profile_blob has empty json dictionary, in_vm_artifacts_profile '
+                             'If artifacts_profile_blob has empty json dictionary, in_vm_artifacts_profile '
                              'should contain nothing')
 
             host_plugin_get_artifact_url_and_headers.assert_called_with(testurl)
@@ -182,30 +220,55 @@ class TestWireProtocolGetters(AgentTestCase):
     def test_get_in_vm_artifacts_profile_default(self, *args):
         wire_protocol_client = WireProtocol(wireserver_url).client
         wire_protocol_client.ext_conf = ExtensionsConfig(None)
-        wire_protocol_client.ext_conf.in_vm_artifacts_profile_blob = testurl
+        wire_protocol_client.ext_conf.artifacts_profile_blob = testurl
         goal_state = GoalState(WireProtocolData(DATA_FILE).goal_state)
         wire_protocol_client.get_goal_state = Mock(return_value=goal_state)
 
         wire_protocol_client.call_storage_service = Mock(return_value=MockResponse('{"onHold": "true"}'.encode('utf-8'), 200))
-        in_vm_artifacts_profile = wire_protocol_client.get_in_vm_artifacts_profile()
+        in_vm_artifacts_profile = wire_protocol_client.get_artifacts_profile()
         self.assertEqual(dict(onHold='true'), in_vm_artifacts_profile.__dict__)
-        self.assertTrue(in_vm_artifacts_profile.is_extension_handlers_handling_on_hold())
+        self.assertTrue(in_vm_artifacts_profile.is_on_hold())
+
+    @patch("time.sleep")
+    def test_fetch_manifest_fallback(self, patch_sleep,  *args):
+        uri1 = ExtHandlerVersionUri()
+        uri1.uri = 'ext_uri'
+        uris = DataContractList(ExtHandlerVersionUri)
+        uris.append(uri1)
+        host_uri = 'host_uri'
+        mock_host = HostPluginProtocol(host_uri,
+                                       'container_id',
+                                       'role_config')
+        client = WireProtocol(wireserver_url).client
+        with patch.object(WireClient,
+                          "fetch",
+                          return_value=None) as patch_fetch:
+            with patch.object(WireClient,
+                              "get_host_plugin",
+                              return_value=mock_host):
+                with patch.object(HostPluginProtocol,
+                                  "get_artifact_request",
+                                  return_value=[host_uri, {}]):
+                    self.assertRaises(ProtocolError, client.fetch_manifest, uris)
+                    self.assertEqual(patch_fetch.call_count, 2)
+                    self.assertEqual(patch_fetch.call_args_list[0][0][0], uri1.uri)
+                    self.assertEqual(patch_fetch.call_args_list[1][0][0], host_uri)
 
     def test_get_in_vm_artifacts_profile_host_ga_plugin(self, *args):
         wire_protocol_client = WireProtocol(wireserver_url).client
         wire_protocol_client.ext_conf = ExtensionsConfig(None)
-        wire_protocol_client.ext_conf.in_vm_artifacts_profile_blob = testurl
+        wire_protocol_client.ext_conf.artifacts_profile_blob = testurl
         goal_state = GoalState(WireProtocolData(DATA_FILE).goal_state)
         wire_protocol_client.get_goal_state = Mock(return_value=goal_state)
-
-        wire_protocol_client._get_in_vm_artifacts_profile = Mock(side_effect=[None, '{"onHold": "true"}'.encode('utf-8')])
-
-        with patch.object(HostPluginProtocol, "get_extension_artifact_url_and_headers",
-                          return_value = ['dummy_url', {}]) as host_plugin_get_artifact_url_and_headers:
-            in_vm_artifacts_profile = wire_protocol_client.get_in_vm_artifacts_profile()
+        wire_protocol_client.fetch = Mock(side_effect=[None, '{"onHold": "true"}'.encode('utf-8')])
+        with patch.object(HostPluginProtocol,
+                          "get_artifact_request",
+                          return_value=['dummy_url', {}]) as artifact_request:
+            in_vm_artifacts_profile = wire_protocol_client.get_artifacts_profile()
+            self.assertTrue(in_vm_artifacts_profile is not None)
             self.assertEqual(dict(onHold='true'), in_vm_artifacts_profile.__dict__)
-            self.assertTrue(in_vm_artifacts_profile.is_extension_handlers_handling_on_hold())
-            host_plugin_get_artifact_url_and_headers.assert_called_once_with(testurl)
+            self.assertTrue(in_vm_artifacts_profile.is_on_hold())
+            artifact_request.assert_called_once_with(testurl)
 
 
 class MockResponse:

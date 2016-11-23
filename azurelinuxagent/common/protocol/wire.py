@@ -140,9 +140,21 @@ class WireProtocol(Protocol):
         man = self.client.get_ext_manifest(ext_handler, goal_state)
         return man.pkg_list
 
-    def get_in_vm_artifacts_profile(self):
+    def get_artifacts_profile(self):
         logger.verbose("Get In-VM Artifacts Profile")
-        return self.client.get_in_vm_artifacts_profile()
+        return self.client.get_artifacts_profile()
+
+    def download_ext_handler_pkg(self, uri, headers=None):
+        package = super(WireProtocol, self).download_ext_handler_pkg(uri)
+
+        if package is not None:
+            return package
+        else:
+            logger.warn("Download did not succeed, falling back to host plugin")
+            host = self.client.get_host_plugin()
+            uri, headers = host.get_artifact_request(uri, host.manifest_uri)
+            package = super(WireProtocol, self).download_ext_handler_pkg(uri, headers=headers)
+        return package
 
     def report_provision_status(self, provision_status):
         validate_param("provision_status", provision_status, ProvisionStatus)
@@ -359,8 +371,8 @@ class StatusBlob(object):
         # TODO upload extension only if content has changed
         logger.verbose("Upload status blob")
         upload_successful = False
-        self.type = self.get_blob_type(url)
         self.data = self.to_json()
+        self.type = self.get_blob_type(url)
         try:
             if self.type == "BlockBlob":
                 self.put_block_blob(url, self.data)
@@ -376,8 +388,7 @@ class StatusBlob(object):
         return upload_successful
 
     def get_blob_type(self, url):
-        # Check blob type
-        logger.verbose("Check blob type.")
+        logger.verbose("Get blob type")
         timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         try:
             resp = self.client.call_storage_service(
@@ -388,18 +399,17 @@ class StatusBlob(object):
                     "x-ms-version": self.__class__.__storage_version__
                 })
         except HttpError as e:
-            raise ProtocolError((u"Failed to get status blob type: {0}"
-                                 u"").format(e))
+            raise ProtocolError("Failed to get status blob type: {0}", e)
+
         if resp is None or resp.status != httpclient.OK:
-            raise ProtocolError(("Failed to get status blob type: {0}"
-                                 "").format(resp.status))
+            raise ProtocolError("Failed to get status blob type")
 
         blob_type = resp.getheader("x-ms-blob-type")
-        logger.verbose("Blob type={0}".format(blob_type))
+        logger.verbose("Blob type: [{0}]", blob_type)
         return blob_type
 
     def put_block_blob(self, url, data):
-        logger.verbose("Upload block blob")
+        logger.verbose("Put block blob")
         timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         resp = self.client.call_storage_service(
             restutil.http_put,
@@ -416,7 +426,7 @@ class StatusBlob(object):
                 "Failed to upload block blob: {0}".format(resp.status))
 
     def put_page_blob(self, url, data):
-        logger.verbose("Replace old page blob")
+        logger.verbose("Put page blob")
 
         # Convert string into bytes
         data = bytearray(data, encoding='utf-8')
@@ -618,25 +628,42 @@ class WireClient(object):
                              "{0}").format(resp.status))
 
     def fetch_manifest(self, version_uris):
-        for version_uri in version_uris:
-            logger.verbose("Fetch ext handler manifest: {0}", version_uri.uri)
-            try:
-                resp = self.call_storage_service(
-                    restutil.http_get,
-                    version_uri.uri,
-                    None)
-            except HttpError as e:
-                raise ProtocolError(ustr(e))
+        logger.verbose("Fetch manifest")
+        for version in version_uris:
+            response = self.fetch(version.uri)
+            if not response:
+                logger.verbose("Manifest could not be downloaded, falling back to host plugin")
+                host = self.get_host_plugin()
+                uri, headers = host.get_artifact_request(version.uri)
+                response = self.fetch(uri, headers)
+                if not response:
+                    logger.info("Retry fetch in {0} seconds",
+                                LONG_WAITING_INTERVAL)
+                    time.sleep(LONG_WAITING_INTERVAL)
+                else:
+                    host.manifest_uri = version.uri
+                    logger.verbose("Manifest downloaded successfully from host plugin")
+            if response:
+                return response
+        raise ProtocolError("Failed to fetch manifest from all sources")
 
+    def fetch(self, uri, headers=None):
+        logger.verbose("Fetch [{0}] with headers [{1}]", uri, headers)
+        return_value = None
+        try:
+            resp = self.call_storage_service(
+                restutil.http_get,
+                uri,
+                headers)
             if resp.status == httpclient.OK:
-                return self.decode_config(resp.read())
-            logger.warn("Failed to fetch ExtensionManifest: {0}, {1}",
-                        resp.status, version_uri.uri)
-            logger.info("Will retry later, in {0} seconds",
-                        LONG_WAITING_INTERVAL)
-            time.sleep(LONG_WAITING_INTERVAL)
-        raise ProtocolError(("Failed to fetch ExtensionManifest from "
-                             "all sources"))
+                return_value = self.decode_config(resp.read())
+            else:
+                logger.warn("Could not fetch {0} [{1}]",
+                            uri,
+                            resp.status)
+        except (HttpError, ProtocolError) as e:
+            logger.verbose("Fetch failed from [{0}]", uri)
+        return return_value
 
     def update_hosting_env(self, goal_state):
         if goal_state.hosting_env_uri is None:
@@ -709,7 +736,7 @@ class WireClient(object):
                 self.update_ext_conf(goal_state)
                 if self.host_plugin is not None:
                     self.host_plugin.container_id = goal_state.container_id
-                    self.host_plugin.role_config_name = goal_state.role_instance_config_name
+                    self.host_plugin.role_config_name = goal_state.role_config_name
                 return
             except WireProtocolResourceGone:
                 logger.info("Incarnation is out of date. Update goalstate.")
@@ -802,8 +829,17 @@ class WireClient(object):
     def upload_status_blob(self):
         ext_conf = self.get_ext_conf()
         if ext_conf.status_upload_blob is not None:
-            if not self.status_blob.upload(ext_conf.status_upload_blob):
-                self.get_host_plugin().put_vm_status(self.status_blob, ext_conf.status_upload_blob)
+            uploaded = False
+            try:
+                uploaded = self.status_blob.upload(ext_conf.status_upload_blob)
+            except (HttpError, ProtocolError) as e:
+                # errors have already been logged
+                pass
+            if not uploaded:
+                host = self.get_host_plugin()
+                host.put_vm_status(self.status_blob,
+                                   ext_conf.status_upload_blob,
+                                   ext_conf.status_upload_blob_type)
 
     def report_role_prop(self, thumbprint):
         goal_state = self.get_goal_state()
@@ -923,52 +959,31 @@ class WireClient(object):
             goal_state = self.get_goal_state()
             self.host_plugin = HostPluginProtocol(self.endpoint,
                                                   goal_state.container_id,
-                                                  goal_state.role_instance_config_name)
+                                                  goal_state.role_config_name)
         return self.host_plugin
 
-    def get_in_vm_artifacts_profile(self):
-        ext_conf = self.ext_conf
-        if ext_conf and not textutil.is_str_none_or_whitespace(ext_conf.in_vm_artifacts_profile_blob):
-            # try with the default protocol
-            in_vm_artifacts_profile_byte_arr = \
-                self._get_in_vm_artifacts_profile(ext_conf.in_vm_artifacts_profile_blob)
+    def has_artifacts_profile_blob(self):
+        return self.ext_conf and not \
+               textutil.is_str_none_or_whitespace(self.ext_conf.artifacts_profile_blob)
 
-            # try with host GA plugin
-            if in_vm_artifacts_profile_byte_arr is None:
-                logger.warn(
-                    "Failed to get extension artifacts profile using the default protocol. Try with HostGAPlugin")
-                host_plugin_endpoint, headers = \
-                    self.get_host_plugin().get_extension_artifact_url_and_headers(ext_conf.in_vm_artifacts_profile_blob)
-                in_vm_artifacts_profile_byte_arr = self._get_in_vm_artifacts_profile(host_plugin_endpoint, headers)
+    def get_artifacts_profile(self):
+        artifacts_profile = None
+        if self.has_artifacts_profile_blob():
+            blob = self.ext_conf.artifacts_profile_blob
+            logger.info("Getting the artifacts profile")
+            profile = self.fetch(blob)
 
-            in_vm_artifacts_profile_json = self.decode_config(in_vm_artifacts_profile_byte_arr)
-            if not textutil.is_str_none_or_whitespace(in_vm_artifacts_profile_json):
-                return InVMArtifactsProfile(in_vm_artifacts_profile_json)
+            if profile is None:
+                logger.warn("Download failed, falling back to host plugin")
+                host = self.get_host_plugin()
+                uri, headers = host.get_artifact_request(blob)
+                profile = self.decode_config(self.fetch(uri, headers))
 
-    def _get_in_vm_artifacts_profile(self, blob_url, headers=None):
-        result = None
-        try:
-            resp = self.call_storage_service(restutil.http_get, blob_url, headers=headers)
-            response_body = resp.read()
-            if resp.status < 400:
-                decoded = self.decode_config(response_body)
-                if not textutil.is_str_none_or_whitespace(decoded):
-                    result = InVMArtifactsProfile(decoded)
-            else:
-                logger.warn("Unexpected http status '{0}' is returned with the message '{1}'",
-                            resp.status,
-                            response_body)
+            if not textutil.is_str_none_or_whitespace(profile):
+                    logger.info("Artifacts profile downloaded successfully")
+                    artifacts_profile = InVMArtifactsProfile(profile)
 
-        except HttpError as e:
-            logger.warn("Encountered HttpError while getting InVMArtifactsProfile from '{0}' "
-                        "using the default protocol: [{1}]", blob_url, e)
-        else:
-            if resp.status == httpclient.OK:
-                result = resp.read()
-            else:
-                logger.warn("Failed to get InVMArtifactsProfile with status [{0}] from '{1}' "
-                            "using the default protocol", resp.status, blob_url)
-        return result
+        return artifacts_profile
 
 
 class VersionInfo(object):
@@ -1015,9 +1030,10 @@ class GoalState(object):
         self.certs_uri = None
         self.ext_uri = None
         self.role_instance_id = None
-        self.role_instance_config_name = None
+        self.role_config_name = None
         self.container_id = None
         self.load_balancer_probe_port = None
+        self.xml_text = None
         self.parse(xml_text)
 
     def parse(self, xml_text):
@@ -1035,7 +1051,7 @@ class GoalState(object):
         role_instance = find(xml_doc, "RoleInstance")
         self.role_instance_id = findtext(role_instance, "InstanceId")
         role_config = find(role_instance, "Configuration")
-        self.role_instance_config_name = findtext(role_config, "ConfigName")
+        self.role_config_name = findtext(role_config, "ConfigName")
         container = find(xml_doc, "Container")
         self.container_id = findtext(container, "ContainerId")
         lbprobe_ports = find(xml_doc, "LBProbePorts")
@@ -1056,6 +1072,7 @@ class HostingEnv(object):
         self.vm_name = None
         self.role_name = None
         self.deployment_name = None
+        self.xml_text = None
         self.parse(xml_text)
 
     def parse(self, xml_text):
@@ -1199,7 +1216,8 @@ class ExtensionsConfig(object):
         self.ext_handlers = ExtHandlerList()
         self.vmagent_manifests = VMAgentManifestList()
         self.status_upload_blob = None
-        self.in_vm_artifacts_profile_blob = None
+        self.status_upload_blob_type = None
+        self.artifacts_profile_blob = None
         if xml_text is not None:
             self.parse(xml_text)
 
@@ -1234,7 +1252,13 @@ class ExtensionsConfig(object):
             self.parse_plugin_settings(ext_handler, plugin_settings)
 
         self.status_upload_blob = findtext(xml_doc, "StatusUploadBlob")
-        self.in_vm_artifacts_profile_blob = findtext(xml_doc, "InVMArtifactsProfileBlob")
+        self.artifacts_profile_blob = findtext(xml_doc, "InVMArtifactsProfileBlob")
+
+        status_upload_node = find(xml_doc, "StatusUploadBlob")
+        self.status_upload_blob_type = getattrib(status_upload_node,
+                                                 "statusBlobType")
+        logger.verbose("Extension config shows status blob type as [{0}]",
+                       self.status_upload_blob_type)
 
     def parse_plugin(self, plugin):
         ext_handler = ExtHandler()
@@ -1340,7 +1364,7 @@ class ExtensionManifest(object):
 
 # Do not extend this class
 class InVMArtifactsProfile(object):
-    '''
+    """
     deserialized json string of InVMArtifactsProfile.
     It is expected to contain the following fields:
     * inVMArtifactsProfileBlobSeqNo
@@ -1349,13 +1373,13 @@ class InVMArtifactsProfile(object):
     * certificateThumbprint (optional)
     * encryptedHealthChecks (optional)
     * encryptedApplicationProfile (optional)
-    '''
+    """
 
-    def __init__(self, in_vm_artifacts_profile_json):
-        if not textutil.is_str_none_or_whitespace(in_vm_artifacts_profile_json):
-            self.__dict__.update(parse_json(in_vm_artifacts_profile_json))
+    def __init__(self, artifacts_profile):
+        if not textutil.is_str_none_or_whitespace(artifacts_profile):
+            self.__dict__.update(parse_json(artifacts_profile))
 
-    def is_extension_handlers_handling_on_hold(self):
+    def is_on_hold(self):
         # hasattr() is not available in Python 2.6
         if 'onHold' in self.__dict__:
             return self.onHold.lower() == 'true'
