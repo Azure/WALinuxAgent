@@ -53,9 +53,8 @@ class UbuntuProvisionHandler(ProvisionHandler):
         self.wait_for_ovfenv()
         self.protocol_util.get_protocol()
         self.report_not_ready("Provisioning", "Starting")
-        logger.info("Sleep 15 seconds to prevent throttling")
-        time.sleep(15)  # Sleep to prevent throttling
-
+        logger.info("Sleeping 1 second to avoid throttling.")
+        time.sleep(1)
         try:
             logger.info("Wait for ssh host key to be generated.")
             thumbprint = self.wait_for_ssh_host_key()
