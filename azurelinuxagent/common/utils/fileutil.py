@@ -73,6 +73,14 @@ def append_file(filepath, contents, asbin=False, encoding='utf-8'):
     """
     write_file(filepath, contents, asbin=asbin, encoding=encoding, append=True)
 
+def remove_file(filepath):
+    """
+    Silently remove file
+    """
+    try:
+        os.remove(filepath)
+    except OSError:
+        pass
 
 def base_name(path):
     head, tail = os.path.split(path)

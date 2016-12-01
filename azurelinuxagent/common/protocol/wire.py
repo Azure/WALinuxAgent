@@ -50,6 +50,7 @@ EXT_CONF_FILE_NAME = "ExtensionsConfig.{0}.xml"
 MANIFEST_FILE_NAME = "{0}.{1}.manifest.xml"
 TRANSPORT_CERT_FILE_NAME = "TransportCert.pem"
 TRANSPORT_PRV_FILE_NAME = "TransportPrivate.pem"
+WAS_ON_HOLD_EVER_SET_TO_FALSE = "OnHoldSetToFalse"
 
 PROTOCOL_VERSION = "2012-11-30"
 ENDPOINT_FINE_NAME = "WireServer"
@@ -143,6 +144,10 @@ class WireProtocol(Protocol):
     def get_in_vm_artifacts_profile(self):
         logger.verbose("Get In-VM Artifacts Profile")
         return self.client.get_in_vm_artifacts_profile()
+
+    def is_ext_handling_on_hold(self):
+        logger.verbose("Check if extension handling is on hold")
+        return self.client.is_extension_handling_on_hold()
 
     def report_provision_status(self, provision_status):
         validate_param("provision_status", provision_status, ProvisionStatus)
@@ -639,13 +644,25 @@ class WireClient(object):
                              "all sources"))
 
     def update_hosting_env(self, goal_state):
+        '''
+        Update hosting environment.
+        Hosting environment contains properties which can tell whether the VM Agent
+        woke up in a different VM than it was in before. This can happen under
+        backup/caupture and restore scenario. When the VM is different, clean up
+        legacy values from the previous VM.
+        '''
         if goal_state.hosting_env_uri is None:
             raise ProtocolError("HostingEnvironmentConfig uri is empty")
+
         local_file = os.path.join(conf.get_lib_dir(), HOSTING_ENV_FILE_NAME)
-        xml_text = self.fetch_config(goal_state.hosting_env_uri,
-                                     self.get_header())
+        xml_text = self.fetch_config(goal_state.hosting_env_uri, self.get_header())
+        new_hosting_env = HostingEnv(xml_text)
+
+        if self._is_in_a_restored_vm(new_hosting_env):
+            self._clean_up_legacy_files_from_the_captured_vm()
+
         self.save_cache(local_file, xml_text)
-        self.hosting_env = HostingEnv(xml_text)
+        self.hosting_env = new_hosting_env
 
     def update_shared_conf(self, goal_state):
         if goal_state.shared_conf_uri is None:
@@ -926,6 +943,30 @@ class WireClient(object):
                                                   goal_state.role_instance_config_name)
         return self.host_plugin
 
+    def is_extension_handling_on_hold(self):
+        is_extension_handling_on_hold = False
+        ext_conf = self.ext_conf
+        was_on_hold_ever_set_to_false = os.path.join(conf.get_lib_dir(), WAS_ON_HOLD_EVER_SET_TO_FALSE)
+        # If in_vm_artifacts_profile_blob does not exist, do not hold
+        if ext_conf and \
+                ext_conf.in_vm_artifacts_profile_blob and not \
+                ext_conf.in_vm_artifacts_profile_blob.isspace():
+            in_vm_artifacts_profile = self.get_in_vm_artifacts_profile()
+            if not in_vm_artifacts_profile:
+                # If in_vm_artifacts_profile cannot be retrieved while the blob exists,
+                # depends on the existence of WAS_ON_HOLD_EVER_SET_TO_FALSE file to determine
+                # whether to hold extension handling
+                is_extension_handling_on_hold = not os.path.isfile(was_on_hold_ever_set_to_false)
+            else:
+                is_extension_handling_on_hold = in_vm_artifacts_profile.is_extension_handling_on_hold()
+
+        if not is_extension_handling_on_hold and not os.path.isfile(was_on_hold_ever_set_to_false):
+            # If extension handling is not on hold, create WAS_ON_HOLD_EVER_SET_TO_FALSE file
+            # Once on hold is set to false, WALA should never hold extension handling in the current VM
+            fileutil.write_file(was_on_hold_ever_set_to_false, "")
+
+        return is_extension_handling_on_hold
+
     def get_in_vm_artifacts_profile(self):
         ext_conf = self.ext_conf
         if ext_conf and not textutil.is_str_none_or_whitespace(ext_conf.in_vm_artifacts_profile_blob):
@@ -969,6 +1010,21 @@ class WireClient(object):
                 logger.warn("Failed to get InVMArtifactsProfile with status [{0}] from '{1}' "
                             "using the default protocol", resp.status, blob_url)
         return result
+
+    def _is_in_a_restored_vm(self, current_hosting_env):
+        ret = False
+        local_file = os.path.join(conf.get_lib_dir(), HOSTING_ENV_FILE_NAME)
+        # If hosting env file does not exist, we can safely assume that the vm is not a restored one
+        if os.path.isfile(local_file):
+            last_hosting_env = HostingEnv(self.fetch_cache(local_file))
+            # If either deployment name or role name is different, it indicates the current vm is a restored one
+            if current_hosting_env.deployment_name != last_hosting_env.deployment_name or \
+                current_hosting_env.role_name != last_hosting_env.role_name:
+                ret = True
+        return ret
+
+    def _clean_up_legacy_files_from_the_captured_vm(self):
+        fileutil.remove_file(os.path.join(conf.get_lib_dir(), WAS_ON_HOLD_EVER_SET_TO_FALSE))
 
 
 class VersionInfo(object):
@@ -1355,7 +1411,7 @@ class InVMArtifactsProfile(object):
         if not textutil.is_str_none_or_whitespace(in_vm_artifacts_profile_json):
             self.__dict__.update(parse_json(in_vm_artifacts_profile_json))
 
-    def is_extension_handlers_handling_on_hold(self):
+    def is_extension_handling_on_hold(self):
         # hasattr() is not available in Python 2.6
         if 'onHold' in self.__dict__:
             return self.onHold.lower() == 'true'
