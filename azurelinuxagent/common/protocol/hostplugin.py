@@ -70,7 +70,7 @@ class HostPluginProtocol(object):
         if not self.ensure_initialized():
             logger.error("host plugin channel is not available")
             return
-        if artifact_url is None or artifact_url.isspace():
+        if textutil.is_str_none_or_whitespace(artifact_url):
             logger.error("no extension artifact url was provided")
             return
 

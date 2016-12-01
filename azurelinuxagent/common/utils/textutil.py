@@ -251,10 +251,14 @@ def set_ini_config(config, name, val):
 
 
 def remove_bom(c):
-    if len(c) > 2 \
-            and str_to_ord(c[0]) > 128 \
-            and str_to_ord(c[1]) > 128 \
-            and str_to_ord(c[2]) > 128:
+    '''
+    bom is comprised of a sequence of three chars,0xef, 0xbb, 0xbf, in case of utf-8.
+    '''
+    if not is_str_none_or_whitespace(c) and \
+       len(c) > 2 and \
+       str_to_ord(c[0]) > 128 and \
+       str_to_ord(c[1]) > 128 and \
+       str_to_ord(c[2]) > 128:
         c = c[3:]
     return c
 
@@ -302,8 +306,11 @@ def parse_json(json_str):
     """
     # trim null and whitespaces
     result = None
-    if json_str and not json_str.isspace():
+    if not is_str_none_or_whitespace(json_str):
         import json
         result = json.loads(json_str.rstrip(' \t\r\n\0'))
 
     return result
+
+def is_str_none_or_whitespace(s):
+    return s is None or len(s) == 0 or s.isspace()

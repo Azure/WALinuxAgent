@@ -35,11 +35,30 @@ class TestTextUtil(AgentTestCase):
         data = ustr(b'\xef\xbb\xbfhehe', encoding='utf-8')
         data = textutil.remove_bom(data)
         self.assertNotEquals(0xbb, data[0])
-        
+
+        #bom is comprised of a sequence of three bytes and ff length of the input is shorter
+        # than three bytes, remove_bom should not do anything
+        data = u"\xa7"
+        data = textutil.remove_bom(data)
+        self.assertEquals(data, data[0])
+
+        data = u"\xa7\xef"
+        data = textutil.remove_bom(data)
+        self.assertEquals(u"\xa7", data[0])
+        self.assertEquals(u"\xef", data[1])
+
         #Test string without BOM is not affected
         data = u"hehe"
         data = textutil.remove_bom(data)
         self.assertEquals(u"h", data[0])
+
+        data = u""
+        data = textutil.remove_bom(data)
+        self.assertEquals(u"", data)
+
+        data = u"  "
+        data = textutil.remove_bom(data)
+        self.assertEquals(u"  ", data)
 
     def test_version_compare(self):
         self.assertTrue(Version("1.0") < Version("1.1"))
