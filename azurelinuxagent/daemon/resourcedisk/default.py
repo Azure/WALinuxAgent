@@ -129,12 +129,12 @@ class ResourceDiskHandler(object):
                 shellutil.run(mkfs_string)
         else:
             logger.info("GPT not detected, determining filesystem")
-            ret = shellutil.run_get_output("sfdisk -q --part-type {0} 1".format(device))
+            ret = self.change_partition_type(suppress_message=True, option_str="{0} 1".format(device))
             ptype = ret[1].strip()
             if ptype == "7" and self.fs != "ntfs":
                 logger.info("The partition is formatted with ntfs, updating "
                             "partition type to 83")
-                shellutil.run_get_output("sfdisk --part-type {0} 1 83".format(device))
+                self.change_partition_type(suppress_message=False, option_str="{0} 1 83".format(device))
                 logger.info("Format partition [{0}]", mkfs_string)
                 shellutil.run(mkfs_string)
             else:
@@ -173,6 +173,24 @@ class ResourceDiskHandler(object):
                     mount_point,
                     self.fs)
         return mount_point
+
+    def change_partition_type(self, suppress_message, option_str):
+        """
+            use sfdisk to change partition type.
+            First try with --part-type; if fails, fall back to -c
+        """
+
+        command_to_use = '--part-type'
+        input = "sfdisk {0} {1} {2}".format(command_to_use, '-f' if suppress_message else '', option_str)
+        err_code, output = shellutil.run_get_output(input)
+
+        # fall back to -c
+        if err_code != 0:
+            command_to_use = '-c'
+            input = "sfdisk {0} {1} {2}".format(command_to_use, '-f' if suppress_message else '', option_str)
+            err_code, output = shellutil.run_get_output(input)
+
+        return err_code, output
 
     @staticmethod
     def get_mount_string(mount_options, partition, mount_point):
