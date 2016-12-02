@@ -144,17 +144,16 @@ class BigIpOSUtil(DefaultOSUtil):
         :param expiration: The expiration date to use. We do not use this
                            value.
         """
-        userentry = self.get_userentry(username)
-        if userentry is not None:
+        if self.get_userentry(username):
             logger.info("User {0} already exists, skip useradd", username)
             return None
 
         cmd = "/usr/bin/tmsh create auth user %s partition-access add { all-partitions { role admin } } shell bash" % (username)
         retcode, out = shellutil.run_get_output(cmd, log_cmd=True, chk_err=True)
         if retcode != 0:
-            raise OSUtilError(("Failed to create user account:{0}, "
-                               "retcode:{1}, "
-                               "output:{2}").format(username, retcode, out))
+            raise OSUtilError(
+                "Failed to create user account:{0}, retcode:{1}, output:{2}".format(username, retcode, out)
+            )
         self._save_sys_config()
         return retcode
 
@@ -165,6 +164,10 @@ class BigIpOSUtil(DefaultOSUtil):
         changing the password of the built-in 'admin' account, both must
         be modified in this method.
 
+        Note that the default method also checks for a "system level" of the
+        user; based on the value of UID_MIN in /etc/login.defs. In our env,
+        all user accounts have the UID 0. So we can't rely on this value.
+
         :param username: The username whose password to change
         :param password: The unencrypted password to set for the user
         :param crypt_id: If encrypting the password, the crypt_id that was used
@@ -172,17 +175,13 @@ class BigIpOSUtil(DefaultOSUtil):
                          value used to do it.
         """
 
-        if self.is_sys_user(username):
-            raise OSUtilError(("User {0} is a system user. "
-                               "Will not set passwd.").format(username))
-
         # Start by setting the password of the user provided account
-        cmd = ("/usr/bin/tmsh modify auth user {0} password '{1}'"
-               "").format(username, password)
+        cmd = "/usr/bin/tmsh modify auth user {0} password '{1}'".format(username, password)
         ret, output = shellutil.run_get_output(cmd, log_cmd=False, chk_err=True)
         if ret != 0:
-            raise OSUtilError(("Failed to set password for {0}: {1}"
-                               "").format(username, output))
+            raise OSUtilError(
+                "Failed to set password for {0}: {1}".format(username, output)
+            )
 
         # Next, set the password of the built-in 'admin' account to be have
         # the same password as the user provided account
@@ -190,12 +189,29 @@ class BigIpOSUtil(DefaultOSUtil):
         if userentry is None:
             raise OSUtilError("The 'admin' user account was not found!")
 
-        cmd = ("/usr/bin/tmsh modify auth user 'admin' password '{0}'").format(password)
+        cmd = "/usr/bin/tmsh modify auth user 'admin' password '{0}'".format(password)
         ret, output = shellutil.run_get_output(cmd, log_cmd=False, chk_err=True)
         if ret != 0:
-            raise OSUtilError(("Failed to set password for 'admin': {0}").format(output))
+            raise OSUtilError(
+                "Failed to set password for 'admin': {0}".format(output)
+            )
         self._save_sys_config()
         return ret
+
+    def del_account(self, username):
+        """Deletes a user account.
+
+        Note that the default method also checks for a "system level" of the
+        user; based on the value of UID_MIN in /etc/login.defs. In our env,
+        all user accounts have the UID 0. So we can't rely on this value.
+
+        We also don't use sudo, so we remove that method call as well.
+
+        :param username:
+        :return:
+        """
+        shellutil.run("> /var/run/utmp")
+        shellutil.run("/usr/bin/tmsh delete auth user " + username)
 
     def get_dvd_device(self, dev_dir='/dev'):
         """Find BIG-IP's CD/DVD device
@@ -215,7 +231,7 @@ class BigIpOSUtil(DefaultOSUtil):
                 return "/dev/{0}".format(dvd.group(0))
         raise OSUtilError("Failed to get dvd device")
 
-    def mount_dvd(self, max_retry=6, chk_err=True):
+    def mount_dvd(self, **kwargs):
         """Mount the DVD containing the provisioningiso.iso file
 
         This is the _first_ hook that WAAgent provides for us, so this is the
@@ -228,7 +244,7 @@ class BigIpOSUtil(DefaultOSUtil):
                         commands
         """
         self._wait_until_mcpd_is_initialized()
-        return super(BigIpOSUtil, self).mount_dvd(max_retry, chk_err)
+        return super(BigIpOSUtil, self).mount_dvd(**kwargs)
 
     def eject_dvd(self, chk_err=True):
         """Runs the eject command to eject the provisioning DVD
@@ -325,12 +341,29 @@ class BigIpOSUtil(DefaultOSUtil):
                          'network interfaces.'), expected)
         sock = buff.tostring()
         for i in range(0, struct_size * expected, struct_size):
-            iface = sock[i:i+16].split(b'\0', 1)[0]
-            if iface == b'lo':
+            iface = self._format_single_interface_name(sock, i)
+
+            # Azure public was returning "lo:1" when deploying WAF
+            if b'lo' in iface:
                 continue
             else:
                 break
         return iface.decode('latin-1'), socket.inet_ntoa(sock[i+20:i+24])
+
+    def _format_single_interface_name(self, sock, offset):
+        return sock[offset:offset+16].split(b'\0', 1)[0]
+
+    def route_add(self, net, mask, gateway):
+        """Add specified route using tmsh.
+
+        :param net:
+        :param mask:
+        :param gateway:
+        :return:
+        """
+        cmd = ("/usr/bin/tmsh create net route "
+               "{0}/{1} gw {2}").format(net, mask, gateway)
+        return shellutil.run(cmd, chk_err=False)
 
     def device_for_ide_port(self, port_id):
         """Return device name attached to ide port 'n'.
