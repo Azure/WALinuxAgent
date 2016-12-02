@@ -218,3 +218,6 @@ def get_autoupdate_enabled(conf=__conf__):
 
 def get_autoupdate_frequency(conf=__conf__):
     return conf.get_int("Autoupdate.Frequency", 3600)
+
+def get_enable_overprovisioning(conf=__conf__):
+    return conf.get_switch("EnableOverProvisioning", False)

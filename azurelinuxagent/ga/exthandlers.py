@@ -196,8 +196,9 @@ class ExtHandlersHandler(object):
             return
 
         in_vm_artifacts_profile = self.protocol.get_in_vm_artifacts_profile()
-        if in_vm_artifacts_profile and \
-           in_vm_artifacts_profile.is_extension_handlers_handling_on_hold():
+        if conf.get_enable_overprovisioning() and \
+                in_vm_artifacts_profile and \
+                in_vm_artifacts_profile.is_extension_handlers_handling_on_hold():
             logger.info("Handling Extension handlers is on hold")
             return
 
