@@ -375,7 +375,10 @@ class UpdateHandler(object):
         #  The code leaves on disk available, but blacklisted, agents so as to
         #  preserve the state. Otherwise, those agents could be again
         #  downloaded and inappropriately retried.
-        self._set_agents([GuestAgent(pkg=pkg) for pkg in pkg_list.versions])
+        host = None
+        if protocol and protocol.client:
+            host = protocol.client.get_host_plugin()
+        self._set_agents([GuestAgent(pkg=pkg, host=host) for pkg in pkg_list.versions])
         self._purge_agents()
         self._filter_blacklisted_agents()
 
@@ -575,8 +578,9 @@ class UpdateHandler(object):
 
 
 class GuestAgent(object):
-    def __init__(self, path=None, pkg=None):
+    def __init__(self, path=None, pkg=None, host=None):
         self.pkg = pkg
+        self.host = host
         version = None
         if path is not None:
             m = AGENT_DIR_PATTERN.match(path)
@@ -693,18 +697,15 @@ class GuestAgent(object):
         return
 
     def _download(self):
-        package = None
-
         for uri in self.pkg.uris:
-            try:
-                resp = restutil.http_get(uri.uri, chk_proxy=True)
-                if resp.status == restutil.httpclient.OK:
-                    package = resp.read()
-                    fileutil.write_file(self.get_agent_pkg_path(), bytearray(package), asbin=True)
-                    logger.info(u"Agent {0} downloaded from {1}", self.name, uri.uri)
-                    break
-            except restutil.HttpError as e:
-                logger.warn(u"Agent {0} download from {1} failed", self.name, uri.uri)
+            if self._fetch(uri.uri):
+                break
+            else:
+                if self.host is not None:
+                    logger.info("Download unsuccessful, falling back to host plugin")
+                    uri, headers = self.host.get_artifact_request(uri.uri, self.host.manifest_uri)
+                    if self._fetch(uri, headers=headers):
+                        break
 
         if not os.path.isfile(self.get_agent_pkg_path()):
             msg = u"Unable to download Agent {0} from any URI".format(self.name)
@@ -716,6 +717,23 @@ class GuestAgent(object):
                 message=msg)
             raise UpdateError(msg)
         return
+
+    def _fetch(self, uri, headers=None):
+        package = None
+        try:
+            resp = restutil.http_get(uri, chk_proxy=True, headers=headers)
+            if resp.status == restutil.httpclient.OK:
+                package = resp.read()
+                fileutil.write_file(self.get_agent_pkg_path(),
+                                    bytearray(package),
+                                    asbin=True)
+                logger.info(u"Agent {0} downloaded from {1}", self.name, uri)
+        except restutil.HttpError as http_error:
+            logger.verbose(u"Agent {0} download from {1} failed [{2}]",
+                        self.name,
+                        uri,
+                        http_error)
+        return package is not None
 
     def _load_error(self):
         try:

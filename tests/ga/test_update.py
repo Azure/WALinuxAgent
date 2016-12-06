@@ -535,6 +535,34 @@ class TestGuestAgent(UpdateTestCase):
         self.assertFalse(agent.is_downloaded)
         return
 
+    @patch("azurelinuxagent.ga.update.GuestAgent._ensure_downloaded")
+    @patch("azurelinuxagent.ga.update.restutil.http_get")
+    def test_download_fallback(self, mock_http_get, mock_ensure):
+        self.remove_agents()
+        self.assertFalse(os.path.isdir(self.agent_path))
+
+        mock_http_get.return_value = ResponseMock(
+            status=restutil.httpclient.SERVICE_UNAVAILABLE)
+
+        ext_uri = 'ext_uri'
+        host_uri = 'host_uri'
+        mock_host = HostPluginProtocol(host_uri,
+                                       'container_id',
+                                       'role_config')
+
+        pkg = ExtHandlerPackage(version=str(get_agent_version()))
+        pkg.uris.append(ExtHandlerPackageUri(uri=ext_uri))
+        agent = GuestAgent(pkg=pkg)
+        agent.host = mock_host
+
+        with patch.object(HostPluginProtocol,
+                          "get_artifact_request",
+                          return_value=[host_uri, {}]):
+            self.assertRaises(UpdateError, agent._download)
+            self.assertEqual(mock_http_get.call_count, 2)
+            self.assertEqual(mock_http_get.call_args_list[0][0][0], ext_uri)
+            self.assertEqual(mock_http_get.call_args_list[1][0][0], host_uri)
+
     @patch("azurelinuxagent.ga.update.restutil.http_get")
     def test_ensure_downloaded(self, mock_http_get):
         self.remove_agents()
@@ -1299,8 +1327,9 @@ class ChildMock(Mock):
 
 
 class ProtocolMock(object):
-    def __init__(self, family="TestAgent", etag=42, versions=None):
+    def __init__(self, family="TestAgent", etag=42, versions=None, client=None):
         self.family = family
+        self.client = client
         self.etag = etag
         self.versions = versions if versions is not None else []
         self.create_manifests()

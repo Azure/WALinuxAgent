@@ -29,7 +29,8 @@ API_VERSION = "2015-09-01"
 HEADER_CONTAINER_ID = "x-ms-containerid"
 HEADER_VERSION = "x-ms-version"
 HEADER_HOST_CONFIG_NAME = "x-ms-host-config-name"
-
+HEADER_ARTIFACT_LOCATION = "x-ms-artifact-location"
+HEADER_ARTIFACT_MANIFEST_LOCATION = "x-ms-artifact-manifest-location"
 
 class HostPluginProtocol(object):
     def __init__(self, endpoint, container_id, role_config_name):
@@ -41,6 +42,7 @@ class HostPluginProtocol(object):
         self.endpoint = endpoint
         self.container_id = container_id
         self.role_config_name = role_config_name
+        self.manifest_uri = None
 
     def ensure_initialized(self):
         if not self.is_initialized:
@@ -52,21 +54,24 @@ class HostPluginProtocol(object):
     def get_api_versions(self):
         url = URI_FORMAT_GET_API_VERSIONS.format(self.endpoint,
                                                  HOST_PLUGIN_PORT)
-        logger.info("getting API versions at [{0}]".format(url))
+        logger.verbose("getting API versions at [{0}]".format(url))
+        return_val = []
         try:
-            headers = { HEADER_CONTAINER_ID: self.container_id }
+            headers = {HEADER_CONTAINER_ID: self.container_id}
             response = restutil.http_get(url, headers)
             if response.status != httpclient.OK:
                 logger.error(
                     "get API versions returned status code [{0}]".format(
                         response.status))
-                return []
-            return response.read()
+            else:
+                return_val = ustr(remove_bom(response.read()), encoding='utf-8')
+
         except HttpError as e:
             logger.error("get API versions failed with [{0}]".format(e))
-            return []
 
-    def get_extension_artifact_url_and_headers(self, artifact_url, artifact_manifest_url = None):
+        return return_val
+
+    def get_artifact_request(self, artifact_url, artifact_manifest_url=None):
         if not self.ensure_initialized():
             logger.error("host plugin channel is not available")
             return
@@ -74,20 +79,23 @@ class HostPluginProtocol(object):
             logger.error("no extension artifact url was provided")
             return
 
-        url = URI_FORMAT_GET_EXTENSION_ARTIFACT.format(self.endpoint, HOST_PLUGIN_PORT)
+        url = URI_FORMAT_GET_EXTENSION_ARTIFACT.format(self.endpoint,
+                                                       HOST_PLUGIN_PORT)
         headers = {HEADER_VERSION: API_VERSION,
                    HEADER_CONTAINER_ID: self.container_id,
                    HEADER_HOST_CONFIG_NAME: self.role_config_name,
-                   "x-ms-artifact-location": artifact_url}
+                   HEADER_ARTIFACT_LOCATION: artifact_url}
+
         if artifact_manifest_url is not None:
-            headers["x-ms-artifact-manifest-location"] = artifact_manifest_url
+            headers[HEADER_ARTIFACT_MANIFEST_LOCATION] = artifact_manifest_url
 
         return url, headers
 
-    def put_vm_status(self, status_blob, sas_url):
+    def put_vm_status(self, status_blob, sas_url, config_blob_type=None):
         """
         Try to upload the VM status via the host plugin /status channel
         :param sas_url: the blob SAS url to pass to the host plugin
+        :param config_blob_type: the blob type from the extension config
         :type status_blob: StatusBlob
         """
         if not self.ensure_initialized():
@@ -96,26 +104,28 @@ class HostPluginProtocol(object):
         if status_blob is None or status_blob.vm_status is None:
             logger.error("no status data was provided")
             return
-        url = URI_FORMAT_PUT_VM_STATUS.format(self.endpoint, HOST_PLUGIN_PORT)
-        logger.verbose("Posting VM status to host channel [{0}]".format(url))
-        status = textutil.b64encode(status_blob.data)
-        headers = {HEADER_VERSION: API_VERSION,
-                   "Content-type": "application/json",
-                   HEADER_CONTAINER_ID: self.container_id,
-                   HEADER_HOST_CONFIG_NAME: self.role_config_name}
-        blob_headers = [{'headerName': 'x-ms-version',
-                         'headerValue': status_blob.__storage_version__},
-                        {'headerName': 'x-ms-blob-type',
-                         'headerValue': status_blob.type}]
-        data = json.dumps({'requestUri': sas_url, 'headers': blob_headers,
-                           'content': status}, sort_keys=True)
         try:
-            response = restutil.http_put(url, data, headers)
+            url = URI_FORMAT_PUT_VM_STATUS.format(self.endpoint, HOST_PLUGIN_PORT)
+            logger.verbose("Posting VM status to host plugin")
+            status = textutil.b64encode(status_blob.data)
+            blob_type = status_blob.type if status_blob.type else config_blob_type
+            headers = {HEADER_VERSION: API_VERSION,
+                       "Content-type": "application/json",
+                       HEADER_CONTAINER_ID: self.container_id,
+                       HEADER_HOST_CONFIG_NAME: self.role_config_name}
+            blob_headers = [{'headerName': 'x-ms-version',
+                             'headerValue': status_blob.__storage_version__},
+                            {'headerName': 'x-ms-blob-type',
+                             'headerValue': blob_type}]
+            data = json.dumps({'requestUri': sas_url, 'headers': blob_headers,
+                               'content': status}, sort_keys=True)
+            response = restutil.http_put(url, data=data, headers=headers)
             if response.status != httpclient.OK:
-                logger.error("put VM status returned status code [{0}]".format(
-                    response.status))
-        except HttpError as e:
-            logger.error("put VM status failed with [{0}]".format(e))
+                logger.error("PUT failed [{0}]", response.status)
+            else:
+                logger.verbose("Successfully uploaded status to host plugin")
+        except Exception as e:
+            logger.error("Put VM status failed [{0}]", e)
 
     def put_vm_log(self, content):
         """

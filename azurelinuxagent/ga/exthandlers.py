@@ -192,18 +192,17 @@ class ExtHandlersHandler(object):
     def handle_ext_handlers(self, etag=None):
         if self.ext_handlers.extHandlers is None or \
                 len(self.ext_handlers.extHandlers) == 0:
-            logger.verbose("No ext handler config found")
+            logger.verbose("No extension handler config found")
             return
 
-        in_vm_artifacts_profile = self.protocol.get_in_vm_artifacts_profile()
-        if conf.get_enable_overprovisioning() and \
-                in_vm_artifacts_profile and \
-                in_vm_artifacts_profile.is_extension_handlers_handling_on_hold():
-            logger.info("Handling Extension handlers is on hold")
-            return
+        if conf.get_enable_overprovisioning():
+            artifacts_profile = self.protocol.get_artifacts_profile()
+            if artifacts_profile and artifacts_profile.is_on_hold():
+                logger.info("Extension handling is on hold")
+                return
 
         for ext_handler in self.ext_handlers.extHandlers:
-            #TODO handle install in sequence, enable in parallel
+            # TODO: handle install in sequence, enable in parallel
             self.handle_ext_handler(ext_handler, etag)
     
     def handle_ext_handler(self, ext_handler, etag):
@@ -522,8 +521,10 @@ class ExtHandlerInstance(object):
         for uri in self.pkg.uris:
             try:
                 package = self.protocol.download_ext_handler_pkg(uri.uri)
-            except ProtocolError as e: 
-                logger.warn("Failed download extension: {0}", e)
+                if package is not None:
+                    break
+            except Exception as e:
+                logger.warn("Error while downloading extension: {0}", e)
         
         if package is None:
             raise ExtensionError("Failed to download extension")
