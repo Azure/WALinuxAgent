@@ -41,6 +41,7 @@ class WALAEventOperation:
     Disable = "Disable"
     Download = "Download"
     Enable = "Enable"
+    HealthCheck = "HealthCheck"
     HeartBeat="HeartBeat"
     Install = "Install"
     Provision = "Provision"
