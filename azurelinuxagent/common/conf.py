@@ -85,7 +85,9 @@ def load_conf_from_file(conf_file_path, conf=__conf__):
 
 
 def enable_rdma(conf=__conf__):
-    return conf.get_switch("OS.EnableRDMA", False)
+    return conf.get_switch("OS.EnableRDMA", False) or \
+           conf.get_switch("OS.UpdateRdmaDriver", False) or \
+           conf.get_switch("OS.CheckRdmaDriver", False)
 
 
 def get_logs_verbose(conf=__conf__):
