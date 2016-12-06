@@ -3457,9 +3457,21 @@ class RdmaHandler(object):
         """
         Write config string to /dev/hvnd_rdma
         """
-        Log("Set /dev/hvnd_rdma")
-        self.wait_rdma_dev()
-        self.write_rdma_dev_conf()
+        skip_rdma_device = False
+        retcode,out = RunGetOutput("modinfo hv_network_direct", True)
+        if retcode == 0:
+            version = re.search("version:\s+(\d+)\.(\d+)\.(\d+)\D", out, re.IGNORECASE)
+                if version:
+                    v1 = int(version.groups(0)[0])
+                    v2 = int(version.groups(0)[1])
+                    if v1>4 or v1==4 and v2>0:
+                        Log("Skip setting /dev/hvnd_rdma on 4.1 or later")
+                        skip_rdma_device = True
+
+        if not skip_rdma_device:
+            Log("Set /dev/hvnd_rdma")
+            self.wait_rdma_dev()
+            self.write_rdma_dev_conf()
 
     def write_rdma_dev_conf(self):
         Log("Write rdma config to {0}: {1}".format(self.dev, self.data))

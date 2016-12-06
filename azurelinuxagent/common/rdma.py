@@ -199,10 +199,24 @@ class RDMADeviceHandler(object):
     def process(self):
         try:
             RDMADeviceHandler.update_dat_conf(dapl_config_paths, self.ipv4_addr)
-            RDMADeviceHandler.wait_rdma_device(
-                self.rdma_dev, self.device_check_timeout_sec, self.device_check_interval_sec)
-            RDMADeviceHandler.write_rdma_config_to_device(
-                self.rdma_dev, self.ipv4_addr, self.mac_addr)
+
+            skip_rdma_device = False
+            retcode,out = shellutil.run_get_output("modinfo hv_network_direct")
+            if retcode == 0:
+                version = re.search("version:\s+(\d+)\.(\d+)\.(\d+)\D", out, re.IGNORECASE)
+                if version:
+                    v1 = int(version.groups(0)[0])
+                    v2 = int(version.groups(0)[1])
+                    if v1>4 or v1==4 and v2>0:
+                        logger.info("Skip setting /dev/hvnd_rdma on 4.1 or later")
+                        skip_rdma_device = True
+
+            if not skip_rdma_device:
+                RDMADeviceHandler.wait_rdma_device(
+                    self.rdma_dev, self.device_check_timeout_sec, self.device_check_interval_sec)
+                RDMADeviceHandler.write_rdma_config_to_device(
+                    self.rdma_dev, self.ipv4_addr, self.mac_addr)
+
             RDMADeviceHandler.update_network_interface(self.mac_addr, self.ipv4_addr)
         except Exception as e:
             logger.error("RDMA: device processing failed: {0}".format(e))
