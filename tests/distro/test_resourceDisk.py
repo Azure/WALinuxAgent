@@ -83,5 +83,27 @@ class TestResourceDisk(AgentTestCase):
             assert "dd if" in run_patch.call_args_list[0][0][0]
 
 
+    def test_change_partition_type(self):
+        resource_handler = get_resourcedisk_handler()
+        # test when sfdisk --part-type does not exist
+        with patch.object(shellutil, "run_get_output",
+                          side_effect=[[1, ''], [0, '']]) as run_patch:
+            resource_handler.change_partition_type(suppress_message=True, option_str='')
+
+            # assert
+            assert run_patch.call_count == 2
+            assert "sfdisk --part-type" in run_patch.call_args_list[0][0][0]
+            assert "sfdisk -c" in run_patch.call_args_list[1][0][0]
+
+        # test when sfdisk --part-type exists
+        with patch.object(shellutil, "run_get_output",
+                          side_effect=[[0, '']]) as run_patch:
+            resource_handler.change_partition_type(suppress_message=True, option_str='')
+
+            # assert
+            assert run_patch.call_count == 1
+            assert "sfdisk --part-type" in run_patch.call_args_list[0][0][0]
+
+
 if __name__ == '__main__':
     unittest.main()
