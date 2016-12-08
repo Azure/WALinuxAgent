@@ -182,20 +182,23 @@ class ResourceDiskHandler(object):
 
         command_to_use = '--part-type'
         input = "sfdisk {0} {1} {2}".format(command_to_use, '-f' if suppress_message else '', option_str)
-        err_code, output = shellutil.run_get_output(input, chk_err=False)
+        err_code, output = shellutil.run_get_output(input, chk_err=False, log_cmd=True)
 
         # fall back to -c
         if err_code != 0:
-            logger.info("sfdisk with --part-type failed with error_code {0}. Retry with -c.", err_code)
+            logger.info("sfdisk with --part-type failed [{0}], retrying with -c", err_code)
             command_to_use = '-c'
             input = "sfdisk {0} {1} {2}".format(command_to_use, '-f' if suppress_message else '', option_str)
-            err_code, output = shellutil.run_get_output(input)
+            err_code, output = shellutil.run_get_output(input, log_cmd=True)
 
-        log_message = "sfdisk {0} with return code {1} and output {2}"
         if err_code == 0:
-            logger.info(log_message, 'succeeded', err_code, output)
+            logger.info('{0} succeeded',
+                        input)
         else:
-            logger.error(log_message, 'failed', err_code, output)
+            logger.error('{0} failed [{1}: {2}]',
+                         input,
+                         err_code,
+                         output)
 
         return err_code, output
 
