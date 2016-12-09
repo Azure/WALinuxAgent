@@ -24,7 +24,6 @@ import azurelinuxagent.common.osutil.default as default
 import azurelinuxagent.common.utils.shellutil as shellutil
 
 from azurelinuxagent.common.exception import OSUtilError
-from azurelinuxagent.common.exception import UpdateError
 from tests.tools import *
 
 
@@ -175,7 +174,9 @@ class TestBigIpOSUtil_restart_ssh_service(AgentTestCase):
 
     @patch.object(shellutil, "run", return_value=0)
     def test_success(self, *args):
-        result = osutil.BigIpOSUtil.restart_ssh_service(osutil.BigIpOSUtil())
+        result = osutil.BigIpOSUtil.restart_ssh_service(
+            osutil.BigIpOSUtil()
+        )
         self.assertEqual(result, 0)
 
 
@@ -183,7 +184,9 @@ class TestBigIpOSUtil_stop_agent_service(AgentTestCase):
 
     @patch.object(shellutil, "run", return_value=0)
     def test_success(self, *args):
-        result = osutil.BigIpOSUtil.stop_agent_service(osutil.BigIpOSUtil())
+        result = osutil.BigIpOSUtil.stop_agent_service(
+            osutil.BigIpOSUtil()
+        )
         self.assertEqual(result, 0)
 
 
@@ -191,7 +194,9 @@ class TestBigIpOSUtil_start_agent_service(AgentTestCase):
 
     @patch.object(shellutil, "run", return_value=0)
     def test_success(self, *args):
-        result = osutil.BigIpOSUtil.start_agent_service(osutil.BigIpOSUtil())
+        result = osutil.BigIpOSUtil.start_agent_service(
+            osutil.BigIpOSUtil()
+        )
         self.assertEqual(result, 0)
 
 
@@ -199,7 +204,9 @@ class TestBigIpOSUtil_register_agent_service(AgentTestCase):
 
     @patch.object(shellutil, "run", return_value=0)
     def test_success(self, *args):
-        result = osutil.BigIpOSUtil.register_agent_service(osutil.BigIpOSUtil())
+        result = osutil.BigIpOSUtil.register_agent_service(
+            osutil.BigIpOSUtil()
+        )
         self.assertEqual(result, 0)
 
 
@@ -207,7 +214,9 @@ class TestBigIpOSUtil_unregister_agent_service(AgentTestCase):
 
     @patch.object(shellutil, "run", return_value=0)
     def test_success(self, *args):
-        result = osutil.BigIpOSUtil.unregister_agent_service(osutil.BigIpOSUtil())
+        result = osutil.BigIpOSUtil.unregister_agent_service(
+            osutil.BigIpOSUtil()
+        )
         self.assertEqual(result, 0)
 
 
@@ -215,7 +224,9 @@ class TestBigIpOSUtil_set_hostname(AgentTestCase):
 
     @patch.object(os.path, "exists", return_value=False)
     def test_success(self, *args):
-        result = osutil.BigIpOSUtil.set_hostname(osutil.BigIpOSUtil(), None)
+        result = osutil.BigIpOSUtil.set_hostname(
+            osutil.BigIpOSUtil(), None
+        )
         self.assertEqual(args[0].call_count, 0)
         self.assertEqual(result, None)
 
@@ -224,16 +235,31 @@ class TestBigIpOSUtil_set_dhcp_hostname(AgentTestCase):
 
     @patch.object(os.path, "exists", return_value=False)
     def test_success(self, *args):
-        result = osutil.BigIpOSUtil.set_dhcp_hostname(osutil.BigIpOSUtil(), None)
+        result = osutil.BigIpOSUtil.set_dhcp_hostname(
+            osutil.BigIpOSUtil(), None
+        )
         self.assertEqual(args[0].call_count, 0)
         self.assertEqual(result, None)
 
 
 class TestBigIpOSUtil_get_first_if(AgentTestCase):
 
-    def test_success(self):
+    @patch.object(osutil.BigIpOSUtil,
+                  '_format_single_interface_name', return_value=b'eth0')
+    def test_success(self, *args):
         ifname, ipaddr = osutil.BigIpOSUtil().get_first_if()
         self.assertTrue(ifname.startswith('eth'))
+        self.assertTrue(ipaddr is not None)
+        try:
+            socket.inet_aton(ipaddr)
+        except socket.error:
+            self.fail("not a valid ip address")
+
+    @patch.object(osutil.BigIpOSUtil,
+                  '_format_single_interface_name', return_value=b'loenp0s3')
+    def test_success(self, *args):
+        ifname, ipaddr = osutil.BigIpOSUtil().get_first_if()
+        self.assertFalse(ifname.startswith('eth'))
         self.assertTrue(ipaddr is not None)
         try:
             socket.inet_aton(ipaddr)
@@ -283,6 +309,44 @@ class TestBigIpOSUtil_set_admin_access_to_ip(AgentTestCase):
             osutil.BigIpOSUtil(), '192.168.10.10'
         )
         self.assertEqual(args[0].call_count, 2)
+
+
+class TestBigIpOSUtil_route_add(AgentTestCase):
+
+    @patch.object(shellutil, "run", return_value=0)
+    def test_success(self, *args):
+        osutil.BigIpOSUtil.route_add(
+            osutil.BigIpOSUtil(), '10.10.10.0', '255.255.255.0', '10.10.10.1'
+        )
+        self.assertEqual(args[0].call_count, 1)
+
+
+class TestBigIpOSUtil_device_for_ide_port(AgentTestCase):
+
+    @patch.object(time, "sleep", return_value=None)
+    @patch.object(os.path, "exists", return_value=False)
+    @patch.object(default.DefaultOSUtil,
+                  'device_for_ide_port', return_value=None)
+    def test_success_waiting(self, *args):
+        osutil.BigIpOSUtil.device_for_ide_port(
+            osutil.BigIpOSUtil(), '5'
+        )
+        self.assertEqual(args[0].call_count, 1)
+        self.assertEqual(args[1].call_count, 99)
+        self.assertEqual(args[2].call_count, 99)
+
+    @patch.object(time, "sleep", return_value=None)
+    @patch.object(os.path, "exists", return_value=True)
+    @patch.object(default.DefaultOSUtil,
+                  'device_for_ide_port', return_value=None)
+    def test_success_immediate(self, *args):
+        osutil.BigIpOSUtil.device_for_ide_port(
+            osutil.BigIpOSUtil(), '5'
+        )
+        self.assertEqual(args[0].call_count, 1)
+        self.assertEqual(args[1].call_count, 1)
+        self.assertEqual(args[2].call_count, 0)
+
 
 if __name__ == '__main__':
     unittest.main()
