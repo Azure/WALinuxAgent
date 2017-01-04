@@ -40,6 +40,7 @@ class DeprovisionHandler(object):
     def __init__(self):
         self.osutil = get_osutil()
         self.protocol_util = get_protocol_util()
+        self.actions_running = False
         signal.signal(signal.SIGINT, self.handle_interrupt_signal)
 
     def del_root_password(self, warnings, actions):
@@ -134,11 +135,16 @@ class DeprovisionHandler(object):
             if not confirm.lower().startswith('y'):
                 return
 
+        self.actions_running = True
         for action in actions:
             action.invoke()
 
-    def handle_interrupt_signal(self, frame):
-        print("Deprovision is interrupted.")
-        sys.exit(0)
+    def handle_interrupt_signal(self, signum, frame):
+        if not self.actions_running:
+            print("Deprovision is interrupted.")
+            sys.exit(0)
+
+        print ('Deprovisioning may not be interrupted.')
+        return
 
 
