@@ -26,7 +26,7 @@ from azurelinuxagent.common.utils.textutil import Version
 
 class TestTextUtil(AgentTestCase):
     def test_get_password_hash(self):
-        with open('./test_passwords.txt', 'rb') as in_file:
+        with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'test_passwords.txt'), 'rb') as in_file:
             for data in in_file:
                 # Remove bom on bytes data before it is converted into string.
                 data = textutil.remove_bom(data)
