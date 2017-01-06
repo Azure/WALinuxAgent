@@ -98,7 +98,7 @@ class RedhatOSUtil(Redhat6xOSUtil):
         """
         Unlike redhat 6.x, redhat 7.x will set hostname via hostnamectl
         """
-        shellutil.run("hostnamectl {0}".format(hostname))
+        shellutil.run("hostnamectl set-hostname {0}".format(hostname))
 
     def publish_hostname(self, hostname):
         """
