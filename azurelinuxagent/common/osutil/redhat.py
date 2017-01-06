@@ -96,10 +96,9 @@ class RedhatOSUtil(Redhat6xOSUtil):
 
     def set_hostname(self, hostname):
         """
-        Set /etc/hostname
-        Unlike redhat 6.x, redhat 7.x will set hostname to /etc/hostname
+        Unlike redhat 6.x, redhat 7.x will set hostname via hostnamectl
         """
-        DefaultOSUtil.set_hostname(self, hostname)
+        shellutil.run("hostnamectl {0}".format(hostname))
 
     def publish_hostname(self, hostname):
         """

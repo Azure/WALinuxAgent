@@ -807,6 +807,9 @@ class ExtHandlerInstance(object):
     def set_handler_state(self, handler_state):
         state_dir = self.get_conf_dir()
         try:
+            if not os.path.exists(state_dir):
+                fileutil.mkdir(state_dir, mode=0o700)
+
             state_file = os.path.join(state_dir, "HandlerState")
             fileutil.write_file(state_file, handler_state)
         except IOError as e:
