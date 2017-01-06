@@ -670,7 +670,7 @@ class ExtHandlerInstance(object):
             ext_status.message = u"Failed to get status file {0}".format(e)
             ext_status.code = -1
             ext_status.status = "error"
-        except ValueError as e:
+        except (ExtensionError, ValueError) as e:
             ext_status.message = u"Malformed status file {0}".format(e)
             ext_status.code = -1
             ext_status.status = "error"
