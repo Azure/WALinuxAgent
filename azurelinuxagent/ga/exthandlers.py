@@ -107,7 +107,8 @@ def parse_ext_status(ext_status, data):
     if substatus_list is None:
         return
     for substatus in substatus_list:
-        ext_status.substatusList.append(parse_ext_substatus(substatus))
+        if substatus is not None:
+            ext_status.substatusList.append(parse_ext_substatus(substatus))
 
 # This code migrates, if it exists, handler state and status from an
 # agent-owned directory into the handler-owned config directory
