@@ -162,15 +162,18 @@ NM_CONTROLLED=yes\n\
 DHCP_HOSTNAME=test\n"
 
         path = 'path'
-        with patch.object(fileutil, 'write_file') as patch_write, patch.object(fileutil, 'read_file', return_value=new_file):
+        with patch.object(fileutil, 'write_file') as patch_write:
+            with patch.object(fileutil, 'read_file', return_value=new_file):
                 fileutil.update_conf_file(path, 'DHCP_HOSTNAME', 'DHCP_HOSTNAME=test')
                 patch_write.assert_called_once_with(path, updated_file)
 
-        with patch.object(fileutil, 'write_file') as patch_write, patch.object(fileutil, 'read_file', return_value=existing_file):
+        with patch.object(fileutil, 'write_file') as patch_write:
+            with patch.object(fileutil, 'read_file', return_value=existing_file):
                 fileutil.update_conf_file(path, 'DHCP_HOSTNAME', 'DHCP_HOSTNAME=test')
                 patch_write.assert_called_once_with(path, updated_file)
 
-        with patch.object(fileutil, 'write_file') as patch_write, patch.object(fileutil, 'read_file', return_value=bad_file):
+        with patch.object(fileutil, 'write_file') as patch_write:
+            with patch.object(fileutil, 'read_file', return_value=bad_file):
                 fileutil.update_conf_file(path, 'DHCP_HOSTNAME', 'DHCP_HOSTNAME=test')
                 patch_write.assert_called_once_with(path, updated_file)
 
