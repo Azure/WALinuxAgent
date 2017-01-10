@@ -267,6 +267,9 @@ def gen_password_hash(password, crypt_id, salt_len):
     collection = string.ascii_letters + string.digits
     salt = ''.join(random.choice(collection) for _ in range(salt_len))
     salt = "${0}${1}".format(crypt_id, salt)
+    if sys.version_info[0] == 2:
+        # if python 2.*, encode to type 'str' to prevent Unicode Encode Error from crypt.crypt
+        password = password.encode('utf-8')
     return crypt.crypt(password, salt)
 
 

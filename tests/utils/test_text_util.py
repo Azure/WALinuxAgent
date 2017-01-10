@@ -23,12 +23,16 @@ from azurelinuxagent.common.future import ustr
 import azurelinuxagent.common.utils.textutil as textutil
 from azurelinuxagent.common.utils.textutil import Version
 
+
 class TestTextUtil(AgentTestCase):
     def test_get_password_hash(self):
-        password_hash = textutil.gen_password_hash("asdf", 6, 10)
-        self.assertNotEquals(None, password_hash)
-        password_hash = textutil.gen_password_hash("asdf", 6, 0)
-        self.assertNotEquals(None, password_hash)
+        with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'test_passwords.txt'), 'rb') as in_file:
+            for data in in_file:
+                # Remove bom on bytes data before it is converted into string.
+                data = textutil.remove_bom(data)
+                data = ustr(data, encoding='utf-8')
+                password_hash = textutil.gen_password_hash(data, 6, 10)
+                self.assertNotEquals(None, password_hash)
 
     def test_remove_bom(self):
         #Test bom could be removed
