@@ -29,6 +29,7 @@ REST api util functions
 """
 
 RETRY_WAITING_INTERVAL = 10
+secure_warning = True
 
 
 def _parse_url(url):
@@ -104,6 +105,7 @@ def http_request(method, url, data, headers=None, max_retry=3,
     On error, sleep 10 and retry max_retry times.
     """
     host, port, secure, rel_uri = _parse_url(url)
+    global secure_warning
 
     # Check proxy
     proxy_host, proxy_port = (None, None)
@@ -112,15 +114,19 @@ def http_request(method, url, data, headers=None, max_retry=3,
 
     # If httplib module is not built with ssl support. Fallback to http
     if secure and not hasattr(httpclient, "HTTPSConnection"):
-        logger.warn("httplib is not built with ssl support")
         secure = False
+        if secure_warning:
+            logger.warn("httplib is not built with ssl support")
+            secure_warning = False
 
     # If httplib module doesn't support https tunnelling. Fallback to http
     if secure and proxy_host is not None and proxy_port is not None \
             and not hasattr(httpclient.HTTPSConnection, "set_tunnel"):
-        logger.warn("httplib does not support https tunnelling "
-                    "(new in python 2.7)")
         secure = False
+        if secure_warning:
+            logger.warn("httplib does not support https tunnelling "
+                        "(new in python 2.7)")
+            secure_warning = False
 
     logger.verbose("HTTP method: [{0}]", method)
     logger.verbose("HTTP host: [{0}]", host)
