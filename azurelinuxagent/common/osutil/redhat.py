@@ -117,5 +117,11 @@ class RedhatOSUtil(Redhat6xOSUtil):
         DefaultOSUtil.openssl_to_openssh(self, input_file, output_file)
 
     def get_dhcp_lease_endpoint(self):
-        # centos7 has this weird naming with double hyphen like /var/lib/dhclient/dhclient--eth0.lease
-        return self.get_endpoint_from_leases_path('/var/lib/dhclient/dhclient-*.lease')
+        # dhclient
+        endpoint = self.get_endpoint_from_leases_path('/var/lib/dhclient/dhclient-*.lease')
+
+        if endpoint is None:
+            # NetworkManager
+            endpoint = self.get_endpoint_from_leases_path('/var/lib/NetworkManager/dhclient-*.lease')
+
+        return endpoint
