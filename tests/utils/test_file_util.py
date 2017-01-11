@@ -15,13 +15,12 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
-from tests.tools import *
 import uuid
-import unittest
-import os
-import sys
-from azurelinuxagent.common.future import ustr
+
 import azurelinuxagent.common.utils.fileutil as fileutil
+from azurelinuxagent.common.future import ustr
+from tests.tools import *
+
 
 class TestFileOperations(AgentTestCase):
 
@@ -116,6 +115,67 @@ class TestFileOperations(AgentTestCase):
         actual_files = fileutil.get_all_files(self.tmp_dir)
 
         self.assertEqual(set(expected_files), set(actual_files))
+
+    @patch('os.path.isfile')
+    def test_update_conf_file(self, _):
+        new_file = "\
+DEVICE=eth0\n\
+ONBOOT=yes\n\
+BOOTPROTO=dhcp\n\
+TYPE=Ethernet\n\
+USERCTL=no\n\
+PEERDNS=yes\n\
+IPV6INIT=no\n\
+NM_CONTROLLED=yes\n"
+
+        existing_file = "\
+DEVICE=eth0\n\
+ONBOOT=yes\n\
+BOOTPROTO=dhcp\n\
+TYPE=Ethernet\n\
+DHCP_HOSTNAME=existing\n\
+USERCTL=no\n\
+PEERDNS=yes\n\
+IPV6INIT=no\n\
+NM_CONTROLLED=yes\n"
+
+        bad_file = "\
+DEVICE=eth0\n\
+ONBOOT=yes\n\
+BOOTPROTO=dhcp\n\
+TYPE=Ethernet\n\
+USERCTL=no\n\
+PEERDNS=yes\n\
+IPV6INIT=no\n\
+NM_CONTROLLED=yes\n\
+DHCP_HOSTNAME=no_new_line"
+
+        updated_file = "\
+DEVICE=eth0\n\
+ONBOOT=yes\n\
+BOOTPROTO=dhcp\n\
+TYPE=Ethernet\n\
+USERCTL=no\n\
+PEERDNS=yes\n\
+IPV6INIT=no\n\
+NM_CONTROLLED=yes\n\
+DHCP_HOSTNAME=test\n"
+
+        path = 'path'
+        with patch.object(fileutil, 'write_file') as patch_write:
+            with patch.object(fileutil, 'read_file', return_value=new_file):
+                fileutil.update_conf_file(path, 'DHCP_HOSTNAME', 'DHCP_HOSTNAME=test')
+                patch_write.assert_called_once_with(path, updated_file)
+
+        with patch.object(fileutil, 'write_file') as patch_write:
+            with patch.object(fileutil, 'read_file', return_value=existing_file):
+                fileutil.update_conf_file(path, 'DHCP_HOSTNAME', 'DHCP_HOSTNAME=test')
+                patch_write.assert_called_once_with(path, updated_file)
+
+        with patch.object(fileutil, 'write_file') as patch_write:
+            with patch.object(fileutil, 'read_file', return_value=bad_file):
+                fileutil.update_conf_file(path, 'DHCP_HOSTNAME', 'DHCP_HOSTNAME=test')
+                patch_write.assert_called_once_with(path, updated_file)
 
 if __name__ == '__main__':
     unittest.main()

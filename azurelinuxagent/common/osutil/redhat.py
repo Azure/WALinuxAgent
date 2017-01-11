@@ -84,7 +84,8 @@ class Redhat6xOSUtil(DefaultOSUtil):
     def set_dhcp_hostname(self, hostname):
         ifname = self.get_if_name()
         filepath = "/etc/sysconfig/network-scripts/ifcfg-{0}".format(ifname)
-        fileutil.update_conf_file(filepath, 'DHCP_HOSTNAME',
+        fileutil.update_conf_file(filepath,
+                                  'DHCP_HOSTNAME',
                                   'DHCP_HOSTNAME={0}'.format(hostname))
 
     def get_dhcp_lease_endpoint(self):

@@ -140,9 +140,9 @@ def update_conf_file(path, line_start, val, chk_err=False):
     if not os.path.isfile(path) and chk_err:
         raise IOError("Can't find config file:{0}".format(path))
     conf = read_file(path).split('\n')
-    conf = [x for x in conf if not x.startswith(line_start)]
+    conf = [x for x in conf if x is not None and len(x) > 0 and not x.startswith(line_start)]
     conf.append(val)
-    write_file(path, '\n'.join(conf))
+    write_file(path, '\n'.join(conf) + '\n')
 
 def search_file(target_dir_name, target_file_name):
     for root, dirs, files in os.walk(target_dir_name):
