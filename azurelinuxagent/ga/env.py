@@ -56,9 +56,9 @@ class EnvHandler(object):
         self.stopped = False
         logger.info("Start env monitor service.")
         self.dhcp_handler.conf_routes()
-        self.hostname = socket.gethostname()
+        self.hostname = self.osutil.get_hostname_record()
         self.dhcpid = self.osutil.get_dhcp_pid()
-        self.server_thread = threading.Thread(target = self.monitor)
+        self.server_thread = threading.Thread(target=self.monitor)
         self.server_thread.setDaemon(True)
         self.server_thread.start()
 
@@ -81,7 +81,8 @@ class EnvHandler(object):
         curr_hostname = socket.gethostname()
         if curr_hostname != self.hostname:
             logger.info("EnvMonitor: Detected host name change: {0} -> {1}",
-                        self.hostname, curr_hostname)
+                        self.hostname,
+                        curr_hostname)
             self.osutil.set_hostname(curr_hostname)
             self.osutil.publish_hostname(curr_hostname)
             self.hostname = curr_hostname

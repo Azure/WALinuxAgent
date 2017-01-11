@@ -675,6 +675,7 @@ class DefaultOSUtil(object):
 
     def publish_hostname(self, hostname):
         self.set_dhcp_hostname(hostname)
+        self.set_hostname_record(hostname)
         ifname = self.get_if_name()
         self.restart_if(ifname)
 
@@ -740,6 +741,15 @@ class DefaultOSUtil(object):
                                 break
                 break
         return device
+
+    def set_hostname_record(self, hostname):
+        fileutil.write_file(conf.get_published_hostname(), contents=hostname)
+
+    def get_hostname_record(self):
+        record = None
+        if os.path.exists(conf.get_published_hostname()):
+            record = fileutil.read_file(conf.get_published_hostname())
+        return record
 
     def del_account(self, username):
         if self.is_sys_user(username):
