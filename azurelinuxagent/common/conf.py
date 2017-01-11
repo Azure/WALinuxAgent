@@ -98,6 +98,10 @@ def get_lib_dir(conf=__conf__):
     return conf.get("Lib.Dir", "/var/lib/waagent")
 
 
+def get_published_hostname(conf=__conf__):
+    return os.path.join(get_lib_dir(conf), 'published_hostname')
+
+
 def get_dvd_mount_point(conf=__conf__):
     return conf.get("DVD.MountPoint", "/mnt/cdrom/secure")
 
