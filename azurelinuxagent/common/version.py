@@ -112,12 +112,13 @@ def set_current_agent():
     lib_dir = conf.get_lib_dir()
     if lib_dir[-1] != os.path.sep:
         lib_dir += os.path.sep
-    if path[:len(lib_dir)] != lib_dir:
+    agent = path[len(lib_dir):].split(os.path.sep)[0]
+    match = AGENT_NAME_PATTERN.match(agent)
+    if match:
+        version = match.group(1)
+    else:
         agent = AGENT_LONG_VERSION
         version = AGENT_VERSION
-    else:
-        agent = path[len(lib_dir):].split(os.path.sep)[0]
-        version = AGENT_NAME_PATTERN.match(agent).group(1)
     return agent, FlexibleVersion(version)
 CURRENT_AGENT, CURRENT_VERSION = set_current_agent()
 

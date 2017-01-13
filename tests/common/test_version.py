@@ -54,6 +54,22 @@ class TestCurrentAgentName(AgentTestCase):
         self.assertEqual(AGENT_VERSION, str(current_version))
         return
 
+    @patch("os.getcwd", return_value="/")
+    def test_extract_name_root_finds_installed(self, mock_cwd):
+        current_agent, current_version = set_current_agent()
+        self.assertEqual(AGENT_LONG_VERSION, current_agent)
+        self.assertEqual(AGENT_VERSION, str(current_version))
+        return
+
+    @patch("os.getcwd")
+    def test_extract_name_in_path_finds_installed(self, mock_cwd):
+        path = os.path.join(conf.get_lib_dir(), "events")
+        mock_cwd.return_value = path
+        current_agent, current_version = set_current_agent()
+        self.assertEqual(AGENT_LONG_VERSION, current_agent)
+        self.assertEqual(AGENT_VERSION, str(current_version))
+        return
+
     @patch("os.getcwd")
     def test_extract_name_finds_latest_agent(self, mock_cwd):
         path = os.path.join(conf.get_lib_dir(), "{0}-{1}".format(
