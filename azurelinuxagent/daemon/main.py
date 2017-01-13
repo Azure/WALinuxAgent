@@ -35,7 +35,7 @@ from azurelinuxagent.common.protocol import get_protocol_util
 from azurelinuxagent.common.rdma import RDMADeviceHandler, setup_rdma_device
 from azurelinuxagent.common.utils.textutil import parse_doc, find, getattrib
 from azurelinuxagent.common.version import AGENT_LONG_NAME, AGENT_VERSION, \
-                                     DISTRO_NAME, DISTRO_VERSION, \
+                                     DISTRO_CODE_NAME, DISTRO_VERSION, \
                                      DISTRO_FULL_NAME, PY_VERSION_MAJOR, \
                                      PY_VERSION_MINOR, PY_VERSION_MICRO
 from azurelinuxagent.daemon.resourcedisk import get_resourcedisk_handler
@@ -57,7 +57,7 @@ class DaemonHandler(object):
 
     def run(self):
         logger.info("{0} Version:{1}", AGENT_LONG_NAME, AGENT_VERSION)
-        logger.info("OS: {0} {1}", DISTRO_NAME, DISTRO_VERSION)
+        logger.info("OS: {0} {1}", DISTRO_CODE_NAME, DISTRO_VERSION)
         logger.info("Python: {0}.{1}.{2}", PY_VERSION_MAJOR, PY_VERSION_MINOR,
             PY_VERSION_MICRO)
 

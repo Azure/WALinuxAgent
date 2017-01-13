@@ -20,7 +20,7 @@
 import os
 from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, \
     AGENT_DESCRIPTION, \
-    DISTRO_NAME, DISTRO_VERSION, DISTRO_FULL_NAME
+    DISTRO_CODE_NAME, DISTRO_VERSION, DISTRO_FULL_NAME
 
 from azurelinuxagent.common.osutil import get_osutil
 import setuptools
@@ -68,13 +68,13 @@ def set_udev_files(data_files, dest="/etc/udev/rules.d/",
     data_files.append((dest, src))
 
 
-def get_data_files(name, version, fullname):
+def get_data_files(distro_id, version, fullname):
     """
     Determine data_files according to distro name, version and init system type
     """
     data_files = []
 
-    if name == 'redhat' or name == 'centos':
+    if distro_id == 'redhat' or distro_id == 'centos':
         set_bin_files(data_files)
         set_conf_files(data_files)
         set_logrotate_files(data_files)
@@ -88,7 +88,7 @@ def get_data_files(name, version, fullname):
                 # TODO this is a mitigation to systemctl bug on 7.1
                 set_sysv_files(data_files)
 
-    elif name == 'coreos':
+    elif distro_id == 'coreos':
         set_bin_files(data_files, dest="/usr/share/oem/bin")
         set_conf_files(data_files, dest="/usr/share/oem",
                        src=["config/coreos/waagent.conf"])
@@ -96,13 +96,13 @@ def get_data_files(name, version, fullname):
         set_udev_files(data_files)
         set_files(data_files, dest="/usr/share/oem",
                   src=["init/coreos/cloud-config.yml"])
-    elif name == 'clear linux software for intel architecture':
+    elif distro_id == 'clear linux software for intel architecture':
         set_bin_files(data_files, dest="/usr/bin")
         set_conf_files(data_files, dest="/usr/share/defaults/waagent",
                        src=["config/clearlinux/waagent.conf"])
         set_systemd_files(data_files, dest='/usr/lib/systemd/system',
                           src=["init/clearlinux/waagent.service"])
-    elif name == 'ubuntu':
+    elif distro_id == 'ubuntu':
         set_bin_files(data_files)
         set_conf_files(data_files, src=["config/ubuntu/waagent.conf"])
         set_logrotate_files(data_files)
@@ -120,7 +120,7 @@ def get_data_files(name, version, fullname):
             # Ubuntu15.04+ uses systemd
             set_systemd_files(data_files,
                               src=["init/ubuntu/walinuxagent.service"])
-    elif name == 'suse':
+    elif distro_id == 'suse':
         set_bin_files(data_files)
         set_conf_files(data_files, src=["config/suse/waagent.conf"])
         set_logrotate_files(data_files)
@@ -134,7 +134,7 @@ def get_data_files(name, version, fullname):
         else:
             # sles 12+ and openSUSE 13.2+ use systemd
             set_systemd_files(data_files, dest='/usr/lib/systemd/system')
-    elif name == 'freebsd':
+    elif distro_id == 'freebsd':
         set_bin_files(data_files, dest="/usr/local/sbin")
         set_conf_files(data_files, src=["config/freebsd/waagent.conf"])
         set_rc_files(data_files)
@@ -159,7 +159,7 @@ class install(_install):
 
     def initialize_options(self):
         _install.initialize_options(self)
-        self.lnx_distro = DISTRO_NAME
+        self.lnx_distro = DISTRO_CODE_NAME
         self.lnx_distro_version = DISTRO_VERSION
         self.lnx_distro_fullname = DISTRO_FULL_NAME
         self.register_service = False
