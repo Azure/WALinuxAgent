@@ -21,6 +21,7 @@ import mock
 import azurelinuxagent.common.osutil.default as osutil
 import azurelinuxagent.common.utils.shellutil as shellutil
 from azurelinuxagent.common.osutil import get_osutil
+from azurelinuxagent.common.utils import fileutil
 from tests.tools import *
 
 
@@ -163,6 +164,156 @@ class TestOSUtil(AgentTestCase):
             self.assertEqual(int(ret[1]), get_osutil().get_processor_cores())
         else:
             self.fail("Cannot retrieve number of process cores using shell command.")
+
+    def test_conf_sshd(self):
+        new_file = "\
+Port 22\n\
+Protocol 2\n\
+ChallengeResponseAuthentication yes\n\
+#PasswordAuthentication yes\n\
+UsePAM yes\n\
+"
+        expected_output = "\
+Port 22\n\
+Protocol 2\n\
+ChallengeResponseAuthentication no\n\
+#PasswordAuthentication yes\n\
+UsePAM yes\n\
+PasswordAuthentication no\n\
+ClientAliveInterval 180\n\
+"
+
+        with patch.object(fileutil, 'write_file') as patch_write:
+            with patch.object(fileutil, 'read_file', return_value=new_file):
+                osutil.DefaultOSUtil().conf_sshd(disable_password=True)
+                patch_write.assert_called_once_with(
+                    conf.get_sshd_conf_file_path(),
+                    expected_output)
+
+    def test_conf_sshd_with_match(self):
+        new_file = "\
+Port 22\n\
+ChallengeResponseAuthentication yes\n\
+Match host 192.168.1.1\n\
+  ChallengeResponseAuthentication yes\n\
+"
+        expected_output = "\
+Port 22\n\
+ChallengeResponseAuthentication no\n\
+PasswordAuthentication no\n\
+ClientAliveInterval 180\n\
+Match host 192.168.1.1\n\
+  ChallengeResponseAuthentication yes\n\
+"
+
+        with patch.object(fileutil, 'write_file') as patch_write:
+            with patch.object(fileutil, 'read_file', return_value=new_file):
+                osutil.DefaultOSUtil().conf_sshd(disable_password=True)
+                patch_write.assert_called_once_with(
+                    conf.get_sshd_conf_file_path(),
+                    expected_output)
+
+    def test_conf_sshd_with_match_last(self):
+        new_file = "\
+Port 22\n\
+Match host 192.168.1.1\n\
+  ChallengeResponseAuthentication yes\n\
+"
+        expected_output = "\
+Port 22\n\
+PasswordAuthentication no\n\
+ChallengeResponseAuthentication no\n\
+ClientAliveInterval 180\n\
+Match host 192.168.1.1\n\
+  ChallengeResponseAuthentication yes\n\
+"
+
+        with patch.object(fileutil, 'write_file') as patch_write:
+            with patch.object(fileutil, 'read_file', return_value=new_file):
+                osutil.DefaultOSUtil().conf_sshd(disable_password=True)
+                patch_write.assert_called_once_with(
+                    conf.get_sshd_conf_file_path(),
+                    expected_output)
+
+    def test_conf_sshd_with_match_middle(self):
+        new_file = "\
+Port 22\n\
+match host 192.168.1.1\n\
+  ChallengeResponseAuthentication yes\n\
+match all\n\
+#Other config\n\
+"
+        expected_output = "\
+Port 22\n\
+match host 192.168.1.1\n\
+  ChallengeResponseAuthentication yes\n\
+match all\n\
+#Other config\n\
+PasswordAuthentication no\n\
+ChallengeResponseAuthentication no\n\
+ClientAliveInterval 180\n\
+"
+
+        with patch.object(fileutil, 'write_file') as patch_write:
+            with patch.object(fileutil, 'read_file', return_value=new_file):
+                osutil.DefaultOSUtil().conf_sshd(disable_password=True)
+                patch_write.assert_called_once_with(
+                    conf.get_sshd_conf_file_path(),
+                    expected_output)
+
+    def test_conf_sshd_with_match_multiple(self):
+        new_file = "\
+Port 22\n\
+Match host 192.168.1.1\n\
+  ChallengeResponseAuthentication yes\n\
+Match host 192.168.1.2\n\
+  ChallengeResponseAuthentication yes\n\
+Match all\n\
+#Other config\n\
+"
+        expected_output = "\
+Port 22\n\
+Match host 192.168.1.1\n\
+  ChallengeResponseAuthentication yes\n\
+Match host 192.168.1.2\n\
+  ChallengeResponseAuthentication yes\n\
+Match all\n\
+#Other config\n\
+PasswordAuthentication no\n\
+ChallengeResponseAuthentication no\n\
+ClientAliveInterval 180\n\
+"
+
+        with patch.object(fileutil, 'write_file') as patch_write:
+            with patch.object(fileutil, 'read_file', return_value=new_file):
+                osutil.DefaultOSUtil().conf_sshd(disable_password=True)
+                patch_write.assert_called_once_with(
+                    conf.get_sshd_conf_file_path(),
+                    expected_output)
+
+    def test_conf_sshd_with_match_multiple_first_last(self):
+        new_file = "\
+Match host 192.168.1.1\n\
+  ChallengeResponseAuthentication yes\n\
+Match host 192.168.1.2\n\
+  ChallengeResponseAuthentication yes\n\
+"
+        expected_output = "\
+PasswordAuthentication no\n\
+ChallengeResponseAuthentication no\n\
+ClientAliveInterval 180\n\
+Match host 192.168.1.1\n\
+  ChallengeResponseAuthentication yes\n\
+Match host 192.168.1.2\n\
+  ChallengeResponseAuthentication yes\n\
+"
+
+        with patch.object(fileutil, 'write_file') as patch_write:
+            with patch.object(fileutil, 'read_file', return_value=new_file):
+                osutil.DefaultOSUtil().conf_sshd(disable_password=True)
+                patch_write.assert_called_once_with(
+                    conf.get_sshd_conf_file_path(),
+                    expected_output)
 
 if __name__ == '__main__':
     unittest.main()

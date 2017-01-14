@@ -221,15 +221,24 @@ def hexstr_to_bytearray(a):
 
 
 def set_ssh_config(config, name, val):
-    notfound = True
+    found = False
+    no_match = -1
+
+    match_start = no_match
     for i in range(0, len(config)):
-        if config[i].startswith(name):
+        if config[i].startswith(name) and match_start == no_match:
             config[i] = "{0} {1}".format(name, val)
-            notfound = False
-        elif config[i].startswith("Match"):
-            # Match block must be put in the end of sshd config
-            break
-    if notfound:
+            found = True
+        elif config[i].lower().startswith("match"):
+            if config[i].lower().startswith("match all"):
+                # outside match block
+                match_start = no_match
+            elif match_start == no_match:
+                # inside match block
+                match_start = i
+    if not found:
+        if match_start != no_match:
+            i = match_start
         config.insert(i, "{0} {1}".format(name, val))
     return config
 
