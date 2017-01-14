@@ -238,16 +238,16 @@ Match host 192.168.1.1\n\
     def test_conf_sshd_with_match_middle(self):
         new_file = "\
 Port 22\n\
-Match host 192.168.1.1\n\
+match host 192.168.1.1\n\
   ChallengeResponseAuthentication yes\n\
-Match all\n\
+match all\n\
 #Other config\n\
 "
         expected_output = "\
 Port 22\n\
-Match host 192.168.1.1\n\
+match host 192.168.1.1\n\
   ChallengeResponseAuthentication yes\n\
-Match all\n\
+match all\n\
 #Other config\n\
 PasswordAuthentication no\n\
 ChallengeResponseAuthentication no\n\

@@ -229,8 +229,8 @@ def set_ssh_config(config, name, val):
         if config[i].startswith(name) and match_start == no_match:
             config[i] = "{0} {1}".format(name, val)
             found = True
-        elif config[i].startswith("Match"):
-            if config[i].startswith("Match all"):
+        elif config[i].lower().startswith("match"):
+            if config[i].lower().startswith("match all"):
                 # outside match block
                 match_start = no_match
             elif match_start == no_match:
