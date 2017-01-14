@@ -162,7 +162,7 @@ class MonitorHandler(object):
 
             try:
                 event = parse_event(data_str)
-                event.parameters.extend(self.sysinfo)
+                self.add_sysinfo(event)
                 event_list.events.append(event)
             except (ValueError, ProtocolError) as e:
                 logger.warn("Failed to decode event file: {0}", e)
@@ -193,3 +193,13 @@ class MonitorHandler(object):
             except Exception as e:
                 logger.warn("Failed to send events: {0}", e)
             time.sleep(60)
+
+    def add_sysinfo(self, event):
+        event_param_dict = {}  # key: TelemetryEventParam.name, val: idx of the EventParam in event.parameters
+        for i in range(len(event.parameters)):
+            event_param_dict[event.parameters[i].name] = i
+        for e in self.sysinfo:
+            if e.name in event_param_dict:
+                event.parameters[event_param_dict[e.name]] = e
+            else:
+                event.parameters.append(e)
