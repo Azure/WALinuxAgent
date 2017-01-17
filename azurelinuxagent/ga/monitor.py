@@ -162,7 +162,7 @@ class MonitorHandler(object):
 
             try:
                 event = parse_event(data_str)
-                event.parameters.extend(self.sysinfo)
+                self.add_sysinfo(event)
                 event_list.events.append(event)
             except (ValueError, ProtocolError) as e:
                 logger.warn("Failed to decode event file: {0}", e)
@@ -193,3 +193,11 @@ class MonitorHandler(object):
             except Exception as e:
                 logger.warn("Failed to send events: {0}", e)
             time.sleep(60)
+
+    def add_sysinfo(self, event):
+        sysinfo_names = [v.name for v in self.sysinfo]
+        for param in event.parameters:
+            if param.name in sysinfo_names:
+                logger.verbose("Remove existing event parameter: [{0}:{1}]", param.name, param.value)
+                event.parameters.remove(param)
+        event.parameters.extend(self.sysinfo)
