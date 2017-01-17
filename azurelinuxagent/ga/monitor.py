@@ -195,11 +195,9 @@ class MonitorHandler(object):
             time.sleep(60)
 
     def add_sysinfo(self, event):
-        event_param_dict = {}  # key: TelemetryEventParam.name, val: idx of the EventParam in event.parameters
-        for i in range(len(event.parameters)):
-            event_param_dict[event.parameters[i].name] = i
-        for e in self.sysinfo:
-            if e.name in event_param_dict:
-                event.parameters[event_param_dict[e.name]] = e
-            else:
-                event.parameters.append(e)
+        sysinfo_names = [v.name for v in self.sysinfo]
+        for param in event.parameters:
+            if param.name in sysinfo_names:
+                logger.verbose("Remove existing event parameter: [{0}:{1}]", param.name, param.value)
+                event.parameters.remove(param)
+        event.parameters.extend(self.sysinfo)
