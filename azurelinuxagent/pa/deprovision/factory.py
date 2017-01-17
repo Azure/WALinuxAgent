@@ -17,7 +17,7 @@
 
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.utils.textutil import Version
-from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_VERSION, \
+from azurelinuxagent.common.version import DISTRO_CODE_NAME, DISTRO_VERSION, \
                                      DISTRO_FULL_NAME
 
 from .default import DeprovisionHandler
@@ -25,14 +25,14 @@ from .clearlinux import ClearLinuxDeprovisionHandler
 from .coreos import CoreOSDeprovisionHandler
 from .ubuntu import UbuntuDeprovisionHandler
 
-def get_deprovision_handler(distro_name=DISTRO_NAME, 
+def get_deprovision_handler(distro_id=DISTRO_CODE_NAME,
                             distro_version=DISTRO_VERSION,
                             distro_full_name=DISTRO_FULL_NAME):
-    if distro_name == "ubuntu":
+    if distro_id == "ubuntu":
         return UbuntuDeprovisionHandler()
-    if distro_name == "coreos":
+    if distro_id == "coreos":
         return CoreOSDeprovisionHandler()
-    if distro_name == "clear linux":
+    if distro_id == "clear linux":
         return ClearLinuxDeprovisionHandler()
 
     return DeprovisionHandler()

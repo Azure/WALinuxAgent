@@ -17,7 +17,7 @@
 
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.utils.textutil import Version
-from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_VERSION, \
+from azurelinuxagent.common.version import DISTRO_CODE_NAME, DISTRO_VERSION, \
                                      DISTRO_FULL_NAME
 
 from .default import DefaultOSUtil
@@ -32,11 +32,11 @@ from .ubuntu import UbuntuOSUtil, Ubuntu12OSUtil, Ubuntu14OSUtil, \
 from .alpine import AlpineOSUtil
 from .bigip import BigIpOSUtil
 
-def get_osutil(distro_name=DISTRO_NAME, distro_version=DISTRO_VERSION,
-               distro_full_name=DISTRO_FULL_NAME):
-    if distro_name == "clear linux software for intel architecture":
+
+def get_osutil(distro_id=DISTRO_CODE_NAME, distro_version=DISTRO_VERSION, distro_full_name=DISTRO_FULL_NAME):
+    if distro_id == "clear linux software for intel architecture":
         return ClearLinuxUtil()
-    if distro_name == "ubuntu":
+    if distro_id == "ubuntu":
         if Version(distro_version) == Version("12.04") or \
            Version(distro_version) == Version("12.10"):
             return Ubuntu12OSUtil()
@@ -47,13 +47,13 @@ def get_osutil(distro_name=DISTRO_NAME, distro_version=DISTRO_VERSION,
             return UbuntuSnappyOSUtil()
         else:
             return UbuntuOSUtil()
-    if distro_name == "alpine":
+    if distro_id == "alpine":
         return AlpineOSUtil()
-    if distro_name == "kali":
+    if distro_id == "kali":
         return DebianOSUtil()    
-    if distro_name == "coreos":
+    if distro_id == "coreos":
         return CoreOSUtil()
-    if distro_name == "suse":
+    if distro_id == "suse":
         if distro_full_name=='SUSE Linux Enterprise Server' and \
            Version(distro_version) < Version('12') or \
            distro_full_name == 'openSUSE' and \
@@ -61,20 +61,20 @@ def get_osutil(distro_name=DISTRO_NAME, distro_version=DISTRO_VERSION,
             return SUSE11OSUtil()
         else:
             return SUSEOSUtil()
-    elif distro_name == "debian":
+    elif distro_id == "debian":
         return DebianOSUtil()
-    elif distro_name == "redhat" or distro_name == "centos" or \
-            distro_name == "oracle":
+    elif distro_id == "redhat" or distro_id == "centos" or \
+            distro_id == "oracle":
         if Version(distro_version) < Version("7"):
             return Redhat6xOSUtil()
         else:
             return RedhatOSUtil()
-    elif distro_name == "freebsd":
+    elif distro_id == "freebsd":
         return FreeBSDOSUtil()
-    elif distro_name == "bigip":
+    elif distro_id == "bigip":
         return BigIpOSUtil()
     else:
-        logger.warn("Unable to load distro implementation for {0}.", distro_name)
+        logger.warn("Unable to load distro implementation for {0}.", distro_id)
         logger.warn("Use default distro implementation instead.")
         return DefaultOSUtil()
 

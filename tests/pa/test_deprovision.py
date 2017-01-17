@@ -22,10 +22,10 @@ from azurelinuxagent.pa.deprovision import get_deprovision_handler
 class TestDeprovision(AgentTestCase):
     @distros("redhat")
     def test_deprovision(self,
-                         distro_name,
+                         distro_id,
                          distro_version,
                          distro_full_name):
-        deprovision_handler = get_deprovision_handler(distro_name,
+        deprovision_handler = get_deprovision_handler(distro_id,
                                                       distro_version,
                                                       distro_full_name)
         warnings, actions = deprovision_handler.setup(deluser=False)
@@ -33,10 +33,10 @@ class TestDeprovision(AgentTestCase):
 
     @distros("ubuntu")
     def test_deprovision_ubuntu(self,
-                                distro_name,
+                                distro_id,
                                 distro_version,
                                 distro_full_name):
-        deprovision_handler = get_deprovision_handler(distro_name,
+        deprovision_handler = get_deprovision_handler(distro_id,
                                                       distro_version,
                                                       distro_full_name)
 

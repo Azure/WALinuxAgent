@@ -29,7 +29,7 @@ import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.event as event
 import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common.version import AGENT_NAME, AGENT_LONG_VERSION, \
-                                     DISTRO_NAME, DISTRO_VERSION, \
+                                     DISTRO_CODE_NAME, DISTRO_VERSION, \
                                      PY_VERSION_MAJOR, PY_VERSION_MINOR, \
                                      PY_VERSION_MICRO, GOAL_STATE_AGENT_VERSION
 from azurelinuxagent.common.osutil import get_osutil
@@ -174,7 +174,7 @@ def version():
     Show agent version
     """
     print(("{0} running on {1} {2}".format(AGENT_LONG_VERSION,
-                                           DISTRO_NAME,
+                                           DISTRO_CODE_NAME,
                                            DISTRO_VERSION)))
     print("Python: {0}.{1}.{2}".format(PY_VERSION_MAJOR,
                                        PY_VERSION_MINOR,

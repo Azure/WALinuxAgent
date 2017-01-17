@@ -17,16 +17,16 @@
 
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.utils.textutil import Version
-from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_VERSION, \
-                                     DISTRO_FULL_NAME
+from azurelinuxagent.common.version import DISTRO_CODE_NAME, DISTRO_VERSION, \
+    DISTRO_FULL_NAME
 from .default import ProvisionHandler
 from .ubuntu import UbuntuProvisionHandler
 
-def get_provision_handler(distro_name=DISTRO_NAME, 
-                            distro_version=DISTRO_VERSION,
-                            distro_full_name=DISTRO_FULL_NAME):
-    if distro_name == "ubuntu":
+
+def get_provision_handler(distro_id=DISTRO_CODE_NAME,
+                          distro_version=DISTRO_VERSION,
+                          distro_full_name=DISTRO_FULL_NAME):
+    if distro_id == "ubuntu":
         return UbuntuProvisionHandler()
 
     return ProvisionHandler()
-

@@ -24,9 +24,8 @@ from azurelinuxagent.pa.provision import get_provision_handler
 class TestProvision(AgentTestCase):
  
     @distros("redhat")
-    def test_provision(self, distro_name, distro_version, distro_full_name):
-        provision_handler = get_provision_handler(distro_name, distro_version, 
-                                                  distro_full_name)
+    def test_provision(self, distro_id, distro_version, distro_full_name):
+        provision_handler = get_provision_handler(distro_id, distro_version, distro_full_name)
         mock_osutil = MagicMock()
         mock_osutil.decode_customdata = Mock(return_value="")
         

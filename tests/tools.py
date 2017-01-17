@@ -101,19 +101,21 @@ supported_distro = [
 
 ]
 
+
 def open_patch():
     open_name = '__builtin__.open'
     if PY_VERSION_MAJOR == 3:
         open_name = 'builtins.open'
     return open_name
 
-def distros(distro_name=".*", distro_version=".*", distro_full_name=".*"):
+
+def distros(distro_id=".*", distro_version=".*", distro_full_name=".*"):
     """Run test on multiple distros"""
     def decorator(test_method):
         @wraps(test_method)
         def wrapper(self, *args, **kwargs):
             for distro in supported_distro:
-                if re.match(distro_name, distro[0]) and \
+                if re.match(distro_id, distro[0]) and \
                    re.match(distro_version, distro[1]) and \
                    re.match(distro_full_name, distro[2]):
                     if debug:
