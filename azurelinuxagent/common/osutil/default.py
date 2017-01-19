@@ -494,6 +494,8 @@ class DefaultOSUtil(object):
 
         if primary is None:
             primary = ''
+            logger.error('could not determine primary interface, '
+                         'please ensure /proc/net/route is correct')
 
         logger.info('primary interface is [{0}]'.format(primary))
         return primary
