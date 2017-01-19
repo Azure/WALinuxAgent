@@ -16,7 +16,6 @@
 #
 # Requires Python 2.4+ and Openssl 1.0+
 #
-from azurelinuxagent.common.event import *
 from azurelinuxagent.common.protocol.wire import *
 from azurelinuxagent.common.utils import textutil
 
@@ -51,6 +50,8 @@ class HostPluginProtocol(object):
             self.api_versions = self.get_api_versions()
             self.is_available = API_VERSION in self.api_versions
             self.is_initialized = True
+
+            from azurelinuxagent.common.event import add_event, WALAEventOperation
             add_event(name="WALA",
                       op=WALAEventOperation.InitializeHostPlugin,
                       is_success=self.is_available)

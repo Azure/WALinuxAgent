@@ -17,29 +17,13 @@
 
 from __future__ import print_function
 
-import copy
-import glob
-import json
-import mock
-import os
-import platform
-import random
-import subprocess
-import sys
-import tempfile
 import textwrap
-import zipfile
 
-from tests.protocol.mockwiredata import *
-from tests.tools import *
+import mock
 
-import azurelinuxagent.common.conf as conf
-import azurelinuxagent.common.logger as logger
-import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.version as version
-
-from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import *
+from tests.tools import *
 
 
 class TestCurrentAgentName(AgentTestCase):

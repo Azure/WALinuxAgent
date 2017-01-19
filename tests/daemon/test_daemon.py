@@ -15,9 +15,9 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
-from tests.tools import *
-from azurelinuxagent.common.exception import *
 from azurelinuxagent.daemon import *
+from tests.tools import *
+
 
 class MockDaemonCall(object):
     def __init__(self, daemon_handler, count):
