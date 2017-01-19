@@ -44,6 +44,7 @@ class WALAEventOperation:
     HealthCheck = "HealthCheck"
     HeartBeat = "HeartBeat"
     Install = "Install"
+    InitializeHostPlugin = "InitializeHostPlugin"
     Provision = "Provision"
     Restart = "Restart"
     UnhandledError = "UnhandledError"

@@ -198,6 +198,8 @@ class MonitorHandler(object):
         sysinfo_names = [v.name for v in self.sysinfo]
         for param in event.parameters:
             if param.name in sysinfo_names:
-                logger.verbose("Remove existing event parameter: [{0}:{1}]", param.name, param.value)
+                logger.verbose("Remove existing event parameter: [{0}:{1}]",
+                               param.name,
+                               param.value)
                 event.parameters.remove(param)
         event.parameters.extend(self.sysinfo)
