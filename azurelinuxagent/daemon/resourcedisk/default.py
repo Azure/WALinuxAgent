@@ -253,7 +253,7 @@ class ResourceDiskHandler(object):
         if not isinstance(nbytes, int):
             nbytes = int(nbytes)
 
-        if nbytes < 0:
+        if nbytes <= 0:
             raise ValueError(nbytes)
 
         if os.path.isfile(filename):
