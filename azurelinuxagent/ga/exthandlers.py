@@ -209,18 +209,18 @@ class ExtHandlersHandler(object):
     def handle_ext_handler(self, ext_handler, etag):
         ext_handler_i = ExtHandlerInstance(ext_handler, self.protocol)
 
-        ext_handler_i.decide_version()
-        if not ext_handler_i.is_upgrade and self.last_etag == etag:
-            if self.log_etag:
-                ext_handler_i.logger.verbose("Version {0} is current for etag {1}",
-                                             ext_handler_i.pkg.version,
-                                             etag)
-                self.log_etag = False
-            return
-
-        self.log_etag = True
-
         try:
+            ext_handler_i.decide_version()
+            if not ext_handler_i.is_upgrade and self.last_etag == etag:
+                if self.log_etag:
+                    ext_handler_i.logger.verbose("Version {0} is current for etag {1}",
+                                                 ext_handler_i.pkg.version,
+                                                 etag)
+                    self.log_etag = False
+                return
+
+            self.log_etag = True
+
             state = ext_handler.properties.state
             ext_handler_i.logger.info("Expected handler state: {0}", state)
             if state == "enabled":
