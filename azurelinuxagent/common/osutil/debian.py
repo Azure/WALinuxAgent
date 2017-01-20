@@ -37,11 +37,22 @@ class DebianOSUtil(DefaultOSUtil):
         super(DebianOSUtil, self).__init__()
 
     def restart_ssh_service(self):
-        return shellutil.run("service sshd restart", chk_err=False)
+        return shellutil.run("systemctl --job-mode=ignore-dependencies try-reload-or-restart ssh", chk_err=False)
 
     def stop_agent_service(self):
-        return shellutil.run("service azurelinuxagent stop", chk_err=False)
+        raise NotImplementedError
 
     def start_agent_service(self):
-        return shellutil.run("service azurelinuxagent start", chk_err=False)
+        raise NotImplementedError
 
+    def start_network(self):
+        raise NotImplementedError
+
+    def remove_rules_files(self, rules_files=""):
+        pass
+
+    def restore_rules_files(self, rules_files=""):
+        pass
+
+    def get_dhcp_lease_endpoint(self):
+        return self.get_endpoint_from_leases_path('/var/lib/dhcp/dhclient.*.leases')
