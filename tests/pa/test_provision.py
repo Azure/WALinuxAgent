@@ -15,11 +15,12 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
-from tests.tools import *
-import azurelinuxagent.common.conf as conf
-from azurelinuxagent.common.protocol import OVF_FILE_NAME
 import azurelinuxagent.common.utils.fileutil as fileutil
+from azurelinuxagent.common.osutil.default import DefaultOSUtil
+from azurelinuxagent.common.protocol import OVF_FILE_NAME
 from azurelinuxagent.pa.provision import get_provision_handler
+from tests.tools import *
+
 
 class TestProvision(AgentTestCase):
  
@@ -41,6 +42,12 @@ class TestProvision(AgentTestCase):
         fileutil.write_file(ovfenv_file, ovfenv_data)
          
         provision_handler.run()
+
+    def test_customdata(self):
+        base64data = 'Q3VzdG9tRGF0YQ=='
+        data = DefaultOSUtil().decode_customdata(base64data)
+        fileutil.write_file(tempfile.mktemp(), data)
+
 
 if __name__ == '__main__':
     unittest.main()
