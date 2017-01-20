@@ -762,7 +762,7 @@ class DefaultOSUtil(object):
         self.conf_sudoer(username, remove=True)
 
     def decode_customdata(self, data):
-        return base64.b64decode(data)
+        return base64.b64decode(data).decode('utf-8')
 
     def get_total_mem(self):
         # Get total memory in bytes and divide by 1024**2 to get the valu in MB.
