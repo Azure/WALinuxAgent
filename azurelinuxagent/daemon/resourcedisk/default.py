@@ -224,7 +224,9 @@ class ResourceDiskHandler(object):
         swapfile = os.path.join(mount_point, 'swapfile')
         swaplist = shellutil.run_get_output("swapon -s")[1]
 
-        if swapfile in swaplist and os.path.getsize(swapfile) == size:
+        if swapfile in swaplist \
+                and os.path.isfile(swapfile) \
+                and os.path.getsize(swapfile) == size:
             logger.info("Swap already enabled")
             return
 
