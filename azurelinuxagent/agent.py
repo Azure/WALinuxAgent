@@ -25,6 +25,8 @@ import os
 import sys
 import re
 import subprocess
+import traceback
+
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.event as event
 import azurelinuxagent.common.conf as conf
@@ -133,8 +135,10 @@ def main(args=[]):
                 agent.daemon()
             elif command == "run-exthandlers":
                 agent.run_exthandlers()
-        except Exception as e:
-            logger.error(u"Failed to run '{0}': {1}", command, e)
+        except Exception:
+            logger.error(u"Failed to run '{0}': {1}",
+                         command,
+                         traceback.format_exc())
 
 def parse_args(sys_args):
     """
