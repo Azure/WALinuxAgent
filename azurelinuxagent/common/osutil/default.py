@@ -728,20 +728,21 @@ class DefaultOSUtil(object):
             port_id = port_id - 2
         device = None
         path = "/sys/bus/vmbus/devices/"
-        for vmbus in os.listdir(path):
-            deviceid = fileutil.read_file(os.path.join(path, vmbus, "device_id"))
-            guid = deviceid.lstrip('{').split('-')
-            if guid[0] == g0 and guid[1] == "000" + ustr(port_id):
-                for root, dirs, files in os.walk(path + vmbus):
-                    if root.endswith("/block"):
-                        device = dirs[0]
-                        break
-                    else : #older distros
-                        for d in dirs:
-                            if ':' in d and "block" == d.split(':')[0]:
-                                device = d.split(':')[1]
-                                break
-                break
+        if os.path.exists(path):
+            for vmbus in os.listdir(path):
+                deviceid = fileutil.read_file(os.path.join(path, vmbus, "device_id"))
+                guid = deviceid.lstrip('{').split('-')
+                if guid[0] == g0 and guid[1] == "000" + ustr(port_id):
+                    for root, dirs, files in os.walk(path + vmbus):
+                        if root.endswith("/block"):
+                            device = dirs[0]
+                            break
+                        else : #older distros
+                            for d in dirs:
+                                if ':' in d and "block" == d.split(':')[0]:
+                                    device = d.split(':')[1]
+                                    break
+                    break
         return device
 
     def set_hostname_record(self, hostname):
