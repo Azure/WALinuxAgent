@@ -99,7 +99,14 @@ class ResourceDiskHandler(object):
                         existing)
             return existing
 
-        fileutil.mkdir(mount_point, mode=0o755)
+        try:
+            fileutil.mkdir(mount_point, mode=0o755)
+        except OSError as ose:
+            msg = "Failed to create mount point " \
+                  "directory [{0}]: {1}".format(mount_point, ose)
+            logger.error(msg)
+            raise ResourceDiskError(msg=msg, inner=ose)
+
         logger.info("Examining partition table")
         ret = shellutil.run_get_output("parted {0} print".format(device))
         if ret[0]:
