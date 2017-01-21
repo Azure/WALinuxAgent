@@ -40,13 +40,13 @@ class DebianOSUtil(DefaultOSUtil):
         return shellutil.run("systemctl --job-mode=ignore-dependencies try-reload-or-restart ssh", chk_err=False)
 
     def stop_agent_service(self):
-        raise NotImplementedError
+        return shellutil.run("service azurelinuxagent stop", chk_err=False)
 
     def start_agent_service(self):
-        raise NotImplementedError
+        return shellutil.run("service azurelinuxagent start", chk_err=False)
 
     def start_network(self):
-        raise NotImplementedError
+        pass
 
     def remove_rules_files(self, rules_files=""):
         pass
