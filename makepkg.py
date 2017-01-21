@@ -42,7 +42,7 @@ PUBLISH_MANIFEST = '''<?xml version="1.0" encoding="utf-8" ?>
   <IsJsonExtension>true</IsJsonExtension>
   <CompanyName>Microsoft</CompanyName>
   <SupportedOS>Linux</SupportedOS>
-  <Regions>{2}</Regions>
+  <!--%REGIONS%-->
 </ExtensionImage>
 '''
 
@@ -59,12 +59,6 @@ pkg_name = os.path.join(output_path, AGENT_LONG_VERSION + ".zip")
 family = 'Test'
 if len(sys.argv) > 1:
     family = sys.argv[1]
-
-region = 'South Central US'
-if len(sys.argv) > 2:
-    cloud = sys.argv[2]
-    if cloud == 'BlackForest':
-        region = 'Germany Central'
 
 def do(*args):
     try:
@@ -100,8 +94,7 @@ with open(manifest_path, mode='w') as manifest:
 print("Writing {0}".format(publish_manifest_path))
 with open(publish_manifest_path, mode='w') as publish_manifest:
     publish_manifest.write(PUBLISH_MANIFEST.format(AGENT_VERSION,
-                                                   family,
-                                                   region))
+                                                   family))
 
 
 cwd = os.getcwd()
