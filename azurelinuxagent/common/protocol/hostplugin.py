@@ -127,7 +127,10 @@ class HostPluginProtocol(object):
                                'content': status}, sort_keys=True)
             response = restutil.http_put(url, data=data, headers=headers)
             if response.status != httpclient.OK:
-                logger.error("PUT failed [{0}]", response.status)
+                logger.warn("PUT {0} [{1}: {2}]",
+                            url,
+                            response.status,
+                            response.reason)
             else:
                 logger.verbose("Successfully uploaded status to host plugin")
         except Exception as e:

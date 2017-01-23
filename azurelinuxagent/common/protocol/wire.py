@@ -638,9 +638,10 @@ class WireClient(object):
                 uri, headers = host.get_artifact_request(version.uri)
                 response = self.fetch(uri, headers)
                 if not response:
+                    host = self.get_host_plugin(force_update=True)
                     logger.info("Retry fetch in {0} seconds",
-                                LONG_WAITING_INTERVAL)
-                    time.sleep(LONG_WAITING_INTERVAL)
+                                SHORT_WAITING_INTERVAL)
+                    time.sleep(SHORT_WAITING_INTERVAL)
                 else:
                     host.manifest_uri = version.uri
                     logger.verbose("Manifest downloaded successfully from host plugin")
@@ -659,9 +660,10 @@ class WireClient(object):
             if resp.status == httpclient.OK:
                 return_value = self.decode_config(resp.read())
             else:
-                logger.warn("Could not fetch {0} [{1}]",
+                logger.warn("Could not fetch {0} [{1}: {2}]",
                             uri,
-                            resp.status)
+                            resp.status,
+                            resp.reason)
         except (HttpError, ProtocolError) as e:
             logger.verbose("Fetch failed from [{0}]", uri)
         return return_value
@@ -982,8 +984,11 @@ class WireClient(object):
             "x-ms-guest-agent-public-x509-cert": cert
         }
 
-    def get_host_plugin(self):
-        if self.host_plugin is None:
+    def get_host_plugin(self, force_update=False):
+        if self.host_plugin is None or force_update:
+            if force_update:
+                logger.warn("Forcing update of goal state")
+                self.goal_state = None
             goal_state = self.get_goal_state()
             self.host_plugin = HostPluginProtocol(self.endpoint,
                                                   goal_state.container_id,
