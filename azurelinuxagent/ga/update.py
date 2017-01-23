@@ -702,7 +702,7 @@ class GuestAgent(object):
                 break
             else:
                 if self.host is not None:
-                    logger.info("Download unsuccessful, falling back to host plugin")
+                    logger.warn("Download unsuccessful, falling back to host plugin")
                     uri, headers = self.host.get_artifact_request(uri.uri, self.host.manifest_uri)
                     if self._fetch(uri, headers=headers):
                         break
@@ -730,9 +730,9 @@ class GuestAgent(object):
                 logger.info(u"Agent {0} downloaded from {1}", self.name, uri)
         except restutil.HttpError as http_error:
             logger.verbose(u"Agent {0} download from {1} failed [{2}]",
-                        self.name,
-                        uri,
-                        http_error)
+                           self.name,
+                           uri,
+                           http_error)
         return package is not None
 
     def _load_error(self):
