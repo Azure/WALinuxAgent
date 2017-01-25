@@ -80,7 +80,7 @@ class EnvHandler(object):
     def handle_hostname_update(self):
         curr_hostname = socket.gethostname()
         if curr_hostname != self.hostname:
-            logger.info("EnvMonitor: Detected host name change: {0} -> {1}",
+            logger.info("EnvMonitor: Detected hostname change: {0} -> {1}",
                         self.hostname,
                         curr_hostname)
             self.osutil.set_hostname(curr_hostname)

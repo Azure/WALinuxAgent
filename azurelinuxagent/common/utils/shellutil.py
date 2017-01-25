@@ -17,13 +17,11 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
-import platform
-import os
 import subprocess
-from azurelinuxagent.common.future import ustr
 import azurelinuxagent.common.logger as logger
+from azurelinuxagent.common.future import ustr
 
-if not hasattr(subprocess,'check_output'):
+if not hasattr(subprocess, 'check_output'):
     def check_output(*popenargs, **kwargs):
         r"""Backport from subprocess module from python 2.7"""
         if 'stdout' in kwargs:
@@ -39,51 +37,58 @@ if not hasattr(subprocess,'check_output'):
             raise subprocess.CalledProcessError(retcode, cmd, output=output)
         return output
 
+
     # Exception classes used by this module.
     class CalledProcessError(Exception):
         def __init__(self, returncode, cmd, output=None):
             self.returncode = returncode
             self.cmd = cmd
             self.output = output
+
         def __str__(self):
             return ("Command '{0}' returned non-zero exit status {1}"
                     "").format(self.cmd, self.returncode)
 
-    subprocess.check_output=check_output
-    subprocess.CalledProcessError=CalledProcessError
 
+    subprocess.check_output = check_output
+    subprocess.CalledProcessError = CalledProcessError
 
 """
 Shell command util functions
 """
+
+
 def run(cmd, chk_err=True):
     """
     Calls run_get_output on 'cmd', returning only the return code.
     If chk_err=True then errors will be reported in the log.
     If chk_err=False then errors will be suppressed from the log.
     """
-    retcode,out=run_get_output(cmd,chk_err)
+    retcode, out = run_get_output(cmd, chk_err)
     return retcode
+
 
 def run_get_output(cmd, chk_err=True, log_cmd=True):
     """
     Wrapper for subprocess.check_output.
-    Execute 'cmd'.  Returns return code and STDOUT, trapping expected exceptions.
+    Execute 'cmd'.  Returns return code and STDOUT, trapping expected
+    exceptions.
     Reports exceptions to Error if chk_err parameter is True
     """
     if log_cmd:
         logger.verbose(u"run cmd '{0}'", cmd)
     try:
-        output=subprocess.check_output(cmd,stderr=subprocess.STDOUT,shell=True)
+        output = subprocess.check_output(cmd, stderr=subprocess.STDOUT,
+                                         shell=True)
         output = ustr(output, encoding='utf-8', errors="backslashreplace")
-    except subprocess.CalledProcessError as e :
+    except subprocess.CalledProcessError as e:
         output = ustr(e.output, encoding='utf-8', errors="backslashreplace")
         if chk_err:
             if log_cmd:
                 logger.error(u"run cmd '{0}' failed", e.cmd)
             logger.error(u"Error Code:{0}", e.returncode)
             logger.error(u"Result:{0}", output)
-        return e.returncode, output 
+        return e.returncode, output
     return 0, output
 
 
@@ -93,15 +98,17 @@ def quote(word_list):
     byte-literal single quote.
 
     The resulting string is safe for use with ``shell=True`` in ``subprocess``,
-    and in ``os.system``. ``assert shlex.split(ShellQuote(wordList)) == wordList``.
+    and in ``os.system``. ``assert shlex.split(ShellQuote(wordList)) ==
+    wordList``.
 
     See POSIX.1:2013 Vol 3, Chap 2, Sec 2.2.2:
-    http://pubs.opengroup.org/onlinepubs/9699919799/utilities/V3_chap02.html#tag_18_02_02
+    http://pubs.opengroup.org/onlinepubs/9699919799/utilities/V3_chap02.html
+    #tag_18_02_02
     """
     if not isinstance(word_list, (tuple, list)):
         word_list = (word_list,)
 
-    return " ".join(list("'{0}'".format(s.replace("'", "'\\''")) for s in word_list))
-
+    return " ".join(
+        list("'{0}'".format(s.replace("'", "'\\''")) for s in word_list))
 
 # End shell command util functions
