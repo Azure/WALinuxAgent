@@ -36,6 +36,7 @@ import azurelinuxagent.common.utils.textutil as textutil
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
 
+
 class Redhat6xOSUtil(DefaultOSUtil):
     def __init__(self):
         super(Redhat6xOSUtil, self).__init__()
@@ -57,7 +58,7 @@ class Redhat6xOSUtil(DefaultOSUtil):
 
     def unregister_agent_service(self):
         return shellutil.run("chkconfig --del waagent", chk_err=False)
-    
+
     def openssl_to_openssh(self, input_file, output_file):
         pubkey = fileutil.read_file(input_file)
         try:
@@ -67,7 +68,7 @@ class Redhat6xOSUtil(DefaultOSUtil):
             raise OSUtilError(ustr(e))
         fileutil.write_file(output_file, ssh_rsa_pubkey)
 
-    #Override
+    # Override
     def get_dhcp_pid(self):
         ret = shellutil.run_get_output("pidof dhclient", chk_err=False)
         return ret[1] if ret[0] == 0 else None
@@ -91,6 +92,7 @@ class Redhat6xOSUtil(DefaultOSUtil):
     def get_dhcp_lease_endpoint(self):
         return self.get_endpoint_from_leases_path('/var/lib/dhclient/dhclient-*.leases')
 
+
 class RedhatOSUtil(Redhat6xOSUtil):
     def __init__(self):
         super(RedhatOSUtil, self).__init__()
@@ -98,8 +100,13 @@ class RedhatOSUtil(Redhat6xOSUtil):
     def set_hostname(self, hostname):
         """
         Unlike redhat 6.x, redhat 7.x will set hostname via hostnamectl
+        Due to a bug in systemd in Centos-7.0, if this call fails, fallback
+        to hostname.
         """
-        shellutil.run("hostnamectl set-hostname {0}".format(hostname))
+        hostnamectl_cmd = "hostnamectl set-hostname {0}".format(hostname)
+        if shellutil.run(hostnamectl_cmd, chk_err=False) != 0:
+            logger.warn("[{0}] failed, attempting fallback".format(hostnamectl_cmd))
+            DefaultOSUtil.set_hostname(self, hostname)
 
     def publish_hostname(self, hostname):
         """

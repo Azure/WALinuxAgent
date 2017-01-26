@@ -100,10 +100,10 @@ class ProvisionHandler(object):
     def provision(self, ovfenv):
         logger.info("Handle ovf-env.xml.")
         try:
-            logger.info("Set host name.")
+            logger.info("Set hostname [{0}]".format(ovfenv.hostname))
             self.osutil.set_hostname(ovfenv.hostname)
 
-            logger.info("Publish host name.")
+            logger.info("Publish hostname [{0}]".format(ovfenv.hostname))
             self.osutil.publish_hostname(ovfenv.hostname)
 
             self.config_user_account(ovfenv)
