@@ -98,17 +98,14 @@ def quote(word_list):
     byte-literal single quote.
 
     The resulting string is safe for use with ``shell=True`` in ``subprocess``,
-    and in ``os.system``. ``assert shlex.split(ShellQuote(wordList)) ==
-    wordList``.
+    and in ``os.system``. ``assert shlex.split(ShellQuote(wordList)) == wordList``.
 
     See POSIX.1:2013 Vol 3, Chap 2, Sec 2.2.2:
-    http://pubs.opengroup.org/onlinepubs/9699919799/utilities/V3_chap02.html
-    #tag_18_02_02
+    http://pubs.opengroup.org/onlinepubs/9699919799/utilities/V3_chap02.html#tag_18_02_02
     """
     if not isinstance(word_list, (tuple, list)):
         word_list = (word_list,)
 
-    return " ".join(
-        list("'{0}'".format(s.replace("'", "'\\''")) for s in word_list))
+    return " ".join(list("'{0}'".format(s.replace("'", "'\\''")) for s in word_list))
 
 # End shell command util functions
