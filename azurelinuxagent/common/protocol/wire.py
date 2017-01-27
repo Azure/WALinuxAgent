@@ -341,7 +341,7 @@ def vm_status_to_v1(vm_status, ext_statuses):
         'handlerAggregateStatus': v1_handler_status_list
     }
     v1_vm_status = {
-        'version': '1.0',
+        'version': '1.1',
         'timestampUTC': timestamp,
         'aggregateStatus': v1_agg_status
     }
