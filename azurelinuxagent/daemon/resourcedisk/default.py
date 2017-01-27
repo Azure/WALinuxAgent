@@ -152,8 +152,11 @@ class ResourceDiskHandler(object):
                                              partition,
                                              mount_point)
         logger.info("Mount resource disk [{0}]", mount_string)
-        ret = shellutil.run(mount_string, chk_err=False)
-        if ret:
+        ret, output = shellutil.run_get_output(mount_string, chk_err=False)
+        # if the exit code is 32, then the resource disk is already mounted
+        if ret == 32:
+            logger.warn("Resource disk is already mounted: {0}", output)
+        elif ret != 0:
             # Some kernels seem to issue an async partition re-read after a
             # 'parted' command invocation. This causes mount to fail if the
             # partition re-read is not complete by the time mount is
