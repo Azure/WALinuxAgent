@@ -16,11 +16,12 @@
 #
 # Requires Python 2.4+ and Openssl 1.0+
 #
-
+import socket
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.restutil as restutil
 from azurelinuxagent.common.exception import ProtocolError, HttpError
 from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.version import DISTRO_VERSION, DISTRO_NAME, CURRENT_VERSION
 
 
 def validate_param(name, val, expected_type):
@@ -87,8 +88,13 @@ Data contract between guest and host
 
 
 class VMInfo(DataContract):
-    def __init__(self, subscriptionId=None, vmName=None, containerId=None,
-                 roleName=None, roleInstanceName=None, tenantName=None):
+    def __init__(self,
+                 subscriptionId=None,
+                 vmName=None,
+                 containerId=None,
+                 roleName=None,
+                 roleInstanceName=None,
+                 tenantName=None):
         self.subscriptionId = subscriptionId
         self.vmName = vmName
         self.containerId = containerId
@@ -96,17 +102,25 @@ class VMInfo(DataContract):
         self.roleInstanceName = roleInstanceName
         self.tenantName = tenantName
 
+
 class CertificateData(DataContract):
     def __init__(self, certificateData=None):
         self.certificateData = certificateData
 
+
 class Cert(DataContract):
-    def __init__(self, name=None, thumbprint=None, certificateDataUri=None, storeName=None, storeLocation=None):
+    def __init__(self,
+                 name=None,
+                 thumbprint=None,
+                 certificateDataUri=None,
+                 storeName=None,
+                 storeLocation=None):
         self.name = name
         self.thumbprint = thumbprint
         self.certificateDataUri = certificateDataUri
         self.storeLocation = storeLocation
         self.storeName = storeName
+
 
 class CertList(DataContract):
     def __init__(self):
@@ -131,8 +145,12 @@ class VMAgentManifestList(DataContract):
 
 
 class Extension(DataContract):
-    def __init__(self, name=None, sequenceNumber=None, publicSettings=None,
-                 protectedSettings=None, certificateThumbprint=None):
+    def __init__(self,
+                 name=None,
+                 sequenceNumber=None,
+                 publicSettings=None,
+                 protectedSettings=None,
+                 certificateThumbprint=None):
         self.name = name
         self.sequenceNumber = sequenceNumber
         self.publicSettings = publicSettings
@@ -207,8 +225,13 @@ class ExtensionSubStatus(DataContract):
 
 
 class ExtensionStatus(DataContract):
-    def __init__(self, configurationAppliedTime=None, operation=None,
-                 status=None, seq_no=None, code=None, message=None):
+    def __init__(self,
+                 configurationAppliedTime=None,
+                 operation=None,
+                 status=None,
+                 seq_no=None,
+                 code=None,
+                 message=None):
         self.configurationAppliedTime = configurationAppliedTime
         self.operation = operation
         self.status = status
@@ -219,7 +242,11 @@ class ExtensionStatus(DataContract):
 
 
 class ExtHandlerStatus(DataContract):
-    def __init__(self, name=None, version=None, status=None, code=0,
+    def __init__(self,
+                 name=None,
+                 version=None,
+                 status=None,
+                 code=0,
                  message=None):
         self.name = name
         self.version = version
@@ -230,16 +257,19 @@ class ExtHandlerStatus(DataContract):
 
 
 class VMAgentStatus(DataContract):
-    def __init__(self, version=None, status=None, message=None):
-        self.version = version
+    def __init__(self, status=None, message=None):
         self.status = status
         self.message = message
+        self.hostname = socket.gethostname()
+        self.version = str(CURRENT_VERSION)
+        self.osname = DISTRO_NAME
+        self.osversion = DISTRO_VERSION
         self.extensionHandlers = DataContractList(ExtHandlerStatus)
 
 
 class VMStatus(DataContract):
-    def __init__(self):
-        self.vmAgent = VMAgentStatus()
+    def __init__(self, status, message):
+        self.vmAgent = VMAgentStatus(status=status, message=message)
 
 
 class TelemetryEventParam(DataContract):

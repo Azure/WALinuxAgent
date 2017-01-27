@@ -250,6 +250,9 @@ def ga_status_to_v1(ga_status):
     v1_ga_status = {
         'version': ga_status.version,
         'status': ga_status.status,
+        'osversion': ga_status.osversion,
+        'osname': ga_status.osname,
+        'hostname': ga_status.hostname,
         'formattedMessage': formatted_msg
     }
     return v1_ga_status
@@ -762,7 +765,7 @@ class WireClient(object):
         return self.goal_state
 
     def get_hosting_env(self):
-        if (self.hosting_env is None):
+        if self.hosting_env is None:
             local_file = os.path.join(conf.get_lib_dir(),
                                       HOSTING_ENV_FILE_NAME)
             xml_text = self.fetch_cache(local_file)
@@ -770,7 +773,7 @@ class WireClient(object):
         return self.hosting_env
 
     def get_shared_conf(self):
-        if (self.shared_conf is None):
+        if self.shared_conf is None:
             local_file = os.path.join(conf.get_lib_dir(),
                                       SHARED_CONF_FILE_NAME)
             xml_text = self.fetch_cache(local_file)
@@ -778,7 +781,7 @@ class WireClient(object):
         return self.shared_conf
 
     def get_certs(self):
-        if (self.certs is None):
+        if self.certs is None:
             local_file = os.path.join(conf.get_lib_dir(), CERTS_FILE_NAME)
             xml_text = self.fetch_cache(local_file)
             self.certs = Certificates(self, xml_text)
@@ -1407,7 +1410,6 @@ class InVMArtifactsProfile(object):
     * encryptedHealthChecks (optional)
     * encryptedApplicationProfile (optional)
     """
-
     def __init__(self, artifacts_profile):
         if not textutil.is_str_none_or_whitespace(artifacts_profile):
             self.__dict__.update(parse_json(artifacts_profile))

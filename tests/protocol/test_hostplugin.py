@@ -65,7 +65,7 @@ class TestHostPlugin(AgentTestCase):
             wire_protocol_client.get_goal_state = Mock(return_value=test_goal_state)
             plugin = wire_protocol_client.get_host_plugin()
             blob = wire_protocol_client.status_blob
-            blob.vm_status = restapi.VMStatus()
+            blob.vm_status = restapi.VMStatus(message="Ready", status="Ready")
             blob.data = '{"dummy": "data"}'
             with patch.object(plugin, 'get_api_versions') as patch_api:
                 patch_api.return_value = API_VERSION
@@ -117,7 +117,7 @@ class TestHostPlugin(AgentTestCase):
         self.assertFalse(host_client.is_initialized)
         self.assertTrue(host_client.api_versions is None)
         status_blob = wire.StatusBlob(None)
-        status_blob.vm_status = restapi.VMStatus()
+        status_blob.vm_status = restapi.VMStatus(message="Ready", status="Ready")
         status_blob.data = '{"dummy": "data"}'
         status_blob.type = "BlockBlob"
         with patch.object(wire.HostPluginProtocol,
