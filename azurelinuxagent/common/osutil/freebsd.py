@@ -77,7 +77,7 @@ class FreeBSDOSUtil(DefaultOSUtil):
                                "").format(username, output))
 
     def del_root_password(self):
-        err = shellutil.run('pw mod user root -w no')
+        err = shellutil.run('pw usermod root -h -')
         if err:
             raise OSUtilError("Failed to delete root password: Failed to update password database.")
 
