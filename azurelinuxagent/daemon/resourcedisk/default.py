@@ -161,19 +161,25 @@ class ResourceDiskHandler(object):
             # the partition and try mounting.
             logger.warn("Failed to mount resource disk. "
                         "Retry mounting after re-reading partition info.")
+
             if shellutil.run("sfdisk -R {0}".format(device), chk_err=False):
                 shellutil.run("blockdev --rereadpt {0}".format(device),
                               chk_err=False)
-            ret = shellutil.run(mount_string, chk_err=False)
+
+            ret, output = shellutil.run_get_output(mount_string)
             if ret:
                 logger.warn("Failed to mount resource disk. "
-                            "Attempting to format and retry mount.")
+                            "Attempting to format and retry mount. [{0}]",
+                            output)
+
                 shellutil.run(mkfs_string)
-                ret = shellutil.run(mount_string)
+                ret, output = shellutil.run_get_output(mount_string)
                 if ret:
                     raise ResourceDiskError("Could not mount {0} "
                                             "after syncing partition table: "
-                                            "{1}".format(partition, ret))
+                                            "[{1}] {2}".format(partition,
+                                                               ret,
+                                                               output))
 
         logger.info("Resource disk {0} is mounted at {1} with {2}",
                     device,
