@@ -17,6 +17,7 @@
 
 from azurelinuxagent.common.protocol.wire import *
 from tests.protocol.mockwiredata import *
+from azurelinuxagent.ga.exthandlers import parse_ext_status
 
 data_with_bom = b'\xef\xbb\xbfhehe'
 testurl = 'http://foo'
@@ -100,6 +101,29 @@ class TestWireProtocolGetters(AgentTestCase):
             self.assertTrue(http_patch.call_count == 4)
             for c in http_patch.call_args_list:
                 self.assertTrue(c[-1]['chk_proxy'] == True)
+
+    def test_ext_status_to_v1_parsing(self, *args):
+        data_str =  '[{"status": {"status": "success", "code": 0, "operation": "Install"}, "version": 1.0, "timestampUTC": "2017-01-25T00:00:00Z"}]'
+        ext_status = ExtensionStatus(seq_no=1)
+        data = json.loads(data_str)
+        parse_ext_status(ext_status, data)
+
+        ext_handler_name = 'ext_handler'
+        ext_name = 'ext'
+        v1_ext_status = ext_status_to_v1(ext_handler_name, ext_status)
+        self.assertEqual(ext_handler_name, v1_ext_status['status']['name'])
+        self.assertEqual(ext_status.operation, v1_ext_status['status']['operation'])
+        self.assertEqual(ext_status.status, v1_ext_status['status']['status'])
+        self.assertEqual(ext_status.code, v1_ext_status['status']['code'])
+        self.assertEqual(1.0, v1_ext_status['version'])
+
+        ext_status.name = ext_name
+        v1_ext_status = ext_status_to_v1(ext_handler_name, ext_status)
+        self.assertEqual(ext_name, v1_ext_status['status']['name'])
+        self.assertEqual(ext_status.operation, v1_ext_status['status']['operation'])
+        self.assertEqual(ext_status.status, v1_ext_status['status']['status'])
+        self.assertEqual(ext_status.code, v1_ext_status['status']['code'])
+        self.assertEqual(1.0, v1_ext_status['version'])
 
     def test_status_blob_parsing(self, *args):
         wire_protocol_client = WireProtocol(wireserver_url).client
