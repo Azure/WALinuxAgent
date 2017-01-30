@@ -270,6 +270,40 @@ class TestWireProtocolGetters(AgentTestCase):
             self.assertTrue(in_vm_artifacts_profile.is_on_hold())
             artifact_request.assert_called_once_with(testurl)
 
+    @patch("socket.gethostname", return_value="hostname")
+    @patch("time.gmtime", return_value=time.localtime(1485543256))
+    def test_report_vm_status(self, *args):
+        status = 'status'
+        message = 'message'
+
+        client = WireProtocol(wireserver_url).client
+        actual = StatusBlob(client=client)
+        actual.set_vm_status(VMStatus(status=status, message=message))
+        timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+        formatted_msg = {
+            'lang': 'en-US',
+            'message': message
+        }
+        v1_ga_status = {
+            'version': str(CURRENT_VERSION),
+            'status': status,
+            'osversion': DISTRO_VERSION,
+            'osname': DISTRO_NAME,
+            'hostname': socket.gethostname(),
+            'formattedMessage': formatted_msg
+        }
+        v1_agg_status = {
+            'guestAgentStatus': v1_ga_status,
+            'handlerAggregateStatus': []
+        }
+        v1_vm_status = {
+            'version': '1.1',
+            'timestampUTC': timestamp,
+            'aggregateStatus': v1_agg_status
+        }
+        self.assertEqual(json.dumps(v1_vm_status), actual.to_json())
+
 
 class MockResponse:
     def __init__(self, body, status_code):
