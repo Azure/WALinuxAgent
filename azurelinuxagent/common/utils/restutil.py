@@ -86,7 +86,7 @@ def _http_request(method, host, rel_uri, port=None, data=None, secure=False,
                                              timeout=10)
             url = rel_uri
 
-    logger.verbose("HTTPConnection [{0}] [{1}] [{2}] [{3}]",
+    logger.verbose("HTTP connection [{0}] [{1}] [{2}] [{3}]",
                    method,
                    url,
                    data,
@@ -128,13 +128,6 @@ def http_request(method, url, data, headers=None, max_retry=3,
                         "(new in python 2.7)")
             secure_warning = False
 
-    logger.verbose("HTTP method: [{0}]", method)
-    logger.verbose("HTTP host: [{0}]", host)
-    logger.verbose("HTTP uri: [{0}]", rel_uri)
-    logger.verbose("HTTP port: [{0}]", port)
-    logger.verbose("HTTP data: [{0}]", data)
-    logger.verbose("HTTP secure: [{0}]", secure)
-    logger.verbose("HTTP headers: [{0}]", headers)
     logger.verbose("HTTP proxy: [{0}:{1}]", proxy_host, proxy_port)
 
     retry_msg = ''

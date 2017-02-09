@@ -721,7 +721,7 @@ class WireClient(object):
 
         if not forced:
             last_incarnation = None
-            if (os.path.isfile(incarnation_file)):
+            if os.path.isfile(incarnation_file):
                 last_incarnation = fileutil.read_file(incarnation_file)
             new_incarnation = goal_state.incarnation
             if last_incarnation is not None and \
