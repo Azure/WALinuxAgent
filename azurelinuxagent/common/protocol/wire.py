@@ -992,6 +992,7 @@ class WireClient(object):
             if force_update:
                 logger.warn("Forcing update of goal state")
                 self.goal_state = None
+                self.update_goal_state(forced=True)
             goal_state = self.get_goal_state()
             self.host_plugin = HostPluginProtocol(self.endpoint,
                                                   goal_state.container_id,
