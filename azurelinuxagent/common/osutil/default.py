@@ -749,9 +749,16 @@ class DefaultOSUtil(object):
         fileutil.write_file(conf.get_published_hostname(), contents=hostname)
 
     def get_hostname_record(self):
-        record = None
-        if os.path.exists(conf.get_published_hostname()):
-            record = fileutil.read_file(conf.get_published_hostname())
+        hostname_record = conf.get_published_hostname()
+        if not os.path.exists(hostname_record):
+            # this file is created at provisioning time with agents >= 2.2.3
+            hostname = socket.gethostname()
+            logger.warn('Hostname record does not exist, '
+                        'creating [{0}] with hostname [{1}]',
+                        hostname_record,
+                        hostname)
+            self.set_hostname_record(hostname)
+        record = fileutil.read_file(hostname_record)
         return record
 
     def del_account(self, username):
@@ -765,7 +772,7 @@ class DefaultOSUtil(object):
         return base64.b64decode(data).decode('utf-8')
 
     def get_total_mem(self):
-        # Get total memory in bytes and divide by 1024**2 to get the valu in MB.
+        # Get total memory in bytes and divide by 1024**2 to get the value in MB.
         return os.sysconf('SC_PAGE_SIZE') * os.sysconf('SC_PHYS_PAGES') / (1024**2)
 
     def get_processor_cores(self):

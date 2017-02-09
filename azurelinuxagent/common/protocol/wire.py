@@ -721,7 +721,7 @@ class WireClient(object):
 
         if not forced:
             last_incarnation = None
-            if (os.path.isfile(incarnation_file)):
+            if os.path.isfile(incarnation_file):
                 last_incarnation = fileutil.read_file(incarnation_file)
             new_incarnation = goal_state.incarnation
             if last_incarnation is not None and \
@@ -736,11 +736,11 @@ class WireClient(object):
                 file_name = GOAL_STATE_FILE_NAME.format(goal_state.incarnation)
                 goal_state_file = os.path.join(conf.get_lib_dir(), file_name)
                 self.save_cache(goal_state_file, xml_text)
-                self.save_cache(incarnation_file, goal_state.incarnation)
                 self.update_hosting_env(goal_state)
                 self.update_shared_conf(goal_state)
                 self.update_certs(goal_state)
                 self.update_ext_conf(goal_state)
+                self.save_cache(incarnation_file, goal_state.incarnation)
                 if self.host_plugin is not None:
                     self.host_plugin.container_id = goal_state.container_id
                     self.host_plugin.role_config_name = goal_state.role_config_name
@@ -992,6 +992,7 @@ class WireClient(object):
             if force_update:
                 logger.warn("Forcing update of goal state")
                 self.goal_state = None
+                self.update_goal_state(forced=True)
             goal_state = self.get_goal_state()
             self.host_plugin = HostPluginProtocol(self.endpoint,
                                                   goal_state.container_id,
