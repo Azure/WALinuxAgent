@@ -128,7 +128,8 @@ def http_request(method, url, data, headers=None, max_retry=3,
                         "(new in python 2.7)")
             secure_warning = False
 
-    logger.verbose("HTTP proxy: [{0}:{1}]", proxy_host, proxy_port)
+    if proxy_host or proxy_port:
+        logger.verbose("HTTP proxy: [{0}:{1}]", proxy_host, proxy_port)
 
     retry_msg = ''
     log_msg = "HTTP {0}".format(method)
