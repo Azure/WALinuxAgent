@@ -341,7 +341,7 @@ class ExtHandlerInstance(object):
         self.logger = logger.Logger(logger.DEFAULT_LOGGER, prefix)
         
         try:
-            fileutil.mkdir(self.get_log_dir(), mode=0o744)
+            fileutil.mkdir(self.get_log_dir(), mode=0o755)
         except IOError as e:
             self.logger.error(u"Failed to create extension log dir: {0}", e)
 
