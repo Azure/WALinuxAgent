@@ -49,7 +49,7 @@ class ConfigurationProvider(object):
                 if not os.path.exists(path):
                     raise AgentConfigError(
                         "Included configuration path does "
-                        "not exist: {}".format(path))
+                        "not exist: {0}".format(path))
                 elif os.path.isdir(path):
                     for file in os.listdir(path):
                         conf_path = os.path.join(path, file)
