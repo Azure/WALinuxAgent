@@ -25,6 +25,16 @@ from tests.tools import *
 class TestConfigurationProvider(AgentTestCase):
     def setUp(self):
         AgentTestCase.setUp(self)
+        # We create a temporary directory here that we use for some tests 
+        # as to easily clean up after running we can't use the convenient
+        # TemporaryDirectory as it's python 3+ only nor use self.addCleanup
+        # (python 2.7+).
+        self.temp_dir = mkdtemp()
+        return
+
+    def tearDown(self):
+        AgentTestCase.tearDown(self)
+        rmtree(self.temp_dir)
         return
 
     def test_load(self):
@@ -62,16 +72,14 @@ Three=Baz
         return
 
     def test_load_include_directory(self):
-        conf_dir = mkdtemp()
-        self.addCleanup(rmtree, conf_dir)
-        with open(os.path.join(conf_dir, "one.conf"), "w") as f:
+        with open(os.path.join(self.temp_dir, "one.conf"), "w") as f:
             f.write("Two=Bar\n")
-        with open(os.path.join(conf_dir, "two.conf"), "w") as f:
+        with open(os.path.join(self.temp_dir, "two.conf"), "w") as f:
             f.write("Three=Baz\n")   
         content = """One=Foo
 include {}
 Four=Qux
-""".format(conf_dir)
+""".format(self.temp_dir)
         conf = ConfigurationProvider()
         conf.load(content)
         self.assertEqual(conf.get("One", None), "Foo")
@@ -81,9 +89,7 @@ Four=Qux
         return
 
     def test_load_include_invalid(self):
-        conf_dir = mkdtemp()
-        self.addCleanup(rmtree, conf_dir)
-        content = "include {}/missing.conf\n".format(conf_dir)
+        content = "include {}/missing.conf\n".format(self.temp_dir)
         conf = ConfigurationProvider()
         with self.assertRaises(AgentConfigError):
             conf.load(content)
