@@ -91,6 +91,5 @@ Four=Qux
     def test_load_include_invalid(self):
         content = "include {0}/missing.conf\n".format(self.temp_dir)
         conf = ConfigurationProvider()
-        with self.assertRaises(AgentConfigError):
-            conf.load(content)
+        self.assertRaises(AgentConfigError, conf.load, content)
         return
