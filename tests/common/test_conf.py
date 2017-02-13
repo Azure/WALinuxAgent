@@ -15,7 +15,8 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
-from tempfile import NamedTemporaryFile, TemporaryDirectory
+from shutil import rmtree
+from tempfile import NamedTemporaryFile, mkdtemp
 
 from azurelinuxagent.common.conf import *
 from tests.tools import *
@@ -61,17 +62,18 @@ Three=Baz
         return
 
     def test_load_include_directory(self):
-        with TemporaryDirectory() as conf_dir:
-            with open(os.path.join(conf_dir, "one.conf"), "w") as f:
-                f.write("Two=Bar\n")
-            with open(os.path.join(conf_dir, "two.conf"), "w") as f:
-                f.write("Three=Baz\n")   
-            content = """One=Foo
+        conf_dir = mkdtemp()
+        self.addCleanup(rmtree, conf_dir)
+        with open(os.path.join(conf_dir, "one.conf"), "w") as f:
+            f.write("Two=Bar\n")
+        with open(os.path.join(conf_dir, "two.conf"), "w") as f:
+            f.write("Three=Baz\n")   
+        content = """One=Foo
 include {}
 Four=Qux
 """.format(conf_dir)
-            conf = ConfigurationProvider()
-            conf.load(content)
+        conf = ConfigurationProvider()
+        conf.load(content)
         self.assertEqual(conf.get("One", None), "Foo")
         self.assertEqual(conf.get("Two", None), "Bar")
         self.assertEqual(conf.get("Three", None), "Baz")
@@ -79,9 +81,10 @@ Four=Qux
         return
 
     def test_load_include_invalid(self):
-        with TemporaryDirectory() as conf_dir:
-            content = "include {}/missing.conf\n".format(conf_dir)
-            conf = ConfigurationProvider()
-            with self.assertRaises(AgentConfigError):
-                conf.load(content)
+        conf_dir = mkdtemp()
+        self.addCleanup(rmtree, conf_dir)
+        content = "include {}/missing.conf\n".format(conf_dir)
+        conf = ConfigurationProvider()
+        with self.assertRaises(AgentConfigError):
+            conf.load(content)
         return
