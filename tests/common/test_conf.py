@@ -61,7 +61,7 @@ Integer=123
             conf_file.write(b"Two=Bar\n")
             conf_file.flush()
             content = """One=Foo
-include {}
+include {0}
 Three=Baz
 """.format(conf_file.name)
             conf = ConfigurationProvider()
@@ -77,7 +77,7 @@ Three=Baz
         with open(os.path.join(self.temp_dir, "two.conf"), "w") as f:
             f.write("Three=Baz\n")   
         content = """One=Foo
-include {}
+include {0}
 Four=Qux
 """.format(self.temp_dir)
         conf = ConfigurationProvider()
@@ -89,7 +89,7 @@ Four=Qux
         return
 
     def test_load_include_invalid(self):
-        content = "include {}/missing.conf\n".format(self.temp_dir)
+        content = "include {0}/missing.conf\n".format(self.temp_dir)
         conf = ConfigurationProvider()
         with self.assertRaises(AgentConfigError):
             conf.load(content)
