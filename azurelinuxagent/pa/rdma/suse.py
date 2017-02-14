@@ -93,8 +93,7 @@ class SUSERDMAHandler(RDMAHandler):
                 msg = 'RDMA: Successfully installed "%s" from '
                 msg += 'configured repositories'
                 logger.info(msg % complete_name)
-                self.load_driver_module()
-                if requires_reboot:
+                if not self.load_driver_module() or requires_reboot:
                     self.reboot_system()
                 return True
         else:
@@ -119,8 +118,7 @@ class SUSERDMAHandler(RDMAHandler):
                     msg = 'RDMA: Successfully installed "%s" from '
                     msg += 'local package cache'
                     logger.info(msg % (local_package))
-                    self.load_driver_module()
-                    if requires_reboot:
+                    if not self.load_driver_module() or requires_reboot:
                         self.reboot_system()
                     return True
             else:
