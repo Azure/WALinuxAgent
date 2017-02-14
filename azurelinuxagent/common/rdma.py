@@ -158,6 +158,7 @@ class RDMAHandler(object):
             logger.info('RDMA: module loaded.')
             return True
         logger.info('RDMA: module not loaded.')
+        return False
 
     def reboot_system(self):
         """Reboot the system. This is required as the kernel module for
