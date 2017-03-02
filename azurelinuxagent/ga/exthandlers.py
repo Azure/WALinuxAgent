@@ -715,7 +715,7 @@ class ExtHandlerInstance(object):
  
     def is_responsive(self, heartbeat_file):
         last_update=int(time.time() - os.stat(heartbeat_file).st_mtime)
-        return  last_update > 600    # not updated for more than 10 min
+        return  last_update <= 600    # updated within the last 10 min
    
     def launch_command(self, cmd, timeout=300):
         self.logger.info("Launch command:{0}", cmd)
