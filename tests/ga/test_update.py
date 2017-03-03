@@ -17,30 +17,10 @@
 
 from __future__ import print_function
 
-import copy
-import glob
-import json
-import os
-import platform
-import random
-import re
-import subprocess
-import sys
-import tempfile
-import zipfile
-
-from tests.protocol.mockwiredata import *
-from tests.tools import *
-
-import azurelinuxagent.common.logger as logger
-import azurelinuxagent.common.utils.fileutil as fileutil
-
-from azurelinuxagent.common.exception import UpdateError
-from azurelinuxagent.common.protocol.restapi import *
+from azurelinuxagent.common.protocol.hostplugin import *
 from azurelinuxagent.common.protocol.wire import *
-from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
-from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION
 from azurelinuxagent.ga.update import *
+from tests.tools import *
 
 NO_ERROR = {
     "last_failure" : 0.0,
@@ -194,7 +174,7 @@ class UpdateTestCase(AgentTestCase):
             self.copy_agents(get_agent_pkgs()[0])
             self.expand_agents()
             count -= 1
-        
+
         # Determine the most recent agent version
         versions = self.agent_versions()
         src_v = FlexibleVersion(str(versions[0]))
@@ -290,11 +270,11 @@ class TestGuestAgentError(UpdateTestCase):
 
         for i in range(0, MAX_FAILURE):
             err.mark_failure()
-        
+
         # Agent failed >= MAX_FAILURE, it should be blacklisted
         self.assertTrue(err.is_blacklisted)
         self.assertEqual(MAX_FAILURE, err.failure_count)
-        
+
         # Clear old failure does not clear recent failure
         err.clear_old_failure()
         self.assertTrue(err.is_blacklisted)
@@ -396,7 +376,7 @@ class TestGuestAgent(UpdateTestCase):
         self.assertFalse(agent.is_available)
         agent._unpack()
         self.assertTrue(agent.is_available)
-        
+
         agent.mark_failure(is_fatal=True)
         self.assertFalse(agent.is_available)
         return
@@ -409,7 +389,7 @@ class TestGuestAgent(UpdateTestCase):
         agent._unpack()
         self.assertFalse(agent.is_blacklisted)
         self.assertEqual(agent.is_blacklisted, agent.error.is_blacklisted)
-        
+
         agent.mark_failure(is_fatal=True)
         self.assertTrue(agent.is_blacklisted)
         self.assertEqual(agent.is_blacklisted, agent.error.is_blacklisted)
@@ -525,7 +505,7 @@ class TestGuestAgent(UpdateTestCase):
         self.assertFalse(os.path.isdir(self.agent_path))
 
         mock_http_get.return_value= ResponseMock(status=restutil.httpclient.SERVICE_UNAVAILABLE)
-        
+
         pkg = ExtHandlerPackage(version=str(get_agent_version()))
         pkg.uris.append(ExtHandlerPackageUri())
         agent = GuestAgent(pkg=pkg)
@@ -546,6 +526,8 @@ class TestGuestAgent(UpdateTestCase):
 
         ext_uri = 'ext_uri'
         host_uri = 'host_uri'
+        api_uri = URI_FORMAT_GET_API_VERSIONS.format(host_uri, HOST_PLUGIN_PORT)
+        art_uri = URI_FORMAT_GET_EXTENSION_ARTIFACT.format(host_uri, HOST_PLUGIN_PORT)
         mock_host = HostPluginProtocol(host_uri,
                                        'container_id',
                                        'role_config')
@@ -555,13 +537,29 @@ class TestGuestAgent(UpdateTestCase):
         agent = GuestAgent(pkg=pkg)
         agent.host = mock_host
 
+        # ensure fallback fails gracefully, no http
+        self.assertRaises(UpdateError, agent._download)
+        self.assertEqual(mock_http_get.call_count, 2)
+        self.assertEqual(mock_http_get.call_args_list[0][0][0], ext_uri)
+        self.assertEqual(mock_http_get.call_args_list[1][0][0], api_uri)
+
+        # ensure fallback fails gracefully, artifact api failure
         with patch.object(HostPluginProtocol,
-                          "get_artifact_request",
-                          return_value=[host_uri, {}]):
+                          "ensure_initialized",
+                          return_value=True):
             self.assertRaises(UpdateError, agent._download)
-            self.assertEqual(mock_http_get.call_count, 2)
-            self.assertEqual(mock_http_get.call_args_list[0][0][0], ext_uri)
-            self.assertEqual(mock_http_get.call_args_list[1][0][0], host_uri)
+            self.assertEqual(mock_http_get.call_count, 4)
+            self.assertEqual(mock_http_get.call_args_list[2][0][0], ext_uri)
+            self.assertEqual(mock_http_get.call_args_list[3][0][0], art_uri)
+
+            # ensure fallback works as expected
+            with patch.object(HostPluginProtocol,
+                              "get_artifact_request",
+                              return_value=[art_uri, {}]):
+                self.assertRaises(UpdateError, agent._download)
+                self.assertEqual(mock_http_get.call_count, 6)
+                self.assertEqual(mock_http_get.call_args_list[4][0][0], ext_uri)
+                self.assertEqual(mock_http_get.call_args_list[5][0][0], art_uri)
 
     @patch("azurelinuxagent.ga.update.restutil.http_get")
     def test_ensure_downloaded(self, mock_http_get):
@@ -688,7 +686,7 @@ class TestUpdate(UpdateTestCase):
             protocol=None,
             versions=None,
             count=5):
-        
+
         latest_version = self.prepare_agents(count=count)
         if versions is None or len(versions) <= 0:
             versions = [latest_version]
@@ -741,7 +739,7 @@ class TestUpdate(UpdateTestCase):
         self.prepare_agents()
         agent_count = self.agent_count()
         self.assertEqual(5, agent_count)
-        
+
         agent_versions = self.agent_versions()[:3]
         self.assertTrue(self._test_upgrade_available(versions=agent_versions))
         self.assertEqual(len(agent_versions), len(self.update_handler.agents))
@@ -793,7 +791,7 @@ class TestUpdate(UpdateTestCase):
                 return iterations[0] < invocations
 
             mock_util.check_pid_alive = Mock(side_effect=iterator)
-            
+
             with patch('os.getpid', return_value=42):
                 with patch('time.sleep', return_value=None) as mock_sleep:
                     self.update_handler._ensure_no_orphans(orphan_wait_interval=interval)
@@ -1178,7 +1176,7 @@ class TestUpdate(UpdateTestCase):
         #   reference. Incrementing an item of a list changes an item to
         #   which the code has a reference.
         #   See http://stackoverflow.com/questions/26408941/python-nested-functions-and-variable-scope
-        iterations = [0] 
+        iterations = [0]
         def iterator(*args, **kwargs):
             iterations[0] += 1
             if iterations[0] >= invocations:
