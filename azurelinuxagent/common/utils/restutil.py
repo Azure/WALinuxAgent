@@ -152,8 +152,14 @@ def http_request(method, url, data, headers=None, max_retry=3,
             retry_interval = 5
         except IOError as e:
             retry_msg = 'IO error: {0} {1}'.format(log_msg, e)
-            retry_interval = 0
-            max_retry = 0
+            # error 101: network unreachable; when the adapter resets we may
+            # see this transient error for a short time, retry once.
+            if e.errno == 101:
+                retry_interval = RETRY_WAITING_INTERVAL
+                max_retry = 1
+            else:
+                retry_interval = 0
+                max_retry = 0
 
         if retry < max_retry:
             logger.info("Retry [{0}/{1} - {3}]",
