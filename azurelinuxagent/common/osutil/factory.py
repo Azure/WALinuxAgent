@@ -76,6 +76,9 @@ def get_osutil(distro_name=DISTRO_NAME,
         else:
             return RedhatOSUtil()
 
+    elif distro_name == "euleros":
+        return RedhatOSUtil()
+
     elif distro_name == "freebsd":
         return FreeBSDOSUtil()
 
