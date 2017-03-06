@@ -80,10 +80,10 @@ class HostPluginProtocol(object):
     def get_artifact_request(self, artifact_url, artifact_manifest_url=None):
         if not self.ensure_initialized():
             logger.error("host plugin channel is not available")
-            return
+            return None, None
         if textutil.is_str_none_or_whitespace(artifact_url):
             logger.error("no extension artifact url was provided")
-            return
+            return None, None
 
         url = URI_FORMAT_GET_EXTENSION_ARTIFACT.format(self.endpoint,
                                                        HOST_PLUGIN_PORT)

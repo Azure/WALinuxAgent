@@ -701,11 +701,15 @@ class GuestAgent(object):
             if self._fetch(uri.uri):
                 break
             else:
-                if self.host is not None:
+                if self.host is not None and self.host.ensure_initialized():
                     logger.warn("Download unsuccessful, falling back to host plugin")
                     uri, headers = self.host.get_artifact_request(uri.uri, self.host.manifest_uri)
-                    if self._fetch(uri, headers=headers):
+                    if uri is not None \
+                            and headers is not None \
+                            and self._fetch(uri, headers=headers):
                         break
+                else:
+                    logger.warn("Download unsuccessful, host plugin not available")
 
         if not os.path.isfile(self.get_agent_pkg_path()):
             msg = u"Unable to download Agent {0} from any URI".format(self.name)
