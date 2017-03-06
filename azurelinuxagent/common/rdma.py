@@ -133,14 +133,14 @@ class RDMAHandler(object):
         """Load the kernel driver, this depends on the proper driver
            to be installed with the install_driver() method"""
         logger.info("RDMA: probing module '%s'" % self.driver_module_name)
-        result = shellutil.run('modprobe %s' % self.driver_module_name)
+        result = shellutil.run('modprobe --first-time %s' % self.driver_module_name)
         if result != 0:
             error_msg = 'Could not load "%s" kernel module. '
-            error_msg += 'Run "modprobe %s" as root for more details'
+            error_msg += 'Run "modprobe --first-time %s" as root for more details'
             logger.error(
                 error_msg % (self.driver_module_name, self.driver_module_name)
             )
-            return
+            return False
         logger.info('RDMA: Loaded the kernel driver successfully.')
         return True
 
@@ -158,6 +158,7 @@ class RDMAHandler(object):
             logger.info('RDMA: module loaded.')
             return True
         logger.info('RDMA: module not loaded.')
+        return False
 
     def reboot_system(self):
         """Reboot the system. This is required as the kernel module for

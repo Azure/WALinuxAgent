@@ -173,8 +173,7 @@ class CentOSRDMAHandler(RDMAHandler):
             'user mode', self.rdma_user_mode_package_name, umod_pkg_path)
 
         logger.info("RDMA: driver packages installed")
-        self.load_driver_module()
-        if not self.is_driver_loaded():
+        if not self.load_driver_module() or not self.is_driver_loaded():
             logger.info("RDMA: driver module is not loaded; reboot required")
             self.reboot_system()
         else:
