@@ -89,8 +89,14 @@ class UbuntuProvisionHandler(ProvisionHandler):
         path = '/etc/ssh/ssh_host_{0}_key.pub'.format(keypair_type)
         for retry in range(0, max_retry):
             if os.path.isfile(path):
-                return self.get_ssh_host_key_thumbprint(keypair_type)
+                logger.info("ssh host key found at: {0}".format(path))
+                try:
+                    thumbprint = self.get_ssh_host_key_thumbprint(keypair_type)
+                    logger.info("Thumbprint obtained from : {0}".format(path))
+                    return thumbprint
+                except ProvisionError:
+                    logger.warn("Could not get thumbprint from {0}".format(path))
             if retry < max_retry - 1:
-                logger.info("Wait for ssh host key be generated: {0}", path)
+                logger.info("Wait for ssh host key be generated: {0}".format(path))
                 time.sleep(5)
         raise ProvisionError("ssh host key is not generated.")
