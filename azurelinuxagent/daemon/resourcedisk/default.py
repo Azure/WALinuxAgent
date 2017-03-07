@@ -285,7 +285,7 @@ class ResourceDiskHandler(object):
             nbytes = int(nbytes)
 
         if nbytes <= 0:
-            raise ValueError(nbytes)
+            raise ResourceDiskError("Invalid swap size [{0}]".format(nbytes))
 
         if os.path.isfile(filename):
             os.remove(filename)
