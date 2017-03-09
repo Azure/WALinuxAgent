@@ -19,6 +19,8 @@ import os
 import re
 import sys
 import threading
+from time import sleep
+
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.future import ustr
 import azurelinuxagent.common.conf as conf
@@ -151,11 +153,22 @@ class ResourceDiskHandler(object):
         mount_string = self.get_mount_string(mount_options,
                                              partition,
                                              mount_point)
+        attempts = 5
+        while not os.path.exists(partition) and attempts > 0:
+            logger.info("Waiting for partition [{0}], {1} attempts remaining",
+                        partition,
+                        attempts)
+            sleep(5)
+            attempts -= 1
+
+        if not os.path.exists(partition):
+            raise ResourceDiskError("Partition was not created [{0}]".format(partition))
+
         logger.info("Mount resource disk [{0}]", mount_string)
         ret, output = shellutil.run_get_output(mount_string, chk_err=False)
         # if the exit code is 32, then the resource disk is already mounted
         if ret == 32:
-            logger.warn("Resource disk is already mounted: {0}", output)
+            logger.warn("Could not mount resource disk: {0}", output)
         elif ret != 0:
             # Some kernels seem to issue an async partition re-read after a
             # 'parted' command invocation. This causes mount to fail if the
@@ -272,7 +285,7 @@ class ResourceDiskHandler(object):
             nbytes = int(nbytes)
 
         if nbytes <= 0:
-            raise ValueError(nbytes)
+            raise ResourceDiskError("Invalid swap size [{0}]".format(nbytes))
 
         if os.path.isfile(filename):
             os.remove(filename)
