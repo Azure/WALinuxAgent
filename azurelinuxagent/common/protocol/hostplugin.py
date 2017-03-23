@@ -16,8 +16,12 @@
 #
 # Requires Python 2.4+ and Openssl 1.0+
 #
+
+import base64
+
 from azurelinuxagent.common.protocol.wire import *
 from azurelinuxagent.common.utils import textutil
+from azurelinuxagent.common.version import PY_VERSION_MAJOR
 
 HOST_PLUGIN_PORT = 32526
 URI_FORMAT_GET_API_VERSIONS = "http://{0}:{1}/versions"
@@ -30,12 +34,13 @@ HEADER_VERSION = "x-ms-version"
 HEADER_HOST_CONFIG_NAME = "x-ms-host-config-name"
 HEADER_ARTIFACT_LOCATION = "x-ms-artifact-location"
 HEADER_ARTIFACT_MANIFEST_LOCATION = "x-ms-artifact-manifest-location"
+MAXIMUM_PAGEBLOB_PAGE_SIZE = 4 * 1024 * 1024  # Max page size: 4MB
 
 
 class HostPluginProtocol(object):
     def __init__(self, endpoint, container_id, role_config_name):
         if endpoint is None:
-            raise ProtocolError("Host plugin endpoint not provided")
+            raise ProtocolError("HostGAPlugin: Endpoint not provided")
         self.is_initialized = False
         self.is_available = False
         self.api_versions = None
@@ -60,29 +65,31 @@ class HostPluginProtocol(object):
     def get_api_versions(self):
         url = URI_FORMAT_GET_API_VERSIONS.format(self.endpoint,
                                                  HOST_PLUGIN_PORT)
-        logger.verbose("getting API versions at [{0}]".format(url))
+        logger.verbose("HostGAPlugin: Getting API versions at [{0}]".format(
+            url))
         return_val = []
         try:
             headers = {HEADER_CONTAINER_ID: self.container_id}
             response = restutil.http_get(url, headers)
             if response.status != httpclient.OK:
                 logger.error(
-                    "get API versions returned status code [{0}]".format(
-                        response.status))
+                    "HostGAPlugin: Failed Get API versions: {0}".format(
+                        self._read_response_error(response)))
             else:
                 return_val = ustr(remove_bom(response.read()), encoding='utf-8')
 
         except HttpError as e:
-            logger.error("get API versions failed with [{0}]".format(e))
+            logger.error("HostGAPlugin: Exception Get API versions: " \
+                "{0}".format(e))
 
         return return_val
 
     def get_artifact_request(self, artifact_url, artifact_manifest_url=None):
         if not self.ensure_initialized():
-            logger.error("host plugin channel is not available")
+            logger.error("HostGAPlugin: Host plugin channel is not available")
             return None, None
         if textutil.is_str_none_or_whitespace(artifact_url):
-            logger.error("no extension artifact url was provided")
+            logger.error("HostGAPlugin: No extension artifact url was provided")
             return None, None
 
         url = URI_FORMAT_GET_EXTENSION_ARTIFACT.format(self.endpoint,
@@ -97,45 +104,6 @@ class HostPluginProtocol(object):
 
         return url, headers
 
-    def put_vm_status(self, status_blob, sas_url, config_blob_type=None):
-        """
-        Try to upload the VM status via the host plugin /status channel
-        :param sas_url: the blob SAS url to pass to the host plugin
-        :param config_blob_type: the blob type from the extension config
-        :type status_blob: StatusBlob
-        """
-        if not self.ensure_initialized():
-            logger.error("host plugin channel is not available")
-            return
-        if status_blob is None or status_blob.vm_status is None:
-            logger.error("no status data was provided")
-            return
-        try:
-            url = URI_FORMAT_PUT_VM_STATUS.format(self.endpoint, HOST_PLUGIN_PORT)
-            logger.verbose("Posting VM status to host plugin")
-            status = textutil.b64encode(status_blob.data)
-            blob_type = status_blob.type if status_blob.type else config_blob_type
-            headers = {HEADER_VERSION: API_VERSION,
-                       "Content-type": "application/json",
-                       HEADER_CONTAINER_ID: self.container_id,
-                       HEADER_HOST_CONFIG_NAME: self.role_config_name}
-            blob_headers = [{'headerName': 'x-ms-version',
-                             'headerValue': status_blob.__storage_version__},
-                            {'headerName': 'x-ms-blob-type',
-                             'headerValue': blob_type}]
-            data = json.dumps({'requestUri': sas_url, 'headers': blob_headers,
-                               'content': status}, sort_keys=True)
-            response = restutil.http_put(url, data=data, headers=headers)
-            if response.status != httpclient.OK:
-                logger.warn("PUT {0} [{1}: {2}]",
-                            url,
-                            response.status,
-                            response.reason)
-            else:
-                logger.verbose("Successfully uploaded status to host plugin")
-        except Exception as e:
-            logger.error("Put VM status failed [{0}]", e)
-
     def put_vm_log(self, content):
         """
         Try to upload the given content to the host plugin
@@ -147,13 +115,13 @@ class HostPluginProtocol(object):
         :return:
         """
         if not self.ensure_initialized():
-            logger.error("host plugin channel is not available")
+            logger.error("HostGAPlugin: Host plugin channel is not available")
             return
         if content is None \
                 or self.container_id is None \
                 or self.deployment_id is None:
             logger.error(
-                "invalid arguments passed: "
+                "HostGAPlugin: Invalid arguments passed: "
                 "[{0}], [{1}], [{2}]".format(
                     content,
                     self.container_id,
@@ -163,11 +131,146 @@ class HostPluginProtocol(object):
 
         headers = {"x-ms-vmagentlog-deploymentid": self.deployment_id,
                    "x-ms-vmagentlog-containerid": self.container_id}
-        logger.info("put VM log at [{0}]".format(url))
+        logger.info("HostGAPlugin: Put VM log to [{0}]".format(url))
         try:
             response = restutil.http_put(url, content, headers)
             if response.status != httpclient.OK:
-                logger.error("put log returned status code [{0}]".format(
+                logger.error("HostGAPlugin: Put log failed: Code {0}".format(
                     response.status))
         except HttpError as e:
-            logger.error("put log failed with [{0}]".format(e))
+            logger.error("HostGAPlugin: Put log exception: {0}".format(e))
+
+    def put_vm_status(self, status_blob, sas_url, config_blob_type=None):
+        """
+        Try to upload the VM status via the host plugin /status channel
+        :param sas_url: the blob SAS url to pass to the host plugin
+        :param config_blob_type: the blob type from the extension config
+        :type status_blob: StatusBlob
+        """
+        if not self.ensure_initialized():
+            logger.error("HostGAPlugin: HostGAPlugin is not available")
+            return
+        if status_blob is None or status_blob.vm_status is None:
+            logger.error("HostGAPlugin: Status blob was not provided")
+            return
+
+        logger.verbose("HostGAPlugin: Posting VM status")
+        try:
+            blob_type = status_blob.type if status_blob.type else config_blob_type
+
+            if blob_type == "BlockBlob":
+                self._put_block_blob_status(sas_url, status_blob)
+            else:
+                self._put_page_blob_status(sas_url, status_blob)
+
+        except Exception as e:
+            logger.error("HostGAPlugin: Exception Put VM status: {0}", e)
+    
+    def _put_block_blob_status(self, sas_url, status_blob):
+        url = URI_FORMAT_PUT_VM_STATUS.format(self.endpoint, HOST_PLUGIN_PORT)
+
+        response = restutil.http_put(url,
+                        data=self._build_status_data(
+                                    sas_url,
+                                    status_blob.get_block_blob_headers(len(status_blob.data)),
+                                    bytearray(status_blob.data, encoding='utf-8')),
+                        headers=self._build_status_headers())
+
+        if response.status != httpclient.OK:
+            raise HttpError("HostGAPlugin: Put BlockBlob failed: {0}".format(
+                self._read_response_error(response)))
+        else:
+            logger.verbose("HostGAPlugin: Put BlockBlob status succeeded")
+
+    def _put_page_blob_status(self, sas_url, status_blob):
+        url = URI_FORMAT_PUT_VM_STATUS.format(self.endpoint, HOST_PLUGIN_PORT)
+
+        # Convert the status into a blank-padded string whose length is modulo 512
+        status = bytearray(status_blob.data, encoding='utf-8')
+        status_size = int((len(status) + 511) / 512) * 512
+        status = bytearray(status_blob.data.ljust(status_size), encoding='utf-8')
+
+        # First, initialize an empty blob
+        response = restutil.http_put(url,
+                        data=self._build_status_data(
+                                    sas_url,
+                                    status_blob.get_page_blob_create_headers(status_size)),
+                        headers=self._build_status_headers())
+
+        if response.status != httpclient.OK:
+            raise HttpError(
+                "HostGAPlugin: Failed PageBlob clean-up: {0}".format(
+                    self._read_response_error(response)))
+        else:
+            logger.verbose("HostGAPlugin: PageBlob clean-up succeeded")
+        
+        # Then, upload the blob in pages
+        if sas_url.count("?") <= 0:
+            sas_url = "{0}?comp=page".format(sas_url)
+        else:
+            sas_url = "{0}&comp=page".format(sas_url)
+
+        start = 0
+        end = 0
+        while start < len(status):
+            # Create the next page
+            end = start + min(len(status) - start, MAXIMUM_PAGEBLOB_PAGE_SIZE)
+            page_size = int((end - start + 511) / 512) * 512
+            buf = bytearray(page_size)
+            buf[0: end - start] = status[start: end]
+
+            # Send the page
+            response = restutil.http_put(url,
+                            data=self._build_status_data(
+                                        sas_url,
+                                        status_blob.get_page_blob_page_headers(start, end),
+                                        buf),
+                            headers=self._build_status_headers())
+
+            if response.status != httpclient.OK:
+                raise HttpError(
+                    "HostGAPlugin Error: Put PageBlob bytes [{0},{1}]: " \
+                    "{2}".format(
+                        start, end, self._read_response_error(response)))
+
+            # Advance to the next page (if any)
+            start = end
+        
+    def _build_status_data(self, sas_url, blob_headers, content=None):
+        headers = []
+        for name in iter(blob_headers.keys()):
+            headers.append({
+                'headerName': name,
+                'headerValue': blob_headers[name]
+            })
+
+        data = {
+            'requestUri': sas_url,
+            'headers': headers
+        }
+        if not content is None:
+            data['content'] = self._base64_encode(content)
+        return json.dumps(data, sort_keys=True)
+    
+    def _build_status_headers(self):
+        return {
+            HEADER_VERSION: API_VERSION,
+            "Content-type": "application/json",
+            HEADER_CONTAINER_ID: self.container_id,
+            HEADER_HOST_CONFIG_NAME: self.role_config_name
+        }
+    
+    def _base64_encode(self, data):
+        s = base64.b64encode(bytes(data))
+        if PY_VERSION_MAJOR > 2:
+            return s.decode('utf-8')
+        return s
+    
+    def _read_response_error(self, response):
+        body = remove_bom(response.read())
+        if PY_VERSION_MAJOR < 3:
+            body = ustr(body, encoding='utf-8')
+        return "{0}, {1}, {2}".format(
+            response.status,
+            response.reason,
+            body)

@@ -522,7 +522,8 @@ class TestGuestAgent(UpdateTestCase):
         self.assertFalse(os.path.isdir(self.agent_path))
 
         mock_http_get.return_value = ResponseMock(
-            status=restutil.httpclient.SERVICE_UNAVAILABLE)
+            status=restutil.httpclient.SERVICE_UNAVAILABLE,
+            response="")
 
         ext_uri = 'ext_uri'
         host_uri = 'host_uri'
@@ -1371,9 +1372,10 @@ class ProtocolMock(object):
 
 
 class ResponseMock(Mock):
-    def __init__(self, status=restutil.httpclient.OK, response=None):
+    def __init__(self, status=restutil.httpclient.OK, response=None, reason=None):
         Mock.__init__(self)
         self.status = status
+        self.reason = reason
         self.response = response
         return
 
