@@ -1,12 +1,13 @@
-ACTION!="add|change", GOTO="azure_end"
-SUBSYSTEM!="block", GOTO="azure_end"
-ATTRS{ID_VENDOR}!="Msft", GOTO="azure_end"
-ATTRS{ID_MODEL}!="Virtual_Disk", GOTO="azure_end"
+ACTION=="add|change", SUBSYSTEM=="block", ENV{ID_VENDOR}=="Msft", ENV{ID_MODEL}=="Virtual_Disk", GOTO="azure_disk"
+GOTO="azure_end"
 
+LABEL="azure_disk"
 # Root has a GUID of 0000 as the second value
 # The resource/resource has GUID of 0001 as the second value
 ATTRS{device_id}=="?00000000-0000-*", ENV{fabric_name}="root", GOTO="azure_names"
 ATTRS{device_id}=="?00000000-0001-*", ENV{fabric_name}="resource", GOTO="azure_names"
+ENV{DEVTYPE}=="partition", PROGRAM="/bin/sh -c 'readlink /sys/class/block/%k/../device|cut -d: -f4'", ENV{fabric_name}="datadisks/lun$result", GOTO="azure_names"
+PROGRAM="/bin/sh -c 'readlink /sys/class/block/%k/device|cut -d: -f4'", ENV{fabric_name}="datadisks/lun$result", GOTO="azure_names"
 GOTO="azure_end"
 
 # Create the symlinks
