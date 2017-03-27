@@ -138,7 +138,7 @@ class ResourceDiskHandler(object):
                 shellutil.run(mkfs_string)
         else:
             logger.info("GPT not detected, determining filesystem")
-            ret = self.change_partition_type(suppress_message=True, option_str="{0} 1".format(device))
+            ret = self.change_partition_type(suppress_message=True, option_str="{0} 1 -n".format(device))
             ptype = ret[1].strip()
             if ptype == "7" and self.fs != "ntfs":
                 logger.info("The partition is formatted with ntfs, updating "
