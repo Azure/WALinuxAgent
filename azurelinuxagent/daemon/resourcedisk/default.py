@@ -166,8 +166,8 @@ class ResourceDiskHandler(object):
 
         logger.info("Mount resource disk [{0}]", mount_string)
         ret, output = shellutil.run_get_output(mount_string, chk_err=False)
-        # if the exit code is 32, then the resource disk is already mounted
-        if ret == 32:
+        # if the exit code is 32, then the resource disk can be already mounted
+        if ret == 32 and output.find("is already mounted") != -1:
             logger.warn("Could not mount resource disk: {0}", output)
         elif ret != 0:
             # Some kernels seem to issue an async partition re-read after a
