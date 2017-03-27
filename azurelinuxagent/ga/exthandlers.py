@@ -299,7 +299,7 @@ class ExtHandlersHandler(object):
         try:
             self.protocol.report_vm_status(vm_status)
             if self.log_report:
-                logger.verbose("Successfully reported vm agent status")
+                logger.verbose("Completed vm agent status report")
         except ProtocolError as e:
             message = "Failed to report vm agent status: {0}".format(e)
             add_event(AGENT_NAME, version=CURRENT_VERSION, is_success=False, message=message)
