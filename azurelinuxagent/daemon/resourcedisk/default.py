@@ -85,6 +85,11 @@ class ResourceDiskHandler(object):
         except ResourceDiskError as e:
             logger.error("Failed to enable swap {0}", e)
 
+    def reread_partition_table(self, device):
+        if shellutil.run("sfdisk -R {0}".format(device), chk_err=False):
+            shellutil.run("blockdev --rereadpt {0}".format(device),
+                          chk_err=False)
+
     def mount_resource_disk(self, mount_point):
         device = self.osutil.device_for_ide_port(1)
         if device is None:
@@ -144,6 +149,7 @@ class ResourceDiskHandler(object):
                 logger.info("The partition is formatted with ntfs, updating "
                             "partition type to 83")
                 self.change_partition_type(suppress_message=False, option_str="{0} 1 83".format(device))
+                self.reread_partition_table(device)
                 logger.info("Format partition [{0}]", mkfs_string)
                 shellutil.run(mkfs_string)
             else:
@@ -178,9 +184,7 @@ class ResourceDiskHandler(object):
             logger.warn("Failed to mount resource disk. "
                         "Retry mounting after re-reading partition info.")
 
-            if shellutil.run("sfdisk -R {0}".format(device), chk_err=False):
-                shellutil.run("blockdev --rereadpt {0}".format(device),
-                              chk_err=False)
+            self.reread_partition_table(device)
 
             ret, output = shellutil.run_get_output(mount_string)
             if ret:
