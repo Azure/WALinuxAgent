@@ -28,7 +28,7 @@ from azurelinuxagent.common.future import httpclient, urlparse
 REST api util functions
 """
 
-RETRY_WAITING_INTERVAL = 10
+RETRY_WAITING_INTERVAL = 3
 secure_warning = True
 
 

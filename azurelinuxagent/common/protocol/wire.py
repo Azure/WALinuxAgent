@@ -370,11 +370,14 @@ class StatusBlob(object):
 
     __storage_version__ = "2014-02-14"
 
+    def prepare(self, blob_type):
+        logger.verbose("Prepare status blob")
+        self.data = self.to_json()
+        self.type = blob_type
+
     def upload(self, url):
         # TODO upload extension only if content has changed
-        logger.verbose("Upload status blob")
         upload_successful = False
-        self.data = self.to_json()
         self.type = self.get_blob_type(url)
         try:
             if self.type == "BlockBlob":
@@ -635,9 +638,14 @@ class WireClient(object):
     def fetch_manifest(self, version_uris):
         logger.verbose("Fetch manifest")
         for version in version_uris:
-            response = self.fetch(version.uri)
+            response = None
+            if not HostPluginProtocol.is_default_channel():
+                response = self.fetch(version.uri)
             if not response:
-                logger.verbose("Manifest could not be downloaded, falling back to host plugin")
+                if HostPluginProtocol.is_default_channel():
+                    logger.verbose("Using host plugin as default channel")
+                else:
+                    logger.verbose("Manifest could not be downloaded, falling back to host plugin")
                 host = self.get_host_plugin()
                 uri, headers = host.get_artifact_request(version.uri)
                 response = self.fetch(uri, headers)
@@ -649,6 +657,9 @@ class WireClient(object):
                 else:
                     host.manifest_uri = version.uri
                     logger.verbose("Manifest downloaded successfully from host plugin")
+                    if not HostPluginProtocol.is_default_channel():
+                        logger.info("Setting host plugin as default channel")
+                        HostPluginProtocol.set_default_channel(True)
             if response:
                 return response
         raise ProtocolError("Failed to fetch manifest from all sources")
@@ -664,12 +675,11 @@ class WireClient(object):
             if resp.status == httpclient.OK:
                 return_value = self.decode_config(resp.read())
             else:
-                logger.warn("Could not fetch {0} [{1}: {2}]",
+                logger.warn("Could not fetch {0} [{1}]",
                             uri,
-                            resp.status,
-                            resp.reason)
+                            HostPluginProtocol.read_response_error(resp))
         except (HttpError, ProtocolError) as e:
-            logger.verbose("Fetch failed from [{0}]", uri)
+            logger.verbose("Fetch failed from [{0}]: {1}", uri, e)
         return return_value
 
     def update_hosting_env(self, goal_state):
@@ -840,10 +850,12 @@ class WireClient(object):
         if ext_conf.status_upload_blob is not None:
             uploaded = False
             try:
-                uploaded = self.status_blob.upload(ext_conf.status_upload_blob)
-                self.report_blob_type(self.status_blob.type,
-                                      ext_conf.status_upload_blob_type)
-            except (HttpError, ProtocolError) as e:
+                self.status_blob.prepare(ext_conf.status_upload_blob_type)
+                if not HostPluginProtocol.is_default_channel():
+                    uploaded = self.status_blob.upload(ext_conf.status_upload_blob)
+                    self.report_blob_type(self.status_blob.type,
+                                          ext_conf.status_upload_blob_type)
+            except (HttpError, ProtocolError):
                 # errors have already been logged
                 pass
             if not uploaded:
@@ -851,6 +863,9 @@ class WireClient(object):
                 host.put_vm_status(self.status_blob,
                                    ext_conf.status_upload_blob,
                                    ext_conf.status_upload_blob_type)
+                if not HostPluginProtocol.is_default_channel():
+                    logger.info("Setting host plugin as default channel")
+                    HostPluginProtocol.set_default_channel(True)
 
     """
     Emit an event to determine if the type in the extension config
