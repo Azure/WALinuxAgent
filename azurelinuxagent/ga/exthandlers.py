@@ -725,7 +725,8 @@ class ExtHandlerInstance(object):
             child = subprocess.Popen(base_dir + "/" + cmd,
                                      shell=True,
                                      cwd=base_dir,
-                                     stdout=devnull)
+                                     stdout=devnull,
+                                     env=os.environ)
         except Exception as e:
             #TODO do not catch all exception
             raise ExtensionError("Failed to launch: {0}, {1}".format(cmd, e))
