@@ -82,7 +82,7 @@ class CentOSRDMAHandler(RDMAHandler):
         # Example match (pkg name, -, followed by 3 segments, fw_version and -):
         # - pkg=microsoft-hyper-v-rdma-4.1.0.142-20160323.x86_64
         # - fw_version=142
-        pattern = '{0}-\d\.\d\.\d\.({1})-'.format(
+        pattern = '{0}-(\d+\.){3,}({1})-'.format(
             self.rdma_user_mode_package_name, fw_version)
         return re.match(pattern, pkg)
 
