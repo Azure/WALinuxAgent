@@ -156,7 +156,7 @@ class CentOSRDMAHandler(RDMAHandler):
 
         # Install kernel mode driver (kmod-microsoft-hyper-v-rdma-*)
         kmod_pkg = self.get_file_by_pattern(
-            pkgs, "%s-\d\.\d\.\d\.+(%s)-\d{8}\.x86_64.rpm" % (self.rdma_kernel_mode_package_name, fw_version))
+            pkgs, "%s-(\d+\.){3,}(%s)-\d{8}\.x86_64.rpm" % (self.rdma_kernel_mode_package_name, fw_version))
         if not kmod_pkg:
             raise Exception("RDMA kernel mode package not found")
         kmod_pkg_path = os.path.join(pkg_dir, kmod_pkg)
@@ -165,7 +165,7 @@ class CentOSRDMAHandler(RDMAHandler):
 
         # Install user mode driver (microsoft-hyper-v-rdma-*)
         umod_pkg = self.get_file_by_pattern(
-            pkgs, "%s-\d\.\d\.\d\.+(%s)-\d{8}\.x86_64.rpm" % (self.rdma_user_mode_package_name, fw_version))
+            pkgs, "%s-(\d+\.){3,}(%s)-\d{8}\.x86_64.rpm" % (self.rdma_user_mode_package_name, fw_version))
         if not umod_pkg:
             raise Exception("RDMA user mode package not found")
         umod_pkg_path = os.path.join(pkg_dir, umod_pkg)
