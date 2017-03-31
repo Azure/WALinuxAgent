@@ -281,9 +281,7 @@ class HostPluginProtocol(object):
         if response is None:
             return ''
         body = remove_bom(response.read())
-        if body is None:
-            return ''
-        if PY_VERSION_MAJOR < 3:
+        if PY_VERSION_MAJOR < 3 and body is not None:
             body = ustr(body, encoding='utf-8')
         return "{0}, {1}, {2}".format(
             response.status,
