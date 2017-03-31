@@ -38,6 +38,8 @@ MAXIMUM_PAGEBLOB_PAGE_SIZE = 4 * 1024 * 1024  # Max page size: 4MB
 
 
 class HostPluginProtocol(object):
+    _is_default_channel = False
+
     def __init__(self, endpoint, container_id, role_config_name):
         if endpoint is None:
             raise ProtocolError("HostGAPlugin: Endpoint not provided")
@@ -49,6 +51,14 @@ class HostPluginProtocol(object):
         self.deployment_id = None
         self.role_config_name = role_config_name
         self.manifest_uri = None
+
+    @staticmethod
+    def is_default_channel():
+        return HostPluginProtocol._is_default_channel
+
+    @staticmethod
+    def set_default_channel(is_default):
+        HostPluginProtocol._is_default_channel = is_default
 
     def ensure_initialized(self):
         if not self.is_initialized:
@@ -74,7 +84,7 @@ class HostPluginProtocol(object):
             if response.status != httpclient.OK:
                 logger.error(
                     "HostGAPlugin: Failed Get API versions: {0}".format(
-                        self._read_response_error(response)))
+                        self.read_response_error(response)))
             else:
                 return_val = ustr(remove_bom(response.read()), encoding='utf-8')
 
@@ -165,7 +175,7 @@ class HostPluginProtocol(object):
 
         except Exception as e:
             logger.error("HostGAPlugin: Exception Put VM status: {0}", e)
-    
+
     def _put_block_blob_status(self, sas_url, status_blob):
         url = URI_FORMAT_PUT_VM_STATUS.format(self.endpoint, HOST_PLUGIN_PORT)
 
@@ -178,7 +188,7 @@ class HostPluginProtocol(object):
 
         if response.status != httpclient.OK:
             raise HttpError("HostGAPlugin: Put BlockBlob failed: {0}".format(
-                self._read_response_error(response)))
+                self.read_response_error(response)))
         else:
             logger.verbose("HostGAPlugin: Put BlockBlob status succeeded")
 
@@ -200,7 +210,7 @@ class HostPluginProtocol(object):
         if response.status != httpclient.OK:
             raise HttpError(
                 "HostGAPlugin: Failed PageBlob clean-up: {0}".format(
-                    self._read_response_error(response)))
+                    self.read_response_error(response)))
         else:
             logger.verbose("HostGAPlugin: PageBlob clean-up succeeded")
         
@@ -231,7 +241,7 @@ class HostPluginProtocol(object):
                 raise HttpError(
                     "HostGAPlugin Error: Put PageBlob bytes [{0},{1}]: " \
                     "{2}".format(
-                        start, end, self._read_response_error(response)))
+                        start, end, self.read_response_error(response)))
 
             # Advance to the next page (if any)
             start = end
@@ -266,9 +276,12 @@ class HostPluginProtocol(object):
             return s.decode('utf-8')
         return s
     
-    def _read_response_error(self, response):
+    @staticmethod
+    def read_response_error(response):
+        if response is None:
+            return ''
         body = remove_bom(response.read())
-        if PY_VERSION_MAJOR < 3:
+        if PY_VERSION_MAJOR < 3 and body is not None:
             body = ustr(body, encoding='utf-8')
         return "{0}, {1}, {2}".format(
             response.status,

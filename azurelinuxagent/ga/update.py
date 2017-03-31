@@ -40,6 +40,7 @@ from azurelinuxagent.common.exception import UpdateError, ProtocolError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol import get_protocol_util
+from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, AGENT_LONG_VERSION, \
                                             AGENT_DIR_GLOB, AGENT_PKG_GLOB, \
@@ -48,7 +49,6 @@ from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, AGENT_LONG
                                             is_current_agent_installed
 
 from azurelinuxagent.ga.exthandlers import HandlerManifest
-
 
 AGENT_ERROR_FILE = "error.json" # File name for agent error record
 AGENT_MANIFEST_FILE = "HandlerManifest.json"
@@ -698,18 +698,26 @@ class GuestAgent(object):
 
     def _download(self):
         for uri in self.pkg.uris:
-            if self._fetch(uri.uri):
+            if not HostPluginProtocol.is_default_channel() and self._fetch(uri.uri):
                 break
-            else:
-                if self.host is not None and self.host.ensure_initialized():
+            elif self.host is not None and self.host.ensure_initialized():
+                if not HostPluginProtocol.is_default_channel():
                     logger.warn("Download unsuccessful, falling back to host plugin")
-                    uri, headers = self.host.get_artifact_request(uri.uri, self.host.manifest_uri)
-                    if uri is not None \
-                            and headers is not None \
-                            and self._fetch(uri, headers=headers):
-                        break
                 else:
-                    logger.warn("Download unsuccessful, host plugin not available")
+                    logger.verbose("Using host plugin as default channel")
+
+                uri, headers = self.host.get_artifact_request(uri.uri, self.host.manifest_uri)
+                if uri is not None \
+                        and headers is not None \
+                        and self._fetch(uri, headers=headers):
+                    if not HostPluginProtocol.is_default_channel():
+                        logger.verbose("Setting host plugin as default channel")
+                        HostPluginProtocol.set_default_channel(True)
+                    break
+                else:
+                    logger.warn("Host plugin download unsuccessful")
+            else:
+                logger.error("No download channels available")
 
         if not os.path.isfile(self.get_agent_pkg_path()):
             msg = u"Unable to download Agent {0} from any URI".format(self.name)
@@ -732,6 +740,9 @@ class GuestAgent(object):
                                     bytearray(package),
                                     asbin=True)
                 logger.info(u"Agent {0} downloaded from {1}", self.name, uri)
+            else:
+                logger.verbose("Fetch was unsuccessful [{0}]",
+                               HostPluginProtocol.read_response_error(resp))
         except restutil.HttpError as http_error:
             logger.verbose(u"Agent {0} download from {1} failed [{2}]",
                            self.name,

@@ -113,21 +113,24 @@ class TestHostPlugin(AgentTestCase):
 
     def test_fallback(self):
         """
-        Validate fallback to upload status using HostGAPlugin is happening when status reporting via
-        default method is unsuccessful
+        Validate fallback to upload status using HostGAPlugin is happening when
+        status reporting via default method is unsuccessful
         """
         test_goal_state = wire.GoalState(WireProtocolData(DATA_FILE).goal_state)
-
+        status = restapi.VMStatus(status="Ready", message="Guest Agent is running")
         with patch.object(wire.HostPluginProtocol, "put_vm_status") as patch_put:
             with patch.object(wire.StatusBlob, "upload", return_value=False) as patch_upload:
                 wire_protocol_client = wire.WireProtocol(wireserver_url).client
                 wire_protocol_client.get_goal_state = Mock(return_value=test_goal_state)
                 wire_protocol_client.ext_conf = wire.ExtensionsConfig(None)
                 wire_protocol_client.ext_conf.status_upload_blob = sas_url
+                wire_protocol_client.status_blob.set_vm_status(status)
                 wire_protocol_client.upload_status_blob()
                 self.assertTrue(patch_put.call_count == 1,
                                 "Fallback was not engaged")
                 self.assertTrue(patch_put.call_args[0][1] == sas_url)
+                self.assertTrue(wire.HostPluginProtocol.is_default_channel())
+                wire.HostPluginProtocol.set_default_channel(False)
 
     def test_validate_http_request(self):
         """Validate correct set of data is sent to HostGAPlugin when reporting VM status"""
@@ -161,19 +164,19 @@ class TestHostPlugin(AgentTestCase):
 
     def test_no_fallback(self):
         """
-        Validate fallback to upload status using HostGAPlugin is not happening when status reporting via
-        default method is successful
+        Validate fallback to upload status using HostGAPlugin is not happening
+        when status reporting via default method is successful
         """
-        with patch.object(wire.HostPluginProtocol,
-                          "put_vm_status") as patch_put:
+        vmstatus = restapi.VMStatus(message="Ready", status="Ready")
+        with patch.object(wire.HostPluginProtocol, "put_vm_status") as patch_put:
             with patch.object(wire.StatusBlob, "upload") as patch_upload:
                 patch_upload.return_value = True
                 wire_protocol_client = wire.WireProtocol(wireserver_url).client
                 wire_protocol_client.ext_conf = wire.ExtensionsConfig(None)
                 wire_protocol_client.ext_conf.status_upload_blob = sas_url
+                wire_protocol_client.status_blob.vm_status = vmstatus
                 wire_protocol_client.upload_status_blob()
-                self.assertTrue(patch_put.call_count == 0,
-                                "Fallback was engaged")
+                self.assertTrue(patch_put.call_count == 0, "Fallback was engaged")
 
     def test_validate_block_blob(self):
         """Validate correct set of data is sent to HostGAPlugin when reporting VM status"""
