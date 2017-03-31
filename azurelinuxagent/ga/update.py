@@ -140,7 +140,8 @@ class UpdateHandler(object):
                 cmds,
                 cwd=agent_dir,
                 stdout=sys.stdout,
-                stderr=sys.stderr)
+                stderr=sys.stderr,
+                env=os.environ)
 
             logger.info(u"Agent {0} launched with command '{1}'", agent_name, agent_cmd)
 
