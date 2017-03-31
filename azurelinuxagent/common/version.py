@@ -76,6 +76,9 @@ def get_distro():
         osinfo[2] = "oracle"
         osinfo[3] = "Oracle Linux"
 
+    if os.path.exists("/etc/euleros-release"):
+        osinfo[0] = "euleros"
+
     # The platform.py lib has issue with detecting BIG-IP linux distribution.
     # Merge the following patch provided by F5.
     if os.path.exists("/shared/vadc"):

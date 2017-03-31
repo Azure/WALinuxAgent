@@ -1094,6 +1094,18 @@ class centosDistro(redhatDistro):
         super(centosDistro,self).__init__()
 
 ############################################################    
+#   eulerosDistro
+############################################################    
+
+class eulerosDistro(redhatDistro):
+    """
+    EulerOS Distro concrete class
+    Put EulerOS specific behavior here...
+    """
+    def __init__(self):
+        super(eulerosDistro,self).__init__()
+
+############################################################    
 #	oracleDistro
 ############################################################    
 
@@ -6016,6 +6028,8 @@ def DistInfo(fullname=0):
     if 'linux_distribution' in dir(platform):
         distinfo = list(platform.linux_distribution(full_distribution_name=fullname))
         distinfo[0] = distinfo[0].strip() # remove trailing whitespace in distro name
+        if os.path.exists("/etc/euleros-release"):
+            distinfo[0] = "euleros"
         return distinfo
     else:
         return platform.dist()
