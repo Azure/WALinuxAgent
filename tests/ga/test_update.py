@@ -1083,7 +1083,6 @@ class TestUpdate(UpdateTestCase):
         self._test_run_latest(mock_child=mock_child, mock_time=mock_time)
         self.assertEqual(1, mock_child.poll.call_count)
         self.assertEqual(0, mock_child.wait.call_count)
-        self.assertEqual(2, mock_time.time_call_count)
         return
 
     def test_run_latest_defaults_to_current(self):

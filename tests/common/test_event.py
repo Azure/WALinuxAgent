@@ -68,7 +68,7 @@ class TestEvent(AgentTestCase):
         init_event_logger(tmp_evt)
 
         for i in range(0, 2000):
-            evt = os.path.join(tmp_evt, '{0}.tld'.format(ustr(int(time.time() * 1000000))))
+            evt = os.path.join(tmp_evt, '{0}.tld'.format(ustr(1491004920536531 + i)))
             with open(evt, 'w') as fh:
                 fh.write('test event {0}'.format(i))
 
