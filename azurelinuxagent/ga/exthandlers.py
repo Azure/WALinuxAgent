@@ -221,9 +221,9 @@ class ExtHandlersHandler(object):
 
             self.log_etag = True
 
-            state = ext_handler.properties.state
+            state = ext_handler.properties.state.lower()
             ext_handler_i.logger.info("Expected handler state: {0}", state)
-            if state == "enabled":
+            if state == u"enabled":
                 self.handle_enable(ext_handler_i)
             elif state == u"disabled":
                 self.handle_disable(ext_handler_i)
@@ -709,7 +709,7 @@ class ExtHandlerInstance(object):
             heartbeat = json.loads(heartbeat_json)[0]['heartbeat']
         except IOError as e:
             raise ExtensionError("Failed to get heartbeat file:{0}".format(e))
-        except ValueError as e:
+        except (ValueError, KeyError) as e:
             raise ExtensionError("Malformed heartbeat file: {0}".format(e))
         return heartbeat
  

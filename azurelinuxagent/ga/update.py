@@ -27,6 +27,7 @@ import signal
 import subprocess
 import sys
 import time
+import traceback
 import zipfile
 
 import azurelinuxagent.common.conf as conf
@@ -250,6 +251,7 @@ class UpdateHandler(object):
 
         except Exception as e:
             logger.warn(u"Agent {0} failed with exception: {1}", CURRENT_AGENT, ustr(e))
+            logger.warn(traceback.format_exc())
             sys.exit(1)
             return
 
