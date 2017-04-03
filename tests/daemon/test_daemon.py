@@ -14,8 +14,7 @@
 #
 # Requires Python 2.4+ and Openssl 1.0+
 #
-
-from azurelinuxagent.daemon import *
+from azurelinuxagent.daemon import get_daemon_handler
 from tests.tools import *
 
 

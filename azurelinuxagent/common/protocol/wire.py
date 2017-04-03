@@ -387,7 +387,12 @@ class StatusBlob(object):
             else:
                 raise ProtocolError("Unknown blob type: {0}".format(self.type))
         except HttpError as e:
-            logger.warn("Initial upload failed [{0}]".format(e))
+            message = "Initial upload failed [{0}]".format(e)
+            logger.warn(message)
+            from azurelinuxagent.common.event import WALAEventOperation, report_event
+            report_event(op=WALAEventOperation.ReportStatus,
+                         is_success=False,
+                         message=message)
         else:
             logger.verbose("Uploading status blob succeeded")
             upload_successful = True
@@ -863,9 +868,6 @@ class WireClient(object):
                 host.put_vm_status(self.status_blob,
                                    ext_conf.status_upload_blob,
                                    ext_conf.status_upload_blob_type)
-                if not HostPluginProtocol.is_default_channel():
-                    logger.info("Setting host plugin as default channel")
-                    HostPluginProtocol.set_default_channel(True)
 
     """
     Emit an event to determine if the type in the extension config

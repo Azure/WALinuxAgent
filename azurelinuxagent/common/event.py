@@ -46,6 +46,7 @@ class WALAEventOperation:
     Install = "Install"
     InitializeHostPlugin = "InitializeHostPlugin"
     Provision = "Provision"
+    ReportStatus = "ReportStatus"
     Restart = "Restart"
     UnhandledError = "UnhandledError"
     UnInstall = "UnInstall"
@@ -108,6 +109,15 @@ class EventLogger(object):
 
 
 __event_logger__ = EventLogger()
+
+
+def report_event(op, is_success=True, message=''):
+    from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
+    add_event(AGENT_NAME,
+              version=CURRENT_VERSION,
+              is_success=is_success,
+              message=message,
+              op=op)
 
 
 def add_event(name, op="", is_success=True, duration=0, version=CURRENT_VERSION,
