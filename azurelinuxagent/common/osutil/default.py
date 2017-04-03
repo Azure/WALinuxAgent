@@ -18,6 +18,7 @@
 
 import multiprocessing
 import os
+import platform
 import re
 import shutil
 import socket
@@ -420,7 +421,12 @@ class DefaultOSUtil(object):
         """
         iface=''
         expected=16 # how many devices should I expect...
-        struct_size=40 # for 64bit the size is 40 bytes
+
+        # for 64bit the size is 40 bytes
+        # for 32bit the size is 32 bytes
+        python_arc = platform.architecture()[0]
+        struct_size = 40 if python_arc == '64bit' else 32
+
         sock = socket.socket(socket.AF_INET,
                              socket.SOCK_DGRAM,
                              socket.IPPROTO_UDP)
