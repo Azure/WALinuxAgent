@@ -149,13 +149,16 @@ def migrate_handler_state():
         logger.warn("Exception occurred removing {0}: {1}", handler_state_path, str(e))
     return
 
+
 class ExtHandlerState(object):
     NotInstalled = "NotInstalled"
     Installed = "Installed"
     Enabled = "Enabled"
 
+
 def get_exthandlers_handler():
     return ExtHandlersHandler()
+
 
 class ExtHandlersHandler(object):
     def __init__(self):
@@ -221,8 +224,8 @@ class ExtHandlersHandler(object):
 
             self.log_etag = True
 
-            state = ext_handler.properties.state.lower()
-            ext_handler_i.logger.info("Expected handler state: {0}", state)
+            state = ext_handler.properties.state
+            ext_handler_i.logger.info("Target handler state: {0}", state)
             if state == u"enabled":
                 self.handle_enable(ext_handler_i)
             elif state == u"disabled":
@@ -237,21 +240,17 @@ class ExtHandlersHandler(object):
             ext_handler_i.report_event(message=ustr(e), is_success=False)
     
     def handle_enable(self, ext_handler_i):
-
         old_ext_handler_i = ext_handler_i.get_installed_ext_handler()
         if old_ext_handler_i is not None and \
            old_ext_handler_i.version_gt(ext_handler_i):
             raise ExtensionError(u"Downgrade not allowed")
-
         handler_state = ext_handler_i.get_handler_state()
-        ext_handler_i.logger.info("Current handler state is: {0}", handler_state)
+        ext_handler_i.logger.info("[Enable] current handler state is: {0}",
+                                  handler_state.lower())
         if handler_state == ExtHandlerState.NotInstalled:
             ext_handler_i.set_handler_state(ExtHandlerState.NotInstalled)
-
             ext_handler_i.download()
-
             ext_handler_i.update_settings()
-
             if old_ext_handler_i is None:
                 ext_handler_i.install()
             elif ext_handler_i.version_gt(old_ext_handler_i):
@@ -268,13 +267,15 @@ class ExtHandlersHandler(object):
 
     def handle_disable(self, ext_handler_i):
         handler_state = ext_handler_i.get_handler_state()
-        ext_handler_i.logger.info("Current handler state is: {0}", handler_state)
+        ext_handler_i.logger.info("[Disable] current handler state is: {0}",
+                                  handler_state.lower())
         if handler_state == ExtHandlerState.Enabled:
             ext_handler_i.disable()
 
     def handle_uninstall(self, ext_handler_i):
         handler_state = ext_handler_i.get_handler_state()
-        ext_handler_i.logger.info("Current handler state is: {0}", handler_state)
+        ext_handler_i.logger.info("[Uninstall] current handler state is: {0}",
+                                  handler_state.lower())
         if handler_state != ExtHandlerState.NotInstalled:
             if handler_state == ExtHandlerState.Enabled:
                 ext_handler_i.disable()
@@ -510,7 +511,7 @@ class ExtHandlerInstance(object):
                   op=self.operation, is_success=is_success)
 
     def download(self):
-        self.logger.info("Download extension package")
+        self.logger.verbose("Download extension package")
         self.set_operation(WALAEventOperation.Download)
         if self.pkg is None:
             raise ExtensionError("No package uri found")
@@ -527,7 +528,7 @@ class ExtHandlerInstance(object):
         if package is None:
             raise ExtensionError("Failed to download extension")
 
-        self.logger.info("Unpack extension package")
+        self.logger.verbose("Unpack extension package")
         pkg_file = os.path.join(conf.get_lib_dir(),
                                 os.path.basename(uri.uri) + ".zip")
         try:
@@ -569,38 +570,38 @@ class ExtHandlerInstance(object):
         self.create_handler_env()
 
     def enable(self):
-        self.logger.info("Enable extension.")
         self.set_operation(WALAEventOperation.Enable)
-
         man = self.load_manifest()
-        self.launch_command(man.get_enable_command(), timeout=300)
+        enable_cmd = man.get_enable_command()
+        self.logger.info("Enable extension [{0}]".format(enable_cmd))
+        self.launch_command(enable_cmd, timeout=300)
         self.set_handler_state(ExtHandlerState.Enabled)
         self.set_handler_status(status="Ready", message="Plugin enabled")
 
     def disable(self):
-        self.logger.info("Disable extension.")
         self.set_operation(WALAEventOperation.Disable)
-
         man = self.load_manifest()
-        self.launch_command(man.get_disable_command(), timeout=900)
+        disable_cmd = man.get_disable_command()
+        self.logger.info("Disable extension [{0}]".format(disable_cmd))
+        self.launch_command(disable_cmd, timeout=900)
         self.set_handler_state(ExtHandlerState.Installed)
         self.set_handler_status(status="NotReady", message="Plugin disabled")
 
     def install(self):
-        self.logger.info("Install extension.")
-        self.set_operation(WALAEventOperation.Install)
-
         man = self.load_manifest()
-        self.launch_command(man.get_install_command(), timeout=900)
+        install_cmd = man.get_install_command()
+        self.logger.info("Install extension [{0}]".format(install_cmd))
+        self.set_operation(WALAEventOperation.Install)
+        self.launch_command(install_cmd, timeout=900)
         self.set_handler_state(ExtHandlerState.Installed)
 
     def uninstall(self):
-        self.logger.info("Uninstall extension.")
-        self.set_operation(WALAEventOperation.UnInstall)
-        
         try:
+            self.set_operation(WALAEventOperation.UnInstall)
             man = self.load_manifest()
-            self.launch_command(man.get_uninstall_command())
+            uninstall_cmd = man.get_uninstall_command()
+            self.logger.info("Uninstall extension [{0}]".format(uninstall_cmd))
+            self.launch_command(uninstall_cmd)
         except ExtensionError as e:
             self.report_event(message=ustr(e), is_success=False)
     
@@ -608,18 +609,19 @@ class ExtHandlerInstance(object):
         try:
             base_dir = self.get_base_dir()
             if os.path.isdir(base_dir):
-                self.logger.info("Remove ext handler dir: {0}", base_dir)
+                self.logger.info("Remove extension handler directory: {0}",
+                                 base_dir)
                 shutil.rmtree(base_dir)
         except IOError as e:
-            message = "Failed to rm ext handler dir: {0}".format(e)
+            message = "Failed to remove extension handler directory: {0}".format(e)
             self.report_event(message=message, is_success=False)
 
     def update(self):
-        self.logger.info("Update extension.")
         self.set_operation(WALAEventOperation.Update)
-        
         man = self.load_manifest()
-        self.launch_command(man.get_update_command(), timeout=900)
+        update_cmd = man.get_update_command()
+        self.logger.info("Update extension [{0}]".format(update_cmd))
+        self.launch_command(update_cmd, timeout=900)
     
     def update_with_install(self):
         man = self.load_manifest()
@@ -714,11 +716,11 @@ class ExtHandlerInstance(object):
         return heartbeat
  
     def is_responsive(self, heartbeat_file):
-        last_update=int(time.time() - os.stat(heartbeat_file).st_mtime)
-        return  last_update <= 600    # updated within the last 10 min
+        last_update = int(time.time() - os.stat(heartbeat_file).st_mtime)
+        return last_update <= 600    # updated within the last 10 min
    
     def launch_command(self, cmd, timeout=300):
-        self.logger.info("Launch command:{0}", cmd)
+        self.logger.verbose("Launch command: [{0}]", cmd)
         base_dir = self.get_base_dir()
         try:
             devnull = open(os.devnull, 'w')
