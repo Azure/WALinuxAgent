@@ -201,27 +201,27 @@ class TestWireProtocolGetters(AgentTestCase):
 
         with patch.object(HostPluginProtocol,
                           "ensure_initialized",
-                          return_value=True),\
-             patch.object(StatusBlob,
-                          "put_block_blob",
-                          side_effect=HttpError("error")),\
-             patch.object(StatusBlob,
-                          "get_blob_type",
-                          return_value='BlockBlob'),\
-             patch.object(HostPluginProtocol,
-                          "put_vm_status"),\
-             patch.object(WireClient,
-                          "report_blob_type",
-                          side_effect=MagicMock()),\
-             patch.object(event,
-                          "add_event") as patch_add_event:
-            HostPluginProtocol.set_default_channel(False)
-            wire_protocol_client.get_goal_state = Mock(return_value=goal_state)
-            wire_protocol_client.upload_status_blob()
-            wire_protocol_client.get_goal_state.assert_called_once()
-            self.assertTrue(patch_add_event.call_count == 1)
-            self.assertTrue(patch_add_event.call_args_list[0][1]['op'] == 'ReportStatus')
-            self.assertFalse(HostPluginProtocol.is_default_channel())
+                          return_value=True):
+                 with patch.object(StatusBlob,
+                                   "put_block_blob",
+                                   side_effect=HttpError("error")):
+                     with patch.object(StatusBlob,
+                                       "get_blob_type",
+                                       return_value='BlockBlob'):
+                         with patch.object(HostPluginProtocol,
+                                           "put_vm_status"):
+                             with patch.object(WireClient,
+                                               "report_blob_type",
+                                               side_effect=MagicMock()):
+                                 with patch.object(event,
+                                                   "add_event") as patch_add_event:
+                                    HostPluginProtocol.set_default_channel(False)
+                                    wire_protocol_client.get_goal_state = Mock(return_value=goal_state)
+                                    wire_protocol_client.upload_status_blob()
+                                    wire_protocol_client.get_goal_state.assert_called_once()
+                                    self.assertTrue(patch_add_event.call_count == 1)
+                                    self.assertTrue(patch_add_event.call_args_list[0][1]['op'] == 'ReportStatus')
+                                    self.assertFalse(HostPluginProtocol.is_default_channel())
 
     def test_get_in_vm_artifacts_profile_blob_not_available(self, *args):
         wire_protocol_client = WireProtocol(wireserver_url).client
