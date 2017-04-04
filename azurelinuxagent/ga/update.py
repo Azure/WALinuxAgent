@@ -710,9 +710,7 @@ class GuestAgent(object):
                     logger.verbose("Using host plugin as default channel")
 
                 uri, headers = self.host.get_artifact_request(uri.uri, self.host.manifest_uri)
-                if uri is not None \
-                        and headers is not None \
-                        and self._fetch(uri, headers=headers):
+                if self._fetch(uri, headers=headers):
                     if not HostPluginProtocol.is_default_channel():
                         logger.verbose("Setting host plugin as default channel")
                         HostPluginProtocol.set_default_channel(True)

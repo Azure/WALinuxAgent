@@ -98,11 +98,10 @@ class HostPluginProtocol(object):
 
     def get_artifact_request(self, artifact_url, artifact_manifest_url=None):
         if not self.ensure_initialized():
-            logger.error("HostGAPlugin: Host plugin channel is not available")
-            return None, None
+            raise ProtocolError("HostGAPlugin: Host plugin channel is not available")
+
         if textutil.is_str_none_or_whitespace(artifact_url):
-            logger.error("HostGAPlugin: No extension artifact url was provided")
-            return None, None
+            raise ProtocolError("HostGAPlugin: No extension artifact url was provided")
 
         url = URI_FORMAT_GET_EXTENSION_ARTIFACT.format(self.endpoint,
                                                        HOST_PLUGIN_PORT)
@@ -127,8 +126,8 @@ class HostPluginProtocol(object):
         :return:
         """
         if not self.ensure_initialized():
-            logger.error("HostGAPlugin: Host plugin channel is not available")
-            return
+            raise ProtocolError("HostGAPlugin: Host plugin channel is not available")
+
         if content is None \
                 or self.container_id is None \
                 or self.deployment_id is None:
@@ -160,11 +159,10 @@ class HostPluginProtocol(object):
         :type status_blob: StatusBlob
         """
         if not self.ensure_initialized():
-            logger.error("HostGAPlugin: HostGAPlugin is not available")
-            return
+            raise ProtocolError("HostGAPlugin: HostGAPlugin is not available")
+
         if status_blob is None or status_blob.vm_status is None:
-            logger.error("HostGAPlugin: Status blob was not provided")
-            return
+            raise ProtocolError("HostGAPlugin: Status blob was not provided")
 
         logger.verbose("HostGAPlugin: Posting VM status")
         try:
