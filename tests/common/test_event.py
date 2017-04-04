@@ -17,8 +17,9 @@
 
 from __future__ import print_function
 
+from azurelinuxagent.common.event import init_event_logger, add_event
+from azurelinuxagent.common.future import ustr
 from tests.tools import *
-from azurelinuxagent.common.event import *
 
 
 class TestEvent(AgentTestCase):

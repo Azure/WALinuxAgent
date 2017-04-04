@@ -14,7 +14,7 @@
 #
 # Requires Python 2.4+ and Openssl 1.0+
 #
-
+from azurelinuxagent.common import event
 from azurelinuxagent.common.protocol.wire import *
 from tests.protocol.mockwiredata import *
 
@@ -157,6 +157,7 @@ class TestWireProtocolGetters(AgentTestCase):
         with patch.object(WireClient, "get_goal_state") as patch_get_goal_state:
             with patch.object(HostPluginProtocol, "put_vm_status") as patch_host_ga_plugin_upload:
                 with patch.object(StatusBlob, "upload", return_value=True) as patch_default_upload:
+                    HostPluginProtocol.set_default_channel(False)
                     wire_protocol_client.upload_status_blob()
 
                     patch_default_upload.assert_called_once_with(testurl)
@@ -172,16 +173,55 @@ class TestWireProtocolGetters(AgentTestCase):
         wire_protocol_client.status_blob.vm_status = vmstatus
         goal_state = GoalState(WireProtocolData(DATA_FILE).goal_state)
 
-        with patch.object(HostPluginProtocol, "put_vm_status") as patch_host_ga_plugin_upload:
-            with patch.object(StatusBlob, "upload", return_value=False) as patch_default_upload:
-                wire_protocol_client.get_goal_state = Mock(return_value=goal_state)
-                wire_protocol_client.upload_status_blob()
+        with patch.object(HostPluginProtocol,
+                          "ensure_initialized",
+                          return_value=True):
+            with patch.object(StatusBlob,
+                              "upload",
+                              return_value=False) as patch_default_upload:
+                with patch.object(HostPluginProtocol,
+                                  "_put_block_blob_status") as patch_http:
+                    HostPluginProtocol.set_default_channel(False)
+                    wire_protocol_client.get_goal_state = Mock(return_value=goal_state)
+                    wire_protocol_client.upload_status_blob()
+                    patch_default_upload.assert_called_once_with(testurl)
+                    wire_protocol_client.get_goal_state.assert_called_once()
+                    patch_http.assert_called_once_with(testurl, wire_protocol_client.status_blob)
+                    self.assertTrue(HostPluginProtocol.is_default_channel())
+                    HostPluginProtocol.set_default_channel(False)
 
-                patch_default_upload.assert_called_once_with(testurl)
-                wire_protocol_client.get_goal_state.assert_called_once()
-                patch_host_ga_plugin_upload.assert_called_once_with(wire_protocol_client.status_blob, testurl, testtype)
-                self.assertTrue(HostPluginProtocol.is_default_channel())
-                HostPluginProtocol.set_default_channel(False)
+    def test_upload_status_blob_error_reporting(self, *args):
+        vmstatus = VMStatus(message="Ready", status="Ready")
+        wire_protocol_client = WireProtocol(wireserver_url).client
+        wire_protocol_client.ext_conf = ExtensionsConfig(None)
+        wire_protocol_client.ext_conf.status_upload_blob = testurl
+        wire_protocol_client.ext_conf.status_upload_blob_type = testtype
+        wire_protocol_client.status_blob.vm_status = vmstatus
+        goal_state = GoalState(WireProtocolData(DATA_FILE).goal_state)
+
+        with patch.object(HostPluginProtocol,
+                          "ensure_initialized",
+                          return_value=True):
+                 with patch.object(StatusBlob,
+                                   "put_block_blob",
+                                   side_effect=HttpError("error")):
+                     with patch.object(StatusBlob,
+                                       "get_blob_type",
+                                       return_value='BlockBlob'):
+                         with patch.object(HostPluginProtocol,
+                                           "put_vm_status"):
+                             with patch.object(WireClient,
+                                               "report_blob_type",
+                                               side_effect=MagicMock()):
+                                 with patch.object(event,
+                                                   "add_event") as patch_add_event:
+                                    HostPluginProtocol.set_default_channel(False)
+                                    wire_protocol_client.get_goal_state = Mock(return_value=goal_state)
+                                    wire_protocol_client.upload_status_blob()
+                                    wire_protocol_client.get_goal_state.assert_called_once()
+                                    self.assertTrue(patch_add_event.call_count == 1)
+                                    self.assertTrue(patch_add_event.call_args_list[0][1]['op'] == 'ReportStatus')
+                                    self.assertFalse(HostPluginProtocol.is_default_channel())
 
     def test_get_in_vm_artifacts_profile_blob_not_available(self, *args):
         wire_protocol_client = WireProtocol(wireserver_url).client
@@ -255,6 +295,7 @@ class TestWireProtocolGetters(AgentTestCase):
                 with patch.object(HostPluginProtocol,
                                   "get_artifact_request",
                                   return_value=[host_uri, {}]):
+                    HostPluginProtocol.set_default_channel(False)
                     self.assertRaises(ProtocolError, client.fetch_manifest, uris)
                     self.assertEqual(patch_fetch.call_count, 2)
                     self.assertEqual(patch_fetch.call_args_list[0][0][0], uri1.uri)

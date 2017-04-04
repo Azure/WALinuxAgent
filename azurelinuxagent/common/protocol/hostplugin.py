@@ -18,9 +18,14 @@
 #
 
 import base64
+import json
 
-from azurelinuxagent.common.protocol.wire import *
+from azurelinuxagent.common import logger
+from azurelinuxagent.common.exception import ProtocolError, HttpError
+from azurelinuxagent.common.future import ustr, httpclient
+from azurelinuxagent.common.utils import restutil
 from azurelinuxagent.common.utils import textutil
+from azurelinuxagent.common.utils.textutil import remove_bom
 from azurelinuxagent.common.version import PY_VERSION_MAJOR
 
 HOST_PLUGIN_PORT = 32526
@@ -65,11 +70,9 @@ class HostPluginProtocol(object):
             self.api_versions = self.get_api_versions()
             self.is_available = API_VERSION in self.api_versions
             self.is_initialized = True
-
-            from azurelinuxagent.common.event import add_event, WALAEventOperation
-            add_event(name="WALA",
-                      op=WALAEventOperation.InitializeHostPlugin,
-                      is_success=self.is_available)
+            from azurelinuxagent.common.event import WALAEventOperation, report_event
+            report_event(WALAEventOperation.InitializeHostPlugin,
+                         is_success=self.is_available)
         return self.is_available
 
     def get_api_versions(self):
@@ -89,8 +92,7 @@ class HostPluginProtocol(object):
                 return_val = ustr(remove_bom(response.read()), encoding='utf-8')
 
         except HttpError as e:
-            logger.error("HostGAPlugin: Exception Get API versions: " \
-                "{0}".format(e))
+            logger.error("HostGAPlugin: Exception Get API versions: {0}".format(e))
 
         return return_val
 
@@ -173,8 +175,16 @@ class HostPluginProtocol(object):
             else:
                 self._put_page_blob_status(sas_url, status_blob)
 
+            if not HostPluginProtocol.is_default_channel():
+                logger.info("HostGAPlugin: Setting host plugin as default channel")
+                HostPluginProtocol.set_default_channel(True)
         except Exception as e:
-            logger.error("HostGAPlugin: Exception Put VM status: {0}", e)
+            message = "HostGAPlugin: Exception Put VM status: {0}".format(e)
+            logger.error(message)
+            from azurelinuxagent.common.event import WALAEventOperation, report_event
+            report_event(op=WALAEventOperation.ReportStatus,
+                         is_success=False,
+                         message=message)
 
     def _put_block_blob_status(self, sas_url, status_blob):
         url = URI_FORMAT_PUT_VM_STATUS.format(self.endpoint, HOST_PLUGIN_PORT)

@@ -16,11 +16,12 @@
 #
 
 import base64
-import sys
 import json
-import unittest
+import sys
 
-if sys.version_info[0]== 3:
+
+
+if sys.version_info[0] == 3:
     import http.client as httpclient
     bytebuffer = memoryview
 elif sys.version_info[0] == 2:
@@ -31,10 +32,9 @@ import azurelinuxagent.common.protocol.restapi as restapi
 import azurelinuxagent.common.protocol.wire as wire
 import azurelinuxagent.common.protocol.hostplugin as hostplugin
 
+from azurelinuxagent.common import event
 from azurelinuxagent.common.protocol.hostplugin import API_VERSION
 from azurelinuxagent.common.utils import restutil
-from azurelinuxagent.common.utils import textutil
-from azurelinuxagent.common.version import PY_VERSION_MAJOR
 
 from tests.protocol.mockwiredata import WireProtocolData, DATA_FILE
 from tests.tools import *
@@ -118,19 +118,51 @@ class TestHostPlugin(AgentTestCase):
         """
         test_goal_state = wire.GoalState(WireProtocolData(DATA_FILE).goal_state)
         status = restapi.VMStatus(status="Ready", message="Guest Agent is running")
-        with patch.object(wire.HostPluginProtocol, "put_vm_status") as patch_put:
+        with patch.object(wire.HostPluginProtocol,
+                          "ensure_initialized",
+                          return_value=True):
             with patch.object(wire.StatusBlob, "upload", return_value=False) as patch_upload:
-                wire_protocol_client = wire.WireProtocol(wireserver_url).client
-                wire_protocol_client.get_goal_state = Mock(return_value=test_goal_state)
-                wire_protocol_client.ext_conf = wire.ExtensionsConfig(None)
-                wire_protocol_client.ext_conf.status_upload_blob = sas_url
-                wire_protocol_client.status_blob.set_vm_status(status)
-                wire_protocol_client.upload_status_blob()
-                self.assertTrue(patch_put.call_count == 1,
-                                "Fallback was not engaged")
-                self.assertTrue(patch_put.call_args[0][1] == sas_url)
-                self.assertTrue(wire.HostPluginProtocol.is_default_channel())
-                wire.HostPluginProtocol.set_default_channel(False)
+                with patch.object(wire.HostPluginProtocol,
+                                  "_put_page_blob_status") as patch_put:
+                    wire_protocol_client = wire.WireProtocol(wireserver_url).client
+                    wire_protocol_client.get_goal_state = Mock(return_value=test_goal_state)
+                    wire_protocol_client.ext_conf = wire.ExtensionsConfig(None)
+                    wire_protocol_client.ext_conf.status_upload_blob = sas_url
+                    wire_protocol_client.status_blob.set_vm_status(status)
+                    wire_protocol_client.upload_status_blob()
+                    self.assertTrue(patch_put.call_count == 1,
+                                    "Fallback was not engaged")
+                    self.assertTrue(patch_put.call_args[0][0] == sas_url)
+                    self.assertTrue(wire.HostPluginProtocol.is_default_channel())
+                    wire.HostPluginProtocol.set_default_channel(False)
+
+    def test_put_status_error_reporting(self):
+        """
+        Validate the telemetry when uploading status fails
+        """
+        test_goal_state = wire.GoalState(WireProtocolData(DATA_FILE).goal_state)
+        status = restapi.VMStatus(status="Ready",
+                                  message="Guest Agent is running")
+        with patch.object(wire.StatusBlob,
+                          "upload",
+                          return_value=False):
+            wire_protocol_client = wire.WireProtocol(wireserver_url).client
+            wire_protocol_client.get_goal_state = Mock(return_value=test_goal_state)
+            wire_protocol_client.ext_conf = wire.ExtensionsConfig(None)
+            wire_protocol_client.ext_conf.status_upload_blob = sas_url
+            wire_protocol_client.status_blob.set_vm_status(status)
+            put_error = wire.HttpError("put status http error")
+            with patch.object(event,
+                              "add_event") as patch_add_event:
+                with patch.object(restutil,
+                                  "http_put",
+                                  side_effect=put_error) as patch_http_put:
+                    with patch.object(wire.HostPluginProtocol,
+                                      "ensure_initialized", return_value=True):
+                        wire_protocol_client.upload_status_blob()
+                        self.assertFalse(wire.HostPluginProtocol.is_default_channel())
+                        self.assertTrue(patch_add_event.call_count == 1)
+
 
     def test_validate_http_request(self):
         """Validate correct set of data is sent to HostGAPlugin when reporting VM status"""
