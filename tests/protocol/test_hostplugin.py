@@ -136,6 +136,32 @@ class TestHostPlugin(AgentTestCase):
                     self.assertTrue(wire.HostPluginProtocol.is_default_channel())
                     wire.HostPluginProtocol.set_default_channel(False)
 
+    def test_fallback_failure(self):
+        """
+        Validate that when host plugin fails, the default channel is reset
+        """
+        test_goal_state = wire.GoalState(WireProtocolData(DATA_FILE).goal_state)
+        status = restapi.VMStatus(status="Ready",
+                                  message="Guest Agent is running")
+        with patch.object(wire.HostPluginProtocol,
+                          "ensure_initialized",
+                          return_value=True):
+            with patch.object(wire.StatusBlob,
+                              "upload",
+                              return_value=False):
+                with patch.object(wire.HostPluginProtocol,
+                                  "_put_page_blob_status",
+                                  side_effect=wire.HttpError("put failure")) as patch_put:
+                    client = wire.WireProtocol(wireserver_url).client
+                    client.get_goal_state = Mock(return_value=test_goal_state)
+                    client.ext_conf = wire.ExtensionsConfig(None)
+                    client.ext_conf.status_upload_blob = sas_url
+                    client.status_blob.set_vm_status(status)
+                    client.upload_status_blob()
+                    self.assertTrue(patch_put.call_count == 1,
+                                    "Fallback was not engaged")
+                    self.assertFalse(wire.HostPluginProtocol.is_default_channel())
+
     def test_put_status_error_reporting(self):
         """
         Validate the telemetry when uploading status fails
