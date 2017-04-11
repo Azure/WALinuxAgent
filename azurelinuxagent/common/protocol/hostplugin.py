@@ -183,6 +183,8 @@ class HostPluginProtocol(object):
             report_event(op=WALAEventOperation.ReportStatus,
                          is_success=False,
                          message=message)
+            logger.warn("HostGAPlugin: resetting default channel")
+            HostPluginProtocol.set_default_channel(False)
 
     def _put_block_blob_status(self, sas_url, status_blob):
         url = URI_FORMAT_PUT_VM_STATUS.format(self.endpoint, HOST_PLUGIN_PORT)
