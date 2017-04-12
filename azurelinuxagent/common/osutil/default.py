@@ -291,24 +291,38 @@ class DefaultOSUtil(object):
             mount_point = conf.get_dvd_mount_point()
         mountlist = shellutil.run_get_output("mount")[1]
         existing = self.get_mount_point(mountlist, dvd_device)
-        if existing is not None: #Already mounted
+
+        if existing is not None:
+            # already mounted
             logger.info("{0} is already mounted at {1}", dvd_device, existing)
             return
+
         if not os.path.isdir(mount_point):
             os.makedirs(mount_point)
 
-        for retry in range(0, max_retry):
-            retcode = self.mount(dvd_device, mount_point, option="-o ro -t udf,iso9660",
-                                 chk_err=chk_err)
+        sleep_time = 5
+        err = ''
+        for retry in range(1, max_retry):
+            retcode, err = self.mount(dvd_device,
+                                      mount_point,
+                                      option="-o ro -t udf,iso9660",
+                                      chk_err=chk_err)
             if retcode == 0:
                 logger.info("Successfully mounted dvd")
-                return
-            if retry < max_retry - 1:
-                logger.warn("Mount dvd failed: retry={0}, ret={1}", retry,
-                            retcode)
-                time.sleep(5)
+            else:
+                logger.warn(
+                    "Mounting dvd failed [{0}, {1}]: retry {2}/{3}, sleep {4} "
+                    "sec",
+                    retcode,
+                    err,
+                    retry,
+                    max_retry,
+                    sleep_time)
+                if retry < max_retry:
+                    time.sleep(sleep_time)
+
         if chk_err:
-            raise OSUtilError("Failed to mount dvd.")
+            raise OSUtilError("Failed to mount dvd device", inner=err)
 
     def umount_dvd(self, chk_err=True, mount_point=None):
         if mount_point is None:
@@ -359,7 +373,11 @@ class DefaultOSUtil(object):
 
     def mount(self, dvd, mount_point, option="", chk_err=True):
         cmd = "mount {0} {1} {2}".format(option, dvd, mount_point)
-        return shellutil.run_get_output(cmd, chk_err)[0]
+        retcode, err = shellutil.run_get_output(cmd, chk_err)
+        if retcode != 0:
+            detail = "[{0}] returned {1}: {2}".format(cmd, retcode, err)
+            err = detail
+        return retcode, err
 
     def umount(self, mount_point, chk_err=True):
         return shellutil.run("umount {0}".format(mount_point), chk_err=chk_err)
