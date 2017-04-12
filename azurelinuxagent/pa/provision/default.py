@@ -87,10 +87,9 @@ class ProvisionHandler(object):
         thumbprint = self.get_ssh_host_key_thumbprint(keypair_type)
         return thumbprint
 
-    def get_ssh_host_key_thumbprint(self, keypair_type):
-        cmd = "ssh-keygen -lf /etc/ssh/ssh_host_{0}_key.pub".format(
-            keypair_type)
-        ret = shellutil.run_get_output(cmd)
+    def get_ssh_host_key_thumbprint(self, keypair_type, chk_err=True):
+        cmd = "ssh-keygen -lf /etc/ssh/ssh_host_{0}_key.pub".format(keypair_type)
+        ret = shellutil.run_get_output(cmd, chk_err=chk_err)
         if ret[0] == 0:
             return ret[1].rstrip().split()[1].replace(':', '')
         else:
