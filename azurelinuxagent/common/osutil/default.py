@@ -273,13 +273,16 @@ class DefaultOSUtil(object):
                     .format("Disabled" if disable_password else "Enabled"))
         logger.info("Configured SSH client probing to keep connections alive.")
 
-
     def get_dvd_device(self, dev_dir='/dev'):
-        pattern=r'(sr[0-9]|hd[c-z]|cdrom[0-9]|cd[0-9])'
-        for dvd in [re.match(pattern, dev) for dev in os.listdir(dev_dir)]:
+        pattern = r'(sr[0-9]|hd[c-z]|cdrom[0-9]|cd[0-9])'
+        device_list = os.listdir(dev_dir)
+        for dvd in [re.match(pattern, dev) for dev in device_list]:
             if dvd is not None:
                 return "/dev/{0}".format(dvd.group(0))
-        raise OSUtilError("Failed to get dvd device")
+        inner_detail = 'Devices found: {0}\n' \
+                       ''.format(device_list)
+        raise OSUtilError(msg="Failed to get dvd device from {0}".format(dev_dir),
+                          inner=inner_detail)
 
     def mount_dvd(self, max_retry=6, chk_err=True, dvd_device=None, mount_point=None):
         if dvd_device is None:
