@@ -84,7 +84,7 @@ class DhcpHandler(object):
         :return: True if a route to KNOWN_WIRESERVER_IP exists.
         """
         route_exists = False
-        logger.info("test for route to {0}".format(KNOWN_WIRESERVER_IP))
+        logger.info("Test for route to {0}".format(KNOWN_WIRESERVER_IP))
         try:
             route_file = '/proc/net/route'
             if os.path.exists(route_file) and \
@@ -95,13 +95,12 @@ class DhcpHandler(object):
                 self.gateway = None
                 self.routes = None
                 route_exists = True
-                logger.info("route to {0} exists".format(KNOWN_WIRESERVER_IP))
+                logger.info("Route to {0} exists".format(KNOWN_WIRESERVER_IP))
             else:
-                logger.warn(
-                    "no route exists to {0}".format(KNOWN_WIRESERVER_IP))
+                logger.warn("No route exists to {0}".format(KNOWN_WIRESERVER_IP))
         except Exception as e:
             logger.error(
-                "could not determine whether route exists to {0}: {1}".format(
+                "Could not determine whether route exists to {0}: {1}".format(
                     KNOWN_WIRESERVER_IP, e))
 
         return route_exists
@@ -118,12 +117,12 @@ class DhcpHandler(object):
 
         exists = False
 
-        logger.info("checking for dhcp lease cache")
+        logger.info("Checking for dhcp lease cache")
         cached_endpoint = self.osutil.get_dhcp_lease_endpoint()
         if cached_endpoint is not None:
             self.endpoint = cached_endpoint
             exists = True
-        logger.info("cache exists [{0}]".format(exists))
+        logger.info("Cache exists [{0}]".format(exists))
         return exists
 
     def conf_routes(self):
