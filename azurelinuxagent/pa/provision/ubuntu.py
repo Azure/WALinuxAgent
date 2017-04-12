@@ -91,7 +91,7 @@ class UbuntuProvisionHandler(ProvisionHandler):
             if os.path.isfile(path):
                 logger.info("ssh host key found at: {0}".format(path))
                 try:
-                    thumbprint = self.get_ssh_host_key_thumbprint(keypair_type)
+                    thumbprint = self.get_ssh_host_key_thumbprint(keypair_type, chk_err=False)
                     logger.info("Thumbprint obtained from : {0}".format(path))
                     return thumbprint
                 except ProvisionError:
