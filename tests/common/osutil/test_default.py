@@ -20,6 +20,7 @@ import glob
 import mock
 import azurelinuxagent.common.osutil.default as osutil
 import azurelinuxagent.common.utils.shellutil as shellutil
+from azurelinuxagent.common.exception import OSUtilError, AgentError
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils import fileutil
 from tests.tools import *
@@ -39,6 +40,18 @@ class TestOSUtil(AgentTestCase):
             # assert
             self.assertEqual(run_patch.call_count, retries)
             self.assertEqual(run_patch.call_args_list[0][0][0], 'ifdown {0} && ifup {0}'.format(ifname))
+
+    def test_get_dvd_device_success(self):
+        with patch.object(os, 'listdir', return_value=['cpu', 'cdrom0']):
+            osutil.DefaultOSUtil().get_dvd_device()
+
+    def test_get_dvd_device_failure(self):
+        with patch.object(os, 'listdir', return_value=['cpu', 'notmatching']):
+            try:
+                osutil.DefaultOSUtil().get_dvd_device()
+                self.fail('OSUtilError was not raised')
+            except OSUtilError as ose:
+                self.assertTrue('notmatching' in ose.message)
 
     def test_get_first_if(self):
         ifname, ipaddr = osutil.DefaultOSUtil().get_first_if()

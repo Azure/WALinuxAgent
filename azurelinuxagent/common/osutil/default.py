@@ -279,8 +279,8 @@ class DefaultOSUtil(object):
         for dvd in [re.match(pattern, dev) for dev in device_list]:
             if dvd is not None:
                 return "/dev/{0}".format(dvd.group(0))
-        inner_detail = 'Devices found: {0}\n' \
-                       ''.format(device_list)
+        inner_detail = "The following devices were found, but none matched " \
+                       "the pattern [{0}]: {1}\n".format(pattern, device_list)
         raise OSUtilError(msg="Failed to get dvd device from {0}".format(dev_dir),
                           inner=inner_detail)
 
