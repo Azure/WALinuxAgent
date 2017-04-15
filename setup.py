@@ -88,6 +88,12 @@ def get_data_files(name, version, fullname):
                 # TODO this is a mitigation to systemctl bug on 7.1
                 set_sysv_files(data_files)
 
+    elif name == 'arch':
+        set_bin_files(data_files, dest="/usr/bin")
+        set_conf_files(data_files, src=["config/arch/waagent.conf"])
+        set_udev_files(data_files)
+        set_systemd_files(data_files, dest='/usr/lib/systemd/system',
+                          src=["init/arch/waagent.service"])
     elif name == 'coreos':
         set_bin_files(data_files, dest="/usr/share/oem/bin")
         set_conf_files(data_files, dest="/usr/share/oem",
