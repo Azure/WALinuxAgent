@@ -25,6 +25,8 @@ import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
 from azurelinuxagent.common.exception import ProvisionError, ProtocolError
 from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.protocol import OVF_FILE_NAME
+from azurelinuxagent.common.protocol.ovfenv import OvfEnv
 from azurelinuxagent.pa.provision.default import ProvisionHandler
 
 """
@@ -44,12 +46,12 @@ class UbuntuProvisionHandler(ProvisionHandler):
             super(UbuntuProvisionHandler, self).run()
             return
 
-        logger.info("Running Ubuntu provisioning handler")
         provisioned = os.path.join(conf.get_lib_dir(), "provisioned")
         if os.path.isfile(provisioned):
             logger.info("Provisioning already completed, skipping.")
             return
 
+        logger.info("Running Ubuntu provisioning handler")
         self.wait_for_ovfenv()
         self.protocol_util.get_protocol()
         self.report_not_ready("Provisioning", "Starting")
@@ -70,18 +72,28 @@ class UbuntuProvisionHandler(ProvisionHandler):
         """
         Wait for cloud-init to copy ovf-env.xml file from provision ISO
         """
+        ovf_file_path = os.path.join(conf.get_lib_dir(), OVF_FILE_NAME)
         for retry in range(0, max_retry):
-            try:
-                self.protocol_util.get_ovf_env()
-                return
-            except ProtocolError:
+            if os.path.isfile(ovf_file_path):
+                try:
+                    OvfEnv(fileutil.read_file(ovf_file_path))
+                    return
+                except ProtocolError as pe:
+                    raise ProvisionError("OVF xml could not be parsed "
+                                         "[{0}]: {1}".format(ovf_file_path,
+                                                             pe.message))
+            else:
                 if retry < max_retry - 1:
-                    logger.info("Waiting for cloud-init to copy ovf-env.xml "
-                                "[{0} retries remaining, "
-                                "sleeping {1}s]".format(max_retry - retry,
-                                                        sleep_time))
+                    logger.info(
+                        "Waiting for cloud-init to copy ovf-env.xml to {0} "
+                        "[{1} retries remaining, "
+                        "sleeping {2}s]".format(ovf_file_path,
+                                                max_retry - retry,
+                                                sleep_time))
                     time.sleep(sleep_time)
-        raise ProvisionError("ovf-env.xml is not copied")
+        raise ProvisionError("Giving up, ovf-env.xml was not copied to {0} "
+                             "after {1}s".format(ovf_file_path,
+                                                 max_retry * sleep_time))
 
     def wait_for_ssh_host_key(self, max_retry=360, sleep_time=5):
         """
@@ -105,4 +117,6 @@ class UbuntuProvisionHandler(ProvisionHandler):
                                                     max_retry - retry,
                                                     sleep_time))
                 time.sleep(sleep_time)
-        raise ProvisionError("ssh host key is not generated.")
+        raise ProvisionError("Giving up, ssh host key was not found at {0} "
+                             "after {1}s".format(path,
+                                                 max_retry * sleep_time))
