@@ -1040,7 +1040,7 @@ class TestUpdate(UpdateTestCase):
 
         with patch('subprocess.Popen', return_value=mock_child) as mock_popen:
             with patch('time.time', side_effect=mock_time.time):
-                with patch('time.sleep', return_value=mock_time.sleep):
+                with patch('time.sleep', side_effect=mock_time.sleep):
                     self.update_handler.run_latest()
                     self.assertEqual(1, mock_popen.call_count)
 
@@ -1083,6 +1083,22 @@ class TestUpdate(UpdateTestCase):
         self._test_run_latest(mock_child=mock_child, mock_time=mock_time)
         self.assertEqual(1, mock_child.poll.call_count)
         self.assertEqual(0, mock_child.wait.call_count)
+        return
+
+    def test_run_latest_polls_frequently_if_installed_is_latest(self):
+        mock_child = ChildMock(return_value=0)
+        mock_time = TimeMock(time_increment=CHILD_HEALTH_INTERVAL/2)
+        self._test_run_latest(mock_time=mock_time)
+        self.assertEqual(1, mock_time.sleep_interval)
+        return
+
+    def test_run_latest_polls_moderately_if_installed_not_latest(self):
+        self.prepare_agents()
+
+        mock_child = ChildMock(return_value=0)
+        mock_time = TimeMock(time_increment=CHILD_HEALTH_INTERVAL/2)
+        self._test_run_latest(mock_time=mock_time)
+        self.assertNotEqual(1, mock_time.sleep_interval)
         return
 
     def test_run_latest_defaults_to_current(self):
@@ -1137,7 +1153,6 @@ class TestUpdate(UpdateTestCase):
         return
 
     def test_run_latest_exception_blacklists(self):
-        # logger.add_logger_appender(logger.AppenderType.STDOUT)
         self.prepare_agents()
 
         latest_agent = self.update_handler.get_latest_agent()
@@ -1389,7 +1404,11 @@ class TimeMock(Mock):
         self.time_call_count = 0
         self.time_increment = time_increment
 
-        self.sleep = Mock(return_value=0)
+        self.sleep_interval = None
+        return
+
+    def sleep(self, n):
+        self.sleep_interval = n
         return
 
     def time(self):
