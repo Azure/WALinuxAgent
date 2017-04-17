@@ -63,15 +63,10 @@ class ProvisionHandler(object):
                 thumbprint = self.reg_ssh_host_key()
                 self.osutil.restart_ssh_service()
                 self.report_event("Provision succeed", is_success=True)
-            except ProtocolError as e:
-                logger.error("[ProtocolError] Provisioning failed: {0}", e)
-                self.report_not_ready("ProvisioningFailed", ustr(e))
-                self.report_event("Failed to copy ovf-env.xml: {0}".format(e))
-                return
-            except ProvisionError as e:
-                logger.error("[ProvisionError] Provisioning failed: {0}", e)
-                self.report_not_ready("ProvisioningFailed", ustr(e))
-                self.report_event(ustr(e))
+            except (ProtocolError, ProvisionError) as e:
+                self.report_not_ready("ProvisioningFailed", ustr(e.message))
+                self.report_event(ustr(e.message))
+                logger.error("Provisioning failed: {0}", e.message)
                 return
         # write out provisioned file and report Ready
         fileutil.write_file(provisioned, "")
@@ -113,7 +108,7 @@ class ProvisionHandler(object):
                 self.osutil.del_root_password()
 
         except OSUtilError as e:
-            raise ProvisionError("Failed to handle ovf-env.xml: {0}".format(e))
+            raise ProvisionError("Failed to provision: {0}".format(e.message))
 
     def config_user_account(self, ovfenv):
         logger.info("Create user account if not exists")
