@@ -59,9 +59,9 @@ class UbuntuProvisionHandler(ProvisionHandler):
             fileutil.write_file(provisioned, "")
             logger.info("Finished provisioning")
         except ProvisionError as e:
-            logger.error("Provision failed: {0}", e)
-            self.report_not_ready("ProvisioningFailed", ustr(e))
-            self.report_event(ustr(e))
+            logger.error("Provision failed: {0}", e.message)
+            self.report_not_ready("ProvisioningFailed", ustr(e.message))
+            self.report_event(ustr(e.message))
             return
 
         self.report_ready(thumbprint)
