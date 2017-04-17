@@ -52,7 +52,7 @@ class ProvisionHandler(object):
         if not conf.get_provision_enabled():
             logger.info("Provisioning is disabled, skipping.")
         else:
-            logger.info("Running provisioning handler")
+            logger.info("Running default provisioning handler")
             try:
                 logger.info("Copying ovf-env.xml")
                 ovf_env = self.protocol_util.copy_ovf_env()
