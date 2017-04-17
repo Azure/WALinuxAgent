@@ -71,21 +71,32 @@ class ProtocolUtil(object):
         dvd_mount_point = conf.get_dvd_mount_point()
         ovf_file_path_on_dvd = os.path.join(dvd_mount_point, OVF_FILE_NAME)
         tag_file_path_on_dvd = os.path.join(dvd_mount_point, TAG_FILE_NAME)
+
         try:
             self.osutil.mount_dvd()
+        except OSUtilError as e:
+            raise ProtocolError("[CopyOVFEnv] Error mounting dvd: {0}".format(ustr(e)))
+
+        try:
             ovfxml = fileutil.read_file(ovf_file_path_on_dvd, remove_bom=True)
             ovfenv = OvfEnv(ovfxml)
+        except IOError as e:
+            raise ProtocolError("[CopyOVFEnv] Error reading {0}: {1}".format(ovf_file_path_on_dvd, ustr(e)))
+
+        try:
             ovfxml = re.sub("<UserPassword>.*?<", "<UserPassword>*<", ovfxml)
             ovf_file_path = os.path.join(conf.get_lib_dir(), OVF_FILE_NAME)
             fileutil.write_file(ovf_file_path, ovfxml)
-            
+        except IOError as e:
+            raise ProtocolError("[CopyOVFEnv] Error writing {0}: {1}".format(ovf_file_path, ustr(e)))
+
+        try:
             if os.path.isfile(tag_file_path_on_dvd):
                 logger.info("Found {0} in provisioning ISO", TAG_FILE_NAME)
                 tag_file_path = os.path.join(conf.get_lib_dir(), TAG_FILE_NAME)
                 shutil.copyfile(tag_file_path_on_dvd, tag_file_path) 
-
-        except (OSUtilError, IOError) as e:
-            raise ProtocolError(ustr(e))
+        except IOError as e:
+            raise ProtocolError("[CopyOVFEnv] Error copying {0} to {1}: {2}".format(tag_file_path, tag_file_path, ustr(e)))
 
         try:
             self.osutil.umount_dvd()
