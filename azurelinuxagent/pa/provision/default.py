@@ -20,6 +20,9 @@ Provision handler
 """
 
 import os
+
+import re
+
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.future import ustr
 import azurelinuxagent.common.conf as conf
@@ -33,6 +36,8 @@ from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol import get_protocol_util
 
 CUSTOM_DATA_FILE = "CustomData"
+CLOUD_INIT_PATTERN = b".*/bin/cloud-init.*"
+CLOUD_INIT_REGEX = re.compile(CLOUD_INIT_PATTERN)
 
 
 class ProvisionHandler(object):
@@ -52,8 +57,11 @@ class ProvisionHandler(object):
         if not conf.get_provision_enabled():
             logger.info("Provisioning is disabled, skipping.")
         else:
-            logger.info("Running provisioning handler")
+            logger.info("Running default provisioning handler")
             try:
+                if not self.validate_cloud_init(is_expected=False):
+                    raise ProvisionError("cloud-init appears to be running, "
+                                         "this is not expected, cannot continue")
                 logger.info("Copying ovf-env.xml")
                 ovf_env = self.protocol_util.copy_ovf_env()
                 self.protocol_util.get_protocol_by_file()
@@ -63,20 +71,35 @@ class ProvisionHandler(object):
                 thumbprint = self.reg_ssh_host_key()
                 self.osutil.restart_ssh_service()
                 self.report_event("Provision succeed", is_success=True)
-            except ProtocolError as e:
-                logger.error("[ProtocolError] Provisioning failed: {0}", e)
-                self.report_not_ready("ProvisioningFailed", ustr(e))
-                self.report_event("Failed to copy ovf-env.xml: {0}".format(e))
-                return
-            except ProvisionError as e:
-                logger.error("[ProvisionError] Provisioning failed: {0}", e)
+            except (ProtocolError, ProvisionError) as e:
                 self.report_not_ready("ProvisioningFailed", ustr(e))
                 self.report_event(ustr(e))
+                logger.error("Provisioning failed: {0}", ustr(e))
                 return
         # write out provisioned file and report Ready
         fileutil.write_file(provisioned, "")
         self.report_ready(thumbprint)
         logger.info("Provisioning complete")
+
+    @staticmethod
+    def validate_cloud_init(is_expected=True):
+        pids = [pid for pid in os.listdir('/proc') if pid.isdigit()]
+        is_running = False
+        for pid in pids:
+            try:
+                pname = open(os.path.join('/proc', pid, 'cmdline'), 'rb').read()
+                if CLOUD_INIT_REGEX.match(pname):
+                    is_running = True
+                    msg = "cloud-init is running [PID {0}, {1}]".format(pid,
+                                                                        pname)
+                    if is_expected:
+                        logger.verbose(msg)
+                    else:
+                        logger.error(msg)
+                    break
+            except IOError:
+                continue
+        return is_running == is_expected
 
     def reg_ssh_host_key(self):
         keypair_type = conf.get_ssh_host_keypair_type()
@@ -113,7 +136,7 @@ class ProvisionHandler(object):
                 self.osutil.del_root_password()
 
         except OSUtilError as e:
-            raise ProvisionError("Failed to handle ovf-env.xml: {0}".format(e))
+            raise ProvisionError("Failed to provision: {0}".format(ustr(e)))
 
     def config_user_account(self, ovfenv):
         logger.info("Create user account if not exists")

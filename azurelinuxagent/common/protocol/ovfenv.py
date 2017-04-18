@@ -35,7 +35,7 @@ WA_NAME_SPACE = "http://schemas.microsoft.com/windowsazure"
 
 def _validate_ovf(val, msg):
     if val is None:
-        raise ProtocolError("Failed to parse OVF XML: {0}".format(msg))
+        raise ProtocolError("Failed to validate OVF: {0}".format(msg))
 
 class OvfEnv(object):
     """

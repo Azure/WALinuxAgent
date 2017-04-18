@@ -33,24 +33,20 @@ from azurelinuxagent.common.protocol.ovfenv import OvfEnv
 from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.common.protocol.metadata import MetadataProtocol, \
                                                      METADATA_ENDPOINT
-import azurelinuxagent.common.utils.shellutil as shellutil
 
 OVF_FILE_NAME = "ovf-env.xml"
-
-#Tag file to indicate usage of metadata protocol
-TAG_FILE_NAME = "useMetadataEndpoint.tag" 
-
+TAG_FILE_NAME = "useMetadataEndpoint.tag"
 PROTOCOL_FILE_NAME = "Protocol"
-
-#MAX retry times for protocol probing
 MAX_RETRY = 360
-
 PROBE_INTERVAL = 10
-
 ENDPOINT_FILE_NAME = "WireServerEndpoint"
+PASSWORD_PATTERN = "<UserPassword>.*?<"
+PASSWORD_REPLACEMENT = "<UserPassword>*<"
+
 
 def get_protocol_util():
     return ProtocolUtil()
+
 
 class ProtocolUtil(object):
     """
@@ -71,21 +67,42 @@ class ProtocolUtil(object):
         dvd_mount_point = conf.get_dvd_mount_point()
         ovf_file_path_on_dvd = os.path.join(dvd_mount_point, OVF_FILE_NAME)
         tag_file_path_on_dvd = os.path.join(dvd_mount_point, TAG_FILE_NAME)
+        ovf_file_path = os.path.join(conf.get_lib_dir(), OVF_FILE_NAME)
+        tag_file_path = os.path.join(conf.get_lib_dir(), TAG_FILE_NAME)
+
         try:
             self.osutil.mount_dvd()
+        except OSUtilError as e:
+            raise ProtocolError("[CopyOvfEnv] Error mounting dvd: "
+                                "{0}".format(ustr(e)))
+
+        try:
             ovfxml = fileutil.read_file(ovf_file_path_on_dvd, remove_bom=True)
             ovfenv = OvfEnv(ovfxml)
-            ovfxml = re.sub("<UserPassword>.*?<", "<UserPassword>*<", ovfxml)
-            ovf_file_path = os.path.join(conf.get_lib_dir(), OVF_FILE_NAME)
+        except IOError as e:
+            raise ProtocolError("[CopyOvfEnv] Error reading file "
+                                "{0}: {1}".format(ovf_file_path_on_dvd,
+                                                  ustr(e)))
+
+        try:
+            ovfxml = re.sub(PASSWORD_PATTERN,
+                            PASSWORD_REPLACEMENT,
+                            ovfxml)
             fileutil.write_file(ovf_file_path, ovfxml)
-            
+        except IOError as e:
+            raise ProtocolError("[CopyOvfEnv] Error writing file "
+                                "{0}: {1}".format(ovf_file_path,
+                                                  ustr(e)))
+
+        try:
             if os.path.isfile(tag_file_path_on_dvd):
                 logger.info("Found {0} in provisioning ISO", TAG_FILE_NAME)
-                tag_file_path = os.path.join(conf.get_lib_dir(), TAG_FILE_NAME)
-                shutil.copyfile(tag_file_path_on_dvd, tag_file_path) 
-
-        except (OSUtilError, IOError) as e:
-            raise ProtocolError(ustr(e))
+                shutil.copyfile(tag_file_path_on_dvd, tag_file_path)
+        except IOError as e:
+            raise ProtocolError("[CopyOvfEnv] Error copying file "
+                                "{0} to {1}: {2}".format(tag_file_path,
+                                                         tag_file_path,
+                                                         ustr(e)))
 
         try:
             self.osutil.umount_dvd()
@@ -104,7 +121,7 @@ class ProtocolUtil(object):
             xml_text = fileutil.read_file(ovf_file_path)
             return OvfEnv(xml_text)
         else:
-            raise ProtocolError("ovf-env.xml is missing.")
+            raise ProtocolError("ovf-env.xml is missing from {0}".format(ovf_file_path))
 
     def _get_wireserver_endpoint(self):
         try:
@@ -146,7 +163,7 @@ class ProtocolUtil(object):
         protocol = MetadataProtocol()
         protocol.detect()
         
-        #Only allow root access METADATA_ENDPOINT
+        # only allow root access METADATA_ENDPOINT
         self.osutil.set_admin_access_to_ip(METADATA_ENDPOINT)
         
         self.save_protocol("MetadataProtocol")
@@ -206,7 +223,6 @@ class ProtocolUtil(object):
         except IOError as e:
             logger.error("Failed to save protocol endpoint: {0}", e)
 
-
     def clear_protocol(self):
         """
         Cleanup previous saved endpoint.
@@ -248,7 +264,6 @@ class ProtocolUtil(object):
 
         finally:
             self.lock.release()
-
 
     def get_protocol_by_file(self):
         """
