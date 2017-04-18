@@ -90,8 +90,12 @@ class ProvisionHandler(object):
                 pname = open(os.path.join('/proc', pid, 'cmdline'), 'rb').read()
                 if CLOUD_INIT_REGEX.match(pname):
                     is_running = True
-                    logger.verbose("cloud-init is running "
-                                   "[PID {0}, {1}]".format(pid, pname))
+                    msg = "cloud-init is running [PID {0}, {1}]".format(pid,
+                                                                        pname)
+                    if is_expected:
+                        logger.verbose(msg)
+                    else:
+                        logger.error(msg)
                     break
             except IOError:
                 continue
