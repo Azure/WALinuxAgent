@@ -20,6 +20,9 @@ Provision handler
 """
 
 import os
+
+import re
+
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.future import ustr
 import azurelinuxagent.common.conf as conf
@@ -72,6 +75,16 @@ class ProvisionHandler(object):
         fileutil.write_file(provisioned, "")
         self.report_ready(thumbprint)
         logger.info("Provisioning complete")
+
+    @staticmethod
+    def validate_cloud_init():
+        pids = [pid for pid in os.listdir('/proc') if pid.isdigit()]
+        for pid in pids:
+            try:
+                pname = open(os.path.join('/proc', pid, 'cmdline'), 'rb').read()
+                logger.verbose("[PID {0}] {1}".format(pid, pname))
+            except IOError:
+                continue
 
     def reg_ssh_host_key(self):
         keypair_type = conf.get_ssh_host_keypair_type()
