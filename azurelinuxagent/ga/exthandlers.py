@@ -478,6 +478,26 @@ class ExtHandlerInstance(object):
 
             separator = path.rfind('-')
             version = FlexibleVersion(path[separator+1:])
+            existing_state = os.path.join(path, 'config', 'HandlerState')
+            should_remove = False
+
+            if not os.path.exists(existing_state):
+                should_remove = True
+            else:
+                with open(existing_state) as fh:
+                    existing_state_text = fh.read()
+                    if existing_state_text is None or \
+                       existing_state == ExtHandlerState.NotInstalled:
+                        should_remove = True
+
+            if should_remove:
+                logger.warn("Extension directory does not contain a valid "
+                            "status, removing [{0}]".format(path))
+                shutil.rmtree(path, ignore_errors=True)
+                continue
+            else:
+                logger.verbose("Extension directory contains valid status "
+                               "[{0}]".format(path))
 
             if lastest_version is None or lastest_version < version:
                 lastest_version = version
