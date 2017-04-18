@@ -60,9 +60,9 @@ class UbuntuProvisionHandler(ProvisionHandler):
             fileutil.write_file(provisioned, "")
             logger.info("Finished provisioning")
         except ProvisionError as e:
-            logger.error("Provisioning failed: {0}", e.message)
-            self.report_not_ready("ProvisioningFailed", ustr(e.message))
-            self.report_event(ustr(e.message))
+            logger.error("Provisioning failed: {0}", ustr(e))
+            self.report_not_ready("ProvisioningFailed", ustr(e))
+            self.report_event(ustr(e))
             return
 
         self.report_ready(thumbprint)
@@ -81,7 +81,7 @@ class UbuntuProvisionHandler(ProvisionHandler):
                 except ProtocolError as pe:
                     raise ProvisionError("OVF xml could not be parsed "
                                          "[{0}]: {1}".format(ovf_file_path,
-                                                             pe.message))
+                                                             ustr(pe)))
             else:
                 if retry < max_retry - 1:
                     logger.info(

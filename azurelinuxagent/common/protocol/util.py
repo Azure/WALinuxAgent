@@ -74,7 +74,7 @@ class ProtocolUtil(object):
             self.osutil.mount_dvd()
         except OSUtilError as e:
             raise ProtocolError("[CopyOvfEnv] Error mounting dvd: "
-                                "{0}".format(ustr(e.message)))
+                                "{0}".format(ustr(e)))
 
         try:
             ovfxml = fileutil.read_file(ovf_file_path_on_dvd, remove_bom=True)
@@ -82,7 +82,7 @@ class ProtocolUtil(object):
         except IOError as e:
             raise ProtocolError("[CopyOvfEnv] Error reading file "
                                 "{0}: {1}".format(ovf_file_path_on_dvd,
-                                                  ustr(e.message)))
+                                                  ustr(e)))
 
         try:
             ovfxml = re.sub(PASSWORD_PATTERN,
@@ -92,7 +92,7 @@ class ProtocolUtil(object):
         except IOError as e:
             raise ProtocolError("[CopyOvfEnv] Error writing file "
                                 "{0}: {1}".format(ovf_file_path,
-                                                  ustr(e.message)))
+                                                  ustr(e)))
 
         try:
             if os.path.isfile(tag_file_path_on_dvd):
@@ -102,13 +102,13 @@ class ProtocolUtil(object):
             raise ProtocolError("[CopyOvfEnv] Error copying file "
                                 "{0} to {1}: {2}".format(tag_file_path,
                                                          tag_file_path,
-                                                         ustr(e.message)))
+                                                         ustr(e)))
 
         try:
             self.osutil.umount_dvd()
             self.osutil.eject_dvd()
         except OSUtilError as e:
-            logger.warn(ustr(e.message))
+            logger.warn(ustr(e))
 
         return ovfenv
 
