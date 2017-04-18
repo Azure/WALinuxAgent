@@ -21,6 +21,7 @@ from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_VERSION, \
                                      DISTRO_FULL_NAME
 
 from .default import DeprovisionHandler
+from .arch import ArchDeprovisionHandler
 from .clearlinux import ClearLinuxDeprovisionHandler
 from .coreos import CoreOSDeprovisionHandler
 from .ubuntu import UbuntuDeprovisionHandler
@@ -28,6 +29,8 @@ from .ubuntu import UbuntuDeprovisionHandler
 def get_deprovision_handler(distro_name=DISTRO_NAME, 
                             distro_version=DISTRO_VERSION,
                             distro_full_name=DISTRO_FULL_NAME):
+    if distro_name == "arch":
+        return ArchDeprovisionHandler()
     if distro_name == "ubuntu":
         return UbuntuDeprovisionHandler()
     if distro_name == "coreos":

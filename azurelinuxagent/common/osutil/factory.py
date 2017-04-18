@@ -19,6 +19,7 @@ import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.utils.textutil import Version
 from azurelinuxagent.common.version import *
 from .default import DefaultOSUtil
+from .arch import ArchUtil
 from .clearlinux import ClearLinuxUtil
 from .coreos import CoreOSUtil
 from .debian import DebianOSUtil
@@ -34,6 +35,9 @@ def get_osutil(distro_name=DISTRO_NAME,
                distro_code_name=DISTRO_CODE_NAME,
                distro_version=DISTRO_VERSION,
                distro_full_name=DISTRO_FULL_NAME):
+
+    if distro_name == "arch":
+        return ArchUtil()
 
     if distro_name == "clear linux software for intel architecture":
         return ClearLinuxUtil()

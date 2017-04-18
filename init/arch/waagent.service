@@ -1,0 +1,16 @@
+[Unit]
+Description=Azure Linux Agent
+Wants=network-online.target sshd.service sshd-keygen.service
+After=network-online.target
+
+ConditionFileIsExecutable=/usr/bin/waagent
+ConditionPathExists=/etc/waagent.conf
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python -u /usr/bin/waagent -daemon
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
