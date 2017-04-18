@@ -141,11 +141,12 @@ class ProvisionHandler(object):
         if customdata is None:
             return
 
-        logger.info("Save custom data")
         lib_dir = conf.get_lib_dir()
-        if conf.get_decode_customdata():
+        if conf.get_decode_customdata() or conf.get_execute_customdata():
+            logger.info("Decode custom data")
             customdata = self.osutil.decode_customdata(customdata)
 
+        logger.info("Save custom data")
         customdata_file = os.path.join(lib_dir, CUSTOM_DATA_FILE)
         fileutil.write_file(customdata_file, customdata)
 
