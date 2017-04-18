@@ -36,6 +36,8 @@ from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol import get_protocol_util
 
 CUSTOM_DATA_FILE = "CustomData"
+CLOUD_INIT_PATTERN = b".*/bin/cloud-init.*"
+CLOUD_INIT_REGEX = re.compile(CLOUD_INIT_PATTERN)
 
 
 class ProvisionHandler(object):
@@ -57,6 +59,9 @@ class ProvisionHandler(object):
         else:
             logger.info("Running default provisioning handler")
             try:
+                if not self.validate_cloud_init(is_expected=False):
+                    raise ProvisionError("cloud-init appears to be running, "
+                                         "this is not expected, cannot continue")
                 logger.info("Copying ovf-env.xml")
                 ovf_env = self.protocol_util.copy_ovf_env()
                 self.protocol_util.get_protocol_by_file()
@@ -77,14 +82,20 @@ class ProvisionHandler(object):
         logger.info("Provisioning complete")
 
     @staticmethod
-    def validate_cloud_init():
+    def validate_cloud_init(is_expected=True):
         pids = [pid for pid in os.listdir('/proc') if pid.isdigit()]
+        is_running = False
         for pid in pids:
             try:
                 pname = open(os.path.join('/proc', pid, 'cmdline'), 'rb').read()
-                logger.verbose("[PID {0}] {1}".format(pid, pname))
+                if CLOUD_INIT_REGEX.match(pname):
+                    is_running = True
+                    logger.verbose("cloud-init is running "
+                                   "[PID {0}, {1}]".format(pid, pname))
+                    break
             except IOError:
                 continue
+        return is_running == is_expected
 
     def reg_ssh_host_key(self):
         keypair_type = conf.get_ssh_host_keypair_type()

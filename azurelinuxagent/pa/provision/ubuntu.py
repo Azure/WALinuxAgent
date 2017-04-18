@@ -74,9 +74,6 @@ class UbuntuProvisionHandler(ProvisionHandler):
         """
         ovf_file_path = os.path.join(conf.get_lib_dir(), OVF_FILE_NAME)
         for retry in range(0, max_retry):
-            # debugging
-            self.validate_cloud_init()
-
             if os.path.isfile(ovf_file_path):
                 try:
                     OvfEnv(fileutil.read_file(ovf_file_path))
@@ -93,6 +90,8 @@ class UbuntuProvisionHandler(ProvisionHandler):
                         "sleeping {2}s]".format(ovf_file_path,
                                                 max_retry - retry,
                                                 sleep_time))
+                    if not self.validate_cloud_init():
+                        logger.warn("cloud-init does not appear to be running")
                     time.sleep(sleep_time)
         raise ProvisionError("Giving up, ovf-env.xml was not copied to {0} "
                              "after {1}s".format(ovf_file_path,
@@ -119,6 +118,8 @@ class UbuntuProvisionHandler(ProvisionHandler):
                             "sleeping {2}s]".format(path,
                                                     max_retry - retry,
                                                     sleep_time))
+                if not self.validate_cloud_init():
+                    logger.warn("cloud-init does not appear to be running")
                 time.sleep(sleep_time)
         raise ProvisionError("Giving up, ssh host key was not found at {0} "
                              "after {1}s".format(path,
