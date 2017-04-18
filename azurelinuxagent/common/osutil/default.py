@@ -309,18 +309,15 @@ class DefaultOSUtil(object):
                                       chk_err=chk_err)
             if retcode == 0:
                 logger.info("Successfully mounted dvd")
+                return
             else:
                 logger.warn(
-                    "Mounting dvd failed [{0}, {1}]: retry {2}/{3}, sleep {4} "
-                    "sec",
-                    retcode,
-                    err,
+                    "Mounting dvd failed [retry {0}/{1}, sleeping {2} sec]",
                     retry,
-                    max_retry,
+                    max_retry - 1,
                     sleep_time)
                 if retry < max_retry:
                     time.sleep(sleep_time)
-
         if chk_err:
             raise OSUtilError("Failed to mount dvd device", inner=err)
 

@@ -76,18 +76,23 @@ def run_get_output(cmd, chk_err=True, log_cmd=True):
     Reports exceptions to Error if chk_err parameter is True
     """
     if log_cmd:
-        logger.verbose(u"run cmd '{0}'", cmd)
+        logger.verbose(u"Run '{0}'", cmd)
     try:
-        output = subprocess.check_output(cmd, stderr=subprocess.STDOUT,
+        output = subprocess.check_output(cmd,
+                                         stderr=subprocess.STDOUT,
                                          shell=True)
-        output = ustr(output, encoding='utf-8', errors="backslashreplace")
+        output = ustr(output,
+                      encoding='utf-8',
+                      errors="backslashreplace")
     except subprocess.CalledProcessError as e:
-        output = ustr(e.output, encoding='utf-8', errors="backslashreplace")
+        output = ustr(e.output,
+                      encoding='utf-8',
+                      errors="backslashreplace")
         if chk_err:
             if log_cmd:
-                logger.error(u"run cmd '{0}' failed", e.cmd)
-            logger.error(u"Error Code:{0}", e.returncode)
-            logger.error(u"Result:{0}", output)
+                logger.error(u"Command: '{0}'", e.cmd)
+            logger.error(u"Return code: {0}", e.returncode)
+            logger.error(u"Result: {0}", output)
         return e.returncode, output
     return 0, output
 
