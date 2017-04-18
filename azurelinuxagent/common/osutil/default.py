@@ -284,13 +284,18 @@ class DefaultOSUtil(object):
         raise OSUtilError(msg="Failed to get dvd device from {0}".format(dev_dir),
                           inner=inner_detail)
 
-    def mount_dvd(self, max_retry=6, chk_err=True, dvd_device=None, mount_point=None):
+    def mount_dvd(self,
+                  max_retry=6,
+                  chk_err=True,
+                  dvd_device=None,
+                  mount_point=None,
+                  sleep_time=5):
         if dvd_device is None:
             dvd_device = self.get_dvd_device()
         if mount_point is None:
             mount_point = conf.get_dvd_mount_point()
-        mountlist = shellutil.run_get_output("mount")[1]
-        existing = self.get_mount_point(mountlist, dvd_device)
+        mount_list = shellutil.run_get_output("mount")[1]
+        existing = self.get_mount_point(mount_list, dvd_device)
 
         if existing is not None:
             # already mounted
@@ -300,14 +305,13 @@ class DefaultOSUtil(object):
         if not os.path.isdir(mount_point):
             os.makedirs(mount_point)
 
-        sleep_time = 5
         err = ''
         for retry in range(1, max_retry):
-            retcode, err = self.mount(dvd_device,
-                                      mount_point,
-                                      option="-o ro -t udf,iso9660",
-                                      chk_err=chk_err)
-            if retcode == 0:
+            return_code, err = self.mount(dvd_device,
+                                          mount_point,
+                                          option="-o ro -t udf,iso9660",
+                                          chk_err=chk_err)
+            if return_code == 0:
                 logger.info("Successfully mounted dvd")
                 return
             else:
@@ -324,9 +328,10 @@ class DefaultOSUtil(object):
     def umount_dvd(self, chk_err=True, mount_point=None):
         if mount_point is None:
             mount_point = conf.get_dvd_mount_point()
-        retcode = self.umount(mount_point, chk_err=chk_err)
-        if chk_err and retcode != 0:
-            raise OSUtilError("Failed to umount dvd.")
+        return_code = self.umount(mount_point, chk_err=chk_err)
+        if chk_err and return_code != 0:
+            raise OSUtilError("Failed to unmount dvd device at {0}",
+                              mount_point)
 
     def eject_dvd(self, chk_err=True):
         dvd = self.get_dvd_device()
