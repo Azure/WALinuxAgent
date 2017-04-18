@@ -479,6 +479,13 @@ class ExtHandlerInstance(object):
             separator = path.rfind('-')
             version = FlexibleVersion(path[separator+1:])
 
+            if not os.path.exists(os.path.join(path, 'config', 'HandlerState')):
+                logger.warn("Extension directory does not contain a valid "
+                            "status, removing [{0}]".format(path))
+            else:
+                logger.info("Extension directory contains valid status "
+                            "[{0}]".format(path))
+
             if lastest_version is None or lastest_version < version:
                 lastest_version = version
 
