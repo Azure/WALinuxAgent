@@ -44,6 +44,21 @@ class ConfigurationProvider(object):
                     self.values[parts[0]] = value
                 else:
                     self.values[parts[0]] = None
+            elif line.startswith("include "):
+                path = line[8:]
+                if not os.path.exists(path):
+                    raise AgentConfigError(
+                        "Included configuration path does "
+                        "not exist: {0}".format(path))
+                elif os.path.isdir(path):
+                    for file in os.listdir(path):
+                        conf_path = os.path.join(path, file)
+                        if os.path.isfile(conf_path):
+                            include_content = fileutil.read_file(conf_path)
+                            self.load(include_content)
+                else:
+                    include_content = fileutil.read_file(path)
+                    self.load(include_content)
 
     def get(self, key, default_val):
         val = self.values.get(key)
