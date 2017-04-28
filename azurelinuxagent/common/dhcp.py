@@ -130,7 +130,7 @@ class DhcpHandler(object):
         logger.info("Gateway:{0}", self.gateway)
         logger.info("Routes:{0}", self.routes)
         # Add default gateway
-        if self.gateway is not None:
+        if self.gateway is not None and self.osutil.is_missing_default_route():
             self.osutil.route_add(0, 0, self.gateway)
         if self.routes is not None:
             for route in self.routes:
