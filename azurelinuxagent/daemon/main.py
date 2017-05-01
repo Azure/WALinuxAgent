@@ -39,6 +39,8 @@ from azurelinuxagent.ga.update import get_update_handler
 from azurelinuxagent.pa.provision import get_provision_handler
 from azurelinuxagent.pa.rdma import get_rdma_handler
 
+OPENSSL_FIPS_ENVIRONMENT = "OPENSSL_FIPS"
+
 
 def get_daemon_handler():
     return DaemonHandler()
@@ -60,6 +62,12 @@ class DaemonHandler(object):
                     PY_VERSION_MICRO)
 
         self.check_pid()
+
+        # If FIPS is enabled, set the OpenSSL environment variable
+        # Note:
+        # -- Subprocesses inherit the current environment
+        if conf.get_fips_enabled():
+            os.environ[OPENSSL_FIPS_ENVIRONMENT] = '1'
 
         while self.running:
             try:

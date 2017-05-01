@@ -103,7 +103,7 @@ class RedhatOSUtil(Redhat6xOSUtil):
         Due to a bug in systemd in Centos-7.0, if this call fails, fallback
         to hostname.
         """
-        hostnamectl_cmd = "hostnamectl set-hostname {0}".format(hostname)
+        hostnamectl_cmd = "hostnamectl set-hostname {0} --static".format(hostname)
         if shellutil.run(hostnamectl_cmd, chk_err=False) != 0:
             logger.warn("[{0}] failed, attempting fallback".format(hostnamectl_cmd))
             DefaultOSUtil.set_hostname(self, hostname)

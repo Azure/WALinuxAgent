@@ -14,7 +14,9 @@
 #
 # Requires Python 2.4+ and Openssl 1.0+
 #
-from azurelinuxagent.daemon import get_daemon_handler
+
+from azurelinuxagent.daemon import *
+from azurelinuxagent.daemon.main import OPENSSL_FIPS_ENVIRONMENT
 from tests.tools import *
 
 
@@ -30,8 +32,9 @@ class MockDaemonCall(object):
             self.daemon_handler.running = False
         raise Exception("Mock unhandled exception")
 
-@patch("time.sleep")
 class TestDaemon(AgentTestCase):
+    
+    @patch("time.sleep")
     def test_daemon_restart(self, mock_sleep):
         #Mock daemon function
         daemon_handler = get_daemon_handler()
@@ -45,6 +48,7 @@ class TestDaemon(AgentTestCase):
         mock_sleep.assert_any_call(15)
         self.assertEquals(2, daemon_handler.daemon.call_count)
 
+    @patch("time.sleep")
     @patch("azurelinuxagent.daemon.main.conf")
     @patch("azurelinuxagent.daemon.main.sys.exit")
     def test_check_pid(self, mock_exit, mock_conf, mock_sleep):
@@ -58,6 +62,25 @@ class TestDaemon(AgentTestCase):
 
         daemon_handler.check_pid()
         mock_exit.assert_any_call(0)
+
+    @patch("azurelinuxagent.daemon.main.DaemonHandler.check_pid")
+    @patch("azurelinuxagent.common.conf.get_fips_enabled", return_value=True)
+    def test_set_openssl_fips(self, mock_conf, mock_daemon):
+        daemon_handler = get_daemon_handler()
+        daemon_handler.running = False
+        with patch.dict("os.environ"):
+            daemon_handler.run()
+            self.assertTrue(OPENSSL_FIPS_ENVIRONMENT in os.environ)
+            self.assertEqual('1', os.environ[OPENSSL_FIPS_ENVIRONMENT])
+
+    @patch("azurelinuxagent.daemon.main.DaemonHandler.check_pid")
+    @patch("azurelinuxagent.common.conf.get_fips_enabled", return_value=False)
+    def test_does_not_set_openssl_fips(self, mock_conf, mock_daemon):
+        daemon_handler = get_daemon_handler()
+        daemon_handler.running = False
+        with patch.dict("os.environ"):
+            daemon_handler.run()
+            self.assertFalse(OPENSSL_FIPS_ENVIRONMENT in os.environ)
    
 if __name__ == '__main__':
     unittest.main()
