@@ -31,7 +31,7 @@ class CryptUtil(object):
         """
         Create ssl certificate for https communication with endpoint server.
         """
-        cmd = ("{0} req -x509 -nodes -subj /CN=LinuxTransport -days 32768 "
+        cmd = ("{0} req -x509 -nodes -subj /CN=LinuxTransport -days 730 "
                "-newkey rsa:2048 -keyout {1} "
                "-out {2}").format(self.openssl_cmd, prv_file, crt_file)
         shellutil.run(cmd)
