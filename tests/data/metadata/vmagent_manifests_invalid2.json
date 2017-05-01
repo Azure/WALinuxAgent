@@ -1,0 +1,10 @@
+{
+    "notTheRightKey": [
+        {
+            "foo": "https://notused.com/vmagent_manifest1.json"
+        },
+        {
+            "bar": "https://notused.com/vmagent_manifest2.json"
+        }
+    ]
+}

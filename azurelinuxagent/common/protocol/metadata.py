@@ -21,23 +21,28 @@ import json
 import os
 import shutil
 import re
+
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.shellutil as shellutil
 import azurelinuxagent.common.utils.textutil as textutil
+
 from azurelinuxagent.common.future import httpclient
 from azurelinuxagent.common.protocol.restapi import *
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 
 METADATA_ENDPOINT = '169.254.169.254'
 APIVERSION = '2015-05-01-preview'
-BASE_URI = "http://{0}/Microsoft.Compute/{1}?api-version={2}{3}"
+BASE_URI = "http://{0}/Microsoft.Compute/{1}?api-version={2}"
 
 TRANSPORT_PRV_FILE_NAME = "V2TransportPrivate.pem"
 TRANSPORT_CERT_FILE_NAME = "V2TransportCert.pem"
 P7M_FILE_NAME = "Certificates.p7m"
 P7B_FILE_NAME = "Certificates.p7b"
 PEM_FILE_NAME = "Certificates.pem"
+
+KEY_AGENT_VERSION_URIS = "versionsManifestUris"
+KEY_URI = "uri"
 
 # TODO remote workaround for azure stack
 MAX_PING = 30
@@ -56,13 +61,13 @@ class MetadataProtocol(Protocol):
         self.apiversion = apiversion
         self.endpoint = endpoint
         self.identity_uri = BASE_URI.format(self.endpoint, "identity",
-                                            self.apiversion, "&$expand=*")
+                                            self.apiversion)
         self.cert_uri = BASE_URI.format(self.endpoint, "certificates",
-                                        self.apiversion, "&$expand=*")
+                                        self.apiversion)
         self.ext_uri = BASE_URI.format(self.endpoint, "extensionHandlers",
-                                       self.apiversion, "&$expand=*")
+                                       self.apiversion)
         self.vmagent_uri = BASE_URI.format(self.endpoint, "vmAgentVersions",
-                                           self.apiversion, "&$expand=*")
+                                           self.apiversion)
         self.provision_status_uri = BASE_URI.format(self.endpoint,
                                                     "provisioningStatus",
                                                     self.apiversion, "")
@@ -74,6 +79,8 @@ class MetadataProtocol(Protocol):
         self.event_uri = BASE_URI.format(self.endpoint, "status/telemetry",
                                          self.apiversion, "")
         self.certs = None
+        self.agent_manifests = None
+        self.agent_etag = None
 
     def _get_data(self, url, headers=None):
         try:
@@ -166,32 +173,55 @@ class MetadataProtocol(Protocol):
             return None
         return self.certs
 
-    def get_vmagent_manifests(self, last_etag=None):
-        manifests = VMAgentManifestList()
+    def get_vmagent_manifests(self):
         self.update_goal_state()
+
         data, etag = self._get_data(self.vmagent_uri)
-        if last_etag is None or last_etag < etag:
-            set_properties("vmAgentManifests",
-                           manifests.vmAgentManifests,
-                           data)
-        return manifests, etag
+        if self.agent_etag is None or self.agent_etag < etag:
+            self.agent_etag = etag
+
+            # Create a list with a single manifest
+            # -- The protocol lacks "family," use the configured family
+            self.agent_manifests = VMAgentManifestList()
+
+            manifest = VMAgentManifest()
+            manifest.family = family=conf.get_autoupdate_gafamily()
+            
+            if not KEY_AGENT_VERSION_URIS in data:
+                raise ProtocolError(
+                    "Agent versions missing '{0}': {1}".format(
+                        KEY_AGENT_VERSION_URIS, data))
+
+            for version in data[KEY_AGENT_VERSION_URIS]:
+                if not KEY_URI in version:
+                    raise ProtocolError(
+                        "Agent versions missing '{0': {1}".format(
+                            KEY_URI, data))
+                manifest_uri = VMAgentManifestUri(uri=version[KEY_URI])
+                manifest.versionsManifestUris.append(manifest_uri)
+        
+            self.agent_manifests.vmAgentManifests.append(manifest)
+        
+        return self.agent_manifests, self.agent_etag
 
     def get_vmagent_pkgs(self, vmagent_manifest):
-        # Agent package is the same with extension handler
-        vmagent_pkgs = ExtHandlerPackageList()
         data = None
+        etag = None
         for manifest_uri in vmagent_manifest.versionsManifestUris:
             try:
-                data = self._get_data(manifest_uri.uri)
+                data, etag = self._get_data(manifest_uri.uri)
                 break
             except ProtocolError as e:
-                logger.warn("Failed to get vmagent versions: {0}", e)
-                logger.info("Retry getting vmagent versions")
+                logger.verbose(
+                    "Error retrieving agent package from {0}: {1}".format(
+                        manifest_uri, e))
+
         if data is None:
-            raise ProtocolError(("Failed to get versions for vm agent: {0}"
-                                 "").format(vmagent_manifest.family))
+            raise ProtocolError(
+                "Failed retrieving agent package from all URIs")
+
+        vmagent_pkgs = ExtHandlerPackageList()
         set_properties("vmAgentVersions", vmagent_pkgs, data)
-        # TODO: What etag should this return?
         return vmagent_pkgs
 
     def get_ext_handlers(self, last_etag=None):
@@ -251,11 +281,9 @@ class MetadataProtocol(Protocol):
         self._put_data(uri, data)
 
     def report_event(self, events):
-        # TODO disable telemetry for azure stack test
-        # validate_param('events', events, TelemetryEventList)
-        # data = get_properties(events)
-        # self._post_data(self.event_uri, data)
-        pass
+        validate_param('events', events, TelemetryEventList)
+        data = get_properties(events)
+        self._post_data(self.event_uri, data)
 
     def update_certs(self):
         certificates = self.get_certs()

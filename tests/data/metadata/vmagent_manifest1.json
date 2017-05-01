@@ -1,0 +1,20 @@
+{
+    "versions": [
+        {
+            "version": "2.2.8",
+            "uris": [
+                {
+                    "uri": "https: //notused.com/ga/WALinuxAgent-2.2.8.zip"
+                }
+            ]
+        },
+        {
+            "version": "2.2.9",
+            "uris": [
+                {
+                    "uri": "https: //notused.com/ga/WALinuxAgent-2.2.9.zip"
+                }
+            ]
+        }
+    ]
+}

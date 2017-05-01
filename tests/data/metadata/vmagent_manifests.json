@@ -1,0 +1,7 @@
+{
+    "versionsManifestUris" :
+    [
+        { "uri" : "https://notused.com/vmagent_manifest1.json" },
+        { "uri" : "https://notused.com/vmagent_manifest2.json" }
+    ]
+}
