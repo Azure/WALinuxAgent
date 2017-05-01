@@ -123,7 +123,7 @@ class ResourceDiskHandler(object):
         force_option = 'F'
         if self.fs == 'xfs':
             force_option = 'f'
-        mkfs_string = "mkfs.{0} {1} -{2}".format(self.fs, partition, force_option)
+        mkfs_string = "mkfs.{0} -{2} {1}".format(self.fs, partition, force_option)
 
         if "gpt" in ret[1]:
             logger.info("GPT detected, finding partitions")
