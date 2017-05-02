@@ -15,18 +15,22 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
+import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
+
 from azurelinuxagent.common.utils.textutil import Version
 from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_VERSION, \
                                      DISTRO_FULL_NAME
+
 from .default import ProvisionHandler
-from .ubuntu import UbuntuProvisionHandler
+from .cloudinit import CloudInitProvisionHandler
 
 def get_provision_handler(distro_name=DISTRO_NAME, 
                             distro_version=DISTRO_VERSION,
                             distro_full_name=DISTRO_FULL_NAME):
-    if distro_name == "ubuntu":
-        return UbuntuProvisionHandler()
+
+    if conf.get_provision_cloudinit():
+        return CloudInitProvisionHandler()
 
     return ProvisionHandler()
 

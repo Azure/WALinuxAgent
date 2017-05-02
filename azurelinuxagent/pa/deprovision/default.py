@@ -17,13 +17,16 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
+import os.path
 import signal
 import sys
+
 import azurelinuxagent.common.conf as conf
-from azurelinuxagent.common.exception import ProtocolError
-from azurelinuxagent.common.future import read_input
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.shellutil as shellutil
+
+from azurelinuxagent.common.exception import ProtocolError
+from azurelinuxagent.common.future import read_input
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol import get_protocol_util
 
@@ -68,7 +71,7 @@ class DeprovisionHandler(object):
     def regen_ssh_host_key(self, warnings, actions):
         warnings.append("WARNING! All SSH host key pairs will be deleted.")
         actions.append(DeprovisionAction(fileutil.rm_files,
-                                         ['/etc/ssh/ssh_host_*key*']))
+                        [conf.get_ssh_key_glob()]))
 
     def stop_agent_service(self, warnings, actions):
         warnings.append("WARNING! The waagent service will be stopped.")

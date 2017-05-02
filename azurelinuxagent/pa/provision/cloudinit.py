@@ -23,27 +23,24 @@ import time
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
+
 from azurelinuxagent.common.exception import ProvisionError, ProtocolError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol import OVF_FILE_NAME
 from azurelinuxagent.common.protocol.ovfenv import OvfEnv
 from azurelinuxagent.pa.provision.default import ProvisionHandler
 
-"""
-On ubuntu image, provision could be disabled.
-"""
 
-
-class UbuntuProvisionHandler(ProvisionHandler):
+class CloudInitProvisionHandler(ProvisionHandler):
     def __init__(self):
-        super(UbuntuProvisionHandler, self).__init__()
+        super(CloudInitProvisionHandler, self).__init__()
 
     def run(self):
         # If provision is enabled, run default provision handler
         if conf.get_provision_enabled():
-            logger.warn("Provisioning flag is enabled, this is not typical"
-                        "in Ubuntu, please ensure your config is correct.")
-            super(UbuntuProvisionHandler, self).run()
+            logger.warn("Provisioning flag is enabled, which overrides using "
+                        "cloud-init; running the default provisioning code")
+            super(CloudInitProvisionHandler, self).run()
             return
 
         provisioned = os.path.join(conf.get_lib_dir(), "provisioned")
@@ -51,7 +48,7 @@ class UbuntuProvisionHandler(ProvisionHandler):
             logger.info("Provisioning already completed, skipping.")
             return
 
-        logger.info("Running Ubuntu provisioning handler")
+        logger.info("Running CloudInit provisioning handler")
         self.wait_for_ovfenv()
         self.protocol_util.get_protocol()
         self.report_not_ready("Provisioning", "Starting")
@@ -102,12 +99,12 @@ class UbuntuProvisionHandler(ProvisionHandler):
         Wait for cloud-init to generate ssh host key
         """
         keypair_type = conf.get_ssh_host_keypair_type()
-        path = '/etc/ssh/ssh_host_{0}_key.pub'.format(keypair_type)
+        path = conf.get_ssh_key_public_path()
         for retry in range(0, max_retry):
             if os.path.isfile(path):
                 logger.info("ssh host key found at: {0}".format(path))
                 try:
-                    thumbprint = self.get_ssh_host_key_thumbprint(keypair_type, chk_err=False)
+                    thumbprint = self.get_ssh_host_key_thumbprint(chk_err=False)
                     logger.info("Thumbprint obtained from : {0}".format(path))
                     return thumbprint
                 except ProvisionError:

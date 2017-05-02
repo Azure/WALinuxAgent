@@ -170,6 +170,7 @@ waagent. A sample configuration file is shown below:
 
 ```
 Provisioning.Enabled=y
+Provisioning.UseCloudInit=n
 Provisioning.DeleteRootPassword=n
 Provisioning.RegenerateSshHostKeyPair=y
 Provisioning.SshHostKeyPairType=rsa
@@ -187,7 +188,9 @@ ResourceDisk.SwapSizeMB=0
 LBProbeResponder=y
 Logs.Verbose=n
 OS.RootDeviceScsiTimeout=300
+OS.FIPSEnabled=n
 OS.OpensslPath=None
+OS.SshDir=/etc/ssh
 HttpProxy.Host=None
 HttpProxy.Port=None
 ```
@@ -207,6 +210,16 @@ This allows the user to enable or disable the provisioning functionality in the
 agent. Valid values are "y" or "n". If provisioning is disabled, SSH host and
 user keys in the image are preserved and any configuration specified in the
 Azure provisioning API is ignored.
+
+# __Provisioning.UseCloudInit__
+_Type: Boolean_
+_Default: n_
+
+This options enables / disables support for provisioning by means of cloud-init.
+When true ("y"), the agent will wait for cloud-init to complete before installing
+extensions and processing the latest goal state. _Provisioning.Enabled_ must be
+disabled ("n") for this option to have an effect. Setting _Provisioning.Enabled_ to
+true ("y") overrides this option and runs the built-in agent provisioning code.
 
 * __Provisioning.DeleteRootPassword__  
 _Type: Boolean_   
@@ -340,6 +353,15 @@ _Default: n_
 If set, the agent will attempt to install and then load an RDMA kernel driver
 that matches the version of the firmware on the underlying hardware.
 
+* __OS.FIPSEnabled__
+_Type: Boolean_
+_Default: n_
+
+If set, the agent will emit into the environment "OPENSSL_FIPS=1" when executing
+OpenSSL commands. This signals OpenSSL to use any installed FIPS-compliant libraries.
+Note that the agent itself has no FIPS-specific code. _If no FIPS-compliant are
+installed, then enabling this option will cause all OpenSSL commands to fail._
+
 * __OS.RootDeviceScsiTimeout__   
 _Type: Integer_    
 _Default: 300_   
@@ -353,6 +375,13 @@ _Default: None_
 
 This can be used to specify an alternate path for the openssl binary to use for
 cryptographic operations.
+
+* __OS.SshDir__
+_Type: String_
+_Default: "/etc/ssh"_
+
+This option can be used to override the normal location of the SSH configuration
+directory.
 
 * __HttpProxy.Host, HttpProxy.Port__   
 _Type: String_   
