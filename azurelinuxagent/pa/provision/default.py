@@ -20,19 +20,20 @@ Provision handler
 """
 
 import os
-
+import os.path
 import re
 
-import azurelinuxagent.common.logger as logger
-from azurelinuxagent.common.future import ustr
 import azurelinuxagent.common.conf as conf
+import azurelinuxagent.common.logger as logger
+import azurelinuxagent.common.utils.shellutil as shellutil
+import azurelinuxagent.common.utils.fileutil as fileutil
+
+from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.event import add_event, WALAEventOperation
 from azurelinuxagent.common.exception import ProvisionError, ProtocolError, \
     OSUtilError
-from azurelinuxagent.common.protocol.restapi import ProvisionStatus
-import azurelinuxagent.common.utils.shellutil as shellutil
-import azurelinuxagent.common.utils.fileutil as fileutil
 from azurelinuxagent.common.osutil import get_osutil
+from azurelinuxagent.common.protocol.restapi import ProvisionStatus
 from azurelinuxagent.common.protocol import get_protocol_util
 
 CUSTOM_DATA_FILE = "CustomData"
@@ -104,14 +105,14 @@ class ProvisionHandler(object):
     def reg_ssh_host_key(self):
         keypair_type = conf.get_ssh_host_keypair_type()
         if conf.get_regenerate_ssh_host_key():
-            fileutil.rm_files("/etc/ssh/ssh_host_*key*")
-            keygen_cmd = "ssh-keygen -N '' -t {0} -f /etc/ssh/ssh_host_{1}_key"
-            shellutil.run(keygen_cmd.format(keypair_type, keypair_type))
-        thumbprint = self.get_ssh_host_key_thumbprint(keypair_type)
-        return thumbprint
+            fileutil.rm_files(conf.get_ssh_key_glob())
+            keygen_cmd = "ssh-keygen -N '' -t {0} -f {1}"
+            shellutil.run(keygen_cmd.format(keypair_type,
+                        conf.get_ssh_key_private_path()))
+        return self.get_ssh_host_key_thumbprint()
 
-    def get_ssh_host_key_thumbprint(self, keypair_type, chk_err=True):
-        cmd = "ssh-keygen -lf /etc/ssh/ssh_host_{0}_key.pub".format(keypair_type)
+    def get_ssh_host_key_thumbprint(self, chk_err=True):
+        cmd = "ssh-keygen -lf {0}".format(conf.get_ssh_key_public_path())
         ret = shellutil.run_get_output(cmd, chk_err=chk_err)
         if ret[0] == 0:
             return ret[1].rstrip().split()[1].replace(':', '')

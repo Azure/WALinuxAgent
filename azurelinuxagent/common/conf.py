@@ -21,13 +21,15 @@
 Module conf loads and parses configuration file
 """
 import os
+import os.path
+
 import azurelinuxagent.common.utils.fileutil as fileutil
 from azurelinuxagent.common.exception import AgentConfigError
 
 
 class ConfigurationProvider(object):
     """
-    Parse amd store key:values in /etc/waagent.conf.
+    Parse and store key:values in /etc/waagent.conf.
     """
 
     def __init__(self):
@@ -119,34 +121,43 @@ def get_fips_enabled(conf=__conf__):
 def get_openssl_cmd(conf=__conf__):
     return conf.get("OS.OpensslPath", "/usr/bin/openssl")
 
+def get_ssh_dir(conf=__conf__):
+    return conf.get("OS.SshDir", "/etc/ssh")
 
 def get_home_dir(conf=__conf__):
     return conf.get("OS.HomeDir", "/home")
 
-
 def get_passwd_file_path(conf=__conf__):
     return conf.get("OS.PasswordPath", "/etc/shadow")
-
 
 def get_sudoers_dir(conf=__conf__):
     return conf.get("OS.SudoersDir", "/etc/sudoers.d")
 
-
 def get_sshd_conf_file_path(conf=__conf__):
-    return conf.get("OS.SshdConfigPath", "/etc/ssh/sshd_config")
+    return os.path.join(get_ssh_dir(conf), "sshd_config")
 
+def get_ssh_key_glob(conf=__conf__):
+    return os.path.join(get_ssh_dir(conf), 'ssh_host_*key*')
+
+def get_ssh_key_private_path(conf=__conf__):
+    return os.path.join(get_ssh_dir(conf),
+        'ssh_host_{0}_key'.format(get_ssh_host_keypair_type(conf)))
+
+def get_ssh_key_public_path(conf=__conf__):
+    return os.path.join(get_ssh_dir(conf),
+        'ssh_host_{0}_key.pub'.format(get_ssh_host_keypair_type(conf)))
 
 def get_root_device_scsi_timeout(conf=__conf__):
     return conf.get("OS.RootDeviceScsiTimeout", None)
 
-
 def get_ssh_host_keypair_type(conf=__conf__):
     return conf.get("Provisioning.SshHostKeyPairType", "rsa")
-
 
 def get_provision_enabled(conf=__conf__):
     return conf.get_switch("Provisioning.Enabled", True)
 
+def get_provision_cloudinit(conf=__conf__):
+    return conf.get_switch("Provisioning.UseCloudInit", False)
 
 def get_allow_reset_sys_user(conf=__conf__):
     return conf.get_switch("Provisioning.AllowResetSysUser", False)
