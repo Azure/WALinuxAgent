@@ -15,11 +15,57 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
-from tests.tools import *
+import tempfile
+
+import azurelinuxagent.common.utils.fileutil as fileutil
+
 from azurelinuxagent.pa.deprovision import get_deprovision_handler
+from azurelinuxagent.pa.deprovision.default import DeprovisionHandler
+from tests.tools import *
 
 
 class TestDeprovision(AgentTestCase):
+    @patch("signal.signal")
+    @patch("azurelinuxagent.common.protocol.get_protocol_util")
+    @patch("azurelinuxagent.common.osutil.get_osutil")
+    @patch("azurelinuxagent.pa.deprovision.default.DeprovisionHandler.cloud_init_directories")
+    @patch("azurelinuxagent.pa.deprovision.default.DeprovisionHandler.cloud_init_files")
+    def test_del_cloud_init(self, mock_files, mock_dirs, mock_osutil, mock_util, mock_signal):
+        try:
+            with tempfile.NamedTemporaryFile() as f:
+                warnings = []
+                actions = []
+
+                dirs = [tempfile.mkdtemp()]
+                mock_dirs.return_value = dirs
+
+                files = [f.name]
+                mock_files.return_value = files
+
+                deprovision_handler = get_deprovision_handler("","","")
+                deprovision_handler.del_cloud_init(warnings, actions)
+
+                self.assertEqual(len(warnings), 0)
+                self.assertEqual(len(actions), 2)
+                for da in actions:
+                    if da.func == fileutil.rm_dirs:
+                        self.assertEqual(da.args, dirs)
+                    elif da.func == fileutil.rm_files:
+                        self.assertEqual(da.args, files)
+                    else:
+                        self.assertTrue(False)
+
+                try:
+                    for da in actions:
+                        da.invoke()
+                    self.assertEqual(len([d for d in dirs if os.path.isdir(d)]), 0)
+                    self.assertEqual(len([f for f in files if os.path.isfile(f)]), 0)
+                except Exception as e:
+                    self.assertTrue(False, "Exception {0}".format(e))
+        except OSError:
+            # Ignore the error caused by removing the file within the "with"
+            pass
+
     @distros("redhat")
     def test_deprovision(self,
                          distro_name,
