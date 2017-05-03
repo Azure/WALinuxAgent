@@ -15,6 +15,14 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
+import glob
+import os
+import os.path
+import shutil
+import tempfile
+import zipfile
+
+import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.utils.fileutil as fileutil
 
 from tests.protocol.mockwiredata import *
@@ -29,6 +37,103 @@ from azurelinuxagent.common.protocol.restapi import ExtHandlerStatus, \
                                                     get_properties
 from azurelinuxagent.ga.exthandlers import *
 from azurelinuxagent.common.protocol.wire import WireProtocol
+
+class TestExtensionCleanup(AgentTestCase):
+    def setUp(self):
+        AgentTestCase.setUp(self)
+        self.ext_handlers = ExtHandlersHandler()
+        self.lib_dir = tempfile.mkdtemp()
+
+    def _install_handlers(self, start=0, count=1,
+                        handler_state=ExtHandlerState.Installed):
+        src = os.path.join(data_dir, "ext", "sample_ext-1.2.0.zip")
+        version = FlexibleVersion("1.2.0")
+        version += start - version.patch
+
+        for i in range(start, start+count):
+            eh = ExtHandler()
+            eh.name = "sample_ext"
+            eh.properties.version = str(version)
+            handler = ExtHandlerInstance(eh, "unused")
+
+            dst = os.path.join(self.lib_dir,
+                    handler.get_full_name()+HANDLER_PKG_EXT)
+            shutil.copy(src, dst)
+
+            if not handler_state is None:
+                zipfile.ZipFile(dst).extractall(handler.get_base_dir())
+                handler.set_handler_state(handler_state)
+
+            version += 1
+    
+    def _count_packages(self):
+        return len(glob.glob(os.path.join(self.lib_dir, "*.zip")))
+
+    def _count_installed(self):
+        paths = os.listdir(self.lib_dir)
+        paths = [os.path.join(self.lib_dir, p) for p in paths]
+        return len([p for p in paths
+                        if os.path.isdir(p) and self._is_installed(p)])
+
+    def _count_uninstalled(self):
+        paths = os.listdir(self.lib_dir)
+        paths = [os.path.join(self.lib_dir, p) for p in paths]
+        return len([p for p in paths
+                        if os.path.isdir(p) and not self._is_installed(p)])
+
+    def _is_installed(self, path):
+        path = os.path.join(path, 'config', 'HandlerState')
+        return fileutil.read_file(path) != "NotInstalled"
+
+    @patch("azurelinuxagent.common.conf.get_lib_dir")
+    def test_cleanup_leaves_installed_extensions(self, mock_conf):
+        mock_conf.return_value = self.lib_dir
+
+        self._install_handlers(start=0, count=5, handler_state=ExtHandlerState.Installed)
+        self._install_handlers(start=5, count=5, handler_state=ExtHandlerState.Enabled)
+
+        self.assertEqual(self._count_packages(), 10)
+        self.assertEqual(self._count_installed(), 10)
+
+        self.ext_handlers.cleanup_outdated_handlers()
+
+        self.assertEqual(self._count_packages(), 10)
+        self.assertEqual(self._count_installed(), 10)
+        self.assertEqual(self._count_uninstalled(), 0)
+
+    @patch("azurelinuxagent.common.conf.get_lib_dir")
+    def test_cleanup_removes_uninstalled_extensions(self, mock_conf):
+        mock_conf.return_value = self.lib_dir
+
+        self._install_handlers(start=0, count=5, handler_state=ExtHandlerState.Installed)
+        self._install_handlers(start=5, count=5, handler_state=ExtHandlerState.NotInstalled)
+
+        self.assertEqual(self._count_packages(), 10)
+        self.assertEqual(self._count_installed(), 5)
+        self.assertEqual(self._count_uninstalled(), 5)
+
+        self.ext_handlers.cleanup_outdated_handlers()
+
+        self.assertEqual(self._count_packages(), 5)
+        self.assertEqual(self._count_installed(), 5)
+        self.assertEqual(self._count_uninstalled(), 0)
+
+    @patch("azurelinuxagent.common.conf.get_lib_dir")
+    def test_cleanup_removes_orphaned_packages(self, mock_conf):
+        mock_conf.return_value = self.lib_dir
+
+        self._install_handlers(start=0, count=5, handler_state=ExtHandlerState.Installed)
+        self._install_handlers(start=5, count=5, handler_state=None)
+
+        self.assertEqual(self._count_packages(), 10)
+        self.assertEqual(self._count_installed(), 5)
+        self.assertEqual(self._count_uninstalled(), 0)
+
+        self.ext_handlers.cleanup_outdated_handlers()
+
+        self.assertEqual(self._count_packages(), 5)
+        self.assertEqual(self._count_installed(), 5)
+        self.assertEqual(self._count_uninstalled(), 0)
 
 class TestHandlerStateMigration(AgentTestCase):
     def setUp(self):
