@@ -20,6 +20,8 @@
 import glob
 import json
 import os
+import os.path
+import re
 import shutil
 import stat
 import subprocess
@@ -31,6 +33,7 @@ import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.restutil as restutil
 import azurelinuxagent.common.utils.shellutil as shellutil
+import azurelinuxagent.common.version as version
 
 from azurelinuxagent.common.event import add_event, WALAEventOperation
 from azurelinuxagent.common.exception import ExtensionError, ProtocolError, HttpError
@@ -54,6 +57,13 @@ HANDLER_ENVIRONMENT_VERSION = 1.0
 VALID_EXTENSION_STATUS = ['transitioning', 'error', 'success', 'warning']
 
 VALID_HANDLER_STATUS = ['Ready', 'NotReady', "Installing", "Unresponsive"]
+
+HANDLER_PATTERN = "^([^-]+)-(\d+(?:\.\d+)*)"
+HANDLER_NAME_PATTERN = re.compile(HANDLER_PATTERN+"$", re.IGNORECASE)
+HANDLER_PKG_EXT = ".zip"
+HANDLER_PKG_PATTERN = re.compile(HANDLER_PATTERN+"\\"+HANDLER_PKG_EXT+"$",
+                                re.IGNORECASE)
+
 
 def validate_has_key(obj, key, fullname):
     if key not in obj:
@@ -163,6 +173,7 @@ def get_exthandlers_handler():
 class ExtHandlersHandler(object):
     def __init__(self):
         self.protocol_util = get_protocol_util()
+        self.protocol = None
         self.ext_handlers = None
         self.last_etag = None
         self.log_report = False
@@ -188,10 +199,74 @@ class ExtHandlersHandler(object):
         self.last_etag = etag
 
         self.report_ext_handlers_status()
+        self.cleanup_outdated_handlers()
 
     def run_status(self):
         self.report_ext_handlers_status()
         return
+
+    def cleanup_outdated_handlers(self):
+        handlers = []
+        pkgs = []
+
+        # Build a collection of uninstalled handlers and orphaned packages
+        # Note:
+        # -- An orphaned package is one without a corresponding handler
+        #    directory
+        for item in os.listdir(conf.get_lib_dir()):
+            path = os.path.join(conf.get_lib_dir(), item)
+
+            if version.is_agent_package(path) or version.is_agent_path(path):
+                continue
+
+            if os.path.isdir(path):
+                if re.match(HANDLER_NAME_PATTERN, item) is None:
+                    continue
+                try:
+                    eh = ExtHandler()
+
+                    separator = item.rfind('-')
+
+                    eh.name = item[0:separator]
+                    eh.properties.version = str(FlexibleVersion(item[separator+1:]))
+
+                    handler = ExtHandlerInstance(eh, self.protocol)
+                except Exception as e:
+                    continue
+                if handler.get_handler_state() != ExtHandlerState.NotInstalled:
+                    continue
+                handlers.append(handler)
+
+            elif os.path.isfile(path) and \
+                    not os.path.isdir(path[0:-len(HANDLER_PKG_EXT)]):
+                if not re.match(HANDLER_PKG_PATTERN, item):
+                    continue
+                pkgs.append(path)
+
+        # Then, remove the orphaned packages
+        for pkg in pkgs:
+            try:
+                os.remove(pkg)
+                logger.verbose("Removed orphaned extension package "
+                            "{0}".format(pkg))
+            except Exception as e:
+                logger.warn("Failed to remove orphaned package: {0}".format(
+                                pkg))
+
+        # Finally, remove the directories and packages of the
+        # uninstalled handlers
+        for handler in handlers:
+            handler.rm_ext_handler_dir()
+            pkg = os.path.join(conf.get_lib_dir(),
+                    handler.get_full_name() + HANDLER_PKG_EXT)
+            if os.path.isfile(pkg):
+                try:
+                    os.remove(pkg)
+                    logger.verbose("Removed extension package "
+                                "{0}".format(pkg))
+                except Exception as e:
+                    logger.warn("Failed to remove extension package: "
+                                "{0}".format(pkg))
    
     def handle_ext_handlers(self, etag=None):
         if self.ext_handlers.extHandlers is None or \
@@ -635,6 +710,7 @@ class ExtHandlerInstance(object):
         except IOError as e:
             message = "Failed to remove extension handler directory: {0}".format(e)
             self.report_event(message=message, is_success=False)
+            self.logger.warn(message)
 
     def update(self):
         self.set_operation(WALAEventOperation.Update)

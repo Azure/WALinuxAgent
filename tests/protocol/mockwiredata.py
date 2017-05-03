@@ -30,7 +30,7 @@ DATA_FILE = {
         "ga_manifest" : "wire/ga_manifest.xml",
         "trans_prv": "wire/trans_prv",
         "trans_cert": "wire/trans_cert",
-        "test_ext": "ext/sample_ext.zip"
+        "test_ext": "ext/sample_ext-1.2.0.zip"
 }
 
 DATA_FILE_NO_EXT = DATA_FILE.copy()
