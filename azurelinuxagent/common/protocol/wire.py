@@ -378,12 +378,13 @@ class StatusBlob(object):
     def upload(self, url):
         # TODO upload extension only if content has changed
         upload_successful = False
-        self.type = self.get_blob_type(url)
         try:
             if self.type == "BlockBlob":
                 self.put_block_blob(url, self.data)
             elif self.type == "PageBlob":
                 self.put_page_blob(url, self.data)
+            elif self.type == "" or self.type is None:
+                raise ProtocolError("Missing blob type")
             else:
                 raise ProtocolError("Unknown blob type: {0}".format(self.type))
         except HttpError as e:
@@ -397,27 +398,6 @@ class StatusBlob(object):
             logger.verbose("Uploading status blob succeeded")
             upload_successful = True
         return upload_successful
-
-    def get_blob_type(self, url):
-        logger.verbose("Get blob type")
-        timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-        try:
-            resp = self.client.call_storage_service(
-                restutil.http_head,
-                url,
-                {
-                    "x-ms-date": timestamp,
-                    "x-ms-version": self.__class__.__storage_version__
-                })
-        except HttpError as e:
-            raise ProtocolError("Failed to get status blob type: {0}", e)
-
-        if resp is None or resp.status != httpclient.OK:
-            raise ProtocolError("Failed to get status blob type")
-
-        blob_type = resp.getheader("x-ms-blob-type")
-        logger.verbose("Blob type: [{0}]", blob_type)
-        return blob_type
 
     def get_block_blob_headers(self, blob_size):
         return {
@@ -538,7 +518,6 @@ class WireClient(object):
         self.req_count = 0
         self.host_plugin = None
         self.status_blob = StatusBlob(self)
-        self.status_blob_type_reported = False
 
     def prevent_throttling(self):
         """
@@ -725,7 +704,6 @@ class WireClient(object):
         xml_text = self.fetch_config(goal_state.ext_uri, self.get_header())
         self.save_cache(local_file, xml_text)
         self.ext_conf = ExtensionsConfig(xml_text)
-        self.status_blob_type_reported = False
 
     def update_goal_state(self, forced=False, max_retry=3):
         uri = GOAL_STATE_URI.format(self.endpoint)
@@ -815,7 +793,6 @@ class WireClient(object):
                 local_file = os.path.join(conf.get_lib_dir(), local_file)
                 xml_text = self.fetch_cache(local_file)
                 self.ext_conf = ExtensionsConfig(xml_text)
-                self.status_blob_type_reported = False
         return self.ext_conf
 
     def get_ext_manifest(self, ext_handler, goal_state):
@@ -858,8 +835,6 @@ class WireClient(object):
                 self.status_blob.prepare(ext_conf.status_upload_blob_type)
                 if not HostPluginProtocol.is_default_channel():
                     uploaded = self.status_blob.upload(ext_conf.status_upload_blob)
-                    self.report_blob_type(self.status_blob.type,
-                                          ext_conf.status_upload_blob_type)
             except (HttpError, ProtocolError):
                 # errors have already been logged
                 pass
@@ -868,29 +843,6 @@ class WireClient(object):
                 host.put_vm_status(self.status_blob,
                                    ext_conf.status_upload_blob,
                                    ext_conf.status_upload_blob_type)
-
-    """
-    Emit an event to determine if the type in the extension config
-    matches the actual type from the HTTP HEAD request.
-    """
-    def report_blob_type(self, head_type, config_type):
-        if head_type and config_type:
-            is_match = head_type == config_type
-            if self.status_blob_type_reported is False:
-                message = \
-                    'Blob type match [{0}]'.format(head_type) if is_match else \
-                    'Blob type mismatch [HEAD {0}], [CONFIG {1}]'.format(
-                        head_type,
-                        config_type)
-
-                from azurelinuxagent.common.event import add_event, WALAEventOperation
-                from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
-                add_event(AGENT_NAME,
-                          version=CURRENT_VERSION,
-                          is_success=is_match,
-                          message=message,
-                          op=WALAEventOperation.HealthCheck)
-                self.status_blob_type_reported = True
 
     def report_role_prop(self, thumbprint):
         goal_state = self.get_goal_state()
