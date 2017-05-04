@@ -24,7 +24,11 @@ import time
 import datetime
 import threading
 import platform
+
+from datetime import datetime
+
 import azurelinuxagent.common.logger as logger
+
 from azurelinuxagent.common.exception import EventError, ProtocolError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.restapi import TelemetryEventParam, \
@@ -45,6 +49,7 @@ class WALAEventOperation:
     HeartBeat = "HeartBeat"
     Install = "Install"
     InitializeHostPlugin = "InitializeHostPlugin"
+    ProcessGoalState = "ProcessGoalState"
     Provision = "Provision"
     ReportStatus = "ReportStatus"
     Restart = "Restart"
@@ -110,6 +115,11 @@ class EventLogger(object):
 
 __event_logger__ = EventLogger()
 
+
+def elapsed_milliseconds(utc_start):
+    d = datetime.utcnow() - utc_start
+    return int(((d.days * 24 * 60 * 60 + d.seconds) * 1000) + \
+                    (d.microseconds / 1000.0))
 
 def report_event(op, is_success=True, message=''):
     from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION

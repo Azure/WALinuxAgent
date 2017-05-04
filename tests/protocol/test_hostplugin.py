@@ -33,6 +33,7 @@ import azurelinuxagent.common.protocol.wire as wire
 import azurelinuxagent.common.protocol.hostplugin as hostplugin
 
 from azurelinuxagent.common import event
+from azurelinuxagent.common.exception import ProtocolError, HttpError
 from azurelinuxagent.common.protocol.hostplugin import API_VERSION
 from azurelinuxagent.common.utils import restutil
 
@@ -128,8 +129,10 @@ class TestHostPlugin(AgentTestCase):
                     wire_protocol_client.get_goal_state = Mock(return_value=test_goal_state)
                     wire_protocol_client.ext_conf = wire.ExtensionsConfig(None)
                     wire_protocol_client.ext_conf.status_upload_blob = sas_url
+                    wire_protocol_client.ext_conf.status_upload_blob_type = page_blob_type
                     wire_protocol_client.status_blob.set_vm_status(status)
                     wire_protocol_client.upload_status_blob()
+                    self.assertEqual(patch_upload.call_count, 1)
                     self.assertTrue(patch_put.call_count == 1,
                                     "Fallback was not engaged")
                     self.assertTrue(patch_put.call_args[0][0] == sas_url)
@@ -156,6 +159,7 @@ class TestHostPlugin(AgentTestCase):
                     client.get_goal_state = Mock(return_value=test_goal_state)
                     client.ext_conf = wire.ExtensionsConfig(None)
                     client.ext_conf.status_upload_blob = sas_url
+                    client.ext_conf.status_upload_blob_type = page_blob_type
                     client.status_blob.set_vm_status(status)
                     client.upload_status_blob()
                     self.assertTrue(patch_put.call_count == 1,
