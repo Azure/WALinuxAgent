@@ -99,6 +99,21 @@ class DeprovisionHandler(object):
         dirs_to_del = [conf.get_lib_dir()]
         actions.append(DeprovisionAction(fileutil.rm_dirs, dirs_to_del))
 
+    def cloud_init_directories(self):
+        return ["/var/lib/cloud"]
+
+    def cloud_init_files(self):
+        return ["/etc/sudoers.d/90-cloud-init-users"]
+
+    def del_cloud_init(self, warnings, actions):
+        dirs = [d for d in self.cloud_init_directories() if os.path.isdir(d)]
+        if len(dirs) > 0:
+            actions.append(DeprovisionAction(fileutil.rm_dirs, dirs))
+
+        files = [f for f in self.cloud_init_files() if os.path.isfile(f)]
+        if len(files) > 0:
+            actions.append(DeprovisionAction(fileutil.rm_files, files))
+
     def reset_hostname(self, warnings, actions):
         localhost = ["localhost.localdomain"]
         actions.append(DeprovisionAction(self.osutil.set_hostname, 
@@ -120,6 +135,7 @@ class DeprovisionHandler(object):
         if conf.get_delete_root_password():
             self.del_root_password(warnings, actions)
 
+        self.del_cloud_init(warnings, actions)
         self.del_lib_dir(warnings, actions)
         self.del_files(warnings, actions)
         self.del_resolv(warnings, actions)
