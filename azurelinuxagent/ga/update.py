@@ -30,13 +30,17 @@ import time
 import traceback
 import zipfile
 
+from datetime import datetime
+
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.restutil as restutil
 import azurelinuxagent.common.utils.textutil as textutil
 
-from azurelinuxagent.common.event import add_event, WALAEventOperation
+from azurelinuxagent.common.event import add_event, \
+                                    elapsed_milliseconds, \
+                                    WALAEventOperation
 from azurelinuxagent.common.exception import UpdateError, ProtocolError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
@@ -68,7 +72,6 @@ REPORT_STATUS_INTERVAL = 15
 ORPHAN_WAIT_INTERVAL = 15 * 60 * 60
 
 AGENT_SENTINAL_FILE = "current_version"
-
 
 def get_update_handler():
     return UpdateHandler()
@@ -254,7 +257,16 @@ class UpdateHandler(object):
                             self.agents[0].name)
                     break
 
+                utc_start = datetime.utcnow()
+
                 exthandlers_handler.run()
+
+                add_event(
+                    AGENT_NAME,
+                    version=CURRENT_VERSION,
+                    op=WALAEventOperation.ProcessGoalState,
+                    is_success=True,
+                    duration=elapsed_milliseconds(utc_start))
                 
                 time.sleep(GOAL_STATE_INTERVAL)
 
