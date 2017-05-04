@@ -100,7 +100,9 @@ class DeprovisionHandler(object):
         actions.append(DeprovisionAction(fileutil.rm_dirs, dirs_to_del))
 
     def cloud_init_directories(self):
-        return ["/var/lib/cloud"]
+        return ["/var/lib/cloud/instance",
+            "/var/lib/cloud/instances/",
+            "/var/lib/cloud/data"]
 
     def cloud_init_files(self):
         return ["/etc/sudoers.d/90-cloud-init-users"]

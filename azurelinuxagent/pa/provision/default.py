@@ -23,18 +23,22 @@ import os
 import os.path
 import re
 
+from datetime import datetime
+
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.shellutil as shellutil
 import azurelinuxagent.common.utils.fileutil as fileutil
 
 from azurelinuxagent.common.future import ustr
-from azurelinuxagent.common.event import add_event, WALAEventOperation
+from azurelinuxagent.common.event import add_event, WALAEventOperation, \
+    elapsed_milliseconds
 from azurelinuxagent.common.exception import ProvisionError, ProtocolError, \
     OSUtilError
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol.restapi import ProvisionStatus
 from azurelinuxagent.common.protocol import get_protocol_util
+from azurelinuxagent.common.version import AGENT_NAME
 
 CUSTOM_DATA_FILE = "CustomData"
 CLOUD_INIT_PATTERN = b".*/bin/cloud-init.*"
@@ -53,6 +57,7 @@ class ProvisionHandler(object):
             logger.info("Provisioning already completed, skipping.")
             return
 
+        utc_start = datetime.utcnow()
         thumbprint = None
         # If provision is not enabled, report ready and then return
         if not conf.get_provision_enabled():
@@ -71,12 +76,15 @@ class ProvisionHandler(object):
                 self.provision(ovf_env)
                 thumbprint = self.reg_ssh_host_key()
                 self.osutil.restart_ssh_service()
-                self.report_event("Provision succeed", is_success=True)
+                self.report_event("Provision succeed",
+                    is_success=True,
+                    duration=elapsed_milliseconds(utc_start))
             except (ProtocolError, ProvisionError) as e:
                 self.report_not_ready("ProvisioningFailed", ustr(e))
                 self.report_event(ustr(e))
                 logger.error("Provisioning failed: {0}", ustr(e))
                 return
+
         # write out provisioned file and report Ready
         fileutil.write_file(provisioned, "")
         self.report_ready(thumbprint)
@@ -189,9 +197,12 @@ class ProvisionHandler(object):
             logger.info("Deploy ssh key pairs.")
             self.osutil.deploy_ssh_keypair(ovfenv.username, keypair)
 
-    def report_event(self, message, is_success=False):
-        add_event(name="WALA", message=message, is_success=is_success,
-                  op=WALAEventOperation.Provision)
+    def report_event(self, message, is_success=False, duration=0):
+        add_event(name=AGENT_NAME,
+                    message=message,
+                    duration=duration,
+                    is_success=is_success,
+                    op=WALAEventOperation.Provision)
 
     def report_not_ready(self, sub_status, description):
         status = ProvisionStatus(status="NotReady", subStatus=sub_status,

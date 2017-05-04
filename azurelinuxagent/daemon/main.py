@@ -30,7 +30,8 @@ from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol import get_protocol_util
 from azurelinuxagent.common.rdma import setup_rdma_device
-from azurelinuxagent.common.version import AGENT_LONG_NAME, AGENT_VERSION, \
+from azurelinuxagent.common.version import AGENT_NAME, AGENT_LONG_NAME, \
+    AGENT_VERSION, \
     DISTRO_NAME, DISTRO_VERSION, PY_VERSION_MAJOR, PY_VERSION_MINOR, \
     PY_VERSION_MICRO
 from azurelinuxagent.daemon.resourcedisk import get_resourcedisk_handler
@@ -74,7 +75,7 @@ class DaemonHandler(object):
                 self.daemon()
             except Exception as e:
                 err_msg = traceback.format_exc()
-                add_event("WALA", is_success=False, message=ustr(err_msg),
+                add_event(name=AGENT_NAME, is_success=False, message=ustr(err_msg),
                           op=WALAEventOperation.UnhandledError)
                 logger.info("Sleep 15 seconds and restart daemon")
                 time.sleep(15)

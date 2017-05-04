@@ -29,6 +29,7 @@ import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.shellutil as shellutil
 from azurelinuxagent.common.exception import ResourceDiskError
 from azurelinuxagent.common.osutil import get_osutil
+from azurelinuxagent.common.version import AGENT_NAME
 
 DATALOSS_WARNING_FILE_NAME = "DATALOSS_WARNING_README.txt"
 DATA_LOSS_WARNING = """\
@@ -74,7 +75,7 @@ class ResourceDiskHandler(object):
             return mount_point
         except ResourceDiskError as e:
             logger.error("Failed to mount resource disk {0}", e)
-            add_event(name="WALA", is_success=False, message=ustr(e),
+            add_event(name=AGENT_NAME, is_success=False, message=ustr(e),
                       op=WALAEventOperation.ActivateResourceDisk)
 
     def enable_swap(self, mount_point):

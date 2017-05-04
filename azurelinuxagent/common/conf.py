@@ -116,7 +116,7 @@ def get_ext_log_dir(conf=__conf__):
     return conf.get("Extension.LogDir", "/var/log/azure")
 
 def get_fips_enabled(conf=__conf__):
-    return conf.get_switch("OS.FIPSEnabled", False)
+    return conf.get_switch("OS.EnableFIPS", False)
 
 def get_openssl_cmd(conf=__conf__):
     return conf.get("OS.OpensslPath", "/usr/bin/openssl")
