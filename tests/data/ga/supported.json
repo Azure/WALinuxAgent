@@ -1,0 +1,8 @@
+{
+    "ubuntu.16.10-x64": {
+        "versions": [
+            "^Ubuntu,16.10,yakkety$"
+        ],
+        "slice": 10
+    }
+}

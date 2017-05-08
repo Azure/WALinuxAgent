@@ -15,9 +15,14 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
+import glob
+import random
+import string
+import tempfile
 import uuid
 
 import azurelinuxagent.common.utils.fileutil as fileutil
+
 from azurelinuxagent.common.future import ustr
 from tests.tools import *
 
@@ -69,9 +74,6 @@ class TestFileOperations(AgentTestCase):
         self.assertEquals('abc', filename)
 
     def test_remove_files(self):
-        import random
-        import string
-        import glob
         random_word = lambda : ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(5))
 
         #Create 10 test files
@@ -90,9 +92,27 @@ class TestFileOperations(AgentTestCase):
         self.assertEqual(0, len(glob.glob(os.path.join(self.tmp_dir, test_file_pattern))))
         self.assertEqual(0, len(glob.glob(os.path.join(self.tmp_dir, test_file_pattern2))))
 
+    def test_remove_dirs(self):
+        dirs = []
+        for n in range(0,5):
+            dirs.append(tempfile.mkdtemp())
+        for d in dirs:
+            for n in range(0, random.choice(range(0,10))):
+                fileutil.write_file(os.path.join(d, "test"+str(n)), "content")
+            for n in range(0, random.choice(range(0,10))):
+                dd = os.path.join(d, "testd"+str(n))
+                os.mkdir(dd)
+                for nn in range(0, random.choice(range(0,10))):
+                    os.symlink(dd, os.path.join(dd, "sym"+str(nn)))
+            for n in range(0, random.choice(range(0,10))):
+                os.symlink(d, os.path.join(d, "sym"+str(n)))
+
+        fileutil.rm_dirs(*dirs)
+
+        for d in dirs:
+            self.assertEqual(len(os.listdir(d)), 0)
+
     def test_get_all_files(self):
-        import random
-        import string
         random_word = lambda: ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(5))
 
         # Create 10 test files at the root dir and 10 other in the sub dir

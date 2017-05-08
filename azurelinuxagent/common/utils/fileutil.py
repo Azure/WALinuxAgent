@@ -119,16 +119,20 @@ def rm_files(*args):
 
 def rm_dirs(*args):
     """
-    Remove all the contents under the directry
+    Remove the contents of each directry
     """
-    for dir_name in args:
-        if os.path.isdir(dir_name):
-            for item in os.listdir(dir_name):
-                path = os.path.join(dir_name, item)
-                if os.path.isfile(path):
-                    os.remove(path)
-                elif os.path.isdir(path):
-                    shutil.rmtree(path)
+    for p in args:
+        if not os.path.isdir(p):
+            continue
+
+        for pp in os.listdir(p):
+            path = os.path.join(p, pp)
+            if os.path.isfile(path):
+                os.remove(path)
+            elif os.path.islink(path):
+                os.unlink(path)
+            elif os.path.isdir(path):
+                shutil.rmtree(path)
 
 def trim_ext(path, ext):
     if not ext.startswith("."):

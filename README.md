@@ -188,7 +188,7 @@ ResourceDisk.SwapSizeMB=0
 LBProbeResponder=y
 Logs.Verbose=n
 OS.RootDeviceScsiTimeout=300
-OS.FIPSEnabled=n
+OS.EnableFIPS=n
 OS.OpensslPath=None
 OS.SshDir=/etc/ssh
 HttpProxy.Host=None
@@ -353,7 +353,7 @@ _Default: n_
 If set, the agent will attempt to install and then load an RDMA kernel driver
 that matches the version of the firmware on the underlying hardware.
 
-* __OS.FIPSEnabled__
+* __OS.EnableFIPS__
 _Type: Boolean_
 _Default: n_
 

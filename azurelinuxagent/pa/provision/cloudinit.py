@@ -20,10 +20,13 @@
 import os
 import time
 
+from datetime import datetime
+
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
 
+from azurelinuxagent.common.event import elapsed_milliseconds
 from azurelinuxagent.common.exception import ProvisionError, ProtocolError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol import OVF_FILE_NAME
@@ -48,6 +51,7 @@ class CloudInitProvisionHandler(ProvisionHandler):
             logger.info("Provisioning already completed, skipping.")
             return
 
+        utc_start = datetime.utcnow()
         logger.info("Running CloudInit provisioning handler")
         self.wait_for_ovfenv()
         self.protocol_util.get_protocol()
@@ -63,7 +67,9 @@ class CloudInitProvisionHandler(ProvisionHandler):
             return
 
         self.report_ready(thumbprint)
-        self.report_event("Provision succeed", is_success=True)
+        self.report_event("Provision succeed",
+            is_success=True,
+            duration=elapsed_milliseconds(utc_start))
 
     def wait_for_ovfenv(self, max_retry=360, sleep_time=5):
         """
