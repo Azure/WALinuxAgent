@@ -18,6 +18,7 @@
 #
 
 import os
+import os.path
 import time
 
 from datetime import datetime
@@ -25,6 +26,7 @@ from datetime import datetime
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
+import azurelinuxagent.common.utils.shellutil as shellutil
 
 from azurelinuxagent.common.event import elapsed_milliseconds
 from azurelinuxagent.common.exception import ProvisionError, ProtocolError
@@ -46,30 +48,31 @@ class CloudInitProvisionHandler(ProvisionHandler):
             super(CloudInitProvisionHandler, self).run()
             return
 
-        provisioned = os.path.join(conf.get_lib_dir(), "provisioned")
-        if os.path.isfile(provisioned):
-            logger.info("Provisioning already completed, skipping.")
-            return
-
-        utc_start = datetime.utcnow()
-        logger.info("Running CloudInit provisioning handler")
-        self.wait_for_ovfenv()
-        self.protocol_util.get_protocol()
-        self.report_not_ready("Provisioning", "Starting")
         try:
+            if is_provisioned():
+                logger.info("Provisioning already completed, skipping.")
+                return
+
+            utc_start = datetime.utcnow()
+            logger.info("Running CloudInit provisioning handler")
+            self.wait_for_ovfenv()
+            self.protocol_util.get_protocol()
+            self.report_not_ready("Provisioning", "Starting")
+
             thumbprint = self.wait_for_ssh_host_key()
-            fileutil.write_file(provisioned, "")
+            self.write_provisioned()
             logger.info("Finished provisioning")
+
+            self.report_ready(thumbprint)
+            self.report_event("Provision succeed",
+                is_success=True,
+                duration=elapsed_milliseconds(utc_start))
+
         except ProvisionError as e:
             logger.error("Provisioning failed: {0}", ustr(e))
             self.report_not_ready("ProvisioningFailed", ustr(e))
             self.report_event(ustr(e))
             return
-
-        self.report_ready(thumbprint)
-        self.report_event("Provision succeed",
-            is_success=True,
-            duration=elapsed_milliseconds(utc_start))
 
     def wait_for_ovfenv(self, max_retry=360, sleep_time=5):
         """

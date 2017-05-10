@@ -16,17 +16,22 @@
 #
 
 import azurelinuxagent.common.utils.fileutil as fileutil
+
+from azurelinuxagent.common.exception import ProtocolError
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
 from azurelinuxagent.common.protocol import OVF_FILE_NAME
 from azurelinuxagent.pa.provision import get_provision_handler
+from azurelinuxagent.pa.provision.default import ProvisionHandler
 from tests.tools import *
 
 
 class TestProvision(AgentTestCase):
  
     @distros("redhat")
-    def test_provision(self, distro_name, distro_version, distro_full_name):
-        provision_handler = get_provision_handler(distro_name, distro_version, 
+    @patch('azurelinuxagent.common.osutil.default.DefaultOSUtil.get_instance_id',
+        return_value='B9F3C233-9913-9F42-8EB3-BA656DF32502')
+    def test_provision(self, mock_util, distro_name, distro_version, distro_full_name):
+        provision_handler = get_provision_handler(distro_name, distro_version,
                                                   distro_full_name)
         mock_osutil = MagicMock()
         mock_osutil.decode_customdata = Mock(return_value="")
@@ -48,6 +53,24 @@ class TestProvision(AgentTestCase):
         data = DefaultOSUtil().decode_customdata(base64data)
         fileutil.write_file(tempfile.mktemp(), data)
 
+    @patch('os.path.isfile', return_value=False)
+    def test_is_provisioned_not_provisioned(self, mock_isfile):
+        ph = ProvisionHandler()
+        self.assertFalse(ph.is_provisioned())
+
+    @patch('os.path.isfile', return_value=True)
+    @patch('azurelinuxagent.common.utils.fileutil.read_file',
+            return_value="B9F3C233-9913-9F42-8EB3-BA656DF32502")
+    def test_is_provisioned_is_provisioned(self, mock_read, mock_isfile):
+        ph = ProvisionHandler()
+        self.assertTrue(ph.is_provisioned())
+
+    @patch('os.path.isfile', return_value=True)
+    @patch('azurelinuxagent.common.utils.fileutil.read_file',
+            side_effect=["Value1", "Value2"])
+    def test_is_provisioned_not_deprovisioned(self, mock_read, mock_isfile):
+        ph = ProvisionHandler()
+        self.assertRaises(ProtocolError, ph.is_provisioned)
 
 if __name__ == '__main__':
     unittest.main()

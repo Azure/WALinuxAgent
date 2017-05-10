@@ -362,5 +362,37 @@ Match host 192.168.1.2\n\
                     conf.get_sshd_conf_file_path(),
                     expected_output)
 
+    @patch('os.path.isfile', return_value=True)
+    @patch('azurelinuxagent.common.utils.fileutil.read_file',
+            return_value="B9F3C233-9913-9F42-8EB3-BA656DF32502")
+    def test_get_instance_id_from_file(self, mock_read, mock_isfile):
+        util = osutil.DefaultOSUtil()
+        self.assertEqual(
+            "B9F3C233-9913-9F42-8EB3-BA656DF32502",
+            util.get_instance_id())
+
+    @patch('os.path.isfile', return_value=False)
+    @patch('azurelinuxagent.common.utils.shellutil.run_get_output',
+            return_value=[0, 'B9F3C233-9913-9F42-8EB3-BA656DF32502'])
+    def test_get_instance_id_from_dmidecode(self, mock_shell, mock_isfile):
+        util = osutil.DefaultOSUtil()
+        self.assertEqual(
+            "B9F3C233-9913-9F42-8EB3-BA656DF32502",
+            util.get_instance_id())
+
+    @patch('os.path.isfile', return_value=False)
+    @patch('azurelinuxagent.common.utils.shellutil.run_get_output',
+            return_value=[1, 'Error Value'])
+    def test_get_instance_id_missing(self, mock_shell, mock_isfile):
+        util = osutil.DefaultOSUtil()
+        self.assertEqual("", util.get_instance_id())
+
+    @patch('os.path.isfile', return_value=False)
+    @patch('azurelinuxagent.common.utils.shellutil.run_get_output',
+            return_value=[0, 'Unexpected Value'])
+    def test_get_instance_id_unexpected(self, mock_shell, mock_isfile):
+        util = osutil.DefaultOSUtil()
+        self.assertEqual("", util.get_instance_id())
+
 if __name__ == '__main__':
     unittest.main()

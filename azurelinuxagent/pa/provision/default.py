@@ -44,6 +44,8 @@ CUSTOM_DATA_FILE = "CustomData"
 CLOUD_INIT_PATTERN = b".*/bin/cloud-init.*"
 CLOUD_INIT_REGEX = re.compile(CLOUD_INIT_PATTERN)
 
+PROVISIONED_FILE = 'provisioned'
+
 
 class ProvisionHandler(object):
     def __init__(self):
@@ -51,44 +53,53 @@ class ProvisionHandler(object):
         self.protocol_util = get_protocol_util()
 
     def run(self):
-        # if provisioning is already done, return
-        provisioned = os.path.join(conf.get_lib_dir(), "provisioned")
-        if os.path.isfile(provisioned):
-            logger.info("Provisioning already completed, skipping.")
-            return
-
-        utc_start = datetime.utcnow()
-        thumbprint = None
         # If provision is not enabled, report ready and then return
         if not conf.get_provision_enabled():
             logger.info("Provisioning is disabled, skipping.")
-        else:
-            logger.info("Running default provisioning handler")
-            try:
-                if not self.validate_cloud_init(is_expected=False):
-                    raise ProvisionError("cloud-init appears to be running, "
-                                         "this is not expected, cannot continue")
-                logger.info("Copying ovf-env.xml")
-                ovf_env = self.protocol_util.copy_ovf_env()
-                self.protocol_util.get_protocol_by_file()
-                self.report_not_ready("Provisioning", "Starting")
-                logger.info("Starting provisioning")
-                self.provision(ovf_env)
-                thumbprint = self.reg_ssh_host_key()
-                self.osutil.restart_ssh_service()
-                self.report_event("Provision succeed",
-                    is_success=True,
-                    duration=elapsed_milliseconds(utc_start))
-            except (ProtocolError, ProvisionError) as e:
-                self.report_not_ready("ProvisioningFailed", ustr(e))
-                self.report_event(ustr(e))
-                logger.error("Provisioning failed: {0}", ustr(e))
+            return
+
+        try:
+            utc_start = datetime.utcnow()
+            thumbprint = None
+
+            # if provisioning is already done, return
+            if self.is_provisioned():
+                logger.info("Provisioning already completed, skipping.")
                 return
 
-        # write out provisioned file and report Ready
-        fileutil.write_file(provisioned, "")
-        self.report_ready(thumbprint)
-        logger.info("Provisioning complete")
+            logger.info("Running default provisioning handler")
+
+            if not self.validate_cloud_init(is_expected=False):
+                raise ProvisionError("cloud-init appears to be running, "
+                                        "this is not expected, cannot continue")
+
+            logger.info("Copying ovf-env.xml")
+            ovf_env = self.protocol_util.copy_ovf_env()
+
+            self.protocol_util.get_protocol_by_file()
+            self.report_not_ready("Provisioning", "Starting")
+            logger.info("Starting provisioning")
+
+            self.provision(ovf_env)
+
+            thumbprint = self.reg_ssh_host_key()
+            self.osutil.restart_ssh_service()
+
+            # write out provisioned file and report Ready
+            self.write_provisioned()
+
+            self.report_event("Provision succeed",
+                is_success=True,
+                duration=elapsed_milliseconds(utc_start))
+
+            self.report_ready(thumbprint)
+            logger.info("Provisioning complete")
+
+        except (ProtocolError, ProvisionError) as e:
+            self.report_not_ready("ProvisioningFailed", ustr(e))
+            self.report_event(ustr(e))
+            logger.error("Provisioning failed: {0}", ustr(e))
+            return
 
     @staticmethod
     def validate_cloud_init(is_expected=True):
@@ -127,6 +138,25 @@ class ProvisionHandler(object):
         else:
             raise ProvisionError(("Failed to generate ssh host key: "
                                   "ret={0}, out= {1}").format(ret[0], ret[1]))
+
+    def provisioned_file_path(self):
+        return os.path.join(conf.get_lib_dir(), PROVISIONED_FILE)
+
+    def is_provisioned(self):
+        if not os.path.isfile(self.provisioned_file_path()):
+            return False
+
+        s = fileutil.read_file(self.provisioned_file_path())
+        util = get_osutil()
+        if s == util.get_instance_id():
+            return True
+
+        raise ProtocolError("Provisioning new instance without a deprovision")
+
+    def write_provisioned(self):
+        fileutil.write_file(
+            self.provisioned_file_path(),
+            get_osutil().get_instance_id())
 
     def provision(self, ovfenv):
         logger.info("Handle ovf-env.xml.")

@@ -30,13 +30,15 @@ import fcntl
 import base64
 import glob
 import datetime
+
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.conf as conf
-from azurelinuxagent.common.exception import OSUtilError
-from azurelinuxagent.common.future import ustr
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.shellutil as shellutil
 import azurelinuxagent.common.utils.textutil as textutil
+
+from azurelinuxagent.common.exception import OSUtilError
+from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 
 __RULES_FILES__ = [ "/lib/udev/rules.d/75-persistent-net-generator.rules",
@@ -48,6 +50,12 @@ for all distros. Each concrete distro classes could overwrite default behavior
 if needed.
 """
 
+DMIDECODE_CMD = 'dmidecode --string system-uuid'
+PRODUCT_ID_FILE = '/sys/class/dmi/id/product_uuid'
+UUID_PATTERN = re.compile(
+    '^\s*[A-F0-9]{8}(?:\-[A-F0-9]{4}){3}\-[A-F0-9]{12}\s*$',
+    re.IGNORECASE)
+
 class DefaultOSUtil(object):
 
     def __init__(self):
@@ -57,6 +65,22 @@ class DefaultOSUtil(object):
 
     def get_agent_conf_file_path(self):
         return self.agent_conf_file_path
+
+    def get_instance_id(self):
+        '''
+        Azure records a UUID as the instance ID
+        First check /sys/class/dmi/id/product_uuid.
+        If that is missing, then extracts from dmidecode
+        If nothing works (for old VMs), return the empty string
+        '''
+        if os.path.isfile(PRODUCT_ID_FILE):
+            return fileutil.read_file(PRODUCT_ID_FILE).strip()
+
+        rc, s = shellutil.run_get_output(DMIDECODE_CMD)
+        if rc != 0 or UUID_PATTERN.match(s) is None:
+            return ""
+
+        return s.strip()
 
     def get_userentry(self, username):
         try:
