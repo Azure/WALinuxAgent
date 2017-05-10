@@ -201,7 +201,7 @@ class UpdateHandler(object):
                     ret)
                 logger.warn(msg)
                 if latest_agent is not None:
-                    latest_agent.mark_failure()
+                    latest_agent.mark_failure(is_fatal=True)
 
         except Exception as e:
             msg = u"Agent {0} launched with command '{1}' failed with exception: {2}".format(
@@ -415,6 +415,7 @@ class UpdateHandler(object):
         host = None
         if protocol and protocol.client:
             host = protocol.client.get_host_plugin()
+
         self._set_agents([GuestAgent(pkg=pkg, host=host) for pkg in pkg_list.versions])
         self._purge_agents()
         self._filter_blacklisted_agents()
@@ -675,6 +676,7 @@ class GuestAgent(object):
     def enable(self):
         if self.error.is_sentinel:
             self.error.clear()
+            self.error.save()
         return
 
     @property
@@ -714,7 +716,7 @@ class GuestAgent(object):
             logger.verbose(u"Ensuring Agent {0} is downloaded", self.name)
 
             if self.is_blacklisted:
-                logger.warn(u"Agent {0} is blacklisted - skipping download", self.name)
+                logger.info(u"Agent {0} is blacklisted - skipping download", self.name)
                 return
 
             if self.is_downloaded:

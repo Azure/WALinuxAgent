@@ -528,6 +528,11 @@ class TestGuestAgent(UpdateTestCase):
         self.assertFalse(agent.is_blacklisted)
         self.assertFalse(agent.is_test)
 
+        # Ensure the new state is preserved to disk
+        agent = GuestAgent(path=self.agent_path)
+        self.assertFalse(agent.is_blacklisted)
+        self.assertFalse(agent.is_test)
+
     @patch("azurelinuxagent.ga.update.GuestAgent._ensure_downloaded")
     def test_mark_failure(self, mock_ensure):
         agent = GuestAgent(path=self.agent_path)
@@ -1280,7 +1285,8 @@ class TestUpdate(UpdateTestCase):
         with patch('azurelinuxagent.ga.update.UpdateHandler.get_latest_agent', return_value=latest_agent):
             self._test_run_latest(mock_child=ChildMock(return_value=1))
 
-        self.assertTrue(latest_agent.is_available)
+        self.assertTrue(latest_agent.is_blacklisted)
+        self.assertFalse(latest_agent.is_available)
         self.assertNotEqual(0.0, latest_agent.error.last_failure)
         self.assertEqual(1, latest_agent.error.failure_count)
         return
