@@ -251,7 +251,6 @@ class OpenBSDOSUtil(DefaultOSUtil):
                 return
             if retry < max_retry - 1:
                 mountlist = shellutil.run_get_output("/sbin/mount")[1]
-                logger.info("mountlist: '{0}'", mountlist)
                 existing = self.get_mount_point(mountlist, dvd_device)
                 if existing is not None:
                     logger.info("{0} is mounted at {1}", dvd_device, existing)
