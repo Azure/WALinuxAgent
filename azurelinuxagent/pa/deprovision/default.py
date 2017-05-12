@@ -81,6 +81,15 @@ class DeprovisionHandler(object):
         files_to_del = ['/root/.bash_history', '/var/log/waagent.log']
         actions.append(DeprovisionAction(fileutil.rm_files, files_to_del))
 
+        # For OpenBSD
+        actions.append(DeprovisionAction(fileutil.rm_files,
+                                         ["/etc/random.seed",
+                                         "/var/db/host.random",
+                                         "/etc/isakmpd/local.pub",
+                                         "/etc/isakmpd/private/local.key",
+                                         "/etc/iked/private/local.key",
+                                         "/etc/iked/local.pub"]))
+
     def del_resolv(self, warnings, actions):
         warnings.append("WARNING! /etc/resolv.conf will be deleted.")
         files_to_del = ["/etc/resolv.conf"]
@@ -94,6 +103,9 @@ class DeprovisionHandler(object):
         # For Freebsd, NM controlled
         actions.append(DeprovisionAction(fileutil.rm_files, ["/var/db/dhclient.leases.hn0",
                                                              "/var/lib/NetworkManager/dhclient-*.lease"]))
+
+        # For OpenBSD
+        actions.append(DeprovisionAction(fileutil.rm_files, ["/var/db/dhclient.leases.hvn0"]))
 
     def del_lib_dir(self, warnings, actions):
         dirs_to_del = [conf.get_lib_dir()]

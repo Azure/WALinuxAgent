@@ -77,6 +77,9 @@ def get_distro():
     if 'FreeBSD' in platform.system():
         release = re.sub('\-.*\Z', '', ustr(platform.release()))
         osinfo = ['freebsd', release, '', 'freebsd']
+    elif 'OpenBSD' in platform.system():
+        release = re.sub('\-.*\Z', '', ustr(platform.release()))
+        osinfo = ['openbsd', release, '', 'openbsd']
     elif 'linux_distribution' in dir(platform):
         supported = platform._supported_dists + ('alpine',)
         osinfo = list(platform.linux_distribution(full_distribution_name=0,
@@ -160,7 +163,10 @@ CURRENT_AGENT, CURRENT_VERSION = set_current_agent()
 
 def set_goal_state_agent():
     agent = None
-    pids = [pid for pid in os.listdir('/proc') if pid.isdigit()]
+    if os.path.isdir("/proc"):
+        pids = [pid for pid in os.listdir('/proc') if pid.isdigit()]
+    else:
+        pids = []
     for pid in pids:
         try:
             pname = open(os.path.join('/proc', pid, 'cmdline'), 'rb').read()

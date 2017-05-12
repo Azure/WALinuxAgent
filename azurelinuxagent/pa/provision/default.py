@@ -103,8 +103,11 @@ class ProvisionHandler(object):
 
     @staticmethod
     def validate_cloud_init(is_expected=True):
-        pids = [pid for pid in os.listdir('/proc') if pid.isdigit()]
         is_running = False
+        if os.path.isdir("/proc"):
+            pids = [pid for pid in os.listdir('/proc') if pid.isdigit()]
+        else:
+            pids = []
         for pid in pids:
             try:
                 pname = open(os.path.join('/proc', pid, 'cmdline'), 'rb').read()

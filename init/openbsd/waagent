@@ -1,0 +1,10 @@
+#!/bin/sh
+
+daemon="python2.7 /usr/local/sbin/waagent -start"
+
+. /etc/rc.d/rc.subr
+
+pexp="python /usr/local/sbin/waagent -daemon"
+rc_reload=NO
+
+rc_cmd $1
