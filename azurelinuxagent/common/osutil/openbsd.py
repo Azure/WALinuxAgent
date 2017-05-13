@@ -25,16 +25,14 @@ import datetime
 
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.shellutil as shellutil
-import azurelinuxagent.common.utils.textutil as textutil
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.conf as conf
 
 from azurelinuxagent.common.exception import OSUtilError
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
-from azurelinuxagent.common.future import ustr
 
 UUID_PATTERN = re.compile(
-    '^\s*[A-F0-9]{8}(?:\-[A-F0-9]{4}){3}\-[A-F0-9]{12}\s*$',
+    r'^\s*[A-F0-9]{8}(?:\-[A-F0-9]{4}){3}\-[A-F0-9]{12}\s*$',
     re.IGNORECASE)
 
 class OpenBSDOSUtil(DefaultOSUtil):
@@ -98,14 +96,15 @@ class OpenBSDOSUtil(DefaultOSUtil):
                     doas = content.split("\n")
                     doas = [x for x in doas if username not in x]
                     fileutil.write_file(doas_conf, "\n".join(doas))
-                except IOError as e:
-                    raise OSUtilError("Failed to remove sudoer: {0}".format(e))
+                except IOError as err:
+                    raise OSUtilError("Failed to remove sudoer: "
+                                      "{0}".format(err))
 
     def chpasswd(self, username, password, crypt_id=6, salt_len=10):
         if self.is_sys_user(username):
             raise OSUtilError(("User {0} is a system user. "
                                "Will not set passwd.").format(username))
-        cmd = "echo -n {0}|encrypt".format(passwd_hash, username)
+        cmd = "echo -n {0}|encrypt".format(password)
         ret, output = shellutil.run_get_output(cmd, log_cmd=False)
         if ret != 0:
             raise OSUtilError(("Failed to encrypt password for {0}: {1}"
@@ -120,8 +119,8 @@ class OpenBSDOSUtil(DefaultOSUtil):
     def del_root_password(self):
         ret, output = shellutil.run_get_output('usermod -p "*" root')
         if ret:
-            raise OSUtilError(("Failed to delete root password: "
-                              "{0}".format(output)))
+            raise OSUtilError("Failed to delete root password: "
+                              "{0}".format(output))
 
     def get_if_mac(self, ifname):
         data = self._get_net_info()
@@ -178,10 +177,11 @@ class OpenBSDOSUtil(DefaultOSUtil):
                         expired = True
                     elif HEADER_OPTION in line:
                         try:
-                            ip = line.split(" ")[-1].strip(";").split(":")
-                            cached_endpoint = ".".join(str(int(d, 16)) for d in ip)
+                            ipaddr = line.split(" ")[-1].strip(";").split(":")
+                            cached_endpoint = \
+                               ".".join(str(int(d, 16)) for d in ipaddr)
                             has_option_245 = True
-                        except:
+                        except ValueError:
                             logger.error("could not parse '{0}'".format(line))
                     elif HEADER_EXPIRE in line:
                         if "never" in line:
@@ -194,13 +194,12 @@ class OpenBSDOSUtil(DefaultOSUtil):
                                     expire_string, FORMAT_DATETIME)
                                 if expire_date > datetime.datetime.utcnow():
                                     expired = False
-                            except:
+                            except ValueError:
                                 logger.error("could not parse expiry token "
                                              "'{0}'".format(line))
                     elif FOOTER_LEASE in line:
-                        logger.info("dhcp entry:{0}, 245:{1}, expired:"
-                                    "{2}".format(
-                                    cached_endpoint, has_option_245, expired))
+                        logger.info("dhcp entry:{0}, 245:{1}, expired: {2}"
+                                    .format(cached_endpoint, has_option_245, expired))
                         if not expired and cached_endpoint is not None and has_option_245:
                             endpoint = cached_endpoint
                             logger.info("found endpoint [{0}]".format(endpoint))
@@ -229,13 +228,18 @@ class OpenBSDOSUtil(DefaultOSUtil):
         return output if ret == 0 else None
 
     def get_dvd_device(self, dev_dir='/dev'):
-        pattern=r'cd[0-9]c'
+        pattern = r'cd[0-9]c'
         for dvd in [re.match(pattern, dev) for dev in os.listdir(dev_dir)]:
             if dvd is not None:
                 return "/dev/{0}".format(dvd.group(0))
         raise OSUtilError("Failed to get DVD device")
 
-    def mount_dvd(self, max_retry=6, chk_err=True, dvd_device=None, mount_point=None):
+    def mount_dvd(self,
+                  max_retry=6,
+                  chk_err=True,
+                  dvd_device=None,
+                  mount_point=None,
+                  sleep_time=5):
         if dvd_device is None:
             dvd_device = self.get_dvd_device()
         if mount_point is None:
@@ -257,7 +261,7 @@ class OpenBSDOSUtil(DefaultOSUtil):
                     return
                 logger.warn("Mount DVD failed: retry={0}, ret={1}", retry,
                             retcode)
-                time.sleep(5)
+                time.sleep(sleep_time)
         if chk_err:
             raise OSUtilError("Failed to mount DVD.")
 
@@ -267,7 +271,7 @@ class OpenBSDOSUtil(DefaultOSUtil):
         if chk_err and retcode != 0:
             raise OSUtilError("Failed to eject DVD: ret={0}".format(retcode))
 
-    def restart_if(self, ifname):
+    def restart_if(self, ifname, retries=3, wait=5):
         # Restart dhclient only to publish hostname
         shellutil.run("/sbin/dhclient {0}".format(ifname), chk_err=False)
 

@@ -58,9 +58,8 @@ class OpenBSDResourceDiskHandler(ResourceDiskHandler):
             raise ResourceDiskError("Unable to detect resource disk device.")
         logger.info('Resource disk device {0} found.', device)
 
-        # 2. Get partitions
+        # 2. Get partition
         partition = "/dev/{0}a".format(device)
-        swappartition = "/dev/{0}b".format(device)
 
         # 3. Mount partition
         mount_list = shellutil.run_get_output("mount")[1]
@@ -71,7 +70,8 @@ class OpenBSDResourceDiskHandler(ResourceDiskHandler):
             return existing
 
         fileutil.mkdir(mount_point, mode=0o755)
-        mount_cmd = 'mount -t {0} {1} {2}'.format(fs, partition, mount_point)
+        mount_cmd = 'mount -t {0} {1} {2}'.format(self.fs,
+                                                  partition, mount_point)
         err = shellutil.run(mount_cmd, chk_err=False)
         if err:
             logger.info('Creating {0} filesystem on {1}'.format(fs, device))
@@ -87,8 +87,8 @@ class OpenBSDResourceDiskHandler(ResourceDiskHandler):
                 if size_mb > 512 * 1024:
                     size_mb = 512 * 1024
                 disklabel_cmd = ("echo -e '{0} 1G-* 50%\nswap 1-{1}M 50%' "
-                    "| disklabel -w -A -T /dev/stdin "
-                    "{2}").format(mount_point, size_mb, device)
+                                 "| disklabel -w -A -T /dev/stdin "
+                                 "{2}").format(mount_point, size_mb, device)
                 ret, output = shellutil.run_get_output(
                     disklabel_cmd, chk_err=False)
                 if ret:
