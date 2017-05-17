@@ -57,6 +57,22 @@ def get_f5_platform():
     return result
 
 
+def get_checkpoint_platform():
+    take = build = release = ""
+    full_name = open("/etc/cp-release").read().strip()
+    with open("/etc/cloud-version") as f:
+        for line in f:
+            k, _, v = line.partition(": ")
+            v = v.strip()
+            if k == "release":
+                release = v
+            elif k == "take":
+                take = v
+            elif k == "build":
+                build = v
+    return ["gaia", take + "." + build, release, full_name]
+
+
 def get_distro():
     if 'FreeBSD' in platform.system():
         release = re.sub('\-.*\Z', '', ustr(platform.release()))
@@ -83,6 +99,9 @@ def get_distro():
     # Merge the following patch provided by F5.
     if os.path.exists("/shared/vadc"):
         osinfo = get_f5_platform()
+
+    if os.path.exists("/etc/cp-release"):
+        osinfo = get_checkpoint_platform()
 
     # Remove trailing whitespace and quote in distro name
     osinfo[0] = osinfo[0].strip('"').strip(' ').lower()

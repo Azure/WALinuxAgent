@@ -1,0 +1,56 @@
+#!/bin/bash
+#
+# Init file for AzureLinuxAgent.
+#
+# chkconfig: 2345 60 80
+# description: AzureLinuxAgent
+#
+
+# source function library
+. /etc/rc.d/init.d/functions
+
+RETVAL=0
+FriendlyName="AzureLinuxAgent"
+WAZD_BIN=/usr/sbin/waagent.sh
+
+start()
+{
+    echo -n $"Starting $FriendlyName: "
+    $WAZD_BIN -start &
+    success
+    echo
+}
+
+stop()
+{
+    echo -n $"Stopping $FriendlyName: "
+    killproc -p /var/run/waagent.pid $WAZD_BIN
+    RETVAL=$?
+    echo
+    return $RETVAL
+}
+
+case "$1" in
+    start)
+        start
+        ;;
+    stop)
+        stop
+        ;;
+    restart)
+        stop
+        start
+        ;;
+    reload)
+        ;;
+    report)
+        ;;
+    status)
+        status $WAZD_BIN
+        RETVAL=$?
+        ;;
+    *)
+        echo $"Usage: $0 {start|stop|restart|status}"
+        RETVAL=1
+esac
+exit $RETVAL
