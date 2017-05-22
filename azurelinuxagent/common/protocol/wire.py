@@ -830,10 +830,9 @@ class WireClient(object):
         if blob_uri is not None:
 
             if not blob_type in ["BlockBlob", "PageBlob"]:
-                self.report_status_event(
-                    "{0} is an unsupported blob type",
-                    blob_type)
-                return
+                blob_type = "BlockBlob"
+                logger.info("Status Blob type is unspecified "
+                    "-- assuming it is a BlockBlob")
 
             try:
                 self.status_blob.prepare(blob_type)

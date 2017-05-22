@@ -191,19 +191,23 @@ class TestWireProtocolGetters(AgentTestCase):
                     self.assertTrue(HostPluginProtocol.is_default_channel())
                     HostPluginProtocol.set_default_channel(False)
 
-    def test_upload_status_blob_reports_type_error(self, *args):
+    def test_upload_status_blob_unknown_type_assumes_block(self, *args):
         vmstatus = VMStatus(message="Ready", status="Ready")
         wire_protocol_client = WireProtocol(wireserver_url).client
         wire_protocol_client.ext_conf = ExtensionsConfig(None)
         wire_protocol_client.ext_conf.status_upload_blob = testurl
         wire_protocol_client.ext_conf.status_upload_blob_type = "NotALegalType"
         wire_protocol_client.status_blob.vm_status = vmstatus
-        goal_state = GoalState(WireProtocolData(DATA_FILE).goal_state)
 
-        with patch.object(WireClient, "report_status_event") as mock_event:
-            wire_protocol_client.upload_status_blob()
+        with patch.object(WireClient, "get_goal_state") as patch_get_goal_state:
+            with patch.object(StatusBlob, "prepare") as patch_prepare:
+                with patch.object(StatusBlob, "upload") as patch_default_upload:
+                    HostPluginProtocol.set_default_channel(False)
+                    wire_protocol_client.upload_status_blob()
 
-            self.assertEqual(mock_event.call_count, 1)
+                    patch_prepare.assert_called_once_with("BlockBlob")
+                    patch_default_upload.assert_called_once_with(testurl)
+                    patch_get_goal_state.assert_not_called()
 
     def test_upload_status_blob_reports_prepare_error(self, *args):
         vmstatus = VMStatus(message="Ready", status="Ready")
