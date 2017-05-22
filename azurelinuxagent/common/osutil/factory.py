@@ -29,6 +29,7 @@ from .suse import SUSEOSUtil, SUSE11OSUtil
 from .ubuntu import UbuntuOSUtil, Ubuntu12OSUtil, Ubuntu14OSUtil, UbuntuSnappyOSUtil
 from .alpine import AlpineOSUtil
 from .bigip import BigIpOSUtil
+from .gaia import GaiaOSUtil
 
 
 def get_osutil(distro_name=DISTRO_NAME,
@@ -88,6 +89,9 @@ def get_osutil(distro_name=DISTRO_NAME,
 
     elif distro_name == "bigip":
         return BigIpOSUtil()
+
+    elif distro_name == "gaia":
+        return GaiaOSUtil()
 
     else:
         logger.warn("Unable to load distro implementation for {0}. Using "
