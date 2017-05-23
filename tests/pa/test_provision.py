@@ -61,16 +61,37 @@ class TestProvision(AgentTestCase):
     @patch('os.path.isfile', return_value=True)
     @patch('azurelinuxagent.common.utils.fileutil.read_file',
             return_value="B9F3C233-9913-9F42-8EB3-BA656DF32502")
-    def test_is_provisioned_is_provisioned(self, mock_read, mock_isfile):
+    @patch('azurelinuxagent.pa.deprovision.get_deprovision_handler')
+    def test_is_provisioned_is_provisioned(self,
+            mock_deprovision, mock_read, mock_isfile):
         ph = ProvisionHandler()
+        ph.osutil = Mock()
+        ph.osutil.get_instance_id = \
+            Mock(return_value="B9F3C233-9913-9F42-8EB3-BA656DF32502")
+        ph.write_provisioned = Mock()
+
+        deprovision_handler = Mock()
+        mock_deprovision.return_value = deprovision_handler
+
         self.assertTrue(ph.is_provisioned())
+        deprovision_handler.run_changed_unique_id.assert_not_called()
 
     @patch('os.path.isfile', return_value=True)
     @patch('azurelinuxagent.common.utils.fileutil.read_file',
-            side_effect=["Value1", "Value2"])
-    def test_is_provisioned_not_deprovisioned(self, mock_read, mock_isfile):
+            side_effect=["Value"])
+    @patch('azurelinuxagent.pa.deprovision.get_deprovision_handler')
+    def test_is_provisioned_not_deprovisioned(self,
+            mock_deprovision, mock_read, mock_isfile):
+
         ph = ProvisionHandler()
-        self.assertRaises(ProtocolError, ph.is_provisioned)
+        ph.osutil = Mock()
+        ph.write_provisioned = Mock()
+
+        deprovision_handler = Mock()
+        mock_deprovision.return_value = deprovision_handler
+
+        self.assertTrue(ph.is_provisioned())
+        deprovision_handler.run_changed_unique_id.assert_called_once()
 
 if __name__ == '__main__':
     unittest.main()

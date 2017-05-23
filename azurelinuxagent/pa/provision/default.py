@@ -143,15 +143,35 @@ class ProvisionHandler(object):
         return os.path.join(conf.get_lib_dir(), PROVISIONED_FILE)
 
     def is_provisioned(self):
+        '''
+        A VM is considered provisionend *anytime* the provisioning
+        sentinel file exists and not provisioned *anytime* the file
+        is absent.
+
+        If the VM was provisioned using an agent that did not record
+        the VM unique identifier, the provisioning file will be re-written
+        to include the identifier.
+
+        A warning is logged *if* the VM unique identifier has changed
+        since VM was provisioned.
+        '''
         if not os.path.isfile(self.provisioned_file_path()):
             return False
 
-        s = fileutil.read_file(self.provisioned_file_path())
-        util = get_osutil()
-        if s == util.get_instance_id():
-            return True
+        s = fileutil.read_file(self.provisioned_file_path()).strip()
+        if s != self.osutil.get_instance_id():
+            if len(s) > 0:
+                logger.warn("VM is provisioned, "
+                            "but the VM unique identifier has changed -- "
+                            "clearing cached state")
+                from azurelinuxagent.pa.deprovision \
+                    import get_deprovision_handler
+                deprovision_handler = get_deprovision_handler()
+                deprovision_handler.run_changed_unique_id()
 
-        raise ProtocolError("Provisioning new instance without a deprovision")
+            self.write_provisioned()
+
+        return True
 
     def write_provisioned(self):
         fileutil.write_file(
