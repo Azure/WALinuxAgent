@@ -276,14 +276,16 @@ def ext_substatus_to_v1(sub_status_list):
     return status_list
 
 
-def ext_status_to_v1(ext_name, ext_status):
+def ext_status_to_v1(ext_handler_name, ext_status):
     if ext_status is None:
         return None
     timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     v1_sub_status = ext_substatus_to_v1(ext_status.substatusList)
+    if not ext_status.name:
+        ext_status.name = ext_handler_name
     v1_ext_status = {
         "status": {
-            "name": ext_name,
+            "name": ext_status.name,
             "configurationAppliedTime": ext_status.configurationAppliedTime,
             "operation": ext_status.operation,
             "status": ext_status.status,
@@ -316,9 +318,9 @@ def ext_handler_status_to_v1(handler_status, ext_statuses, timestamp):
 
     if len(handler_status.extensions) > 0:
         # Currently, no more than one extension per handler
-        ext_name = handler_status.extensions[0]
-        ext_status = ext_statuses.get(ext_name)
-        v1_ext_status = ext_status_to_v1(ext_name, ext_status)
+        ext_handler_name = handler_status.extensions[0]
+        ext_status = ext_statuses.get(ext_handler_name)
+        v1_ext_status = ext_status_to_v1(ext_handler_name, ext_status)
         if ext_status is not None and v1_ext_status is not None:
             v1_handler_status["runtimeSettingsStatus"] = {
                 'settingsStatus': v1_ext_status,

@@ -111,6 +111,7 @@ def parse_ext_status(ext_status, data):
     ext_status.operation = status_data.get('operation')
     ext_status.status = status_data.get('status')
     ext_status.code = status_data.get('code', 0)
+    ext_status.name = status_data.get('name', None)
     formatted_message = status_data.get('formattedMessage')
     ext_status.message = parse_formatted_message(formatted_message)
     substatus_list = status_data.get('substatus')
