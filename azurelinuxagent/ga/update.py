@@ -30,7 +30,7 @@ import time
 import traceback
 import zipfile
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
@@ -101,7 +101,7 @@ class UpdateHandler(object):
         self.signal_handler = None
         return
 
-    def run_latest(self):
+    def run_latest(self, child_args=None):
         """
         This method is called from the daemon to find and launch the most
         current, downloaded agent.
@@ -129,7 +129,10 @@ class UpdateHandler(object):
             agent_dir = latest_agent.get_agent_dir()
             agent_name = latest_agent.name
             agent_version = latest_agent.version
-        
+
+        if child_args is not None:
+            agent_cmd = "{0} {1}".format(agent_cmd, child_args)
+
         try:
 
             # Launch the correct Python version for python-based agents
@@ -240,6 +243,8 @@ class UpdateHandler(object):
         migrate_handler_state()
 
         try:
+            send_event_time = datetime.utcnow()
+
             self._ensure_no_orphans()
             self._emit_restart_event()
 
@@ -258,14 +263,20 @@ class UpdateHandler(object):
 
                 utc_start = datetime.utcnow()
 
+                last_etag = exthandlers_handler.last_etag
                 exthandlers_handler.run()
 
+                log_event = last_etag != exthandlers_handler.last_etag or \
+                            (datetime.utcnow() >= send_event_time)
                 add_event(
                     AGENT_NAME,
                     version=CURRENT_VERSION,
                     op=WALAEventOperation.ProcessGoalState,
                     is_success=True,
-                    duration=elapsed_milliseconds(utc_start))
+                    duration=elapsed_milliseconds(utc_start),
+                    log_event=log_event)
+                if log_event:
+                    send_event_time += timedelta(minutes=REPORT_STATUS_INTERVAL)
 
                 test_agent = self.get_test_agent()
                 if test_agent is not None and test_agent.in_slice:

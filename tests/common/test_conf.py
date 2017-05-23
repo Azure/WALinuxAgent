@@ -31,6 +31,10 @@ class TestConf(AgentTestCase):
                 os.path.join(data_dir, "test_waagent.conf"),
                 self.conf)
 
+    def test_key_value_handling(self):
+        self.assertEqual("Value1", self.conf.get("FauxKey1", "Bad"))
+        self.assertEqual("Value2 Value2", self.conf.get("FauxKey2", "Bad"))
+
     def test_get_ssh_dir(self):
         self.assertTrue(get_ssh_dir(self.conf).startswith("/notareal/path"))
 

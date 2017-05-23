@@ -43,14 +43,17 @@ class Agent(object):
         """
         Initialize agent running environment.
         """
+        self.conf_file_path = conf_file_path
         self.osutil = get_osutil()
+
         #Init stdout log
         level = logger.LogLevel.VERBOSE if verbose else logger.LogLevel.INFO
         logger.add_logger_appender(logger.AppenderType.STDOUT, level)
 
         #Init config
-        if conf_file_path is None:
-            conf_file_path = self.osutil.get_agent_conf_file_path()
+        conf_file_path = self.conf_file_path \
+                if self.conf_file_path is not None \
+                    else self.osutil.get_agent_conf_file_path()
         conf.load_conf_from_file(conf_file_path)
 
         #Init log
@@ -70,9 +73,13 @@ class Agent(object):
         """
         Run agent daemon
         """
+        child_args = None \
+            if self.conf_file_path is None \
+                else "-configuration-path:{0}".format(self.conf_file_path)
+
         from azurelinuxagent.daemon import get_daemon_handler
         daemon_handler = get_daemon_handler()
-        daemon_handler.run()
+        daemon_handler.run(child_args=child_args)
 
     def provision(self):
         """

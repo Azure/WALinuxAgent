@@ -62,12 +62,31 @@ class TestAgent(AgentTestCase):
         Agent(False)
         mock_load.assert_called_once_with("/etc/waagent.conf")
 
-    @patch("azurelinuxagent.agent.Agent.run_exthandlers")
-    @patch("os.path.exists", return_value=True)
+    @patch("azurelinuxagent.daemon.get_daemon_handler")
     @patch("azurelinuxagent.common.conf.load_conf_from_file")
-    def test_main_passes_configuration_path(self,
-                mock_load, mock_exists, mock_handlers):
-        main(["-configuration-path:/foo/bar.conf", "-run-exthandlers"])
-        mock_handlers.assert_called_once()
-        mock_exists.assert_called_once_with("/foo/bar.conf")
-        mock_load.assert_called_once_with("/foo/bar.conf")
+    def test_agent_does_not_pass_configuration_path(self,
+                mock_load, mock_handler):
+
+        mock_daemon = Mock()
+        mock_daemon.run = Mock()
+        mock_handler.return_value = mock_daemon
+
+        agent = Agent(False)
+        agent.daemon()
+
+        mock_daemon.run.assert_called_once_with(child_args=None)
+        mock_load.assert_called_once()
+
+    @patch("azurelinuxagent.daemon.get_daemon_handler")
+    @patch("azurelinuxagent.common.conf.load_conf_from_file")
+    def test_agent_passes_configuration_path(self, mock_load, mock_handler):
+
+        mock_daemon = Mock()
+        mock_daemon.run = Mock()
+        mock_handler.return_value = mock_daemon
+
+        agent = Agent(False, conf_file_path="/foo/bar.conf")
+        agent.daemon()
+
+        mock_daemon.run.assert_called_once_with(child_args="-configuration-path:/foo/bar.conf")
+        mock_load.assert_called_once()

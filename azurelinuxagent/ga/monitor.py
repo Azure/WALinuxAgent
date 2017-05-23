@@ -178,11 +178,11 @@ class MonitorHandler(object):
             logger.error("{0}", e)
 
     def daemon(self):
-        last_heartbeat = datetime.datetime.min
         period = datetime.timedelta(minutes=30)
+        last_heartbeat = datetime.datetime.utcnow() - period
         while True:
-            if (datetime.datetime.now() - last_heartbeat) > period:
-                last_heartbeat = datetime.datetime.now()
+            if datetime.datetime.utcnow() >= (last_heartbeat + period):
+                last_heartbeat = datetime.datetime.utcnow()
                 add_event(
                     op=WALAEventOperation.HeartBeat,
                     name=CURRENT_AGENT,

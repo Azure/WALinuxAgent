@@ -40,12 +40,12 @@ class ConfigurationProvider(object):
             raise AgentConfigError("Can't not parse empty configuration")
         for line in content.split('\n'):
             if not line.startswith("#") and "=" in line:
-                parts = line.split()[0].split('=')
+                parts = line.split('=')
+                if len(parts) < 2:
+                    continue
+                key = parts[0].strip()
                 value = parts[1].strip("\" ")
-                if value != "None":
-                    self.values[parts[0]] = value
-                else:
-                    self.values[parts[0]] = None
+                self.values[key] = value if value != "None" else None
 
     def get(self, key, default_val):
         val = self.values.get(key)
