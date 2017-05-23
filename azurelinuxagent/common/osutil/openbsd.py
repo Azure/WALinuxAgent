@@ -109,7 +109,7 @@ class OpenBSDOSUtil(DefaultOSUtil):
         if ret != 0:
             raise OSUtilError(("Failed to encrypt password for {0}: {1}"
                                "").format(username, output))
-        passwd_hash = output
+        passwd_hash = output.strip()
         cmd = "usermod -p '{0}' {1}".format(passwd_hash, username)
         ret, output = shellutil.run_get_output(cmd, log_cmd=False)
         if ret != 0:
