@@ -1170,7 +1170,7 @@ class TestUpdate(UpdateTestCase):
             self.assertTrue(os.path.exists(agent_path + ".zip"))
         return
 
-    def _test_run_latest(self, mock_child=None, mock_time=None):
+    def _test_run_latest(self, mock_child=None, mock_time=None, child_args=None):
         if mock_child is None:
             mock_child = ChildMock()
         if mock_time is None:
@@ -1179,7 +1179,7 @@ class TestUpdate(UpdateTestCase):
         with patch('subprocess.Popen', return_value=mock_child) as mock_popen:
             with patch('time.time', side_effect=mock_time.time):
                 with patch('time.sleep', side_effect=mock_time.sleep):
-                    self.update_handler.run_latest()
+                    self.update_handler.run_latest(child_args=child_args)
                     self.assertEqual(1, mock_popen.call_count)
 
                     return mock_popen.call_args
@@ -1189,14 +1189,30 @@ class TestUpdate(UpdateTestCase):
 
         agent = self.update_handler.get_latest_agent()
         args, kwargs = self._test_run_latest()
+        args = args[0]
         cmds = textutil.safe_shlex_split(agent.get_agent_cmd())
         if cmds[0].lower() == "python":
             cmds[0] = get_python_cmd()
 
-        self.assertEqual(args[0], cmds)
+        self.assertEqual(args, cmds)
+        self.assertTrue(len(args) > 1)
+        self.assertTrue(args[0].startswith("python"))
+        self.assertEqual("-run-exthandlers", args[len(args)-1])
         self.assertEqual(True, 'cwd' in kwargs)
         self.assertEqual(agent.get_agent_dir(), kwargs['cwd'])
         self.assertEqual(False, '\x00' in cmds[0])
+        return
+
+    def test_run_latest_passes_child_args(self):
+        self.prepare_agents()
+
+        agent = self.update_handler.get_latest_agent()
+        args, kwargs = self._test_run_latest(child_args="AnArgument")
+        args = args[0]
+
+        self.assertTrue(len(args) > 1)
+        self.assertTrue(args[0].startswith("python"))
+        self.assertEqual("AnArgument", args[len(args)-1])
         return
 
     def test_run_latest_polls_and_waits_for_success(self):

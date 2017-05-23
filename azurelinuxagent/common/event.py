@@ -131,10 +131,11 @@ def report_event(op, is_success=True, message=''):
 
 
 def add_event(name, op="", is_success=True, duration=0, version=CURRENT_VERSION,
-              message="", evt_type="", is_internal=False,
+              message="", evt_type="", is_internal=False, log_event=True,
               reporter=__event_logger__):
-    log = logger.info if is_success else logger.error
-    log("Event: name={0}, op={1}, message={2}", name, op, message)
+    if log_event or not is_success:
+        log = logger.info if is_success else logger.error
+        log("Event: name={0}, op={1}, message={2}", name, op, message)
 
     if reporter.event_dir is None:
         logger.warn("Event reporter is not initialized.")
