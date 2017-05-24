@@ -19,6 +19,7 @@
 
 import base64
 import json
+import traceback
 
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.exception import ProtocolError, HttpError
@@ -177,8 +178,7 @@ class HostPluginProtocol(object):
                 logger.info("HostGAPlugin: Setting host plugin as default channel")
                 HostPluginProtocol.set_default_channel(True)
         except Exception as e:
-            message = "HostGAPlugin: Exception Put VM status: {0}".format(e)
-            logger.error(message)
+            message = "HostGAPlugin: Exception Put VM status: {0}, {1}".format(e, traceback.format_exc())
             from azurelinuxagent.common.event import WALAEventOperation, report_event
             report_event(op=WALAEventOperation.ReportStatus,
                          is_success=False,
