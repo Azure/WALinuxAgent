@@ -59,6 +59,7 @@ of supported systems on the Microsoft Azure Platform as described here:
 http://support.microsoft.com/kb/2805216
 
 Supported Linux Distributions:
+   * Archlinux
    * CoreOS
    * CentOS 6.2+
    * Red Hat Enterprise Linux 6.7+
