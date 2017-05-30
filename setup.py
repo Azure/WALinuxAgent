@@ -58,7 +58,11 @@ def set_systemd_files(data_files, dest="/lib/systemd/system",
     data_files.append((dest, src))
 
 
-def set_rc_files(data_files, dest="/etc/rc.d/", src=["init/freebsd/waagent"]):
+def set_freebsd_rc_files(data_files, dest="/etc/rc.d/", src=["init/freebsd/waagent"]):
+    data_files.append((dest, src))
+
+
+def set_openbsd_rc_files(data_files, dest="/etc/rc.d/", src=["init/openbsd/waagent"]):
     data_files.append((dest, src))
 
 
@@ -143,7 +147,11 @@ def get_data_files(name, version, fullname):
     elif name == 'freebsd':
         set_bin_files(data_files, dest="/usr/local/sbin")
         set_conf_files(data_files, src=["config/freebsd/waagent.conf"])
-        set_rc_files(data_files)
+        set_freebsd_rc_files(data_files)
+    elif name == 'openbsd':
+        set_bin_files(data_files, dest="/usr/local/sbin")
+        set_conf_files(data_files, src=["config/openbsd/waagent.conf"])
+        set_openbsd_rc_files(data_files)
     else:
         # Use default setting
         set_bin_files(data_files)

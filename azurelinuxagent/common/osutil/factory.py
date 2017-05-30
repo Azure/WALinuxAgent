@@ -24,6 +24,7 @@ from .clearlinux import ClearLinuxUtil
 from .coreos import CoreOSUtil
 from .debian import DebianOSUtil
 from .freebsd import FreeBSDOSUtil
+from .openbsd import OpenBSDOSUtil
 from .redhat import RedhatOSUtil, Redhat6xOSUtil
 from .suse import SUSEOSUtil, SUSE11OSUtil
 from .ubuntu import UbuntuOSUtil, Ubuntu12OSUtil, Ubuntu14OSUtil, UbuntuSnappyOSUtil
@@ -86,6 +87,9 @@ def get_osutil(distro_name=DISTRO_NAME,
 
     elif distro_name == "freebsd":
         return FreeBSDOSUtil()
+
+    elif distro_name == "openbsd":
+        return OpenBSDOSUtil()
 
     elif distro_name == "bigip":
         return BigIpOSUtil()

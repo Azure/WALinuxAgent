@@ -2,9 +2,9 @@
 
 ### INTRODUCTION
 
-The Microsoft Azure Linux Agent (waagent) manages Linux & FreeBSD provisioning,
+The Microsoft Azure Linux Agent (waagent) manages Linux & BSD provisioning,
 and VM interaction with the Azure Fabric Controller. It provides the following
-functionality for Linux and FreeBSD IaaS deployments:
+functionality for Linux and BSD IaaS deployments:
 
   * Image Provisioning
     - Creation of a user account
@@ -70,6 +70,7 @@ Supported Linux Distributions:
 
 Other Supported Systems:
    * FreeBSD 10+ (Azure Linux Agent v2.0.10+)
+   * OpenBSD 6+ (Azure Linux Agent v2.2.11+)
 
 Waagent depends on some system packages in order to function properly:
 
@@ -303,8 +304,8 @@ _Default: ext4_
 
 This specifies the filesystem type for the resource disk. Supported values vary
 by Linux distribution. If the string is X, then mkfs.X should be present on the
-Linux image. SLES 11 images should typically use 'ext3'. FreeBSD images should
-use 'ufs2' here.
+Linux image. SLES 11 images should typically use 'ext3'. BSD images should use
+'ufs2' here.
 
 * __ResourceDisk.MountPoint__   
 _Type: String_   
