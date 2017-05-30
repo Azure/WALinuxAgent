@@ -288,12 +288,23 @@ class HostPluginProtocol(object):
     
     @staticmethod
     def read_response_error(response):
-        if response is None:
-            return ''
-        body = remove_bom(response.read())
-        if PY_VERSION_MAJOR < 3 and body is not None:
-            body = ustr(body, encoding='utf-8')
-        return "{0}, {1}, {2}".format(
-            response.status,
-            response.reason,
-            body)
+        result = ''
+        if response is not None:
+            try:
+                body = remove_bom(response.read())
+                result = "[{0}: {1}] {2}".format(response.status,
+                                                 response.reason,
+                                                 body)
+
+                # this result string is passed upstream to several methods
+                # which do a raise HttpError() or a format() of some kind;
+                # as a result it cannot have any unicode characters
+                if PY_VERSION_MAJOR < 3:
+                    result = ustr(result, encoding='ascii', errors='ignore')
+                else:
+                    result = result\
+                        .encode(encoding='ascii', errors='ignore')\
+                        .decode(encoding='ascii', errors='ignore')
+            except Exception:
+                logger.warn(traceback.format_exc())
+        return result
