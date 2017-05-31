@@ -592,6 +592,7 @@ class ExtHandlerInstance(object):
         version = self.ext_handler.properties.version
         add_event(name=self.ext_handler.name, version=version, message=message, 
                   op=self.operation, is_success=is_success)
+        self.logger.info(message)
 
     def download(self):
         self.logger.verbose("Download extension package")
@@ -826,10 +827,8 @@ class ExtHandlerInstance(object):
             raise ExtensionError("Timeout({0}): {1}".format(timeout, cmd))
 
         ret = child.wait()
-        if ret == None or ret != 0:
-            raise ExtensionError("Non-zero exit code: {0}, {1}".format(ret, cmd))
-
-        self.report_event(message="Launch command succeeded: {0}".format(cmd))
+        message="Launch command '{0}' returned code {1}".format(cmd, ret)
+        self.report_event(message=message, is_success=(ret <= 0))
 
     def load_manifest(self):
         man_file = self.get_manifest_file()
