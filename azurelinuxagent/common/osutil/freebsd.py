@@ -229,17 +229,21 @@ class FreeBSDOSUtil(DefaultOSUtil):
         err, output = shellutil.run_get_output(cmd_search_blkvsc)
         if err == 0:
             output = output.rstrip()
-            cmd_search_dev="camcontrol devlist | grep {0} | awk -F \( '{{print $2}}'|awk -F , '{{print $1}}'".format(output)
+            cmd_search_dev="camcontrol devlist | grep {0} | awk -F \( '{{print $2}}'|sed -e 's/.*(//'| sed -e 's/).*//'".format(output)
             err, output = shellutil.run_get_output(cmd_search_dev)
             if err == 0:
-                return output.rstrip()
+                for possible in output.rstrip().split(','):
+                    if not possible.startswith('pass'):
+                        return possible
 
         cmd_search_storvsc = "camcontrol devlist -b | grep storvsc{0} | awk '{{print $1}}'".format(output)
         err, output = shellutil.run_get_output(cmd_search_storvsc)
         if err == 0:
             output = output.rstrip()
-            cmd_search_dev="camcontrol devlist | grep {0} | awk -F \( '{{print $2}}'|awk -F , '{{print $1}}'".format(output)
+            cmd_search_dev="camcontrol devlist | grep {0} | awk -F \( '{{print $2}}'|sed -e 's/.*(//'| sed -e 's/).*//'".format(output)
             err, output = shellutil.run_get_output(cmd_search_dev)
             if err == 0:
-                return output.rstrip()
+                for possible in output.rstrip().split(','):
+                    if not possible.startswith('pass'):
+                        return possible
         return None
