@@ -59,7 +59,7 @@ class FreeBSDResourceDiskHandler(ResourceDiskHandler):
         disks = self.parse_gpart_list(output)
 
         device = self.osutil.device_for_ide_port(1)
-        if device is None:
+        if device is None or not device in disks:
         # fallback logic to find device
             err, output = shellutil.run_get_output('camcontrol periphlist 2:1:0')
             if err:
