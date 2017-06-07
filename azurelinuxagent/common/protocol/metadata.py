@@ -113,7 +113,7 @@ class MetadataProtocol(Protocol):
         except HttpError as e:
             raise ProtocolError(ustr(e))
         if resp.status != httpclient.CREATED:
-            raise ProtocolError("{0} - POST: {1}".format(resp.status, url))
+            logger.warn("{0} for POST {1}".format(resp.status, url))
 
     def _get_trans_cert(self):
         trans_crt_file = os.path.join(conf.get_lib_dir(),
