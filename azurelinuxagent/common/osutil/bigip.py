@@ -258,57 +258,6 @@ class BigIpOSUtil(DefaultOSUtil):
         """
         logger.warn("Eject is not supported on this platform")
 
-    def set_admin_access_to_ip(self, dest_ip):
-        """Sets admin access to an IP address
-
-        This method is primarily used to limit which user account is allowed to
-        communicate with the Azure(Stack) metadata service. This service is at
-        the address 169.254.169.254 and includes information about the device
-        that "normal" users should not be allowed to see.
-
-        We cannot use this iptables command that comes with the default class
-        because we do not ship the 'ipt_owner' iptables extension with BIG-IP.
-
-        This should not be a problem though as the only people who should have
-        access to BIG-IP are people who are root anyways. Our system is not
-        a "general purpose" user system. So for those reasons I am dropping
-        that requirement from our implementation.
-
-        :param dest_ip: The IP address that you want to allow admin access for
-        """
-        self._set_accept_admin_access_to_ip(dest_ip)
-        self._set_drop_admin_access_to_ip(dest_ip)
-
-    def _set_accept_admin_access_to_ip(self, dest_ip):
-        """Sets the "accept" IP Tables rules
-
-        I broke this out to a separate function so that I could more easily
-        test it in the tests/common/osutil/test_default.py code
-
-        :param dest_ip:
-        :return:
-        """
-        # This allows root to access dest_ip
-        rm_old = "iptables -D OUTPUT -d {0} -j ACCEPT"
-        rule = "iptables -A OUTPUT -d {0} -j ACCEPT"
-        shellutil.run(rm_old.format(dest_ip), chk_err=False)
-        shellutil.run(rule.format(dest_ip))
-
-    def _set_drop_admin_access_to_ip(self, dest_ip):
-        """Sets the "drop" IP Tables rules
-
-        I broke this out to a separate function so that I could more easily
-        test it in the tests/common/osutil/test_default.py code
-
-        :param dest_ip:
-        :return:
-        """
-        # This blocks all other users to access dest_ip
-        rm_old = "iptables -D OUTPUT -d {0} -j DROP"
-        rule = "iptables -A OUTPUT -d {0} -j DROP"
-        shellutil.run(rm_old.format(dest_ip), chk_err=False)
-        shellutil.run(rule.format(dest_ip))
-
     def get_first_if(self):
         """Return the interface name, and ip addr of the management interface.
 

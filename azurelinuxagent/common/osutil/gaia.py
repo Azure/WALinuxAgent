@@ -194,6 +194,3 @@ class GaiaOSUtil(DefaultOSUtil):
 
     def del_account(self, username):
         logger.warn('del_account is ignored on GAiA')
-
-    def set_admin_access_to_ip(self, dest_ip):
-        logger.warn('set_admin_access_to_ip is ignored on GAiA')

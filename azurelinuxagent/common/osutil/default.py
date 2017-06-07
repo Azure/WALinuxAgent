@@ -841,18 +841,5 @@ class DefaultOSUtil(object):
     def get_processor_cores(self):
         return multiprocessing.cpu_count()
 
-    def set_admin_access_to_ip(self, dest_ip):
-        #This allows root to access dest_ip
-        rm_old= "iptables -D OUTPUT -d {0} -j ACCEPT -m owner --uid-owner 0"
-        rule = "iptables -A OUTPUT -d {0} -j ACCEPT -m owner --uid-owner 0"
-        shellutil.run(rm_old.format(dest_ip), chk_err=False)
-        shellutil.run(rule.format(dest_ip))
-
-        #This blocks all other users to access dest_ip
-        rm_old = "iptables -D OUTPUT -d {0} -j DROP"
-        rule = "iptables -A OUTPUT -d {0} -j DROP"
-        shellutil.run(rm_old.format(dest_ip), chk_err=False)
-        shellutil.run(rule.format(dest_ip))
-
     def check_pid_alive(self, pid):
         return pid is not None and os.path.isdir(os.path.join('/proc', pid))
