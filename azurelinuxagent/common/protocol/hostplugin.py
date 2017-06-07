@@ -70,7 +70,7 @@ class HostPluginProtocol(object):
         if not self.is_initialized:
             self.api_versions = self.get_api_versions()
             self.is_available = API_VERSION in self.api_versions
-            self.is_initialized = True
+            self.is_initialized = self.is_available
             from azurelinuxagent.common.event import WALAEventOperation, report_event
             report_event(WALAEventOperation.InitializeHostPlugin,
                          is_success=self.is_available)
