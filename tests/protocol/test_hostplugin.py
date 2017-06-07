@@ -19,7 +19,7 @@ import base64
 import json
 import sys
 
-
+from azurelinuxagent.common.future import ustr
 
 if sys.version_info[0] == 3:
     import http.client as httpclient
@@ -223,6 +223,61 @@ class TestHostPlugin(AgentTestCase):
                     patch_http.call_args_list[0],
                     test_goal_state,
                     exp_method, exp_url, exp_data)
+
+    def test_read_response_error(self):
+        """
+        Validate the read_response_error method handles encoding correctly
+        """
+        responses = ['message', b'message', '\x80message\x80']
+        response = MagicMock()
+        response.status = 'status'
+        response.reason = 'reason'
+        with patch.object(response, 'read') as patch_response:
+            for s in responses:
+                patch_response.return_value = s
+                result = hostplugin.HostPluginProtocol.read_response_error(response)
+                self.assertTrue('[status: reason]' in result)
+                self.assertTrue('message' in result)
+
+    def test_read_response_bytes(self):
+        response_bytes = '7b:0a:20:20:20:20:22:65:72:72:6f:72:43:6f:64:65:22:' \
+                         '3a:20:22:54:68:65:20:62:6c:6f:62:20:74:79:70:65:20:' \
+                         '69:73:20:69:6e:76:61:6c:69:64:20:66:6f:72:20:74:68:' \
+                         '69:73:20:6f:70:65:72:61:74:69:6f:6e:2e:22:2c:0a:20:' \
+                         '20:20:20:22:6d:65:73:73:61:67:65:22:3a:20:22:c3:af:' \
+                         'c2:bb:c2:bf:3c:3f:78:6d:6c:20:76:65:72:73:69:6f:6e:' \
+                         '3d:22:31:2e:30:22:20:65:6e:63:6f:64:69:6e:67:3d:22:' \
+                         '75:74:66:2d:38:22:3f:3e:3c:45:72:72:6f:72:3e:3c:43:' \
+                         '6f:64:65:3e:49:6e:76:61:6c:69:64:42:6c:6f:62:54:79:' \
+                         '70:65:3c:2f:43:6f:64:65:3e:3c:4d:65:73:73:61:67:65:' \
+                         '3e:54:68:65:20:62:6c:6f:62:20:74:79:70:65:20:69:73:' \
+                         '20:69:6e:76:61:6c:69:64:20:66:6f:72:20:74:68:69:73:' \
+                         '20:6f:70:65:72:61:74:69:6f:6e:2e:0a:52:65:71:75:65:' \
+                         '73:74:49:64:3a:63:37:34:32:39:30:63:62:2d:30:30:30:' \
+                         '31:2d:30:30:62:35:2d:30:36:64:61:2d:64:64:36:36:36:' \
+                         '61:30:30:30:22:2c:0a:20:20:20:20:22:64:65:74:61:69:' \
+                         '6c:73:22:3a:20:22:22:0a:7d'.split(':')
+        expected_response = '[status: reason] {\n    "errorCode": "The blob ' \
+                            'type is invalid for this operation.",\n    ' \
+                            '"message": "<?xml version="1.0" ' \
+                            'encoding="utf-8"?>' \
+                            '<Error><Code>InvalidBlobType</Code><Message>The ' \
+                            'blob type is invalid for this operation.\n' \
+                            'RequestId:c74290cb-0001-00b5-06da-dd666a000",' \
+                            '\n    "details": ""\n}'
+
+        response_string = ''.join(chr(int(b, 16)) for b in response_bytes)
+        response = MagicMock()
+        response.status = 'status'
+        response.reason = 'reason'
+        with patch.object(response, 'read') as patch_response:
+            patch_response.return_value = response_string
+            result = hostplugin.HostPluginProtocol.read_response_error(response)
+            self.assertEqual(result, expected_response)
+            try:
+                raise HttpError("{0}".format(result))
+            except HttpError as e:
+                self.assertTrue(result in ustr(e))
 
     def test_no_fallback(self):
         """
