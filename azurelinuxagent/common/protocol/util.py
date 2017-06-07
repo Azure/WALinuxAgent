@@ -162,12 +162,7 @@ class ProtocolUtil(object):
     def _detect_metadata_protocol(self):
         protocol = MetadataProtocol()
         protocol.detect()
-        
-        # only allow root access METADATA_ENDPOINT
-        self.osutil.set_admin_access_to_ip(METADATA_ENDPOINT)
-        
         self.save_protocol("MetadataProtocol")
-
         return protocol
             
     def _detect_protocol(self, protocols):

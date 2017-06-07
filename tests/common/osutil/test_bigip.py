@@ -282,35 +282,6 @@ class TestBigIpOSUtil_mount_dvd(AgentTestCase):
         self.assertEqual(args[1].call_count, 1)
 
 
-class TestBigIpOSUtil_set_admin_access_to_ip(AgentTestCase):
-
-    @patch.object(shellutil, "run", return_value=0)
-    @patch.object(osutil.BigIpOSUtil,
-                  '_set_accept_admin_access_to_ip', return_value=None)
-    @patch.object(osutil.BigIpOSUtil,
-                  '_set_drop_admin_access_to_ip', return_value=None)
-    def test_success(self, *args):
-        osutil.BigIpOSUtil.set_admin_access_to_ip(
-            osutil.BigIpOSUtil(), '192.168.10.10'
-        )
-        self.assertEqual(args[0].call_count, 1)
-        self.assertEqual(args[1].call_count, 1)
-
-    @patch.object(shellutil, "run", return_value=0)
-    def test_accept_access(self, *args):
-        osutil.BigIpOSUtil._set_accept_admin_access_to_ip(
-            osutil.BigIpOSUtil(), '192.168.10.10'
-        )
-        self.assertEqual(args[0].call_count, 2)
-
-    @patch.object(shellutil, "run", return_value=0)
-    def test_drop_access(self, *args):
-        osutil.BigIpOSUtil._set_drop_admin_access_to_ip(
-            osutil.BigIpOSUtil(), '192.168.10.10'
-        )
-        self.assertEqual(args[0].call_count, 2)
-
-
 class TestBigIpOSUtil_route_add(AgentTestCase):
 
     @patch.object(shellutil, "run", return_value=0)
