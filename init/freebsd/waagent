@@ -6,7 +6,7 @@
 
 . /etc/rc.subr
 
-PATH=$PATH:/usr/local/bin
+PATH=$PATH:/usr/local/bin:/usr/local/sbin
 name="waagent"
 rcvar="waagent_enable"
 pidfile="/var/run/waagent.pid"
