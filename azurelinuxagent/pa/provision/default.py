@@ -53,14 +53,20 @@ class ProvisionHandler(object):
         self.protocol_util = get_protocol_util()
 
     def run(self):
+        thumbprint = None
+      
         # If provision is not enabled, report ready and then return
         if not conf.get_provision_enabled():
-            logger.info("Provisioning is disabled, skipping.")
+            if self.is_provisioned():
+                logger.info("Provisioning completed by external source,"
+                    " marking as ready")
+                self.report_ready(thumbprint)
+            else:
+                logger.info("Provisioning is disabled, skipping.")
             return
 
         try:
             utc_start = datetime.utcnow()
-            thumbprint = None
 
             # if provisioning is already done, return
             if self.is_provisioned():
