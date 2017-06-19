@@ -781,7 +781,6 @@ class ExtHandlerInstance(object):
         heartbeat_file = os.path.join(conf.get_lib_dir(),
                                       self.get_heartbeat_file())
 
-        self.logger.info("Collect heart beat")
         if not os.path.isfile(heartbeat_file):
             raise ExtensionError("Failed to get heart beat file")
         if not self.is_responsive(heartbeat_file):

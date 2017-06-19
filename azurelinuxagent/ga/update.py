@@ -38,7 +38,7 @@ import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.restutil as restutil
 import azurelinuxagent.common.utils.textutil as textutil
 
-from azurelinuxagent.common.event import add_event, \
+from azurelinuxagent.common.event import add_event, add_periodic, \
                                     elapsed_milliseconds, \
                                     WALAEventOperation
 from azurelinuxagent.common.exception import UpdateError, ProtocolError
@@ -46,6 +46,7 @@ from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol import get_protocol_util
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
+from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, AGENT_LONG_VERSION, \
                                             AGENT_DIR_GLOB, AGENT_PKG_GLOB, \
@@ -67,7 +68,6 @@ CHILD_POLL_INTERVAL = 60
 MAX_FAILURE = 3 # Max failure allowed for agent before blacklisted
 
 GOAL_STATE_INTERVAL = 3
-REPORT_STATUS_INTERVAL = 15
 
 ORPHAN_WAIT_INTERVAL = 15 * 60 * 60
 
@@ -207,19 +207,21 @@ class UpdateHandler(object):
                     latest_agent.mark_failure(is_fatal=True)
 
         except Exception as e:
-            msg = u"Agent {0} launched with command '{1}' failed with exception: {2}".format(
-                agent_name,
-                agent_cmd,
-                ustr(e))
-            logger.warn(msg)
-            add_event(
-                AGENT_NAME,
-                version=agent_version,
-                op=WALAEventOperation.Enable,
-                is_success=False,
-                message=msg)
-            if latest_agent is not None:
-                latest_agent.mark_failure(is_fatal=True)
+            # Ignore child errors during termination
+            if self.running:
+                msg = u"Agent {0} launched with command '{1}' failed with exception: {2}".format(
+                    agent_name,
+                    agent_cmd,
+                    ustr(e))
+                logger.warn(msg)
+                add_event(
+                    AGENT_NAME,
+                    version=agent_version,
+                    op=WALAEventOperation.Enable,
+                    is_success=False,
+                    message=msg)
+                if latest_agent is not None:
+                    latest_agent.mark_failure(is_fatal=True)
 
         self.child_process = None
         return
@@ -266,17 +268,14 @@ class UpdateHandler(object):
                 last_etag = exthandlers_handler.last_etag
                 exthandlers_handler.run()
 
-                log_event = last_etag != exthandlers_handler.last_etag or \
-                            (datetime.utcnow() >= send_event_time)
-                add_event(
-                    AGENT_NAME,
-                    version=CURRENT_VERSION,
-                    op=WALAEventOperation.ProcessGoalState,
-                    is_success=True,
-                    duration=elapsed_milliseconds(utc_start),
-                    log_event=log_event)
-                if log_event:
-                    send_event_time += timedelta(minutes=REPORT_STATUS_INTERVAL)
+                if last_etag != exthandlers_handler.last_etag:
+                    add_event(
+                        AGENT_NAME,
+                        version=CURRENT_VERSION,
+                        op=WALAEventOperation.ProcessGoalState,
+                        is_success=True,
+                        duration=elapsed_milliseconds(utc_start),
+                        log_event=True)
 
                 test_agent = self.get_test_agent()
                 if test_agent is not None and test_agent.in_slice:
@@ -423,10 +422,7 @@ class UpdateHandler(object):
         #  The code leaves on disk available, but blacklisted, agents so as to
         #  preserve the state. Otherwise, those agents could be again
         #  downloaded and inappropriately retried.
-        host = None
-        if protocol and protocol.client:
-            host = protocol.client.get_host_plugin()
-
+        host = self._get_host_plugin(protocol=protocol)
         self._set_agents([GuestAgent(pkg=pkg, host=host) for pkg in pkg_list.versions])
         self._purge_agents()
         self._filter_blacklisted_agents()
@@ -504,6 +500,13 @@ class UpdateHandler(object):
         except Exception as e:
             logger.warn(u"Exception occurred loading available agents: {0}", ustr(e))
         return
+
+    def _get_host_plugin(self, protocol=None):
+        return protocol.client.get_host_plugin() \
+                                if protocol and \
+                                    type(protocol) is WireProtocol and \
+                                    protocol.client \
+                                else None
 
     def _get_pid_files(self):
         pid_file = conf.get_agent_pid_file_path()
@@ -602,6 +605,8 @@ class UpdateHandler(object):
         return os.path.join(conf.get_lib_dir(), AGENT_SENTINAL_FILE)
 
     def _shutdown(self):
+        self.running = False
+
         if not os.path.isfile(self._sentinal_file_path()):
             return
 
@@ -647,7 +652,7 @@ class GuestAgent(object):
         self.version = FlexibleVersion(version)
 
         location = u"disk" if path is not None else u"package"
-        logger.verbose(u"Instantiating Agent {0} from {1}", self.name, location)
+        logger.verbose(u"Loading Agent {0} from package {1}", self.name, location)
 
         self.error = None
         self.supported = None
@@ -716,7 +721,7 @@ class GuestAgent(object):
                 os.makedirs(self.get_agent_dir())
             self.error.mark_failure(is_fatal=is_fatal)
             self.error.save()
-            if is_fatal:
+            if self.error.is_blacklisted:
                 logger.warn(u"Agent {0} is permanently blacklisted", self.name)
         except Exception as e:
             logger.warn(u"Agent {0} failed recording error state: {1}", self.name, ustr(e))
@@ -727,7 +732,7 @@ class GuestAgent(object):
             logger.verbose(u"Ensuring Agent {0} is downloaded", self.name)
 
             if self.is_blacklisted:
-                logger.info(u"Agent {0} is blacklisted - skipping download", self.name)
+                logger.verbose(u"Agent {0} is blacklisted - skipping download", self.name)
                 return
 
             if self.is_downloaded:

@@ -27,9 +27,14 @@ import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.shellutil as shellutil
 
 from azurelinuxagent.common.exception import ProtocolError
-from azurelinuxagent.common.future import read_input
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol import get_protocol_util
+
+def read_input(message):
+    if sys.version_info[0] >= 3:
+        return input(message)
+    else:
+        return raw_input(message)
 
 class DeprovisionAction(object):
     def __init__(self, func, args=[], kwargs={}):
@@ -209,7 +214,6 @@ class DeprovisionHandler(object):
         self.del_cloud_init(warnings, actions, include_once=False)
         self.del_dhcp_lease(warnings, actions)
         self.del_lib_dir_files(warnings, actions)
-        self.del_resolv(warnings, actions)
 
         return warnings, actions
 
@@ -217,8 +221,8 @@ class DeprovisionHandler(object):
         warnings, actions = self.setup(deluser)
 
         self.do_warnings(warnings)
-        self.do_confirmation(force=force)
-        self.do_actions(actions)
+        if self.do_confirmation(force=force):
+            self.do_actions(actions)
 
     def run_changed_unique_id(self):
         '''
@@ -259,5 +263,3 @@ class DeprovisionHandler(object):
 
         print ('Deprovisioning may not be interrupted.')
         return
-
-

@@ -79,7 +79,7 @@ class DaemonHandler(object):
                 err_msg = traceback.format_exc()
                 add_event(name=AGENT_NAME, is_success=False, message=ustr(err_msg),
                           op=WALAEventOperation.UnhandledError)
-                logger.info("Sleep 15 seconds and restart daemon")
+                logger.warn("Daemon ended with exception -- Sleep 15 seconds and restart daemon")
                 time.sleep(15)
 
     def check_pid(self):
