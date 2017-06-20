@@ -46,6 +46,7 @@ from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol import get_protocol_util
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
+from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, AGENT_LONG_VERSION, \
                                             AGENT_DIR_GLOB, AGENT_PKG_GLOB, \
@@ -207,19 +208,21 @@ class UpdateHandler(object):
                     latest_agent.mark_failure(is_fatal=True)
 
         except Exception as e:
-            msg = u"Agent {0} launched with command '{1}' failed with exception: {2}".format(
-                agent_name,
-                agent_cmd,
-                ustr(e))
-            logger.warn(msg)
-            add_event(
-                AGENT_NAME,
-                version=agent_version,
-                op=WALAEventOperation.Enable,
-                is_success=False,
-                message=msg)
-            if latest_agent is not None:
-                latest_agent.mark_failure(is_fatal=True)
+            # Ignore child errors during termination
+            if self.running:
+                msg = u"Agent {0} launched with command '{1}' failed with exception: {2}".format(
+                    agent_name,
+                    agent_cmd,
+                    ustr(e))
+                logger.warn(msg)
+                add_event(
+                    AGENT_NAME,
+                    version=agent_version,
+                    op=WALAEventOperation.Enable,
+                    is_success=False,
+                    message=msg)
+                if latest_agent is not None:
+                    latest_agent.mark_failure(is_fatal=True)
 
         self.child_process = None
         return
@@ -423,10 +426,7 @@ class UpdateHandler(object):
         #  The code leaves on disk available, but blacklisted, agents so as to
         #  preserve the state. Otherwise, those agents could be again
         #  downloaded and inappropriately retried.
-        host = None
-        if protocol and protocol.client:
-            host = protocol.client.get_host_plugin()
-
+        host = self._get_host_plugin(protocol=protocol)
         self._set_agents([GuestAgent(pkg=pkg, host=host) for pkg in pkg_list.versions])
         self._purge_agents()
         self._filter_blacklisted_agents()
@@ -504,6 +504,13 @@ class UpdateHandler(object):
         except Exception as e:
             logger.warn(u"Exception occurred loading available agents: {0}", ustr(e))
         return
+
+    def _get_host_plugin(self, protocol=None):
+        return protocol.client.get_host_plugin() \
+                                if protocol and \
+                                    type(protocol) is WireProtocol and \
+                                    protocol.client \
+                                else None
 
     def _get_pid_files(self):
         pid_file = conf.get_agent_pid_file_path()
@@ -602,6 +609,8 @@ class UpdateHandler(object):
         return os.path.join(conf.get_lib_dir(), AGENT_SENTINAL_FILE)
 
     def _shutdown(self):
+        self.running = False
+
         if not os.path.isfile(self._sentinal_file_path()):
             return
 

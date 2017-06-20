@@ -129,7 +129,7 @@ def main(args=[]):
     elif command == "help":
         usage()
     elif command == "start":
-        start()
+        start(conf_file_path=conf_file_path)
     else:
         try:
             agent = Agent(verbose, conf_file_path=conf_file_path)
@@ -217,13 +217,16 @@ def usage():
            "").format(sys.argv[0])))
     print("")
 
-def start():
+def start(conf_file_path=None):
     """
     Start agent daemon in a background process and set stdout/stderr to
     /dev/null
     """
     devnull = open(os.devnull, 'w')
-    subprocess.Popen([sys.argv[0], '-daemon'], stdout=devnull, stderr=devnull)
+    args = [sys.argv[0], '-daemon']
+    if conf_file_path is not None:
+        args.append('-configuration-path:{0}'.format(conf_file_path))
+    subprocess.Popen(args, stdout=devnull, stderr=devnull)
 
 if __name__ == '__main__' :
     main()

@@ -15,6 +15,7 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
+import signal
 import tempfile
 
 import azurelinuxagent.common.utils.fileutil as fileutil
@@ -25,6 +26,33 @@ from tests.tools import *
 
 
 class TestDeprovision(AgentTestCase):
+    @patch('signal.signal')
+    @patch('azurelinuxagent.common.osutil.get_osutil')
+    @patch('azurelinuxagent.common.protocol.get_protocol_util')
+    @patch('azurelinuxagent.pa.deprovision.default.read_input')
+    def test_confirmation(self,
+            mock_read, mock_protocol, mock_util, mock_signal):
+        dh = DeprovisionHandler()
+
+        dh.setup = Mock()
+        dh.setup.return_value = ([], [])
+        dh.do_actions = Mock()
+
+        # Do actions if confirmed
+        mock_read.return_value = "y"
+        dh.run()
+        self.assertEqual(1, dh.do_actions.call_count)
+
+        # Skip actions if not confirmed
+        mock_read.return_value = "n"
+        dh.run()
+        self.assertEqual(1, dh.do_actions.call_count)
+
+        # Do actions if forced
+        mock_read.return_value = "n"
+        dh.run(force=True)
+        self.assertEqual(2, dh.do_actions.call_count)
+
     @patch("azurelinuxagent.pa.deprovision.default.DeprovisionHandler.cloud_init_dirs")
     @patch("azurelinuxagent.pa.deprovision.default.DeprovisionHandler.cloud_init_files")
     def test_del_cloud_init_without_once(self,

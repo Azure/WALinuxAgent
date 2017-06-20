@@ -13,8 +13,6 @@ if sys.version_info[0]== 3:
 
     bytebuffer = memoryview
 
-    read_input = input
-
 elif sys.version_info[0] == 2:
     import httplib as httpclient
     from urlparse import urlparse
@@ -23,8 +21,6 @@ elif sys.version_info[0] == 2:
     ustr = unicode
 
     bytebuffer = buffer
-
-    read_input = raw_input
 
 else:
     raise ImportError("Unknown python version:{0}".format(sys.version_info))
