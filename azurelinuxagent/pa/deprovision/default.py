@@ -155,23 +155,28 @@ class DeprovisionHandler(object):
             ]
         return dirs
     
-    def cloud_init_files(self, include_once=True):
-        files = [
-            "/etc/sudoers.d/90-cloud-init-users"
-        ]
+    def cloud_init_files(self, include_once=True, deluser=False):
+        files = []
+        if deluser:
+            files += [
+                "/etc/sudoers.d/90-cloud-init-users"
+            ]
         if include_once:
             files += [
                 "/var/lib/cloud/sem/config_scripts_per_once.once"
             ]
         return files
 
-    def del_cloud_init(self, warnings, actions, include_once=True):
+    def del_cloud_init(self, warnings, actions,
+            include_once=True, deluser=False):
         dirs = [d for d in self.cloud_init_dirs(include_once=include_once) \
                     if os.path.isdir(d)]
         if len(dirs) > 0:
             actions.append(DeprovisionAction(fileutil.rm_dirs, dirs))
 
-        files = [f for f in self.cloud_init_files(include_once=include_once) \
+        files = [f for f in self.cloud_init_files(
+                                    include_once=include_once,
+                                    deluser=deluser) \
                     if os.path.isfile(f)]
         if len(files) > 0:
             actions.append(DeprovisionAction(fileutil.rm_files, files))
@@ -197,7 +202,7 @@ class DeprovisionHandler(object):
         if conf.get_delete_root_password():
             self.del_root_password(warnings, actions)
 
-        self.del_cloud_init(warnings, actions)
+        self.del_cloud_init(warnings, actions, deluser=deluser)
         self.del_dirs(warnings, actions)
         self.del_files(warnings, actions)
         self.del_resolv(warnings, actions)
@@ -211,7 +216,8 @@ class DeprovisionHandler(object):
         warnings = []
         actions = []
 
-        self.del_cloud_init(warnings, actions, include_once=False)
+        self.del_cloud_init(warnings, actions,
+                    include_once=False, deluser=False)
         self.del_dhcp_lease(warnings, actions)
         self.del_lib_dir_files(warnings, actions)
 

@@ -59,10 +59,11 @@ class TestDeprovision(AgentTestCase):
                 mock_files,
                 mock_dirs):
         deprovision_handler = get_deprovision_handler("","","")
-        deprovision_handler.del_cloud_init([], [], include_once=False)
+        deprovision_handler.del_cloud_init([], [],
+                            include_once=False, deluser=False)
 
         mock_dirs.assert_called_with(include_once=False)
-        mock_files.assert_called_with(include_once=False)
+        mock_files.assert_called_with(include_once=False, deluser=False)
 
     @patch("signal.signal")
     @patch("azurelinuxagent.common.protocol.get_protocol_util")
@@ -87,10 +88,11 @@ class TestDeprovision(AgentTestCase):
                 mock_files.return_value = files
 
                 deprovision_handler = get_deprovision_handler("","","")
-                deprovision_handler.del_cloud_init(warnings, actions)
+                deprovision_handler.del_cloud_init(warnings, actions,
+                        deluser=True)
 
                 mock_dirs.assert_called_with(include_once=True)
-                mock_files.assert_called_with(include_once=True)
+                mock_files.assert_called_with(include_once=True, deluser=True)
 
                 self.assertEqual(len(warnings), 0)
                 self.assertEqual(len(actions), 2)
