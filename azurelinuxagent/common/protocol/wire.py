@@ -597,9 +597,9 @@ class WireClient(object):
         Call storage service, handle SERVICE_UNAVAILABLE(503)
         """
 
-        # force the chk_proxy arg to True, since all calls to storage should
-        #  use a configured proxy
-        kwargs['chk_proxy'] = True
+        # Default to use the configured HTTP proxy
+        if not 'chk_proxy' in kwargs or kwargs['chk_proxy'] is None:
+            kwargs['chk_proxy'] = True
 
         for retry in range(0, 3):
             resp = http_req(*args, **kwargs)
@@ -626,7 +626,7 @@ class WireClient(object):
                     logger.verbose("Manifest could not be downloaded, falling back to host plugin")
                 host = self.get_host_plugin()
                 uri, headers = host.get_artifact_request(version.uri)
-                response = self.fetch(uri, headers)
+                response = self.fetch(uri, headers, chk_proxy=False)
                 if not response:
                     host = self.get_host_plugin(force_update=True)
                     logger.info("Retry fetch in {0} seconds",
@@ -642,14 +642,15 @@ class WireClient(object):
                 return response
         raise ProtocolError("Failed to fetch manifest from all sources")
 
-    def fetch(self, uri, headers=None):
+    def fetch(self, uri, headers=None, chk_proxy=None):
         logger.verbose("Fetch [{0}] with headers [{1}]", uri, headers)
         return_value = None
         try:
             resp = self.call_storage_service(
                 restutil.http_get,
                 uri,
-                headers)
+                headers,
+                chk_proxy=chk_proxy)
             if resp.status == httpclient.OK:
                 return_value = self.decode_config(resp.read())
             else:
@@ -831,7 +832,7 @@ class WireClient(object):
 
             if not blob_type in ["BlockBlob", "PageBlob"]:
                 blob_type = "BlockBlob"
-                logger.info("Status Blob type is unspecified "
+                logger.verbose("Status Blob type is unspecified "
                     "-- assuming it is a BlockBlob")
 
             try:
@@ -998,17 +999,17 @@ class WireClient(object):
         artifacts_profile = None
         if self.has_artifacts_profile_blob():
             blob = self.ext_conf.artifacts_profile_blob
-            logger.info("Getting the artifacts profile")
+            logger.verbose("Getting the artifacts profile")
             profile = self.fetch(blob)
 
             if profile is None:
                 logger.warn("Download failed, falling back to host plugin")
                 host = self.get_host_plugin()
                 uri, headers = host.get_artifact_request(blob)
-                profile = self.decode_config(self.fetch(uri, headers))
+                profile = self.decode_config(self.fetch(uri, headers, chk_proxy=False))
 
             if not textutil.is_str_none_or_whitespace(profile):
-                    logger.info("Artifacts profile downloaded successfully")
+                    logger.verbose("Artifacts profile downloaded successfully")
                     artifacts_profile = InVMArtifactsProfile(profile)
 
         return artifacts_profile

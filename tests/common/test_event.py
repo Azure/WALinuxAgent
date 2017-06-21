@@ -17,12 +17,78 @@
 
 from __future__ import print_function
 
+from datetime import datetime
+
+import azurelinuxagent.common.event as event
+import azurelinuxagent.common.logger as logger
+
 from azurelinuxagent.common.event import init_event_logger, add_event
 from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.version import CURRENT_VERSION
+
 from tests.tools import *
 
 
 class TestEvent(AgentTestCase):
+
+    @patch('azurelinuxagent.common.event.EventLogger.add_event')
+    def test_periodic_emits_if_not_previously_sent(self, mock_event):
+        init_event_logger(tempfile.mkdtemp())
+        event.__event_logger__.reset_periodic()
+
+        event.add_periodic(logger.EVERY_DAY, "FauxEvent")
+        mock_event.assert_called_once()
+
+    @patch('azurelinuxagent.common.event.EventLogger.add_event')
+    def test_periodic_does_not_emit_if_previously_sent(self, mock_event):
+        init_event_logger(tempfile.mkdtemp())
+        event.__event_logger__.reset_periodic()
+
+        event.add_periodic(logger.EVERY_DAY, "FauxEvent")
+        self.assertEqual(1, mock_event.call_count)
+
+        event.add_periodic(logger.EVERY_DAY, "FauxEvent")
+        self.assertEqual(1, mock_event.call_count)
+
+    @patch('azurelinuxagent.common.event.EventLogger.add_event')
+    def test_periodic_emits_if_forced(self, mock_event):
+        init_event_logger(tempfile.mkdtemp())
+        event.__event_logger__.reset_periodic()
+
+        event.add_periodic(logger.EVERY_DAY, "FauxEvent")
+        self.assertEqual(1, mock_event.call_count)
+
+        event.add_periodic(logger.EVERY_DAY, "FauxEvent", force=True)
+        self.assertEqual(2, mock_event.call_count)
+
+    @patch('azurelinuxagent.common.event.EventLogger.add_event')
+    def test_periodic_emits_after_elapsed_delta(self, mock_event):
+        init_event_logger(tempfile.mkdtemp())
+        event.__event_logger__.reset_periodic()
+
+        event.add_periodic(logger.EVERY_DAY, "FauxEvent")
+        self.assertEqual(1, mock_event.call_count)
+
+        event.add_periodic(logger.EVERY_DAY, "FauxEvent")
+        self.assertEqual(1, mock_event.call_count)
+
+        h = hash("FauxEvent"+""+ustr(True)+"")
+        event.__event_logger__.periodic_messages[h] = \
+            datetime.now() - logger.EVERY_DAY - logger.EVERY_HOUR
+        event.add_periodic(logger.EVERY_DAY, "FauxEvent")
+        self.assertEqual(2, mock_event.call_count)
+
+    @patch('azurelinuxagent.common.event.EventLogger.add_event')
+    def test_periodic_forwards_args(self, mock_event):
+        init_event_logger(tempfile.mkdtemp())
+        event.__event_logger__.reset_periodic()
+
+        event.add_periodic(logger.EVERY_DAY, "FauxEvent")
+        mock_event.assert_called_once_with(
+            "FauxEvent",
+            duration=0, evt_type='', is_internal=False, is_success=True,
+            log_event=True, message='', op='', version=str(CURRENT_VERSION))
+
     def test_save_event(self):
         tmp_evt = tempfile.mkdtemp()
         init_event_logger(tmp_evt)

@@ -143,7 +143,9 @@ class HostPluginProtocol(object):
 
         headers = {"x-ms-vmagentlog-deploymentid": self.deployment_id,
                    "x-ms-vmagentlog-containerid": self.container_id}
-        logger.info("HostGAPlugin: Put VM log to [{0}]".format(url))
+        logger.periodic(
+            logger.EVERY_FIFTEEN_MINUTES,
+            "HostGAPlugin: Put VM log to [{0}]".format(url))
         try:
             response = restutil.http_put(url, content, headers)
             if response.status != httpclient.OK:
@@ -175,7 +177,7 @@ class HostPluginProtocol(object):
                 self._put_page_blob_status(sas_url, status_blob)
 
             if not HostPluginProtocol.is_default_channel():
-                logger.info("HostGAPlugin: Setting host plugin as default channel")
+                logger.verbose("HostGAPlugin: Setting host plugin as default channel")
                 HostPluginProtocol.set_default_channel(True)
         except Exception as e:
             message = "HostGAPlugin: Exception Put VM status: {0}, {1}".format(e, traceback.format_exc())

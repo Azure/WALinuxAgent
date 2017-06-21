@@ -23,6 +23,7 @@ import json
 import shutil
 
 from azurelinuxagent.common.protocol.hostplugin import *
+from azurelinuxagent.common.protocol.metadata import *
 from azurelinuxagent.common.protocol.wire import *
 from azurelinuxagent.common.utils.fileutil import *
 from azurelinuxagent.ga.update import *
@@ -1019,6 +1020,21 @@ class TestUpdate(UpdateTestCase):
         self.assertEqual(kept_agents, self.update_handler.agents)
         return
 
+    @patch('azurelinuxagent.common.protocol.wire.WireClient.get_host_plugin')
+    def test_get_host_plugin_returns_host_for_wireserver(self, mock_get_host):
+        protocol = WireProtocol('12.34.56.78')
+        mock_get_host.return_value = "faux host"
+        host = self.update_handler._get_host_plugin(protocol=protocol)
+        mock_get_host.assert_called_once()
+        self.assertEqual("faux host", host)
+
+    @patch('azurelinuxagent.common.protocol.wire.WireClient.get_host_plugin')
+    def test_get_host_plugin_returns_none_otherwise(self, mock_get_host):
+        protocol = MetadataProtocol()
+        host = self.update_handler._get_host_plugin(protocol=protocol)
+        mock_get_host.assert_not_called()
+        self.assertEqual(None, host)
+
     def test_get_latest_agent(self):
         latest_version = self.prepare_agents()
 
@@ -1324,6 +1340,24 @@ class TestUpdate(UpdateTestCase):
         self.assertEqual(1, latest_agent.error.failure_count)
         return
 
+    def test_run_latest_exception_does_not_blacklist_if_terminating(self):
+        self.prepare_agents()
+
+        latest_agent = self.update_handler.get_latest_agent()
+        self.assertTrue(latest_agent.is_available)
+        self.assertEqual(0.0, latest_agent.error.last_failure)
+        self.assertEqual(0, latest_agent.error.failure_count)
+
+        with patch('azurelinuxagent.ga.update.UpdateHandler.get_latest_agent', return_value=latest_agent):
+            self.update_handler.running = False
+            self._test_run_latest(mock_child=ChildMock(side_effect=Exception("Attempt blacklisting")))
+
+        self.assertTrue(latest_agent.is_available)
+        self.assertFalse(latest_agent.error.is_blacklisted)
+        self.assertEqual(0.0, latest_agent.error.last_failure)
+        self.assertEqual(0, latest_agent.error.failure_count)
+        return
+
     @patch('signal.signal')
     def test_run_latest_captures_signals(self, mock_signal):
         self._test_run_latest()
@@ -1462,12 +1496,14 @@ class TestUpdate(UpdateTestCase):
     def test_shutdown(self):
         self.update_handler._set_sentinal()
         self.update_handler._shutdown()
+        self.assertFalse(self.update_handler.running)
         self.assertFalse(os.path.isfile(self.update_handler._sentinal_file_path()))
         return
 
     def test_shutdown_ignores_missing_sentinal_file(self):
         self.assertFalse(os.path.isfile(self.update_handler._sentinal_file_path()))
         self.update_handler._shutdown()
+        self.assertFalse(self.update_handler.running)
         self.assertFalse(os.path.isfile(self.update_handler._sentinal_file_path()))
         return
 

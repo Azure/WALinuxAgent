@@ -20,7 +20,13 @@ Log utils
 import os
 import sys
 from azurelinuxagent.common.future import ustr
-from datetime import datetime
+from datetime import datetime, timedelta
+
+EVERY_DAY = timedelta(days=1)
+EVERY_HALF_DAY = timedelta(hours=12)
+EVERY_HOUR = timedelta(hours=1)
+EVERY_HALF_HOUR = timedelta(minutes=30)
+EVERY_FIFTEEN_MINUTES = timedelta(minutes=15)
 
 class Logger(object):
     """
@@ -28,9 +34,22 @@ class Logger(object):
     """
     def __init__(self, logger=None, prefix=None):
         self.appenders = []
-        if logger is not None:
-            self.appenders.extend(logger.appenders)
+        self.logger = self if logger is None else logger
+        self.periodic_messages = {}
         self.prefix = prefix
+
+    def reset_periodic(self):
+        self.logger.periodic_messages = {}
+
+    def is_period_elapsed(self, delta, h):
+        return h not in self.logger.periodic_messages or \
+            (self.logger.periodic_messages[h] + delta) <= datetime.now()
+
+    def periodic(self, delta, msg_format, *args):
+        h = hash(msg_format)
+        if self.is_period_elapsed(delta, h):
+            self.info(msg_format, *args)
+            self.logger.periodic_messages[h] = datetime.now()
 
     def verbose(self, msg_format, *args):
         self.log(LogLevel.VERBOSE, msg_format, *args)
@@ -62,8 +81,12 @@ class Logger(object):
 
         log_item = ustr(log_item.encode('ascii', "backslashreplace"), 
                         encoding="ascii")
+
         for appender in self.appenders:
             appender.write(level, log_item)
+        if self.logger != self:
+            for appender in self.logger.appenders:
+                appender.write(level, log_item)
 
     def add_appender(self, appender_type, level, path):
         appender = _create_logger_appender(appender_type, level, path)
@@ -128,6 +151,12 @@ class AppenderType(object):
 
 def add_logger_appender(appender_type, level=LogLevel.INFO, path=None):
     DEFAULT_LOGGER.add_appender(appender_type, level, path)
+
+def reset_periodic():
+    DEFAULT_LOGGER.reset_periodic()
+
+def periodic(delta, msg_format, *args):
+    DEFAULT_LOGGER.periodic(delta, msg_format, *args)
 
 def verbose(msg_format, *args):
     DEFAULT_LOGGER.verbose(msg_format, *args)

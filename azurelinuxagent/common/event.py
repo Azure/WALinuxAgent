@@ -25,7 +25,7 @@ import datetime
 import threading
 import platform
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import azurelinuxagent.common.logger as logger
 
@@ -39,6 +39,7 @@ from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_VERSION, \
     DISTRO_CODE_NAME, AGENT_VERSION, \
     CURRENT_AGENT, CURRENT_VERSION
 
+_EVENT_MSG = "Event: name={0}, op={1}, message={2}"
 
 class WALAEventOperation:
     ActivateResourceDisk = "ActivateResourceDisk"
@@ -47,6 +48,7 @@ class WALAEventOperation:
     Enable = "Enable"
     HealthCheck = "HealthCheck"
     HeartBeat = "HeartBeat"
+    HostPlugin = "HostPlugin"
     Install = "Install"
     InitializeHostPlugin = "InitializeHostPlugin"
     ProcessGoalState = "ProcessGoalState"
@@ -58,10 +60,19 @@ class WALAEventOperation:
     Upgrade = "Upgrade"
     Update = "Update"
 
+def _log_event(name, op, message, is_success=True):
+    global _EVENT_MSG
+
+    if not is_success:
+        logger.error(_EVENT_MSG, name, op, message)
+    else:
+        logger.info(_EVENT_MSG, name, op, message)
+
 
 class EventLogger(object):
     def __init__(self):
         self.event_dir = None
+        self.periodic_events = {}
 
     def save_event(self, data):
         if self.event_dir is None:
@@ -92,9 +103,33 @@ class EventLogger(object):
         except IOError as e:
             raise EventError("Failed to write events to file:{0}", e)
 
+    def reset_periodic(self):
+        self.periodic_messages = {}
+
+    def is_period_elapsed(self, delta, h):
+        return h not in self.periodic_messages or \
+            (self.periodic_messages[h] + delta) <= datetime.now()
+
+    def add_periodic(self,
+        delta, name, op="", is_success=True, duration=0,
+        version=CURRENT_VERSION, message="", evt_type="",
+        is_internal=False, log_event=True, force=False):
+
+        h = hash(name+op+ustr(is_success)+message)
+        
+        if force or self.is_period_elapsed(delta, h):
+            self.add_event(name,
+                op=op, is_success=is_success, duration=duration,
+                version=version, message=message, evt_type=evt_type,
+                is_internal=is_internal, log_event=log_event)
+            self.periodic_messages[h] = datetime.now()
+
     def add_event(self, name, op="", is_success=True, duration=0,
                   version=CURRENT_VERSION,
-                  message="", evt_type="", is_internal=False):
+                  message="", evt_type="", is_internal=False, log_event=True):
+        if not is_success or log_event:
+            _log_event(name, op, message, is_success=is_success)
+
         event = TelemetryEvent(1, "69B669B9-4AF8-4C50-BDC4-6006FA76E975")
         event.parameters.append(TelemetryEventParam('Name', name))
         event.parameters.append(TelemetryEventParam('Version', str(version)))
@@ -129,21 +164,40 @@ def report_event(op, is_success=True, message=''):
               message=message,
               op=op)
 
+def report_periodic(delta, op, is_success=True, message=''):
+    from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
+    add_periodic(delta, AGENT_NAME,
+              version=CURRENT_VERSION,
+              is_success=is_success,
+              message=message,
+              op=op)
 
 def add_event(name, op="", is_success=True, duration=0, version=CURRENT_VERSION,
               message="", evt_type="", is_internal=False, log_event=True,
               reporter=__event_logger__):
-    if log_event or not is_success:
-        log = logger.info if is_success else logger.error
-        log("Event: name={0}, op={1}, message={2}", name, op, message)
-
     if reporter.event_dir is None:
         logger.warn("Event reporter is not initialized.")
+        _log_event(name, op, message, is_success=is_success)
         return
-    reporter.add_event(name, op=op, is_success=is_success, duration=duration,
-                       version=str(version), message=message, evt_type=evt_type,
-                       is_internal=is_internal)
 
+    reporter.add_event(
+        name, op=op, is_success=is_success, duration=duration,
+        version=str(version), message=message, evt_type=evt_type,
+        is_internal=is_internal, log_event=log_event)
+
+def add_periodic(
+    delta, name, op="", is_success=True, duration=0, version=CURRENT_VERSION,
+    message="", evt_type="", is_internal=False, log_event=True, force=False,
+    reporter=__event_logger__):
+    if reporter.event_dir is None:
+        logger.warn("Event reporter is not initialized.")
+        _log_event(name, op, message, is_success=is_success)
+        return
+
+    reporter.add_periodic(
+        delta, name, op=op, is_success=is_success, duration=duration,
+        version=str(version), message=message, evt_type=evt_type,
+        is_internal=is_internal, log_event=log_event, force=force)
 
 def init_event_logger(event_dir, reporter=__event_logger__):
     reporter.event_dir = event_dir
