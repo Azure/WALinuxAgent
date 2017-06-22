@@ -240,9 +240,10 @@ class UpdateHandler(object):
         from azurelinuxagent.ga.env import get_env_handler
         get_env_handler().run()
 
-        from azurelinuxagent.ga.exthandlers import get_exthandlers_handler, migrate_handler_state
-        exthandlers_handler = get_exthandlers_handler()
-        migrate_handler_state()
+        if conf.get_ext_enabled():
+            from azurelinuxagent.ga.exthandlers import get_exthandlers_handler, migrate_handler_state
+            exthandlers_handler = get_exthandlers_handler()
+            migrate_handler_state()
 
         try:
             send_event_time = datetime.utcnow()
@@ -265,17 +266,17 @@ class UpdateHandler(object):
 
                 utc_start = datetime.utcnow()
 
-                last_etag = exthandlers_handler.last_etag
-                exthandlers_handler.run()
-
-                if last_etag != exthandlers_handler.last_etag:
-                    add_event(
-                        AGENT_NAME,
-                        version=CURRENT_VERSION,
-                        op=WALAEventOperation.ProcessGoalState,
-                        is_success=True,
-                        duration=elapsed_milliseconds(utc_start),
-                        log_event=True)
+                if conf.get_ext_enabled():
+                    last_etag = exthandlers_handler.last_etag
+                    exthandlers_handler.run()
+                    if last_etag != exthandlers_handler.last_etag:
+                        add_event(
+                            AGENT_NAME,
+                            version=CURRENT_VERSION,
+                            op=WALAEventOperation.ProcessGoalState,
+                            is_success=True,
+                            duration=elapsed_milliseconds(utc_start),
+                            log_event=True)
 
                 test_agent = self.get_test_agent()
                 if test_agent is not None and test_agent.in_slice:
