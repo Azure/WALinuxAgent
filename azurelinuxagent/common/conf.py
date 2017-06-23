@@ -151,6 +151,16 @@ def get_root_device_scsi_timeout(conf=__conf__):
     return conf.get("OS.RootDeviceScsiTimeout", None)
 
 def get_ssh_host_keypair_type(conf=__conf__):
+    keypair_type = conf.get("Provisioning.SshHostKeyPairType", "rsa")
+    if keypair_type == "auto":
+        '''
+        auto generates all supported key types and returns the
+        rsa thumbprint as the default.
+        '''
+        return "rsa"
+    return keypair_type
+
+def get_ssh_host_keypair_mode(conf=__conf__):
     return conf.get("Provisioning.SshHostKeyPairType", "rsa")
 
 def get_provision_enabled(conf=__conf__):

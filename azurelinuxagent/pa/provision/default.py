@@ -128,9 +128,17 @@ class ProvisionHandler(object):
         keypair_type = conf.get_ssh_host_keypair_type()
         if conf.get_regenerate_ssh_host_key():
             fileutil.rm_files(conf.get_ssh_key_glob())
-            keygen_cmd = "ssh-keygen -N '' -t {0} -f {1}"
-            shellutil.run(keygen_cmd.format(keypair_type,
-                        conf.get_ssh_key_private_path()))
+            if conf.get_ssh_host_keypair_mode() == "auto":
+                '''
+                The -A option generates all supported key types.
+                This is supported since OpenSSH 5.9 (2011).
+                '''
+                shellutil.run("ssh-keygen -A")
+            else:
+                keygen_cmd = "ssh-keygen -N '' -t {0} -f {1}"
+                shellutil.run(keygen_cmd.
+                              format(keypair_type,
+                                     conf.get_ssh_key_private_path()))
         return self.get_ssh_host_key_thumbprint()
 
     def get_ssh_host_key_thumbprint(self, chk_err=True):
