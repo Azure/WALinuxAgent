@@ -112,6 +112,9 @@ def get_agent_pid_file_path(conf=__conf__):
     return conf.get("Pid.File", "/var/run/waagent.pid")
 
 
+def get_ext_enabled(conf=__conf__):
+    return conf.get_switch("Extension.Enabled", True)
+
 def get_ext_log_dir(conf=__conf__):
     return conf.get("Extension.LogDir", "/var/log/azure")
 
