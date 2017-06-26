@@ -113,7 +113,7 @@ def get_distro():
 
 AGENT_NAME = "WALinuxAgent"
 AGENT_LONG_NAME = "Azure Linux Agent"
-AGENT_VERSION = '2.2.14'
+AGENT_VERSION = '2.2.14.1'
 AGENT_LONG_VERSION = "{0}-{1}".format(AGENT_NAME, AGENT_VERSION)
 AGENT_DESCRIPTION = """
 The Azure Linux Agent supports the provisioning and running of Linux
@@ -129,8 +129,19 @@ AGENT_NAME_PATTERN = re.compile(AGENT_PATTERN)
 AGENT_PKG_PATTERN = re.compile(AGENT_PATTERN+"\.zip")
 AGENT_DIR_PATTERN = re.compile(".*/{0}".format(AGENT_PATTERN))
 
-EXT_HANDLER_PATTERN = b".*/WALinuxAgent-(\w.\w.\w[.\w]*)-.*-run-exthandlers"
+EXT_HANDLER_PATTERN = b".*/WALinuxAgent-(\d+.\d+.\d+[.\d+]*).*-run-exthandlers"
 EXT_HANDLER_REGEX = re.compile(EXT_HANDLER_PATTERN)
+
+__distro__ = get_distro()
+DISTRO_NAME = __distro__[0]
+DISTRO_VERSION = __distro__[1]
+DISTRO_CODE_NAME = __distro__[2]
+DISTRO_FULL_NAME = __distro__[3]
+
+PY_VERSION = sys.version_info
+PY_VERSION_MAJOR = sys.version_info[0]
+PY_VERSION_MINOR = sys.version_info[1]
+PY_VERSION_MICRO = sys.version_info[2]
 
 
 # Set the CURRENT_AGENT and CURRENT_VERSION to match the agent directory name
@@ -173,6 +184,8 @@ def set_goal_state_agent():
             match = EXT_HANDLER_REGEX.match(pname)
             if match:
                 agent = match.group(1)
+                if PY_VERSION_MAJOR > 2:
+                    agent = agent.decode('UTF-8')
                 break
         except IOError:
             continue
@@ -186,18 +199,6 @@ GOAL_STATE_AGENT_VERSION = set_goal_state_agent()
 
 def is_current_agent_installed():
     return CURRENT_AGENT == AGENT_LONG_VERSION
-
-
-__distro__ = get_distro()
-DISTRO_NAME = __distro__[0]
-DISTRO_VERSION = __distro__[1]
-DISTRO_CODE_NAME = __distro__[2]
-DISTRO_FULL_NAME = __distro__[3]
-
-PY_VERSION = sys.version_info
-PY_VERSION_MAJOR = sys.version_info[0]
-PY_VERSION_MINOR = sys.version_info[1]
-PY_VERSION_MICRO = sys.version_info[2]
 
 
 def is_snappy():

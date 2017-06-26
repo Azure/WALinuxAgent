@@ -85,6 +85,7 @@ class TestProvision(AgentTestCase):
 
         ph = ProvisionHandler()
         ph.osutil = Mock()
+        ph.report_ready = Mock()
         ph.write_provisioned = Mock()
 
         deprovision_handler = Mock()
