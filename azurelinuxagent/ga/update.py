@@ -277,12 +277,6 @@ class UpdateHandler(object):
                         duration=elapsed_milliseconds(utc_start),
                         log_event=True)
 
-                test_agent = self.get_test_agent()
-                if test_agent is not None and test_agent.in_slice:
-                    test_agent.enable()
-                    logger.info(u"Enabled Agent {0} as test agent", test_agent.name)
-                    break
-
                 time.sleep(GOAL_STATE_INTERVAL)
 
         except Exception as e:
@@ -338,14 +332,6 @@ class UpdateHandler(object):
                             and agent.version > FlexibleVersion(AGENT_VERSION)]
 
         return available_agents[0] if len(available_agents) >= 1 else None
-
-    def get_test_agent(self):
-        agent = None
-        agents = [agent for agent in self._load_agents() if agent.is_test]
-        if len(agents) > 0:
-            agents.sort(key=lambda agent: agent.version, reverse=True)
-            agent = agents[0]
-        return agent
 
     def _emit_restart_event(self):
         if not self._is_clean_start:
@@ -652,15 +638,30 @@ class GuestAgent(object):
         self.version = FlexibleVersion(version)
 
         location = u"disk" if path is not None else u"package"
-        logger.verbose(u"Loading Agent {0} from package {1}", self.name, location)
+        logger.verbose(u"Loading Agent {0} from {1}", self.name, location)
 
-        self.error = None
-        self.supported = None
+        self.error = GuestAgentError(self.get_agent_error_file())
+        self.error.load()
+        self.supported = Supported(self.get_agent_supported_file())
+        self.supported.load()
 
-        self._load_error()
-        self._load_supported()
+        try:
+            self._ensure_downloaded()
+            self._ensure_loaded()
+        except Exception as e:
+            # Note the failure, blacklist the agent if the package downloaded
+            # - An exception with a downloaded package indicates the package
+            #   is corrupt (e.g., missing the HandlerManifest.json file)
+            self.mark_failure(is_fatal=os.path.isfile(self.get_agent_pkg_path()))
 
-        self._ensure_downloaded()
+            msg = u"Agent {0} download / load failed with exception: {1}".format(self.name, ustr(e))
+            logger.warn(msg)
+            add_event(
+                AGENT_NAME,
+                version=self.version,
+                op=WALAEventOperation.Install,
+                is_success=False,
+                message=msg)
         return
 
     @property
@@ -687,12 +688,7 @@ class GuestAgent(object):
 
     def clear_error(self):
         self.error.clear()
-        return
-
-    def enable(self):
-        if self.error.is_sentinel:
-            self.error.clear()
-            self.error.save()
+        self.error.save()
         return
 
     @property
@@ -708,12 +704,12 @@ class GuestAgent(object):
         return self.is_blacklisted or os.path.isfile(self.get_agent_manifest_path())
 
     @property
-    def is_test(self):
+    def _is_optional(self):
         return self.error.is_sentinel and self.supported.is_supported
 
     @property
-    def in_slice(self):
-        return self.is_test and self.supported.in_slice
+    def _in_slice(self):
+        return self.supported.is_supported and self.supported.in_slice
 
     def mark_failure(self, is_fatal=False):
         try:
@@ -727,52 +723,50 @@ class GuestAgent(object):
             logger.warn(u"Agent {0} failed recording error state: {1}", self.name, ustr(e))
         return
 
+    def _enable(self):
+        # Enable optional agents if within the "slice"
+        # - The "slice" is a percentage of the agent to execute
+        # - Blacklist out-of-slice agents to prevent reconsideration
+        if self._is_optional:
+            if self._in_slice:
+                self.error.clear()
+                self.error.save()
+                logger.info(u"Enabled optional Agent {0}", self.name)
+            else:
+                self.mark_failure(is_fatal=True)
+                logger.info(u"Optional Agent {0} not in slice", self.name)
+        return
+
     def _ensure_downloaded(self):
-        try:
-            logger.verbose(u"Ensuring Agent {0} is downloaded", self.name)
+        logger.verbose(u"Ensuring Agent {0} is downloaded", self.name)
 
-            if self.is_blacklisted:
-                logger.verbose(u"Agent {0} is blacklisted - skipping download", self.name)
-                return
+        if self.is_downloaded:
+            logger.verbose(u"Agent {0} was previously downloaded - skipping download", self.name)
+            return
 
-            if self.is_downloaded:
-                logger.verbose(u"Agent {0} was previously downloaded - skipping download", self.name)
-                self._load_manifest()
-                return
+        if self.pkg is None:
+            raise UpdateError(u"Agent {0} is missing package and download URIs".format(
+                self.name))
+        
+        self._download()
+        self._unpack()
 
-            if self.pkg is None:
-                raise UpdateError(u"Agent {0} is missing package and download URIs".format(
-                    self.name))
-            
-            self._download()
-            self._unpack()
-            self._load_manifest()
-            self._load_error()
-            self._load_supported()
+        msg = u"Agent {0} downloaded successfully".format(self.name)
+        logger.verbose(msg)
+        add_event(
+            AGENT_NAME,
+            version=self.version,
+            op=WALAEventOperation.Install,
+            is_success=True,
+            message=msg)
+        return
 
-            msg = u"Agent {0} downloaded successfully".format(self.name)
-            logger.verbose(msg)
-            add_event(
-                AGENT_NAME,
-                version=self.version,
-                op=WALAEventOperation.Install,
-                is_success=True,
-                message=msg)
+    def _ensure_loaded(self):
+        self._load_manifest()
+        self._load_error()
+        self._load_supported()
 
-        except Exception as e:
-            # Note the failure, blacklist the agent if the package downloaded
-            # - An exception with a downloaded package indicates the package
-            #   is corrupt (e.g., missing the HandlerManifest.json file)
-            self.mark_failure(is_fatal=os.path.isfile(self.get_agent_pkg_path()))
-
-            msg = u"Agent {0} download failed with exception: {1}".format(self.name, ustr(e))
-            logger.warn(msg)
-            add_event(
-                AGENT_NAME,
-                version=self.version,
-                op=WALAEventOperation.Install,
-                is_success=False,
-                message=msg)
+        self._enable()
         return
 
     def _download(self):
@@ -829,8 +823,7 @@ class GuestAgent(object):
 
     def _load_error(self):
         try:
-            if self.error is None:
-                self.error = GuestAgentError(self.get_agent_error_file())
+            self.error = GuestAgentError(self.get_agent_error_file())
             self.error.load()
             logger.verbose(u"Agent {0} error state: {1}", self.name, ustr(self.error))
         except Exception as e:
@@ -840,6 +833,7 @@ class GuestAgent(object):
     def _load_supported(self):
         try:
             self.supported = Supported(self.get_agent_supported_file())
+            self.supported.load()
         except Exception as e:
             self.supported = Supported()
 
@@ -918,7 +912,6 @@ class GuestAgentError(object):
         self.path = path
 
         self.clear()
-        self.load()
         return
    
     def mark_failure(self, is_fatal=False):
@@ -982,8 +975,7 @@ class Supported(object):
         if path is None:
             raise UpdateError(u"Supported requires a path")
         self.path = path
-
-        self._load()
+        self.distributions = {}
         return
 
     @property
@@ -995,15 +987,7 @@ class Supported(object):
         d = self._supported_distribution
         return d is not None and d.in_slice
 
-    @property
-    def _supported_distribution(self):
-        for d in self.distributions:
-            dd = self.distributions[d]
-            if dd.is_supported:
-                return dd
-        return None
-
-    def _load(self):
+    def load(self):
         self.distributions = {}
         try:
             if self.path is not None and os.path.isfile(self.path):
@@ -1013,6 +997,14 @@ class Supported(object):
         except Exception as e:
             logger.warn("Failed JSON parse of {0}: {1}".format(self.path, e))
         return
+
+    @property
+    def _supported_distribution(self):
+        for d in self.distributions:
+            dd = self.distributions[d]
+            if dd.is_supported:
+                return dd
+        return None
 
 class SupportedDistribution(object):
     def __init__(self, s):

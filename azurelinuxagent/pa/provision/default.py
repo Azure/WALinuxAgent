@@ -173,6 +173,7 @@ class ProvisionHandler(object):
                 deprovision_handler.run_changed_unique_id()
 
             self.write_provisioned()
+            self.report_ready()
 
         return True
 
