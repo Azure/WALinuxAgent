@@ -106,6 +106,9 @@ def get_distro():
     if os.path.exists("/etc/cp-release"):
         osinfo = get_checkpoint_platform()
 
+    if "Clear Linux" in osinfo[0]:
+        osinfo[0] = "clearlinux"
+
     # Remove trailing whitespace and quote in distro name
     osinfo[0] = osinfo[0].strip('"').strip(' ').lower()
     return osinfo
