@@ -42,7 +42,7 @@ def get_osutil(distro_name=DISTRO_NAME,
         return ArchUtil()
 
     if distro_name == "clear linux os for intel architecture" \
-            or distro_name == "clear linux software for intel architecture": 
+            or distro_name == "clear linux software for intel architecture":
         return ClearLinuxUtil()
 
     if distro_name == "ubuntu":
