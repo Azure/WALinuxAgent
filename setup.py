@@ -106,7 +106,8 @@ def get_data_files(name, version, fullname):
         set_udev_files(data_files)
         set_files(data_files, dest="/usr/share/oem",
                   src=["init/coreos/cloud-config.yml"])
-    elif name == 'clear linux software for intel architecture':
+    elif name == 'clear linux os for intel architecture' \
+            or 'clear linux software for intel architecture':
         set_bin_files(data_files, dest="/usr/bin")
         set_conf_files(data_files, dest="/usr/share/defaults/waagent",
                        src=["config/clearlinux/waagent.conf"])
