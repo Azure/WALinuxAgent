@@ -213,7 +213,7 @@ agent. Valid values are "y" or "n". If provisioning is disabled, SSH host and
 user keys in the image are preserved and any configuration specified in the
 Azure provisioning API is ignored.
 
-# __Provisioning.UseCloudInit__
+* __Provisioning.UseCloudInit__
 _Type: Boolean_
 _Default: n_
 
