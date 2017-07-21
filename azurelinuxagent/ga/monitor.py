@@ -37,7 +37,7 @@ from azurelinuxagent.common.protocol.restapi import TelemetryEventParam, \
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, getattrib
 from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_VERSION, \
                                             DISTRO_CODE_NAME, AGENT_LONG_VERSION, \
-                                            CURRENT_AGENT, CURRENT_VERSION
+                                            AGENT_NAME, CURRENT_VERSION
 
 
 def parse_event(data_str):
@@ -184,9 +184,9 @@ class MonitorHandler(object):
             if datetime.datetime.utcnow() >= (last_heartbeat + period):
                 last_heartbeat = datetime.datetime.utcnow()
                 add_event(
-                    op=WALAEventOperation.HeartBeat,
-                    name=CURRENT_AGENT,
+                    name=AGENT_NAME,
                     version=CURRENT_VERSION,
+                    op=WALAEventOperation.HeartBeat,
                     is_success=True)
             try:
                 self.collect_and_send_events()

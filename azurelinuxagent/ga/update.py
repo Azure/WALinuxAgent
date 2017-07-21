@@ -348,6 +348,15 @@ class UpdateHandler(object):
         return
 
     def _upgrade_available(self, base_version=CURRENT_VERSION):
+        # Emit an event expressing the state of AutoUpdate
+        # Note:
+        # - Duplicate events get suppressed; state transitions always emit
+        add_event(
+            AGENT_NAME,
+            version=CURRENT_VERSION,
+            op=WALAEventOperation.AutoUpdate,
+            is_success=conf.get_autoupdate_enabled())
+
         # Ignore new agents if updating is disabled
         if not conf.get_autoupdate_enabled():
             return False
@@ -705,7 +714,7 @@ class GuestAgent(object):
 
     @property
     def _is_optional(self):
-        return self.error.is_sentinel and self.supported.is_supported
+        return self.error is not None and self.error.is_sentinel and self.supported.is_supported
 
     @property
     def _in_slice(self):
