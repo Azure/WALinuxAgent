@@ -22,7 +22,7 @@ from datetime import datetime
 import azurelinuxagent.common.event as event
 import azurelinuxagent.common.logger as logger
 
-from azurelinuxagent.common.event import init_event_logger, add_event, \
+from azurelinuxagent.common.event import add_event, \
                                     mark_event_status, should_emit_event
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.version import CURRENT_VERSION
@@ -32,18 +32,19 @@ from tests.tools import *
 
 class TestEvent(AgentTestCase):
     def test_event_status_event_marked(self):
-        d = tempfile.mkdtemp()
-        es = event.EventStatus(d)
+        es = event.__event_status__
 
         self.assertFalse(es.event_marked("Foo", "1.2", "FauxOperation"))
         es.mark_event_status("Foo", "1.2", "FauxOperation", True)
         self.assertTrue(es.event_marked("Foo", "1.2", "FauxOperation"))
 
-        es = event.EventStatus(d)
+        event.__event_status__ = event.EventStatus()
+        event.init_event_status(self.tmp_dir)
+        es = event.__event_status__
         self.assertTrue(es.event_marked("Foo", "1.2", "FauxOperation"))
 
     def test_event_status_defaults_to_success(self):
-        es = event.EventStatus(tempfile.mkdtemp())
+        es = event.__event_status__
         self.assertTrue(es.event_succeeded("Foo", "1.2", "FauxOperation"))
 
     def test_event_status_records_status(self):
@@ -57,13 +58,14 @@ class TestEvent(AgentTestCase):
         self.assertFalse(es.event_succeeded("Foo", "1.2", "FauxOperation"))
 
     def test_event_status_preserves_state(self):
-        d = tempfile.mkdtemp()
-        es = event.EventStatus(d)
+        es = event.__event_status__
 
         es.mark_event_status("Foo", "1.2", "FauxOperation", False)
         self.assertFalse(es.event_succeeded("Foo", "1.2", "FauxOperation"))
 
-        es = event.EventStatus(d)
+        event.__event_status__ = event.EventStatus()
+        event.init_event_status(self.tmp_dir)
+        es = event.__event_status__
         self.assertFalse(es.event_succeeded("Foo", "1.2", "FauxOperation"))
 
     def test_should_emit_event_ignores_unknown_operations(self):
@@ -107,7 +109,6 @@ class TestEvent(AgentTestCase):
 
     @patch('azurelinuxagent.common.event.EventLogger.add_event')
     def test_periodic_emits_if_not_previously_sent(self, mock_event):
-        init_event_logger(tempfile.mkdtemp())
         event.__event_logger__.reset_periodic()
 
         event.add_periodic(logger.EVERY_DAY, "FauxEvent")
@@ -115,7 +116,6 @@ class TestEvent(AgentTestCase):
 
     @patch('azurelinuxagent.common.event.EventLogger.add_event')
     def test_periodic_does_not_emit_if_previously_sent(self, mock_event):
-        init_event_logger(tempfile.mkdtemp())
         event.__event_logger__.reset_periodic()
 
         event.add_periodic(logger.EVERY_DAY, "FauxEvent")
@@ -126,7 +126,6 @@ class TestEvent(AgentTestCase):
 
     @patch('azurelinuxagent.common.event.EventLogger.add_event')
     def test_periodic_emits_if_forced(self, mock_event):
-        init_event_logger(tempfile.mkdtemp())
         event.__event_logger__.reset_periodic()
 
         event.add_periodic(logger.EVERY_DAY, "FauxEvent")
@@ -137,7 +136,6 @@ class TestEvent(AgentTestCase):
 
     @patch('azurelinuxagent.common.event.EventLogger.add_event')
     def test_periodic_emits_after_elapsed_delta(self, mock_event):
-        init_event_logger(tempfile.mkdtemp())
         event.__event_logger__.reset_periodic()
 
         event.add_periodic(logger.EVERY_DAY, "FauxEvent")
@@ -154,7 +152,6 @@ class TestEvent(AgentTestCase):
 
     @patch('azurelinuxagent.common.event.EventLogger.add_event')
     def test_periodic_forwards_args(self, mock_event):
-        init_event_logger(tempfile.mkdtemp())
         event.__event_logger__.reset_periodic()
 
         event.add_periodic(logger.EVERY_DAY, "FauxEvent")
@@ -164,68 +161,58 @@ class TestEvent(AgentTestCase):
             log_event=True, message='', op='', version=str(CURRENT_VERSION))
 
     def test_save_event(self):
-        tmp_evt = tempfile.mkdtemp()
-        init_event_logger(tmp_evt)
         add_event('test', message='test event')
-        self.assertTrue(len(os.listdir(tmp_evt)) == 1)
-        shutil.rmtree(tmp_evt)
+        self.assertTrue(len(os.listdir(self.tmp_dir)) == 1)
 
     def test_save_event_rollover(self):
-        tmp_evt = tempfile.mkdtemp()
-        init_event_logger(tmp_evt)
         add_event('test', message='first event')
         for i in range(0, 999):
             add_event('test', message='test event {0}'.format(i))
 
-        events = os.listdir(tmp_evt)
+        events = os.listdir(self.tmp_dir)
         events.sort()
         self.assertTrue(len(events) == 1000)
 
-        first_event = os.path.join(tmp_evt, events[0])
+        first_event = os.path.join(self.tmp_dir, events[0])
         with open(first_event) as first_fh:
             first_event_text = first_fh.read()
             self.assertTrue('first event' in first_event_text)
 
         add_event('test', message='last event')
-        events = os.listdir(tmp_evt)
+        events = os.listdir(self.tmp_dir)
         events.sort()
         self.assertTrue(len(events) == 1000, "{0} events found, 1000 expected".format(len(events)))
 
-        first_event = os.path.join(tmp_evt, events[0])
+        first_event = os.path.join(self.tmp_dir, events[0])
         with open(first_event) as first_fh:
             first_event_text = first_fh.read()
             self.assertFalse('first event' in first_event_text)
             self.assertTrue('test event 0' in first_event_text)
 
-        last_event = os.path.join(tmp_evt, events[-1])
+        last_event = os.path.join(self.tmp_dir, events[-1])
         with open(last_event) as last_fh:
             last_event_text = last_fh.read()
             self.assertTrue('last event' in last_event_text)
 
-        shutil.rmtree(tmp_evt)
-
     def test_save_event_cleanup(self):
-        tmp_evt = tempfile.mkdtemp()
-        init_event_logger(tmp_evt)
-
         for i in range(0, 2000):
-            evt = os.path.join(tmp_evt, '{0}.tld'.format(ustr(1491004920536531 + i)))
+            evt = os.path.join(self.tmp_dir, '{0}.tld'.format(ustr(1491004920536531 + i)))
             with open(evt, 'w') as fh:
                 fh.write('test event {0}'.format(i))
 
-        events = os.listdir(tmp_evt)
+        events = os.listdir(self.tmp_dir)
         self.assertTrue(len(events) == 2000, "{0} events found, 2000 expected".format(len(events)))
         add_event('test', message='last event')
 
-        events = os.listdir(tmp_evt)
+        events = os.listdir(self.tmp_dir)
         events.sort()
         self.assertTrue(len(events) == 1000, "{0} events found, 1000 expected".format(len(events)))
-        first_event = os.path.join(tmp_evt, events[0])
+        first_event = os.path.join(self.tmp_dir, events[0])
         with open(first_event) as first_fh:
             first_event_text = first_fh.read()
             self.assertTrue('test event 1001' in first_event_text)
 
-        last_event = os.path.join(tmp_evt, events[-1])
+        last_event = os.path.join(self.tmp_dir, events[-1])
         with open(last_event) as last_fh:
             last_event_text = last_fh.read()
             self.assertTrue('last event' in last_event_text)

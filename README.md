@@ -168,7 +168,10 @@ script.
 ### CONFIGURATION
 
 A configuration file (/etc/waagent.conf) controls the actions of
-waagent. A sample configuration file is shown below:
+waagent. Blank lines and lines whose first character is a `#` are
+ignored (end-of-line comments are *not* supported).
+
+A sample configuration file is shown below:
 
 ```
 Provisioning.Enabled=y

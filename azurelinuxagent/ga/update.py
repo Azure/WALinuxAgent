@@ -426,11 +426,12 @@ class UpdateHandler(object):
         return len(self.agents) > 0 and self.agents[0].version > base_version
 
     def _ensure_no_orphans(self, orphan_wait_interval=ORPHAN_WAIT_INTERVAL):
-        previous_pid_file, pid_file = self._write_pid_file()
-        if previous_pid_file is not None:
+        pid_files, ignored = self._write_pid_file()
+        for pid_file in pid_files:
             try:
-                pid = fileutil.read_file(previous_pid_file)
+                pid = fileutil.read_file(pid_file)
                 wait_interval = orphan_wait_interval
+
                 while self.osutil.check_pid_alive(pid):
                     wait_interval -= GOAL_STATE_INTERVAL
                     if wait_interval <= 0:
@@ -446,6 +447,8 @@ class UpdateHandler(object):
                         CURRENT_AGENT,
                         pid)
                     time.sleep(GOAL_STATE_INTERVAL)
+
+                os.remove(pid_file)
 
             except Exception as e:
                 logger.warn(
@@ -503,22 +506,18 @@ class UpdateHandler(object):
                                     protocol.client \
                                 else None
 
-    def _get_pid_files(self):
+    def _get_pid_parts(self):
         pid_file = conf.get_agent_pid_file_path()
-        
         pid_dir = os.path.dirname(pid_file)
         pid_name = os.path.basename(pid_file)
-        
         pid_re = re.compile("(\d+)_{0}".format(re.escape(pid_name)))
-        pid_files = [int(pid_re.match(f).group(1)) for f in os.listdir(pid_dir) if pid_re.match(f)]
-        pid_files.sort()
+        return pid_dir, pid_name, pid_re
 
-        pid_index = -1 if len(pid_files) <= 0 else pid_files[-1]
-        previous_pid_file = None \
-                        if pid_index < 0 \
-                        else os.path.join(pid_dir, "{0}_{1}".format(pid_index, pid_name))
-        pid_file = os.path.join(pid_dir, "{0}_{1}".format(pid_index+1, pid_name))
-        return previous_pid_file, pid_file
+    def _get_pid_files(self):
+        pid_dir, pid_name, pid_re = self._get_pid_parts()
+        pid_files = [os.path.join(pid_dir, f) for f in os.listdir(pid_dir) if pid_re.match(f)]
+        pid_files.sort(key=lambda f: int(pid_re.match(os.path.basename(f)).group(1)))
+        return pid_files
 
     @property
     def _is_clean_start(self):
@@ -615,7 +614,18 @@ class UpdateHandler(object):
         return
 
     def _write_pid_file(self):
-        previous_pid_file, pid_file = self._get_pid_files()
+        pid_files = self._get_pid_files()
+
+        pid_dir, pid_name, pid_re = self._get_pid_parts()
+
+        previous_pid_file = None \
+                        if len(pid_files) <= 0 \
+                        else pid_files[-1]
+        pid_index = -1 \
+                    if previous_pid_file is None \
+                    else int(pid_re.match(os.path.basename(previous_pid_file)).group(1))
+        pid_file = os.path.join(pid_dir, "{0}_{1}".format(pid_index+1, pid_name))
+
         try:
             fileutil.write_file(pid_file, ustr(os.getpid()))
             logger.info(u"{0} running as process {1}", CURRENT_AGENT, ustr(os.getpid()))
@@ -626,7 +636,8 @@ class UpdateHandler(object):
                 CURRENT_AGENT,
                 pid_file,
                 ustr(e))
-        return previous_pid_file, pid_file
+
+        return pid_files, pid_file
 
 
 class GuestAgent(object):
