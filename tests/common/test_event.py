@@ -22,7 +22,8 @@ from datetime import datetime
 import azurelinuxagent.common.event as event
 import azurelinuxagent.common.logger as logger
 
-from azurelinuxagent.common.event import init_event_logger, add_event
+from azurelinuxagent.common.event import init_event_logger, add_event, \
+                                    mark_event_status, should_emit_event
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.version import CURRENT_VERSION
 
@@ -30,6 +31,79 @@ from tests.tools import *
 
 
 class TestEvent(AgentTestCase):
+    def test_event_status_event_marked(self):
+        d = tempfile.mkdtemp()
+        es = event.EventStatus(d)
+
+        self.assertFalse(es.event_marked("Foo", "1.2", "FauxOperation"))
+        es.mark_event_status("Foo", "1.2", "FauxOperation", True)
+        self.assertTrue(es.event_marked("Foo", "1.2", "FauxOperation"))
+
+        es = event.EventStatus(d)
+        self.assertTrue(es.event_marked("Foo", "1.2", "FauxOperation"))
+
+    def test_event_status_defaults_to_success(self):
+        es = event.EventStatus(tempfile.mkdtemp())
+        self.assertTrue(es.event_succeeded("Foo", "1.2", "FauxOperation"))
+
+    def test_event_status_records_status(self):
+        d = tempfile.mkdtemp()
+        es = event.EventStatus(tempfile.mkdtemp())
+
+        es.mark_event_status("Foo", "1.2", "FauxOperation", True)
+        self.assertTrue(es.event_succeeded("Foo", "1.2", "FauxOperation"))
+
+        es.mark_event_status("Foo", "1.2", "FauxOperation", False)
+        self.assertFalse(es.event_succeeded("Foo", "1.2", "FauxOperation"))
+
+    def test_event_status_preserves_state(self):
+        d = tempfile.mkdtemp()
+        es = event.EventStatus(d)
+
+        es.mark_event_status("Foo", "1.2", "FauxOperation", False)
+        self.assertFalse(es.event_succeeded("Foo", "1.2", "FauxOperation"))
+
+        es = event.EventStatus(d)
+        self.assertFalse(es.event_succeeded("Foo", "1.2", "FauxOperation"))
+
+    def test_should_emit_event_ignores_unknown_operations(self):
+        event.__event_status__ = event.EventStatus(tempfile.mkdtemp())
+
+        self.assertTrue(event.should_emit_event("Foo", "1.2", "FauxOperation", True))
+        self.assertTrue(event.should_emit_event("Foo", "1.2", "FauxOperation", False))
+
+        # Marking the event has no effect
+        event.mark_event_status("Foo", "1.2", "FauxOperation", True)
+
+        self.assertTrue(event.should_emit_event("Foo", "1.2", "FauxOperation", True))
+        self.assertTrue(event.should_emit_event("Foo", "1.2", "FauxOperation", False))
+
+
+    def test_should_emit_event_handles_known_operations(self):
+        event.__event_status__ = event.EventStatus(tempfile.mkdtemp())
+
+        # Known operations always initially "fire"
+        for op in event.__event_status_operations__:
+            self.assertTrue(event.should_emit_event("Foo", "1.2", op, True))
+            self.assertTrue(event.should_emit_event("Foo", "1.2", op, False))
+
+        # Note a success event...
+        for op in event.__event_status_operations__:
+            event.mark_event_status("Foo", "1.2", op, True)
+
+        # Subsequent success events should not fire, but failures will
+        for op in event.__event_status_operations__:
+            self.assertFalse(event.should_emit_event("Foo", "1.2", op, True))
+            self.assertTrue(event.should_emit_event("Foo", "1.2", op, False))
+
+        # Note a failure event...
+        for op in event.__event_status_operations__:
+            event.mark_event_status("Foo", "1.2", op, False)
+
+        # Subsequent success events fire and failure do not
+        for op in event.__event_status_operations__:
+            self.assertTrue(event.should_emit_event("Foo", "1.2", op, True))
+            self.assertFalse(event.should_emit_event("Foo", "1.2", op, False))
 
     @patch('azurelinuxagent.common.event.EventLogger.add_event')
     def test_periodic_emits_if_not_previously_sent(self, mock_event):

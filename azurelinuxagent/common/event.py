@@ -27,6 +27,7 @@ import platform
 
 from datetime import datetime, timedelta
 
+import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 
 from azurelinuxagent.common.exception import EventError, ProtocolError
@@ -43,6 +44,7 @@ _EVENT_MSG = "Event: name={0}, op={1}, message={2}"
 
 class WALAEventOperation:
     ActivateResourceDisk = "ActivateResourceDisk"
+    AutoUpdate = "AutoUpdate"
     Disable = "Disable"
     Download = "Download"
     Enable = "Enable"
@@ -59,6 +61,58 @@ class WALAEventOperation:
     UnInstall = "UnInstall"
     Upgrade = "Upgrade"
     Update = "Update"
+
+
+class EventStatus(object):
+    EVENT_STATUS_FILE = "event_status.json"
+
+    def __init__(self, status_dir=conf.get_lib_dir()):
+        self._path = os.path.join(status_dir, EventStatus.EVENT_STATUS_FILE)
+        self._load()
+
+    def clear(self):
+        self.status = {}
+        self._save()
+
+    def event_marked(self, name, version, op):
+        return self._event_name(name, version, op) in self.status
+
+    def event_succeeded(self, name, version, op):
+        event = self._event_name(name, version, op)
+        if event not in self.status:
+            return True
+        return self.status[event] == True
+
+    def mark_event_status(self, name, version, op, status):
+        event = self._event_name(name, version, op)
+        self.status[event] = (status == True)
+        self._save()
+
+    def _event_name(self, name, version, op):
+        return "{0}-{1}-{2}".format(name, version, op)
+
+    def _load(self):
+        try:
+            self.status = {}
+            if os.path.isfile(self._path):
+                with open(self._path, 'r') as f:
+                    self.status = json.load(f)
+        except Exception as e:
+            logger.warn("Exception occurred loading event status: {0}".format(e))
+            self.status = {}
+
+    def _save(self):
+        try:
+            with open(self._path, 'w') as f:
+                json.dump(self.status, f)
+        except Exception as e:
+            logger.warn("Exception occurred saving event status: {0}".format(e))
+
+__event_status__ = EventStatus()
+__event_status_operations__ = [
+        WALAEventOperation.AutoUpdate,
+        WALAEventOperation.ReportStatus
+    ]
 
 def _log_event(name, op, message, is_success=True):
     global _EVENT_MSG
@@ -180,10 +234,12 @@ def add_event(name, op="", is_success=True, duration=0, version=CURRENT_VERSION,
         _log_event(name, op, message, is_success=is_success)
         return
 
-    reporter.add_event(
-        name, op=op, is_success=is_success, duration=duration,
-        version=str(version), message=message, evt_type=evt_type,
-        is_internal=is_internal, log_event=log_event)
+    if should_emit_event(name, version, op, is_success):
+        mark_event_status(name, version, op, is_success)
+        reporter.add_event(
+            name, op=op, is_success=is_success, duration=duration,
+            version=str(version), message=message, evt_type=evt_type,
+            is_internal=is_internal, log_event=log_event)
 
 def add_periodic(
     delta, name, op="", is_success=True, duration=0, version=CURRENT_VERSION,
@@ -198,6 +254,17 @@ def add_periodic(
         delta, name, op=op, is_success=is_success, duration=duration,
         version=str(version), message=message, evt_type=evt_type,
         is_internal=is_internal, log_event=log_event, force=force)
+
+def mark_event_status(name, version, op, status):
+    if op in __event_status_operations__:
+        __event_status__.mark_event_status(name, version, op, status)
+
+def should_emit_event(name, version, op, status):
+    return \
+        op not in __event_status_operations__ or \
+        __event_status__ is None or \
+        not __event_status__.event_marked(name, version, op) or \
+        __event_status__.event_succeeded(name, version, op) != status
 
 def init_event_logger(event_dir, reporter=__event_logger__):
     reporter.event_dir = event_dir
