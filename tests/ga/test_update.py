@@ -22,6 +22,7 @@ from datetime import datetime
 import json
 import shutil
 
+from azurelinuxagent.common.event import *
 from azurelinuxagent.common.protocol.hostplugin import *
 from azurelinuxagent.common.protocol.metadata import *
 from azurelinuxagent.common.protocol.wire import *
@@ -912,7 +913,7 @@ class TestUpdate(UpdateTestCase):
             v = a.version
         return
 
-    def _test_ensure_no_orphans(self, invocations=3, interval=ORPHAN_WAIT_INTERVAL):
+    def _test_ensure_no_orphans(self, invocations=3, interval=ORPHAN_WAIT_INTERVAL, pid_count=0):
         with patch.object(self.update_handler, 'osutil') as mock_util:
             # Note:
             # - Python only allows mutations of objects to which a function has
@@ -927,15 +928,20 @@ class TestUpdate(UpdateTestCase):
 
             mock_util.check_pid_alive = Mock(side_effect=iterator)
 
+            pid_files = self.update_handler._get_pid_files()
+            self.assertEqual(pid_count, len(pid_files))
+
             with patch('os.getpid', return_value=42):
                 with patch('time.sleep', return_value=None) as mock_sleep:
                     self.update_handler._ensure_no_orphans(orphan_wait_interval=interval)
+                    for pid_file in pid_files:
+                        self.assertFalse(os.path.exists(pid_file))
                     return mock_util.check_pid_alive.call_count, mock_sleep.call_count
         return
 
     def test_ensure_no_orphans(self):
         fileutil.write_file(os.path.join(self.tmp_dir, "0_waagent.pid"), ustr(41))
-        calls, sleeps = self._test_ensure_no_orphans(invocations=3)
+        calls, sleeps = self._test_ensure_no_orphans(invocations=3, pid_count=1)
         self.assertEqual(3, calls)
         self.assertEqual(2, sleeps)
         return
@@ -958,7 +964,8 @@ class TestUpdate(UpdateTestCase):
         with patch('os.kill') as mock_kill:
             calls, sleeps = self._test_ensure_no_orphans(
                                         invocations=4,
-                                        interval=3*GOAL_STATE_INTERVAL)
+                                        interval=3*GOAL_STATE_INTERVAL,
+                                        pid_count=1)
             self.assertEqual(3, calls)
             self.assertEqual(2, sleeps)
             self.assertEqual(1, mock_kill.call_count)
@@ -1069,17 +1076,19 @@ class TestUpdate(UpdateTestCase):
         return
 
     def test_get_pid_files(self):
-        previous_pid_file, pid_file, = self.update_handler._get_pid_files()
-        self.assertEqual(None, previous_pid_file)
-        self.assertEqual("0_waagent.pid", os.path.basename(pid_file))
+        pid_files = self.update_handler._get_pid_files()
+        self.assertEqual(0, len(pid_files))
         return
 
     def test_get_pid_files_returns_previous(self):
         for n in range(1250):
             fileutil.write_file(os.path.join(self.tmp_dir, str(n)+"_waagent.pid"), ustr(n+1))
-        previous_pid_file, pid_file, = self.update_handler._get_pid_files()
-        self.assertEqual("1249_waagent.pid", os.path.basename(previous_pid_file))
-        self.assertEqual("1250_waagent.pid", os.path.basename(pid_file))
+        pid_files = self.update_handler._get_pid_files()
+        self.assertEqual(1250, len(pid_files))
+
+        pid_dir, pid_name, pid_re = self.update_handler._get_pid_parts()
+        for p in pid_files:
+            self.assertTrue(pid_re.match(os.path.basename(p)))
         return
 
     def test_is_clean_start_returns_true_when_no_sentinal(self):
@@ -1499,8 +1508,9 @@ class TestUpdate(UpdateTestCase):
         for n in range(1112):
             fileutil.write_file(os.path.join(self.tmp_dir, str(n)+"_waagent.pid"), ustr(n+1))
         with patch('os.getpid', return_value=1112):
-            previous_pid_file, pid_file = self.update_handler._write_pid_file()
-            self.assertEqual("1111_waagent.pid", os.path.basename(previous_pid_file))
+            pid_files, pid_file = self.update_handler._write_pid_file()
+            self.assertEqual(1112, len(pid_files))
+            self.assertEqual("1111_waagent.pid", os.path.basename(pid_files[-1]))
             self.assertEqual("1112_waagent.pid", os.path.basename(pid_file))
             self.assertEqual(fileutil.read_file(pid_file), ustr(1112))
         return
@@ -1508,8 +1518,8 @@ class TestUpdate(UpdateTestCase):
     def test_write_pid_file_ignores_exceptions(self):
         with patch('azurelinuxagent.common.utils.fileutil.write_file', side_effect=Exception):
             with patch('os.getpid', return_value=42):
-                previous_pid_file, pid_file = self.update_handler._write_pid_file()
-                self.assertEqual(None, previous_pid_file)
+                pid_files, pid_file = self.update_handler._write_pid_file()
+                self.assertEqual(0, len(pid_files))
                 self.assertEqual(None, pid_file)
         return
 

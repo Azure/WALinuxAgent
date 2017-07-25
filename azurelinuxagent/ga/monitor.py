@@ -36,8 +36,8 @@ from azurelinuxagent.common.protocol.restapi import TelemetryEventParam, \
                                                     set_properties
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, getattrib
 from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_VERSION, \
-                                            DISTRO_CODE_NAME, AGENT_LONG_VERSION, \
-                                            AGENT_NAME, CURRENT_VERSION
+            DISTRO_CODE_NAME, AGENT_LONG_VERSION, \
+            AGENT_NAME, CURRENT_AGENT, CURRENT_VERSION
 
 
 def parse_event(data_str):

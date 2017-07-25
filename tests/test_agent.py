@@ -90,3 +90,28 @@ class TestAgent(AgentTestCase):
 
         mock_daemon.run.assert_called_once_with(child_args="-configuration-path:/foo/bar.conf")
         mock_load.assert_called_once()
+
+    @patch("azurelinuxagent.common.conf.get_ext_log_dir")
+    def test_agent_ensures_extension_log_directory(self, mock_dir):
+        ext_log_dir = os.path.join(self.tmp_dir, "FauxLogDir")
+        mock_dir.return_value = ext_log_dir
+
+        self.assertFalse(os.path.isdir(ext_log_dir))
+        agent = Agent(False,
+                    conf_file_path=os.path.join(data_dir, "test_waagent.conf"))
+        self.assertTrue(os.path.isdir(ext_log_dir))
+
+    @patch("azurelinuxagent.common.logger.error")
+    @patch("azurelinuxagent.common.conf.get_ext_log_dir")
+    def test_agent_logs_if_extension_log_directory_is_a_file(self, mock_dir, mock_log):
+        ext_log_dir = os.path.join(self.tmp_dir, "FauxLogDir")
+        mock_dir.return_value = ext_log_dir
+        fileutil.write_file(ext_log_dir, "Foo")
+
+        self.assertTrue(os.path.isfile(ext_log_dir))
+        self.assertFalse(os.path.isdir(ext_log_dir))
+        agent = Agent(False,
+                    conf_file_path=os.path.join(data_dir, "test_waagent.conf"))
+        self.assertTrue(os.path.isfile(ext_log_dir))
+        self.assertFalse(os.path.isdir(ext_log_dir))
+        mock_log.assert_called_once()

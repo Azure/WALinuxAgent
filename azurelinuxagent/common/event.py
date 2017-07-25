@@ -67,25 +67,29 @@ class EventStatus(object):
     EVENT_STATUS_FILE = "event_status.json"
 
     def __init__(self, status_dir=conf.get_lib_dir()):
-        self._path = os.path.join(status_dir, EventStatus.EVENT_STATUS_FILE)
-        self._load()
+        self._path = None
+        self._status = {}
 
     def clear(self):
-        self.status = {}
+        self._status = {}
         self._save()
 
     def event_marked(self, name, version, op):
-        return self._event_name(name, version, op) in self.status
+        return self._event_name(name, version, op) in self._status
 
     def event_succeeded(self, name, version, op):
         event = self._event_name(name, version, op)
-        if event not in self.status:
+        if event not in self._status:
             return True
-        return self.status[event] == True
+        return self._status[event] == True
+
+    def initialize(self, status_dir=conf.get_lib_dir()):
+        self._path = os.path.join(status_dir, EventStatus.EVENT_STATUS_FILE)
+        self._load()
 
     def mark_event_status(self, name, version, op, status):
         event = self._event_name(name, version, op)
-        self.status[event] = (status == True)
+        self._status[event] = (status == True)
         self._save()
 
     def _event_name(self, name, version, op):
@@ -93,18 +97,18 @@ class EventStatus(object):
 
     def _load(self):
         try:
-            self.status = {}
+            self._status = {}
             if os.path.isfile(self._path):
                 with open(self._path, 'r') as f:
-                    self.status = json.load(f)
+                    self._status = json.load(f)
         except Exception as e:
             logger.warn("Exception occurred loading event status: {0}".format(e))
-            self.status = {}
+            self._status = {}
 
     def _save(self):
         try:
             with open(self._path, 'w') as f:
-                json.dump(self.status, f)
+                json.dump(self._status, f)
         except Exception as e:
             logger.warn("Exception occurred saving event status: {0}".format(e))
 
@@ -130,7 +134,7 @@ class EventLogger(object):
 
     def save_event(self, data):
         if self.event_dir is None:
-            logger.warn("Event reporter is not initialized.")
+            logger.warn("Cannot save event -- Event reporter is not initialized.")
             return
 
         if not os.path.exists(self.event_dir):
@@ -230,7 +234,7 @@ def add_event(name, op="", is_success=True, duration=0, version=CURRENT_VERSION,
               message="", evt_type="", is_internal=False, log_event=True,
               reporter=__event_logger__):
     if reporter.event_dir is None:
-        logger.warn("Event reporter is not initialized.")
+        logger.warn("Cannot add event -- Event reporter is not initialized.")
         _log_event(name, op, message, is_success=is_success)
         return
 
@@ -246,7 +250,7 @@ def add_periodic(
     message="", evt_type="", is_internal=False, log_event=True, force=False,
     reporter=__event_logger__):
     if reporter.event_dir is None:
-        logger.warn("Event reporter is not initialized.")
+        logger.warn("Cannot add periodic event -- Event reporter is not initialized.")
         _log_event(name, op, message, is_success=is_success)
         return
 
@@ -266,9 +270,11 @@ def should_emit_event(name, version, op, status):
         not __event_status__.event_marked(name, version, op) or \
         __event_status__.event_succeeded(name, version, op) != status
 
-def init_event_logger(event_dir, reporter=__event_logger__):
-    reporter.event_dir = event_dir
+def init_event_logger(event_dir):
+    __event_logger__.event_dir = event_dir
 
+def init_event_status(status_dir):
+    __event_status__.initialize(status_dir)
 
 def dump_unhandled_err(name):
     if hasattr(sys, 'last_type') and hasattr(sys, 'last_value') and \

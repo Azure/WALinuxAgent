@@ -64,7 +64,19 @@ class Agent(object):
         logger.add_logger_appender(logger.AppenderType.CONSOLE, level,
                                  path="/dev/console")
 
+        ext_log_dir = conf.get_ext_log_dir()
+        try:
+            if os.path.isfile(ext_log_dir):
+                raise Exception("{0} is a file".format(ext_log_dir))
+            if not os.path.isdir(ext_log_dir):
+                os.makedirs(ext_log_dir)
+        except Exception as e:
+            logger.error(
+                "Exception occurred while creating extension "
+                "log directory {0}: {1}".format(ext_log_dir, e))
+
         #Init event reporter
+        event.init_event_status(conf.get_lib_dir())
         event_dir = os.path.join(conf.get_lib_dir(), "events")
         event.init_event_logger(event_dir)
         event.enable_unhandled_err_dump("WALA")
