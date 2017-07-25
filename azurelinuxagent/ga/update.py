@@ -800,7 +800,7 @@ class GuestAgent(object):
                     logger.verbose("Using host plugin as default channel")
 
                 uri, headers = self.host.get_artifact_request(uri.uri, self.host.manifest_uri)
-                if self._fetch(uri, headers=headers):
+                if self._fetch(uri, headers=headers, chk_proxy=False):
                     if not HostPluginProtocol.is_default_channel():
                         logger.verbose("Setting host plugin as default channel")
                         HostPluginProtocol.set_default_channel(True)
@@ -821,10 +821,10 @@ class GuestAgent(object):
             raise UpdateError(msg)
         return
 
-    def _fetch(self, uri, headers=None):
+    def _fetch(self, uri, headers=None, chk_proxy=True):
         package = None
         try:
-            resp = restutil.http_get(uri, chk_proxy=True, headers=headers)
+            resp = restutil.http_get(uri, chk_proxy=chk_proxy, headers=headers)
             if resp.status == restutil.httpclient.OK:
                 package = resp.read()
                 fileutil.write_file(self.get_agent_pkg_path(),
