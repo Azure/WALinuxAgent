@@ -394,5 +394,31 @@ Match host 192.168.1.2\n\
         util = osutil.DefaultOSUtil()
         self.assertEqual("", util.get_instance_id())
 
+    @patch('azurelinuxagent.common.conf.get_sudoers_dir')
+    def test_conf_sudoer(self, mock_dir):
+        tmp_dir = tempfile.mkdtemp()
+        mock_dir.return_value = tmp_dir
+
+        util = osutil.DefaultOSUtil()
+
+        # Assert the sudoer line is added if missing
+        util.conf_sudoer("FooBar")
+        waagent_sudoers = os.path.join(tmp_dir, 'waagent')
+        self.assertTrue(os.path.isfile(waagent_sudoers))
+
+        count = -1
+        with open(waagent_sudoers, 'r') as f:
+            count = len(f.readlines())
+        self.assertEqual(1, count)
+
+        # Assert the line does not get added a second time
+        util.conf_sudoer("FooBar")
+
+        count = -1
+        with open(waagent_sudoers, 'r') as f:
+            count = len(f.readlines())
+        print("WRITING TO {0}".format(waagent_sudoers))
+        self.assertEqual(1, count)
+
 if __name__ == '__main__':
     unittest.main()

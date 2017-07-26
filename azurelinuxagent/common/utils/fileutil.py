@@ -23,12 +23,15 @@ File operation util functions
 
 import glob
 import os
+import pwd
 import re
 import shutil
-import pwd
+import string
+
 import azurelinuxagent.common.logger as logger
-from azurelinuxagent.common.future import ustr
 import azurelinuxagent.common.utils.textutil as textutil
+
+from azurelinuxagent.common.future import ustr
 
 def copy_file(from_path, to_path=None, to_dir=None):
     if to_path is None:
@@ -160,18 +163,31 @@ def chmod_tree(path, mode):
         for file_name in files:
             os.chmod(os.path.join(root, file_name), mode)
 
-def findstr_in_file(file_path, pattern_str):
+def findstr_in_file(file_path, line_str):
+    """
+    Return True if the line is in the file; False otherwise.
+    (Trailing whitespace is ignore.)
+    """
+    try:
+        for line in (open(file_path, 'r')).readlines():
+            if line_str == line.rstrip():
+                return True
+    except Exception as e:
+        pass
+    return False
+
+def findre_in_file(file_path, line_re):
     """
     Return match object if found in file.
     """
     try:
-        pattern = re.compile(pattern_str)
+        pattern = re.compile(line_re)
         for line in (open(file_path, 'r')).readlines():
             match = re.search(pattern, line)
             if match:
                 return match
     except:
-        raise
+        pass
 
     return None
 

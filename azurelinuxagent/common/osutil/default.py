@@ -158,10 +158,12 @@ class DefaultOSUtil(object):
                 fileutil.append_file(sudoers_file, sudoers)
             sudoer = None
             if nopasswd:
-                sudoer = "{0} ALL=(ALL) NOPASSWD: ALL\n".format(username)
+                sudoer = "{0} ALL=(ALL) NOPASSWD: ALL".format(username)
             else:
-                sudoer = "{0} ALL=(ALL) ALL\n".format(username)
-            fileutil.append_file(sudoers_wagent, sudoer)
+                sudoer = "{0} ALL=(ALL) ALL".format(username)
+            if not os.path.isfile(sudoers_wagent) or \
+                fileutil.findstr_in_file(sudoers_wagent, sudoer) is None:
+                fileutil.append_file(sudoers_wagent, "{0}\n".format(sudoer))
             fileutil.chmod(sudoers_wagent, 0o440)
         else:
             #Remove user from sudoers
@@ -718,7 +720,7 @@ class DefaultOSUtil(object):
         for conf_file in dhclient_files:
             if not os.path.isfile(conf_file):
                 continue
-            if fileutil.findstr_in_file(conf_file, autosend):
+            if fileutil.findre_in_file(conf_file, autosend):
                 #Return if auto send host-name is configured
                 return
             fileutil.update_conf_file(conf_file,
