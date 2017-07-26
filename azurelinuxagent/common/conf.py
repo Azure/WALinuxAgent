@@ -91,6 +91,8 @@ def enable_rdma(conf=__conf__):
            conf.get_switch("OS.UpdateRdmaDriver", False) or \
            conf.get_switch("OS.CheckRdmaDriver", False)
 
+def enable_rdma_update(conf=__conf__):
+    return conf.get_switch("OS.UpdateRdmaDriver", False)
 
 def get_logs_verbose(conf=__conf__):
     return conf.get_switch("Logs.Verbose", False)
