@@ -36,8 +36,9 @@ class SUSERDMAHandler(RDMAHandler):
             logger.error(error_msg)
             return
         zypper_install = 'zypper -n in %s'
+        zypper_install_noref = 'zypper -n --no-refresh in %s'
         zypper_remove = 'zypper -n rm %s'
-        zypper_search = 'zypper se -s %s'
+        zypper_search = 'zypper -n se -s %s'
         package_name = 'msft-rdma-kmp-default'
         cmd = zypper_search % package_name
         status, repo_package_info = shellutil.run_get_output(cmd)
@@ -108,9 +109,9 @@ class SUSERDMAHandler(RDMAHandler):
                         fw_version in local_package
                 ):
                     logger.info("RDMA: Installing: %s" % local_package)
-                    cmd = zypper_install % local_package
+                    cmd = zypper_install_noref % local_package
                     result = shellutil.run(cmd)
-                    if result:
+                    if result and result != 106:
                         error_msg = 'RDMA: Failed install of package "%s" '
                         error_msg += 'from local package cache'
                         logger.error(error_msg % local_package)
