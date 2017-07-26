@@ -21,6 +21,7 @@ import glob
 import os
 import re
 import time
+import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.shellutil as shellutil
 from azurelinuxagent.common.rdma import RDMAHandler
@@ -58,6 +59,10 @@ class UbuntuRDMAHandler(RDMAHandler):
             return
 
 	#Driver not found. We need to check to see if we need to update kernel
+        if not conf.enable_rdma_update():
+            logger.info("RDMA: driver update is disabled. Skip kernel update")
+            return
+
         status,output = shellutil.run_get_output('uname -r')
         if status != 0:
             return
