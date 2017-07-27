@@ -64,6 +64,50 @@ class TestFileOperations(AgentTestCase):
 
         os.remove(test_file)
 
+    def test_findre_in_file(self):
+        fp = tempfile.mktemp()
+        with open(fp, 'w') as f:
+            f.write(
+'''
+First line
+Second line
+Third line with more words
+'''
+            )
+
+        self.assertNotEquals(
+            None,
+            fileutil.findre_in_file(fp, ".*rst line$"))
+        self.assertNotEquals(
+            None,
+            fileutil.findre_in_file(fp, ".*ond line$"))
+        self.assertNotEquals(
+            None,
+            fileutil.findre_in_file(fp, ".*with more.*"))
+        self.assertNotEquals(
+            None,
+            fileutil.findre_in_file(fp, "^Third.*"))
+        self.assertEquals(
+            None,
+            fileutil.findre_in_file(fp, "^Do not match.*"))
+
+    def test_findstr_in_file(self):
+        fp = tempfile.mktemp()
+        with open(fp, 'w') as f:
+            f.write(
+'''
+First line
+Second line
+Third line with more words
+'''
+            )
+
+        self.assertTrue(fileutil.findstr_in_file(fp, "First line"))
+        self.assertTrue(fileutil.findstr_in_file(fp, "Second line"))
+        self.assertTrue(
+            fileutil.findstr_in_file(fp, "Third line with more words"))
+        self.assertFalse(fileutil.findstr_in_file(fp, "Not a line"))
+
     def test_get_last_path_element(self):
         filepath = '/tmp/abc.def'
         filename = fileutil.base_name(filepath)
