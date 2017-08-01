@@ -285,6 +285,8 @@ class UpdateHandler(object):
                         ustr(e))
             logger.warn(traceback.format_exc())
             sys.exit(1)
+            # additional return here because sys.exit is mocked in unit tests
+            return
 
         self._shutdown()
         sys.exit(0)
