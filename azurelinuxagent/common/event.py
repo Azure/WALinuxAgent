@@ -40,7 +40,7 @@ from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_VERSION, \
     DISTRO_CODE_NAME, AGENT_VERSION, \
     CURRENT_AGENT, CURRENT_VERSION
 
-_EVENT_MSG = "Event: name={0}, op={1}, message={2}"
+_EVENT_MSG = "Event: name={0}, op={1}, message={2}, duration={3}"
 
 class WALAEventOperation:
     ActivateResourceDisk = "ActivateResourceDisk"
@@ -118,13 +118,14 @@ __event_status_operations__ = [
         WALAEventOperation.ReportStatus
     ]
 
-def _log_event(name, op, message, is_success=True):
+
+def _log_event(name, op, message, duration, is_success=True):
     global _EVENT_MSG
 
     if not is_success:
-        logger.error(_EVENT_MSG, name, op, message)
+        logger.error(_EVENT_MSG, name, op, message, duration)
     else:
-        logger.info(_EVENT_MSG, name, op, message)
+        logger.info(_EVENT_MSG, name, op, message, duration)
 
 
 class EventLogger(object):
@@ -182,11 +183,19 @@ class EventLogger(object):
                 is_internal=is_internal, log_event=log_event)
             self.periodic_messages[h] = datetime.now()
 
-    def add_event(self, name, op="", is_success=True, duration=0,
+    def add_event(self,
+                  name,
+                  op="",
+                  is_success=True,
+                  duration=0,
                   version=CURRENT_VERSION,
-                  message="", evt_type="", is_internal=False, log_event=True):
+                  message="",
+                  evt_type="",
+                  is_internal=False,
+                  log_event=True):
+
         if not is_success or log_event:
-            _log_event(name, op, message, is_success=is_success)
+            _log_event(name, op, message, duration, is_success=is_success)
 
         event = TelemetryEvent(1, "69B669B9-4AF8-4C50-BDC4-6006FA76E975")
         event.parameters.append(TelemetryEventParam('Name', name))
@@ -235,7 +244,7 @@ def add_event(name, op="", is_success=True, duration=0, version=CURRENT_VERSION,
               reporter=__event_logger__):
     if reporter.event_dir is None:
         logger.warn("Cannot add event -- Event reporter is not initialized.")
-        _log_event(name, op, message, is_success=is_success)
+        _log_event(name, op, message, duration, is_success=is_success)
         return
 
     if should_emit_event(name, version, op, is_success):
@@ -251,7 +260,7 @@ def add_periodic(
     reporter=__event_logger__):
     if reporter.event_dir is None:
         logger.warn("Cannot add periodic event -- Event reporter is not initialized.")
-        _log_event(name, op, message, is_success=is_success)
+        _log_event(name, op, message, duration, is_success=is_success)
         return
 
     reporter.add_periodic(

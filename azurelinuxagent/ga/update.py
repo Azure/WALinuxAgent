@@ -231,7 +231,8 @@ class UpdateHandler(object):
         This is the main loop which watches for agent and extension updates.
         """
 
-        logger.info(u"Agent {0} is running as the goal state agent", CURRENT_AGENT)
+        logger.info(u"Agent {0} is running as the goal state agent",
+                    CURRENT_AGENT)
 
         # Launch monitoring threads
         from azurelinuxagent.ga.monitor import get_monitor_handler
@@ -245,14 +246,13 @@ class UpdateHandler(object):
         migrate_handler_state()
 
         try:
-            send_event_time = datetime.utcnow()
-
             self._ensure_no_orphans()
             self._emit_restart_event()
 
             while self.running:
                 if self._is_orphaned:
-                    logger.info("Goal state agent {0} was orphaned -- exiting", CURRENT_AGENT)
+                    logger.info("Goal state agent {0} was orphaned -- exiting",
+                                CURRENT_AGENT)
                     break
 
                 if self._upgrade_available():
@@ -280,14 +280,14 @@ class UpdateHandler(object):
                 time.sleep(GOAL_STATE_INTERVAL)
 
         except Exception as e:
-            logger.warn(u"Agent {0} failed with exception: {1}", CURRENT_AGENT, ustr(e))
+            logger.warn(u"Agent {0} failed with exception: {1}",
+                        CURRENT_AGENT,
+                        ustr(e))
             logger.warn(traceback.format_exc())
             sys.exit(1)
-            return
 
         self._shutdown()
         sys.exit(0)
-        return
 
     def forward_signal(self, signum, frame):
         # Note:
