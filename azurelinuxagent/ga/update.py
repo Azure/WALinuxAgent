@@ -908,6 +908,9 @@ class GuestAgent(object):
             zipfile.ZipFile(self.get_agent_pkg_path()).extractall(self.get_agent_dir())
 
         except Exception as e:
+            fileutil.clean_ioerror(e,
+                paths=[self.get_agent_dir(), self.get_agent_pkg_path()])
+
             msg = u"Exception unpacking Agent {0} from {1}: {2}".format(
                 self.name,
                 self.get_agent_pkg_path(),
