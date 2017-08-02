@@ -21,6 +21,7 @@
 File operation util functions
 """
 
+import errno as errno
 import glob
 import os
 import pwd
@@ -32,6 +33,17 @@ import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.textutil as textutil
 
 from azurelinuxagent.common.future import ustr
+
+KNOWN_IOERRORS = [
+    errno.EIO,          # I/O error
+    errno.ENOMEM,       # Out of memory
+    errno.ENFILE,       # File table overflow
+    errno.EMFILE,       # Too many open files
+    errno.ENOSPC,       # Out of space
+    errno.ENAMETOOLONG, # Name too long
+    errno.ELOOP,        # Too many symbolic links encountered
+    errno.EREMOTEIO     # Remote I/O error
+]
 
 def copy_file(from_path, to_path=None, to_dir=None):
     if to_path is None:
@@ -200,3 +212,21 @@ def get_all_files(root_path):
         result.extend([os.path.join(root, file) for file in files])
 
     return result
+
+def clean_ioerror(e, paths=[]):
+    """
+    Clean-up possibly bad files and directories after an IO error.
+    The code ignores *all* errors since disk state may be unhealthy.
+    """
+    if isinstance(e, IOError) and e.errno in KNOWN_IOERRORS:
+        for path in paths:
+            if path is None:
+                continue
+
+            try:
+                if os.path.isdir(path):
+                    shutil.rmtree(path, ignore_errors=True)
+                else:
+                    os.remove(path)
+            except Exception as e:
+                pass

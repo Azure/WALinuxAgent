@@ -411,6 +411,7 @@ class ExtHandlerInstance(object):
         self.protocol = protocol
         self.operation = None
         self.pkg = None
+        self.pkg_file = None
         self.is_upgrade = False
 
         prefix = "[{0}]".format(self.get_full_name())
@@ -612,12 +613,14 @@ class ExtHandlerInstance(object):
             raise ExtensionError("Failed to download extension")
 
         self.logger.verbose("Unpack extension package")
-        pkg_file = os.path.join(conf.get_lib_dir(),
+        self.pkg_file = os.path.join(conf.get_lib_dir(),
                                 os.path.basename(uri.uri) + ".zip")
         try:
-            fileutil.write_file(pkg_file, bytearray(package), asbin=True)
-            zipfile.ZipFile(pkg_file).extractall(self.get_base_dir())
+            fileutil.write_file(self.pkg_file, bytearray(package), asbin=True)
+            zipfile.ZipFile(self.pkg_file).extractall(self.get_base_dir())
         except IOError as e:
+            fileutil.clean_ioerror(e,
+                paths=[self.get_base_dir(), self.pkg_file])
             raise ExtensionError(u"Failed to write and unzip plugin", e)
 
         #Add user execute permission to all files under the base dir
@@ -638,6 +641,8 @@ class ExtHandlerInstance(object):
             man = fileutil.read_file(man_file, remove_bom=True)
             fileutil.write_file(self.get_manifest_file(), man)
         except IOError as e:
+            fileutil.clean_ioerror(e,
+                paths=[self.get_base_dir(), self.pkg_file])
             raise ExtensionError(u"Failed to save HandlerManifest.json", e)
 
         #Create status and config dir
@@ -647,6 +652,8 @@ class ExtHandlerInstance(object):
             conf_dir = self.get_conf_dir()
             fileutil.mkdir(conf_dir, mode=0o700)
         except IOError as e:
+            fileutil.clean_ioerror(e,
+                paths=[self.get_base_dir(), self.pkg_file])
             raise ExtensionError(u"Failed to create status or config dir", e)
 
         #Save HandlerEnvironment.json
@@ -846,6 +853,8 @@ class ExtHandlerInstance(object):
         try:
             fileutil.write_file(settings_file, settings)
         except IOError as e:
+            fileutil.clean_ioerror(e,
+                paths=[settings_file])
             raise ExtensionError(u"Failed to update settings file", e)
 
     def update_settings(self):
@@ -886,6 +895,8 @@ class ExtHandlerInstance(object):
         try:
             fileutil.write_file(self.get_env_file(), json.dumps(env))
         except IOError as e:
+            fileutil.clean_ioerror(e,
+                paths=[self.get_base_dir(), self.pkg_file])
             raise ExtensionError(u"Failed to save handler environment", e)
 
     def set_handler_state(self, handler_state):
@@ -897,6 +908,8 @@ class ExtHandlerInstance(object):
             state_file = os.path.join(state_dir, "HandlerState")
             fileutil.write_file(state_file, handler_state)
         except IOError as e:
+            fileutil.clean_ioerror(e,
+                paths=[state_file])
             self.logger.error("Failed to set state: {0}", e)
     
     def get_handler_state(self):
@@ -925,6 +938,8 @@ class ExtHandlerInstance(object):
         try:
             fileutil.write_file(status_file, json.dumps(get_properties(handler_status)))
         except (IOError, ValueError, ProtocolError) as e:
+            fileutil.clean_ioerror(e,
+                paths=[status_file])
             self.logger.error("Failed to save handler status: {0}", e)
         
     def get_handler_status(self):

@@ -15,6 +15,7 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
+import errno as errno
 import glob
 import random
 import string
@@ -240,6 +241,76 @@ DHCP_HOSTNAME=test\n"
             with patch.object(fileutil, 'read_file', return_value=bad_file):
                 fileutil.update_conf_file(path, 'DHCP_HOSTNAME', 'DHCP_HOSTNAME=test')
                 patch_write.assert_called_once_with(path, updated_file)
+
+    def test_clean_ioerror_ignores_missing(self):
+        e = IOError()
+        e.errno = errno.ENOSPC
+
+        # Send no paths
+        fileutil.clean_ioerror(e)
+
+        # Send missing file(s) / directories
+        fileutil.clean_ioerror(e, paths=['/foo/not/here', None, '/bar/not/there'])
+
+    def test_clean_ioerror_ignores_unless_ioerror(self):
+        try:
+            d = tempfile.mkdtemp()
+            fd, f = tempfile.mkstemp()
+            os.close(fd)
+            fileutil.write_file(f, 'Not empty')
+
+            # Send non-IOError exception
+            e = Exception()
+            fileutil.clean_ioerror(e, paths=[d, f])
+            self.assertTrue(os.path.isdir(d))
+            self.assertTrue(os.path.isfile(f))
+
+            # Send unrecognized IOError
+            e = IOError()
+            e.errno = errno.EFAULT
+            self.assertFalse(e.errno in fileutil.KNOWN_IOERRORS)
+            fileutil.clean_ioerror(e, paths=[d, f])
+            self.assertTrue(os.path.isdir(d))
+            self.assertTrue(os.path.isfile(f))
+
+        finally:
+            shutil.rmtree(d)
+            os.remove(f)
+
+    def test_clean_ioerror_removes_files(self):
+        fd, f = tempfile.mkstemp()
+        os.close(fd)
+        fileutil.write_file(f, 'Not empty')
+
+        e = IOError()
+        e.errno = errno.ENOSPC
+        fileutil.clean_ioerror(e, paths=[f])
+        self.assertFalse(os.path.isdir(f))
+        self.assertFalse(os.path.isfile(f))
+
+    def test_clean_ioerror_removes_directories(self):
+        d1 = tempfile.mkdtemp()
+        d2 = tempfile.mkdtemp()
+        for n in ['foo', 'bar']:
+            fileutil.write_file(os.path.join(d2, n), 'Not empty')
+
+        e = IOError()
+        e.errno = errno.ENOSPC
+        fileutil.clean_ioerror(e, paths=[d1, d2])
+        self.assertFalse(os.path.isdir(d1))
+        self.assertFalse(os.path.isfile(d1))
+        self.assertFalse(os.path.isdir(d2))
+        self.assertFalse(os.path.isfile(d2))
+
+    def test_clean_ioerror_handles_a_range_of_errors(self):
+        for err in fileutil.KNOWN_IOERRORS:
+            e = IOError()
+            e.errno = err
+
+            d = tempfile.mkdtemp()
+            fileutil.clean_ioerror(e, paths=[d])
+            self.assertFalse(os.path.isdir(d))
+            self.assertFalse(os.path.isfile(d))
 
 if __name__ == '__main__':
     unittest.main()

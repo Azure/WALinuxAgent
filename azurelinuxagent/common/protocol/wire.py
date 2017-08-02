@@ -589,6 +589,8 @@ class WireClient(object):
         try:
             fileutil.write_file(local_file, data)
         except IOError as e:
+            fileutil.clean_ioerror(e,
+                paths=[local_file])
             raise ProtocolError("Failed to write cache: {0}".format(e))
 
     @staticmethod
