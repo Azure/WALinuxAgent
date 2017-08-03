@@ -22,7 +22,8 @@ import json
 import traceback
 
 from azurelinuxagent.common import logger
-from azurelinuxagent.common.exception import ProtocolError, HttpError
+from azurelinuxagent.common.exception import BadRequestError, \
+                                            HttpError, ProtocolError
 from azurelinuxagent.common.future import ustr, httpclient
 from azurelinuxagent.common.utils import restutil
 from azurelinuxagent.common.utils import textutil
@@ -85,10 +86,10 @@ class HostPluginProtocol(object):
         try:
             headers = {HEADER_CONTAINER_ID: self.container_id}
             response = restutil.http_get(url, headers)
-            if response.status != httpclient.OK:
+            if restutil.request_failed(response):
                 logger.error(
                     "HostGAPlugin: Failed Get API versions: {0}".format(
-                        self.read_response_error(response)))
+                        restutil.read_response_error(response)))
             else:
                 return_val = ustr(remove_bom(response.read()), encoding='utf-8')
 
@@ -117,42 +118,7 @@ class HostPluginProtocol(object):
         return url, headers
 
     def put_vm_log(self, content):
-        """
-        Try to upload the given content to the host plugin
-        :param deployment_id: the deployment id, which is obtained from the
-        goal state (tenant name)
-        :param container_id: the container id, which is obtained from the
-        goal state
-        :param content: the binary content of the zip file to upload
-        :return:
-        """
-        if not self.ensure_initialized():
-            raise ProtocolError("HostGAPlugin: Host plugin channel is not available")
-
-        if content is None \
-                or self.container_id is None \
-                or self.deployment_id is None:
-            logger.error(
-                "HostGAPlugin: Invalid arguments passed: "
-                "[{0}], [{1}], [{2}]".format(
-                    content,
-                    self.container_id,
-                    self.deployment_id))
-            return
-        url = URI_FORMAT_PUT_LOG.format(self.endpoint, HOST_PLUGIN_PORT)
-
-        headers = {"x-ms-vmagentlog-deploymentid": self.deployment_id,
-                   "x-ms-vmagentlog-containerid": self.container_id}
-        logger.periodic(
-            logger.EVERY_FIFTEEN_MINUTES,
-            "HostGAPlugin: Put VM log to [{0}]".format(url))
-        try:
-            response = restutil.http_put(url, content, headers)
-            if response.status != httpclient.OK:
-                logger.error("HostGAPlugin: Put log failed: Code {0}".format(
-                    response.status))
-        except HttpError as e:
-            logger.error("HostGAPlugin: Put log exception: {0}".format(e))
+        raise NotImplementedError("Unimplemented")
 
     def put_vm_status(self, status_blob, sas_url, config_blob_type=None):
         """
@@ -169,6 +135,7 @@ class HostPluginProtocol(object):
 
         logger.verbose("HostGAPlugin: Posting VM status")
         try:
+
             blob_type = status_blob.type if status_blob.type else config_blob_type
 
             if blob_type == "BlockBlob":
@@ -176,17 +143,14 @@ class HostPluginProtocol(object):
             else:
                 self._put_page_blob_status(sas_url, status_blob)
 
-            if not HostPluginProtocol.is_default_channel():
+        except Exception as e:
+            # If the HostPlugin rejects the request,
+            # let the error continue, but set to use the HostPlugin
+            if isinstance(e, BadRequestError):
                 logger.verbose("HostGAPlugin: Setting host plugin as default channel")
                 HostPluginProtocol.set_default_channel(True)
-        except Exception as e:
-            message = "HostGAPlugin: Exception Put VM status: {0}, {1}".format(e, traceback.format_exc())
-            from azurelinuxagent.common.event import WALAEventOperation, report_event
-            report_event(op=WALAEventOperation.ReportStatus,
-                         is_success=False,
-                         message=message)
-            logger.warn("HostGAPlugin: resetting default channel")
-            HostPluginProtocol.set_default_channel(False)
+
+            raise
 
     def _put_block_blob_status(self, sas_url, status_blob):
         url = URI_FORMAT_PUT_VM_STATUS.format(self.endpoint, HOST_PLUGIN_PORT)
@@ -198,9 +162,9 @@ class HostPluginProtocol(object):
                                     bytearray(status_blob.data, encoding='utf-8')),
                         headers=self._build_status_headers())
 
-        if response.status != httpclient.OK:
+        if restutil.request_failed(response):
             raise HttpError("HostGAPlugin: Put BlockBlob failed: {0}".format(
-                self.read_response_error(response)))
+                restutil.read_response_error(response)))
         else:
             logger.verbose("HostGAPlugin: Put BlockBlob status succeeded")
 
@@ -219,10 +183,10 @@ class HostPluginProtocol(object):
                                     status_blob.get_page_blob_create_headers(status_size)),
                         headers=self._build_status_headers())
 
-        if response.status != httpclient.OK:
+        if restutil.request_failed(response):
             raise HttpError(
                 "HostGAPlugin: Failed PageBlob clean-up: {0}".format(
-                    self.read_response_error(response)))
+                    restutil.read_response_error(response)))
         else:
             logger.verbose("HostGAPlugin: PageBlob clean-up succeeded")
         
@@ -249,11 +213,11 @@ class HostPluginProtocol(object):
                                         buf),
                             headers=self._build_status_headers())
 
-            if response.status != httpclient.OK:
+            if restutil.request_failed(response):
                 raise HttpError(
                     "HostGAPlugin Error: Put PageBlob bytes [{0},{1}]: " \
                     "{2}".format(
-                        start, end, self.read_response_error(response)))
+                        start, end, restutil.read_response_error(response)))
 
             # Advance to the next page (if any)
             start = end
@@ -287,26 +251,3 @@ class HostPluginProtocol(object):
         if PY_VERSION_MAJOR > 2:
             return s.decode('utf-8')
         return s
-    
-    @staticmethod
-    def read_response_error(response):
-        result = ''
-        if response is not None:
-            try:
-                body = remove_bom(response.read())
-                result = "[{0}: {1}] {2}".format(response.status,
-                                                 response.reason,
-                                                 body)
-
-                # this result string is passed upstream to several methods
-                # which do a raise HttpError() or a format() of some kind;
-                # as a result it cannot have any unicode characters
-                if PY_VERSION_MAJOR < 3:
-                    result = ustr(result, encoding='ascii', errors='ignore')
-                else:
-                    result = result\
-                        .encode(encoding='ascii', errors='ignore')\
-                        .decode(encoding='ascii', errors='ignore')
-            except Exception:
-                logger.warn(traceback.format_exc())
-        return result

@@ -41,7 +41,8 @@ import azurelinuxagent.common.utils.textutil as textutil
 from azurelinuxagent.common.event import add_event, add_periodic, \
                                     elapsed_milliseconds, \
                                     WALAEventOperation
-from azurelinuxagent.common.exception import UpdateError, ProtocolError
+from azurelinuxagent.common.exception import BadRequestError, \
+                                    ProtocolError, UpdateError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol import get_protocol_util
@@ -349,84 +350,6 @@ class UpdateHandler(object):
         self._set_sentinal() 
         return
 
-    def _upgrade_available(self, base_version=CURRENT_VERSION):
-        # Emit an event expressing the state of AutoUpdate
-        # Note:
-        # - Duplicate events get suppressed; state transitions always emit
-        add_event(
-            AGENT_NAME,
-            version=CURRENT_VERSION,
-            op=WALAEventOperation.AutoUpdate,
-            is_success=conf.get_autoupdate_enabled())
-
-        # Ignore new agents if updating is disabled
-        if not conf.get_autoupdate_enabled():
-            return False
-
-        now = time.time()
-        if self.last_attempt_time is not None:
-            next_attempt_time = self.last_attempt_time + conf.get_autoupdate_frequency()
-        else:
-            next_attempt_time = now
-        if next_attempt_time > now:
-            return False
-
-        family = conf.get_autoupdate_gafamily()
-        logger.verbose("Checking for agent family {0} updates", family)
-
-        self.last_attempt_time = now
-        try:
-            protocol = self.protocol_util.get_protocol()
-            manifest_list, etag = protocol.get_vmagent_manifests()
-        except Exception as e:
-            msg = u"Exception retrieving agent manifests: {0}".format(ustr(e))
-            logger.warn(msg)
-            add_event(
-                AGENT_NAME,
-                op=WALAEventOperation.Download,
-                version=CURRENT_VERSION,
-                is_success=False,
-                message=msg)
-            return False
-
-        manifests = [m for m in manifest_list.vmAgentManifests \
-                        if m.family == family and len(m.versionsManifestUris) > 0]
-        if len(manifests) == 0:
-            logger.verbose(u"Incarnation {0} has no agent family {1} updates", etag, family)
-            return False
-
-        try:
-            pkg_list = protocol.get_vmagent_pkgs(manifests[0])
-        except ProtocolError as e:
-            msg = u"Incarnation {0} failed to get {1} package list: " \
-                  u"{2}".format(
-                etag,
-                family,
-                ustr(e))
-            logger.warn(msg)
-            add_event(
-                AGENT_NAME,
-                op=WALAEventOperation.Download,
-                version=CURRENT_VERSION,
-                is_success=False,
-                message=msg)
-            return False
-
-        # Set the agents to those available for download at least as current
-        # as the existing agent and remove from disk any agent no longer
-        # reported to the VM.
-        # Note:
-        #  The code leaves on disk available, but blacklisted, agents so as to
-        #  preserve the state. Otherwise, those agents could be again
-        #  downloaded and inappropriately retried.
-        host = self._get_host_plugin(protocol=protocol)
-        self._set_agents([GuestAgent(pkg=pkg, host=host) for pkg in pkg_list.versions])
-        self._purge_agents()
-        self._filter_blacklisted_agents()
-
-        # Return True if agents more recent than the current are available
-        return len(self.agents) > 0 and self.agents[0].version > base_version
-
     def _ensure_no_orphans(self, orphan_wait_interval=ORPHAN_WAIT_INTERVAL):
         pid_files, ignored = self._write_pid_file()
         for pid_file in pid_files:
@@ -615,6 +538,85 @@ class UpdateHandler(object):
                 str(e))
         return
 
+    def _upgrade_available(self, base_version=CURRENT_VERSION):
+        # Emit an event expressing the state of AutoUpdate
+        # Note:
+        # - Duplicate events get suppressed; state transitions always emit
+        add_event(
+            AGENT_NAME,
+            version=CURRENT_VERSION,
+            op=WALAEventOperation.AutoUpdate,
+            is_success=conf.get_autoupdate_enabled())
+
+        # Ignore new agents if updating is disabled
+        if not conf.get_autoupdate_enabled():
+            return False
+
+        now = time.time()
+        if self.last_attempt_time is not None:
+            next_attempt_time = self.last_attempt_time + \
+                                    conf.get_autoupdate_frequency()
+        else:
+            next_attempt_time = now
+        if next_attempt_time > now:
+            return False
+
+        family = conf.get_autoupdate_gafamily()
+        logger.verbose("Checking for agent family {0} updates", family)
+
+        self.last_attempt_time = now
+        protocol = self.protocol_util.get_protocol()
+
+        for update_goal_state in [False, True]:
+            try:
+                if update_goal_state:
+                    protocol.update_goal_state(forced=True)
+
+                manifest_list, etag = protocol.get_vmagent_manifests()
+
+                manifests = [m for m in manifest_list.vmAgentManifests \
+                                if m.family == family and \
+                                    len(m.versionsManifestUris) > 0]
+                if len(manifests) == 0:
+                    logger.verbose(u"Incarnation {0} has no {1} agent updates",
+                                    etag, family)
+                    return False
+
+                pkg_list = protocol.get_vmagent_pkgs(manifests[0])
+
+                # Set the agents to those available for download at least as
+                # current as the existing agent and remove from disk any agent
+                # no longer reported to the VM.
+                # Note:
+                #  The code leaves on disk available, but blacklisted, agents
+                #  so as to preserve the state. Otherwise, those agents could be
+                #  again downloaded and inappropriately retried.
+                host = self._get_host_plugin(protocol=protocol)
+                self._set_agents([GuestAgent(pkg=pkg, host=host) \
+                                     for pkg in pkg_list.versions])
+
+                self._purge_agents()
+                self._filter_blacklisted_agents()
+
+                # Return True if more recent agents are available
+                return len(self.agents) > 0 and \
+                            self.agents[0].version > base_version
+
+            except Exception as e:
+                if isinstance(e, BadRequestError):
+                    continue
+
+                msg = u"Exception retrieving agent manifests: {0}".format(
+                            ustr(e))
+                logger.warn(msg)
+                add_event(
+                    AGENT_NAME,
+                    op=WALAEventOperation.Download,
+                    version=CURRENT_VERSION,
+                    is_success=False,
+                    message=msg)
+                return False
+
     def _write_pid_file(self):
         pid_files = self._get_pid_files()
 
@@ -671,12 +673,16 @@ class GuestAgent(object):
             self._ensure_downloaded()
             self._ensure_loaded()
         except Exception as e:
+            if isinstance(e, BadRequestError):
+                raise
+
             # Note the failure, blacklist the agent if the package downloaded
             # - An exception with a downloaded package indicates the package
             #   is corrupt (e.g., missing the HandlerManifest.json file)
             self.mark_failure(is_fatal=os.path.isfile(self.get_agent_pkg_path()))
 
-            msg = u"Agent {0} download / load failed with exception: {1}".format(self.name, ustr(e))
+            msg = u"Agent {0} install failed with exception: {1}".format(
+                        self.name, ustr(e))
             logger.warn(msg)
             add_event(
                 AGENT_NAME,
@@ -795,20 +801,29 @@ class GuestAgent(object):
         for uri in self.pkg.uris:
             if not HostPluginProtocol.is_default_channel() and self._fetch(uri.uri):
                 break
+
             elif self.host is not None and self.host.ensure_initialized():
                 if not HostPluginProtocol.is_default_channel():
-                    logger.warn("Download unsuccessful, falling back to host plugin")
+                    logger.warn("Download failed, switching to host plugin")
                 else:
                     logger.verbose("Using host plugin as default channel")
 
                 uri, headers = self.host.get_artifact_request(uri.uri, self.host.manifest_uri)
-                if self._fetch(uri, headers=headers, chk_proxy=False):
-                    if not HostPluginProtocol.is_default_channel():
-                        logger.verbose("Setting host plugin as default channel")
-                        HostPluginProtocol.set_default_channel(True)
-                    break
-                else:
-                    logger.warn("Host plugin download unsuccessful")
+                try:
+                    if self._fetch(uri, headers=headers, chk_proxy=False):
+                        if not HostPluginProtocol.is_default_channel():
+                            logger.verbose("Setting host plugin as default channel")
+                            HostPluginProtocol.set_default_channel(True)
+                        break
+                    else:
+                        logger.warn("Host plugin download failed")
+
+                # If the HostPlugin rejects the request,
+                # let the error continue, but set to use the HostPlugin
+                except BadRequestError:
+                    HostPluginProtocol.set_default_channel(True)
+                    raise
+
             else:
                 logger.error("No download channels available")
 
@@ -821,13 +836,14 @@ class GuestAgent(object):
                 is_success=False,
                 message=msg)
             raise UpdateError(msg)
+
         return
 
     def _fetch(self, uri, headers=None, chk_proxy=True):
         package = None
         try:
             resp = restutil.http_get(uri, chk_proxy=chk_proxy, headers=headers)
-            if resp.status == restutil.httpclient.OK:
+            if restutil.request_succeeded(resp):
                 package = resp.read()
                 fileutil.write_file(self.get_agent_pkg_path(),
                                     bytearray(package),
@@ -835,12 +851,16 @@ class GuestAgent(object):
                 logger.verbose(u"Agent {0} downloaded from {1}", self.name, uri)
             else:
                 logger.verbose("Fetch was unsuccessful [{0}]",
-                               HostPluginProtocol.read_response_error(resp))
+                               restutil.read_response_error(resp))
         except restutil.HttpError as http_error:
+            if isinstance(http_error, BadRequestError):
+                raise
+
             logger.verbose(u"Agent {0} download from {1} failed [{2}]",
                            self.name,
                            uri,
                            http_error)
+
         return package is not None
 
     def _load_error(self):

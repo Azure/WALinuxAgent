@@ -86,7 +86,6 @@ class DhcpError(AgentError):
     def __init__(self, msg=None, inner=None):
         super(DhcpError, self).__init__('000006', msg, inner)
 
-
 class OSUtilError(AgentError):
     """
     Failed to perform operation to OS configuration
@@ -148,3 +147,12 @@ class UpdateError(AgentError):
 
     def __init__(self, msg=None, inner=None):
         super(UpdateError, self).__init__('000012', msg, inner)
+
+
+class BadRequestError(HttpError):
+    """
+    The server rejected the request (i.e., status code 400)
+    """
+
+    def __init__(self, msg=None, inner=None):
+        super(BadRequestError, self).__init__(msg, inner)

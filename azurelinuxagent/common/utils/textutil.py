@@ -259,6 +259,17 @@ def set_ini_config(config, name, val):
         config.insert(length - 1, text)
 
 
+def replace_non_ascii(incoming, replace_char=''):
+    outgoing = ''
+    if incoming is not None:
+        for c in incoming:
+            if str_to_ord(c) > 128:
+                outgoing += replace_char
+            else:
+                outgoing += c
+    return outgoing
+
+
 def remove_bom(c):
     '''
     bom is comprised of a sequence of three chars,0xef, 0xbb, 0xbf, in case of utf-8.
