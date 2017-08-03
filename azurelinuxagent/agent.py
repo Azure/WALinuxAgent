@@ -128,6 +128,11 @@ class Agent(object):
         update_handler = get_update_handler()
         update_handler.run()
 
+    def show_configuration(self):
+        configuration = conf.get_configuration()
+        for k in sorted(configuration.keys()):
+            print("{0} = {1}".format(k, configuration[k]))
+
 def main(args=[]):
     """
     Parse command line arguments, exit with usage() on error.
@@ -157,6 +162,8 @@ def main(args=[]):
                 agent.daemon()
             elif command == "run-exthandlers":
                 agent.run_exthandlers()
+            elif command == "show-configuration":
+                agent.show_configuration()
         except Exception:
             logger.error(u"Failed to run '{0}': {1}",
                          command,
@@ -198,6 +205,8 @@ def parse_args(sys_args):
             verbose = True
         elif re.match("^([-/]*)force", a):
             force = True
+        elif re.match("^([-/]*show-configuration", a):
+            cmd = "show-configuration"
         elif re.match("^([-/]*)(help|usage|\\?)", a):
             cmd = "help"
         else:
