@@ -112,6 +112,21 @@ class TestOSUtil(AgentTestCase):
             self.assertFalse(osutil.DefaultOSUtil().is_primary_interface('lo'))
             self.assertTrue(osutil.DefaultOSUtil().is_primary_interface('eth0'))
 
+    def test_sriov(self):
+        routing_table = "\
+        Iface	Destination	Gateway 	Flags	RefCnt	Use	Metric	Mask		MTU	Window	IRTT \n" \
+        "bond0	00000000	0100000A	0003	0	    0	0	00000000	0	0	0   \n" \
+        "bond0	0000000A	00000000	0001	0	    0	0	00000000	0	0	0   \n" \
+        "eth0	0000000A	00000000	0001	0	    0	0	00000000	0	0	0   \n" \
+        "bond0	10813FA8	0100000A	0007	0	    0	0	00000000	0	0	0   \n" \
+        "bond0	FEA9FEA9	0100000A	0007	0	    0	0	00000000	0	0	0   \n"
+
+        mo = mock.mock_open(read_data=routing_table)
+        with patch(open_patch(), mo):
+            self.assertFalse(osutil.DefaultOSUtil().is_primary_interface('eth0'))
+            self.assertTrue(osutil.DefaultOSUtil().is_primary_interface('bond0'))
+
+
     def test_multiple_default_routes(self):
         routing_table = "\
         Iface	Destination	Gateway 	Flags	RefCnt	Use	Metric	Mask		MTU	Window	IRTT \n\
