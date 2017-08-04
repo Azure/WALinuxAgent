@@ -105,7 +105,8 @@ __SWITCH_OPTIONS__ = {
     "ResourceDisk.Format" : False,
     "ResourceDisk.EnableSwap" : False,
     "AutoUpdate.Enabled" : True,
-    "EnableOverProvisioning" : False
+    "EnableOverProvisioning" : False,
+    "OS.AllowHTTP" : False
 }
 
 __STRING_OPTIONS__ = {
@@ -312,3 +313,6 @@ def get_autoupdate_frequency(conf=__conf__):
 
 def get_enable_overprovisioning(conf=__conf__):
     return conf.get_switch("EnableOverProvisioning", False)
+
+def get_allow_http(conf=__conf__):
+    return conf.get_switch("OS.AllowHTTP", False)

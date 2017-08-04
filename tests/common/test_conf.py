@@ -62,7 +62,8 @@ class TestConf(AgentTestCase):
         "OS.CheckRdmaDriver" : False,
         "AutoUpdate.Enabled" : True,
         "AutoUpdate.GAFamily" : "Prod",
-        "EnableOverProvisioning" : False
+        "EnableOverProvisioning" : False,
+        "OS.AllowHTTP" : False
     }
 
     def setUp(self):

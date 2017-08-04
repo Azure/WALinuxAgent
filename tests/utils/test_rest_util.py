@@ -115,6 +115,57 @@ class TestHttpOperations(AgentTestCase):
         self.assertRaises(restutil.HttpError, restutil.http_get,
                           "http://foo.bar")
 
+    @patch("time.sleep")
+    @patch("azurelinuxagent.common.utils.restutil._http_request")
+    def test_http_request_retries_status_codes(self, _http_request, _sleep):
+        _http_request.side_effect = [
+            Mock(status=httpclient.SERVICE_UNAVAILABLE),
+            Mock(status=httpclient.OK)
+        ]
+
+        restutil.http_get("https://foo.bar")
+        self.assertEqual(2, _http_request.call_count)
+        self.assertEqual(1, _sleep.call_count)
+
+    @patch("time.sleep")
+    @patch("azurelinuxagent.common.utils.restutil._http_request")
+    def test_http_request_retries_exceptions(self, _http_request, _sleep):
+        _http_request.side_effect = [
+            httpclient.IncompleteRead(''),
+            Mock(status=httpclient.OK)
+        ]
+
+        restutil.http_get("https://foo.bar")
+        self.assertEqual(2, _http_request.call_count)
+        self.assertEqual(1, _sleep.call_count)
+
+    @patch("time.sleep")
+    @patch("azurelinuxagent.common.utils.restutil._http_request")
+    def test_http_request_retries_ioerrors(self, _http_request, _sleep):
+        ioerror = IOError()
+        ioerror.errno = 64
+        _http_request.side_effect = [
+            ioerror,
+            Mock(status=httpclient.OK)
+        ]
+
+        restutil.http_get("https://foo.bar")
+        self.assertEqual(2, _http_request.call_count)
+        self.assertEqual(1, _sleep.call_count)
+
+    @patch("time.sleep")
+    @patch("azurelinuxagent.common.utils.restutil._http_request")
+    def test_http_request_invokes_retry_required(self, _http_request, _sleep):
+        retry_count = [0]
+        def retry_required(r, retry_count=retry_count):
+            retry_count[0] += 1
+            return retry_count[0] <= 1
+
+        restutil.http_get("https://foo.bar", retry_required=retry_required)
+        self.assertEqual(2, retry_count[0])
+        self.assertEqual(2, _http_request.call_count)
+        self.assertEqual(1, _sleep.call_count)
+    
 
 if __name__ == '__main__':
     unittest.main()
