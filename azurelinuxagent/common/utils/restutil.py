@@ -28,7 +28,7 @@ from azurelinuxagent.common.future import httpclient, urlparse
 
 SECURE_WARNING_EMITTED = False
 
-RETRY_SLEEP_INTERVAL = 3
+RETRY_SLEEP_INTERVAL = 5
 
 RETRY_CODES = [
     httpclient.RESET_CONTENT,
@@ -160,7 +160,7 @@ def http_request(method,
     if secure and proxy_host is not None and proxy_port is not None \
             and not hasattr(httpclient.HTTPSConnection, "set_tunnel"):
         if not conf.get_allow_http():
-            raise HttpError("HTTPS is unavailable and required")
+            raise HttpError("HTTPS tunnelling is unavailable and required")
 
         secure = False
         if not SECURE_WARNING_EMITTED:
@@ -175,7 +175,7 @@ def http_request(method,
     while attempt < max_retry:
         if attempt > 0:
             logger.info("HTTP attempt {0} of {1}: {2}",
-                        attempt,
+                        attempt+1,
                         max_retry,
                         msg)
             time.sleep(RETRY_SLEEP_INTERVAL)
@@ -194,7 +194,7 @@ def http_request(method,
                                  proxy_port=proxy_port)
             logger.verbose("HTTP response status: [{0}]", resp.status)
 
-            if resp.status in RETRY_CODES:
+            if resp.status in retry_codes:
                 msg = 'HTTP Failed: HTTP {0} Status Code {1}'.format(
                     method, resp.status)
                 continue

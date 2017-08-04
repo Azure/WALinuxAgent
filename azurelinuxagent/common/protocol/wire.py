@@ -595,25 +595,11 @@ class WireClient(object):
 
     @staticmethod
     def call_storage_service(http_req, *args, **kwargs):
-        """ 
-        Call storage service, handle SERVICE_UNAVAILABLE(503)
-        """
-
         # Default to use the configured HTTP proxy
         if not 'chk_proxy' in kwargs or kwargs['chk_proxy'] is None:
             kwargs['chk_proxy'] = True
 
-        for retry in range(0, 3):
-            resp = http_req(*args, **kwargs)
-            if resp.status == httpclient.SERVICE_UNAVAILABLE:
-                logger.warn("Storage service is temporarily unavailable. ")
-                logger.info("Will retry in {0} seconds. ",
-                            LONG_WAITING_INTERVAL)
-                time.sleep(LONG_WAITING_INTERVAL)
-            else:
-                return resp
-        raise ProtocolError(("Calling storage endpoint failed: "
-                             "{0}").format(resp.status))
+        return http_req(*args, **kwargs)
 
     def fetch_manifest(self, version_uris):
         logger.verbose("Fetch manifest")
@@ -621,11 +607,13 @@ class WireClient(object):
             response = None
             if not HostPluginProtocol.is_default_channel():
                 response = self.fetch(version.uri)
+
             if not response:
                 if HostPluginProtocol.is_default_channel():
                     logger.verbose("Using host plugin as default channel")
                 else:
                     logger.verbose("Manifest could not be downloaded, falling back to host plugin")
+
                 host = self.get_host_plugin()
                 uri, headers = host.get_artifact_request(version.uri)
                 response = self.fetch(uri, headers, chk_proxy=False)
@@ -640,8 +628,10 @@ class WireClient(object):
                     if not HostPluginProtocol.is_default_channel():
                         logger.info("Setting host plugin as default channel")
                         HostPluginProtocol.set_default_channel(True)
+
             if response:
                 return response
+
         raise ProtocolError("Failed to fetch manifest from all sources")
 
     def fetch(self, uri, headers=None, chk_proxy=None):

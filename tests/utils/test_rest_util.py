@@ -129,7 +129,25 @@ class TestHttpOperations(AgentTestCase):
 
     @patch("time.sleep")
     @patch("azurelinuxagent.common.utils.restutil._http_request")
+    def test_http_request_retries_passed_status_codes(self, _http_request, _sleep):
+        # Ensure the code is not part of the standard set
+        self.assertFalse(httpclient.BAD_REQUEST in restutil.RETRY_CODES)
+
+        _http_request.side_effect = [
+            Mock(status=httpclient.BAD_REQUEST),
+            Mock(status=httpclient.OK)
+        ]
+
+        restutil.http_get("https://foo.bar", retry_codes=[httpclient.BAD_REQUEST])
+        self.assertEqual(2, _http_request.call_count)
+        self.assertEqual(1, _sleep.call_count)
+
+    @patch("time.sleep")
+    @patch("azurelinuxagent.common.utils.restutil._http_request")
     def test_http_request_retries_exceptions(self, _http_request, _sleep):
+        # Note:
+        # -- It would be best to test each possible exception,
+        #    but their differing signatures makes that a fair bit of work
         _http_request.side_effect = [
             httpclient.IncompleteRead(''),
             Mock(status=httpclient.OK)
@@ -143,15 +161,21 @@ class TestHttpOperations(AgentTestCase):
     @patch("azurelinuxagent.common.utils.restutil._http_request")
     def test_http_request_retries_ioerrors(self, _http_request, _sleep):
         ioerror = IOError()
-        ioerror.errno = 64
-        _http_request.side_effect = [
-            ioerror,
-            Mock(status=httpclient.OK)
-        ]
+        
+        for errno in restutil.RETRY_IOERRORS:
+            _http_request.reset_mock()
+            _sleep.reset_mock()
 
-        restutil.http_get("https://foo.bar")
-        self.assertEqual(2, _http_request.call_count)
-        self.assertEqual(1, _sleep.call_count)
+            ioerror.errno = errno
+
+            _http_request.side_effect = [
+                ioerror,
+                Mock(status=httpclient.OK)
+            ]
+
+            restutil.http_get("https://foo.bar")
+            self.assertEqual(2, _http_request.call_count)
+            self.assertEqual(1, _sleep.call_count)
 
     @patch("time.sleep")
     @patch("azurelinuxagent.common.utils.restutil._http_request")
