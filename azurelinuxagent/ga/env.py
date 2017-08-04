@@ -27,6 +27,7 @@ import azurelinuxagent.common.logger as logger
 
 from azurelinuxagent.common.dhcp import get_dhcp_handler
 from azurelinuxagent.common.osutil import get_osutil
+from azurelinuxagetn.common.protocol import get_protocol_util
 
 def get_env_handler():
     return EnvHandler()
@@ -42,6 +43,7 @@ class EnvHandler(object):
     def __init__(self):
         self.osutil = get_osutil()
         self.dhcp_handler = get_dhcp_handler()
+        self.protocol_util = get_protocol_util()
         self.stopped = True
         self.hostname = None
         self.dhcpid = None
@@ -74,6 +76,8 @@ class EnvHandler(object):
                 self.osutil.set_scsi_disks_timeout(timeout)
             if conf.get_monitor_hostname():
                 self.handle_hostname_update()
+            if conf.get_monitor_conf_file():
+                self.handle_conf_file_change()
             self.handle_dhclient_restart()
             time.sleep(5)
 
@@ -86,6 +90,14 @@ class EnvHandler(object):
             self.osutil.set_hostname(curr_hostname)
             self.osutil.publish_hostname(curr_hostname)
             self.hostname = curr_hostname
+
+    def handle_conf_file_change(self):
+        # dhcp configure file
+        self.publish_hostname(self.hostname)
+
+        # sshd configure change
+        ovfenv = self.protocol_util.get_ovf_env()
+        self.osutil.conf_sshd(ovfenv.disable_ssh_password_auth)
 
     def handle_dhclient_restart(self):
         if self.dhcpid is None:

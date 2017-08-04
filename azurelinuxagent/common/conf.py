@@ -200,6 +200,8 @@ def get_password_crypt_salt_len(conf=__conf__):
 def get_monitor_hostname(conf=__conf__):
     return conf.get_switch("Provisioning.MonitorHostName", False)
 
+def get_monitor_conf_file(conf=__conf__):
+    return conf.get_switch("Provisioning.MonitorConfFile", False)
 
 def get_httpproxy_host(conf=__conf__):
     return conf.get("HttpProxy.Host", None)
