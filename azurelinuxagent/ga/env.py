@@ -27,7 +27,7 @@ import azurelinuxagent.common.logger as logger
 
 from azurelinuxagent.common.dhcp import get_dhcp_handler
 from azurelinuxagent.common.osutil import get_osutil
-from azurelinuxagetn.common.protocol import get_protocol_util
+from azurelinuxagent.common.protocol import get_protocol_util
 
 def get_env_handler():
     return EnvHandler()
