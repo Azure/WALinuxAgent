@@ -310,3 +310,12 @@ class HostPluginProtocol(object):
             except Exception:
                 logger.warn(traceback.format_exc())
         return result
+
+    @staticmethod
+    def retry_required(r):
+        '''
+        Return True when to retry an HTTP call to HostPlugin,
+        False otherwise
+        '''
+        if r is None:
+            return False
