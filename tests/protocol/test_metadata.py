@@ -31,17 +31,15 @@ class TestMetadataProtocolGetters(AgentTestCase):
         return json.loads(ustr(load_data(path)), encoding="utf-8")
 
     @patch("time.sleep")
-    @patch("azurelinuxagent.common.protocol.metadata.restutil")
-    def _test_getters(self, test_data, mock_restutil ,_):
-        mock_restutil.http_get.side_effect = test_data.mock_http_get
-
-        protocol = MetadataProtocol()
-        protocol.detect()
-        protocol.get_vminfo()
-        protocol.get_certs()
-        ext_handlers, etag = protocol.get_ext_handlers()
-        for ext_handler in ext_handlers.extHandlers:
-            protocol.get_ext_handler_pkgs(ext_handler)
+    def _test_getters(self, test_data ,_):
+        with patch.object(restutil, 'http_get', test_data.mock_http_get):
+            protocol = MetadataProtocol()
+            protocol.detect()
+            protocol.get_vminfo()
+            protocol.get_certs()
+            ext_handlers, etag = protocol.get_ext_handlers()
+            for ext_handler in ext_handlers.extHandlers:
+                protocol.get_ext_handler_pkgs(ext_handler)
 
     def test_getters(self, *args):
         test_data = MetadataProtocolData(DATA_FILE)

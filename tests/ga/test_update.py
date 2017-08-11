@@ -828,6 +828,12 @@ class TestUpdate(UpdateTestCase):
         self.event_patch.stop()
         return
 
+    def _create_protocol(self, count=5, versions=None):
+        latest_version = self.prepare_agents(count=count)
+        if versions is None or len(versions) <= 0:
+            versions = [latest_version]
+        return ProtocolMock(versions=versions)
+
     def _test_upgrade_available(
             self,
             base_version=FlexibleVersion(AGENT_VERSION),
@@ -835,12 +841,9 @@ class TestUpdate(UpdateTestCase):
             versions=None,
             count=5):
 
-        latest_version = self.prepare_agents(count=count)
-        if versions is None or len(versions) <= 0:
-            versions = [latest_version]
-
         if protocol is None:
-            protocol = ProtocolMock(versions=versions)
+            protocol = self._create_protocol(count=count, versions=versions)
+
         self.update_handler.protocol_util = protocol
         conf.get_autoupdate_gafamily = Mock(return_value=protocol.family)
 
@@ -848,6 +851,16 @@ class TestUpdate(UpdateTestCase):
 
     def test_upgrade_available_returns_true_on_first_use(self):
         self.assertTrue(self._test_upgrade_available())
+        return
+
+    def test_upgrade_available_will_refresh_goal_state(self):
+        protocol = self._create_protocol()
+        protocol.emulate_stale_goal_state()
+        self.assertTrue(self._test_upgrade_available(protocol=protocol))
+        self.assertEqual(2, protocol.call_counts["get_vmagent_manifests"])
+        self.assertEqual(1, protocol.call_counts["get_vmagent_pkgs"])
+        self.assertEqual(1, protocol.call_counts["update_goal_state"])
+        self.assertTrue(protocol.goal_state_forced)
         return
 
     def test_get_latest_agent_excluded(self):
@@ -1549,11 +1562,21 @@ class ProtocolMock(object):
     def __init__(self, family="TestAgent", etag=42, versions=None, client=None):
         self.family = family
         self.client = client
+        self.call_counts = {
+            "get_vmagent_manifests" : 0,
+            "get_vmagent_pkgs" : 0,
+            "update_goal_state" : 0
+        }
+        self.goal_state_is_stale = False
+        self.goal_state_forced = False
         self.etag = etag
         self.versions = versions if versions is not None else []
         self.create_manifests()
         self.create_packages()
         return
+
+    def emulate_stale_goal_state(self):
+        self.goal_state_is_stale = True
 
     def create_manifests(self):
         self.agent_manifests = VMAgentManifestList()
@@ -1585,11 +1608,23 @@ class ProtocolMock(object):
         return self
 
     def get_vmagent_manifests(self):
+        self.call_counts["get_vmagent_manifests"] += 1
+        if self.goal_state_is_stale:
+            self.goal_state_is_stale = False
+            raise BadRequestError()
         return self.agent_manifests, self.etag
 
     def get_vmagent_pkgs(self, manifest):
+        self.call_counts["get_vmagent_pkgs"] += 1
+        if self.goal_state_is_stale:
+            self.goal_state_is_stale = False
+            raise BadRequestError()
         return self.agent_packages
 
+    def update_goal_state(self, forced=False, max_retry=3):
+        self.call_counts["update_goal_state"] += 1
+        self.goal_state_forced = self.goal_state_forced or forced
+        return
 
 class ResponseMock(Mock):
     def __init__(self, status=restutil.httpclient.OK, response=None, reason=None):

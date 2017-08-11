@@ -34,6 +34,19 @@ class TestTextUtil(AgentTestCase):
                 password_hash = textutil.gen_password_hash(data, 6, 10)
                 self.assertNotEquals(None, password_hash)
 
+    def test_replace_non_ascii(self):
+        data = ustr(b'\xef\xbb\xbfhehe', encoding='utf-8')
+        self.assertEqual('hehe', textutil.replace_non_ascii(data))
+
+        data = "abcd\xa0e\xf0fghijk\xbblm"
+        self.assertEqual("abcdefghijklm", textutil.replace_non_ascii(data))
+
+        data = "abcd\xa0e\xf0fghijk\xbblm"
+        self.assertEqual("abcdXeXfghijkXlm",
+            textutil.replace_non_ascii(data, replace_char='X'))
+
+        self.assertEqual('', textutil.replace_non_ascii(None))
+
     def test_remove_bom(self):
         #Test bom could be removed
         data = ustr(b'\xef\xbb\xbfhehe', encoding='utf-8')

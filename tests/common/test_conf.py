@@ -24,6 +24,48 @@ from tests.tools import *
 
 
 class TestConf(AgentTestCase):
+    # Note:
+    # -- These values *MUST* match those from data/test_waagent.conf
+    EXPECTED_CONFIGURATION = {
+        "Provisioning.Enabled" : True,
+        "Provisioning.UseCloudInit" : True,
+        "Provisioning.DeleteRootPassword" : True,
+        "Provisioning.RegenerateSshHostKeyPair" : True,
+        "Provisioning.SshHostKeyPairType" : "rsa",
+        "Provisioning.MonitorHostName" : True,
+        "Provisioning.DecodeCustomData" : False,
+        "Provisioning.ExecuteCustomData" : False,
+        "Provisioning.PasswordCryptId" : '6',
+        "Provisioning.PasswordCryptSaltLength" : 10,
+        "Provisioning.AllowResetSysUser" : False,
+        "ResourceDisk.Format" : True,
+        "ResourceDisk.Filesystem" : "ext4",
+        "ResourceDisk.MountPoint" : "/mnt/resource",
+        "ResourceDisk.EnableSwap" : False,
+        "ResourceDisk.SwapSizeMB" : 0,
+        "ResourceDisk.MountOptions" : None,
+        "Logs.Verbose" : False,
+        "OS.EnableFIPS" : True,
+        "OS.RootDeviceScsiTimeout" : '300',
+        "OS.OpensslPath" : '/usr/bin/openssl',
+        "OS.SshDir" : "/notareal/path",
+        "HttpProxy.Host" : None,
+        "HttpProxy.Port" : None,
+        "DetectScvmmEnv" : False,
+        "Lib.Dir" : "/var/lib/waagent",
+        "DVD.MountPoint" : "/mnt/cdrom/secure",
+        "Pid.File" : "/var/run/waagent.pid",
+        "Extension.LogDir" : "/var/log/azure",
+        "OS.HomeDir" : "/home",
+        "OS.EnableRDMA" : False,
+        "OS.UpdateRdmaDriver" : False,
+        "OS.CheckRdmaDriver" : False,
+        "AutoUpdate.Enabled" : True,
+        "AutoUpdate.GAFamily" : "Prod",
+        "EnableOverProvisioning" : False,
+        "OS.AllowHTTP" : False
+    }
+
     def setUp(self):
         AgentTestCase.setUp(self)
         self.conf = ConfigurationProvider()
@@ -59,3 +101,11 @@ class TestConf(AgentTestCase):
 
     def test_get_provision_cloudinit(self):
         self.assertTrue(get_provision_cloudinit(self.conf))
+
+    def test_get_configuration(self):
+        configuration = conf.get_configuration(self.conf)
+        self.assertTrue(len(configuration.keys()) > 0)
+        for k in TestConf.EXPECTED_CONFIGURATION.keys():
+            self.assertEqual(
+                TestConf.EXPECTED_CONFIGURATION[k],
+                configuration[k])
