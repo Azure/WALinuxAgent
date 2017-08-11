@@ -100,32 +100,32 @@ class TestWireProtocolGetters(AgentTestCase):
             # no kwargs -- Default to True
             WireClient.call_storage_service(http_req)
 
-            # kwargs, no chk_proxy -- Default to True
+            # kwargs, no use_proxy -- Default to True
             WireClient.call_storage_service(http_req,
                                             url,
                                             headers)
 
-            # kwargs, chk_proxy None -- Default to True
+            # kwargs, use_proxy None -- Default to True
             WireClient.call_storage_service(http_req,
                                             url,
                                             headers,
-                                            chk_proxy=None)
+                                            use_proxy=None)
 
-            # kwargs, chk_proxy False -- Keep False
+            # kwargs, use_proxy False -- Keep False
             WireClient.call_storage_service(http_req,
                                             url,
                                             headers,
-                                            chk_proxy=False)
+                                            use_proxy=False)
 
-            # kwargs, chk_proxy True -- Keep True
+            # kwargs, use_proxy True -- Keep True
             WireClient.call_storage_service(http_req,
                                             url,
                                             headers,
-                                            chk_proxy=True)
+                                            use_proxy=True)
             # assert
             self.assertTrue(http_patch.call_count == 5)
             for i in range(0,5):
-                c = http_patch.call_args_list[i][-1]['chk_proxy']
+                c = http_patch.call_args_list[i][-1]['use_proxy']
                 self.assertTrue(c == (True if i != 3 else False))
 
     def test_status_blob_parsing(self, *args):

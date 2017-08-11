@@ -50,6 +50,12 @@ The information flow from the platform to the agent occurs via two channels:
   * A TCP endpoint exposing a REST API used to obtain deployment and topology
     configuration.
 
+The agent will use an HTTP proxy if provided via the `http_proxy` (for `http` requests) or
+`https_proxy` (for `https` requests) environment variables. The `HttpProxy.Host` and
+`HttpProxy.Port` configuration variables (see below), if used, will override the environment
+settings. Due to limitations of Python, the agent *does not* support HTTP proxies requiring
+authentication.
+
 
 ### REQUIREMENTS
 
@@ -57,21 +63,6 @@ The following systems have been tested and are known to work with the Azure
 Linux Agent.  Please note that this list may differ from the official list
 of supported systems on the Microsoft Azure Platform as described here:
 http://support.microsoft.com/kb/2805216
-
-Supported Linux Distributions:
-   * Archlinux
-   * CoreOS
-   * CentOS 6.2+
-   * Red Hat Enterprise Linux 6.7+
-   * Debian 7.0+
-   * Ubuntu 12.04+
-   * openSUSE 12.3+
-   * SLES 11 SP2+
-   * Oracle Linux 6.4+
-
-Other Supported Systems:
-   * FreeBSD 10+ (Azure Linux Agent v2.0.10+)
-   * OpenBSD 6+ (Azure Linux Agent v2.2.11+)
 
 Waagent depends on some system packages in order to function properly:
 
@@ -192,6 +183,7 @@ ResourceDisk.EnableSwap=n
 ResourceDisk.SwapSizeMB=0
 LBProbeResponder=y
 Logs.Verbose=n
+OS.AllowHTTP=n
 OS.RootDeviceScsiTimeout=300
 OS.EnableFIPS=n
 OS.OpensslPath=None
@@ -351,6 +343,16 @@ _Default: n_
 If set, log verbosity is boosted. Waagent logs to /var/log/waagent.log and
 leverages the system logrotate functionality to rotate logs.
 
+* __OS.AllowHTTP__   
+_Type: Boolean_   
+_Default: n_   
+
+If set to `y` and SSL support is not compiled into Python, the agent will fall-back to
+use HTTP. Otherwise, if SSL support is not compiled into Python, the agent will fail
+all HTTPS requests.
+
+Note: Allowing HTTP may unintentionally expose secure data.
+
 * __OS.EnableRDMA__   
 _Type: Boolean_    
 _Default: n_   
@@ -358,9 +360,9 @@ _Default: n_
 If set, the agent will attempt to install and then load an RDMA kernel driver
 that matches the version of the firmware on the underlying hardware.
 
-* __OS.EnableFIPS__
-_Type: Boolean_
-_Default: n_
+* __OS.EnableFIPS__   
+_Type: Boolean_   
+_Default: n_   
 
 If set, the agent will emit into the environment "OPENSSL_FIPS=1" when executing
 OpenSSL commands. This signals OpenSSL to use any installed FIPS-compliant libraries.
@@ -381,9 +383,9 @@ _Default: None_
 This can be used to specify an alternate path for the openssl binary to use for
 cryptographic operations.
 
-* __OS.SshDir__
-_Type: String_
-_Default: "/etc/ssh"_
+* __OS.SshDir__   
+_Type: String_   
+_Default: `/etc/ssh`_   
 
 This option can be used to override the normal location of the SSH configuration
 directory.
@@ -392,7 +394,9 @@ directory.
 _Type: String_   
 _Default: None_   
 
-If set, the agent will use this proxy server to access the internet. 
+If set, the agent will use this proxy server to access the internet. These values
+*will* override the `http_proxy` or `https_proxy` environment variables. Lastly,
+`HttpProxy.Host` is required (if to be used) and `HttpProxy.Port` is optional.
 
 ### APPENDIX
 

@@ -15,6 +15,7 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
+import os
 import unittest
 
 from azurelinuxagent.common.exception import BadRequestError, \
@@ -53,6 +54,70 @@ class TestHttpOperations(AgentTestCase):
         host, port, secure, rel_uri = restutil._parse_url("None")
         self.assertEquals(None, host)
         self.assertEquals(rel_uri, "None")
+
+    @patch('azurelinuxagent.common.conf.get_httpproxy_port')
+    @patch('azurelinuxagent.common.conf.get_httpproxy_host')
+    def test_get_http_proxy_none_is_default(self, mock_host, mock_port):
+        mock_host.return_value = None
+        mock_port.return_value = None
+        h, p = restutil._get_http_proxy()
+        self.assertEqual(None, h)
+        self.assertEqual(None, p)
+
+    @patch('azurelinuxagent.common.conf.get_httpproxy_port')
+    @patch('azurelinuxagent.common.conf.get_httpproxy_host')
+    def test_get_http_proxy_configuration_overrides_env(self, mock_host, mock_port):
+        mock_host.return_value = "host"
+        mock_port.return_value = None
+        h, p = restutil._get_http_proxy()
+        self.assertEqual("host", h)
+        self.assertEqual(None, p)
+        mock_host.assert_called_once()
+        mock_port.assert_called_once()
+
+    @patch('azurelinuxagent.common.conf.get_httpproxy_port')
+    @patch('azurelinuxagent.common.conf.get_httpproxy_host')
+    def test_get_http_proxy_configuration_requires_host(self, mock_host, mock_port):
+        mock_host.return_value = None
+        mock_port.return_value = None
+        h, p = restutil._get_http_proxy()
+        self.assertEqual(None, h)
+        self.assertEqual(None, p)
+        mock_host.assert_called_once()
+        mock_port.assert_not_called()
+
+    @patch('azurelinuxagent.common.conf.get_httpproxy_host')
+    def test_get_http_proxy_http_uses_httpproxy(self, mock_host):
+        mock_host.return_value = None
+        with patch.dict(os.environ, {
+                                    'http_proxy' : 'http://foo.com:80',
+                                    'https_proxy' : 'https://bar.com:443'
+                                }):
+            h, p = restutil._get_http_proxy()
+            self.assertEqual("foo.com", h)
+            self.assertEqual(80, p)
+
+    @patch('azurelinuxagent.common.conf.get_httpproxy_host')
+    def test_get_http_proxy_https_uses_httpsproxy(self, mock_host):
+        mock_host.return_value = None
+        with patch.dict(os.environ, {
+                                    'http_proxy' : 'http://foo.com:80',
+                                    'https_proxy' : 'https://bar.com:443'
+                                }):
+            h, p = restutil._get_http_proxy(secure=True)
+            self.assertEqual("bar.com", h)
+            self.assertEqual(443, p)
+
+    @patch('azurelinuxagent.common.conf.get_httpproxy_host')
+    def test_get_http_proxy_ignores_user_in_httpproxy(self, mock_host):
+        mock_host.return_value = None
+        with patch.dict(os.environ, {
+                                    'http_proxy' : 'http://user:pw@foo.com:80'
+                                }):
+            h, p = restutil._get_http_proxy()
+            self.assertEqual("foo.com", h)
+            self.assertEqual(80, p)
+
 
     @patch("azurelinuxagent.common.future.httpclient.HTTPSConnection")
     @patch("azurelinuxagent.common.future.httpclient.HTTPConnection")
