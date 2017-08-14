@@ -88,7 +88,7 @@ class MetadataProtocol(Protocol):
         except HttpError as e:
             raise ProtocolError(ustr(e))
 
-        if resp.status != httpclient.OK:
+        if restutil.request_failed(resp):
             raise ProtocolError("{0} - GET: {1}".format(resp.status, url))
 
         data = resp.read()
@@ -103,7 +103,7 @@ class MetadataProtocol(Protocol):
             resp = restutil.http_put(url, json.dumps(data), headers=headers)
         except HttpError as e:
             raise ProtocolError(ustr(e))
-        if resp.status != httpclient.OK:
+        if restutil.request_failed(resp):
             raise ProtocolError("{0} - PUT: {1}".format(resp.status, url))
 
     def _post_data(self, url, data, headers=None):

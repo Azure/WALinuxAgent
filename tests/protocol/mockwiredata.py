@@ -16,6 +16,7 @@
 #
 
 from tests.tools import *
+from azurelinuxagent.common.exception import BadRequestError, HttpError
 from azurelinuxagent.common.future import httpclient
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 
@@ -53,6 +54,20 @@ DATA_FILE_EXT_AUTOUPGRADE_INTERNALVERSION["ext_conf"] = "wire/ext_conf_autoupgra
 
 class WireProtocolData(object):
     def __init__(self, data_files=DATA_FILE):
+        self.emulate_stale_goal_state = False
+        self.call_counts = {
+            "comp=versions" : 0,
+            "/versions" : 0,
+            "goalstate" : 0,
+            "hostingenvuri" : 0,
+            "sharedconfiguri" : 0,
+            "certificatesuri" : 0,
+            "extensionsconfiguri" : 0,
+            "extensionArtifact" : 0,
+            "manifest.xml" : 0,
+            "manifest_of_ga.xml" : 0,
+            "ExampleHandlerLinux" : 0
+        }
         self.version_info = load_data(data_files.get("version_info"))
         self.goal_state = load_data(data_files.get("goal_state"))
         self.hosting_env = load_data(data_files.get("hosting_env"))
@@ -67,32 +82,70 @@ class WireProtocolData(object):
 
     def mock_http_get(self, url, *args, **kwargs):
         content = None
-        if "versions" in url:
-            content = self.version_info
-        elif "goalstate" in url:
-            content = self.goal_state
-        elif "hostingenvuri" in url:
-            content = self.hosting_env
-        elif "sharedconfiguri" in url:
-            content = self.shared_config
-        elif "certificatesuri" in url:
-            content = self.certs
-        elif "extensionsconfiguri" in url:
-            content = self.ext_conf
-        elif "manifest.xml" in url:
-            content = self.manifest
-        elif "manifest_of_ga.xml" in url:
-            content = self.ga_manifest
-        elif "ExampleHandlerLinux" in url:
-            content = self.ext
-            resp = MagicMock()
-            resp.status = httpclient.OK
-            resp.read = Mock(return_value=content)
-            return resp
-        else:
-            raise Exception("Bad url {0}".format(url))
+
         resp = MagicMock()
         resp.status = httpclient.OK
+
+        # wire server versions
+        if "comp=versions" in url:
+            content = self.version_info
+            self.call_counts["comp=versions"] += 1
+
+        # HostPlugin versions
+        elif "/versions" in url:
+            content = '["2015-09-01"]'
+            self.call_counts["/versions"] += 1
+        elif "goalstate" in url:
+            content = self.goal_state
+            self.call_counts["goalstate"] += 1
+        elif "hostingenvuri" in url:
+            content = self.hosting_env
+            self.call_counts["hostingenvuri"] += 1
+        elif "sharedconfiguri" in url:
+            content = self.shared_config
+            self.call_counts["sharedconfiguri"] += 1
+        elif "certificatesuri" in url:
+            content = self.certs
+            self.call_counts["certificatesuri"] += 1
+        elif "extensionsconfiguri" in url:
+            content = self.ext_conf
+            self.call_counts["extensionsconfiguri"] += 1
+
+        else:
+            # A stale GoalState results in a 400 from the HostPlugin
+            # for which the HTTP handler in restutil raises BadRequestError
+            if self.emulate_stale_goal_state:
+                if "extensionArtifact" in url:
+                    self.emulate_stale_goal_state = False
+                    self.call_counts["extensionArtifact"] += 1
+                    raise BadRequestError()
+                else:
+                    raise HttpError()
+
+            # For HostPlugin requests, replace the URL with that passed
+            # via the x-ms-artifact-location header
+            if "extensionArtifact" in url:
+                self.call_counts["extensionArtifact"] += 1
+                if "headers" not in kwargs or \
+                    "x-ms-artifact-location" not in kwargs["headers"]:
+                    raise Exception("Bad HEADERS passed to HostPlugin: {0}",
+                            kwargs)
+                url = kwargs["headers"]["x-ms-artifact-location"]
+
+            if "manifest.xml" in url:
+                content = self.manifest
+                self.call_counts["manifest.xml"] += 1
+            elif "manifest_of_ga.xml" in url:
+                content = self.ga_manifest
+                self.call_counts["manifest_of_ga.xml"] += 1
+            elif "ExampleHandlerLinux" in url:
+                content = self.ext
+                self.call_counts["ExampleHandlerLinux"] += 1
+                resp.read = Mock(return_value=content)
+                return resp
+            else:
+                raise Exception("Bad url {0}".format(url))
+
         resp.read = Mock(return_value=content.encode("utf-8"))
         return resp
 

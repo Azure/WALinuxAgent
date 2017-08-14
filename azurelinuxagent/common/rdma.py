@@ -202,7 +202,17 @@ class RDMADeviceHandler(object):
             RDMADeviceHandler.update_dat_conf(dapl_config_paths, self.ipv4_addr)
 
             skip_rdma_device = False
-            retcode,out = shellutil.run_get_output("modinfo hv_network_direct")
+            module_name = "hv_network_direct"
+            retcode,out = shellutil.run_get_output("modprobe -R %s" % module_name, chk_err=False)
+            if retcode == 0:
+                module_name = out.strip()
+            else:
+                logger.info("RDMA: failed to resolve module name. Use original name")
+            retcode,out = shellutil.run_get_output("modprobe %s" % module_name)
+            if retcode != 0:
+                logger.error("RDMA: failed to load module %s" % module_name)
+                return
+            retcode,out = shellutil.run_get_output("modinfo %s" % module_name)
             if retcode == 0:
                 version = re.search("version:\s+(\d+)\.(\d+)\.(\d+)\D", out, re.IGNORECASE)
                 if version:

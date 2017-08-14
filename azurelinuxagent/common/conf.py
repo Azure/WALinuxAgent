@@ -85,12 +85,77 @@ def load_conf_from_file(conf_file_path, conf=__conf__):
         raise AgentConfigError(("Failed to load conf file:{0}, {1}"
                                 "").format(conf_file_path, err))
 
+__SWITCH_OPTIONS__ = {
+    "OS.EnableRDMA" : False,
+    "OS.UpdateRdmaDriver" : False,
+    "OS.CheckRdmaDriver" : False,
+    "Logs.Verbose" : False,
+    "OS.EnableFIPS" : False,
+    "Provisioning.Enabled" : True,
+    "Provisioning.UseCloudInit" : False,
+    "Provisioning.AllowResetSysUser" : False,
+    "Provisioning.RegenerateSshHostKeyPair" : False,
+    "Provisioning.DeleteRootPassword" : False,
+    "Provisioning.DecodeCustomData" : False,
+    "Provisioning.ExecuteCustomData" : False,
+    "Provisioning.MonitorHostName" : False,
+    "DetectScvmmEnv" : False,
+    "ResourceDisk.Format" : False,
+    "DetectScvmmEnv" : False,
+    "ResourceDisk.Format" : False,
+    "ResourceDisk.EnableSwap" : False,
+    "AutoUpdate.Enabled" : True,
+    "EnableOverProvisioning" : False,
+    "OS.AllowHTTP" : False
+}
+
+__STRING_OPTIONS__ = {
+    "Lib.Dir" : "/var/lib/waagent",
+    "DVD.MountPoint" : "/mnt/cdrom/secure",
+    "Pid.File" : "/var/run/waagent.pid",
+    "Extension.LogDir" : "/var/log/azure",
+    "OS.OpensslPath" : "/usr/bin/openssl",
+    "OS.SshDir" : "/etc/ssh",
+    "OS.HomeDir" : "/home",
+    "OS.PasswordPath" : "/etc/shadow",
+    "OS.SudoersDir" : "/etc/sudoers.d",
+    "OS.RootDeviceScsiTimeout" : None,
+    "Provisioning.SshHostKeyPairType" : "rsa",
+    "Provisioning.PasswordCryptId" : "6",
+    "HttpProxy.Host" : None,
+    "ResourceDisk.MountPoint" : "/mnt/resource",
+    "ResourceDisk.MountOptions" : None,
+    "ResourceDisk.Filesystem" : "ext3",
+    "AutoUpdate.GAFamily" : "Prod"
+}
+
+__INTEGER_OPTIONS__ = {
+    "Provisioning.PasswordCryptSaltLength" : 10,
+    "HttpProxy.Port" : None,
+    "ResourceDisk.SwapSizeMB" : 0,
+    "Autoupdate.Frequency" : 3600
+}
+
+def get_configuration(conf=__conf__):
+    options = {}
+    for option in __SWITCH_OPTIONS__:
+        options[option] = conf.get_switch(option, __SWITCH_OPTIONS__[option])
+
+    for option in __STRING_OPTIONS__:
+        options[option] = conf.get(option, __STRING_OPTIONS__[option])
+
+    for option in __INTEGER_OPTIONS__:
+        options[option] = conf.get_int(option, __INTEGER_OPTIONS__[option])
+
+    return options
 
 def enable_rdma(conf=__conf__):
     return conf.get_switch("OS.EnableRDMA", False) or \
            conf.get_switch("OS.UpdateRdmaDriver", False) or \
            conf.get_switch("OS.CheckRdmaDriver", False)
 
+def enable_rdma_update(conf=__conf__):
+    return conf.get_switch("OS.UpdateRdmaDriver", False)
 
 def get_logs_verbose(conf=__conf__):
     return conf.get_switch("Logs.Verbose", False)
@@ -252,3 +317,6 @@ def get_autoupdate_frequency(conf=__conf__):
 
 def get_enable_overprovisioning(conf=__conf__):
     return conf.get_switch("EnableOverProvisioning", False)
+
+def get_allow_http(conf=__conf__):
+    return conf.get_switch("OS.AllowHTTP", False)

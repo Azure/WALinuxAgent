@@ -17,12 +17,55 @@
 
 import mock
 import os.path
+import sys
 
 from azurelinuxagent.agent import *
 from azurelinuxagent.common.conf import *
 
 from tests.tools import *
 
+EXPECTED_CONFIGURATION = \
+"""AutoUpdate.Enabled = True
+AutoUpdate.GAFamily = Prod
+Autoupdate.Frequency = 3600
+DVD.MountPoint = /mnt/cdrom/secure
+DetectScvmmEnv = False
+EnableOverProvisioning = False
+Extension.LogDir = /var/log/azure
+HttpProxy.Host = None
+HttpProxy.Port = None
+Lib.Dir = /var/lib/waagent
+Logs.Verbose = False
+OS.AllowHTTP = False
+OS.CheckRdmaDriver = False
+OS.EnableFIPS = True
+OS.EnableRDMA = False
+OS.HomeDir = /home
+OS.OpensslPath = /usr/bin/openssl
+OS.PasswordPath = /etc/shadow
+OS.RootDeviceScsiTimeout = 300
+OS.SshDir = /notareal/path
+OS.SudoersDir = /etc/sudoers.d
+OS.UpdateRdmaDriver = False
+Pid.File = /var/run/waagent.pid
+Provisioning.AllowResetSysUser = False
+Provisioning.DecodeCustomData = False
+Provisioning.DeleteRootPassword = True
+Provisioning.Enabled = True
+Provisioning.ExecuteCustomData = False
+Provisioning.MonitorHostName = True
+Provisioning.PasswordCryptId = 6
+Provisioning.PasswordCryptSaltLength = 10
+Provisioning.RegenerateSshHostKeyPair = True
+Provisioning.SshHostKeyPairType = rsa
+Provisioning.UseCloudInit = True
+ResourceDisk.EnableSwap = False
+ResourceDisk.Filesystem = ext4
+ResourceDisk.Format = True
+ResourceDisk.MountOptions = None
+ResourceDisk.MountPoint = /mnt/resource
+ResourceDisk.SwapSizeMB = 0
+""".split('\n')
 
 class TestAgent(AgentTestCase):
 
@@ -115,3 +158,11 @@ class TestAgent(AgentTestCase):
         self.assertTrue(os.path.isfile(ext_log_dir))
         self.assertFalse(os.path.isdir(ext_log_dir))
         mock_log.assert_called_once()
+
+    def test_agent_show_configuration(self):
+        if not hasattr(sys.stdout, 'getvalue'):
+            self.fail('Test requires at least Python 2.7 with buffered output')
+        agent = Agent(False,
+                    conf_file_path=os.path.join(data_dir, "test_waagent.conf"))
+        agent.show_configuration()
+        self.assertEqual(EXPECTED_CONFIGURATION, sys.stdout.getvalue().split('\n'))
