@@ -722,10 +722,11 @@ class DefaultOSUtil(object):
                 continue
             if fileutil.findre_in_file(conf_file, autosend):
                 #Return if auto send host-name is configured
-                return
+                return False
             fileutil.update_conf_file(conf_file,
                                       'send host-name',
                                       'send host-name "{0}";'.format(hostname))
+        return True
 
     def restart_if(self, ifname, retries=3, wait=5):
         retry_limit=retries+1
@@ -741,10 +742,12 @@ class DefaultOSUtil(object):
                 logger.warn("exceeded restart retries")
 
     def publish_hostname(self, hostname):
-        self.set_dhcp_hostname(hostname)
+        changed = self.set_dhcp_hostname(hostname)
         self.set_hostname_record(hostname)
-        ifname = self.get_if_name()
-        self.restart_if(ifname)
+        # Configure changed, restart IF
+        if changed:
+            ifname = self.get_if_name()
+            self.restart_if(ifname)
 
     def set_scsi_disks_timeout(self, timeout):
         for dev in os.listdir("/sys/block"):
