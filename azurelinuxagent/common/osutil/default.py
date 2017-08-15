@@ -53,7 +53,7 @@ if needed.
 DMIDECODE_CMD = 'dmidecode --string system-uuid'
 PRODUCT_ID_FILE = '/sys/class/dmi/id/product_uuid'
 UUID_PATTERN = re.compile(
-    '^\s*[A-F0-9]{8}(?:\-[A-F0-9]{4}){3}\-[A-F0-9]{12}\s*$',
+    r'^\s*[A-F0-9]{8}(?:\-[A-F0-9]{4}){3}\-[A-F0-9]{12}\s*$',
     re.IGNORECASE)
 
 class DefaultOSUtil(object):
@@ -62,6 +62,43 @@ class DefaultOSUtil(object):
         self.agent_conf_file_path = '/etc/waagent.conf'
         self.selinux = None
         self.disable_route_warning = False
+
+    def _correct_instance_id(self, id):
+        '''
+        Azure stores the instance ID with an incorrect byte ordering for the
+        first parts. For example, the ID returned by the metadata service:
+
+            D0DF4C54-4ECB-4A4B-9954-5BDF3ED5C3B8
+
+        will be found as:
+
+            544CDFD0-CB4E-4B4A-9954-5BDF3ED5C3B8
+
+        This code corrects the byte order such that it is consistent with
+        that returned by the metadata service.
+        '''
+
+        if not UUID_PATTERN.match(id):
+            return id
+
+        parts = id.split('-')
+        return '-'.join([
+                textutil.swap_hexstring(parts[0], width=2),
+                textutil.swap_hexstring(parts[1], width=2),
+                textutil.swap_hexstring(parts[2], width=2),
+                parts[3],
+                parts[4]
+            ])
+
+    def is_current_instance_id(self, id_that):
+        '''
+        Compare two instance IDs for equality, but allow that some IDs
+        may have been persisted using the incorrect byte ordering.
+        '''
+        id_this = self.get_instance_id()
+        return id_that == id_this or \
+            id_that == self._correct_instance_id(id_this)
+
 
     def get_agent_conf_file_path(self):
         return self.agent_conf_file_path
@@ -74,13 +111,14 @@ class DefaultOSUtil(object):
         If nothing works (for old VMs), return the empty string
         '''
         if os.path.isfile(PRODUCT_ID_FILE):
-            return fileutil.read_file(PRODUCT_ID_FILE).strip()
+            s = fileutil.read_file(PRODUCT_ID_FILE).strip()
 
-        rc, s = shellutil.run_get_output(DMIDECODE_CMD)
-        if rc != 0 or UUID_PATTERN.match(s) is None:
-            return ""
+        else:
+            rc, s = shellutil.run_get_output(DMIDECODE_CMD)
+            if rc != 0 or UUID_PATTERN.match(s) is None:
+                return ""
 
-        return s.strip()
+        return self._correct_instance_id(s.strip())
 
     def get_userentry(self, username):
         try:

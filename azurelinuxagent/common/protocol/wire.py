@@ -541,7 +541,7 @@ class WireClient(object):
 
         try:
             # Never use the HTTP proxy for wireserver
-            kwargs['chk_proxy'] = False
+            kwargs['use_proxy'] = False
             resp = http_req(*args, **kwargs)
         except Exception as e:
             raise ProtocolError("[Wireserver Exception] {0}".format(
@@ -591,8 +591,8 @@ class WireClient(object):
     @staticmethod
     def call_storage_service(http_req, *args, **kwargs):
         # Default to use the configured HTTP proxy
-        if not 'chk_proxy' in kwargs or kwargs['chk_proxy'] is None:
-            kwargs['chk_proxy'] = True
+        if not 'use_proxy' in kwargs or kwargs['use_proxy'] is None:
+            kwargs['use_proxy'] = True
 
         return http_req(*args, **kwargs)
 
@@ -613,7 +613,7 @@ class WireClient(object):
                 try:
                     host = self.get_host_plugin()
                     uri, headers = host.get_artifact_request(version.uri)
-                    response = self.fetch(uri, headers, chk_proxy=False)
+                    response = self.fetch(uri, headers, use_proxy=False)
 
                 # If the HostPlugin rejects the request,
                 # let the error continue, but set to use the HostPlugin
@@ -632,14 +632,14 @@ class WireClient(object):
 
         raise ProtocolError("Failed to fetch manifest from all sources")
 
-    def fetch(self, uri, headers=None, chk_proxy=None):
+    def fetch(self, uri, headers=None, use_proxy=None):
         logger.verbose("Fetch [{0}] with headers [{1}]", uri, headers)
         try:
             resp = self.call_storage_service(
                         restutil.http_get,
                         uri,
                         headers=headers,
-                        chk_proxy=chk_proxy)
+                        use_proxy=use_proxy)
 
             if restutil.request_failed(resp):
                 msg = "[Storage Failed] URI {0} ".format(uri)
@@ -1054,7 +1054,7 @@ class WireClient(object):
 
                         host = self.get_host_plugin()
                         uri, headers = host.get_artifact_request(blob)
-                        config = self.fetch(uri, headers, chk_proxy=False)
+                        config = self.fetch(uri, headers, use_proxy=False)
                         profile = self.decode_config(config)
 
                     if not textutil.is_str_none_or_whitespace(profile):

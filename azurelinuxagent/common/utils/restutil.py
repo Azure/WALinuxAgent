@@ -17,6 +17,7 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
+import os
 import time
 import traceback
 
@@ -83,6 +84,9 @@ RETRY_IOERRORS = [
     112     # EHOSTDOWN -- Host is down 
 ]
 
+HTTP_PROXY_ENV = "http_proxy"
+HTTPS_PROXY_ENV = "https_proxy"
+
 
 def _is_retry_status(status, retry_codes=RETRY_CODES):
     return status in retry_codes
@@ -109,9 +113,25 @@ def _parse_url(url):
     return o.hostname, o.port, secure, rel_uri
 
 
-def _get_http_proxy():
+def _get_http_proxy(secure=False):
+    # Prefer the configuration settings over environment variables
     host = conf.get_httpproxy_host()
-    port = conf.get_httpproxy_port()
+    port = None
+
+    if not host is None:
+        port = conf.get_httpproxy_port()
+
+    else:
+        http_proxy_env = HTTPS_PROXY_ENV if secure else HTTP_PROXY_ENV
+        http_proxy_url = None
+        for v in [http_proxy_env, http_proxy_env.upper()]:
+            if v in os.environ:
+                http_proxy_url = os.environ[v]
+                break
+
+        if not http_proxy_url is None:
+            host, port, _, _ = _parse_url(http_proxy_url)
+
     return host, port
 
 
@@ -160,7 +180,7 @@ def _http_request(method, host, rel_uri, port=None, data=None, secure=False,
 
 def http_request(method,
                 url, data, headers=None,
-                chk_proxy=False,
+                use_proxy=False,
                 max_retry=DEFAULT_RETRIES,
                 retry_codes=RETRY_CODES,
                 retry_delay=SHORT_DELAY_IN_SECONDS):
@@ -169,10 +189,13 @@ def http_request(method,
 
     host, port, secure, rel_uri = _parse_url(url)
 
-    # Check proxy
+    # Use the HTTP(S) proxy
     proxy_host, proxy_port = (None, None)
-    if chk_proxy:
-        proxy_host, proxy_port = _get_http_proxy()
+    if use_proxy:
+        proxy_host, proxy_port = _get_http_proxy(secure=secure)
+
+        if proxy_host or proxy_port:
+            logger.verbose("HTTP proxy: [{0}:{1}]", proxy_host, proxy_port)
 
     # If httplib module is not built with ssl support,
     # fallback to HTTP if allowed
@@ -187,8 +210,11 @@ def http_request(method,
 
     # If httplib module doesn't support HTTPS tunnelling,
     # fallback to HTTP if allowed
-    if secure and proxy_host is not None and proxy_port is not None \
-            and not hasattr(httpclient.HTTPSConnection, "set_tunnel"):
+    if secure and \
+        proxy_host is not None and \
+        proxy_port is not None \
+        and not hasattr(httpclient.HTTPSConnection, "set_tunnel"):
+
         if not conf.get_allow_http():
             raise HttpError("HTTPS tunnelling is unavailable and required")
 
@@ -196,9 +222,6 @@ def http_request(method,
         if not SECURE_WARNING_EMITTED:
             logger.warn("Python does not support HTTPS tunnelling")
             SECURE_WARNING_EMITTED = True
-
-    if proxy_host or proxy_port:
-        logger.verbose("HTTP proxy: [{0}:{1}]", proxy_host, proxy_port)
 
     msg = ''
     attempt = 0
@@ -258,61 +281,61 @@ def http_request(method,
     raise HttpError(msg)
 
 
-def http_get(url, headers=None, chk_proxy=False,
+def http_get(url, headers=None, use_proxy=False,
                 max_retry=DEFAULT_RETRIES,
                 retry_codes=RETRY_CODES,
                 retry_delay=SHORT_DELAY_IN_SECONDS):
     return http_request("GET",
                         url, None, headers=headers,
-                        chk_proxy=chk_proxy,
+                        use_proxy=use_proxy,
                         max_retry=max_retry,
                         retry_codes=retry_codes,
                         retry_delay=retry_delay)
 
 
-def http_head(url, headers=None, chk_proxy=False,
+def http_head(url, headers=None, use_proxy=False,
                 max_retry=DEFAULT_RETRIES,
                 retry_codes=RETRY_CODES,
                 retry_delay=SHORT_DELAY_IN_SECONDS):
     return http_request("HEAD",
                         url, None, headers=headers,
-                        chk_proxy=chk_proxy,
+                        use_proxy=use_proxy,
                         max_retry=max_retry,
                         retry_codes=retry_codes,
                         retry_delay=retry_delay)
 
 
-def http_post(url, data, headers=None, chk_proxy=False,
+def http_post(url, data, headers=None, use_proxy=False,
                 max_retry=DEFAULT_RETRIES,
                 retry_codes=RETRY_CODES,
                 retry_delay=SHORT_DELAY_IN_SECONDS):
     return http_request("POST",
                         url, data, headers=headers,
-                        chk_proxy=chk_proxy,
+                        use_proxy=use_proxy,
                         max_retry=max_retry,
                         retry_codes=retry_codes,
                         retry_delay=retry_delay)
 
 
-def http_put(url, data, headers=None, chk_proxy=False,
+def http_put(url, data, headers=None, use_proxy=False,
                 max_retry=DEFAULT_RETRIES,
                 retry_codes=RETRY_CODES,
                 retry_delay=SHORT_DELAY_IN_SECONDS):
     return http_request("PUT",
                         url, data, headers=headers,
-                        chk_proxy=chk_proxy,
+                        use_proxy=use_proxy,
                         max_retry=max_retry,
                         retry_codes=retry_codes,
                         retry_delay=retry_delay)
 
 
-def http_delete(url, headers=None, chk_proxy=False,
+def http_delete(url, headers=None, use_proxy=False,
                 max_retry=DEFAULT_RETRIES,
                 retry_codes=RETRY_CODES,
                 retry_delay=SHORT_DELAY_IN_SECONDS):
     return http_request("DELETE",
                         url, None, headers=headers,
-                        chk_proxy=chk_proxy,
+                        use_proxy=use_proxy,
                         max_retry=max_retry,
                         retry_codes=retry_codes,
                         retry_delay=retry_delay)

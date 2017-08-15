@@ -107,6 +107,37 @@ class TestTextUtil(AgentTestCase):
                    "-----END PRIVATE Key-----\n")
         base64_bytes = textutil.get_bytes_from_pem(content)
         self.assertEquals("private key", base64_bytes)
+
+    def test_swap_hexstring(self):
+        data = [
+            ['12', 1, '21'],
+            ['12', 2, '12'],
+            ['12', 3, '012'],
+            ['12', 4, '0012'],
+
+            ['123', 1, '321'],
+            ['123', 2, '2301'],
+            ['123', 3, '123'],
+            ['123', 4, '0123'],
+
+            ['1234', 1, '4321'],
+            ['1234', 2, '3412'],
+            ['1234', 3, '234001'],
+            ['1234', 4, '1234'],
+
+            ['abcdef12', 1, '21fedcba'],
+            ['abcdef12', 2, '12efcdab'],
+            ['abcdef12', 3, 'f12cde0ab'],
+            ['abcdef12', 4, 'ef12abcd'],
+
+            ['aBcdEf12', 1, '21fEdcBa'],
+            ['aBcdEf12', 2, '12EfcdaB'],
+            ['aBcdEf12', 3, 'f12cdE0aB'],
+            ['aBcdEf12', 4, 'Ef12aBcd']
+        ]
+
+        for t in data:
+            self.assertEqual(t[2], textutil.swap_hexstring(t[0], width=t[1]))
         
 if __name__ == '__main__':
     unittest.main()

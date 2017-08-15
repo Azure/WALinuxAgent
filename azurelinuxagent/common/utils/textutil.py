@@ -19,6 +19,7 @@
 import base64
 import crypt
 import random
+import re
 import string
 import struct
 import sys
@@ -322,6 +323,16 @@ def safe_shlex_split(s):
         return shlex.split(s.encode('utf-8'))
     return shlex.split(s)
 
+def swap_hexstring(s, width=2):
+    r = len(s) % width
+    if r != 0:
+        s = ('0' * (width - (len(s) % width))) + s
+
+    return ''.join(reversed(
+                        re.findall(
+                                r'[a-f0-9]{{{0}}}'.format(width),
+                                s,
+                                re.IGNORECASE)))
 
 def parse_json(json_str):
     """

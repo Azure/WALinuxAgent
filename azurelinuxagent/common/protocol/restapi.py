@@ -317,7 +317,7 @@ class Protocol(DataContract):
 
     def download_ext_handler_pkg(self, uri, headers=None):
         try:
-            resp = restutil.http_get(uri, chk_proxy=True, headers=headers)
+            resp = restutil.http_get(uri, use_proxy=True, headers=headers)
             if restutil.request_succeeded(resp):
                 return resp.read()
         except Exception as e:

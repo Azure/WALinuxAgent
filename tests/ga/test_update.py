@@ -688,7 +688,7 @@ class TestGuestAgent(UpdateTestCase):
 
             self.assertEqual(mock_http_get.call_args_list[3][0][0], art_uri)
             a, k = mock_http_get.call_args_list[3]
-            self.assertEqual(False, k['chk_proxy'])
+            self.assertEqual(False, k['use_proxy'])
 
             # ensure fallback works as expected
             with patch.object(HostPluginProtocol,
@@ -698,14 +698,14 @@ class TestGuestAgent(UpdateTestCase):
                 self.assertEqual(mock_http_get.call_count, 6)
 
                 a, k = mock_http_get.call_args_list[3]
-                self.assertEqual(False, k['chk_proxy'])
+                self.assertEqual(False, k['use_proxy'])
 
                 self.assertEqual(mock_http_get.call_args_list[4][0][0], ext_uri)
                 a, k = mock_http_get.call_args_list[4]
 
                 self.assertEqual(mock_http_get.call_args_list[5][0][0], art_uri)
                 a, k = mock_http_get.call_args_list[5]
-                self.assertEqual(False, k['chk_proxy'])
+                self.assertEqual(False, k['use_proxy'])
 
     @patch("azurelinuxagent.ga.update.restutil.http_get")
     def test_ensure_downloaded(self, mock_http_get):

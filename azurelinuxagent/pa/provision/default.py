@@ -170,7 +170,7 @@ class ProvisionHandler(object):
             return False
 
         s = fileutil.read_file(self.provisioned_file_path()).strip()
-        if s != self.osutil.get_instance_id():
+        if not self.osutil.is_current_instance_id(s):
             if len(s) > 0:
                 logger.warn("VM is provisioned, "
                             "but the VM unique identifier has changed -- "
