@@ -488,5 +488,82 @@ Match host 192.168.1.2\n\
         print("WRITING TO {0}".format(waagent_sudoers))
         self.assertEqual(1, count)
 
+    @patch('os.getuid', return_value=42)
+    @patch('azurelinuxagent.common.utils.shellutil.run_get_output')
+    @patch('azurelinuxagent.common.utils.shellutil.run')
+    def test_enable_firewall(self, mock_run, mock_output, mock_uid):
+        util = osutil.DefaultOSUtil()
+
+        dst = '1.2.3.4'
+        uid = 42
+
+        mock_run.side_effect = [1, 1, 0, 0]
+        mock_output.return_value = 0
+        util.enable_firewall(dst_ip=dst, uid=uid)
+
+        mock_run.assert_has_calls([
+            call(osutil.FIREWALL_ACCEPT.format("C", dst, uid), chk_err=False),
+            call(osutil.FIREWALL_DROP.format("C", dst), chk_err=False),
+            call(osutil.FIREWALL_ACCEPT.format("A", dst, uid)),
+            call(osutil.FIREWALL_DROP.format("A", dst))
+        ])
+        mock_output.assert_called_with(osutil.FIREWALL_LIST)
+
+    @patch('os.getuid', return_value=42)
+    @patch('azurelinuxagent.common.utils.shellutil.run_get_output')
+    @patch('azurelinuxagent.common.utils.shellutil.run')
+    def test_enable_firewall_skips_if_accept_exists(self, mock_run, mock_output, mock_uid):
+        util = osutil.DefaultOSUtil()
+
+        dst = '1.2.3.4'
+        uid = 42
+
+        mock_run.side_effect = [0, 1, 0, 0]
+        mock_output.return_value = 0
+        util.enable_firewall(dst_ip=dst, uid=uid)
+
+        mock_run.assert_has_calls([
+            call(osutil.FIREWALL_ACCEPT.format("C", dst, uid), chk_err=False)
+        ])
+        mock_output.assert_not_called()
+
+    @patch('os.getuid', return_value=42)
+    @patch('azurelinuxagent.common.utils.shellutil.run_get_output')
+    @patch('azurelinuxagent.common.utils.shellutil.run')
+    def test_enable_firewall_skips_if_drop_exists(self, mock_run, mock_output, mock_uid):
+        util = osutil.DefaultOSUtil()
+
+        dst = '1.2.3.4'
+        uid = 42
+
+        mock_run.side_effect = [1, 0, 0, 0]
+        mock_output.return_value = 0
+        util.enable_firewall(dst_ip=dst, uid=uid)
+
+        mock_run.assert_has_calls([
+            call(osutil.FIREWALL_ACCEPT.format("C", dst, uid), chk_err=False),
+            call(osutil.FIREWALL_DROP.format("C", dst), chk_err=False),
+        ])
+        mock_output.assert_not_called()
+
+    @patch('os.getuid', return_value=42)
+    @patch('azurelinuxagent.common.utils.shellutil.run_get_output')
+    @patch('azurelinuxagent.common.utils.shellutil.run')
+    def test_enable_firewall_ignores_exceptions(self, mock_run, mock_output, mock_uid):
+        util = osutil.DefaultOSUtil()
+
+        dst = '1.2.3.4'
+        uid = 42
+
+        mock_run.side_effect = [1, 1, Exception]
+        util.enable_firewall(dst_ip=dst, uid=uid)
+
+        mock_run.assert_has_calls([
+            call(osutil.FIREWALL_ACCEPT.format("C", dst, uid), chk_err=False),
+            call(osutil.FIREWALL_DROP.format("C", dst), chk_err=False),
+            call(osutil.FIREWALL_ACCEPT.format("A", dst, uid))
+        ])
+        mock_output.assert_not_called()
+
 if __name__ == '__main__':
     unittest.main()

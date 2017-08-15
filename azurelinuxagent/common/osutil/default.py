@@ -50,6 +50,10 @@ for all distros. Each concrete distro classes could overwrite default behavior
 if needed.
 """
 
+FIREWALL_ACCEPT = "iptables -t security -{0} OUTPUT -d {1} -p tcp -m owner --uid-owner {2} -j ACCEPT"
+FIREWALL_DROP = "iptables -t security -{0} OUTPUT -d {1} -p tcp -j DROP"
+FIREWALL_LIST = "iptables -t security -L"
+
 DMIDECODE_CMD = 'dmidecode --string system-uuid'
 PRODUCT_ID_FILE = '/sys/class/dmi/id/product_uuid'
 UUID_PATTERN = re.compile(
@@ -62,6 +66,40 @@ class DefaultOSUtil(object):
         self.agent_conf_file_path = '/etc/waagent.conf'
         self.selinux = None
         self.disable_route_warning = False
+
+    def enable_firewall(self, dst_ip=None, uid=None):
+        try:
+            if dst_ip is None or uid is None:
+                raise Exception("Missing arguments to enable_firewall")
+
+            # If either firewall rule exists, make no changes
+            accept_rule = FIREWALL_ACCEPT.format("C", dst_ip, uid)
+            drop_rule = FIREWALL_DROP.format("C", dst_ip)
+
+            if shellutil.run(accept_rule, chk_err=False) == 0 or \
+                shellutil.run(drop_rule, chk_err=False) == 0:
+                return
+
+            # Neither rule exists, append both rules
+            accept_rule = FIREWALL_ACCEPT.format("A", dst_ip, uid)
+            drop_rule = FIREWALL_DROP.format("A", dst_ip)
+
+            if shellutil.run(accept_rule) != 0:
+                logger.warn("Unable to add ACCEPT firewall rule '{0}'".format(
+                    accept_rule))
+                return
+
+            if shellutil.run(drop_rule) != 0:
+                logger.warn("Unable to add DROP firewall rule '{0}'".format(
+                    drop_rule))
+                return
+
+            rc, output = shellutil.run_get_output(FIREWALL_LIST)
+            logger.info("Successfully added firewall rules:\n{0}".format(
+                output))
+
+        except Exception as e:
+            logger.info("Unable to establish firewall: {0}".format(ustr(e)))
 
     def _correct_instance_id(self, id):
         '''
