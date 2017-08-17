@@ -78,6 +78,7 @@ class DefaultOSUtil(object):
 
             if shellutil.run(accept_rule, chk_err=False) == 0 or \
                 shellutil.run(drop_rule, chk_err=False) == 0:
+                logger.verbose("Firewall appears established")
                 return
 
             # Neither rule exists, append both rules
@@ -94,9 +95,13 @@ class DefaultOSUtil(object):
                     drop_rule))
                 return
 
+            logger.info("Successfully added Azure fabric firewall rules")
+
             rc, output = shellutil.run_get_output(FIREWALL_LIST)
-            logger.info("Successfully added firewall rules:\n{0}".format(
-                output))
+            if rc == 0:
+                logger.info("Firewall rules:\n{0}".format(output))
+            else:
+                logger.warn("Listing firewall rules failed: {0}".format(output))
 
         except Exception as e:
             logger.info("Unable to establish firewall: {0}".format(ustr(e)))
@@ -412,7 +417,7 @@ class DefaultOSUtil(object):
             return_code, err = self.mount(dvd_device,
                                           mount_point,
                                           option="-o ro -t udf,iso9660",
-                                          chk_err=chk_err)
+                                          chk_err=False)
             if return_code == 0:
                 logger.info("Successfully mounted dvd")
                 return
