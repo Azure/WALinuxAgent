@@ -86,11 +86,13 @@ def load_conf_from_file(conf_file_path, conf=__conf__):
                                 "").format(conf_file_path, err))
 
 __SWITCH_OPTIONS__ = {
+    "OS.AllowHTTP" : False,
+    "OS.EnableFirewall" : False,
+    "OS.EnableFIPS" : False,
     "OS.EnableRDMA" : False,
     "OS.UpdateRdmaDriver" : False,
     "OS.CheckRdmaDriver" : False,
     "Logs.Verbose" : False,
-    "OS.EnableFIPS" : False,
     "Provisioning.Enabled" : True,
     "Provisioning.UseCloudInit" : False,
     "Provisioning.AllowResetSysUser" : False,
@@ -105,8 +107,7 @@ __SWITCH_OPTIONS__ = {
     "ResourceDisk.Format" : False,
     "ResourceDisk.EnableSwap" : False,
     "AutoUpdate.Enabled" : True,
-    "EnableOverProvisioning" : False,
-    "OS.AllowHTTP" : False
+    "EnableOverProvisioning" : False
 }
 
 __STRING_OPTIONS__ = {
@@ -148,6 +149,9 @@ def get_configuration(conf=__conf__):
         options[option] = conf.get_int(option, __INTEGER_OPTIONS__[option])
 
     return options
+
+def enable_firewall(conf=__conf__):
+    return conf.get_switch("OS.EnableFirewall", False)
 
 def enable_rdma(conf=__conf__):
     return conf.get_switch("OS.EnableRDMA", False) or \

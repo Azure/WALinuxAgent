@@ -39,6 +39,7 @@ Logs.Verbose = False
 OS.AllowHTTP = False
 OS.CheckRdmaDriver = False
 OS.EnableFIPS = True
+OS.EnableFirewall = True
 OS.EnableRDMA = False
 OS.HomeDir = /home
 OS.OpensslPath = /usr/bin/openssl

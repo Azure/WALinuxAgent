@@ -137,34 +137,33 @@ def _get_http_proxy(secure=False):
 
 def _http_request(method, host, rel_uri, port=None, data=None, secure=False,
                   headers=None, proxy_host=None, proxy_port=None):
-    url, conn = None, None
-    if secure:
-        port = 443 if port is None else port
-        if proxy_host is not None and proxy_port is not None:
-            conn = httpclient.HTTPSConnection(proxy_host,
-                                              proxy_port,
-                                              timeout=10)
-            conn.set_tunnel(host, port)
-            # If proxy is used, full url is needed.
-            url = "https://{0}:{1}{2}".format(host, port, rel_uri)
-        else:
-            conn = httpclient.HTTPSConnection(host,
-                                              port,
-                                              timeout=10)
-            url = rel_uri
+
+    headers = {} if headers is None else headers
+    use_proxy = proxy_host is not None and proxy_port is not None
+
+    if port is None:
+        port = 443 if secure else 80
+
+    if use_proxy:
+        conn_host, conn_port = proxy_host, proxy_port
+        scheme = "https" if secure else "http"
+        url = "{0}://{1}:{2}{3}".format(scheme, host, port, rel_uri)
+
     else:
-        port = 80 if port is None else port
-        if proxy_host is not None and proxy_port is not None:
-            conn = httpclient.HTTPConnection(proxy_host,
-                                             proxy_port,
-                                             timeout=10)
-            # If proxy is used, full url is needed.
-            url = "http://{0}:{1}{2}".format(host, port, rel_uri)
-        else:
-            conn = httpclient.HTTPConnection(host,
-                                             port,
-                                             timeout=10)
-            url = rel_uri
+        conn_host, conn_port = host, port
+        url = rel_uri
+
+    if secure:
+        conn = httpclient.HTTPSConnection(conn_host,
+                                        conn_port,
+                                        timeout=10)
+        if use_proxy:
+            conn.set_tunnel(host, port)
+
+    else:
+        conn = httpclient.HTTPConnection(conn_host,
+                                        conn_port,
+                                        timeout=10)
 
     logger.verbose("HTTP connection [{0}] [{1}] [{2}] [{3}]",
                    method,
@@ -172,10 +171,8 @@ def _http_request(method, host, rel_uri, port=None, data=None, secure=False,
                    data,
                    headers)
 
-    headers = {} if headers is None else headers
     conn.request(method=method, url=url, body=data, headers=headers)
-    resp = conn.getresponse()
-    return resp
+    return conn.getresponse()
 
 
 def http_request(method,

@@ -16,11 +16,14 @@
 #
 # Requires Python 2.4+ and Openssl 1.0+
 #
+
+import errno
 import os
 import re
 import shutil
 import time
 import threading
+
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.exception import ProtocolError, OSUtilError, \
@@ -231,6 +234,9 @@ class ProtocolUtil(object):
         try:
             os.remove(protocol_file_path)
         except IOError as e:
+            # Ignore file-not-found errors (since the file is being removed)
+            if e.errno == errno.ENOENT:
+                return
             logger.error("Failed to clear protocol endpoint: {0}", e)
 
     def get_protocol(self):

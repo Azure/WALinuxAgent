@@ -23,7 +23,7 @@ from azurelinuxagent.common.exception import BadRequestError, \
 import azurelinuxagent.common.utils.restutil as restutil
 
 from azurelinuxagent.common.future import httpclient, ustr
-from tests.tools import AgentTestCase, patch, Mock, MagicMock
+from tests.tools import *
 
 
 class TestHttpOperations(AgentTestCase):
@@ -118,46 +118,100 @@ class TestHttpOperations(AgentTestCase):
             self.assertEqual("foo.com", h)
             self.assertEqual(80, p)
 
+    @patch("azurelinuxagent.common.future.httpclient.HTTPSConnection")
+    @patch("azurelinuxagent.common.future.httpclient.HTTPConnection")
+    def test_http_request_direct(self, HTTPConnection, HTTPSConnection):
+        mock_conn = \
+            MagicMock(getresponse=\
+                Mock(return_value=\
+                    Mock(read=Mock(return_value="TheResults"))))
+
+        HTTPConnection.return_value = mock_conn
+
+        resp = restutil._http_request("GET", "foo", "/bar")
+
+        HTTPConnection.assert_has_calls([
+            call("foo", 80, timeout=10)
+        ])
+        HTTPSConnection.assert_not_called()
+        mock_conn.request.assert_has_calls([
+            call(method="GET", url="/bar", body=None, headers={})
+        ])
+        mock_conn.getresponse.assert_called_once()
+        self.assertNotEquals(None, resp)
+        self.assertEquals("TheResults", resp.read())
 
     @patch("azurelinuxagent.common.future.httpclient.HTTPSConnection")
     @patch("azurelinuxagent.common.future.httpclient.HTTPConnection")
-    def test_http_request(self, HTTPConnection, HTTPSConnection):
-        mock_http_conn = MagicMock()
-        mock_http_resp = MagicMock()
-        mock_http_conn.getresponse = Mock(return_value=mock_http_resp)
-        HTTPConnection.return_value = mock_http_conn
-        HTTPSConnection.return_value = mock_http_conn
+    def test_http_request_direct_secure(self, HTTPConnection, HTTPSConnection):
+        mock_conn = \
+            MagicMock(getresponse=\
+                Mock(return_value=\
+                    Mock(read=Mock(return_value="TheResults"))))
 
-        mock_http_resp.read = Mock(return_value="_(:3| <)_")
+        HTTPSConnection.return_value = mock_conn
 
-        # Test http get
-        resp = restutil._http_request("GET", "foo", "bar")
+        resp = restutil._http_request("GET", "foo", "/bar", secure=True)
+
+        HTTPConnection.assert_not_called()
+        HTTPSConnection.assert_has_calls([
+            call("foo", 443, timeout=10)
+        ])
+        mock_conn.request.assert_has_calls([
+            call(method="GET", url="/bar", body=None, headers={})
+        ])
+        mock_conn.getresponse.assert_called_once()
         self.assertNotEquals(None, resp)
-        self.assertEquals("_(:3| <)_", resp.read())
+        self.assertEquals("TheResults", resp.read())
 
-        # Test https get
-        resp = restutil._http_request("GET", "foo", "bar", secure=True)
-        self.assertNotEquals(None, resp)
-        self.assertEquals("_(:3| <)_", resp.read())
+    @patch("azurelinuxagent.common.future.httpclient.HTTPSConnection")
+    @patch("azurelinuxagent.common.future.httpclient.HTTPConnection")
+    def test_http_request_proxy(self, HTTPConnection, HTTPSConnection):
+        mock_conn = \
+            MagicMock(getresponse=\
+                Mock(return_value=\
+                    Mock(read=Mock(return_value="TheResults"))))
 
-        # Test http get with proxy
-        mock_http_resp.read = Mock(return_value="_(:3| <)_")
-        resp = restutil._http_request("GET", "foo", "bar", proxy_host="foo.bar",
-                                      proxy_port=23333)
-        self.assertNotEquals(None, resp)
-        self.assertEquals("_(:3| <)_", resp.read())
+        HTTPConnection.return_value = mock_conn
 
-        # Test https get
-        resp = restutil._http_request("GET", "foo", "bar", secure=True)
-        self.assertNotEquals(None, resp)
-        self.assertEquals("_(:3| <)_", resp.read())
+        resp = restutil._http_request("GET", "foo", "/bar",
+                            proxy_host="foo.bar", proxy_port=23333)
 
-        # Test https get with proxy
-        mock_http_resp.read = Mock(return_value="_(:3| <)_")
-        resp = restutil._http_request("GET", "foo", "bar", proxy_host="foo.bar",
-                                      proxy_port=23333, secure=True)
+        HTTPConnection.assert_has_calls([
+            call("foo.bar", 23333, timeout=10)
+        ])
+        HTTPSConnection.assert_not_called()
+        mock_conn.request.assert_has_calls([
+            call(method="GET", url="http://foo:80/bar", body=None, headers={})
+        ])
+        mock_conn.getresponse.assert_called_once()
         self.assertNotEquals(None, resp)
-        self.assertEquals("_(:3| <)_", resp.read())
+        self.assertEquals("TheResults", resp.read())
+
+    @patch("azurelinuxagent.common.future.httpclient.HTTPSConnection")
+    @patch("azurelinuxagent.common.future.httpclient.HTTPConnection")
+    def test_http_request_proxy_secure(self, HTTPConnection, HTTPSConnection):
+        mock_conn = \
+            MagicMock(getresponse=\
+                Mock(return_value=\
+                    Mock(read=Mock(return_value="TheResults"))))
+
+        HTTPSConnection.return_value = mock_conn
+
+        resp = restutil._http_request("GET", "foo", "/bar",
+                            proxy_host="foo.bar", proxy_port=23333,
+                            secure=True)
+
+        HTTPConnection.assert_not_called()
+        HTTPSConnection.assert_has_calls([
+            call("foo.bar", 23333, timeout=10)
+        ])
+        mock_conn.request.assert_has_calls([
+            call(method="GET", url="https://foo:443/bar", body=None, headers={})
+        ])
+        mock_conn.getresponse.assert_called_once()
+        self.assertNotEquals(None, resp)
+        self.assertEquals("TheResults", resp.read())
 
     @patch("time.sleep")
     @patch("azurelinuxagent.common.utils.restutil._http_request")
