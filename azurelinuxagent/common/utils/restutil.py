@@ -251,7 +251,7 @@ def http_request(method,
                 if _is_retry_status(resp.status, retry_codes=retry_codes):
                     msg = '[HTTP Retry] HTTP {0} Status Code {1}'.format(
                         method, resp.status)
-                    if _is_throttle_status(resp.statue):
+                    if _is_throttle_status(resp.status):
                         delay = LONG_DELAY_IN_SECONDS
                         logger.info("[HTTP Delay] Delay {0} seconds for " \
                                     "Status Code {1}".format(
