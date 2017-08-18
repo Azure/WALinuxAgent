@@ -205,7 +205,7 @@ def parse_args(sys_args):
             verbose = True
         elif re.match("^([-/]*)force", a):
             force = True
-        elif re.match("^([-/]*show-configuration", a):
+        elif re.match("^([-/]*)show-configuration", a):
             cmd = "show-configuration"
         elif re.match("^([-/]*)(help|usage|\\?)", a):
             cmd = "help"
