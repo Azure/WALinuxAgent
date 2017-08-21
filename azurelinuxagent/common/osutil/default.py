@@ -79,21 +79,23 @@ class DefaultOSUtil(object):
             if shellutil.run(accept_rule, chk_err=False) == 0 or \
                 shellutil.run(drop_rule, chk_err=False) == 0:
                 logger.verbose("Firewall appears established")
-                return
+                return True
 
             # Neither rule exists, append both rules
             accept_rule = FIREWALL_ACCEPT.format("A", dst_ip, uid)
             drop_rule = FIREWALL_DROP.format("A", dst_ip)
 
             if shellutil.run(accept_rule) != 0:
-                logger.warn("Unable to add ACCEPT firewall rule '{0}'".format(
-                    accept_rule))
-                return
+                msg = "Unable to add ACCEPT firewall rule '{0}'".format(
+                    accept_rule)
+                logger.warn(msg)
+                raise Exception(msg)
 
             if shellutil.run(drop_rule) != 0:
-                logger.warn("Unable to add DROP firewall rule '{0}'".format(
-                    drop_rule))
-                return
+                msg = "Unable to add DROP firewall rule '{0}'".format(
+                    drop_rule)
+                logger.warn(msg)
+                raise Exception(msg)
 
             logger.info("Successfully added Azure fabric firewall rules")
 
@@ -103,8 +105,11 @@ class DefaultOSUtil(object):
             else:
                 logger.warn("Listing firewall rules failed: {0}".format(output))
 
+            return True
+
         except Exception as e:
             logger.info("Unable to establish firewall: {0}".format(ustr(e)))
+            return False
 
     def _correct_instance_id(self, id):
         '''

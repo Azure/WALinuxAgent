@@ -498,8 +498,8 @@ Match host 192.168.1.2\n\
         uid = 42
 
         mock_run.side_effect = [1, 1, 0, 0]
-        mock_output.return_value = 0
-        util.enable_firewall(dst_ip=dst, uid=uid)
+        mock_output.return_value = (0, "Output")
+        self.assertTrue(util.enable_firewall(dst_ip=dst, uid=uid))
 
         mock_run.assert_has_calls([
             call(osutil.FIREWALL_ACCEPT.format("C", dst, uid), chk_err=False),
@@ -519,8 +519,7 @@ Match host 192.168.1.2\n\
         uid = 42
 
         mock_run.side_effect = [0, 1, 0, 0]
-        mock_output.return_value = 0
-        util.enable_firewall(dst_ip=dst, uid=uid)
+        self.assertTrue(util.enable_firewall(dst_ip=dst, uid=uid))
 
         mock_run.assert_has_calls([
             call(osutil.FIREWALL_ACCEPT.format("C", dst, uid), chk_err=False)
@@ -537,8 +536,7 @@ Match host 192.168.1.2\n\
         uid = 42
 
         mock_run.side_effect = [1, 0, 0, 0]
-        mock_output.return_value = 0
-        util.enable_firewall(dst_ip=dst, uid=uid)
+        self.assertTrue(util.enable_firewall(dst_ip=dst, uid=uid))
 
         mock_run.assert_has_calls([
             call(osutil.FIREWALL_ACCEPT.format("C", dst, uid), chk_err=False),
@@ -556,7 +554,7 @@ Match host 192.168.1.2\n\
         uid = 42
 
         mock_run.side_effect = [1, 1, Exception]
-        util.enable_firewall(dst_ip=dst, uid=uid)
+        self.assertFalse(util.enable_firewall(dst_ip=dst, uid=uid))
 
         mock_run.assert_has_calls([
             call(osutil.FIREWALL_ACCEPT.format("C", dst, uid), chk_err=False),

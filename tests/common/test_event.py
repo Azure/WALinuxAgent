@@ -145,7 +145,7 @@ class TestEvent(AgentTestCase):
         self.assertEqual(1, mock_event.call_count)
 
         h = hash("FauxEvent"+""+ustr(True)+"")
-        event.__event_logger__.periodic_messages[h] = \
+        event.__event_logger__.periodic_events[h] = \
             datetime.now() - logger.EVERY_DAY - logger.EVERY_HOUR
         event.add_periodic(logger.EVERY_DAY, "FauxEvent")
         self.assertEqual(2, mock_event.call_count)

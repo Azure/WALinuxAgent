@@ -26,8 +26,10 @@ import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 
 from azurelinuxagent.common.dhcp import get_dhcp_handler
+from azurelinuxagent.common.event import add_periodic, WALAEventOperation
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol import get_protocol_util
+from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 
 def get_env_handler():
     return EnvHandler()
@@ -75,9 +77,16 @@ class EnvHandler(object):
             self.osutil.remove_rules_files()
 
             if conf.enable_firewall():
-                self.osutil.enable_firewall(
-                    dst_ip=protocol.endpoint,
-                    uid=os.getuid())
+                success = self.osutil.enable_firewall(
+                                dst_ip=protocol.endpoint,
+                                uid=os.getuid())
+                add_periodic(
+                    logger.EVERY_HOUR,
+                    AGENT_NAME,
+                    version=CURRENT_VERSION,
+                    op=WALAEventOperation.Firewall,
+                    is_success=success,
+                    log_event=True)
 
             timeout = conf.get_root_device_scsi_timeout()
             if timeout is not None:
