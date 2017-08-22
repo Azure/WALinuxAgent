@@ -53,6 +53,24 @@ class TestProvision(AgentTestCase):
         data = DefaultOSUtil().decode_customdata(base64data)
         fileutil.write_file(tempfile.mktemp(), data)
 
+    @patch('azurelinuxagent.common.conf.get_provision_enabled',
+        return_value=False)
+    def test_provisioning_is_skipped_when_not_enabled(self, mock_conf):
+        ph = ProvisionHandler()
+        ph.osutil = DefaultOSUtil()
+        ph.osutil.get_instance_id = Mock(
+                        return_value='B9F3C233-9913-9F42-8EB3-BA656DF32502')
+
+        ph.is_provisioned = Mock()
+        ph.report_ready = Mock()
+        ph.write_provisioned = Mock()
+
+        ph.run()
+
+        ph.is_provisioned.assert_not_called()
+        ph.report_ready.assert_called_once()
+        ph.write_provisioned.assert_called_once()
+
     @patch('os.path.isfile', return_value=False)
     def test_is_provisioned_not_provisioned(self, mock_isfile):
         ph = ProvisionHandler()
