@@ -73,16 +73,14 @@ class DefaultOSUtil(object):
             if dst_ip is None or uid is None:
                 raise Exception("Missing arguments to enable_firewall")
 
-            # If either firewall rule exists, make no changes
-            accept_rule = FIREWALL_ACCEPT.format("C", dst_ip, uid, FIREWALL_WAIT_IN_SECONDS)
+            # If the DROP rule exists, make no changes
             drop_rule = FIREWALL_DROP.format("C", dst_ip, FIREWALL_WAIT_IN_SECONDS)
 
-            if shellutil.run(accept_rule, chk_err=False) == 0 or \
-                shellutil.run(drop_rule, chk_err=False) == 0:
+            if  shellutil.run(drop_rule, chk_err=False) == 0:
                 logger.verbose("Firewall appears established")
                 return True
 
-            # Neither rule exists, append both rules
+            # Otherwise, append both rules
             accept_rule = FIREWALL_ACCEPT.format("A", dst_ip, uid, FIREWALL_WAIT_IN_SECONDS)
             drop_rule = FIREWALL_DROP.format("A", dst_ip, FIREWALL_WAIT_IN_SECONDS)
 
