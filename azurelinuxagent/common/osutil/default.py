@@ -50,9 +50,10 @@ for all distros. Each concrete distro classes could overwrite default behavior
 if needed.
 """
 
-FIREWALL_ACCEPT = "iptables -t security -{0} OUTPUT -d {1} -p tcp -m owner --uid-owner {2} -j ACCEPT"
-FIREWALL_DROP = "iptables -t security -{0} OUTPUT -d {1} -p tcp -j DROP"
+FIREWALL_ACCEPT = "iptables -t security -{0} OUTPUT -d {1} -p tcp -m owner --uid-owner {2} -w {3} -j ACCEPT"
+FIREWALL_DROP = "iptables -t security -{0} OUTPUT -d {1} -p tcp -w {2} -j DROP"
 FIREWALL_LIST = "iptables -t security -L"
+FIREWALL_WAIT_IN_SECONDS = 30
 
 DMIDECODE_CMD = 'dmidecode --string system-uuid'
 PRODUCT_ID_FILE = '/sys/class/dmi/id/product_uuid'
@@ -73,8 +74,8 @@ class DefaultOSUtil(object):
                 raise Exception("Missing arguments to enable_firewall")
 
             # If either firewall rule exists, make no changes
-            accept_rule = FIREWALL_ACCEPT.format("C", dst_ip, uid)
-            drop_rule = FIREWALL_DROP.format("C", dst_ip)
+            accept_rule = FIREWALL_ACCEPT.format("C", dst_ip, uid, FIREWALL_WAIT_IN_SECONDS)
+            drop_rule = FIREWALL_DROP.format("C", dst_ip, FIREWALL_WAIT_IN_SECONDS)
 
             if shellutil.run(accept_rule, chk_err=False) == 0 or \
                 shellutil.run(drop_rule, chk_err=False) == 0:
@@ -82,8 +83,8 @@ class DefaultOSUtil(object):
                 return True
 
             # Neither rule exists, append both rules
-            accept_rule = FIREWALL_ACCEPT.format("A", dst_ip, uid)
-            drop_rule = FIREWALL_DROP.format("A", dst_ip)
+            accept_rule = FIREWALL_ACCEPT.format("A", dst_ip, uid, FIREWALL_WAIT_IN_SECONDS)
+            drop_rule = FIREWALL_DROP.format("A", dst_ip, FIREWALL_WAIT_IN_SECONDS)
 
             if shellutil.run(accept_rule) != 0:
                 msg = "Unable to add ACCEPT firewall rule '{0}'".format(

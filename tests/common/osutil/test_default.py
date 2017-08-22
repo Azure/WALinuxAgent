@@ -496,16 +496,17 @@ Match host 192.168.1.2\n\
 
         dst = '1.2.3.4'
         uid = 42
+        wait = 30
 
         mock_run.side_effect = [1, 1, 0, 0]
         mock_output.return_value = (0, "Output")
         self.assertTrue(util.enable_firewall(dst_ip=dst, uid=uid))
 
         mock_run.assert_has_calls([
-            call(osutil.FIREWALL_ACCEPT.format("C", dst, uid), chk_err=False),
-            call(osutil.FIREWALL_DROP.format("C", dst), chk_err=False),
-            call(osutil.FIREWALL_ACCEPT.format("A", dst, uid)),
-            call(osutil.FIREWALL_DROP.format("A", dst))
+            call(osutil.FIREWALL_ACCEPT.format("C", dst, uid, wait), chk_err=False),
+            call(osutil.FIREWALL_DROP.format("C", dst, wait), chk_err=False),
+            call(osutil.FIREWALL_ACCEPT.format("A", dst, uid, wait)),
+            call(osutil.FIREWALL_DROP.format("A", dst, wait))
         ])
         mock_output.assert_called_with(osutil.FIREWALL_LIST)
 
@@ -517,12 +518,13 @@ Match host 192.168.1.2\n\
 
         dst = '1.2.3.4'
         uid = 42
+        wait = 30
 
         mock_run.side_effect = [0, 1, 0, 0]
         self.assertTrue(util.enable_firewall(dst_ip=dst, uid=uid))
 
         mock_run.assert_has_calls([
-            call(osutil.FIREWALL_ACCEPT.format("C", dst, uid), chk_err=False)
+            call(osutil.FIREWALL_ACCEPT.format("C", dst, uid, wait), chk_err=False)
         ])
         mock_output.assert_not_called()
 
@@ -534,13 +536,14 @@ Match host 192.168.1.2\n\
 
         dst = '1.2.3.4'
         uid = 42
+        wait = 30
 
         mock_run.side_effect = [1, 0, 0, 0]
         self.assertTrue(util.enable_firewall(dst_ip=dst, uid=uid))
 
         mock_run.assert_has_calls([
-            call(osutil.FIREWALL_ACCEPT.format("C", dst, uid), chk_err=False),
-            call(osutil.FIREWALL_DROP.format("C", dst), chk_err=False),
+            call(osutil.FIREWALL_ACCEPT.format("C", dst, uid, wait), chk_err=False),
+            call(osutil.FIREWALL_DROP.format("C", dst, wait), chk_err=False),
         ])
         mock_output.assert_not_called()
 
@@ -552,14 +555,15 @@ Match host 192.168.1.2\n\
 
         dst = '1.2.3.4'
         uid = 42
+        wait = 30
 
         mock_run.side_effect = [1, 1, Exception]
         self.assertFalse(util.enable_firewall(dst_ip=dst, uid=uid))
 
         mock_run.assert_has_calls([
-            call(osutil.FIREWALL_ACCEPT.format("C", dst, uid), chk_err=False),
-            call(osutil.FIREWALL_DROP.format("C", dst), chk_err=False),
-            call(osutil.FIREWALL_ACCEPT.format("A", dst, uid))
+            call(osutil.FIREWALL_ACCEPT.format("C", dst, uid, wait), chk_err=False),
+            call(osutil.FIREWALL_DROP.format("C", dst, wait), chk_err=False),
+            call(osutil.FIREWALL_ACCEPT.format("A", dst, uid, wait))
         ])
         mock_output.assert_not_called()
 
