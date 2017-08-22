@@ -48,6 +48,7 @@ class WALAEventOperation:
     Disable = "Disable"
     Download = "Download"
     Enable = "Enable"
+    Firewall = "Firewall"
     HealthCheck = "HealthCheck"
     HeartBeat = "HeartBeat"
     HostPlugin = "HostPlugin"
@@ -163,11 +164,11 @@ class EventLogger(object):
             raise EventError("Failed to write events to file:{0}", e)
 
     def reset_periodic(self):
-        self.periodic_messages = {}
+        self.periodic_events = {}
 
     def is_period_elapsed(self, delta, h):
-        return h not in self.periodic_messages or \
-            (self.periodic_messages[h] + delta) <= datetime.now()
+        return h not in self.periodic_events or \
+            (self.periodic_events[h] + delta) <= datetime.now()
 
     def add_periodic(self,
         delta, name, op="", is_success=True, duration=0,
@@ -181,7 +182,7 @@ class EventLogger(object):
                 op=op, is_success=is_success, duration=duration,
                 version=version, message=message, evt_type=evt_type,
                 is_internal=is_internal, log_event=log_event)
-            self.periodic_messages[h] = datetime.now()
+            self.periodic_events[h] = datetime.now()
 
     def add_event(self,
                   name,
