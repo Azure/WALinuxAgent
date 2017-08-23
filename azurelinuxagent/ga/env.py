@@ -105,7 +105,6 @@ class EnvHandler(object):
             logger.info("EnvMonitor: Detected hostname change: {0} -> {1}",
                         self.hostname,
                         curr_hostname)
-            self.osutil.set_hostname(curr_hostname)
             self.osutil.publish_hostname(curr_hostname)
             self.hostname = curr_hostname
 
