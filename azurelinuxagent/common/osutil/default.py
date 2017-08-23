@@ -40,6 +40,7 @@ import azurelinuxagent.common.utils.textutil as textutil
 from azurelinuxagent.common.exception import OSUtilError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
+from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 
 __RULES_FILES__ = [ "/lib/udev/rules.d/75-persistent-net-generator.rules",
                     "/etc/udev/rules.d/70-persistent-net.rules" ]
@@ -50,10 +51,15 @@ for all distros. Each concrete distro classes could overwrite default behavior
 if needed.
 """
 
-FIREWALL_ACCEPT = "iptables -t security -{0} OUTPUT -d {1} -p tcp -m owner --uid-owner {2} -w {3} -j ACCEPT"
-FIREWALL_DROP = "iptables -t security -{0} OUTPUT -d {1} -p tcp -w {2} -j DROP"
-FIREWALL_LIST = "iptables -t security -L"
-FIREWALL_WAIT_IN_SECONDS = 30
+IPTABLES_VERSION_PATTERN = re.compile("^[^\d\.]*([\d\.]+).*$")
+IPTABLES_VERSION = "iptables --version"
+IPTABLES_LOCKING_VERSION = FlexibleVersion('1.4.21')
+
+FIREWALL_ACCEPT = "iptables {0} -t security -{1} OUTPUT -d {2} -p tcp -m owner --uid-owner {3} -j ACCEPT"
+FIREWALL_DROP = "iptables {0} -t security -{1} OUTPUT -d {2} -p tcp -j DROP"
+FIREWALL_LIST = "iptables {0} -t security -L"
+
+_enable_firewall = True
 
 DMIDECODE_CMD = 'dmidecode --string system-uuid'
 PRODUCT_ID_FILE = '/sys/class/dmi/id/product_uuid'
@@ -69,20 +75,45 @@ class DefaultOSUtil(object):
         self.disable_route_warning = False
 
     def enable_firewall(self, dst_ip=None, uid=None):
+
+        # If a previous attempt threw an exception, do not retry
+        global _enable_firewall
+        if not _enable_firewall:
+            return False
+
         try:
             if dst_ip is None or uid is None:
-                raise Exception("Missing arguments to enable_firewall")
+                msg = "Missing arguments to enable_firewall"
+                logger.warn(msg)
+                raise Exception(msg)
+
+            # Determine if iptables will serialize access
+            rc, output = shellutil.run_get_output(IPTABLES_VERSION)
+            if rc != 0:
+                msg = "Unable to determine version of iptables"
+                logger.warn(msg)
+                raise Exception(msg)
+
+            m = IPTABLES_VERSION_PATTERN.match(output)
+            if m is None:
+                msg = "iptables did not return version information"
+                logger.warn(msg)
+                raise Exception(msg)
+
+            wait = "-w" \
+                    if FlexibleVersion(m.group(1)) >= IPTABLES_LOCKING_VERSION \
+                    else ""
 
             # If the DROP rule exists, make no changes
-            drop_rule = FIREWALL_DROP.format("C", dst_ip, FIREWALL_WAIT_IN_SECONDS)
+            drop_rule = FIREWALL_DROP.format(wait, "C", dst_ip)
 
-            if  shellutil.run(drop_rule, chk_err=False) == 0:
+            if shellutil.run(drop_rule, chk_err=False) == 0:
                 logger.verbose("Firewall appears established")
                 return True
 
             # Otherwise, append both rules
-            accept_rule = FIREWALL_ACCEPT.format("A", dst_ip, uid, FIREWALL_WAIT_IN_SECONDS)
-            drop_rule = FIREWALL_DROP.format("A", dst_ip, FIREWALL_WAIT_IN_SECONDS)
+            accept_rule = FIREWALL_ACCEPT.format(wait, "A", dst_ip, uid)
+            drop_rule = FIREWALL_DROP.format(wait, "A", dst_ip)
 
             if shellutil.run(accept_rule) != 0:
                 msg = "Unable to add ACCEPT firewall rule '{0}'".format(
@@ -98,7 +129,7 @@ class DefaultOSUtil(object):
 
             logger.info("Successfully added Azure fabric firewall rules")
 
-            rc, output = shellutil.run_get_output(FIREWALL_LIST)
+            rc, output = shellutil.run_get_output(FIREWALL_LIST.format(wait))
             if rc == 0:
                 logger.info("Firewall rules:\n{0}".format(output))
             else:
@@ -107,7 +138,10 @@ class DefaultOSUtil(object):
             return True
 
         except Exception as e:
-            logger.info("Unable to establish firewall: {0}".format(ustr(e)))
+            _enable_firewall = False
+            logger.info("Unable to establish firewall -- "
+                        "no further attempts will be made: "
+                        "{0}".format(ustr(e)))
             return False
 
     def _correct_instance_id(self, id):

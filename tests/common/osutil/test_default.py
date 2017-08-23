@@ -25,6 +25,7 @@ from azurelinuxagent.common.exception import OSUtilError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils import fileutil
+from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from tests.tools import *
 
 
@@ -492,59 +493,125 @@ Match host 192.168.1.2\n\
     @patch('azurelinuxagent.common.utils.shellutil.run_get_output')
     @patch('azurelinuxagent.common.utils.shellutil.run')
     def test_enable_firewall(self, mock_run, mock_output, mock_uid):
+        osutil._enable_firewall = True
         util = osutil.DefaultOSUtil()
 
         dst = '1.2.3.4'
         uid = 42
-        wait = 30
+        version = "iptables v{0}".format(osutil.IPTABLES_LOCKING_VERSION)
+        wait = "-w"
 
         mock_run.side_effect = [1, 0, 0]
-        mock_output.return_value = (0, "Output")
+        mock_output.side_effect = [(0, version), (0, "Output")]
         self.assertTrue(util.enable_firewall(dst_ip=dst, uid=uid))
 
         mock_run.assert_has_calls([
-            call(osutil.FIREWALL_DROP.format("C", dst, wait), chk_err=False),
-            call(osutil.FIREWALL_ACCEPT.format("A", dst, uid, wait)),
-            call(osutil.FIREWALL_DROP.format("A", dst, wait))
+            call(osutil.FIREWALL_DROP.format(wait, "C", dst), chk_err=False),
+            call(osutil.FIREWALL_ACCEPT.format(wait, "A", dst, uid)),
+            call(osutil.FIREWALL_DROP.format(wait, "A", dst))
         ])
-        mock_output.assert_called_with(osutil.FIREWALL_LIST)
+        mock_output.assert_has_calls([
+            call(osutil.IPTABLES_VERSION),
+            call(osutil.FIREWALL_LIST.format(wait))
+        ])
+        self.assertTrue(osutil._enable_firewall)
+
+    @patch('os.getuid', return_value=42)
+    @patch('azurelinuxagent.common.utils.shellutil.run_get_output')
+    @patch('azurelinuxagent.common.utils.shellutil.run')
+    def test_enable_firewall_no_wait(self, mock_run, mock_output, mock_uid):
+        osutil._enable_firewall = True
+        util = osutil.DefaultOSUtil()
+
+        dst = '1.2.3.4'
+        uid = 42
+        version = "iptables v{0}".format(osutil.IPTABLES_LOCKING_VERSION-1)
+        wait = ""
+
+        mock_run.side_effect = [1, 0, 0]
+        mock_output.side_effect = [(0, version), (0, "Output")]
+        self.assertTrue(util.enable_firewall(dst_ip=dst, uid=uid))
+
+        mock_run.assert_has_calls([
+            call(osutil.FIREWALL_DROP.format(wait, "C", dst), chk_err=False),
+            call(osutil.FIREWALL_ACCEPT.format(wait, "A", dst, uid)),
+            call(osutil.FIREWALL_DROP.format(wait, "A", dst))
+        ])
+        mock_output.assert_has_calls([
+            call(osutil.IPTABLES_VERSION),
+            call(osutil.FIREWALL_LIST.format(wait))
+        ])
+        self.assertTrue(osutil._enable_firewall)
 
     @patch('os.getuid', return_value=42)
     @patch('azurelinuxagent.common.utils.shellutil.run_get_output')
     @patch('azurelinuxagent.common.utils.shellutil.run')
     def test_enable_firewall_skips_if_drop_exists(self, mock_run, mock_output, mock_uid):
+        osutil._enable_firewall = True
         util = osutil.DefaultOSUtil()
 
         dst = '1.2.3.4'
         uid = 42
-        wait = 30
+        version = "iptables v{0}".format(osutil.IPTABLES_LOCKING_VERSION)
+        wait = "-w"
 
         mock_run.side_effect = [0, 0, 0]
+        mock_output.return_value = (0, version)
         self.assertTrue(util.enable_firewall(dst_ip=dst, uid=uid))
 
         mock_run.assert_has_calls([
-            call(osutil.FIREWALL_DROP.format("C", dst, wait), chk_err=False),
+            call(osutil.FIREWALL_DROP.format(wait, "C", dst), chk_err=False),
         ])
-        mock_output.assert_not_called()
+        mock_output.assert_has_calls([
+            call(osutil.IPTABLES_VERSION)
+        ])
+        self.assertTrue(osutil._enable_firewall)
 
     @patch('os.getuid', return_value=42)
     @patch('azurelinuxagent.common.utils.shellutil.run_get_output')
     @patch('azurelinuxagent.common.utils.shellutil.run')
     def test_enable_firewall_ignores_exceptions(self, mock_run, mock_output, mock_uid):
+        osutil._enable_firewall = True
         util = osutil.DefaultOSUtil()
 
         dst = '1.2.3.4'
         uid = 42
-        wait = 30
+        version = "iptables v{0}".format(osutil.IPTABLES_LOCKING_VERSION)
+        wait = "-w"
 
         mock_run.side_effect = [1, Exception]
+        mock_output.return_value = (0, version)
         self.assertFalse(util.enable_firewall(dst_ip=dst, uid=uid))
 
         mock_run.assert_has_calls([
-            call(osutil.FIREWALL_DROP.format("C", dst, wait), chk_err=False),
-            call(osutil.FIREWALL_ACCEPT.format("A", dst, uid, wait))
+            call(osutil.FIREWALL_DROP.format(wait, "C", dst), chk_err=False),
+            call(osutil.FIREWALL_ACCEPT.format(wait, "A", dst, uid))
         ])
+        mock_output.assert_has_calls([
+            call(osutil.IPTABLES_VERSION)
+        ])
+        self.assertFalse(osutil._enable_firewall)
+
+    @patch('os.getuid', return_value=42)
+    @patch('azurelinuxagent.common.utils.shellutil.run_get_output')
+    @patch('azurelinuxagent.common.utils.shellutil.run')
+    def test_enable_firewall_skips_if_disabled(self, mock_run, mock_output, mock_uid):
+        osutil._enable_firewall = False
+        util = osutil.DefaultOSUtil()
+
+        dst = '1.2.3.4'
+        uid = 42
+        version = "iptables v{0}".format(osutil.IPTABLES_LOCKING_VERSION)
+        wait = "-w"
+
+        mock_run.side_effect = [1, 0, 0]
+        mock_output.side_effect = [(0, version), (0, "Output")]
+        self.assertFalse(util.enable_firewall(dst_ip=dst, uid=uid))
+
+        mock_run.assert_not_called()
         mock_output.assert_not_called()
+        mock_uid.assert_not_called()
+        self.assertFalse(osutil._enable_firewall)
 
 if __name__ == '__main__':
     unittest.main()
