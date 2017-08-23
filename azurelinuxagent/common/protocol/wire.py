@@ -731,6 +731,12 @@ class WireClient(object):
                     self.host_plugin.container_id = goal_state.container_id
                     self.host_plugin.role_config_name = goal_state.role_config_name
                 return
+
+            except ProtocolError:
+                if retry < max_retry-1:
+                    continue
+                raise
+
             except WireProtocolResourceGone:
                 logger.info("Incarnation is out of date. Update goalstate.")
                 xml_text = self.fetch_config(uri, self.get_header())
