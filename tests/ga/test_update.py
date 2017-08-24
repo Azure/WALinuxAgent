@@ -1611,14 +1611,14 @@ class ProtocolMock(object):
         self.call_counts["get_vmagent_manifests"] += 1
         if self.goal_state_is_stale:
             self.goal_state_is_stale = False
-            raise BadRequestError()
+            raise ResourceGoneError()
         return self.agent_manifests, self.etag
 
     def get_vmagent_pkgs(self, manifest):
         self.call_counts["get_vmagent_pkgs"] += 1
         if self.goal_state_is_stale:
             self.goal_state_is_stale = False
-            raise BadRequestError()
+            raise ResourceGoneError()
         return self.agent_packages
 
     def update_goal_state(self, forced=False, max_retry=3):

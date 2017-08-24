@@ -25,7 +25,7 @@ import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.textutil as textutil
 
-from azurelinuxagent.common.exception import BadRequestError, HttpError
+from azurelinuxagent.common.exception import HttpError, ResourceGoneError
 from azurelinuxagent.common.future import httpclient, urlparse, ustr
 from azurelinuxagent.common.version import PY_VERSION_MAJOR
 
@@ -43,9 +43,16 @@ RETRY_CODES = [
     httpclient.FORBIDDEN,
     httpclient.INTERNAL_SERVER_ERROR,
     httpclient.NOT_IMPLEMENTED,
+    httpclient.BAD_GATEWAY,
     httpclient.SERVICE_UNAVAILABLE,
     httpclient.GATEWAY_TIMEOUT,
-    httpclient.INSUFFICIENT_STORAGE
+    httpclient.INSUFFICIENT_STORAGE,
+    429, # Request Rate Limit Exceeded
+]
+
+RESOURCE_GONE_CODES = [
+    httpclient.BAD_REQUEST,
+    httpclient.GONE
 ]
 
 OK_CODES = [
@@ -258,8 +265,8 @@ def http_request(method,
                                         delay, resp.status))
                     continue
 
-            if resp.status == httpclient.BAD_REQUEST:
-                raise BadRequestError()
+            if resp.status in RESOURCE_GONE_CODES:
+                raise ResourceGoneError()
 
             return resp
 

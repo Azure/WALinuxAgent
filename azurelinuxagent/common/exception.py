@@ -149,10 +149,10 @@ class UpdateError(AgentError):
         super(UpdateError, self).__init__('000012', msg, inner)
 
 
-class BadRequestError(HttpError):
+class ResourceGoneError(HttpError):
     """
-    The server rejected the request (i.e., status code 400)
+   The requested resource no longer exists (i.e., status code 410)
     """
 
     def __init__(self, msg=None, inner=None):
-        super(BadRequestError, self).__init__(msg, inner)
+        super(ResourceGoneError, self).__init__(msg, inner)
