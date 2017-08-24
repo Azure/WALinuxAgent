@@ -18,8 +18,9 @@
 import os
 import unittest
 
-from azurelinuxagent.common.exception import BadRequestError, \
-                                        HttpError, ProtocolError
+from azurelinuxagent.common.exception import HttpError, \
+                                            ProtocolError, \
+                                            ResourceGoneError
 import azurelinuxagent.common.utils.restutil as restutil
 
 from azurelinuxagent.common.future import httpclient, ustr
@@ -272,7 +273,17 @@ class TestHttpOperations(AgentTestCase):
             Mock(status=httpclient.BAD_REQUEST)
         ]
 
-        self.assertRaises(BadRequestError, restutil.http_get, "https://foo.bar")
+        self.assertRaises(ResourceGoneError, restutil.http_get, "https://foo.bar")
+        self.assertEqual(1, _http_request.call_count)
+
+    @patch("time.sleep")
+    @patch("azurelinuxagent.common.utils.restutil._http_request")
+    def test_http_request_raises_for_resource_gone(self, _http_request, _sleep):
+        _http_request.side_effect = [
+            Mock(status=httpclient.GONE)
+        ]
+
+        self.assertRaises(ResourceGoneError, restutil.http_get, "https://foo.bar")
         self.assertEqual(1, _http_request.call_count)
 
     @patch("time.sleep")

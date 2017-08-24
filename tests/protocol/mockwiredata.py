@@ -16,7 +16,7 @@
 #
 
 from tests.tools import *
-from azurelinuxagent.common.exception import BadRequestError, HttpError
+from azurelinuxagent.common.exception import HttpError, ResourceGoneError
 from azurelinuxagent.common.future import httpclient
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 
@@ -113,12 +113,12 @@ class WireProtocolData(object):
 
         else:
             # A stale GoalState results in a 400 from the HostPlugin
-            # for which the HTTP handler in restutil raises BadRequestError
+            # for which the HTTP handler in restutil raises ResourceGoneError
             if self.emulate_stale_goal_state:
                 if "extensionArtifact" in url:
                     self.emulate_stale_goal_state = False
                     self.call_counts["extensionArtifact"] += 1
-                    raise BadRequestError()
+                    raise ResourceGoneError()
                 else:
                     raise HttpError()
 

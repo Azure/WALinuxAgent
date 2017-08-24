@@ -22,8 +22,8 @@ import json
 import traceback
 
 from azurelinuxagent.common import logger
-from azurelinuxagent.common.exception import BadRequestError, \
-                                            HttpError, ProtocolError
+from azurelinuxagent.common.exception import HttpError, ProtocolError, \
+                                            ResourceGoneError
 from azurelinuxagent.common.future import ustr, httpclient
 from azurelinuxagent.common.utils import restutil
 from azurelinuxagent.common.utils import textutil
@@ -146,7 +146,7 @@ class HostPluginProtocol(object):
         except Exception as e:
             # If the HostPlugin rejects the request,
             # let the error continue, but set to use the HostPlugin
-            if isinstance(e, BadRequestError):
+            if isinstance(e, ResourceGoneError):
                 logger.verbose("HostGAPlugin: Setting host plugin as default channel")
                 HostPluginProtocol.set_default_channel(True)
 

@@ -41,8 +41,9 @@ import azurelinuxagent.common.utils.textutil as textutil
 from azurelinuxagent.common.event import add_event, add_periodic, \
                                     elapsed_milliseconds, \
                                     WALAEventOperation
-from azurelinuxagent.common.exception import BadRequestError, \
-                                    ProtocolError, UpdateError
+from azurelinuxagent.common.exception import ProtocolError, \
+                                            ResourceGoneError, \
+                                            UpdateError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol import get_protocol_util
@@ -603,7 +604,7 @@ class UpdateHandler(object):
                             self.agents[0].version > base_version
 
             except Exception as e:
-                if isinstance(e, BadRequestError):
+                if isinstance(e, ResourceGoneError):
                     continue
 
                 msg = u"Exception retrieving agent manifests: {0}".format(
@@ -673,7 +674,7 @@ class GuestAgent(object):
             self._ensure_downloaded()
             self._ensure_loaded()
         except Exception as e:
-            if isinstance(e, BadRequestError):
+            if isinstance(e, ResourceGoneError):
                 raise
 
             # Note the failure, blacklist the agent if the package downloaded
@@ -820,7 +821,7 @@ class GuestAgent(object):
 
                 # If the HostPlugin rejects the request,
                 # let the error continue, but set to use the HostPlugin
-                except BadRequestError:
+                except ResourceGoneError:
                     HostPluginProtocol.set_default_channel(True)
                     raise
 
@@ -853,7 +854,7 @@ class GuestAgent(object):
                 logger.verbose("Fetch was unsuccessful [{0}]",
                                restutil.read_response_error(resp))
         except restutil.HttpError as http_error:
-            if isinstance(http_error, BadRequestError):
+            if isinstance(http_error, ResourceGoneError):
                 raise
 
             logger.verbose(u"Agent {0} download from {1} failed [{2}]",

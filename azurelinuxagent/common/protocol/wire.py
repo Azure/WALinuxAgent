@@ -26,8 +26,8 @@ import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.textutil as textutil
 
-from azurelinuxagent.common.exception import BadRequestError, \
-                                            ProtocolNotFoundError
+from azurelinuxagent.common.exception import ProtocolNotFoundError, \
+                                            ResourceGoneError
 from azurelinuxagent.common.future import httpclient, bytebuffer
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.restapi import *
@@ -617,7 +617,7 @@ class WireClient(object):
 
                 # If the HostPlugin rejects the request,
                 # let the error continue, but set to use the HostPlugin
-                except BadRequestError:
+                except ResourceGoneError:
                     HostPluginProtocol.set_default_channel(True)
                     raise
 
@@ -653,7 +653,7 @@ class WireClient(object):
         except (HttpError, ProtocolError) as e:
             logger.verbose("Fetch failed from [{0}]: {1}", uri, e)
 
-            if isinstance(e, BadRequestError):
+            if isinstance(e, ResourceGoneError):
                 raise
 
         return None
@@ -808,7 +808,7 @@ class WireClient(object):
                 self.save_cache(local_file, xml_text)
                 return ExtensionManifest(xml_text)
 
-            except BadRequestError:
+            except ResourceGoneError:
                 continue
 
         raise ProtocolError("Failed to retrieve extension manifest")
@@ -829,7 +829,7 @@ class WireClient(object):
                 fileutil.write_file(local_file, xml_text)
                 return ExtensionManifest(xml_text)
 
-            except BadRequestError:
+            except ResourceGoneError:
                 continue
 
         raise ProtocolError("Failed to retrieve GAFamily manifest")
@@ -892,7 +892,7 @@ class WireClient(object):
             except Exception as e:
                 # If the HostPlugin rejects the request,
                 # let the error continue, but set to use the HostPlugin
-                if isinstance(e, BadRequestError):
+                if isinstance(e, ResourceGoneError):
                     HostPluginProtocol.set_default_channel(True)
                     continue
 
@@ -1069,7 +1069,7 @@ class WireClient(object):
 
                 return artifacts_profile
 
-            except BadRequestError:
+            except ResourceGoneError:
                 HostPluginProtocol.set_default_channel(True)
                 continue
 
