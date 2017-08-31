@@ -312,21 +312,16 @@ class TestHttpOperations(AgentTestCase):
     @patch("azurelinuxagent.common.utils.restutil._http_request")
     def test_http_request_retries_ioerrors(self, _http_request, _sleep):
         ioerror = IOError()
-        
-        for errno in restutil.RETRY_IOERRORS:
-            _http_request.reset_mock()
-            _sleep.reset_mock()
+        ioerror.errno = 42
 
-            ioerror.errno = errno
+        _http_request.side_effect = [
+            ioerror,
+            Mock(status=httpclient.OK)
+        ]
 
-            _http_request.side_effect = [
-                ioerror,
-                Mock(status=httpclient.OK)
-            ]
-
-            restutil.http_get("https://foo.bar")
-            self.assertEqual(2, _http_request.call_count)
-            self.assertEqual(1, _sleep.call_count)
+        restutil.http_get("https://foo.bar")
+        self.assertEqual(2, _http_request.call_count)
+        self.assertEqual(1, _sleep.call_count)
 
     def test_request_failed(self):
         self.assertTrue(restutil.request_failed(None))

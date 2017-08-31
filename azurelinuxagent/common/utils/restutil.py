@@ -73,33 +73,12 @@ RETRY_EXCEPTIONS = [
     httpclient.BadStatusLine
 ]
 
-# Note:
-# - The Python library does not define constants for all possible
-#   errno values; these come from the standard C/C++ header
-RETRY_IOERRORS = [
-    64,     # ENONET -- Machine is not on the network 
-    67,     # ENOLINK -- Link has been severed 
-    70,     # ECOMM -- Communication error on send 
-    78,     # EREMCHG -- Remote address changed 
-    85,     # ERESTART -- Interrupted system call should be restarted 
-    100,    # ENETDOWN -- Network is down 
-    101,    # ENETUNREACH -- Network is unreachable 
-    102,    # ENETRESET -- Network dropped connection because of reset 
-    103,    # ECONNABORTED -- Software caused connection abort 
-    104,    # ECONNRESET -- Connection reset by peer 
-    111,    # ECONNREFUSED -- Connection refused 
-    112     # EHOSTDOWN -- Host is down 
-]
-
 HTTP_PROXY_ENV = "http_proxy"
 HTTPS_PROXY_ENV = "https_proxy"
 
 
 def _is_retry_status(status, retry_codes=RETRY_CODES):
     return status in retry_codes
-
-def _is_retry_errno(errno):
-    return errno in RETRY_IOERRORS
 
 def _is_retry_exception(e):
     return len([x for x in RETRY_EXCEPTIONS if isinstance(e, x)]) > 0
@@ -277,10 +256,7 @@ def http_request(method,
             break
 
         except IOError as e:
-            msg = '[HTTP Failed] HTTP {0} IOError {1}'.format(method, e)
-            if _is_retry_errno(e.errno):
-                continue
-            break
+            continue
 
     raise HttpError(msg)
 
