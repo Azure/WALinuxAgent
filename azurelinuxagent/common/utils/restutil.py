@@ -256,6 +256,7 @@ def http_request(method,
             break
 
         except IOError as e:
+            msg = '[HTTP Failed] HTTP {0} IOError {1}'.format(method, e)
             continue
 
     raise HttpError(msg)
