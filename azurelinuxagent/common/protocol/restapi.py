@@ -162,6 +162,7 @@ class ExtHandlerProperties(DataContract):
     def __init__(self):
         self.version = None
         self.upgradePolicy = None
+        self.upgradeGuid = None
         self.state = None
         self.extensions = DataContractList(Extension)
 

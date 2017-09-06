@@ -131,6 +131,9 @@ class WireProtocol(Protocol):
         man = self.client.get_gafamily_manifest(vmagent_manifest, goal_state)
         return man.pkg_list
 
+    def get_rolling_upgrade(self):
+        return self.client.get_ext_conf().rolling_upgrade
+
     def get_ext_handlers(self):
         logger.verbose("Get extension handler config")
         # Update goal state to get latest extensions config
@@ -1309,6 +1312,7 @@ class ExtensionsConfig(object):
         logger.verbose("Load ExtensionsConfig.xml")
         self.ext_handlers = ExtHandlerList()
         self.vmagent_manifests = VMAgentManifestList()
+        self.rolling_upgrade = False
         self.status_upload_blob = None
         self.status_upload_blob_type = None
         self.artifacts_profile_blob = None
@@ -1321,7 +1325,12 @@ class ExtensionsConfig(object):
         """
         xml_doc = parse_doc(xml_text)
 
-        ga_families_list = find(xml_doc, "GAFamilies")
+        guest_agent = find(xml_doc, "GuestAgentExtension")
+        ru_text = findtext(guest_agent, "ExtensionRollingUpgrade")
+        if ru_text and ru_text.lower() == "true":
+            self.rolling_upgrade = True
+
+        ga_families_list = find(guest_agent, "GAFamilies")
         ga_families = findall(ga_families_list, "GAFamily")
 
         for ga_family in ga_families:
@@ -1360,6 +1369,7 @@ class ExtensionsConfig(object):
         ext_handler.properties.version = getattrib(plugin, "version")
         ext_handler.properties.state = getattrib(plugin, "state")
 
+        ext_handler.properties.upgradeGuid = getattrib(plugin, "upgradeGuid")
         auto_upgrade = getattrib(plugin, "autoUpgrade")
         if auto_upgrade is not None and auto_upgrade.lower() == "true":
             ext_handler.properties.upgradePolicy = "auto"

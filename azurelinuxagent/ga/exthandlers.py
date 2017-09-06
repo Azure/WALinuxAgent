@@ -176,6 +176,7 @@ class ExtHandlersHandler(object):
         self.protocol = None
         self.ext_handlers = None
         self.last_etag = None
+        self.last_guids = {}
         self.log_report = False
         self.log_etag = True
 
@@ -204,6 +205,12 @@ class ExtHandlersHandler(object):
     def run_status(self):
         self.report_ext_handlers_status()
         return
+
+    def is_new_guid(self, ext_handler):
+        last_guid = self.last_guid.get(ext_handler.name, None)
+        this_guid = ext_handler.propreties.upgradeGuid
+        self.last_guid[ext_handler.name] = this_guid
+        return last_guid != this_guid
 
     def cleanup_outdated_handlers(self):
         handlers = []
@@ -288,6 +295,9 @@ class ExtHandlersHandler(object):
         ext_handler_i = ExtHandlerInstance(ext_handler, self.protocol)
 
         try:
+            if self.protocol.get_rolling_upgrade() and \
+                    not self.is_new_guid(ext_handler):
+                return
             ext_handler_i.decide_version()
             if not ext_handler_i.is_upgrade and self.last_etag == etag:
                 if self.log_etag:
