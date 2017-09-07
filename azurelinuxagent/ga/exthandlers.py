@@ -940,6 +940,7 @@ class ExtHandlerInstance(object):
         handler_status = ExtHandlerStatus()
         handler_status.name = self.ext_handler.name
         handler_status.version = self.ext_handler.properties.version
+        handler_status.upgradeGuid = self.ext_handler.properties.upgradeGuid
         handler_status.message = message
         handler_status.code = code
         handler_status.status = status

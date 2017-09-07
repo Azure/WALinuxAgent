@@ -321,6 +321,9 @@ def ext_handler_status_to_v1(handler_status, ext_statuses, timestamp):
             "message": handler_status.message
         }
 
+    if handler_status.upgradeGuid is not None:
+        v1_handler_status["upgradeGuid"] = handler_status.upgradeGuid
+
     if len(handler_status.extensions) > 0:
         # Currently, no more than one extension per handler
         ext_name = handler_status.extensions[0]

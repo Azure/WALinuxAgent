@@ -246,11 +246,13 @@ class ExtHandlerStatus(DataContract):
     def __init__(self,
                  name=None,
                  version=None,
+                 upgradeGuid=None,
                  status=None,
                  code=0,
                  message=None):
         self.name = name
         self.version = version
+        self.upgradeGuid = upgradeGuid
         self.status = status
         self.code = code
         self.message = message
