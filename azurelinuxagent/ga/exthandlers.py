@@ -207,13 +207,13 @@ class ExtHandlersHandler(object):
         return
 
     def get_guid(self, name):
-        return self.last_guid.get(name, None)
+        return self.last_guids.get(name, None)
 
     def is_new_guid(self, ext_handler):
         last_guid = self.get_guid(ext_handler.name)
         if last_guid is None:
             return True
-        return last_guid != ext_handler.propreties.upgradeGuid
+        return last_guid != ext_handler.properties.upgradeGuid
 
     def cleanup_outdated_handlers(self):
         handlers = []
@@ -298,9 +298,14 @@ class ExtHandlersHandler(object):
         ext_handler_i = ExtHandlerInstance(ext_handler, self.protocol)
 
         try:
-            if self.protocol.get_rolling_upgrade() and \
-                    not self.is_new_guid(ext_handler):
-                return
+            state = ext_handler.properties.state
+            # Valid states are enabled, disabled and uninstall
+            if state == u"enabled":
+                if self.protocol.get_rolling_upgrade() and \
+                        not self.is_new_guid(ext_handler):
+                    return
+            elif state == u"disabled" or state == u"uninstall":
+                self.last_guids.pop(ext_handler.name, None)
             ext_handler_i.decide_version()
             if not ext_handler_i.is_upgrade and self.last_etag == etag:
                 if self.log_etag:
@@ -312,10 +317,11 @@ class ExtHandlersHandler(object):
 
             self.log_etag = True
 
-            state = ext_handler.properties.state
             ext_handler_i.logger.info("Target handler state: {0}", state)
             if state == u"enabled":
                 self.handle_enable(ext_handler_i)
+                if ext_handler.properties.upgradeGuid is not None:
+                    self.last_guids[ext_handler.name] = ext_handler.properties.upgradeGuid
             elif state == u"disabled":
                 self.handle_disable(ext_handler_i)
             elif state == u"uninstall":
@@ -323,8 +329,6 @@ class ExtHandlersHandler(object):
             else:
                 message = u"Unknown ext handler state:{0}".format(state)
                 raise ExtensionError(message)
-            if ext_handler.properties.upgradeGuid is not None:
-                self.last_guid[ext_handler.name] = ext_handler.properties.upgradeGuid
         except ExtensionError as e:
             ext_handler_i.set_handler_status(message=ustr(e), code=-1)
             ext_handler_i.report_event(message=ustr(e), is_success=False)

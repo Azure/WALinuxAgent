@@ -52,6 +52,9 @@ DATA_FILE_EXT_INTERNALVERSION["ext_conf"] = "wire/ext_conf_internalversion.xml"
 DATA_FILE_EXT_AUTOUPGRADE_INTERNALVERSION = DATA_FILE.copy()
 DATA_FILE_EXT_AUTOUPGRADE_INTERNALVERSION["ext_conf"] = "wire/ext_conf_autoupgrade_internalversion.xml"
 
+DATA_FILE_EXT_ROLLINGUPGRADE = DATA_FILE.copy()
+DATA_FILE_EXT_ROLLINGUPGRADE["ext_conf"] = "wire/ext_conf_upgradeguid.xml"
+
 class WireProtocolData(object):
     def __init__(self, data_files=DATA_FILE):
         self.emulate_stale_goal_state = False
