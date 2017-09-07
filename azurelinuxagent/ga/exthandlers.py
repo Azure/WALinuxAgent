@@ -206,11 +206,14 @@ class ExtHandlersHandler(object):
         self.report_ext_handlers_status()
         return
 
+    def get_guid(self, name):
+        return self.last_guid.get(name, None)
+
     def is_new_guid(self, ext_handler):
-        last_guid = self.last_guid.get(ext_handler.name, None)
-        this_guid = ext_handler.propreties.upgradeGuid
-        self.last_guid[ext_handler.name] = this_guid
-        return last_guid != this_guid
+        last_guid = self.get_guid(ext_handler.name)
+        if last_guid is None:
+            return True
+        return last_guid != ext_handler.propreties.upgradeGuid
 
     def cleanup_outdated_handlers(self):
         handlers = []
@@ -320,6 +323,8 @@ class ExtHandlersHandler(object):
             else:
                 message = u"Unknown ext handler state:{0}".format(state)
                 raise ExtensionError(message)
+            if ext_handler.properties.upgradeGuid is not None:
+                self.last_guid[ext_handler.name] = ext_handler.properties.upgradeGuid
         except ExtensionError as e:
             ext_handler_i.set_handler_status(message=ustr(e), code=-1)
             ext_handler_i.report_event(message=ustr(e), is_success=False)
@@ -396,6 +401,9 @@ class ExtHandlersHandler(object):
         handler_status = ext_handler_i.get_handler_status() 
         if handler_status is None:
             return
+        guid = self.get_guid(ext_handler.name)
+        if guid is not None:
+            handler_status.upgradeGuid = guid
 
         handler_state = ext_handler_i.get_handler_state()
         if handler_state != ExtHandlerState.NotInstalled:
@@ -940,7 +948,6 @@ class ExtHandlerInstance(object):
         handler_status = ExtHandlerStatus()
         handler_status.name = self.ext_handler.name
         handler_status.version = self.ext_handler.properties.version
-        handler_status.upgradeGuid = self.ext_handler.properties.upgradeGuid
         handler_status.message = message
         handler_status.code = code
         handler_status.status = status
