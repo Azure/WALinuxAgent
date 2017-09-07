@@ -44,7 +44,10 @@ _EVENT_MSG = "Event: name={0}, op={1}, message={2}, duration={3}"
 
 class WALAEventOperation:
     ActivateResourceDisk = "ActivateResourceDisk"
+    AgentBlacklisted = "AgentBlacklisted"
+    AgentEnabled = "AgentEnabled"
     AutoUpdate = "AutoUpdate"
+    Deploy = "Deploy"
     Disable = "Disable"
     Download = "Download"
     Enable = "Enable"
@@ -54,6 +57,7 @@ class WALAEventOperation:
     HostPlugin = "HostPlugin"
     Install = "Install"
     InitializeHostPlugin = "InitializeHostPlugin"
+    Partition = "Partition"
     ProcessGoalState = "ProcessGoalState"
     Provision = "Provision"
     ReportStatus = "ReportStatus"

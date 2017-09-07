@@ -16,20 +16,21 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
+import array
+import base64
+import datetime
+import fcntl
+import glob
 import multiprocessing
 import os
 import platform
+import pwd
 import re
 import shutil
 import socket
-import array
 import struct
+import sys
 import time
-import pwd
-import fcntl
-import base64
-import glob
-import datetime
 
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.conf as conf
@@ -964,3 +965,7 @@ class DefaultOSUtil(object):
 
     def check_pid_alive(self, pid):
         return pid is not None and os.path.isdir(os.path.join('/proc', pid))
+
+    @property
+    def is_64bit(self):
+        return sys.maxsize > 2**32
