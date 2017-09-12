@@ -29,14 +29,14 @@ import azurelinuxagent.common.utils.fileutil as fileutil
 
 from azurelinuxagent.common.osutil import get_osutil
 
-DEPLOY_FILE = "deploy.json"
-DEPLOYED_FILE = "deployed.json"
+SAFEDEPLOY_FILE = "safe_deploy.json"
+SAFEDEPLOYED_FILE = "safe_deployed.json"
 
 
-class Deploy(object):
+class SafeDeploy(object):
     def __init__(self, dir=None):
         if dir is not None and not os.path.isdir(dir):
-            raise Exception(u"Deploy requires a directory")
+            raise Exception(u"SafeDeploy requires a directory")
 
         self.dir = dir
         self._load()
@@ -62,9 +62,9 @@ class Deploy(object):
         return self._deployed
 
     def mark_deployed(self):
-        before = os.path.join(self.dir, DEPLOY_FILE)
+        before = os.path.join(self.dir, SAFEDEPLOY_FILE)
         if os.path.exists(before):
-            after = os.path.join(self.dir, DEPLOYED_FILE)
+            after = os.path.join(self.dir, SAFEDEPLOYED_FILE)
             try:
                 os.rename(before, after)
                 self._deployed = True
@@ -79,9 +79,9 @@ class Deploy(object):
         self._safe_deployment = False
 
         if self.dir is not None:
-            path = os.path.join(self.dir, DEPLOY_FILE)
+            path = os.path.join(self.dir, SAFEDEPLOY_FILE)
             if not os.path.isfile(path):
-                path = os.path.join(self.dir, DEPLOYED_FILE)
+                path = os.path.join(self.dir, SAFEDEPLOYED_FILE)
                 self._deployed = os.path.isfile(path)
 
             if os.path.isfile(path):

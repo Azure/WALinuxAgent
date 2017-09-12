@@ -26,7 +26,7 @@ from azurelinuxagent.common.event import *
 from azurelinuxagent.common.protocol.hostplugin import *
 from azurelinuxagent.common.protocol.metadata import *
 from azurelinuxagent.common.protocol.wire import *
-from azurelinuxagent.common.utils.deploy import *
+from azurelinuxagent.common.utils.safedeploy import *
 from azurelinuxagent.common.utils.fileutil import *
 from azurelinuxagent.ga.update import *
 
@@ -160,7 +160,7 @@ class UpdateTestCase(AgentTestCase):
             path = os.path.join(self.tmp_dir, fileutil.trim_ext(agent, "zip"))
             zipfile.ZipFile(agent).extractall(path)
             if safe_deploy:
-                shutil.copy(os.path.join(data_dir, DEPLOY_FILE), path)
+                shutil.copy(os.path.join(data_dir, SAFEDEPLOY_FILE), path)
                 fileutil.write_file(
                     os.path.join(path, 'error.json'),
                     json.dumps(FATAL_ERROR))
@@ -404,7 +404,7 @@ class TestGuestAgent(UpdateTestCase):
         agent._unpack()
         self.assertTrue(agent.is_downloaded)
 
-    @patch('azurelinuxagent.common.utils.deploy.get_osutil', return_value=Mock(is_64bit=True))
+    @patch('azurelinuxagent.common.utils.safedeploy.get_osutil', return_value=Mock(is_64bit=True))
     @patch('platform.linux_distribution', return_value=('Ubuntu', '16.10', 'yakkety'))
     def test_in_safe_deployment_mode(self, mock_dist, mock_osutil):
         self.expand_agents(safe_deploy=True)
@@ -413,7 +413,7 @@ class TestGuestAgent(UpdateTestCase):
         self.assertTrue(agent.in_safe_deployment_mode)
         self.assertTrue(agent.is_blacklisted)
 
-    @patch('azurelinuxagent.common.utils.deploy.get_osutil', return_value=Mock(is_64bit=True))
+    @patch('azurelinuxagent.common.utils.safedeploy.get_osutil', return_value=Mock(is_64bit=True))
     @patch('platform.linux_distribution', return_value=('Ubuntu', '16.10', 'yakkety'))
     def test_in_partition(self, mock_dist, mock_osutil):
         self.expand_agents(safe_deploy=True)
@@ -422,7 +422,7 @@ class TestGuestAgent(UpdateTestCase):
         self.assertTrue(agent.in_partition(84))
         self.assertFalse(agent.in_partition(85))
 
-    @patch('azurelinuxagent.common.utils.deploy.get_osutil', return_value=Mock(is_64bit=True))
+    @patch('azurelinuxagent.common.utils.safedeploy.get_osutil', return_value=Mock(is_64bit=True))
     @patch('platform.linux_distribution', return_value=('Ubuntu', '16.10', 'yakkety'))
     def test_enable_deployment(self, mock_dist, mock_osutil):
         self.expand_agents(safe_deploy=True)
@@ -754,7 +754,7 @@ class TestUpdate(UpdateTestCase):
         for agent in agents:
             self.assertTrue(agent.is_blacklisted)
 
-    def test_blacklist_agents_uses_glob(self):
+    def test_blacklist_agents_uses_pattern(self):
         self.prepare_agents()
         agents = self.agents()
         self.update_handler.agents = agents
@@ -763,7 +763,7 @@ class TestUpdate(UpdateTestCase):
             self.assertFalse(agent.is_blacklisted)
 
         v = agents[0].version
-        versions = ["{0}.*".format(v.major)]
+        versions = ["{0}(?:\\.\\d+)*".format(v.major)]
         self.update_handler._blacklist_agents(versions)
 
         for agent in agents:
@@ -786,7 +786,7 @@ class TestUpdate(UpdateTestCase):
             else:
                 not_blacklisted.append(agent)
         v = blacklisted[0].version
-        versions = ["{0}.*".format(v.major)]
+        versions = ["{0}(?:\\.\\d+)*".format(v.major)]
         self.update_handler._blacklist_agents(versions)
 
         for agent in blacklisted:

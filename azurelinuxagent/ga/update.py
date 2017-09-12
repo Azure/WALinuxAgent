@@ -17,7 +17,6 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
-import fnmatch
 import glob
 import json
 import os
@@ -35,7 +34,7 @@ from datetime import datetime, timedelta
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
-import azurelinuxagent.common.utils.deploy as deploy
+import azurelinuxagent.common.utils.safedeploy as safedeploy
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.restutil as restutil
 import azurelinuxagent.common.utils.textutil as textutil
@@ -353,7 +352,7 @@ class UpdateHandler(object):
         """
         for version in versions:
             for agent in self.agents:
-                if fnmatch.fnmatch(str(agent.version), version):
+                if re.match(version, str(agent.version)) is not None:
                     agent.mark_failure(is_fatal=True)
                     msg = "Agent {0} blacklisted {1}".format(
                             CURRENT_AGENT,
@@ -478,11 +477,11 @@ class UpdateHandler(object):
         try:
             agents = [a for a in self.agents
                         if a.in_safe_deployment_mode
-                            and not a.deploy.is_deployed]
+                            and not a.safe_deploy.is_deployed]
 
             self._enable_agents(agents)
 
-            for blacklist in [a.deploy.blacklisted for a in agents]:
+            for blacklist in [a.safe_deploy.blacklisted for a in agents]:
                 self._blacklist_agents(blacklist)
 
             for agent in agents:
@@ -780,7 +779,7 @@ class GuestAgent(object):
 
         self.error = GuestAgentError(self.get_agent_error_file())
         self.error.load()
-        self.deploy = deploy.Deploy()
+        self.safe_deploy = safedeploy.SafeDeploy()
 
         try:
             self._ensure_downloaded()
@@ -824,7 +823,7 @@ class GuestAgent(object):
         return ".".join((os.path.join(conf.get_lib_dir(), self.name), "zip"))
 
     def enable_deployment(self):
-        if self.in_safe_deployment_mode and not self.deploy.is_deployed:
+        if self.in_safe_deployment_mode and not self.safe_deploy.is_deployed:
             self.clear_error()
 
     def clear_error(self):
@@ -833,7 +832,8 @@ class GuestAgent(object):
 
     @property
     def in_safe_deployment_mode(self):
-        return self.deploy is not None and self.deploy.in_safe_deployment_mode
+        return self.safe_deploy is not None and \
+            self.safe_deploy.in_safe_deployment_mode
 
     @property
     def is_available(self):
@@ -845,7 +845,7 @@ class GuestAgent(object):
 
     @property
     def is_deployed(self):
-        return self.deploy is not None and self.deploy.is_deployed
+        return self.safe_deploy is not None and self.safe_deploy.is_deployed
 
     @property
     def is_downloaded(self):
@@ -853,11 +853,12 @@ class GuestAgent(object):
                 os.path.isfile(self.get_agent_manifest_path())
 
     def in_partition(self, partition):
-        return self.deploy is not None and self.deploy.in_partition(partition)
+        return self.safe_deploy is not None and \
+            self.safe_deploy.in_partition(partition)
 
     def mark_deployed(self):
-        if self.deploy is not None:
-            self.deploy.mark_deployed()
+        if self.safe_deploy is not None:
+            self.safe_deploy.mark_deployed()
 
     def mark_failure(self, is_fatal=False):
         try:
@@ -896,7 +897,7 @@ class GuestAgent(object):
     def _ensure_loaded(self):
         self._load_manifest()
         self._load_error()
-        self.deploy = deploy.Deploy(self.get_agent_dir())
+        self.safe_deploy = safedeploy.SafeDeploy(self.get_agent_dir())
 
     def _download(self):
         for uri in self.pkg.uris:

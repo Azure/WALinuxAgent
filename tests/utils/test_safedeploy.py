@@ -21,7 +21,7 @@ import json
 import os.path
 import shutil
 
-from azurelinuxagent.common.utils.deploy import *
+from azurelinuxagent.common.utils.safedeploy import *
 from azurelinuxagent.common.utils.fileutil import *
 from tests.tools import *
 
@@ -56,14 +56,14 @@ UNSUPPORTED_PLATFORMS = [
 
 class TestFamily(AgentTestCase):
 
-    @patch('azurelinuxagent.common.utils.deploy.get_osutil', return_value=Mock(is_64bit=True))
+    @patch('azurelinuxagent.common.utils.safedeploy.get_osutil', return_value=Mock(is_64bit=True))
     @patch('platform.linux_distribution', return_value=('Ubuntu', '16.10', 'yakkety'))
     def test_creation(self, mock_distribution, mock_osutil):
         self.assertRaises(TypeError, Family)
         self.assertRaises(Exception, Family, None, {})
         self.assertRaises(Exception, Family, "name", None)
 
-        data = json.loads(load_data("deploy.json"))
+        data = json.loads(load_data(SAFEDEPLOY_FILE))
         family = Family("ubuntu-x64", data["families"]["ubuntu-x64"])
 
         self.assertEqual(family.name, "ubuntu-x64")
@@ -71,10 +71,10 @@ class TestFamily(AgentTestCase):
         self.assertEqual(family._partition, 85)
         self.assertEqual(family._versions, ['^Ubuntu,(1[4-9]|2[0-9])\\.\\d+,.*$'])
 
-    @patch('azurelinuxagent.common.utils.deploy.get_osutil')
+    @patch('azurelinuxagent.common.utils.safedeploy.get_osutil')
     @patch('platform.linux_distribution', return_value=('Ubuntu', '16.10', 'yakkety'))
     def test_architecture_matches(self, mock_distribution, mock_osutil):
-        data = json.loads(load_data("deploy.json"))
+        data = json.loads(load_data(SAFEDEPLOY_FILE))
 
         mock_osutil.is_64bit = True
         family = Family("ubuntu-x64", data["families"]["ubuntu-x64"])
@@ -84,20 +84,20 @@ class TestFamily(AgentTestCase):
         family = Family("ubuntu-x64", data["families"]["ubuntu-x64"])
         self.assertTrue(family._is_supported)
 
-    @patch('azurelinuxagent.common.utils.deploy.get_osutil', return_value=Mock(is_64bit=True))
+    @patch('azurelinuxagent.common.utils.safedeploy.get_osutil', return_value=Mock(is_64bit=True))
     @patch('platform.linux_distribution', return_value=('Ubuntu', '16.10', 'yakkety'))
     def test_in_partition(self, mock_distribution, mock_osutil):
-        data = json.loads(load_data("deploy.json"))
+        data = json.loads(load_data(SAFEDEPLOY_FILE))
         family = Family("ubuntu-x64", data["families"]["ubuntu-x64"])
 
         self.assertEqual(family._partition, 85)
         for i in range(0, 100):
             self.assertEqual(i < family._partition, family.in_partition(i))
 
-    @patch('azurelinuxagent.common.utils.deploy.get_osutil', return_value=Mock(is_64bit=True))
+    @patch('azurelinuxagent.common.utils.safedeploy.get_osutil', return_value=Mock(is_64bit=True))
     @patch('platform.linux_distribution')
     def test_version_matches(self, mock_distribution, mock_osutil):
-        data = json.loads(load_data("deploy.json"))
+        data = json.loads(load_data(SAFEDEPLOY_FILE))
 
         for d in UBUNTU_PLATFORMS:
             mock_distribution.return_value = d
@@ -117,64 +117,64 @@ class TestFamily(AgentTestCase):
             self.assertFalse(family._is_supported)
 
 
-class TestDeploy(AgentTestCase):
+class TestSafeDeploy(AgentTestCase):
     def setUp(self):
         AgentTestCase.setUp(self)
-        shutil.copy(os.path.join(data_dir, DEPLOY_FILE), self.tmp_dir)
+        shutil.copy(os.path.join(data_dir, SAFEDEPLOY_FILE), self.tmp_dir)
 
-    @patch('azurelinuxagent.common.utils.deploy.get_osutil', return_value=Mock(is_64bit=True))
+    @patch('azurelinuxagent.common.utils.safedeploy.get_osutil', return_value=Mock(is_64bit=True))
     @patch('platform.linux_distribution', return_value=('Ubuntu', '16.10', 'yakkety'))
     def test_creation(self, mock_distribution, mock_osutil):
-        self.assertRaises(Exception, Deploy, "foobarbaz")
+        self.assertRaises(Exception, SafeDeploy, "foobarbaz")
 
-        deploy = Deploy()
+        deploy = SafeDeploy()
         self.assertEqual(0, len(deploy.blacklisted))
         self.assertEqual(0, len(deploy._families))
         self.assertEqual(None, deploy._family)
         self.assertEqual(None, deploy.family)
 
-        deploy = Deploy(self.tmp_dir)
+        deploy = SafeDeploy(self.tmp_dir)
         self.assertTrue(len(deploy.blacklisted) > 0)
         self.assertTrue(len(deploy._families) > 0)
         self.assertFalse(deploy._family is None)
         self.assertTrue(len(deploy.family) > 0)
 
-        os.remove(os.path.join(self.tmp_dir, DEPLOY_FILE))
-        deploy = Deploy(self.tmp_dir)
+        os.remove(os.path.join(self.tmp_dir, SAFEDEPLOY_FILE))
+        deploy = SafeDeploy(self.tmp_dir)
         self.assertEqual(0, len(deploy.blacklisted))
         self.assertEqual(0, len(deploy._families))
         self.assertEqual(None, deploy._family)
         self.assertEqual(None, deploy.family)
 
-    @patch('azurelinuxagent.common.utils.deploy.get_osutil', return_value=Mock(is_64bit=True))
+    @patch('azurelinuxagent.common.utils.safedeploy.get_osutil', return_value=Mock(is_64bit=True))
     @patch('platform.linux_distribution', return_value=('Ubuntu', '16.10', 'yakkety'))
     def test_in_safe_deployment_mode(self, mock_distribution, mock_osutil):
-        deploy = Deploy(self.tmp_dir)
+        deploy = SafeDeploy(self.tmp_dir)
         self.assertTrue(deploy.in_safe_deployment_mode)
 
-        os.remove(os.path.join(self.tmp_dir, DEPLOY_FILE))
-        deploy = Deploy(self.tmp_dir)
+        os.remove(os.path.join(self.tmp_dir, SAFEDEPLOY_FILE))
+        deploy = SafeDeploy(self.tmp_dir)
         self.assertFalse(deploy.in_safe_deployment_mode)
 
-    @patch('azurelinuxagent.common.utils.deploy.get_osutil', return_value=Mock(is_64bit=True))
+    @patch('azurelinuxagent.common.utils.safedeploy.get_osutil', return_value=Mock(is_64bit=True))
     @patch('platform.linux_distribution', return_value=('Ubuntu', '16.10', 'yakkety'))
     def test_in_partition(self, mock_distribution, mock_osutil):
-        deploy = Deploy(self.tmp_dir)
+        deploy = SafeDeploy(self.tmp_dir)
         self.assertTrue(deploy.in_partition(84))
         self.assertFalse(deploy.in_partition(85))
 
-        os.remove(os.path.join(self.tmp_dir, DEPLOY_FILE))
-        deploy = Deploy(self.tmp_dir)
+        os.remove(os.path.join(self.tmp_dir, SAFEDEPLOY_FILE))
+        deploy = SafeDeploy(self.tmp_dir)
         for i in range(0, 100):
             self.assertTrue(deploy.in_partition(i))
 
-    @patch('azurelinuxagent.common.utils.deploy.get_osutil', return_value=Mock(is_64bit=True))
+    @patch('azurelinuxagent.common.utils.safedeploy.get_osutil', return_value=Mock(is_64bit=True))
     @patch('platform.linux_distribution', return_value=('Ubuntu', '16.10', 'yakkety'))
     def test_mark_deployed(self, mock_distribution, mock_osutil):
-        deploy = Deploy(self.tmp_dir)
+        deploy = SafeDeploy(self.tmp_dir)
 
-        before = os.path.join(self.tmp_dir, DEPLOY_FILE)
-        after = os.path.join(self.tmp_dir, DEPLOYED_FILE)
+        before = os.path.join(self.tmp_dir, SAFEDEPLOY_FILE)
+        after = os.path.join(self.tmp_dir, SAFEDEPLOYED_FILE)
 
         self.assertTrue(os.path.isfile(before))
         self.assertFalse(os.path.exists(after))
@@ -186,7 +186,7 @@ class TestDeploy(AgentTestCase):
         self.assertTrue(os.path.isfile(after))
         self.assertTrue(deploy.is_deployed)
 
-        deploy = Deploy(self.tmp_dir)
+        deploy = SafeDeploy(self.tmp_dir)
         self.assertTrue(deploy.in_safe_deployment_mode)
         self.assertTrue(deploy.is_deployed)
 
