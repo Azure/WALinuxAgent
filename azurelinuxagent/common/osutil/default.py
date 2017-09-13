@@ -16,20 +16,21 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
+import array
+import base64
+import datetime
+import fcntl
+import glob
 import multiprocessing
 import os
 import platform
+import pwd
 import re
 import shutil
 import socket
-import array
 import struct
+import sys
 import time
-import pwd
-import fcntl
-import base64
-import glob
-import datetime
 
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.conf as conf
@@ -58,6 +59,7 @@ IPTABLES_LOCKING_VERSION = FlexibleVersion('1.4.21')
 FIREWALL_ACCEPT = "iptables {0} -t security -{1} OUTPUT -d {2} -p tcp -m owner --uid-owner {3} -j ACCEPT"
 FIREWALL_DROP = "iptables {0} -t security -{1} OUTPUT -d {2} -p tcp -j DROP"
 FIREWALL_LIST = "iptables {0} -t security -L"
+FIREWALL_FLUSH = "iptables {0} -t security --flush"
 
 _enable_firewall = True
 
@@ -74,6 +76,47 @@ class DefaultOSUtil(object):
         self.selinux = None
         self.disable_route_warning = False
 
+    def get_firewall_will_wait(self):
+        # Determine if iptables will serialize access
+        rc, output = shellutil.run_get_output(IPTABLES_VERSION)
+        if rc != 0:
+            msg = "Unable to determine version of iptables"
+            logger.warn(msg)
+            raise Exception(msg)
+
+        m = IPTABLES_VERSION_PATTERN.match(output)
+        if m is None:
+            msg = "iptables did not return version information"
+            logger.warn(msg)
+            raise Exception(msg)
+
+        wait = "-w" \
+                if FlexibleVersion(m.group(1)) >= IPTABLES_LOCKING_VERSION \
+                else ""
+        return wait
+
+    def remove_firewall(self):
+        # If a previous attempt threw an exception, do not retry
+        global _enable_firewall
+        if not _enable_firewall:
+            return False
+
+        try:
+            wait = self.get_firewall_will_wait()
+
+            flush_rule = FIREWALL_FLUSH.format(wait)
+            if shellutil.run(flush_rule, chk_err=False) != 0:
+                logger.warn("Failed to flush firewall")
+
+            return True
+
+        except Exception as e:
+            _enable_firewall = False
+            logger.info("Unable to flush firewall -- "
+                        "no further attempts will be made: "
+                        "{0}".format(ustr(e)))
+            return False
+
     def enable_firewall(self, dst_ip=None, uid=None):
 
         # If a previous attempt threw an exception, do not retry
@@ -87,22 +130,7 @@ class DefaultOSUtil(object):
                 logger.warn(msg)
                 raise Exception(msg)
 
-            # Determine if iptables will serialize access
-            rc, output = shellutil.run_get_output(IPTABLES_VERSION)
-            if rc != 0:
-                msg = "Unable to determine version of iptables"
-                logger.warn(msg)
-                raise Exception(msg)
-
-            m = IPTABLES_VERSION_PATTERN.match(output)
-            if m is None:
-                msg = "iptables did not return version information"
-                logger.warn(msg)
-                raise Exception(msg)
-
-            wait = "-w" \
-                    if FlexibleVersion(m.group(1)) >= IPTABLES_LOCKING_VERSION \
-                    else ""
+            wait = self.get_firewall_will_wait()
 
             # If the DROP rule exists, make no changes
             drop_rule = FIREWALL_DROP.format(wait, "C", dst_ip)
@@ -964,3 +992,7 @@ class DefaultOSUtil(object):
 
     def check_pid_alive(self, pid):
         return pid is not None and os.path.isdir(os.path.join('/proc', pid))
+
+    @property
+    def is_64bit(self):
+        return sys.maxsize > 2**32

@@ -602,7 +602,6 @@ Match host 192.168.1.2\n\
         dst = '1.2.3.4'
         uid = 42
         version = "iptables v{0}".format(osutil.IPTABLES_LOCKING_VERSION)
-        wait = "-w"
 
         mock_run.side_effect = [1, 0, 0]
         mock_output.side_effect = [(0, version), (0, "Output")]
@@ -612,6 +611,30 @@ Match host 192.168.1.2\n\
         mock_output.assert_not_called()
         mock_uid.assert_not_called()
         self.assertFalse(osutil._enable_firewall)
+
+    @patch('os.getuid', return_value=42)
+    @patch('azurelinuxagent.common.utils.shellutil.run_get_output')
+    @patch('azurelinuxagent.common.utils.shellutil.run')
+    def test_remove_firewall(self, mock_run, mock_output, mock_uid):
+        osutil._enable_firewall = True
+        util = osutil.DefaultOSUtil()
+
+        dst = '1.2.3.4'
+        uid = 42
+        version = "iptables v{0}".format(osutil.IPTABLES_LOCKING_VERSION)
+        wait = "-w"
+
+        mock_run.side_effect = [0, 0]
+        mock_output.side_effect = [(0, version), (0, "Output")]
+        self.assertTrue(util.remove_firewall())
+
+        mock_run.assert_has_calls([
+            call(osutil.FIREWALL_FLUSH.format(wait), chk_err=False)
+        ])
+        mock_output.assert_has_calls([
+            call(osutil.IPTABLES_VERSION)
+        ])
+        self.assertTrue(osutil._enable_firewall)
 
 if __name__ == '__main__':
     unittest.main()
