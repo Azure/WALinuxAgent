@@ -301,10 +301,14 @@ class ExtHandlersHandler(object):
             state = ext_handler.properties.state
             # Valid states are enabled, disabled and uninstall
             if state == u"enabled":
+                # Return early to skip upgrading if the rolling_upgrade
+                # flag is True and the upgrade GUID is NOT new
                 if self.protocol.get_rolling_upgrade() and \
                         not self.is_new_guid(ext_handler):
                     return
             elif state == u"disabled" or state == u"uninstall":
+                # Remove the GUID from the dictionary in this case so that
+                # it is upgraded upon re-enabling/re-install
                 self.last_guids.pop(ext_handler.name, None)
             ext_handler_i.decide_version()
             if not ext_handler_i.is_upgrade and self.last_etag == etag:

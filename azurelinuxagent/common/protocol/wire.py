@@ -1315,6 +1315,7 @@ class ExtensionsConfig(object):
         logger.verbose("Load ExtensionsConfig.xml")
         self.ext_handlers = ExtHandlerList()
         self.vmagent_manifests = VMAgentManifestList()
+        # Default the rolling upgrade flag to False
         self.rolling_upgrade = False
         self.status_upload_blob = None
         self.status_upload_blob_type = None
@@ -1330,6 +1331,7 @@ class ExtensionsConfig(object):
 
         guest_agent = find(xml_doc, "GuestAgentExtension")
         ru_text = findtext(guest_agent, "ExtensionRollingUpgrade")
+        # The value of the flag defaults to False
         if ru_text and ru_text.lower() == "true":
             self.rolling_upgrade = True
 
