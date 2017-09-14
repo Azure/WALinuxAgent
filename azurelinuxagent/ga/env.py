@@ -76,17 +76,20 @@ class EnvHandler(object):
         while not self.stopped:
             self.osutil.remove_rules_files()
 
-            if conf.enable_firewall():
-                success = self.osutil.enable_firewall(
-                                dst_ip=protocol.endpoint,
-                                uid=os.getuid())
-                add_periodic(
-                    logger.EVERY_HOUR,
-                    AGENT_NAME,
-                    version=CURRENT_VERSION,
-                    op=WALAEventOperation.Firewall,
-                    is_success=success,
-                    log_event=True)
+            # Disable setting firewall for now, regardless of configuration switch
+            # if conf.enable_firewall():
+            #     success = self.osutil.enable_firewall(
+            #                     dst_ip=protocol.endpoint,
+            #                     uid=os.getuid())
+            #     add_periodic(
+            #         logger.EVERY_HOUR,
+            #         AGENT_NAME,
+            #         version=CURRENT_VERSION,
+            #         op=WALAEventOperation.Firewall,
+            #         is_success=success,
+            #         log_event=True)
+
+            self.osutil.remove_firewall()
 
             timeout = conf.get_root_device_scsi_timeout()
             if timeout is not None:
