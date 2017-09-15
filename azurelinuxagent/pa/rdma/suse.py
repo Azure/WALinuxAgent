@@ -1,6 +1,6 @@
 # Microsoft Azure Linux Agent
 #
-# Copyright 2014 Microsoft Corporation
+# Copyright 2017 Microsoft Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -55,16 +55,12 @@ class SUSERDMAHandler(RDMAHandler):
                 installed = sections[0].strip()
                 version = sections[3].strip()
                 driver_package_versions.append(version)
-                if (
-                        fw_version in version
-                        and len(installed) >= 1
-                        and installed[0] == 'i'
-                ):
+                if fw_version in version and installed.startswith('i'):
                     info_msg = 'RDMA: Matching driver package "%s-%s" '
                     info_msg += 'is already installed, nothing to do.'
                     logger.info(info_msg % (package_name, version))
                     return True
-                if len(installed) >= 1 and installed[0] == 'i':
+                if installed.startswith('i'):
                     # A driver with a different version is installed
                     driver_package_installed = True
                     cmd = zypper_unlock % package_name
