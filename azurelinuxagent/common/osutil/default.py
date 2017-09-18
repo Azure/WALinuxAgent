@@ -309,11 +309,11 @@ class DefaultOSUtil(object):
             else:
                 sudoer = "{0} ALL=(ALL) ALL".format(username)
             if not os.path.isfile(sudoers_wagent) or \
-                fileutil.findstr_in_file(sudoers_wagent, sudoer) is None:
+                    fileutil.findstr_in_file(sudoers_wagent, sudoer) is False:
                 fileutil.append_file(sudoers_wagent, "{0}\n".format(sudoer))
             fileutil.chmod(sudoers_wagent, 0o440)
         else:
-            #Remove user from sudoers
+            # remove user from sudoers
             if os.path.isfile(sudoers_wagent):
                 try:
                     content = fileutil.read_file(sudoers_wagent)
