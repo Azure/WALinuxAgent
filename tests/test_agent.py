@@ -65,8 +65,7 @@ ResourceDisk.Filesystem = ext4
 ResourceDisk.Format = True
 ResourceDisk.MountOptions = None
 ResourceDisk.MountPoint = /mnt/resource
-ResourceDisk.SwapSizeMB = 0
-""".split('\n')
+ResourceDisk.SwapSizeMB = 0""".split('\n')
 
 class TestAgent(AgentTestCase):
 
@@ -160,10 +159,11 @@ class TestAgent(AgentTestCase):
         self.assertFalse(os.path.isdir(ext_log_dir))
         mock_log.assert_called_once()
 
-    def test_agent_show_configuration(self):
-        if not hasattr(sys.stdout, 'getvalue'):
-            self.fail('Test requires at least Python 2.7 with buffered output')
-        agent = Agent(False,
-                    conf_file_path=os.path.join(data_dir, "test_waagent.conf"))
-        agent.show_configuration()
-        self.assertEqual(EXPECTED_CONFIGURATION, sys.stdout.getvalue().split('\n'))
+    def test_agent_get_configuration(self):
+        Agent(False, conf_file_path=os.path.join(data_dir, "test_waagent.conf"))
+
+        actual_configuration = []
+        configuration = conf.get_configuration()
+        for k in sorted(configuration.keys()):
+            actual_configuration.append("{0} = {1}".format(k, configuration[k]))
+        self.assertEqual(EXPECTED_CONFIGURATION, actual_configuration)
