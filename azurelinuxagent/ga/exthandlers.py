@@ -305,6 +305,7 @@ class ExtHandlersHandler(object):
                 # flag is True and the upgrade GUID is NOT new
                 if self.protocol.get_rolling_upgrade() and \
                         not self.is_new_guid(ext_handler):
+                    logger.info("Rolling Upgrade flag is set. New GUID is the same as the old GUID. Exiting without upgrading.")
                     return
             elif state == u"disabled" or state == u"uninstall":
                 # Remove the GUID from the dictionary in this case so that
@@ -325,6 +326,7 @@ class ExtHandlersHandler(object):
             if state == u"enabled":
                 self.handle_enable(ext_handler_i)
                 if ext_handler.properties.upgradeGuid is not None:
+                    ext_handler_i.logger.info("New Upgrade GUID: {0}", ext_handler.properties.upgradeGuid)
                     self.last_guids[ext_handler.name] = ext_handler.properties.upgradeGuid
             elif state == u"disabled":
                 self.handle_disable(ext_handler_i)

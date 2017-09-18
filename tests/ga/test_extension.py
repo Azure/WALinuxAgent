@@ -384,7 +384,7 @@ class TestExtension(AgentTestCase):
         exthandlers_handler.run()
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
 
-        #Test goal state changed
+        #Test goal state changed without new GUID
         test_data.goal_state = test_data.goal_state.replace("<Incarnation>1<",
                                                             "<Incarnation>2<")
         test_data.ext_conf = test_data.ext_conf.replace("seqNo=\"0\"",
