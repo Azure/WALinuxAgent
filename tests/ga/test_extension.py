@@ -30,13 +30,14 @@ from tests.protocol.mockwiredata import *
 from azurelinuxagent.common.exception import *
 from azurelinuxagent.common.protocol import get_protocol_util
 from azurelinuxagent.common.protocol.restapi import ExtHandlerStatus, \
-                                                    ExtensionStatus, \
-                                                    ExtensionSubStatus, \
-                                                    Extension, \
-                                                    VMStatus, ExtHandler, \
-                                                    get_properties
+    ExtensionStatus, \
+    ExtensionSubStatus, \
+    Extension, \
+    VMStatus, ExtHandler, \
+    get_properties
 from azurelinuxagent.ga.exthandlers import *
 from azurelinuxagent.common.protocol.wire import WireProtocol
+
 
 class TestExtensionCleanup(AgentTestCase):
     def setUp(self):
@@ -45,19 +46,19 @@ class TestExtensionCleanup(AgentTestCase):
         self.lib_dir = tempfile.mkdtemp()
 
     def _install_handlers(self, start=0, count=1,
-                        handler_state=ExtHandlerState.Installed):
+                          handler_state=ExtHandlerState.Installed):
         src = os.path.join(data_dir, "ext", "sample_ext-1.2.0.zip")
         version = FlexibleVersion("1.2.0")
         version += start - version.patch
 
-        for i in range(start, start+count):
+        for i in range(start, start + count):
             eh = ExtHandler()
             eh.name = "sample_ext"
             eh.properties.version = str(version)
             handler = ExtHandlerInstance(eh, "unused")
 
             dst = os.path.join(self.lib_dir,
-                    handler.get_full_name()+HANDLER_PKG_EXT)
+                               handler.get_full_name() + HANDLER_PKG_EXT)
             shutil.copy(src, dst)
 
             if not handler_state is None:
@@ -65,7 +66,7 @@ class TestExtensionCleanup(AgentTestCase):
                 handler.set_handler_state(handler_state)
 
             version += 1
-    
+
     def _count_packages(self):
         return len(glob.glob(os.path.join(self.lib_dir, "*.zip")))
 
@@ -73,13 +74,13 @@ class TestExtensionCleanup(AgentTestCase):
         paths = os.listdir(self.lib_dir)
         paths = [os.path.join(self.lib_dir, p) for p in paths]
         return len([p for p in paths
-                        if os.path.isdir(p) and self._is_installed(p)])
+                    if os.path.isdir(p) and self._is_installed(p)])
 
     def _count_uninstalled(self):
         paths = os.listdir(self.lib_dir)
         paths = [os.path.join(self.lib_dir, p) for p in paths]
         return len([p for p in paths
-                        if os.path.isdir(p) and not self._is_installed(p)])
+                    if os.path.isdir(p) and not self._is_installed(p)])
 
     def _is_installed(self, path):
         path = os.path.join(path, 'config', 'HandlerState')
@@ -89,8 +90,10 @@ class TestExtensionCleanup(AgentTestCase):
     def test_cleanup_leaves_installed_extensions(self, mock_conf):
         mock_conf.return_value = self.lib_dir
 
-        self._install_handlers(start=0, count=5, handler_state=ExtHandlerState.Installed)
-        self._install_handlers(start=5, count=5, handler_state=ExtHandlerState.Enabled)
+        self._install_handlers(start=0, count=5,
+                               handler_state=ExtHandlerState.Installed)
+        self._install_handlers(start=5, count=5,
+                               handler_state=ExtHandlerState.Enabled)
 
         self.assertEqual(self._count_packages(), 10)
         self.assertEqual(self._count_installed(), 10)
@@ -105,8 +108,10 @@ class TestExtensionCleanup(AgentTestCase):
     def test_cleanup_removes_uninstalled_extensions(self, mock_conf):
         mock_conf.return_value = self.lib_dir
 
-        self._install_handlers(start=0, count=5, handler_state=ExtHandlerState.Installed)
-        self._install_handlers(start=5, count=5, handler_state=ExtHandlerState.NotInstalled)
+        self._install_handlers(start=0, count=5,
+                               handler_state=ExtHandlerState.Installed)
+        self._install_handlers(start=5, count=5,
+                               handler_state=ExtHandlerState.NotInstalled)
 
         self.assertEqual(self._count_packages(), 10)
         self.assertEqual(self._count_installed(), 5)
@@ -122,7 +127,8 @@ class TestExtensionCleanup(AgentTestCase):
     def test_cleanup_removes_orphaned_packages(self, mock_conf):
         mock_conf.return_value = self.lib_dir
 
-        self._install_handlers(start=0, count=5, handler_state=ExtHandlerState.Installed)
+        self._install_handlers(start=0, count=5,
+                               handler_state=ExtHandlerState.Installed)
         self._install_handlers(start=5, count=5, handler_state=None)
 
         self.assertEqual(self._count_packages(), 10)
@@ -135,6 +141,7 @@ class TestExtensionCleanup(AgentTestCase):
         self.assertEqual(self._count_installed(), 5)
         self.assertEqual(self._count_uninstalled(), 0)
 
+
 class TestHandlerStateMigration(AgentTestCase):
     def setUp(self):
         AgentTestCase.setUp(self)
@@ -144,7 +151,8 @@ class TestHandlerStateMigration(AgentTestCase):
 
         self.ext_handler = ExtHandler(handler_name)
         self.ext_handler.properties.version = handler_version
-        self.ext_handler_i = ExtHandlerInstance(self.ext_handler, "dummy protocol")
+        self.ext_handler_i = ExtHandlerInstance(self.ext_handler,
+                                                "dummy protocol")
 
         self.handler_state = "Enabled"
         self.handler_status = ExtHandlerStatus(
@@ -156,9 +164,9 @@ class TestHandlerStateMigration(AgentTestCase):
 
     def _prepare_handler_state(self):
         handler_state_path = os.path.join(
-                                self.tmp_dir,
-                                "handler_state",
-                                self.ext_handler_i.get_full_name())
+            self.tmp_dir,
+            "handler_state",
+            self.ext_handler_i.get_full_name())
         os.makedirs(handler_state_path)
         fileutil.write_file(
             os.path.join(handler_state_path, "state"),
@@ -170,9 +178,9 @@ class TestHandlerStateMigration(AgentTestCase):
 
     def _prepare_handler_config(self):
         handler_config_path = os.path.join(
-                                self.tmp_dir,
-                                self.ext_handler_i.get_full_name(),
-                                "config")
+            self.tmp_dir,
+            self.ext_handler_i.get_full_name(),
+            "config")
         os.makedirs(handler_config_path)
         return
 
@@ -182,7 +190,8 @@ class TestHandlerStateMigration(AgentTestCase):
 
         migrate_handler_state()
 
-        self.assertEquals(self.ext_handler_i.get_handler_state(), self.handler_state)
+        self.assertEquals(self.ext_handler_i.get_handler_state(),
+                          self.handler_state)
         self.assertEquals(
             self.ext_handler_i.get_handler_status().status,
             self.handler_status.status)
@@ -194,9 +203,11 @@ class TestHandlerStateMigration(AgentTestCase):
         migrate_handler_state()
 
         self.assertFalse(
-            os.path.isfile(os.path.join(self.ext_handler_i.get_conf_dir(), "HandlerState")))
+            os.path.isfile(os.path.join(self.ext_handler_i.get_conf_dir(),
+                                        "HandlerState")))
         self.assertFalse(
-            os.path.isfile(os.path.join(self.ext_handler_i.get_conf_dir(), "HandlerStatus")))
+            os.path.isfile(os.path.join(self.ext_handler_i.get_conf_dir(),
+                                        "HandlerStatus")))
         return
 
     def test_migration_cleans_up(self):
@@ -205,7 +216,8 @@ class TestHandlerStateMigration(AgentTestCase):
 
         migrate_handler_state()
 
-        self.assertFalse(os.path.isdir(os.path.join(conf.get_lib_dir(), "handler_state")))
+        self.assertFalse(
+            os.path.isdir(os.path.join(conf.get_lib_dir(), "handler_state")))
         return
 
     def test_migration_does_not_overwrite(self):
@@ -222,7 +234,8 @@ class TestHandlerStateMigration(AgentTestCase):
         self.assertNotEquals(message, self.handler_status.message)
 
         self.ext_handler_i.set_handler_state(state)
-        self.ext_handler_i.set_handler_status(status=status, code=code, message=message)
+        self.ext_handler_i.set_handler_status(status=status, code=code,
+                                              message=message)
 
         migrate_handler_state()
 
@@ -255,11 +268,11 @@ class TestHandlerStateMigration(AgentTestCase):
             self.assertTrue(False, "Unexpected exception: {0}".format(str(e)))
         return
 
+
 @patch("azurelinuxagent.common.protocol.wire.CryptUtil")
 @patch("azurelinuxagent.common.utils.restutil.http_get")
 class TestExtension(AgentTestCase):
-
-    def _assert_handler_status(self, report_vm_status, expected_status, 
+    def _assert_handler_status(self, report_vm_status, expected_status,
                                expected_ext_count, version):
         self.assertTrue(report_vm_status.called)
         args, kw = report_vm_status.call_args
@@ -272,7 +285,7 @@ class TestExtension(AgentTestCase):
         self.assertEquals(version, handler_status.version)
         self.assertEquals(expected_ext_count, len(handler_status.extensions))
         return
-    
+
     def _assert_no_handler_status(self, report_vm_status):
         self.assertTrue(report_vm_status.called)
         args, kw = report_vm_status.call_args
@@ -284,7 +297,7 @@ class TestExtension(AgentTestCase):
         """Test enable/disable/uninstall of an extension"""
         handler = get_exthandlers_handler()
 
-        #Mock protocol to return test data
+        # Mock protocol to return test data
         mock_http_get.side_effect = test_data.mock_http_get
         MockCryptUtil.side_effect = test_data.mock_crypt_util
 
@@ -295,55 +308,59 @@ class TestExtension(AgentTestCase):
 
         handler.protocol_util.get_protocol = Mock(return_value=protocol)
         return handler, protocol
-        
+
     def test_ext_handler(self, *args):
         test_data = WireProtocolData(DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
 
-        #Test enable scenario. 
+        # Test enable scenario.
         exthandlers_handler.run()
-        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1,
+                                    "1.0.0")
         self._assert_ext_status(protocol.report_ext_status, "success", 0)
 
-        #Test goal state not changed
+        # Test goal state not changed
         exthandlers_handler.run()
-        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1,
+                                    "1.0.0")
 
-        #Test goal state changed
+        # Test goal state changed
         test_data.goal_state = test_data.goal_state.replace("<Incarnation>1<",
                                                             "<Incarnation>2<")
-        test_data.ext_conf = test_data.ext_conf.replace("seqNo=\"0\"", 
+        test_data.ext_conf = test_data.ext_conf.replace("seqNo=\"0\"",
                                                         "seqNo=\"1\"")
         exthandlers_handler.run()
-        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1,
+                                    "1.0.0")
         self._assert_ext_status(protocol.report_ext_status, "success", 1)
-        
-        #Test upgrade
+
+        # Test upgrade
         test_data.goal_state = test_data.goal_state.replace("<Incarnation>2<",
                                                             "<Incarnation>3<")
         test_data.ext_conf = test_data.ext_conf.replace("1.0.0", "1.1.0")
-        test_data.ext_conf = test_data.ext_conf.replace("seqNo=\"1\"", 
+        test_data.ext_conf = test_data.ext_conf.replace("seqNo=\"1\"",
                                                         "seqNo=\"2\"")
         exthandlers_handler.run()
-        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.1.0")
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1,
+                                    "1.1.0")
         self._assert_ext_status(protocol.report_ext_status, "success", 2)
 
-        #Test disable
+        # Test disable
         test_data.goal_state = test_data.goal_state.replace("<Incarnation>3<",
                                                             "<Incarnation>4<")
         test_data.ext_conf = test_data.ext_conf.replace("enabled", "disabled")
         exthandlers_handler.run()
-        self._assert_handler_status(protocol.report_vm_status, "NotReady", 
+        self._assert_handler_status(protocol.report_vm_status, "NotReady",
                                     1, "1.1.0")
 
-        #Test uninstall
+        # Test uninstall
         test_data.goal_state = test_data.goal_state.replace("<Incarnation>4<",
                                                             "<Incarnation>5<")
         test_data.ext_conf = test_data.ext_conf.replace("disabled", "uninstall")
         exthandlers_handler.run()
         self._assert_no_handler_status(protocol.report_vm_status)
 
-        #Test uninstall again!
+        # Test uninstall again!
         test_data.goal_state = test_data.goal_state.replace("<Incarnation>5<",
                                                             "<Incarnation>6<")
         exthandlers_handler.run()
@@ -354,23 +371,25 @@ class TestExtension(AgentTestCase):
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
 
         exthandlers_handler.run()
-        self._assert_handler_status(protocol.report_vm_status, "Ready", 0, "1.0.0")
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 0,
+                                    "1.0.0")
 
     def test_ext_handler_no_public_settings(self, *args):
         test_data = WireProtocolData(DATA_FILE_EXT_NO_PUBLIC)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
 
         exthandlers_handler.run()
-        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1,
+                                    "1.0.0")
 
     def test_ext_handler_no_ext(self, *args):
         test_data = WireProtocolData(DATA_FILE_NO_EXT)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
 
-        #Assert no extension handler status
+        # Assert no extension handler status
         exthandlers_handler.run()
         self._assert_no_handler_status(protocol.report_vm_status)
-    
+
     @patch('azurelinuxagent.ga.exthandlers.add_event')
     def test_ext_handler_download_failure(self, mock_add_event, *args):
         test_data = WireProtocolData(DATA_FILE)
@@ -387,7 +406,7 @@ class TestExtension(AgentTestCase):
     def test_ext_handler_io_error(self, mock_fileutil, *args):
         test_data = WireProtocolData(DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
-    
+
         mock_fileutil.write_file.return_value = IOError("Mock IO Error")
         exthandlers_handler.run()
 
@@ -400,16 +419,17 @@ class TestExtension(AgentTestCase):
 
         # Disable extension handling blocking
         conf.get_enable_overprovisioning = Mock(return_value=False)
-        with patch.object(ExtHandlersHandler, 'handle_ext_handler') as patch_handle_ext_handler:
+        with patch.object(ExtHandlersHandler,
+                          'handle_ext_handler') as patch_handle_ext_handler:
             exthandlers_handler.handle_ext_handlers()
             patch_handle_ext_handler.assert_called()
 
         # enable extension handling blocking
         conf.get_enable_overprovisioning = Mock(return_value=True)
-        with patch.object(ExtHandlersHandler, 'handle_ext_handler') as patch_handle_ext_handler:
+        with patch.object(ExtHandlersHandler,
+                          'handle_ext_handler') as patch_handle_ext_handler:
             exthandlers_handler.handle_ext_handlers()
             patch_handle_ext_handler.assert_not_called()
-
 
     def test_handle_ext_handlers_on_hold_false(self, *args):
         test_data = WireProtocolData(DATA_FILE)
@@ -420,18 +440,21 @@ class TestExtension(AgentTestCase):
         # enable extension handling blocking
         conf.get_enable_overprovisioning = Mock(return_value=True)
 
-        #Test when is_on_hold returns False
+        # Test when is_on_hold returns False
         from azurelinuxagent.common.protocol.wire import InVMArtifactsProfile
         mock_in_vm_artifacts_profile = InVMArtifactsProfile(MagicMock())
         mock_in_vm_artifacts_profile.is_on_hold = Mock(return_value=False)
-        protocol.get_artifacts_profile = Mock(return_value=mock_in_vm_artifacts_profile)
-        with patch.object(ExtHandlersHandler, 'handle_ext_handler') as patch_handle_ext_handler:
+        protocol.get_artifacts_profile = Mock(
+            return_value=mock_in_vm_artifacts_profile)
+        with patch.object(ExtHandlersHandler,
+                          'handle_ext_handler') as patch_handle_ext_handler:
             exthandlers_handler.handle_ext_handlers()
             patch_handle_ext_handler.assert_called_once()
 
-        #Test when in_vm_artifacts_profile is not available
+        # Test when in_vm_artifacts_profile is not available
         protocol.get_artifacts_profile = Mock(return_value=None)
-        with patch.object(ExtHandlersHandler, 'handle_ext_handler') as patch_handle_ext_handler:
+        with patch.object(ExtHandlersHandler,
+                          'handle_ext_handler') as patch_handle_ext_handler:
             exthandlers_handler.handle_ext_handlers()
             patch_handle_ext_handler.assert_called_once()
 
@@ -447,20 +470,23 @@ class TestExtension(AgentTestCase):
         test_data = WireProtocolData(DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
         exthandlers_handler.run()
-        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1,
+                                    "1.0.0")
 
-        #Remove status file and re-run collecting extension status
-        status_file = os.path.join(self.tmp_dir, 
+        # Remove status file and re-run collecting extension status
+        status_file = os.path.join(self.tmp_dir,
                                    "OSTCExtensions.ExampleHandlerLinux-1.0.0",
                                    "status", "0.status")
         self.assertTrue(os.path.isfile(status_file))
         os.remove(status_file)
 
         exthandlers_handler.run()
-        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1,
+                                    "1.0.0")
         self._assert_ext_status(protocol.report_ext_status, "error", 0)
 
-    def test_ext_handler_version_decide_autoupgrade_internalversion(self, *args):
+    def test_ext_handler_version_decide_autoupgrade_internalversion(self,
+                                                                    *args):
         for internal in [False, True]:
             for autoupgrade in [False, True]:
                 if internal:
@@ -479,14 +505,19 @@ class TestExtension(AgentTestCase):
                         datafile = DATA_FILE
                         decision_version = '1.0.0'
 
-                _, protocol = self._create_mock(WireProtocolData(datafile), *args)
+                _, protocol = self._create_mock(WireProtocolData(datafile),
+                                                *args)
                 ext_handlers, _ = protocol.get_ext_handlers()
                 self.assertEqual(1, len(ext_handlers.extHandlers))
                 ext_handler = ext_handlers.extHandlers[0]
-                self.assertEqual('OSTCExtensions.ExampleHandlerLinux', ext_handler.name)
-                self.assertEqual(config_version, ext_handler.properties.version, "config version.")
+                self.assertEqual('OSTCExtensions.ExampleHandlerLinux',
+                                 ext_handler.name)
+                self.assertEqual(config_version, ext_handler.properties.version,
+                                 "config version.")
                 ExtHandlerInstance(ext_handler, protocol).decide_version()
-                self.assertEqual(decision_version, ext_handler.properties.version, "decision version.")
+                self.assertEqual(decision_version,
+                                 ext_handler.properties.version,
+                                 "decision version.")
 
     def test_ext_handler_version_decide_between_minor_versions(self, *args):
         """
@@ -498,30 +529,32 @@ class TestExtension(AgentTestCase):
 
         # (installed_version, config_version, exptected_version, autoupgrade_expected_version)
         cases = [
-            (None,  '2.0',     '2.0.0',    '2.2.0'),
-            (None,  '2.0.0',   '2.0.0',    '2.2.0'),
-            ('1.0', '1.0.0',   '1.0.0',    '1.1.0'),
-            (None,  '2.1.0',   '2.1.1',    '2.2.0'),
-            (None,  '2.2.0',   '2.2.0',    '2.2.0'),
-            (None,  '2.3.0',   '2.3.0',    '2.3.0'),
-            (None,  '2.4.0',   '2.4.0',    '2.4.0'),
-            (None,  '3.0',     '3.0',      '3.1'),
-            (None,  '4.0',     '4.0.0.1',  '4.1.0.0'),
+            (None, '2.0', '2.0.0', '2.2.0'),
+            (None, '2.0.0', '2.0.0', '2.2.0'),
+            ('1.0', '1.0.0', '1.0.0', '1.1.0'),
+            (None, '2.1.0', '2.1.1', '2.2.0'),
+            (None, '2.2.0', '2.2.0', '2.2.0'),
+            (None, '2.3.0', '2.3.0', '2.3.0'),
+            (None, '2.4.0', '2.4.0', '2.4.0'),
+            (None, '3.0', '3.0', '3.1'),
+            (None, '4.0', '4.0.0.1', '4.1.0.0'),
         ]
 
         _, protocol = self._create_mock(WireProtocolData(DATA_FILE), *args)
         version_uri = Mock()
         version_uri.uri = 'http://some/Microsoft.OSTCExtensions_ExampleHandlerLinux_asiaeast_manifest.xml'
 
-        for (installed_version, config_version, expected_version, autoupgrade_expected_version) in cases:
+        for (installed_version, config_version, expected_version,
+             autoupgrade_expected_version) in cases:
             ext_handler = Mock()
             ext_handler.properties = Mock()
             ext_handler.name = 'OSTCExtensions.ExampleHandlerLinux'
             ext_handler.versionUris = [version_uri]
             ext_handler.properties.version = config_version
-            
+
             ext_handler_instance = ExtHandlerInstance(ext_handler, protocol)
-            ext_handler_instance.get_installed_version = Mock(return_value=installed_version)
+            ext_handler_instance.get_installed_version = Mock(
+                return_value=installed_version)
 
             ext_handler_instance.decide_version()
             self.assertEqual(expected_version, ext_handler.properties.version)
@@ -530,12 +563,13 @@ class TestExtension(AgentTestCase):
             ext_handler.properties.upgradePolicy = 'auto'
 
             ext_handler_instance = ExtHandlerInstance(ext_handler, protocol)
-            ext_handler_instance.get_installed_version = Mock(return_value=installed_version)
+            ext_handler_instance.get_installed_version = Mock(
+                return_value=installed_version)
 
             ext_handler_instance.decide_version()
-            self.assertEqual(autoupgrade_expected_version, ext_handler.properties.version)
+            self.assertEqual(autoupgrade_expected_version,
+                             ext_handler.properties.version)
 
 
 if __name__ == '__main__':
     unittest.main()
-
