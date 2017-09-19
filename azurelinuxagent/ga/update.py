@@ -73,7 +73,7 @@ GOAL_STATE_INTERVAL = 3
 
 ORPHAN_WAIT_INTERVAL = 15 * 60 * 60
 
-AGENT_SENTINAL_FILE = "current_version"
+AGENT_SENTINEL_FILE = "current_version"
 
 def get_update_handler():
     return UpdateHandler()
@@ -447,16 +447,16 @@ class UpdateHandler(object):
 
     @property
     def _is_clean_start(self):
-        if not os.path.isfile(self._sentinal_file_path()):
+        if not os.path.isfile(self._sentinel_file_path()):
             return True
 
         try:
-            if fileutil.read_file(self._sentinal_file_path()) != CURRENT_AGENT:
+            if fileutil.read_file(self._sentinel_file_path()) != CURRENT_AGENT:
                 return True
         except Exception as e:
             logger.warn(
                 u"Exception reading sentinal file {0}: {1}",
-                self._sentinal_file_path(),
+                self._sentinel_file_path(),
                 str(e))
 
         return False
@@ -513,29 +513,29 @@ class UpdateHandler(object):
 
     def _set_sentinal(self, agent=CURRENT_AGENT):
         try:
-            fileutil.write_file(self._sentinal_file_path(), agent)
+            fileutil.write_file(self._sentinel_file_path(), agent)
         except Exception as e:
             logger.warn(
                 u"Exception writing sentinal file {0}: {1}",
-                self._sentinal_file_path(),
+                self._sentinel_file_path(),
                 str(e))
         return
 
-    def _sentinal_file_path(self):
-        return os.path.join(conf.get_lib_dir(), AGENT_SENTINAL_FILE)
+    def _sentinel_file_path(self):
+        return os.path.join(conf.get_lib_dir(), AGENT_SENTINEL_FILE)
 
     def _shutdown(self):
         self.running = False
 
-        if not os.path.isfile(self._sentinal_file_path()):
+        if not os.path.isfile(self._sentinel_file_path()):
             return
 
         try:
-            os.remove(self._sentinal_file_path())
+            os.remove(self._sentinel_file_path())
         except Exception as e:
             logger.warn(
                 u"Exception removing sentinal file {0}: {1}",
-                self._sentinal_file_path(),
+                self._sentinel_file_path(),
                 str(e))
         return
 
