@@ -51,6 +51,7 @@ P7M_FILE_NAME = "Certificates.p7m"
 PEM_FILE_NAME = "Certificates.pem"
 EXT_CONF_FILE_NAME = "ExtensionsConfig.{0}.xml"
 MANIFEST_FILE_NAME = "{0}.{1}.manifest.xml"
+AGENTS_MANIFEST_FILE_NAME = "{0}.{1}.agentsManifest"
 TRANSPORT_CERT_FILE_NAME = "TransportCert.pem"
 TRANSPORT_PRV_FILE_NAME = "TransportPrivate.pem"
 
@@ -128,8 +129,9 @@ class WireProtocol(Protocol):
 
     def get_vmagent_pkgs(self, vmagent_manifest):
         goal_state = self.client.get_goal_state()
-        man = self.client.get_gafamily_manifest(vmagent_manifest, goal_state)
-        return man.pkg_list
+        ga_manifest = self.client.get_gafamily_manifest(vmagent_manifest, goal_state)
+        valid_pkg_list = self.client.filter_package_list(vmagent_manifest.family, ga_manifest, goal_state)
+        return valid_pkg_list
 
     def get_ext_handlers(self):
         logger.verbose("Get extension handler config")
@@ -813,6 +815,41 @@ class WireClient(object):
 
         raise ProtocolError("Failed to retrieve extension manifest")
 
+    def filter_package_list(self, family, ga_manifest, goal_state):
+        complete_list = ga_manifest.pkg_list
+        agent_manifest = os.path.join(conf.get_lib_dir(),
+                                      AGENTS_MANIFEST_FILE_NAME.format(
+                                          family,
+                                          goal_state.incarnation))
+
+        if not os.path.exists(agent_manifest):
+            # clear memory cache
+            ga_manifest.allowed_versions = None
+
+            # create disk cache
+            with open(agent_manifest, mode='w') as manifest_fh:
+                for version in complete_list.versions:
+                    manifest_fh.write('{0}\n'.format(version.version))
+            fileutil.chmod(agent_manifest, 0o644)
+
+            return complete_list
+
+        else:
+            # use allowed versions from cache, otherwise from disk
+            if ga_manifest.allowed_versions is None:
+                with open(agent_manifest, mode='r') as manifest_fh:
+                    ga_manifest.allowed_versions = [v.strip('\n') for v
+                                                    in manifest_fh.readlines()]
+
+            # use the updated manifest urls for allowed versions
+            allowed_list = ExtHandlerPackageList()
+            allowed_list.versions = [version for version
+                                     in complete_list.versions
+                                     if version.version
+                                     in ga_manifest.allowed_versions]
+
+            return allowed_list
+
     def get_gafamily_manifest(self, vmagent_manifest, goal_state):
         for update_goal_state in [False, True]:
             try:
@@ -1418,6 +1455,7 @@ class ExtensionManifest(object):
             raise ValueError("ExtensionManifest is None")
         logger.verbose("Load ExtensionManifest.xml")
         self.pkg_list = ExtHandlerPackageList()
+        self.allowed_versions = None
         self.parse(xml_text)
 
     def parse(self, xml_text):
