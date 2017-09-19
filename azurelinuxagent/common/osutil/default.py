@@ -96,7 +96,7 @@ class DefaultOSUtil(object):
         return wait
 
     def remove_firewall(self):
-        # If a previous attempt threw an exception, do not retry
+        # If a previous attempt failed, do not retry
         global _enable_firewall
         if not _enable_firewall:
             return False
@@ -105,8 +105,8 @@ class DefaultOSUtil(object):
             wait = self.get_firewall_will_wait()
 
             flush_rule = FIREWALL_FLUSH.format(wait)
-            if shellutil.run(flush_rule, chk_err=False) != 0:
-                logger.warn("Failed to flush firewall")
+            if shellutil.run(flush_rule, chk_err=True) != 0:
+                raise Exception("non-zero return code")
 
             return True
 
