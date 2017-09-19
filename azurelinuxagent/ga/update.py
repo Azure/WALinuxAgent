@@ -652,13 +652,13 @@ class GuestAgent(object):
         version = None
         if path is not None:
             m = AGENT_DIR_PATTERN.match(path)
-            if m == None:
+            if m is None:
                 raise UpdateError(u"Illegal agent directory: {0}".format(path))
             version = m.group(1)
         elif self.pkg is not None:
             version = pkg.version
 
-        if version == None:
+        if version is None:
             raise UpdateError(u"Illegal agent version: {0}".format(version))
         self.version = FlexibleVersion(version)
 
