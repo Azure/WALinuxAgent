@@ -364,7 +364,7 @@ class UpdateHandler(object):
                 is_success=False,
                 message=msg)
 
-        self._set_sentinal()
+        self._set_sentinel()
         return
 
     def _ensure_no_orphans(self, orphan_wait_interval=ORPHAN_WAIT_INTERVAL):
@@ -478,7 +478,7 @@ class UpdateHandler(object):
                 return True
         except Exception as e:
             logger.warn(
-                u"Exception reading sentinal file {0}: {1}",
+                u"Exception reading sentinel file {0}: {1}",
                 self._sentinel_file_path(),
                 str(e))
 
@@ -541,12 +541,12 @@ class UpdateHandler(object):
         self.agents.sort(key=lambda agent: agent.version, reverse=True)
         return
 
-    def _set_sentinal(self, agent=CURRENT_AGENT):
+    def _set_sentinel(self, agent=CURRENT_AGENT):
         try:
             fileutil.write_file(self._sentinel_file_path(), agent)
         except Exception as e:
             logger.warn(
-                u"Exception writing sentinal file {0}: {1}",
+                u"Exception writing sentinel file {0}: {1}",
                 self._sentinel_file_path(),
                 str(e))
         return
@@ -564,7 +564,7 @@ class UpdateHandler(object):
             os.remove(self._sentinel_file_path())
         except Exception as e:
             logger.warn(
-                u"Exception removing sentinal file {0}: {1}",
+                u"Exception removing sentinel file {0}: {1}",
                 self._sentinel_file_path(),
                 str(e))
         return
