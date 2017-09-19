@@ -1,0 +1,20 @@
+{
+    "blacklisted" : ["1.2.3", "1.3.*"],
+
+    "families" : {
+        "ubuntu-x64": {
+            "versions": [
+                "^Ubuntu,(1[4-9]|2[0-9])\\.\\d+,.*$"
+            ],
+            "require_64bit": true,
+            "partition": 85
+        },
+        "fedora-x64": {
+            "versions": [
+                "^Oracle[^,]*,([7-9]|[1-9][0-9])\\.\\d+,.*$",
+                "^Red\\sHat[^,]*,([7-9]|[1-9][0-9])\\.\\d+,.*$"
+            ],
+            "partition": 20
+        }
+    }
+}
