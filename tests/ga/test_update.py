@@ -1548,6 +1548,64 @@ class TestUpdate(UpdateTestCase):
                 self.assertEqual(None, pid_file)
         return
 
+    @patch('azurelinuxagent.common.protocol.wire.WireClient.get_goal_state',
+           return_value=GoalState(load_data('wire/goal_state.xml')))
+    def test_package_filter_for_agent_manifest(self, _):
+
+        protocol = WireProtocol('12.34.56.78')
+        extension_config = ExtensionsConfig(load_data('wire/ext_conf.xml'))
+        agent_manifest = extension_config.vmagent_manifests.vmAgentManifests[0]
+
+        # has agent versions 13, 14
+        ga_manifest_1 = ExtensionManifest(load_data('wire/ga_manifest_1.xml'))
+
+        # has agent versions 13, 14, 15
+        ga_manifest_2 = ExtensionManifest(load_data('wire/ga_manifest_2.xml'))
+
+        goal_state = protocol.client.get_goal_state()
+        disk_cache = os.path.join(conf.get_lib_dir(),
+                                  AGENTS_MANIFEST_FILE_NAME.format(
+                                      agent_manifest.family,
+                                      goal_state.incarnation))
+
+        self.assertFalse(os.path.exists(disk_cache))
+        self.assertTrue(ga_manifest_1.allowed_versions is None)
+
+        with patch(
+                'azurelinuxagent.common.protocol.wire.WireClient'
+                '.get_gafamily_manifest',
+                return_value=ga_manifest_1):
+
+            pkg_list_1 = protocol.get_vmagent_pkgs(agent_manifest)
+            self.assertTrue(pkg_list_1 is not None)
+            self.assertTrue(len(pkg_list_1.versions) == 2)
+            self.assertTrue(pkg_list_1.versions[0].version == '2.2.13')
+            self.assertTrue(pkg_list_1.versions[0].uris[0].uri == 'url1_13')
+            self.assertTrue(pkg_list_1.versions[1].version == '2.2.14')
+            self.assertTrue(pkg_list_1.versions[1].uris[0].uri == 'url1_14')
+
+        self.assertTrue(os.path.exists(disk_cache))
+
+        with patch(
+                'azurelinuxagent.common.protocol.wire.WireClient'
+                '.get_gafamily_manifest',
+                return_value=ga_manifest_2):
+
+            pkg_list_2 = protocol.get_vmagent_pkgs(agent_manifest)
+            self.assertTrue(pkg_list_2 is not None)
+            self.assertTrue(len(pkg_list_2.versions) == 2)
+            self.assertTrue(pkg_list_2.versions[0].version == '2.2.13')
+            self.assertTrue(pkg_list_2.versions[0].uris[0].uri == 'url2_13')
+            self.assertTrue(pkg_list_2.versions[1].version == '2.2.14')
+            self.assertTrue(pkg_list_2.versions[1].uris[0].uri == 'url2_14')
+            # does not contain 2.2.15
+
+        self.assertTrue(os.path.exists(disk_cache))
+        self.assertTrue(ga_manifest_2.allowed_versions is not None)
+        self.assertTrue(len(ga_manifest_2.allowed_versions) == 2)
+        self.assertTrue(ga_manifest_2.allowed_versions[0] == '2.2.13')
+        self.assertTrue(ga_manifest_2.allowed_versions[1] == '2.2.14')
+
 
 class ChildMock(Mock):
     def __init__(self, return_value=0, side_effect=None):
