@@ -46,8 +46,8 @@ class TestExtensionCleanup(AgentTestCase):
 
     def _install_handlers(self, start=0, count=1,
                         handler_state=ExtHandlerState.Installed):
-        src = os.path.join(data_dir, "ext", "sample_ext-1.2.0.zip")
-        version = FlexibleVersion("1.2.0")
+        src = os.path.join(data_dir, "ext", "sample_ext-1.3.0.zip")
+        version = FlexibleVersion("1.3.0")
         version += start - version.patch
 
         for i in range(start, start+count):
@@ -318,34 +318,44 @@ class TestExtension(AgentTestCase):
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
         self._assert_ext_status(protocol.report_ext_status, "success", 1)
         
-        #Test upgrade
+        #Test hotfix
         test_data.goal_state = test_data.goal_state.replace("<Incarnation>2<",
                                                             "<Incarnation>3<")
         test_data.ext_conf = test_data.ext_conf.replace("1.0.0", "1.1.0")
         test_data.ext_conf = test_data.ext_conf.replace("seqNo=\"1\"", 
                                                         "seqNo=\"2\"")
         exthandlers_handler.run()
-        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.1.0")
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.1.1")
         self._assert_ext_status(protocol.report_ext_status, "success", 2)
 
-        #Test disable
+        #Test upgrade
         test_data.goal_state = test_data.goal_state.replace("<Incarnation>3<",
                                                             "<Incarnation>4<")
+        test_data.ext_conf = test_data.ext_conf.replace("1.1.0", "1.2.0")
+        test_data.ext_conf = test_data.ext_conf.replace("seqNo=\"2\"",
+                                                        "seqNo=\"3\"")
+        exthandlers_handler.run()
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.2.0")
+        self._assert_ext_status(protocol.report_ext_status, "success", 3)
+
+        #Test disable
+        test_data.goal_state = test_data.goal_state.replace("<Incarnation>4<",
+                                                            "<Incarnation>5<")
         test_data.ext_conf = test_data.ext_conf.replace("enabled", "disabled")
         exthandlers_handler.run()
         self._assert_handler_status(protocol.report_vm_status, "NotReady", 
-                                    1, "1.1.0")
+                                    1, "1.2.0")
 
         #Test uninstall
-        test_data.goal_state = test_data.goal_state.replace("<Incarnation>4<",
-                                                            "<Incarnation>5<")
+        test_data.goal_state = test_data.goal_state.replace("<Incarnation>5<",
+                                                            "<Incarnation>6<")
         test_data.ext_conf = test_data.ext_conf.replace("disabled", "uninstall")
         exthandlers_handler.run()
         self._assert_no_handler_status(protocol.report_vm_status)
 
         #Test uninstall again!
-        test_data.goal_state = test_data.goal_state.replace("<Incarnation>5<",
-                                                            "<Incarnation>6<")
+        test_data.goal_state = test_data.goal_state.replace("<Incarnation>6<",
+                                                            "<Incarnation>7<")
         exthandlers_handler.run()
         self._assert_no_handler_status(protocol.report_vm_status)
 
@@ -401,7 +411,7 @@ class TestExtension(AgentTestCase):
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
         self._assert_ext_status(protocol.report_ext_status, "success", 1)
 
-        #Test new version available without GUID change
+        #Test hotfix available without GUID change
         test_data.goal_state = test_data.goal_state.replace("<Incarnation>3<",
                                                             "<Incarnation>4<")
         test_data.ext_conf = test_data.ext_conf.replace("1.0.0", "1.1.0")
@@ -410,12 +420,12 @@ class TestExtension(AgentTestCase):
         exthandlers_handler.run()
         self._assert_no_handler_status(protocol.report_vm_status)
 
-        #Test GUID change with new version available
+        #Test GUID change with hotfix
         test_data.goal_state = test_data.goal_state.replace("<Incarnation>4<",
                                                             "<Incarnation>5<")
         test_data.ext_conf = test_data.ext_conf.replace("FE0987654322", "FE0987654323")
         exthandlers_handler.run()
-        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.1.0")
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.1.1")
         self._assert_ext_status(protocol.report_ext_status, "success", 2)
 
         #Test disable
@@ -424,7 +434,7 @@ class TestExtension(AgentTestCase):
         test_data.ext_conf = test_data.ext_conf.replace("enabled", "disabled")
         exthandlers_handler.run()
         self._assert_handler_status(protocol.report_vm_status, "NotReady",
-                                    1, "1.1.0")
+                                    1, "1.1.1")
 
         #Test uninstall
         test_data.goal_state = test_data.goal_state.replace("<Incarnation>6<",
@@ -446,8 +456,25 @@ class TestExtension(AgentTestCase):
         test_data.ext_conf = test_data.ext_conf.replace("seqNo=\"2\"",
                                                         "seqNo=\"3\"")
         exthandlers_handler.run()
-        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.1.0")
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.1.1")
         self._assert_ext_status(protocol.report_ext_status, "success", 3)
+
+        #Test upgrade available without GUID change
+        test_data.goal_state = test_data.goal_state.replace("<Incarnation>9<",
+                                                            "<Incarnation>10<")
+        test_data.ext_conf = test_data.ext_conf.replace("1.1.0", "1.2.0")
+        test_data.ext_conf = test_data.ext_conf.replace("seqNo=\"3\"",
+                                                        "seqNo=\"4\"")
+        exthandlers_handler.run()
+        self._assert_no_handler_status(protocol.report_vm_status)
+
+        #Test GUID change with upgrade available
+        test_data.goal_state = test_data.goal_state.replace("<Incarnation>10<",
+                                                            "<Incarnation>11<")
+        test_data.ext_conf = test_data.ext_conf.replace("FE0987654323", "FE0987654324")
+        exthandlers_handler.run()
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.2.0")
+        self._assert_ext_status(protocol.report_ext_status, "success", 4)
 
     @patch('azurelinuxagent.ga.exthandlers.add_event')
     def test_ext_handler_download_failure(self, mock_add_event, *args):
@@ -542,8 +569,8 @@ class TestExtension(AgentTestCase):
         for internal in [False, True]:
             for autoupgrade in [False, True]:
                 if internal:
-                    config_version = '1.2.0'
-                    decision_version = '1.2.0'
+                    config_version = '1.3.0'
+                    decision_version = '1.3.0'
                     if autoupgrade:
                         datafile = DATA_FILE_EXT_AUTOUPGRADE_INTERNALVERSION
                     else:
@@ -552,7 +579,7 @@ class TestExtension(AgentTestCase):
                     config_version = '1.0.0'
                     if autoupgrade:
                         datafile = DATA_FILE_EXT_AUTOUPGRADE
-                        decision_version = '1.1.0'
+                        decision_version = '1.2.0'
                     else:
                         datafile = DATA_FILE
                         decision_version = '1.0.0'
@@ -578,7 +605,7 @@ class TestExtension(AgentTestCase):
         cases = [
             (None,  '2.0',     '2.0.0',    '2.2.0'),
             (None,  '2.0.0',   '2.0.0',    '2.2.0'),
-            ('1.0', '1.0.0',   '1.0.0',    '1.1.0'),
+            ('1.0', '1.0.0',   '1.0.0',    '1.2.0'),
             (None,  '2.1.0',   '2.1.1',    '2.2.0'),
             (None,  '2.2.0',   '2.2.0',    '2.2.0'),
             (None,  '2.3.0',   '2.3.0',    '2.3.0'),

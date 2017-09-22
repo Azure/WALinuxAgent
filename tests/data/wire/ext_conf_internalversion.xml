@@ -17,10 +17,10 @@
   </GAFamilies>
 </GuestAgentExtension>
 <Plugins>
-  <Plugin name="OSTCExtensions.ExampleHandlerLinux" version="1.2.0" location="http://rdfepirv2hknprdstr03.blob.core.windows.net/b01058962be54ceca550a390fa5ff064/Microsoft.OSTCExtensions_ExampleHandlerLinux_asiaeast_manifest.xml" config="" state="enabled" autoUpgrade="true" failoverlocation="http://rdfepirv2hknprdstr04.blob.core.windows.net/b01058962be54ceca550a390fa5ff064/Microsoft.OSTCExtensions_ExampleHandlerLinux_asiaeast_manifest.xml" runAsStartupTask="false" isJson="true" />
+  <Plugin name="OSTCExtensions.ExampleHandlerLinux" version="1.3.0" location="http://rdfepirv2hknprdstr03.blob.core.windows.net/b01058962be54ceca550a390fa5ff064/Microsoft.OSTCExtensions_ExampleHandlerLinux_asiaeast_manifest.xml" config="" state="enabled" autoUpgrade="true" failoverlocation="http://rdfepirv2hknprdstr04.blob.core.windows.net/b01058962be54ceca550a390fa5ff064/Microsoft.OSTCExtensions_ExampleHandlerLinux_asiaeast_manifest.xml" runAsStartupTask="false" isJson="true" />
 </Plugins>
 <PluginSettings>
-  <Plugin name="OSTCExtensions.ExampleHandlerLinux" version="1.2.0">
+  <Plugin name="OSTCExtensions.ExampleHandlerLinux" version="1.3.0">
     <RuntimeSettings seqNo="0">{"runtimeSettings":[{"handlerSettings":{"protectedSettingsCertThumbprint":"4037FBF5F1F3014F99B5D6C7799E9B20E6871CB3","protectedSettings":"MIICWgYJK","publicSettings":{"foo":"bar"}}}]}</RuntimeSettings>
   </Plugin>
 </PluginSettings>
