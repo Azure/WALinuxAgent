@@ -301,9 +301,9 @@ class ExtHandlersHandler(object):
             state = ext_handler.properties.state
             # Valid states are enabled, disabled and uninstall
             if state == u"enabled":
-                # Return early to skip upgrading if the rolling_upgrade
+                # Return early to skip upgrading if the is_part_of_vmss
                 # flag is True and the upgrade GUID is NOT new
-                if self.protocol.get_rolling_upgrade() and \
+                if self.protocol.is_part_of_vmss() and \
                         not self.is_new_guid(ext_handler):
                     logger.info("Rolling Upgrade flag is set. New GUID is the same as the old GUID. Exiting without upgrading.")
                     return
