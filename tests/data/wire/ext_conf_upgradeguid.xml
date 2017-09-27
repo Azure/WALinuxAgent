@@ -1,5 +1,4 @@
 <Extensions version="1.0.0.0" goalStateIncarnation="9"><GuestAgentExtension xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
-  <IsPartOfScaleSet>true</IsPartOfScaleSet>
   <GAFamilies>
     <GAFamily>
       <Name>Prod</Name>

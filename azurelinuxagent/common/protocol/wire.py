@@ -131,9 +131,6 @@ class WireProtocol(Protocol):
         man = self.client.get_gafamily_manifest(vmagent_manifest, goal_state)
         return man.pkg_list
 
-    def is_part_of_vmss(self):
-        return self.client.get_ext_conf().is_part_of_vmss
-
     def get_ext_handlers(self):
         logger.verbose("Get extension handler config")
         # Update goal state to get latest extensions config
@@ -1315,8 +1312,6 @@ class ExtensionsConfig(object):
         logger.verbose("Load ExtensionsConfig.xml")
         self.ext_handlers = ExtHandlerList()
         self.vmagent_manifests = VMAgentManifestList()
-        # Default the is part of vmss flag to False
-        self.is_part_of_vmss = False
         self.status_upload_blob = None
         self.status_upload_blob_type = None
         self.artifacts_profile_blob = None
@@ -1329,13 +1324,7 @@ class ExtensionsConfig(object):
         """
         xml_doc = parse_doc(xml_text)
 
-        guest_agent = find(xml_doc, "GuestAgentExtension")
-        ru_text = findtext(guest_agent, "IsPartOfScaleSet")
-        # The value of the flag defaults to False
-        if ru_text and ru_text.lower() == "true":
-            self.is_part_of_vmss = True
-
-        ga_families_list = find(guest_agent, "GAFamilies")
+        ga_families_list = find(xml_doc, "GAFamilies")
         ga_families = findall(ga_families_list, "GAFamily")
 
         for ga_family in ga_families:
