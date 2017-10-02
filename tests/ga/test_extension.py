@@ -397,8 +397,6 @@ class TestExtension(AgentTestCase):
         #Test goal state changed without new GUID
         test_data.goal_state = test_data.goal_state.replace("<Incarnation>1<",
                                                             "<Incarnation>2<")
-        test_data.ext_conf = test_data.ext_conf.replace("seqNo=\"0\"",
-                                                        "seqNo=\"1\"")
         exthandlers_handler.run()
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
         self._assert_ext_status(protocol.report_ext_status, "success", 0)
@@ -409,14 +407,12 @@ class TestExtension(AgentTestCase):
         test_data.ext_conf = test_data.ext_conf.replace("FE0987654321", "FE0987654322")
         exthandlers_handler.run()
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
-        self._assert_ext_status(protocol.report_ext_status, "success", 1)
+        self._assert_ext_status(protocol.report_ext_status, "success", 0)
 
         #Test hotfix available without GUID change
         test_data.goal_state = test_data.goal_state.replace("<Incarnation>3<",
                                                             "<Incarnation>4<")
         test_data.ext_conf = test_data.ext_conf.replace("1.0.0", "1.1.0")
-        test_data.ext_conf = test_data.ext_conf.replace("seqNo=\"1\"",
-                                                        "seqNo=\"2\"")
         exthandlers_handler.run()
         self._assert_no_handler_status(protocol.report_vm_status)
 
@@ -426,7 +422,7 @@ class TestExtension(AgentTestCase):
         test_data.ext_conf = test_data.ext_conf.replace("FE0987654322", "FE0987654323")
         exthandlers_handler.run()
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.1.1")
-        self._assert_ext_status(protocol.report_ext_status, "success", 2)
+        self._assert_ext_status(protocol.report_ext_status, "success", 0)
 
         #Test disable
         test_data.goal_state = test_data.goal_state.replace("<Incarnation>5<",
@@ -453,18 +449,14 @@ class TestExtension(AgentTestCase):
         test_data.goal_state = test_data.goal_state.replace("<Incarnation>8<",
                                                             "<Incarnation>9<")
         test_data.ext_conf = test_data.ext_conf.replace("uninstall", "enabled")
-        test_data.ext_conf = test_data.ext_conf.replace("seqNo=\"2\"",
-                                                        "seqNo=\"3\"")
         exthandlers_handler.run()
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.1.1")
-        self._assert_ext_status(protocol.report_ext_status, "success", 3)
+        self._assert_ext_status(protocol.report_ext_status, "success", 0)
 
         #Test upgrade available without GUID change
         test_data.goal_state = test_data.goal_state.replace("<Incarnation>9<",
                                                             "<Incarnation>10<")
         test_data.ext_conf = test_data.ext_conf.replace("1.1.0", "1.2.0")
-        test_data.ext_conf = test_data.ext_conf.replace("seqNo=\"3\"",
-                                                        "seqNo=\"4\"")
         exthandlers_handler.run()
         self._assert_no_handler_status(protocol.report_vm_status)
 
@@ -474,7 +466,7 @@ class TestExtension(AgentTestCase):
         test_data.ext_conf = test_data.ext_conf.replace("FE0987654323", "FE0987654324")
         exthandlers_handler.run()
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.2.0")
-        self._assert_ext_status(protocol.report_ext_status, "success", 4)
+        self._assert_ext_status(protocol.report_ext_status, "success", 0)
 
     @patch('azurelinuxagent.ga.exthandlers.add_event')
     def test_ext_handler_download_failure(self, mock_add_event, *args):
