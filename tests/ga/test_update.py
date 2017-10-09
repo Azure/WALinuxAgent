@@ -26,7 +26,7 @@ from azurelinuxagent.common.event import *
 from azurelinuxagent.common.protocol.hostplugin import *
 from azurelinuxagent.common.protocol.metadata import *
 from azurelinuxagent.common.protocol.wire import *
-from azurelinuxagent.common.utils.deploy import *
+from azurelinuxagent.common.utils.safedeploy import *
 from azurelinuxagent.common.utils.fileutil import *
 from azurelinuxagent.ga.update import *
 
@@ -160,7 +160,7 @@ class UpdateTestCase(AgentTestCase):
             path = os.path.join(self.tmp_dir, fileutil.trim_ext(agent, "zip"))
             zipfile.ZipFile(agent).extractall(path)
             if safe_deploy:
-                shutil.copy(os.path.join(data_dir, DEPLOY_FILE), path)
+                shutil.copy(os.path.join(data_dir, SAFEDEPLOY_FILE), path)
                 fileutil.write_file(
                     os.path.join(path, 'error.json'),
                     json.dumps(FATAL_ERROR))
@@ -404,7 +404,7 @@ class TestGuestAgent(UpdateTestCase):
         agent._unpack()
         self.assertTrue(agent.is_downloaded)
 
-    @patch('azurelinuxagent.common.utils.deploy.get_osutil', return_value=Mock(is_64bit=True))
+    @patch('azurelinuxagent.common.utils.safedeploy.get_osutil', return_value=Mock(is_64bit=True))
     @patch('platform.linux_distribution', return_value=('Ubuntu', '16.10', 'yakkety'))
     def test_in_safe_deployment_mode(self, mock_dist, mock_osutil):
         self.expand_agents(safe_deploy=True)
@@ -413,7 +413,7 @@ class TestGuestAgent(UpdateTestCase):
         self.assertTrue(agent.in_safe_deployment_mode)
         self.assertTrue(agent.is_blacklisted)
 
-    @patch('azurelinuxagent.common.utils.deploy.get_osutil', return_value=Mock(is_64bit=True))
+    @patch('azurelinuxagent.common.utils.safedeploy.get_osutil', return_value=Mock(is_64bit=True))
     @patch('platform.linux_distribution', return_value=('Ubuntu', '16.10', 'yakkety'))
     def test_in_partition(self, mock_dist, mock_osutil):
         self.expand_agents(safe_deploy=True)
@@ -422,7 +422,7 @@ class TestGuestAgent(UpdateTestCase):
         self.assertTrue(agent.in_partition(84))
         self.assertFalse(agent.in_partition(85))
 
-    @patch('azurelinuxagent.common.utils.deploy.get_osutil', return_value=Mock(is_64bit=True))
+    @patch('azurelinuxagent.common.utils.safedeploy.get_osutil', return_value=Mock(is_64bit=True))
     @patch('platform.linux_distribution', return_value=('Ubuntu', '16.10', 'yakkety'))
     def test_enable_deployment(self, mock_dist, mock_osutil):
         self.expand_agents(safe_deploy=True)
@@ -754,7 +754,7 @@ class TestUpdate(UpdateTestCase):
         for agent in agents:
             self.assertTrue(agent.is_blacklisted)
 
-    def test_blacklist_agents_uses_glob(self):
+    def test_blacklist_agents_uses_pattern(self):
         self.prepare_agents()
         agents = self.agents()
         self.update_handler.agents = agents
@@ -763,7 +763,7 @@ class TestUpdate(UpdateTestCase):
             self.assertFalse(agent.is_blacklisted)
 
         v = agents[0].version
-        versions = ["{0}.*".format(v.major)]
+        versions = ["{0}(?:\\.\\d+)*".format(v.major)]
         self.update_handler._blacklist_agents(versions)
 
         for agent in agents:
@@ -786,7 +786,7 @@ class TestUpdate(UpdateTestCase):
             else:
                 not_blacklisted.append(agent)
         v = blacklisted[0].version
-        versions = ["{0}.*".format(v.major)]
+        versions = ["{0}(?:\\.\\d+)*".format(v.major)]
         self.update_handler._blacklist_agents(versions)
 
         for agent in blacklisted:
@@ -1612,6 +1612,64 @@ class TestUpdate(UpdateTestCase):
                 pid_files, pid_file = self.update_handler._write_pid_file()
                 self.assertEqual(0, len(pid_files))
                 self.assertEqual(None, pid_file)
+
+    @patch('azurelinuxagent.common.protocol.wire.WireClient.get_goal_state',
+           return_value=GoalState(load_data('wire/goal_state.xml')))
+    def test_package_filter_for_agent_manifest(self, _):
+
+        protocol = WireProtocol('12.34.56.78')
+        extension_config = ExtensionsConfig(load_data('wire/ext_conf.xml'))
+        agent_manifest = extension_config.vmagent_manifests.vmAgentManifests[0]
+
+        # has agent versions 13, 14
+        ga_manifest_1 = ExtensionManifest(load_data('wire/ga_manifest_1.xml'))
+
+        # has agent versions 13, 14, 15
+        ga_manifest_2 = ExtensionManifest(load_data('wire/ga_manifest_2.xml'))
+
+        goal_state = protocol.client.get_goal_state()
+        disk_cache = os.path.join(conf.get_lib_dir(),
+                                  AGENTS_MANIFEST_FILE_NAME.format(
+                                      agent_manifest.family,
+                                      goal_state.incarnation))
+
+        self.assertFalse(os.path.exists(disk_cache))
+        self.assertTrue(ga_manifest_1.allowed_versions is None)
+
+        with patch(
+                'azurelinuxagent.common.protocol.wire.WireClient'
+                '.get_gafamily_manifest',
+                return_value=ga_manifest_1):
+
+            pkg_list_1 = protocol.get_vmagent_pkgs(agent_manifest)
+            self.assertTrue(pkg_list_1 is not None)
+            self.assertTrue(len(pkg_list_1.versions) == 2)
+            self.assertTrue(pkg_list_1.versions[0].version == '2.2.13')
+            self.assertTrue(pkg_list_1.versions[0].uris[0].uri == 'url1_13')
+            self.assertTrue(pkg_list_1.versions[1].version == '2.2.14')
+            self.assertTrue(pkg_list_1.versions[1].uris[0].uri == 'url1_14')
+
+        self.assertTrue(os.path.exists(disk_cache))
+
+        with patch(
+                'azurelinuxagent.common.protocol.wire.WireClient'
+                '.get_gafamily_manifest',
+                return_value=ga_manifest_2):
+
+            pkg_list_2 = protocol.get_vmagent_pkgs(agent_manifest)
+            self.assertTrue(pkg_list_2 is not None)
+            self.assertTrue(len(pkg_list_2.versions) == 2)
+            self.assertTrue(pkg_list_2.versions[0].version == '2.2.13')
+            self.assertTrue(pkg_list_2.versions[0].uris[0].uri == 'url2_13')
+            self.assertTrue(pkg_list_2.versions[1].version == '2.2.14')
+            self.assertTrue(pkg_list_2.versions[1].uris[0].uri == 'url2_14')
+            # does not contain 2.2.15
+
+        self.assertTrue(os.path.exists(disk_cache))
+        self.assertTrue(ga_manifest_2.allowed_versions is not None)
+        self.assertTrue(len(ga_manifest_2.allowed_versions) == 2)
+        self.assertTrue(ga_manifest_2.allowed_versions[0] == '2.2.13')
+        self.assertTrue(ga_manifest_2.allowed_versions[1] == '2.2.14')
 
 
 class ChildMock(Mock):
