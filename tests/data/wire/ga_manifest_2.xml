@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PluginVersionManifest xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
+	<Plugins/>
+	<InternalPlugins>
+		<Plugin>
+			<Version>2.2.13</Version>
+			<Uris>
+				<Uri>url2_13</Uri>
+			</Uris>
+		</Plugin>
+		<Plugin>
+			<Version>2.2.14</Version>
+			<Uris>
+				<Uri>url2_14</Uri>
+			</Uris>
+		</Plugin>
+		<Plugin>
+			<Version>2.2.15</Version>
+			<Uris>
+				<Uri>url1_15</Uri>
+			</Uris>
+		</Plugin>
+	</InternalPlugins>
+</PluginVersionManifest>
