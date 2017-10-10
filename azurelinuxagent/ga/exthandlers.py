@@ -299,17 +299,13 @@ class ExtHandlersHandler(object):
 
         try:
             state = ext_handler.properties.state
-            # Valid states are enabled, disabled and uninstall
-            if state == u"enabled":
-                # there is an upgrade GUID and it is NOT new
-                if ext_handler.properties.upgradeGuid is not None and \
-                        not self.is_new_guid(ext_handler):
-                    logger.info("New GUID is the same as the old GUID. Exiting without upgrading.")
-                    return
-            elif state == u"disabled" or state == u"uninstall":
-                # Remove the GUID from the dictionary in this case so that
-                # it is upgraded upon re-enabling/re-install
-                self.last_guids.pop(ext_handler.name, None)
+            # The extension is to be enabled, there is an upgrade GUID
+            # and the GUID is NOT new
+            if state == u"enabled" and \
+                    ext_handler.properties.upgradeGuid is not None and \
+                    not self.is_new_guid(ext_handler):
+                logger.info("New GUID is the same as the old GUID. Exiting without upgrading.")
+                return
             ext_handler_i.decide_version()
             if not ext_handler_i.is_upgrade and self.last_etag == etag:
                 if self.log_etag:
@@ -329,8 +325,12 @@ class ExtHandlersHandler(object):
                     self.last_guids[ext_handler.name] = ext_handler.properties.upgradeGuid
             elif state == u"disabled":
                 self.handle_disable(ext_handler_i)
+                # Remove the GUID from the dictionary so that it is upgraded upon re-enable
+                self.last_guids.pop(ext_handler.name, None)
             elif state == u"uninstall":
                 self.handle_uninstall(ext_handler_i)
+                # Remove the GUID from the dictionary so that it is upgraded upon re-install
+                self.last_guids.pop(ext_handler.name, None)
             else:
                 message = u"Unknown ext handler state:{0}".format(state)
                 raise ExtensionError(message)
