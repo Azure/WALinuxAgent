@@ -103,7 +103,7 @@ class CloudInitProvisionHandler(ProvisionHandler):
                              "after {1}s".format(ovf_file_path,
                                                  max_retry * sleep_time))
 
-    def wait_for_ssh_host_key(self, max_retry=360, sleep_time=5):
+    def wait_for_ssh_host_key(self, max_retry=360, sleep_time=1):
         """
         Wait for cloud-init to generate ssh host key
         """
