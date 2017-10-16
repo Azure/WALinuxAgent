@@ -120,6 +120,13 @@ class WireProtocol(Protocol):
         certificates = self.client.get_certs()
         return certificates.cert_list
 
+    def get_incarnation(self):
+        path = os.path.join(conf.get_lib_dir(), INCARNATION_FILE_NAME)
+        if os.path.exists(path):
+            return fileutil.read_file(path)
+        else:
+            return 0
+
     def get_vmagent_manifests(self):
         # Update goal state to get latest extensions config
         self.update_goal_state()

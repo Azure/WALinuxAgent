@@ -300,6 +300,9 @@ class Protocol(DataContract):
     def get_certs(self):
         raise NotImplementedError()
 
+    def get_incarnation(self):
+        raise NotImplementedError()
+
     def get_vmagent_manifests(self):
         raise NotImplementedError()
 

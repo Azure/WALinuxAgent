@@ -45,6 +45,7 @@ OS.HomeDir = /home
 OS.OpensslPath = /usr/bin/openssl
 OS.PasswordPath = /etc/shadow
 OS.RootDeviceScsiTimeout = 300
+OS.SshClientAliveInterval = 42
 OS.SshDir = /notareal/path
 OS.SudoersDir = /etc/sudoers.d
 OS.UpdateRdmaDriver = False

@@ -21,8 +21,10 @@ import os
 import platform
 import time
 import threading
+import uuid
 
 import azurelinuxagent.common.conf as conf
+import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.logger as logger
 
 from azurelinuxagent.common.event import add_event, WALAEventOperation
@@ -179,15 +181,24 @@ class MonitorHandler(object):
 
     def daemon(self):
         period = datetime.timedelta(minutes=30)
+        protocol = self.protocol_util.get_protocol()        
         last_heartbeat = datetime.datetime.utcnow() - period
+
+        # Create a new identifier on each restart and reset the counter
+        heartbeat_id = str(uuid.uuid4()).upper()
+        counter = 0
         while True:
             if datetime.datetime.utcnow() >= (last_heartbeat + period):
                 last_heartbeat = datetime.datetime.utcnow()
+                incarnation = protocol.get_incarnation()
+                msg = "{0};{1};{2}".format(incarnation, counter, heartbeat_id)
                 add_event(
                     name=AGENT_NAME,
                     version=CURRENT_VERSION,
                     op=WALAEventOperation.HeartBeat,
-                    is_success=True)
+                    is_success=True,
+                    message=msg)
+                counter += 1
             try:
                 self.collect_and_send_events()
             except Exception as e:
