@@ -48,6 +48,7 @@ class TestConf(AgentTestCase):
         "OS.EnableFIPS" : True,
         "OS.RootDeviceScsiTimeout" : '300',
         "OS.OpensslPath" : '/usr/bin/openssl',
+        "OS.SshClientAliveInterval" : 42,
         "OS.SshDir" : "/notareal/path",
         "HttpProxy.Host" : None,
         "HttpProxy.Port" : None,

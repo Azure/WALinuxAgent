@@ -24,6 +24,7 @@ import platform
 import re
 import shutil
 import signal
+import stat
 import subprocess
 import sys
 import time
@@ -75,6 +76,13 @@ GOAL_STATE_INTERVAL = 3
 ORPHAN_WAIT_INTERVAL = 15 * 60
 
 AGENT_SENTINAL_FILE = "current_version"
+
+READONLY_FILE_GLOBS = [
+    "*.p7m",
+    "*.pem",
+    "*.crt",
+    "ovf-env.xml"
+]
 
 def get_update_handler():
     return UpdateHandler()
@@ -251,6 +259,7 @@ class UpdateHandler(object):
             self._ensure_no_orphans()
             self._emit_restart_event()
             self._ensure_partition_assigned()
+            self._ensure_readonly_files()
 
             while self.running:
                 if self._is_orphaned:
@@ -277,6 +286,7 @@ class UpdateHandler(object):
                 exthandlers_handler.run()
 
                 if last_etag != exthandlers_handler.last_etag:
+                    self._ensure_readonly_files()
                     add_event(
                         AGENT_NAME,
                         version=CURRENT_VERSION,
@@ -424,6 +434,11 @@ class UpdateHandler(object):
                 op=WALAEventOperation.Partition,
                 is_success=True,
                 message=partition)
+
+    def _ensure_readonly_files(self):
+        for g in READONLY_FILE_GLOBS:
+            for path in glob.iglob(os.path.join(conf.get_lib_dir(), g)):
+                os.chmod(path, stat.S_IRUSR)
 
     def _evaluate_agent_health(self, latest_agent):
         """
