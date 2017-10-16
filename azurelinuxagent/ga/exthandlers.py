@@ -17,6 +17,7 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
+import datetime
 import glob
 import json
 import os
@@ -63,7 +64,6 @@ HANDLER_NAME_PATTERN = re.compile(HANDLER_PATTERN+"$", re.IGNORECASE)
 HANDLER_PKG_EXT = ".zip"
 HANDLER_PKG_PATTERN = re.compile(HANDLER_PATTERN+"\\"+HANDLER_PKG_EXT+"$",
                                 re.IGNORECASE)
-
 
 def validate_has_key(obj, key, fullname):
     if key not in obj:
@@ -585,7 +585,7 @@ class ExtHandlerInstance(object):
                 status_file = os.path.join(old_ext_status_dir, status_file)
                 if os.path.isfile(status_file):
                     shutil.copy2(status_file, new_ext_status_dir)
-    
+
     def set_operation(self, op):
         self.operation = op
 
@@ -649,8 +649,25 @@ class ExtHandlerInstance(object):
         try:
             status_dir = self.get_status_dir()
             fileutil.mkdir(status_dir, mode=0o700)
+
+            seq_no, status_path = self.get_status_file_path()
+            if seq_no > -1:
+                now = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+                status = {
+                    "version": 1.0,
+                    "timestampUTC" : now,
+                    "status" : {
+                        "name" : self.ext_handler.name,
+                        "operation" : "Enabling Handler",
+                        "status" : "transitioning",
+                        "code" : 0
+                    }
+                }
+                fileutil.write_file(json.dumps(status), status_path)
+
             conf_dir = self.get_conf_dir()
             fileutil.mkdir(conf_dir, mode=0o700)
+
         except IOError as e:
             fileutil.clean_ioerror(e,
                 paths=[self.get_base_dir(), self.pkg_file])
@@ -740,16 +757,23 @@ class ExtHandlerInstance(object):
                     continue
         return seq_no
 
+    def get_status_file_path(self):
+        seq_no = self.get_largest_seq_no()
+        path = None
+
+        if seq_no > -1:
+            path = os.path.join(
+                        self.get_status_dir(),
+                        "{0}.status".format(seq_no))
+
+        return seq_no, path
+
     def collect_ext_status(self, ext):
         self.logger.verbose("Collect extension status")
 
-        seq_no = self.get_largest_seq_no()
+        seq_no, ext_status_file = self.get_status_file_path()
         if seq_no == -1:
             return None
-
-        status_dir = self.get_status_dir()
-        ext_status_file = "{0}.status".format(seq_no)
-        ext_status_file = os.path.join(status_dir, ext_status_file)
 
         ext_status = ExtensionStatus(seq_no=seq_no)
         try:

@@ -123,6 +123,7 @@ class DeprovisionHandler(object):
         known_files = [
             'HostingEnvironmentConfig.xml',
             'Incarnation',
+            'partition',
             'Protocol',
             'SharedConfig.xml',
             'WireServerEndpoint'

@@ -54,6 +54,8 @@ class TestWireProtocolGetters(AgentTestCase):
             self.assertTrue(os.path.isfile(crt2))
             self.assertTrue(os.path.isfile(prv2))
 
+            self.assertEqual("1", protocol.get_incarnation())
+
     def test_getters(self, *args):
         """Normal case"""
         test_data = WireProtocolData(DATA_FILE)

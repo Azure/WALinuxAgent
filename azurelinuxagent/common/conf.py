@@ -131,6 +131,7 @@ __STRING_OPTIONS__ = {
 }
 
 __INTEGER_OPTIONS__ = {
+    "OS.SshClientAliveInterval" : 180,
     "Provisioning.PasswordCryptSaltLength" : 10,
     "HttpProxy.Port" : None,
     "ResourceDisk.SwapSizeMB" : 0,
@@ -189,6 +190,9 @@ def get_fips_enabled(conf=__conf__):
 
 def get_openssl_cmd(conf=__conf__):
     return conf.get("OS.OpensslPath", "/usr/bin/openssl")
+
+def get_ssh_client_alive_interval(conf=__conf__):
+    return conf.get("OS.SshClientAliveInterval", 180)
 
 def get_ssh_dir(conf=__conf__):
     return conf.get("OS.SshDir", "/etc/ssh")

@@ -440,7 +440,7 @@ class DefaultOSUtil(object):
         conf_file = fileutil.read_file(conf_file_path).split("\n")
         textutil.set_ssh_config(conf_file, "PasswordAuthentication", option)
         textutil.set_ssh_config(conf_file, "ChallengeResponseAuthentication", option)
-        textutil.set_ssh_config(conf_file, "ClientAliveInterval", "180")
+        textutil.set_ssh_config(conf_file, "ClientAliveInterval", str(conf.get_ssh_client_alive_interval()))
         fileutil.write_file(conf_file_path, "\n".join(conf_file))
         logger.info("{0} SSH password-based authentication methods."
                     .format("Disabled" if disable_password else "Enabled"))
