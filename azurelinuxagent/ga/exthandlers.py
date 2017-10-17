@@ -306,7 +306,8 @@ class ExtHandlersHandler(object):
                     not self.is_new_guid(ext_handler):
                 logger.info("New GUID is the same as the old GUID. Exiting without upgrading.")
                 return
-            ext_handler_i.decide_version()
+
+            ext_handler_i.decide_version(target_state=state)
             if not ext_handler_i.is_upgrade and self.last_etag == etag:
                 if self.log_etag:
                     ext_handler_i.logger.verbose("Version {0} is current for etag {1}",
@@ -453,7 +454,7 @@ class ExtHandlerInstance(object):
         self.logger.add_appender(logger.AppenderType.FILE,
                                  logger.LogLevel.INFO, log_file)
 
-    def decide_version(self):
+    def decide_version(self, target_state=None):
         self.logger.verbose("Decide which version to use")
         try:
             pkg_list = self.protocol.get_ext_handler_pkgs(self.ext_handler)
@@ -538,7 +539,14 @@ class ExtHandlerInstance(object):
         # Note:
         #  - A downgrade, which will be bound to the same major version,
         #    is allowed if the installed version is no longer available
-        if selected_pkg is None \
+        if target_state == u"uninstall":
+            if installed_pkg is None:
+                msg = "Failed to find installed version of {0} " \
+                    "to uninstall".format(self.ext_handler.name)
+                self.logger.warn(msg)
+            self.pkg = installed_pkg
+            self.ext_handler.properties.version = installed_version
+        elif selected_pkg is None \
             or (installed_pkg is not None and selected_version < installed_version):
             self.pkg = installed_pkg
             self.ext_handler.properties.version = installed_version
@@ -1031,7 +1039,7 @@ class ExtHandlerInstance(object):
 
     def get_log_dir(self):
         return os.path.join(conf.get_ext_log_dir(), self.ext_handler.name,
-                            self.ext_handler.properties.version)
+                            str(self.ext_handler.properties.version))
 
 class HandlerEnvironment(object):
     def __init__(self, data):
