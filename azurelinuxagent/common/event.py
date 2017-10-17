@@ -47,6 +47,7 @@ class WALAEventOperation:
     AgentBlacklisted = "AgentBlacklisted"
     AgentEnabled = "AgentEnabled"
     AutoUpdate = "AutoUpdate"
+    CustomData = "CustomData"
     Deploy = "Deploy"
     Disable = "Disable"
     Download = "Download"

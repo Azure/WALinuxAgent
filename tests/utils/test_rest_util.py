@@ -268,6 +268,46 @@ class TestHttpOperations(AgentTestCase):
 
     @patch("time.sleep")
     @patch("azurelinuxagent.common.utils.restutil._http_request")
+    def test_http_request_retries_with_fibonacci_delay(self, _http_request, _sleep):
+        # Ensure the code is not a throttle code
+        self.assertFalse(httpclient.BAD_GATEWAY in restutil.THROTTLE_CODES)
+
+        _http_request.side_effect = [
+            Mock(status=httpclient.BAD_GATEWAY),
+            Mock(status=httpclient.BAD_GATEWAY),
+            Mock(status=httpclient.BAD_GATEWAY),
+            Mock(status=httpclient.OK)
+        ]
+
+        restutil.http_get("https://foo.bar",
+                            max_retry=restutil.DEFAULT_RETRIES+1)
+
+        self.assertEqual(restutil.DEFAULT_RETRIES+1, _http_request.call_count)
+        self.assertEqual(restutil.DEFAULT_RETRIES, _sleep.call_count)
+        self.assertEqual([call(2), call(3), call(5)], _sleep.call_args_list)
+
+    @patch("time.sleep")
+    @patch("azurelinuxagent.common.utils.restutil._http_request")
+    def test_http_request_retries_with_constant_delay_when_throttled(self, _http_request, _sleep):
+        # Ensure the code is a throttle code
+        self.assertTrue(httpclient.SERVICE_UNAVAILABLE in restutil.THROTTLE_CODES)
+
+        _http_request.side_effect = [
+            Mock(status=httpclient.SERVICE_UNAVAILABLE),
+            Mock(status=httpclient.SERVICE_UNAVAILABLE),
+            Mock(status=httpclient.SERVICE_UNAVAILABLE),
+            Mock(status=httpclient.OK)
+        ]
+
+        restutil.http_get("https://foo.bar",
+                            max_retry=restutil.DEFAULT_RETRIES+1)
+
+        self.assertEqual(restutil.DEFAULT_RETRIES+1, _http_request.call_count)
+        self.assertEqual(restutil.DEFAULT_RETRIES, _sleep.call_count)
+        self.assertEqual([call(1), call(1), call(1)], _sleep.call_args_list)
+
+    @patch("time.sleep")
+    @patch("azurelinuxagent.common.utils.restutil._http_request")
     def test_http_request_raises_for_bad_request(self, _http_request, _sleep):
         _http_request.side_effect = [
             Mock(status=httpclient.BAD_REQUEST)
