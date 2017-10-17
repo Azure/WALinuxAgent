@@ -21,6 +21,7 @@ from datetime import datetime
 
 import json
 import shutil
+import stat
 
 from azurelinuxagent.common.event import *
 from azurelinuxagent.common.protocol.hostplugin import *
@@ -920,6 +921,47 @@ class TestUpdate(UpdateTestCase):
             s = fileutil.read_file(path)
             self.assertEqual(n, int(s))
             os.remove(path)
+
+    def test_ensure_readonly_sets_readonly(self):
+        test_files = [
+            os.path.join(conf.get_lib_dir(), "faux_certificate.crt"),
+            os.path.join(conf.get_lib_dir(), "faux_certificate.p7m"),
+            os.path.join(conf.get_lib_dir(), "faux_certificate.pem"),
+            os.path.join(conf.get_lib_dir(), "faux_certificate.prv"),
+            os.path.join(conf.get_lib_dir(), "ovf-env.xml")
+        ]
+        for path in test_files:
+            fileutil.write_file(path, "Faux content")
+            os.chmod(path,
+                stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IROTH)
+
+        self.update_handler._ensure_readonly_files()
+
+        for path in test_files:
+            mode = os.stat(path).st_mode
+            mode &= (stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO)
+            self.assertEqual(0, mode ^ stat.S_IRUSR)
+
+    def test_ensure_readonly_leaves_unmodified(self):
+        test_files = [
+            os.path.join(conf.get_lib_dir(), "faux.xml"),
+            os.path.join(conf.get_lib_dir(), "faux.json"),
+            os.path.join(conf.get_lib_dir(), "faux.txt"),
+            os.path.join(conf.get_lib_dir(), "faux")
+        ]
+        for path in test_files:
+            fileutil.write_file(path, "Faux content")
+            os.chmod(path,
+                stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IROTH)
+
+        self.update_handler._ensure_readonly_files()
+
+        for path in test_files:
+            mode = os.stat(path).st_mode
+            mode &= (stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO)
+            self.assertEqual(
+                stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IROTH,
+                mode)
 
     def _test_evaluate_agent_health(self, child_agent_index=0):
         self.prepare_agents()
