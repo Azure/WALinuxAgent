@@ -31,7 +31,7 @@ DATA_FILE = {
         "ga_manifest" : "wire/ga_manifest.xml",
         "trans_prv": "wire/trans_prv",
         "trans_cert": "wire/trans_cert",
-        "test_ext": "ext/sample_ext-1.2.0.zip"
+        "test_ext": "ext/sample_ext-1.3.0.zip"
 }
 
 DATA_FILE_NO_EXT = DATA_FILE.copy()
@@ -51,6 +51,9 @@ DATA_FILE_EXT_INTERNALVERSION["ext_conf"] = "wire/ext_conf_internalversion.xml"
 
 DATA_FILE_EXT_AUTOUPGRADE_INTERNALVERSION = DATA_FILE.copy()
 DATA_FILE_EXT_AUTOUPGRADE_INTERNALVERSION["ext_conf"] = "wire/ext_conf_autoupgrade_internalversion.xml"
+
+DATA_FILE_EXT_ROLLINGUPGRADE = DATA_FILE.copy()
+DATA_FILE_EXT_ROLLINGUPGRADE["ext_conf"] = "wire/ext_conf_upgradeguid.xml"
 
 class WireProtocolData(object):
     def __init__(self, data_files=DATA_FILE):

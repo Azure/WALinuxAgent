@@ -14,6 +14,18 @@
             </Uris>
         </Plugin>
         <Plugin>
+            <Version>1.1.1</Version>
+            <Uris>
+                <Uri>http://foo.bar/zar/OSTCExtensions.ExampleHandlerLinux__1.1.1</Uri>
+            </Uris>
+        </Plugin>
+        <Plugin>
+            <Version>1.2.0</Version>
+            <Uris>
+                <Uri>http://foo.bar/zar/OSTCExtensions.ExampleHandlerLinux__1.2.0</Uri>
+            </Uris>
+        </Plugin>
+        <Plugin>
             <Version>2.0.0</Version><Uris><Uri>http://host/OSTCExtensions.ExampleHandlerLinux__2.0.0</Uri></Uris>
         </Plugin>
         <Plugin>
@@ -44,9 +56,9 @@
     </Plugins>
     <InternalPlugins>
         <Plugin>
-            <Version>1.2.0</Version>
+            <Version>1.3.0</Version>
             <Uris>
-                <Uri>http://foo.bar/zar/OSTCExtensions.ExampleHandlerLinux__1.2.0</Uri>
+                <Uri>http://foo.bar/zar/OSTCExtensions.ExampleHandlerLinux__1.3.0</Uri>
             </Uris>
         </Plugin>
         <Plugin>

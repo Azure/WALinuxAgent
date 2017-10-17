@@ -176,6 +176,7 @@ class ExtHandlersHandler(object):
         self.protocol = None
         self.ext_handlers = None
         self.last_etag = None
+        self.last_guids = {}
         self.log_report = False
         self.log_etag = True
 
@@ -204,6 +205,15 @@ class ExtHandlersHandler(object):
     def run_status(self):
         self.report_ext_handlers_status()
         return
+
+    def get_guid(self, name):
+        return self.last_guids.get(name, None)
+
+    def is_new_guid(self, ext_handler):
+        last_guid = self.get_guid(ext_handler.name)
+        if last_guid is None:
+            return True
+        return last_guid != ext_handler.properties.upgradeGuid
 
     def cleanup_outdated_handlers(self):
         handlers = []
@@ -288,6 +298,14 @@ class ExtHandlersHandler(object):
         ext_handler_i = ExtHandlerInstance(ext_handler, self.protocol)
 
         try:
+            state = ext_handler.properties.state
+            # The extension is to be enabled, there is an upgrade GUID
+            # and the GUID is NOT new
+            if state == u"enabled" and \
+                    ext_handler.properties.upgradeGuid is not None and \
+                    not self.is_new_guid(ext_handler):
+                logger.info("New GUID is the same as the old GUID. Exiting without upgrading.")
+                return
             ext_handler_i.decide_version()
             if not ext_handler_i.is_upgrade and self.last_etag == etag:
                 if self.log_etag:
@@ -299,14 +317,20 @@ class ExtHandlersHandler(object):
 
             self.log_etag = True
 
-            state = ext_handler.properties.state
             ext_handler_i.logger.info("Target handler state: {0}", state)
             if state == u"enabled":
                 self.handle_enable(ext_handler_i)
+                if ext_handler.properties.upgradeGuid is not None:
+                    ext_handler_i.logger.info("New Upgrade GUID: {0}", ext_handler.properties.upgradeGuid)
+                    self.last_guids[ext_handler.name] = ext_handler.properties.upgradeGuid
             elif state == u"disabled":
                 self.handle_disable(ext_handler_i)
+                # Remove the GUID from the dictionary so that it is upgraded upon re-enable
+                self.last_guids.pop(ext_handler.name, None)
             elif state == u"uninstall":
                 self.handle_uninstall(ext_handler_i)
+                # Remove the GUID from the dictionary so that it is upgraded upon re-install
+                self.last_guids.pop(ext_handler.name, None)
             else:
                 message = u"Unknown ext handler state:{0}".format(state)
                 raise ExtensionError(message)
@@ -386,6 +410,9 @@ class ExtHandlersHandler(object):
         handler_status = ext_handler_i.get_handler_status() 
         if handler_status is None:
             return
+        guid = self.get_guid(ext_handler.name)
+        if guid is not None:
+            handler_status.upgradeGuid = guid
 
         handler_state = ext_handler_i.get_handler_state()
         if handler_state != ExtHandlerState.NotInstalled:
