@@ -17,6 +17,7 @@
 # Requires Python 2.4+ and Openssl 1.0+
 
 import json
+import operator
 import os
 import re
 import time
@@ -55,11 +56,18 @@ AGENTS_MANIFEST_FILE_NAME = "{0}.{1}.agentsManifest"
 TRANSPORT_CERT_FILE_NAME = "TransportCert.pem"
 TRANSPORT_PRV_FILE_NAME = "TransportPrivate.pem"
 
+CACHE_PATTERNS = [
+    re.compile("^(.*)\.(\d+)\.(agentsManifest)$", re.IGNORECASE),
+    re.compile("^(.*)\.(\d+)\.(manifest\.xml)$", re.IGNORECASE),
+    re.compile("^(.*)\.(\d+)\.(xml)$", re.IGNORECASE)
+]
+
+MAXIMUM_CACHED_FILES = 50
+
 PROTOCOL_VERSION = "2012-11-30"
 ENDPOINT_FINE_NAME = "WireServer"
 
 SHORT_WAITING_INTERVAL = 1  # 1 second
-LONG_WAITING_INTERVAL = 15  # 15 seconds
 
 
 class UploadError(HttpError):
@@ -257,21 +265,27 @@ Convert VMStatus object to status blob format
 """
 
 
+def ga_status_to_guest_info(ga_status):
+    v1_ga_guest_info = {
+        "computerName" : ga_status.hostname,
+        "osName" : ga_status.osname,
+        "osVersion" : ga_status.osversion,
+        "version" : ga_status.version,
+    }
+    return v1_ga_guest_info
+
+
 def ga_status_to_v1(ga_status):
     formatted_msg = {
         'lang': 'en-US',
         'message': ga_status.message
     }
     v1_ga_status = {
-        'version': ga_status.version,
-        'status': ga_status.status,
-        'osversion': ga_status.osversion,
-        'osname': ga_status.osname,
-        'hostname': ga_status.hostname,
-        'formattedMessage': formatted_msg
+        "version" : ga_status.version,
+        "status" : ga_status.status,
+        "formattedMessage" : formatted_msg
     }
     return v1_ga_status
-
 
 def ext_substatus_to_v1(sub_status_list):
     status_list = []
@@ -346,6 +360,7 @@ def ext_handler_status_to_v1(handler_status, ext_statuses, timestamp):
 def vm_status_to_v1(vm_status, ext_statuses):
     timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
+    v1_ga_guest_info = ga_status_to_guest_info(vm_status.vmAgent)
     v1_ga_status = ga_status_to_v1(vm_status.vmAgent)
     v1_handler_status_list = []
     for handler_status in vm_status.vmAgent.extensionHandlers:
@@ -361,7 +376,8 @@ def vm_status_to_v1(vm_status, ext_statuses):
     v1_vm_status = {
         'version': '1.1',
         'timestampUTC': timestamp,
-        'aggregateStatus': v1_agg_status
+        'aggregateStatus': v1_agg_status,
+        'guestOSInfo' : v1_ga_guest_info
     }
     return v1_vm_status
 
@@ -524,33 +540,10 @@ class WireClient(object):
         self.shared_conf = None
         self.certs = None
         self.ext_conf = None
-        self.last_request = 0
-        self.req_count = 0
         self.host_plugin = None
         self.status_blob = StatusBlob(self)
 
-    def prevent_throttling(self):
-        """
-        Try to avoid throttling of wire server
-        """
-        now = time.time()
-        if now - self.last_request < 1:
-            logger.verbose("Last request issued less than 1 second ago")
-            logger.verbose("Sleep {0} second to avoid throttling.",
-                           SHORT_WAITING_INTERVAL)
-            time.sleep(SHORT_WAITING_INTERVAL)
-        self.last_request = now
-
-        self.req_count += 1
-        if self.req_count % 3 == 0:
-            logger.verbose("Sleep {0} second to avoid throttling.",
-                           SHORT_WAITING_INTERVAL)
-            time.sleep(SHORT_WAITING_INTERVAL)
-            self.req_count = 0
-
     def call_wireserver(self, http_req, *args, **kwargs):
-        self.prevent_throttling()
-
         try:
             # Never use the HTTP proxy for wireserver
             kwargs['use_proxy'] = False
@@ -742,6 +735,7 @@ class WireClient(object):
                 if self.host_plugin is not None:
                     self.host_plugin.container_id = goal_state.container_id
                     self.host_plugin.role_config_name = goal_state.role_config_name
+                self.purge_cache()
                 return
 
             except ProtocolError:
@@ -755,6 +749,40 @@ class WireClient(object):
                 goal_state = GoalState(xml_text)
 
         raise ProtocolError("Exceeded max retry updating goal state")
+
+    def purge_cache(self):
+        '''
+        Ensure the number of cached files does not exceed a maximum
+        '''
+        # Create a list of file tuples of (prefix, suffix, incarnation, name)
+        # -- Convert the incarnation to an integer for proper sorting
+        files = []
+        for f in os.listdir(conf.get_lib_dir()):
+            for pattern in CACHE_PATTERNS:
+                m = pattern.match(f)
+                if m is not None:
+                    t = (m.group(1), m.group(3), int(m.group(2)), f)
+                    files.append(t)
+                    break
+
+        if len(files) <= 0:
+            return
+
+        # Sort by (prefix, suffix, incarnation) in reverse order
+        # (This puts more recent incarnations first in the list)
+        files = sorted(files, key=operator.itemgetter(0,1,2), reverse=True)
+
+        # Remove any files in excess of the maximum allowed
+        # -- Restart then whenever the (prefix, suffix) change
+        last_match = [None, None]
+        for f in files:
+            if last_match != f[0:2]:
+                last_match = f[0:2]
+                count = 0
+            count += 1
+
+            if count > MAXIMUM_CACHED_FILES:
+                os.remove(os.path.join(conf.get_lib_dir(), f[3]))
 
     def get_goal_state(self):
         if self.goal_state is None:

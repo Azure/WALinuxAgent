@@ -32,10 +32,11 @@ from azurelinuxagent.common.version import PY_VERSION_MAJOR
 
 SECURE_WARNING_EMITTED = False
 
-DEFAULT_RETRIES = 3
+DEFAULT_RETRIES = 4
 
-SHORT_DELAY_IN_SECONDS = 5
-LONG_DELAY_IN_SECONDS = 15
+DELAY_IN_SECONDS = 1
+THROTTLE_DELAY_IN_SECONDS = 1
+MINIMUM_THROTTLE_RETRY = 15
 
 RETRY_CODES = [
     httpclient.RESET_CONTENT,
@@ -63,7 +64,8 @@ OK_CODES = [
 
 THROTTLE_CODES = [
     httpclient.FORBIDDEN,
-    httpclient.SERVICE_UNAVAILABLE
+    httpclient.SERVICE_UNAVAILABLE,
+    429, # Request Rate Limit Exceeded
 ]
 
 RETRY_EXCEPTIONS = [
@@ -76,6 +78,12 @@ RETRY_EXCEPTIONS = [
 HTTP_PROXY_ENV = "http_proxy"
 HTTPS_PROXY_ENV = "https_proxy"
 
+
+def _compute_delay(retry_attempt=1, delay=DELAY_IN_SECONDS):
+    fib = (1, 1)
+    for n in range(retry_attempt):
+        fib = (fib[1], fib[0]+fib[1])
+    return delay*fib[1]
 
 def _is_retry_status(status, retry_codes=RETRY_CODES):
     return status in retry_codes
@@ -166,7 +174,7 @@ def http_request(method,
                 use_proxy=False,
                 max_retry=DEFAULT_RETRIES,
                 retry_codes=RETRY_CODES,
-                retry_delay=SHORT_DELAY_IN_SECONDS):
+                retry_delay=DELAY_IN_SECONDS):
 
     global SECURE_WARNING_EMITTED
 
@@ -219,7 +227,7 @@ def http_request(method,
             time.sleep(delay)
 
         attempt += 1
-        delay = retry_delay
+        delay = _compute_delay(retry_attempt=attempt, delay=retry_delay)
 
         try:
             resp = _http_request(method,
@@ -237,8 +245,17 @@ def http_request(method,
                 if _is_retry_status(resp.status, retry_codes=retry_codes):
                     msg = '[HTTP Retry] HTTP {0} Status Code {1}'.format(
                         method, resp.status)
+
+                    # Always delay a short, constant time for throttling
+                    # -- Most (all?) throttling comes from wireserver or
+                    #    the HostPlugin; both throttle when receiving more than
+                    #    1 message per second; longer delays impact deployment
+                    #    peformance
+                    # -- Since the delay for throttled requests is constant,
+                    #    ensure a safe, minimum number of retries is performed
                     if _is_throttle_status(resp.status):
-                        delay = LONG_DELAY_IN_SECONDS
+                        delay = THROTTLE_DELAY_IN_SECONDS
+                        max_retry = max(max_retry, MINIMUM_THROTTLE_RETRY)
                         logger.info("[HTTP Delay] Delay {0} seconds for " \
                                     "Status Code {1}".format(
                                         delay, resp.status))
@@ -265,7 +282,7 @@ def http_request(method,
 def http_get(url, headers=None, use_proxy=False,
                 max_retry=DEFAULT_RETRIES,
                 retry_codes=RETRY_CODES,
-                retry_delay=SHORT_DELAY_IN_SECONDS):
+                retry_delay=DELAY_IN_SECONDS):
     return http_request("GET",
                         url, None, headers=headers,
                         use_proxy=use_proxy,
@@ -277,7 +294,7 @@ def http_get(url, headers=None, use_proxy=False,
 def http_head(url, headers=None, use_proxy=False,
                 max_retry=DEFAULT_RETRIES,
                 retry_codes=RETRY_CODES,
-                retry_delay=SHORT_DELAY_IN_SECONDS):
+                retry_delay=DELAY_IN_SECONDS):
     return http_request("HEAD",
                         url, None, headers=headers,
                         use_proxy=use_proxy,
@@ -289,7 +306,7 @@ def http_head(url, headers=None, use_proxy=False,
 def http_post(url, data, headers=None, use_proxy=False,
                 max_retry=DEFAULT_RETRIES,
                 retry_codes=RETRY_CODES,
-                retry_delay=SHORT_DELAY_IN_SECONDS):
+                retry_delay=DELAY_IN_SECONDS):
     return http_request("POST",
                         url, data, headers=headers,
                         use_proxy=use_proxy,
@@ -301,7 +318,7 @@ def http_post(url, data, headers=None, use_proxy=False,
 def http_put(url, data, headers=None, use_proxy=False,
                 max_retry=DEFAULT_RETRIES,
                 retry_codes=RETRY_CODES,
-                retry_delay=SHORT_DELAY_IN_SECONDS):
+                retry_delay=DELAY_IN_SECONDS):
     return http_request("PUT",
                         url, data, headers=headers,
                         use_proxy=use_proxy,
@@ -313,7 +330,7 @@ def http_put(url, data, headers=None, use_proxy=False,
 def http_delete(url, headers=None, use_proxy=False,
                 max_retry=DEFAULT_RETRIES,
                 retry_codes=RETRY_CODES,
-                retry_delay=SHORT_DELAY_IN_SECONDS):
+                retry_delay=DELAY_IN_SECONDS):
     return http_request("DELETE",
                         url, None, headers=headers,
                         use_proxy=use_proxy,
