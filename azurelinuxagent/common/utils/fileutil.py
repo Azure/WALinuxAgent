@@ -42,7 +42,7 @@ KNOWN_IOERRORS = [
     errno.ENOSPC,       # Out of space
     errno.ENAMETOOLONG, # Name too long
     errno.ELOOP,        # Too many symbolic links encountered
-    errno.EREMOTEIO     # Remote I/O error
+    121                 # Remote I/O error (errno.EREMOTEIO -- not present in all Python 2.7+)
 ]
 
 

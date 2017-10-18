@@ -14,6 +14,9 @@
 #
 # Requires Python 2.4+ and Openssl 1.0+
 #
+
+import glob
+
 from azurelinuxagent.common import event
 from azurelinuxagent.common.protocol.wire import *
 from tests.protocol.mockwiredata import *
@@ -25,10 +28,10 @@ wireserver_url = '168.63.129.16'
 
 @patch("time.sleep")
 @patch("azurelinuxagent.common.protocol.wire.CryptUtil")
-class TestWireProtocolGetters(AgentTestCase):
+class TestWireProtocol(AgentTestCase):
 
     def setUp(self):
-        super(TestWireProtocolGetters, self).setUp()
+        super(TestWireProtocol, self).setUp()
         HostPluginProtocol.set_default_channel(False)
     
     def _test_getters(self, test_data, MockCryptUtil, _):
@@ -367,10 +370,13 @@ class TestWireProtocolGetters(AgentTestCase):
         v1_ga_status = {
             'version': str(CURRENT_VERSION),
             'status': status,
-            'osversion': DISTRO_VERSION,
-            'osname': DISTRO_NAME,
-            'hostname': socket.gethostname(),
             'formattedMessage': formatted_msg
+        }
+        v1_ga_guest_info = {
+            'computerName' : socket.gethostname(),
+            'osName' : DISTRO_NAME,
+            'osVersion' : DISTRO_VERSION,
+            'version' : str(CURRENT_VERSION),
         }
         v1_agg_status = {
             'guestAgentStatus': v1_ga_status,
@@ -379,9 +385,43 @@ class TestWireProtocolGetters(AgentTestCase):
         v1_vm_status = {
             'version': '1.1',
             'timestampUTC': timestamp,
-            'aggregateStatus': v1_agg_status
+            'aggregateStatus': v1_agg_status,
+            'guestOSInfo' : v1_ga_guest_info
         }
         self.assertEqual(json.dumps(v1_vm_status), actual.to_json())
+
+    def _create_files(self, tmp_dir, prefix, suffix, count):
+        for i in range(count):
+            f = os.path.join(tmp_dir, '.'.join((prefix, str(i), suffix)))
+            fileutil.write_file(f, "faux content")
+
+    @patch("azurelinuxagent.common.conf.get_lib_dir")
+    def test_purge_cache_purges(self, mock_conf, *args):
+        names = [
+            ("Prod", "agentsManifest"),
+            ("Test", "agentsManifest"),
+            ("FauxExtension1", "manifest.xml"),
+            ("FauxExtension2", "manifest.xml"),
+            ("GoalState", "xml"),
+            ("ExtensionsConfig", "xml")
+        ]
+
+        tmp_dir = tempfile.mkdtemp()
+        mock_conf.return_value = tmp_dir
+
+        for t in names:
+            self._create_files(tmp_dir, t[0], t[1], 2 * MAXIMUM_CACHED_FILES)
+
+        for t in names:
+            p = os.path.join(tmp_dir, '{0}.*.{1}'.format(*t))
+            self.assertEqual(2 * MAXIMUM_CACHED_FILES, len(glob.glob(p)))
+
+        client = WireProtocol(wireserver_url).client
+        client.purge_cache()
+
+        for t in names:
+            p = os.path.join(tmp_dir, '{0}.*.{1}'.format(*t))
+            self.assertEqual(MAXIMUM_CACHED_FILES, len(glob.glob(p)))
 
 
 class MockResponse:

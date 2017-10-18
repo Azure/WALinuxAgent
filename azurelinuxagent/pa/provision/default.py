@@ -22,6 +22,7 @@ Provision handler
 import os
 import os.path
 import re
+import time
 
 from datetime import datetime
 
@@ -244,9 +245,14 @@ class ProvisionHandler(object):
         fileutil.write_file(customdata_file, customdata)
 
         if conf.get_execute_customdata():
+            start = time.time()
             logger.info("Execute custom data")
             os.chmod(customdata_file, 0o700)
             shellutil.run(customdata_file)
+            add_event(name=AGENT_NAME,
+                        duration=int(time.time() - start),
+                        is_success=True,
+                        op=WALAEventOperation.CustomData)
 
     def deploy_ssh_pubkeys(self, ovfenv):
         for pubkey in ovfenv.ssh_pubkeys:
