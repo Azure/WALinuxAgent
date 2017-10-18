@@ -37,7 +37,7 @@ class FlexibleVersion(version.Version):
         self.prerelease = None
         self.version = ()
         if vstring:
-            self._parse(vstring)
+            self._parse(str(vstring))
         return
 
     _nn_version = 'version'
