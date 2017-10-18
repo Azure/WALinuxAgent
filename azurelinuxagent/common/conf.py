@@ -44,7 +44,7 @@ class ConfigurationProvider(object):
                 if len(parts) < 2:
                     continue
                 key = parts[0].strip()
-                value = parts[1].strip("\" ")
+                value = parts[1].split('#')[0].strip("\" ")
                 self.values[key] = value if value != "None" else None
 
     def get(self, key, default_val):
