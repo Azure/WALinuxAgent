@@ -185,11 +185,15 @@ class ExtHandlersHandler(object):
         try:
             self.protocol = self.protocol_util.get_protocol()
             self.ext_handlers, etag = self.protocol.get_ext_handlers()
-        except ProtocolError as e:
+        except Exception as e:
             msg = u"Exception retrieving extension handlers: {0}".format(
                 ustr(e))
             logger.warn(msg)
-            add_event(AGENT_NAME, version=CURRENT_VERSION, is_success=False, message=msg)
+            add_event(AGENT_NAME,
+                version=CURRENT_VERSION,
+                op=WALAEventOperation.ExtensionProcessing,
+                is_success=False,
+                message=msg)
             return
 
         try:
@@ -206,7 +210,11 @@ class ExtHandlersHandler(object):
             msg = u"Exception processing extension handlers: {0}".format(
                 ustr(e))
             logger.warn(msg)
-            add_event(AGENT_NAME, version=CURRENT_VERSION, is_success=False, message=msg)
+            add_event(AGENT_NAME,
+                version=CURRENT_VERSION,
+                op=WALAEventOperation.ExtensionProcessing,
+                is_success=False,
+                message=msg)
             return
 
     def run_status(self):
@@ -400,6 +408,7 @@ class ExtHandlersHandler(object):
                     add_event(
                         AGENT_NAME,
                         version=CURRENT_VERSION,
+                        op=WALAEventOperation.ExtensionProcessing,
                         is_success=False,
                         message=ustr(e))
 
@@ -410,7 +419,11 @@ class ExtHandlersHandler(object):
                 logger.verbose("Completed vm agent status report")
         except ProtocolError as e:
             message = "Failed to report vm agent status: {0}".format(e)
-            add_event(AGENT_NAME, version=CURRENT_VERSION, is_success=False, message=message)
+            add_event(AGENT_NAME,
+                version=CURRENT_VERSION,
+                op=WALAEventOperation.ExtensionProcessing,
+                is_success=False,
+                message=message)
 
     def report_ext_handler_status(self, vm_status, ext_handler):
         ext_handler_i = ExtHandlerInstance(ext_handler, self.protocol)

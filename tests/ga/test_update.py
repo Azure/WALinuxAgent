@@ -27,7 +27,6 @@ from azurelinuxagent.common.event import *
 from azurelinuxagent.common.protocol.hostplugin import *
 from azurelinuxagent.common.protocol.metadata import *
 from azurelinuxagent.common.protocol.wire import *
-from azurelinuxagent.common.utils.safedeploy import *
 from azurelinuxagent.common.utils.fileutil import *
 from azurelinuxagent.ga.update import *
 
@@ -156,22 +155,17 @@ class UpdateTestCase(AgentTestCase):
             fileutil.copy_file(agent, to_dir=self.tmp_dir)
         return
 
-    def expand_agents(self, safe_deploy=False):
+    def expand_agents(self):
         for agent in self.agent_pkgs():
             path = os.path.join(self.tmp_dir, fileutil.trim_ext(agent, "zip"))
             zipfile.ZipFile(agent).extractall(path)
-            if safe_deploy:
-                shutil.copy(os.path.join(data_dir, SAFEDEPLOY_FILE), path)
-                fileutil.write_file(
-                    os.path.join(path, 'error.json'),
-                    json.dumps(FATAL_ERROR))
 
-    def prepare_agent(self, version, safe_deploy=False):
+    def prepare_agent(self, version):
         """
         Create a download for the current agent version, copied from test data
         """
         self.copy_agents(get_agent_pkgs()[0])
-        self.expand_agents(safe_deploy=safe_deploy)
+        self.expand_agents()
 
         versions = self.agent_versions()
         src_v = FlexibleVersion(str(versions[0]))
@@ -188,14 +182,13 @@ class UpdateTestCase(AgentTestCase):
 
     def prepare_agents(self,
                        count=5,
-                       is_available=True,
-                       safe_deploy=False):
+                       is_available=True):
 
         # Ensure the test data is copied over
         agent_count = self.agent_count()
         if agent_count <= 0:
             self.copy_agents(get_agent_pkgs()[0])
-            self.expand_agents(safe_deploy=safe_deploy)
+            self.expand_agents()
             count -= 1
 
         # Determine the most recent agent version
@@ -334,9 +327,6 @@ class TestGuestAgent(UpdateTestCase):
         self.assertEqual(get_agent_name(), agent.name)
         self.assertEqual(get_agent_version(), agent.version)
 
-        self.assertFalse(agent.in_safe_deployment_mode)
-        self.assertTrue(agent.in_partition)
-
         self.assertEqual(self.agent_path, agent.get_agent_dir())
 
         path = os.path.join(self.agent_path, AGENT_MANIFEST_FILE)
@@ -404,52 +394,6 @@ class TestGuestAgent(UpdateTestCase):
         self.assertFalse(agent.is_downloaded)
         agent._unpack()
         self.assertTrue(agent.is_downloaded)
-
-    @patch('azurelinuxagent.common.utils.safedeploy.get_osutil', return_value=Mock(is_64bit=True))
-    @patch('platform.linux_distribution', return_value=('Ubuntu', '16.10', 'yakkety'))
-    def test_in_safe_deployment_mode(self, mock_dist, mock_osutil):
-        self.expand_agents(safe_deploy=True)
-        agent = GuestAgent(path=self.agent_path)
-
-        self.assertTrue(agent.in_safe_deployment_mode)
-        self.assertTrue(agent.is_blacklisted)
-
-    @patch('azurelinuxagent.common.utils.safedeploy.get_osutil', return_value=Mock(is_64bit=True))
-    @patch('platform.linux_distribution', return_value=('Ubuntu', '16.10', 'yakkety'))
-    def test_in_partition(self, mock_dist, mock_osutil):
-        self.expand_agents(safe_deploy=True)
-        agent = GuestAgent(path=self.agent_path)
-
-        self.assertTrue(agent.in_partition(84))
-        self.assertFalse(agent.in_partition(85))
-
-    @patch('azurelinuxagent.common.utils.safedeploy.get_osutil', return_value=Mock(is_64bit=True))
-    @patch('platform.linux_distribution', return_value=('Ubuntu', '16.10', 'yakkety'))
-    def test_enable_deployment(self, mock_dist, mock_osutil):
-        self.expand_agents(safe_deploy=True)
-        agent = GuestAgent(path=self.agent_path)
-
-        # Assert the agent starts in safe-deployment mode and is blacklisted
-        self.assertTrue(agent.in_safe_deployment_mode)
-        self.assertTrue(agent.in_partition(84))
-        self.assertTrue(agent.is_blacklisted)
-
-        agent.enable_deployment()
-
-        # Assert the agent is no longer blacklisted after enablement
-        self.assertTrue(agent.in_safe_deployment_mode)
-        self.assertTrue(agent.in_partition(84))
-        self.assertFalse(agent.is_blacklisted)
-
-        # Assert that re-enablment does clear explicitly assigned blacklisting
-        agent.mark_failure(is_fatal=True)
-        agent.mark_deployed()
-        self.assertTrue(agent.is_blacklisted)
-
-        agent.enable_deployment()
-        self.assertTrue(agent.in_safe_deployment_mode)
-        self.assertTrue(agent.in_partition(84))
-        self.assertTrue(agent.is_blacklisted)
 
     @patch("azurelinuxagent.ga.update.GuestAgent._ensure_downloaded")
     @patch("azurelinuxagent.ga.update.GuestAgent._ensure_loaded")
@@ -741,117 +685,6 @@ class TestUpdate(UpdateTestCase):
             versions = [latest_version]
         return ProtocolMock(versions=versions)
 
-    def test_blacklist_agents(self):
-        self.prepare_agents()
-        agents = self.agents()
-        self.update_handler.agents = agents
-
-        for agent in agents:
-            self.assertFalse(agent.is_blacklisted)
-
-        versions = [str(v) for v in self.agent_versions()]
-        self.update_handler._blacklist_agents(versions)
-
-        for agent in agents:
-            self.assertTrue(agent.is_blacklisted)
-
-    def test_blacklist_agents_uses_pattern(self):
-        self.prepare_agents()
-        agents = self.agents()
-        self.update_handler.agents = agents
-
-        for agent in agents:
-            self.assertFalse(agent.is_blacklisted)
-
-        v = agents[0].version
-        versions = ["{0}(?:\\.\\d+)*".format(v.major)]
-        self.update_handler._blacklist_agents(versions)
-
-        for agent in agents:
-            self.assertTrue(agent.is_blacklisted)
-
-    def test_blacklist_agents_is_selective(self):
-        self.prepare_agents()
-        agents = self.agents()
-        self.update_handler.agents = agents
-
-        for agent in agents:
-            self.assertFalse(agent.is_blacklisted)
-
-        blacklisted = []
-        not_blacklisted = []
-        i = 0
-        for agent in agents:
-            if i % 2 == 0:
-                blacklisted.append(agent)
-            else:
-                not_blacklisted.append(agent)
-        v = blacklisted[0].version
-        versions = ["{0}(?:\\.\\d+)*".format(v.major)]
-        self.update_handler._blacklist_agents(versions)
-
-        for agent in blacklisted:
-            self.assertTrue(agent.is_blacklisted)
-        for agent in not_blacklisted:
-            self.assertFalse(agent.is_blacklisted)
-
-    @patch('azurelinuxagent.common.osutil.factory.get_osutil', return_value=Mock(is_64bit=True))
-    @patch('platform.linux_distribution', return_value=('Ubuntu', '16.10', 'yakkety'))
-    def test_enable_agents(self, mock_distribution, mock_osutil):
-        self.prepare_agents(safe_deploy=True)
-        agents = self.agents()
-        self.update_handler._partition = Mock(return_value=84)
-
-        for agent in agents:
-            self.assertTrue(agent.in_safe_deployment_mode)
-            self.assertFalse(agent.is_deployed)
-            self.assertFalse(agent.is_available)
-
-        self.update_handler._enable_agents(agents)
-
-        for agent in agents:
-            self.assertTrue(agent.in_safe_deployment_mode)
-            self.assertFalse(agent.is_deployed)
-            self.assertTrue(agent.is_available)
-
-    @patch('azurelinuxagent.common.osutil.factory.get_osutil', return_value=Mock(is_64bit=True))
-    @patch('platform.linux_distribution', return_value=('Ubuntu', '16.10', 'yakkety'))
-    def test_enable_agents_rejects_if_not_in_partition(self, mock_distribution, mock_osutil):
-        self.prepare_agents(safe_deploy=True)
-        agents = self.agents()
-        self.update_handler._partition = Mock(return_value=85)
-
-        for agent in agents:
-            self.assertTrue(agent.in_safe_deployment_mode)
-            self.assertFalse(agent.is_deployed)
-            self.assertFalse(agent.is_available)
-
-        self.update_handler._enable_agents(agents)
-
-        for agent in agents:
-            self.assertTrue(agent.in_safe_deployment_mode)
-            self.assertFalse(agent.is_deployed)
-            self.assertFalse(agent.is_available)
-
-    @patch('azurelinuxagent.common.osutil.factory.get_osutil', return_value=Mock(is_64bit=True))
-    @patch('platform.linux_distribution', return_value=('FooBar', '42', ''))
-    def test_enable_agents_rejects_if_wrong_distribution(self, mock_distribution, mock_osutil):
-        self.prepare_agents(safe_deploy=True)
-        agents = self.agents()
-        self.update_handler._partition = Mock(return_value=85)
-
-        for agent in agents:
-            self.assertTrue(agent.in_safe_deployment_mode)
-            self.assertFalse(agent.is_deployed)
-            self.assertFalse(agent.is_available)
-
-        self.update_handler._enable_agents(agents)
-
-        for agent in agents:
-            self.assertTrue(agent.in_safe_deployment_mode)
-            self.assertFalse(agent.is_deployed)
-            self.assertFalse(agent.is_available)
-
     def _test_ensure_no_orphans(self, invocations=3, interval=ORPHAN_WAIT_INTERVAL, pid_count=0):
         with patch.object(self.update_handler, 'osutil') as mock_util:
             # Note:
@@ -1002,55 +835,6 @@ class TestUpdate(UpdateTestCase):
         self._test_evaluate_agent_health(child_agent_index=1)
         self.assertEqual(1, self.update_handler.child_launch_attempts)
 
-    @patch('azurelinuxagent.common.osutil.factory.get_osutil', return_value=Mock(is_64bit=True))
-    @patch('platform.linux_distribution', return_value=('Ubuntu', '16.10', 'yakkety'))
-    def test_evaluate_deployments(self, mock_distribution, mock_osutil):
-        self.prepare_agents(safe_deploy=True)
-        agents = self.agents()
-        self.update_handler.agents = agents
-        self.update_handler._partition = Mock(return_value=85)
-
-        for agent in agents:
-            self.assertTrue(agent.in_safe_deployment_mode)
-            self.assertFalse(agent.is_deployed)
-            self.assertFalse(agent.is_available)
-
-        self.update_handler._evaluate_deployments()
-
-        for agent in agents:
-            self.assertTrue(agent.in_safe_deployment_mode)
-            self.assertTrue(agent.is_deployed)
-            self.assertFalse(agent.is_available)
-
-    @patch('azurelinuxagent.common.osutil.factory.get_osutil', return_value=Mock(is_64bit=True))
-    @patch('platform.linux_distribution', return_value=('Ubuntu', '16.10', 'yakkety'))
-    def test_evaluate_deployments_only_affects_undeployed(self, mock_distribution, mock_osutil):
-        self.prepare_agents(safe_deploy=True)
-        agents = self.agents()
-        agents[0].mark_deployed()
-        self.update_handler.agents = agents
-        self.update_handler._partition = Mock(return_value=85)
-
-        self.assertTrue(agents[0].in_safe_deployment_mode)
-        self.assertTrue(agents[0].is_deployed)
-        self.assertFalse(agents[0].is_available)
-
-        for agent in agents[1:]:
-            self.assertTrue(agent.in_safe_deployment_mode)
-            self.assertFalse(agent.is_deployed)
-            self.assertFalse(agent.is_available)
-
-        self.update_handler._evaluate_deployments()
-
-        self.assertTrue(agents[0].in_safe_deployment_mode)
-        self.assertTrue(agents[0].is_deployed)
-        self.assertFalse(agents[0].is_available)
-
-        for agent in agents[1:]:
-            self.assertTrue(agent.in_safe_deployment_mode)
-            self.assertTrue(agent.is_deployed)
-            self.assertFalse(agent.is_available)
-
     def test_filter_blacklisted_agents(self):
         self.prepare_agents()
 
@@ -1155,12 +939,7 @@ class TestUpdate(UpdateTestCase):
         self.assertFalse(os.path.isfile(self.update_handler._sentinal_file_path()))
         self.assertTrue(self.update_handler._is_clean_start)
 
-    def test_is_clean_start_returns_true_sentinal_agent_is_not_current(self):
-        self.update_handler._set_sentinal(agent="Not the Current Agent")
-        self.assertTrue(os.path.isfile(self.update_handler._sentinal_file_path()))
-        self.assertTrue(self.update_handler._is_clean_start)
-
-    def test_is_clean_start_returns_false_for_current_agent(self):
+    def test_is_clean_start_returns_false_when_sentinal_exists(self):
         self.update_handler._set_sentinal(agent=CURRENT_AGENT)
         self.assertFalse(self.update_handler._is_clean_start)
 
@@ -1576,26 +1355,6 @@ class TestUpdate(UpdateTestCase):
 
         self.assertTrue(self._test_upgrade_available(versions=self.agent_versions()))
         self.assertEqual(all_count, len(self.update_handler.agents))
-
-    @patch('azurelinuxagent.common.osutil.factory.get_osutil', return_value=Mock(is_64bit=True))
-    @patch('platform.linux_distribution', return_value=('Ubuntu', '16.10', 'yakkety'))
-    def test_upgrade_available_evaluates_deployments(self, mock_distribution, mock_osutil):
-        self.prepare_agents(safe_deploy=True)
-        agents = self.agents()
-        self.update_handler._partition = Mock(return_value=84)
-
-        for agent in agents:
-            self.assertTrue(agent.in_safe_deployment_mode)
-            self.assertFalse(agent.is_deployed)
-            self.assertFalse(agent.is_available)
-
-        self.assertTrue(self._test_upgrade_available(versions=self.agent_versions()))
-
-        self.assertEqual(len(agents), len(self.update_handler.agents))
-        for agent in self.update_handler.agents:
-            self.assertTrue(agent.in_safe_deployment_mode)
-            self.assertTrue(agent.is_deployed)
-            self.assertTrue(agent.is_available)
 
     def test_upgrade_available_purges_old_agents(self):
         self.prepare_agents()

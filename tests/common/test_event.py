@@ -23,7 +23,8 @@ import azurelinuxagent.common.event as event
 import azurelinuxagent.common.logger as logger
 
 from azurelinuxagent.common.event import add_event, \
-                                    mark_event_status, should_emit_event
+                                    mark_event_status, should_emit_event, \
+                                    WALAEventOperation
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.version import CURRENT_VERSION
 
@@ -144,7 +145,7 @@ class TestEvent(AgentTestCase):
         event.add_periodic(logger.EVERY_DAY, "FauxEvent")
         self.assertEqual(1, mock_event.call_count)
 
-        h = hash("FauxEvent"+""+ustr(True)+"")
+        h = hash("FauxEvent"+WALAEventOperation.Unknown+ustr(True))
         event.__event_logger__.periodic_events[h] = \
             datetime.now() - logger.EVERY_DAY - logger.EVERY_HOUR
         event.add_periodic(logger.EVERY_DAY, "FauxEvent")
@@ -158,7 +159,8 @@ class TestEvent(AgentTestCase):
         mock_event.assert_called_once_with(
             "FauxEvent",
             duration=0, evt_type='', is_internal=False, is_success=True,
-            log_event=True, message='', op='', version=str(CURRENT_VERSION))
+            log_event=True, message='', op=WALAEventOperation.Unknown,
+            version=str(CURRENT_VERSION))
 
     def test_save_event(self):
         add_event('test', message='test event')
