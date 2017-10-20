@@ -191,13 +191,19 @@ class MonitorHandler(object):
             if datetime.datetime.utcnow() >= (last_heartbeat + period):
                 last_heartbeat = datetime.datetime.utcnow()
                 incarnation = protocol.get_incarnation()
-                msg = "{0};{1};{2}".format(incarnation, counter, heartbeat_id)
+                dropped_packages = self.osutil.get_firewall_dropped_packets(
+                                                    protocol.endpoint)
+
+                msg = "{0};{1};{2};{3}".format(
+                    incarnation, counter, heartbeat_id, dropped_packets)
+
                 add_event(
                     name=AGENT_NAME,
                     version=CURRENT_VERSION,
                     op=WALAEventOperation.HeartBeat,
                     is_success=True,
                     message=msg)
+
                 counter += 1
             try:
                 self.collect_and_send_events()

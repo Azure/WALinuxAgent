@@ -405,6 +405,60 @@ class TestFlexibleVersion(unittest.TestCase):
             self.assertEqual(test, str(FlexibleVersion(test)))
         return
 
+    def test_creation_from_flexible_version(self):
+        tests = [
+            '1',
+            '1.2',
+            '1.2.3',
+            '1.2.3.4',
+            '1.2.3.4.5',
+
+            '1alpha',
+            '1.alpha',
+            '1-alpha',
+            '1alpha0',
+            '1.alpha0',
+            '1-alpha0',
+            '1.2alpha',
+            '1.2.alpha',
+            '1.2-alpha',
+            '1.2alpha0',
+            '1.2.alpha0',
+            '1.2-alpha0',
+
+            '1beta',
+            '1.beta',
+            '1-beta',
+            '1beta0',
+            '1.beta0',
+            '1-beta0',
+            '1.2beta',
+            '1.2.beta',
+            '1.2-beta',
+            '1.2beta0',
+            '1.2.beta0',
+            '1.2-beta0',
+
+            '1rc',
+            '1.rc',
+            '1-rc',
+            '1rc0',
+            '1.rc0',
+            '1-rc0',
+            '1.2rc',
+            '1.2.rc',
+            '1.2-rc',
+            '1.2rc0',
+            '1.2.rc0',
+            '1.2-rc0',
+
+            '1.2.3.4alpha5',
+        ]
+        for test in tests:
+            v = FlexibleVersion(test)
+            self.assertEqual(test, str(FlexibleVersion(v)))
+        return
+
     def test_repr(self):
         v = FlexibleVersion('1,2,3rc4', ',', ['lol', 'rc'])
         expected = "FlexibleVersion ('1,2,3rc4', ',', ('lol', 'rc'))"

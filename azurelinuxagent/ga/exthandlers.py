@@ -192,15 +192,22 @@ class ExtHandlersHandler(object):
             add_event(AGENT_NAME, version=CURRENT_VERSION, is_success=False, message=msg)
             return
 
-        msg = u"Handle extensions updates for incarnation {0}".format(etag)
-        logger.verbose(msg)
-        # Log status report success on new config
-        self.log_report = True
-        self.handle_ext_handlers(etag)
-        self.last_etag = etag
+        try:
+            msg = u"Handle extensions updates for incarnation {0}".format(etag)
+            logger.verbose(msg)
+            # Log status report success on new config
+            self.log_report = True
+            self.handle_ext_handlers(etag)
+            self.last_etag = etag
 
-        self.report_ext_handlers_status()
-        self.cleanup_outdated_handlers()
+            self.report_ext_handlers_status()
+            self.cleanup_outdated_handlers()
+        except Exception as e:
+            msg = u"Exception processing extension handlers: {0}".format(
+                ustr(e))
+            logger.warn(msg)
+            add_event(AGENT_NAME, version=CURRENT_VERSION, is_success=False, message=msg)
+            return
 
     def run_status(self):
         self.report_ext_handlers_status()
@@ -335,7 +342,7 @@ class ExtHandlersHandler(object):
             else:
                 message = u"Unknown ext handler state:{0}".format(state)
                 raise ExtensionError(message)
-        except ExtensionError as e:
+        except Exception as e:
             ext_handler_i.set_handler_status(message=ustr(e), code=-1)
             ext_handler_i.report_event(message=ustr(e), is_success=False)
     
@@ -462,7 +469,8 @@ class ExtHandlerInstance(object):
             raise ExtensionError("Failed to get ext handler pkgs", e)
 
         # Determine the desired and installed versions
-        requested_version = FlexibleVersion(self.ext_handler.properties.version)
+        requested_version = FlexibleVersion(
+                                    str(self.ext_handler.properties.version))
         installed_version_string = self.get_installed_version()
         installed_version = requested_version \
             if installed_version_string is None \
@@ -545,14 +553,16 @@ class ExtHandlerInstance(object):
                     "to uninstall".format(self.ext_handler.name)
                 self.logger.warn(msg)
             self.pkg = installed_pkg
-            self.ext_handler.properties.version = installed_version
+            self.ext_handler.properties.version = str(installed_version) \
+                                    if installed_version is not None else None
         elif selected_pkg is None \
             or (installed_pkg is not None and selected_version < installed_version):
             self.pkg = installed_pkg
-            self.ext_handler.properties.version = installed_version
+            self.ext_handler.properties.version = str(installed_version) \
+                                    if installed_version is not None else None
         else:
             self.pkg = selected_pkg
-            self.ext_handler.properties.version = selected_pkg.version
+            self.ext_handler.properties.version = str(selected_pkg.version)
 
         # Note if the selected package is greater than that installed
         if installed_pkg is None \
@@ -568,7 +578,7 @@ class ExtHandlerInstance(object):
     def version_gt(self, other):
         self_version = self.ext_handler.properties.version
         other_version = other.ext_handler.properties.version
-        return Version(self_version) > Version(other_version)
+        return FlexibleVersion(self_version) > FlexibleVersion(other_version)
 
     def get_installed_ext_handler(self):
         lastest_version = self.get_installed_version()
@@ -988,7 +998,7 @@ class ExtHandlerInstance(object):
 
         handler_status = ExtHandlerStatus()
         handler_status.name = self.ext_handler.name
-        handler_status.version = self.ext_handler.properties.version
+        handler_status.version = str(self.ext_handler.properties.version)
         handler_status.message = message
         handler_status.code = code
         handler_status.status = status

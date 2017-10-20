@@ -57,9 +57,16 @@ IPTABLES_VERSION = "iptables --version"
 IPTABLES_LOCKING_VERSION = FlexibleVersion('1.4.21')
 
 FIREWALL_ACCEPT = "iptables {0} -t security -{1} OUTPUT -d {2} -p tcp -m owner --uid-owner {3} -j ACCEPT"
-FIREWALL_DROP = "iptables {0} -t security -{1} OUTPUT -d {2} -p tcp -j DROP"
-FIREWALL_LIST = "iptables {0} -t security -L"
+# Note:
+# -- Initially "flight" the change to ACCEPT packets and develop a metric baseline
+#    A subsequent release will convert the ACCEPT to DROP
+FIREWALL_DROP = "iptables {0} -t security -{1} OUTPUT -d {2} -p tcp -m conntrack --ctstate INVALID,NEW -j ACCEPT"
+# FIREWALL_DROP = "iptables {0} -t security -{1} OUTPUT -d {2} -p tcp -m conntrack --ctstate INVALID,NEW -j DROP"
+FIREWALL_LIST = "iptables {0} -t security -L -nxv"
+FIREWALL_PACKETS = "iptables {0} -t security -L OUTPUT -nxv"
 FIREWALL_FLUSH = "iptables {0} -t security --flush"
+
+PACKET_PATTERN = "^\s*(\d+)\s+(\d+)\s+DROP\s+.*{0}[^\d]*$"
 
 _enable_firewall = True
 
@@ -75,6 +82,33 @@ class DefaultOSUtil(object):
         self.agent_conf_file_path = '/etc/waagent.conf'
         self.selinux = None
         self.disable_route_warning = False
+
+    def get_firewall_dropped_packets(self, dst_ip=None):
+        # If a previous attempt failed, do not retry
+        global _enable_firewall
+        if not _enable_firewall:
+            return 0
+
+        try:
+            wait = self.get_firewall_will_wait()
+
+            rc, output = shellutil.run_get_output(FIREWALL_PACKETS.format(wait))
+            if rc != 0:
+                return -1
+
+            pattern = re.compile(PACKET_PATTERN.format(dst_ip))
+            for line in output.split('\n'):
+                m = pattern.match(line)
+                if m is not None:
+                    return int(m.group(1))
+            
+            return 0
+
+        except Exception as e:
+            _enable_firewall = False
+            logger.warn("Unable to retrieve firewall packets dropped"
+                        "{0}".format(ustr(e)))
+            return -1
 
     def get_firewall_will_wait(self):
         # Determine if iptables will serialize access
@@ -118,8 +152,7 @@ class DefaultOSUtil(object):
             return False
 
     def enable_firewall(self, dst_ip=None, uid=None):
-
-        # If a previous attempt threw an exception, do not retry
+        # If a previous attempt failed, do not retry
         global _enable_firewall
         if not _enable_firewall:
             return False

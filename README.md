@@ -181,7 +181,6 @@ ResourceDisk.MountPoint=/mnt/resource
 ResourceDisk.MountOptions=None
 ResourceDisk.EnableSwap=n
 ResourceDisk.SwapSizeMB=0
-LBProbeResponder=y
 Logs.Verbose=n
 OS.AllowHTTP=n
 OS.RootDeviceScsiTimeout=300
@@ -329,13 +328,6 @@ _Type: Integer_
 _Default: 0_   
 
 The size of the swap file in megabytes.   
-
-* __LBProbeResponder__   
-_Type: Boolean_   
-_Default: y_   
-
-If set, waagent will respond to load balancer probes from the platform (if
-present).
 
 * Logs.Verbose   
 _Type: Boolean_    
