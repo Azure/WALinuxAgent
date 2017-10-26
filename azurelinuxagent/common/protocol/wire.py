@@ -851,8 +851,13 @@ class WireClient(object):
                                 ext_handler.name,
                                 goal_state.incarnation)
                 local_file = os.path.join(conf.get_lib_dir(), local_file)
-                xml_text = self.fetch_manifest(ext_handler.versionUris)
-                self.save_cache(local_file, xml_text)
+                try:
+                    xml_text = self.fetch_cache(local_file)
+                except ProtocolError:
+                    # Either I/O error while reading the cache or the cache
+                    # does not exist. Either way, grab a fresh copy.
+                    xml_text = self.fetch_manifest(ext_handler.versionUris)
+                    self.save_cache(local_file, xml_text)
                 return ExtensionManifest(xml_text)
 
             except ResourceGoneError:
