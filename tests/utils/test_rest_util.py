@@ -316,16 +316,16 @@ class TestHttpOperations(AgentTestCase):
 
         _http_request.side_effect = [
                 Mock(status=httpclient.SERVICE_UNAVAILABLE)
-                    for i in range(restutil.MINIMUM_THROTTLE_RETRY-1)
+                    for i in range(restutil.THROTTLE_RETRIES-1)
             ] + [Mock(status=httpclient.OK)]
 
         restutil.http_get("https://foo.bar",
                             max_retry=1)
 
-        self.assertEqual(restutil.MINIMUM_THROTTLE_RETRY, _http_request.call_count)
-        self.assertEqual(restutil.MINIMUM_THROTTLE_RETRY-1, _sleep.call_count)
+        self.assertEqual(restutil.THROTTLE_RETRIES, _http_request.call_count)
+        self.assertEqual(restutil.THROTTLE_RETRIES-1, _sleep.call_count)
         self.assertEqual(
-            [call(1) for i in range(restutil.MINIMUM_THROTTLE_RETRY-1)],
+            [call(1) for i in range(restutil.THROTTLE_RETRIES-1)],
             _sleep.call_args_list)
 
     @patch("time.sleep")

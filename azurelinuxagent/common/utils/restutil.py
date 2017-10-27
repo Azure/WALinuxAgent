@@ -32,11 +32,11 @@ from azurelinuxagent.common.version import PY_VERSION_MAJOR
 
 SECURE_WARNING_EMITTED = False
 
-DEFAULT_RETRIES = 4
-
+DEFAULT_RETRIES = 6
 DELAY_IN_SECONDS = 1
+
+THROTTLE_RETRIES = 25
 THROTTLE_DELAY_IN_SECONDS = 1
-MINIMUM_THROTTLE_RETRY = 15
 
 RETRY_CODES = [
     httpclient.RESET_CONTENT,
@@ -216,18 +216,31 @@ def http_request(method,
 
     msg = ''
     attempt = 0
-    delay = retry_delay
+    delay = 0
+    was_throttled = False
 
     while attempt < max_retry:
         if attempt > 0:
-            logger.info("[HTTP Retry] Attempt {0} of {1}: {2}",
+            # Compute the request delay
+            # -- Use a fixed delay if the server ever rate-throttles the request
+            #    (with a safe, minimum number of retry attempts)
+            # -- Otherwise, compute a delay that is the product of the next
+            #    item in the Fibonacci series and the initial delay value
+            delay = THROTTLE_DELAY_IN_SECONDS \
+                        if was_throttled \
+                        else _compute_delay(retry_attempt=attempt,
+                                            delay=retry_delay)
+
+            logger.info("[HTTP Retry] "
+                        "Attempt {0} of {1} will delay {2} seconds: {3}",
                         attempt+1,
                         max_retry,
+                        delay,
                         msg)
+
             time.sleep(delay)
 
         attempt += 1
-        delay = _compute_delay(retry_attempt=attempt, delay=retry_delay)
 
         try:
             resp = _http_request(method,
@@ -245,20 +258,11 @@ def http_request(method,
                 if _is_retry_status(resp.status, retry_codes=retry_codes):
                     msg = '[HTTP Retry] HTTP {0} Status Code {1}'.format(
                         method, resp.status)
-
-                    # Always delay a short, constant time for throttling
-                    # -- Most (all?) throttling comes from wireserver or
-                    #    the HostPlugin; both throttle when receiving more than
-                    #    1 message per second; longer delays impact deployment
-                    #    peformance
-                    # -- Since the delay for throttled requests is constant,
-                    #    ensure a safe, minimum number of retries is performed
+                    # Note if throttled and ensure a safe, minimum number of
+                    # retry attempts
                     if _is_throttle_status(resp.status):
-                        delay = THROTTLE_DELAY_IN_SECONDS
-                        max_retry = max(max_retry, MINIMUM_THROTTLE_RETRY)
-                        logger.info("[HTTP Delay] Delay {0} seconds for " \
-                                    "Status Code {1}".format(
-                                        delay, resp.status))
+                        was_throttled = True
+                        max_retry = max(max_retry, THROTTLE_RETRIES)
                     continue
 
             if resp.status in RESOURCE_GONE_CODES:

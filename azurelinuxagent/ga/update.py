@@ -35,7 +35,6 @@ from datetime import datetime, timedelta
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
-import azurelinuxagent.common.utils.safedeploy as safedeploy
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.restutil as restutil
 import azurelinuxagent.common.utils.textutil as textutil
@@ -301,9 +300,10 @@ class UpdateHandler(object):
                 time.sleep(GOAL_STATE_INTERVAL)
 
         except Exception as e:
-            logger.warn(u"Agent {0} failed with exception: {1}",
-                        CURRENT_AGENT,
-                        ustr(e))
+            msg = u"Agent {0} failed with exception: {1}".format(
+                CURRENT_AGENT, ustr(e))
+            self._set_sentinal(msg=msg)
+            logger.warn(msg)
             logger.warn(traceback.format_exc())
             sys.exit(1)
             # additional return here because sys.exit is mocked in unit tests
@@ -356,38 +356,22 @@ class UpdateHandler(object):
 
         return available_agents[0] if len(available_agents) >= 1 else None
 
-    def _blacklist_agents(self, versions):
-        """
-        Blacklist agents whose version matches any of the set of passed
-        version glob patterns.
-        """
-        for version in versions:
-            for agent in self.agents:
-                if re.match(version, str(agent.version)) is not None:
-                    agent.mark_failure(is_fatal=True)
-                    msg = "Agent {0} blacklisted {1}".format(
-                            CURRENT_AGENT,
-                            agent.name)
-                    add_event(
-                        agent.name,
-                        op=WALAEventOperation.AgentBlacklisted,
-                        version=agent.version,
-                        is_success=True,
-                        message=msg)
-                    logger.info(msg)
-
     def _emit_restart_event(self):
-        if not self._is_clean_start:
-            msg = u"{0} did not terminate cleanly".format(CURRENT_AGENT)
-            logger.info(msg)
-            add_event(
-                AGENT_NAME,
-                version=CURRENT_VERSION,
-                op=WALAEventOperation.Restart,
-                is_success=False,
-                message=msg)
+        try:
+            if not self._is_clean_start:
+                msg = u"Agent did not terminate cleanly: {0}".format(
+                            fileutil.read_file(self._sentinal_file_path()))
+                logger.info(msg)
+                add_event(
+                    AGENT_NAME,
+                    version=CURRENT_VERSION,
+                    op=WALAEventOperation.Restart,
+                    is_success=False,
+                    message=msg)
+        except Exception:
+            pass
 
-        self._set_sentinal() 
+        self._set_sentinal(msg="Starting")
         return
 
     def _ensure_no_orphans(self, orphan_wait_interval=ORPHAN_WAIT_INTERVAL):
@@ -469,55 +453,6 @@ class UpdateHandler(object):
                 raise Exception(msg)
         return
 
-    def _enable_agents(self, agents):
-        partition = self._partition()
-        for agent in agents:
-            if agent.in_partition(partition):
-                agent.enable_deployment()
-                msg = "Agent {0} enabled {1} for partition {2}".format(
-                        CURRENT_AGENT,
-                        agent.name,
-                        partition)
-                add_event(
-                    agent.name,
-                    op=WALAEventOperation.AgentEnabled,
-                    version=agent.version,
-                    is_success=True,
-                    message=msg)
-                logger.info(msg)
-
-    def _evaluate_deployments(self):
-        agents = []
-        fSuccess = False
-        msg = ""
-        try:
-            agents = [a for a in self.agents
-                        if a.in_safe_deployment_mode
-                            and not a.safe_deploy.is_deployed]
-
-            self._enable_agents(agents)
-
-            for blacklist in [a.safe_deploy.blacklisted for a in agents]:
-                self._blacklist_agents(blacklist)
-
-            for agent in agents:
-                agent.mark_deployed()
-
-            fSuccess = True
-
-        except Exception as e:
-            msg = "Exception evaluating agents for safe deployment: {0}".format(
-                    e)
-            logger.warn(msg)
-
-        if len(agents) > 0:
-            add_event(
-                AGENT_NAME,
-                version=CURRENT_VERSION,
-                op=WALAEventOperation.Deploy,
-                is_success=fSuccess,
-                message=msg)
-
     def _filter_blacklisted_agents(self):
         self.agents = [agent for agent in self.agents if not agent.is_blacklisted]
 
@@ -554,19 +489,7 @@ class UpdateHandler(object):
 
     @property
     def _is_clean_start(self):
-        if not os.path.isfile(self._sentinal_file_path()):
-            return True
-
-        try:
-            if fileutil.read_file(self._sentinal_file_path()) != CURRENT_AGENT:
-                return True
-        except Exception as e:
-            logger.warn(
-                u"Exception reading sentinal file {0}: {1}",
-                self._sentinal_file_path(),
-                str(e))
-
-        return False
+        return not os.path.isfile(self._sentinal_file_path())
 
     @property
     def _is_orphaned(self):
@@ -610,7 +533,7 @@ class UpdateHandler(object):
         path = os.path.join(conf.get_lib_dir(), "{0}-*".format(AGENT_NAME))
 
         known_versions = [agent.version for agent in self.agents]
-        if not is_current_agent_installed() and CURRENT_VERSION not in known_versions:
+        if CURRENT_VERSION not in known_versions:
             logger.info(
                 u"Running Agent {0} was not found in the agent manifest - adding to list",
                 CURRENT_VERSION)
@@ -636,9 +559,11 @@ class UpdateHandler(object):
         self.agents.sort(key=lambda agent: agent.version, reverse=True)
         return
 
-    def _set_sentinal(self, agent=CURRENT_AGENT):
+    def _set_sentinal(self, agent=CURRENT_AGENT, msg="Unknown cause"):
         try:
-            fileutil.write_file(self._sentinal_file_path(), agent)
+            fileutil.write_file(
+                self._sentinal_file_path(),
+                "[{0}] [{1}]".format(agent, msg))
         except Exception as e:
             logger.warn(
                 u"Exception writing sentinal file {0}: {1}",
@@ -722,7 +647,6 @@ class UpdateHandler(object):
                                      for pkg in pkg_list.versions])
 
                 self._purge_agents()
-                self._evaluate_deployments()
                 self._filter_blacklisted_agents()
 
                 # Return True if current agent is no longer available or an
@@ -795,7 +719,6 @@ class GuestAgent(object):
 
         self.error = GuestAgentError(self.get_agent_error_file())
         self.error.load()
-        self.safe_deploy = safedeploy.SafeDeploy()
 
         try:
             self._ensure_downloaded()
@@ -838,18 +761,9 @@ class GuestAgent(object):
     def get_agent_pkg_path(self):
         return ".".join((os.path.join(conf.get_lib_dir(), self.name), "zip"))
 
-    def enable_deployment(self):
-        if self.in_safe_deployment_mode and not self.safe_deploy.is_deployed:
-            self.clear_error()
-
     def clear_error(self):
         self.error.clear()
         self.error.save()
-
-    @property
-    def in_safe_deployment_mode(self):
-        return self.safe_deploy is not None and \
-            self.safe_deploy.in_safe_deployment_mode
 
     @property
     def is_available(self):
@@ -860,21 +774,9 @@ class GuestAgent(object):
         return self.error is not None and self.error.is_blacklisted
 
     @property
-    def is_deployed(self):
-        return self.safe_deploy is not None and self.safe_deploy.is_deployed
-
-    @property
     def is_downloaded(self):
         return self.is_blacklisted or \
                 os.path.isfile(self.get_agent_manifest_path())
-
-    def in_partition(self, partition):
-        return self.safe_deploy is not None and \
-            self.safe_deploy.in_partition(partition)
-
-    def mark_deployed(self):
-        if self.safe_deploy is not None:
-            self.safe_deploy.mark_deployed()
 
     def mark_failure(self, is_fatal=False):
         try:
@@ -913,7 +815,6 @@ class GuestAgent(object):
     def _ensure_loaded(self):
         self._load_manifest()
         self._load_error()
-        self.safe_deploy = safedeploy.SafeDeploy(self.get_agent_dir())
 
     def _download(self):
         for uri in self.pkg.uris:
