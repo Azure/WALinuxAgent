@@ -19,8 +19,11 @@
 
 import base64
 import struct
+
 from azurelinuxagent.common.future import ustr, bytebuffer
 from azurelinuxagent.common.exception import CryptError
+
+import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.shellutil as shellutil
 
 class CryptUtil(object):
@@ -34,7 +37,10 @@ class CryptUtil(object):
         cmd = ("{0} req -x509 -nodes -subj /CN=LinuxTransport -days 730 "
                "-newkey rsa:2048 -keyout {1} "
                "-out {2}").format(self.openssl_cmd, prv_file, crt_file)
-        shellutil.run(cmd)
+        rc = shellutil.run(cmd)
+        if rc != 0:
+            logger.error("Failed to create {0} and {1} certificates".format(
+                prv_file, crt_file))
 
     def get_pubkey_from_prv(self, file_name):
         cmd = "{0} rsa -in {1} -pubout 2>/dev/null".format(self.openssl_cmd, 

@@ -84,16 +84,22 @@ def run_get_output(cmd, chk_err=True, log_cmd=True):
         output = ustr(output,
                       encoding='utf-8',
                       errors="backslashreplace")
-    except subprocess.CalledProcessError as e:
-        output = ustr(e.output,
-                      encoding='utf-8',
-                      errors="backslashreplace")
-        if chk_err:
-            if log_cmd:
-                logger.error(u"Command: '{0}'", e.cmd)
-            logger.error(u"Return code: {0}", e.returncode)
-            logger.error(u"Result: {0}", output)
-        return e.returncode, output
+    except Exception as e:
+        if type(e) is subprocess.CalledProcessError:
+            output = ustr(e.output,
+                        encoding='utf-8',
+                        errors="backslashreplace")
+            if chk_err:
+                if log_cmd:
+                    logger.error(u"Command: '{0}'", e.cmd)
+                logger.error(u"Return code: {0}", e.returncode)
+                logger.error(u"Result: {0}", output)
+            return e.returncode, output
+        else:
+            logger.error(
+                u"'{0}' raised unexpected exception: '{1}'".format(
+                    cmd, ustr(e)))
+            return -1, ustr(e)
     return 0, output
 
 
