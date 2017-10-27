@@ -344,7 +344,7 @@ class ExtHandlersHandler(object):
                 return
 
             self.set_log_upgrade_guid(ext_handler, True)
-            ext_handler_i.decide_version(target_state=state)
+            ext_handler_i.decide_version(etag=etag, target_state=state)
             if not ext_handler_i.is_upgrade and self.last_etag == etag:
                 if self.log_etag:
                     ext_handler_i.logger.verbose("Version {0} is current for etag {1}",
@@ -494,10 +494,10 @@ class ExtHandlerInstance(object):
         self.logger.add_appender(logger.AppenderType.FILE,
                                  logger.LogLevel.INFO, log_file)
 
-    def decide_version(self, target_state=None):
+    def decide_version(self, etag, target_state=None):
         self.logger.verbose("Decide which version to use")
         try:
-            pkg_list = self.protocol.get_ext_handler_pkgs(self.ext_handler)
+            pkg_list = self.protocol.get_ext_handler_pkgs(self.ext_handler, etag)
         except ProtocolError as e:
             raise ExtensionError("Failed to get ext handler pkgs", e)
 

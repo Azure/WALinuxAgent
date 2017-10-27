@@ -153,10 +153,9 @@ class WireProtocol(Protocol):
         # In wire protocol, incarnation is equivalent to ETag
         return ext_conf.ext_handlers, goal_state.incarnation
 
-    def get_ext_handler_pkgs(self, ext_handler):
+    def get_ext_handler_pkgs(self, ext_handler, etag):
         logger.verbose("Get extension handler package")
-        goal_state = self.client.get_goal_state()
-        man = self.client.get_ext_manifest(ext_handler, goal_state)
+        man = self.client.get_ext_manifest(ext_handler, etag)
         return man.pkg_list
 
     def get_artifacts_profile(self):
@@ -840,30 +839,20 @@ class WireClient(object):
                 self.ext_conf = ExtensionsConfig(xml_text)
         return self.ext_conf
 
-    def get_ext_manifest(self, ext_handler, goal_state):
-        for update_goal_state in [False, True]:
-            try:
-                if update_goal_state:
-                    self.update_goal_state(forced=True)
-                    goal_state = self.get_goal_state()
+    def get_ext_manifest(self, ext_handler, incarnation):
+        local_file = MANIFEST_FILE_NAME.format(
+                        ext_handler.name,
+                        incarnation)
+        local_file = os.path.join(conf.get_lib_dir(), local_file)
+        try:
+            xml_text = self.fetch_cache(local_file)
+        except ProtocolError:
+            # Either I/O error while reading the cache or the cache
+            # does not exist. Either way, grab a fresh copy.
+            xml_text = self.fetch_manifest(ext_handler.versionUris)
+            self.save_cache(local_file, xml_text)
 
-                local_file = MANIFEST_FILE_NAME.format(
-                                ext_handler.name,
-                                goal_state.incarnation)
-                local_file = os.path.join(conf.get_lib_dir(), local_file)
-                try:
-                    xml_text = self.fetch_cache(local_file)
-                except ProtocolError:
-                    # Either I/O error while reading the cache or the cache
-                    # does not exist. Either way, grab a fresh copy.
-                    xml_text = self.fetch_manifest(ext_handler.versionUris)
-                    self.save_cache(local_file, xml_text)
-                return ExtensionManifest(xml_text)
-
-            except ResourceGoneError:
-                continue
-
-        raise ProtocolError("Failed to retrieve extension manifest")
+        return ExtensionManifest(xml_text)
 
     def filter_package_list(self, family, ga_manifest, goal_state):
         complete_list = ga_manifest.pkg_list
