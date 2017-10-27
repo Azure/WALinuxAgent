@@ -74,10 +74,6 @@ class UploadError(HttpError):
     pass
 
 
-class WireProtocolResourceGone(ProtocolError):
-    pass
-
-
 class WireProtocol(Protocol):
     """Slim layer to adapt wire protocol data to metadata protocol interface"""
 
@@ -548,19 +544,20 @@ class WireClient(object):
             # Never use the HTTP proxy for wireserver
             kwargs['use_proxy'] = False
             resp = http_req(*args, **kwargs)
+
+            if restutil.request_failed(resp):
+                msg = "[Wireserver Failed] URI {0} ".format(args[0])
+                if resp is not None:
+                    msg += " [HTTP Failed] Status Code {0}".format(resp.status)
+                raise ProtocolError(msg)
+
+        # If the GoalState is stale, pass along the exception to the caller
+        except ResourceGoneError:
+            raise
+
         except Exception as e:
             raise ProtocolError("[Wireserver Exception] {0}".format(
                 ustr(e)))
-
-        if resp is not None and resp.status == httpclient.GONE:
-            msg = args[0] if len(args) > 0 else ""
-            raise WireProtocolResourceGone(msg)
-
-        elif restutil.request_failed(resp):
-            msg = "[Wireserver Failed] URI {0} ".format(args[0])
-            if resp is not None:
-                msg += " [HTTP Failed] Status Code {0}".format(resp.status)
-            raise ProtocolError(msg)
 
         return resp
 
@@ -703,26 +700,31 @@ class WireClient(object):
         self.ext_conf = ExtensionsConfig(xml_text)
 
     def update_goal_state(self, forced=False, max_retry=3):
-        uri = GOAL_STATE_URI.format(self.endpoint)
-        xml_text = self.fetch_config(uri, self.get_header())
-        goal_state = GoalState(xml_text)
-
         incarnation_file = os.path.join(conf.get_lib_dir(),
                                         INCARNATION_FILE_NAME)
-
-        if not forced:
-            last_incarnation = None
-            if os.path.isfile(incarnation_file):
-                last_incarnation = fileutil.read_file(incarnation_file)
-            new_incarnation = goal_state.incarnation
-            if last_incarnation is not None and \
-                            last_incarnation == new_incarnation:
-                # Goalstate is not updated.
-                return
+        uri = GOAL_STATE_URI.format(self.endpoint)
 
         # Start updating goalstate, retry on 410
+        fetch_goal_state = True
         for retry in range(0, max_retry):
             try:
+                if fetch_goal_state:
+                    fetch_goal_state = False
+
+                    xml_text = self.fetch_config(uri, self.get_header())
+                    goal_state = GoalState(xml_text)
+
+                    if not forced:
+                        last_incarnation = None
+                        if os.path.isfile(incarnation_file):
+                            last_incarnation = fileutil.read_file(
+                                                    incarnation_file)
+                        new_incarnation = goal_state.incarnation
+                        if last_incarnation is not None and \
+                                        last_incarnation == new_incarnation:
+                            # Goalstate is not updated.
+                            return
+
                 self.goal_state = goal_state
                 file_name = GOAL_STATE_FILE_NAME.format(goal_state.incarnation)
                 goal_state_file = os.path.join(conf.get_lib_dir(), file_name)
@@ -732,21 +734,29 @@ class WireClient(object):
                 self.update_certs(goal_state)
                 self.update_ext_conf(goal_state)
                 self.save_cache(incarnation_file, goal_state.incarnation)
+
                 if self.host_plugin is not None:
                     self.host_plugin.container_id = goal_state.container_id
                     self.host_plugin.role_config_name = goal_state.role_config_name
                 self.purge_cache()
+
                 return
 
-            except ProtocolError:
+            except ResourceGoneError:
+                logger.info("GoalState is stale -- re-fetching")
+                fetch_goal_state = True
+
+            except Exception as e:
+                log_method = logger.info \
+                                if type(e) is ProtocolError \
+                                else logger.warn
+                log_method(
+                    "Exception processing GoalState-related files: {0}".format(
+                        ustr(e)))
+
                 if retry < max_retry-1:
                     continue
                 raise
-
-            except WireProtocolResourceGone:
-                logger.info("Incarnation is out of date. Update goalstate.")
-                xml_text = self.fetch_config(uri, self.get_header())
-                goal_state = GoalState(xml_text)
 
         raise ProtocolError("Exceeded max retry updating goal state")
 

@@ -26,8 +26,8 @@ class AgentError(Exception):
     Base class of agent error.
     """
 
-    def __init__(self, errno, msg, inner=None):
-        msg = u"[{0}] {1}".format(errno, msg)
+    def __init__(self, msg, inner=None):
+        msg = u"[{0}] {1}".format(type(self).__name__, msg)
         if inner is not None:
             msg = u"{0}\nInner error: {1}".format(msg, inner)
         super(AgentError, self).__init__(msg)
@@ -39,7 +39,7 @@ class AgentConfigError(AgentError):
     """
 
     def __init__(self, msg=None, inner=None):
-        super(AgentConfigError, self).__init__('000001', msg, inner)
+        super(AgentConfigError, self).__init__(msg, inner)
 
 
 class AgentNetworkError(AgentError):
@@ -48,7 +48,7 @@ class AgentNetworkError(AgentError):
     """
 
     def __init__(self, msg=None, inner=None):
-        super(AgentNetworkError, self).__init__('000002', msg, inner)
+        super(AgentNetworkError, self).__init__(msg, inner)
 
 
 class ExtensionError(AgentError):
@@ -57,7 +57,7 @@ class ExtensionError(AgentError):
     """
 
     def __init__(self, msg=None, inner=None):
-        super(ExtensionError, self).__init__('000003', msg, inner)
+        super(ExtensionError, self).__init__(msg, inner)
 
 
 class ProvisionError(AgentError):
@@ -66,7 +66,7 @@ class ProvisionError(AgentError):
     """
 
     def __init__(self, msg=None, inner=None):
-        super(ProvisionError, self).__init__('000004', msg, inner)
+        super(ProvisionError, self).__init__(msg, inner)
 
 
 class ResourceDiskError(AgentError):
@@ -75,7 +75,7 @@ class ResourceDiskError(AgentError):
     """
 
     def __init__(self, msg=None, inner=None):
-        super(ResourceDiskError, self).__init__('000005', msg, inner)
+        super(ResourceDiskError, self).__init__(msg, inner)
 
 
 class DhcpError(AgentError):
@@ -84,7 +84,7 @@ class DhcpError(AgentError):
     """
 
     def __init__(self, msg=None, inner=None):
-        super(DhcpError, self).__init__('000006', msg, inner)
+        super(DhcpError, self).__init__(msg, inner)
 
 class OSUtilError(AgentError):
     """
@@ -92,7 +92,7 @@ class OSUtilError(AgentError):
     """
 
     def __init__(self, msg=None, inner=None):
-        super(OSUtilError, self).__init__('000007', msg, inner)
+        super(OSUtilError, self).__init__(msg, inner)
 
 
 class ProtocolError(AgentError):
@@ -101,7 +101,7 @@ class ProtocolError(AgentError):
     """
 
     def __init__(self, msg=None, inner=None):
-        super(ProtocolError, self).__init__('000008', msg, inner)
+        super(ProtocolError, self).__init__(msg, inner)
 
 
 class ProtocolNotFoundError(ProtocolError):
@@ -119,7 +119,7 @@ class HttpError(AgentError):
     """
 
     def __init__(self, msg=None, inner=None):
-        super(HttpError, self).__init__('000009', msg, inner)
+        super(HttpError, self).__init__(msg, inner)
 
 
 class EventError(AgentError):
@@ -128,7 +128,7 @@ class EventError(AgentError):
     """
 
     def __init__(self, msg=None, inner=None):
-        super(EventError, self).__init__('000010', msg, inner)
+        super(EventError, self).__init__(msg, inner)
 
 
 class CryptError(AgentError):
@@ -137,7 +137,7 @@ class CryptError(AgentError):
     """
 
     def __init__(self, msg=None, inner=None):
-        super(CryptError, self).__init__('000011', msg, inner)
+        super(CryptError, self).__init__(msg, inner)
 
 
 class UpdateError(AgentError):
@@ -146,7 +146,7 @@ class UpdateError(AgentError):
     """
 
     def __init__(self, msg=None, inner=None):
-        super(UpdateError, self).__init__('000012', msg, inner)
+        super(UpdateError, self).__init__(msg, inner)
 
 
 class ResourceGoneError(HttpError):
@@ -155,4 +155,6 @@ class ResourceGoneError(HttpError):
     """
 
     def __init__(self, msg=None, inner=None):
+        if msg is None:
+            msg = "Resource is gone"
         super(ResourceGoneError, self).__init__(msg, inner)

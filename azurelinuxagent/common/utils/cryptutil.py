@@ -67,6 +67,9 @@ class CryptUtil(object):
                "").format(self.openssl_cmd, p7m_file, trans_prv_file, 
                           trans_cert_file, self.openssl_cmd, pem_file)
         shellutil.run(cmd)
+        rc = shellutil.run(cmd)
+        if rc != 0:
+            logger.error("Failed to decrypt {0}".format(p7m_file))
 
     def crt_to_ssh(self, input_file, output_file):
         shellutil.run("ssh-keygen -i -m PKCS8 -f {0} >> {1}".format(input_file,

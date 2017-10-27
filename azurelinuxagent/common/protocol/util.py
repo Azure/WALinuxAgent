@@ -26,16 +26,18 @@ import threading
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
+import azurelinuxagent.common.utils.fileutil as fileutil
+
 from azurelinuxagent.common.exception import ProtocolError, OSUtilError, \
                                       ProtocolNotFoundError, DhcpError
 from azurelinuxagent.common.future import ustr
-import azurelinuxagent.common.utils.fileutil as fileutil
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.dhcp import get_dhcp_handler
 from azurelinuxagent.common.protocol.ovfenv import OvfEnv
 from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.common.protocol.metadata import MetadataProtocol, \
                                                      METADATA_ENDPOINT
+from azurelinuxagent.common.utils.restutil import IOErrorCounter
 
 OVF_FILE_NAME = "ovf-env.xml"
 TAG_FILE_NAME = "useMetadataEndpoint.tag"
@@ -175,17 +177,20 @@ class ProtocolUtil(object):
         self.clear_protocol()
 
         for retry in range(0, MAX_RETRY):
-            for protocol in protocols:
+            for protocol_name in protocols:
                 try:
-                    if protocol == "WireProtocol":
-                        return self._detect_wire_protocol()
-                    
-                    if protocol == "MetadataProtocol":
-                        return self._detect_metadata_protocol()
+                    protocol = self._detect_wire_protocol() \
+                                if protocol_name == "WireProtocol" \
+                                else self._detect_metadata_protocol()
+
+                    IOErrorCounter.set_protocol_endpoint(
+                        endpoint=protocol.endpoint)
+
+                    return protocol
 
                 except ProtocolError as e:
                     logger.info("Protocol endpoint not found: {0}, {1}", 
-                                protocol, e)
+                                protocol_name, e)
 
             if retry < MAX_RETRY -1:
                 logger.info("Retry detect protocols: retry={0}", retry)
