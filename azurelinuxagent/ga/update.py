@@ -241,21 +241,21 @@ class UpdateHandler(object):
         This is the main loop which watches for agent and extension updates.
         """
 
-        logger.info(u"Agent {0} is running as the goal state agent",
-                    CURRENT_AGENT)
-
-        # Launch monitoring threads
-        from azurelinuxagent.ga.monitor import get_monitor_handler
-        get_monitor_handler().run()
-
-        from azurelinuxagent.ga.env import get_env_handler
-        get_env_handler().run()
-
-        from azurelinuxagent.ga.exthandlers import get_exthandlers_handler, migrate_handler_state
-        exthandlers_handler = get_exthandlers_handler()
-        migrate_handler_state()
-
         try:
+            logger.info(u"Agent {0} is running as the goal state agent",
+                        CURRENT_AGENT)
+
+            # Launch monitoring threads
+            from azurelinuxagent.ga.monitor import get_monitor_handler
+            get_monitor_handler().run()
+
+            from azurelinuxagent.ga.env import get_env_handler
+            get_env_handler().run()
+
+            from azurelinuxagent.ga.exthandlers import get_exthandlers_handler, migrate_handler_state
+            exthandlers_handler = get_exthandlers_handler()
+            migrate_handler_state()
+
             self._ensure_no_orphans()
             self._emit_restart_event()
             self._ensure_partition_assigned()
