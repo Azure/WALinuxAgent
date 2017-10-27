@@ -18,6 +18,7 @@
 #
 
 import os
+import threading
 import time
 import traceback
 
@@ -77,6 +78,42 @@ RETRY_EXCEPTIONS = [
 
 HTTP_PROXY_ENV = "http_proxy"
 HTTPS_PROXY_ENV = "https_proxy"
+
+DEFAULT_PROTOCOL_ENDPOINT='168.63.129.16'
+HOST_PLUGIN_PORT = 32526
+
+
+class IOErrorCounter(object):
+    _lock = threading.RLock()
+    _protocol_endpoint = DEFAULT_PROTOCOL_ENDPOINT
+    _counts = {"hostplugin":0, "protocol":0, "other":0}
+
+    @staticmethod
+    def increment(host=None, port=None):
+        with IOErrorCounter._lock:
+            if host == IOErrorCounter._protocol_endpoint:
+                if port == HOST_PLUGIN_PORT:
+                    IOErrorCounter._counts["hostplugin"] += 1
+                else:
+                    IOErrorCounter._counts["protocol"] += 1
+            else:
+                IOErrorCounter._counts["other"] += 1
+
+    @staticmethod
+    def get_and_reset():
+        with IOErrorCounter._lock:
+            counts = IOErrorCounter._counts.copy()
+            IOErrorCounter.reset()
+            return counts
+
+    @staticmethod
+    def reset():
+        with IOErrorCounter._lock:
+            IOErrorCounter._counts = {"hostplugin":0, "protocol":0, "other":0}
+
+    @staticmethod
+    def set_protocol_endpoint(endpoint=DEFAULT_PROTOCOL_ENDPOINT):
+        IOErrorCounter._protocol_endpoint = endpoint
 
 
 def _compute_delay(retry_attempt=1, delay=DELAY_IN_SECONDS):
@@ -231,7 +268,7 @@ def http_request(method,
                         else _compute_delay(retry_attempt=attempt,
                                             delay=retry_delay)
 
-            logger.info("[HTTP Retry] "
+            logger.verbose("[HTTP Retry] "
                         "Attempt {0} of {1} will delay {2} seconds: {3}",
                         attempt+1,
                         max_retry,
@@ -256,8 +293,8 @@ def http_request(method,
 
             if request_failed(resp):
                 if _is_retry_status(resp.status, retry_codes=retry_codes):
-                    msg = '[HTTP Retry] HTTP {0} Status Code {1}'.format(
-                        method, resp.status)
+                    msg = '[HTTP Retry] {0} {1} -- Status Code {2}'.format(
+                        method, url, resp.status)
                     # Note if throttled and ensure a safe, minimum number of
                     # retry attempts
                     if _is_throttle_status(resp.status):
@@ -271,16 +308,19 @@ def http_request(method,
             return resp
 
         except httpclient.HTTPException as e:
-            msg = '[HTTP Failed] HTTP {0} HttpException {1}'.format(method, e)
+            msg = '[HTTP Failed] {0} {1} -- HttpException {2}'.format(
+                method, url, e)
             if _is_retry_exception(e):
                 continue
             break
 
         except IOError as e:
-            msg = '[HTTP Failed] HTTP {0} IOError {1}'.format(method, e)
+            IOErrorCounter.increment(host=host, port=port)
+            msg = '[HTTP Failed] {0} {1} -- IOError {2}'.format(
+                method, url, e)
             continue
 
-    raise HttpError(msg)
+    raise HttpError("{0} -- {1} attempts made".format(msg,attempt))
 
 
 def http_get(url, headers=None, use_proxy=False,

@@ -24,8 +24,69 @@ from azurelinuxagent.common.exception import HttpError, \
 import azurelinuxagent.common.utils.restutil as restutil
 
 from azurelinuxagent.common.future import httpclient, ustr
+
 from tests.tools import *
 
+
+class TestIOErrorCounter(AgentTestCase):
+    def test_increment_hostplugin(self):
+        restutil.IOErrorCounter.reset()
+        restutil.IOErrorCounter.set_protocol_endpoint()
+
+        restutil.IOErrorCounter.increment(
+            restutil.DEFAULT_PROTOCOL_ENDPOINT, restutil.HOST_PLUGIN_PORT)
+
+        counts = restutil.IOErrorCounter.get_and_reset()
+        self.assertEqual(1, counts["hostplugin"])
+        self.assertEqual(0, counts["protocol"])
+        self.assertEqual(0, counts["other"])
+
+    def test_increment_protocol(self):
+        restutil.IOErrorCounter.reset()
+        restutil.IOErrorCounter.set_protocol_endpoint()
+
+        restutil.IOErrorCounter.increment(
+            restutil.DEFAULT_PROTOCOL_ENDPOINT, 80)
+
+        counts = restutil.IOErrorCounter.get_and_reset()
+        self.assertEqual(0, counts["hostplugin"])
+        self.assertEqual(1, counts["protocol"])
+        self.assertEqual(0, counts["other"])
+
+    def test_increment_other(self):
+        restutil.IOErrorCounter.reset()
+        restutil.IOErrorCounter.set_protocol_endpoint()
+
+        restutil.IOErrorCounter.increment(
+            '169.254.169.254', 80)
+
+        counts = restutil.IOErrorCounter.get_and_reset()
+        self.assertEqual(0, counts["hostplugin"])
+        self.assertEqual(0, counts["protocol"])
+        self.assertEqual(1, counts["other"])
+
+    def test_get_and_reset(self):
+        restutil.IOErrorCounter.reset()
+        restutil.IOErrorCounter.set_protocol_endpoint()
+
+        restutil.IOErrorCounter.increment(
+            restutil.DEFAULT_PROTOCOL_ENDPOINT, restutil.HOST_PLUGIN_PORT)
+        restutil.IOErrorCounter.increment(
+            restutil.DEFAULT_PROTOCOL_ENDPOINT, restutil.HOST_PLUGIN_PORT)
+        restutil.IOErrorCounter.increment(
+            restutil.DEFAULT_PROTOCOL_ENDPOINT, 80)
+        restutil.IOErrorCounter.increment(
+            '169.254.169.254', 80)
+        restutil.IOErrorCounter.increment(
+            '169.254.169.254', 80)
+
+        counts = restutil.IOErrorCounter.get_and_reset()
+        self.assertEqual(2, counts.get("hostplugin"))
+        self.assertEqual(1, counts.get("protocol"))
+        self.assertEqual(2, counts.get("other"))
+        self.assertEqual(
+           {"hostplugin":0, "protocol":0, "other":0},
+            restutil.IOErrorCounter._counts)
 
 class TestHttpOperations(AgentTestCase):
     def test_parse_url(self):

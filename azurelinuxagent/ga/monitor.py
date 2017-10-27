@@ -36,6 +36,7 @@ from azurelinuxagent.common.protocol.restapi import TelemetryEventParam, \
                                                     TelemetryEventList, \
                                                     TelemetryEvent, \
                                                     set_properties
+from azurelinuxagent.common.utils.restutil import IOErrorCounter
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, getattrib
 from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_VERSION, \
             DISTRO_CODE_NAME, AGENT_LONG_VERSION, \
@@ -191,7 +192,7 @@ class MonitorHandler(object):
             if datetime.datetime.utcnow() >= (last_heartbeat + period):
                 last_heartbeat = datetime.datetime.utcnow()
                 incarnation = protocol.get_incarnation()
-                dropped_packages = self.osutil.get_firewall_dropped_packets(
+                dropped_packets = self.osutil.get_firewall_dropped_packets(
                                                     protocol.endpoint)
 
                 msg = "{0};{1};{2};{3}".format(
@@ -205,6 +206,24 @@ class MonitorHandler(object):
                     message=msg)
 
                 counter += 1
+
+                ioerrors = IOErrorCounter.get_and_reset()
+                hostplugin_errors = ioerrors.get("hostplugin")
+                protocol_errors = ioerrors.get("protocol")
+                other_errors = ioerrors.get("other")
+
+                if hostplugin_errors > 0 or \
+                    protocol_errors > 0 or \
+                    other_errors > 0:
+                    msg = "hostplugin:{0};protocol:{1};other:{2}".format(
+                        hostplugin_errors, protocol_errors, other_errors)
+                    add_event(
+                        name=AGENT_NAME,
+                        version=CURRENT_VERSION,
+                        op=WALAEventOperation.HttpErrors,
+                        is_success=False,
+                        msg=msg)
+
             try:
                 self.collect_and_send_events()
             except Exception as e:
