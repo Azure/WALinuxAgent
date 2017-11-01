@@ -649,6 +649,7 @@ class TestUpdate(UpdateTestCase):
         UpdateTestCase.setUp(self)
         self.event_patch = patch('azurelinuxagent.common.event.add_event')
         self.update_handler = get_update_handler()
+        self.update_handler.protocol_util = Mock()
 
     def test_creation(self):
         self.assertTrue(self.update_handler.running)
