@@ -1365,6 +1365,10 @@ class TestUpdate(UpdateTestCase):
         agent_versions = self.agent_versions()[:3]
         self.assertTrue(self._test_upgrade_available(versions=agent_versions))
         self.assertEqual(len(agent_versions), len(self.update_handler.agents))
+
+        # Purging always keeps the running agent
+        if CURRENT_VERSION not in agent_versions:
+            agent_versions.append(CURRENT_VERSION)
         self.assertEqual(agent_versions, self.agent_versions())
 
     def test_update_available_returns_true_if_current_gets_blacklisted(self):
