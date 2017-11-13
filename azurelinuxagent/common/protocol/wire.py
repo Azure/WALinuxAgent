@@ -704,13 +704,10 @@ class WireClient(object):
                                         INCARNATION_FILE_NAME)
         uri = GOAL_STATE_URI.format(self.endpoint)
 
-        # Start updating goalstate, retry on 410
-        fetch_goal_state = True
+        goal_state = None
         for retry in range(0, max_retry):
             try:
-                if fetch_goal_state:
-                    fetch_goal_state = False
-
+                if goal_state is None:
                     xml_text = self.fetch_config(uri, self.get_header())
                     goal_state = GoalState(xml_text)
 
@@ -744,7 +741,7 @@ class WireClient(object):
 
             except ResourceGoneError:
                 logger.info("GoalState is stale -- re-fetching")
-                fetch_goal_state = True
+                goal_state = None
 
             except Exception as e:
                 log_method = logger.info \
