@@ -113,6 +113,10 @@ class ProtocolNotFoundError(ProtocolError):
         super(ProtocolNotFoundError, self).__init__(msg, inner)
 
 
+class RestartError(ProtocolError):
+    pass
+
+
 class HttpError(AgentError):
     """
     Http request failure

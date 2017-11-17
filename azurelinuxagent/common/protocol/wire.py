@@ -28,7 +28,7 @@ import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.textutil as textutil
 
 from azurelinuxagent.common.exception import ProtocolNotFoundError, \
-                                            ResourceGoneError
+                                            ResourceGoneError, RestartError
 from azurelinuxagent.common.future import httpclient, bytebuffer
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.restapi import *
@@ -839,7 +839,6 @@ class WireClient(object):
         return self.ext_conf
 
     def get_ext_manifest(self, ext_handler, incarnation):
-        host_plugin_default = HostPluginProtocol.is_default_channel()
         local_file = MANIFEST_FILE_NAME.format(
                         ext_handler.name,
                         incarnation)
@@ -852,17 +851,8 @@ class WireClient(object):
             try:
                 xml_text = self.fetch_manifest(ext_handler.versionUris)
             except ResourceGoneError:
-                try:
-                    if not host_plugin_default:
-                        # fetch_manifest didn't try HostPlugin the first time
-                        # It ought to try HostPlugin the second time
-                        xml_text = self.fetch_manifest(ext_handler.versionUris)
-                    else:
-                        raise
-                except ResourceGoneError:
-                    raise ProtocolError("Failed to retrieve extension manifest")
+                raise RestartError("Failed to retrieve extension manifest")
 
-            # This executes if fetch_manifest succeeded
             self.save_cache(local_file, xml_text)
 
         return ExtensionManifest(xml_text)

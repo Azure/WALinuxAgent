@@ -84,15 +84,20 @@ class TestWireProtocol(AgentTestCase):
         test_data = WireProtocolData(DATA_FILE)
         test_data.emulate_stale_goal_state = True
 
-        self._test_getters(test_data, *args)
+        try:
+            self._test_getters(test_data, *args)
+            # Expect this to throw a ProtocolError because of stale goal state
+            self.assertTrue(False)
+        except ProtocolError:
+            pass
         # Ensure HostPlugin was invoked
-        self.assertEqual(1, test_data.call_counts["/versions"])
-        self.assertEqual(2, test_data.call_counts["extensionArtifact"])
+        #self.assertEqual(1, test_data.call_counts["/versions"])
+        #self.assertEqual(2, test_data.call_counts["extensionArtifact"])
         # Ensure the expected number of HTTP calls were made
         # -- Tracking calls to retrieve GoalState is problematic since it is
         #    fetched often; however, the dependent documents, such as the
         #    HostingEnvironmentConfig, will be retrieved the expected number
-        # self.assertEqual(2, test_data.call_counts["hostingenvuri"])
+        #self.assertEqual(2, test_data.call_counts["hostingenvuri"])
 
     def test_call_storage_kwargs(self,
                                  mock_cryptutil,
