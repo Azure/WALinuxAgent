@@ -15,9 +15,7 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
-import mock
 import os.path
-import sys
 
 from azurelinuxagent.agent import *
 from azurelinuxagent.common.conf import *
@@ -168,3 +166,22 @@ class TestAgent(AgentTestCase):
         for k in sorted(configuration.keys()):
             actual_configuration.append("{0} = {1}".format(k, configuration[k]))
         self.assertEqual(EXPECTED_CONFIGURATION, actual_configuration)
+
+    def test_agent_usage_message(self):
+        message = usage()
+
+        # Python 2.6 does not have assertIn()
+        self.assertTrue("-verbose" in message)
+        self.assertTrue("-force" in message)
+        self.assertTrue("-help" in message)
+        self.assertTrue("-configuration-path" in message)
+        self.assertTrue("-deprovision" in message)
+        self.assertTrue("-register-service" in message)
+        self.assertTrue("-version" in message)
+        self.assertTrue("-daemon" in message)
+        self.assertTrue("-start" in message)
+        self.assertTrue("-run-exthandlers" in message)
+        self.assertTrue("-show-configuration" in message)
+
+        # sanity check
+        self.assertFalse("-not-a-valid-option" in message)
