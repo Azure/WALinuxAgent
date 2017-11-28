@@ -36,7 +36,7 @@ import azurelinuxagent.common.utils.restutil as restutil
 import azurelinuxagent.common.utils.shellutil as shellutil
 import azurelinuxagent.common.version as version
 
-from azurelinuxagent.common.event import add_event, WALAEventOperation
+from azurelinuxagent.common.event import add_event, WALAEventOperation, elapsed_milliseconds
 from azurelinuxagent.common.exception import ExtensionError, ProtocolError, HttpError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.version import AGENT_VERSION
@@ -51,6 +51,7 @@ from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.utils.textutil import Version
 from azurelinuxagent.common.protocol import get_protocol_util
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_AGENT, CURRENT_VERSION
+
 
 #HandlerEnvironment.json schema version
 HANDLER_ENVIRONMENT_VERSION = 1.0
@@ -647,12 +648,13 @@ class ExtHandlerInstance(object):
     def set_operation(self, op):
         self.operation = op
 
-    def report_event(self, message="", is_success=True):
+    def report_event(self, message="", is_success=True, duration=0):
         version = self.ext_handler.properties.version
         add_event(name=self.ext_handler.name, version=version, message=message, 
-                  op=self.operation, is_success=is_success)
+                  op=self.operation, is_success=is_success, duration=duration)
 
     def download(self):
+        begin_utc = datetime.datetime.utcnow()
         self.logger.verbose("Download extension package")
         self.set_operation(WALAEventOperation.Download)
         if self.pkg is None:
@@ -685,7 +687,8 @@ class ExtHandlerInstance(object):
         for file in fileutil.get_all_files(self.get_base_dir()):
             fileutil.chmod(file, os.stat(file).st_mode | stat.S_IXUSR)
 
-        self.report_event(message="Download succeeded")
+        duration = elapsed_milliseconds(begin_utc)
+        self.report_event(message="Download succeeded", duration=duration)
 
         self.logger.info("Initialize extension directory")
         #Save HandlerManifest.json
@@ -892,6 +895,7 @@ class ExtHandlerInstance(object):
         return last_update <= 600    # updated within the last 10 min
    
     def launch_command(self, cmd, timeout=300):
+        begin_utc = datetime.datetime.utcnow()
         self.logger.verbose("Launch command: [{0}]", cmd)
         base_dir = self.get_base_dir()
         try:
@@ -917,7 +921,8 @@ class ExtHandlerInstance(object):
         if ret == None or ret != 0:
             raise ExtensionError("Non-zero exit code: {0}, {1}".format(ret, cmd))
 
-        self.report_event(message="Launch command succeeded: {0}".format(cmd))
+        duration = elapsed_milliseconds(begin_utc)
+        self.report_event(message="Launch command succeeded: {0}".format(cmd), duration=duration)
 
     def load_manifest(self):
         man_file = self.get_manifest_file()
