@@ -375,6 +375,9 @@ class ExtHandlersHandler(object):
                 message = u"Unknown ext handler state:{0}".format(state)
                 raise ExtensionError(message)
         except RestartError:
+            ext_handler_i.logger.info("GoalState became stale during "
+                                      "processing. Restarting with new "
+                                      "GoalState")
             raise
         except Exception as e:
             ext_handler_i.set_handler_status(message=ustr(e), code=-1)
@@ -501,8 +504,6 @@ class ExtHandlerInstance(object):
     def decide_version(self, etag, target_state=None):
         self.logger.verbose("Decide which version to use")
         pkg_list = self.protocol.get_ext_handler_pkgs(self.ext_handler, etag)
-        # except ProtocolError as e:
-        #     raise ExtensionError("Failed to get ext handler pkgs", e)
 
         # Determine the desired and installed versions
         requested_version = FlexibleVersion(

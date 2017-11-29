@@ -114,6 +114,11 @@ class ProtocolNotFoundError(ProtocolError):
 
 
 class RestartError(ProtocolError):
+    """
+    Variant of ProtocolError used to restart processing if the GoalState
+    becomes stale.
+    """
+
     pass
 
 

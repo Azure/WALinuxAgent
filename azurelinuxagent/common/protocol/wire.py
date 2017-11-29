@@ -613,7 +613,8 @@ class WireClient(object):
 
                 try:
                     host = self.get_host_plugin()
-                    response = self.fetch(*host.get_artifact_request(version.uri), use_proxy=False)
+                    uri, headers = host.get_artifact_request(version.uri)
+                    response = self.fetch(uri, headers, use_proxy=False)
 
                 # If the HostPlugin rejects the request,
                 # let the error continue, but set to use the HostPlugin
