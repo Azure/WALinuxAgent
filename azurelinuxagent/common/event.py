@@ -63,6 +63,7 @@ class WALAEventOperation:
     Partition = "Partition"
     ProcessGoalState = "ProcessGoalState"
     Provision = "Provision"
+    GuestState = "GuestState"
     ReportStatus = "ReportStatus"
     Restart = "Restart"
     UnhandledError = "UnhandledError"
