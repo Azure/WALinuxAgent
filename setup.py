@@ -157,7 +157,7 @@ def get_data_files(name, version, fullname):
         set_bin_files(data_files)
         set_conf_files(data_files)
         set_logrotate_files(data_files)
-        set_udev_files(data_files)
+        set_udev_files(data_files, dest="/lib/udev/rules.d")
         set_sysv_files(data_files)
     else:
         # Use default setting
