@@ -281,15 +281,13 @@ class UpdateHandler(object):
                             available_agent.name)
                     break
 
+                utc_start = datetime.utcnow()
 
-                while True:
-                    utc_start = datetime.utcnow()
-                    last_etag = exthandlers_handler.last_etag
-                    try:
-                        exthandlers_handler.run()
-                        break
-                    except RestartError:
-                        pass
+                last_etag = exthandlers_handler.last_etag
+                try:
+                    exthandlers_handler.run()
+                except RestartError:
+                    continue
 
                 if last_etag != exthandlers_handler.last_etag:
                     self._ensure_readonly_files()
