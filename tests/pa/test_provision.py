@@ -15,9 +15,13 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
+import json
+import socket
+
 import azurelinuxagent.common.utils.fileutil as fileutil
 
-from azurelinuxagent.common.exception import ProtocolError
+from azurelinuxagent.common.event import WALAEventOperation
+from azurelinuxagent.common.exception import ProvisionError
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
 from azurelinuxagent.common.protocol import OVF_FILE_NAME
 from azurelinuxagent.pa.provision import get_provision_handler
@@ -114,6 +118,85 @@ class TestProvision(AgentTestCase):
         self.assertTrue(ph.is_provisioned())
         ph.osutil.is_current_instance_id.assert_called_once()
         deprovision_handler.run_changed_unique_id.assert_called_once()
+
+    @distros()
+    @patch('azurelinuxagent.common.osutil.default.DefaultOSUtil.get_instance_id',
+        return_value='B9F3C233-9913-9F42-8EB3-BA656DF32502')
+    def test_provision_telemetry_success(self, mock_util, distro_name, distro_version,
+                       distro_full_name):
+        """
+        Assert that the agent issues two telemetry messages as part of a
+        successful provisioning.
+
+         1. Provision
+         2. GuestState
+        """
+        ph = get_provision_handler(distro_name, distro_version,
+                                   distro_full_name)
+        ph.report_event = MagicMock()
+        ph.reg_ssh_host_key = MagicMock(return_value='--thumprint--')
+
+        mock_osutil = MagicMock()
+        mock_osutil.decode_customdata = Mock(return_value="")
+
+        ph.osutil = mock_osutil
+        ph.protocol_util.osutil = mock_osutil
+        ph.protocol_util.get_protocol_by_file = MagicMock()
+        ph.protocol_util.get_protocol = MagicMock()
+
+        conf.get_dvd_mount_point = Mock(return_value=self.tmp_dir)
+        ovfenv_file = os.path.join(self.tmp_dir, OVF_FILE_NAME)
+        ovfenv_data = load_data("ovf-env.xml")
+        fileutil.write_file(ovfenv_file, ovfenv_data)
+
+        ph.run()
+
+        call1 = call("Provision succeeded", duration=ANY, is_success=True)
+        call2 = call(ANY, is_success=True, operation=WALAEventOperation.GuestState)
+        ph.report_event.assert_has_calls([call1, call2])
+
+        args, kwargs = ph.report_event.call_args_list[1]
+        guest_state_json = json.loads(args[0])
+        self.assertTrue(1 <= guest_state_json['cpu'])
+        self.assertTrue(1 <= guest_state_json['mem'])
+        self.assertEqual(socket.gethostname(), guest_state_json['hostname'])
+
+    @distros()
+    @patch(
+        'azurelinuxagent.common.osutil.default.DefaultOSUtil.get_instance_id',
+        return_value='B9F3C233-9913-9F42-8EB3-BA656DF32502')
+    def test_provision_telemetry_fail(self, mock_util, distro_name,
+                                         distro_version,
+                                         distro_full_name):
+        """
+        Assert that the agent issues one telemetry message as part of a
+        failed provisioning.
+
+         1. Provision
+        """
+        ph = get_provision_handler(distro_name, distro_version,
+                                   distro_full_name)
+        ph.report_event = MagicMock()
+        ph.reg_ssh_host_key = MagicMock(side_effect=ProvisionError(
+            "--unit-test--"))
+
+        mock_osutil = MagicMock()
+        mock_osutil.decode_customdata = Mock(return_value="")
+
+        ph.osutil = mock_osutil
+        ph.protocol_util.osutil = mock_osutil
+        ph.protocol_util.get_protocol_by_file = MagicMock()
+        ph.protocol_util.get_protocol = MagicMock()
+
+        conf.get_dvd_mount_point = Mock(return_value=self.tmp_dir)
+        ovfenv_file = os.path.join(self.tmp_dir, OVF_FILE_NAME)
+        ovfenv_data = load_data("ovf-env.xml")
+        fileutil.write_file(ovfenv_file, ovfenv_data)
+
+        ph.run()
+        ph.report_event.assert_called_once_with(
+            "[ProvisionError] --unit-test--")
+
 
 if __name__ == '__main__':
     unittest.main()

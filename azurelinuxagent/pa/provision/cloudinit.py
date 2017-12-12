@@ -26,9 +26,9 @@ from datetime import datetime
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
-import azurelinuxagent.common.utils.shellutil as shellutil
 
-from azurelinuxagent.common.event import elapsed_milliseconds
+from azurelinuxagent.common.event import elapsed_milliseconds, \
+    WALAEventOperation
 from azurelinuxagent.common.exception import ProvisionError, ProtocolError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol import OVF_FILE_NAME
@@ -67,6 +67,9 @@ class CloudInitProvisionHandler(ProvisionHandler):
             self.report_event("Provision succeed",
                 is_success=True,
                 duration=elapsed_milliseconds(utc_start))
+            self.report_event(self.create_guest_state_telemetry_messsage(),
+                  is_success=True,
+                  operation=WALAEventOperation.GuestState)
 
         except ProvisionError as e:
             logger.error("Provisioning failed: {0}", ustr(e))
