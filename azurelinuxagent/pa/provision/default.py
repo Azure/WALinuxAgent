@@ -282,7 +282,8 @@ class ProvisionHandler(object):
             count = len([x for x in open('/proc/cpuinfo').readlines()
                          if x.startswith("processor")])
             return count
-        except:
+        except Exception as e:
+            logger.verbose(u"Failed to determine the CPU count: {0}.", ustr(e))
             pass
         return -1
 
@@ -292,7 +293,8 @@ class ProvisionHandler(object):
                 m = re.match('^MemTotal:\s*(\d+) kB$', line)
                 if m is not None:
                     return int(int(m.group(1)) / 1024)
-        except:
+        except Exception as e:
+            logger.verbose(u"Failed to determine the memory size: {0}..", ustr(e))
             pass
         return -1
 
