@@ -27,7 +27,8 @@ from .freebsd import FreeBSDOSUtil
 from .openbsd import OpenBSDOSUtil
 from .redhat import RedhatOSUtil, Redhat6xOSUtil
 from .suse import SUSEOSUtil, SUSE11OSUtil
-from .ubuntu import UbuntuOSUtil, Ubuntu12OSUtil, Ubuntu14OSUtil, UbuntuSnappyOSUtil
+from .ubuntu import UbuntuOSUtil, Ubuntu12OSUtil, Ubuntu14OSUtil, \
+    UbuntuSnappyOSUtil, Ubuntu16OSUtil
 from .alpine import AlpineOSUtil
 from .bigip import BigIpOSUtil
 from .gaia import GaiaOSUtil
@@ -46,10 +47,12 @@ def get_osutil(distro_name=DISTRO_NAME,
         return ClearLinuxUtil()
 
     if distro_name == "ubuntu":
-        if Version(distro_version) == Version("12.04") or Version(distro_version) == Version("12.10"):
+        if Version(distro_version) in [Version("12.04"), Version("12.10")]:
             return Ubuntu12OSUtil()
-        elif Version(distro_version) == Version("14.04") or Version(distro_version) == Version("14.10"):
+        elif Version(distro_version) in [Version("14.04"), Version("14.10")]:
             return Ubuntu14OSUtil()
+        elif Version(distro_version) in [Version('16.04'), Version('16.10'), Version('17.04')]:
+            return Ubuntu16OSUtil
         elif distro_full_name == "Snappy Ubuntu Core":
             return UbuntuSnappyOSUtil()
         else:
