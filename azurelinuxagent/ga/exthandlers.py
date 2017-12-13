@@ -35,6 +35,7 @@ import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.restutil as restutil
 import azurelinuxagent.common.utils.shellutil as shellutil
 import azurelinuxagent.common.version as version
+from azurelinuxagent.common.errorstate import ErrorState, ERROR_STATE_DELTA
 
 from azurelinuxagent.common.event import add_event, WALAEventOperation, elapsed_milliseconds
 from azurelinuxagent.common.exception import ExtensionError, ProtocolError, HttpError
@@ -180,6 +181,9 @@ class ExtHandlersHandler(object):
         self.last_upgrade_guids = {}
         self.log_report = False
         self.log_etag = True
+
+        delta = datetime.timedelta(minutes=15)
+        self.report_status_error_state = ErrorState(delta)
 
     def run(self):
         self.ext_handlers, etag = None, None
@@ -418,7 +422,7 @@ class ExtHandlersHandler(object):
                 ext_handler_i.disable()
             ext_handler_i.uninstall()
         ext_handler_i.rm_ext_handler_dir()
-    
+
     def report_ext_handlers_status(self):
         """Go through handler_state dir, collect and report status"""
         vm_status = VMStatus(status="Ready", message="Guest Agent is running")
@@ -439,13 +443,27 @@ class ExtHandlersHandler(object):
             self.protocol.report_vm_status(vm_status)
             if self.log_report:
                 logger.verbose("Completed vm agent status report")
+            self.report_status_error_state.reset()
         except ProtocolError as e:
+            self.report_status_error_state.incr()
             message = "Failed to report vm agent status: {0}".format(e)
             add_event(AGENT_NAME,
                 version=CURRENT_VERSION,
                 op=WALAEventOperation.ExtensionProcessing,
                 is_success=False,
                 message=message)
+
+        if self.report_status_error_state.is_triggered():
+            message = "Failed to report vm agent status for more than {0}"\
+                .format(ERROR_STATE_DELTA)
+
+            add_event(AGENT_NAME,
+                version=CURRENT_VERSION,
+                op=WALAEventOperation.ExtensionProcessing,
+                is_success=False,
+                message=message)
+
+            self.report_status_error_state.reset()
 
     def report_ext_handler_status(self, vm_status, ext_handler):
         ext_handler_i = ExtHandlerInstance(ext_handler, self.protocol)
