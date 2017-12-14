@@ -840,23 +840,35 @@ class WireClient(object):
         return self.ext_conf
 
     def get_ext_manifest(self, ext_handler, incarnation):
-        local_file = MANIFEST_FILE_NAME.format(
-                        ext_handler.name,
-                        incarnation)
-        local_file = os.path.join(conf.get_lib_dir(), local_file)
+
+        def get_local_file(name, incarnation):
+            local_file = MANIFEST_FILE_NAME.format(name, incarnation)
+            return os.path.join(conf.get_lib_dir(), local_file)
+
         try:
+            local_file = get_local_file(ext_handler.name, incarnation)
             xml_text = self.fetch_cache(local_file)
+            return ExtensionManifest(xml_text)
         except ProtocolError:
-            # Either I/O error while reading the cache or the cache
-            # does not exist. Either way, grab a fresh copy.
+            pass
+
+        for update_goal_state in [False, True]:
             try:
+                if update_goal_state:
+                    self.update_goal_state(forced=True)
+                goal_state = self.get_goal_state()
+
+                local_file = get_local_file(
+                                ext_handler.name,
+                                goal_state.incarnation)
                 xml_text = self.fetch_manifest(ext_handler.versionUris)
+                self.save_cache(local_file, xml_text)
+                return ExtensionManifest(xml_text)
+
             except ResourceGoneError:
-                raise RestartError("Failed to retrieve extension manifest")
+                continue
 
-            self.save_cache(local_file, xml_text)
-
-        return ExtensionManifest(xml_text)
+        raise RestartError("Failed to retrieve extension manifest")
 
     def filter_package_list(self, family, ga_manifest, goal_state):
         complete_list = ga_manifest.pkg_list
