@@ -223,7 +223,15 @@ class ExtHandlersHandler(object):
         return
 
     def get_guid(self, name):
-        return self.last_guids.get(name, None)
+        return self.last_guids.get(name, (None, False))[0]
+
+    def get_log_guid(self, ext_handler):
+        return self.last_guids.get(ext_handler.name, (None, False))[1]
+
+    def set_log_guid(self, ext_handler, log_val):
+        guid = self.get_guid(ext_handler.name)
+        if guid is not None:
+            self.last_guids[ext_handler.name] = (guid, log_val)
 
     def is_new_guid(self, ext_handler):
         last_guid = self.get_guid(ext_handler.name)
@@ -320,9 +328,17 @@ class ExtHandlersHandler(object):
             if state == u"enabled" and \
                     ext_handler.properties.upgradeGuid is not None and \
                     not self.is_new_guid(ext_handler):
-                logger.info("New GUID is the same as the old GUID. Exiting without upgrading.")
+                ext_handler_i.ext_handler.properties.version = ext_handler_i.get_installed_version()
+                ext_handler_i.set_logger()
+
+                if self.get_log_guid(ext_handler):
+                    ext_handler_i.logger.info("New GUID is the same as the old GUID. Exiting without upgrading.")
+                    self.set_log_guid(ext_handler, False)
+                ext_handler_i.set_handler_state(ExtHandlerState.Enabled)
+                ext_handler_i.set_handler_status(status="Ready", message="No change")
                 return
 
+            self.set_log_guid(ext_handler, True)
             ext_handler_i.decide_version(target_state=state)
             if not ext_handler_i.is_upgrade and self.last_etag == etag:
                 if self.log_etag:
@@ -339,7 +355,7 @@ class ExtHandlersHandler(object):
                 self.handle_enable(ext_handler_i)
                 if ext_handler.properties.upgradeGuid is not None:
                     ext_handler_i.logger.info("New Upgrade GUID: {0}", ext_handler.properties.upgradeGuid)
-                    self.last_guids[ext_handler.name] = ext_handler.properties.upgradeGuid
+                    self.last_guids[ext_handler.name] = (ext_handler.properties.upgradeGuid, True)
             elif state == u"disabled":
                 self.handle_disable(ext_handler_i)
                 # Remove the GUID from the dictionary so that it is upgraded upon re-enable
@@ -462,9 +478,7 @@ class ExtHandlerInstance(object):
         self.pkg = None
         self.pkg_file = None
         self.is_upgrade = False
-
-        prefix = "[{0}]".format(self.get_full_name())
-        self.logger = logger.Logger(logger.DEFAULT_LOGGER, prefix)
+        self.set_logger()
         
         try:
             fileutil.mkdir(self.get_log_dir(), mode=0o755)
@@ -587,7 +601,12 @@ class ExtHandlerInstance(object):
             raise ExtensionError("Failed to find any valid extension package")
 
         self.logger.verbose("Use version: {0}", self.pkg.version)
+        self.set_logger()
         return
+
+    def set_logger(self):
+        prefix = "[{0}]".format(self.get_full_name())
+        self.logger = logger.Logger(logger.DEFAULT_LOGGER, prefix)
 
     def version_gt(self, other):
         self_version = self.ext_handler.properties.version
