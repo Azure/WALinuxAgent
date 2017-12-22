@@ -330,6 +330,8 @@ class ExtHandlersHandler(object):
                     not self.is_new_guid(ext_handler):
                 ext_handler_i.ext_handler.properties.version = ext_handler_i.get_installed_version()
                 ext_handler_i.set_logger()
+                if self.last_etag != etag:
+                    self.set_log_guid(ext_handler, True)
 
                 if self.get_log_guid(ext_handler):
                     ext_handler_i.logger.info("New GUID is the same as the old GUID. Exiting without upgrading.")
