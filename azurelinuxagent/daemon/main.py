@@ -21,11 +21,14 @@ import os
 import sys
 import time
 import traceback
+import subprocess
+
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
 
+from subprocess import Popen, PIPE, STDOUT
 from azurelinuxagent.common.event import add_event, WALAEventOperation
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
@@ -104,7 +107,14 @@ class DaemonHandler(object):
         self.rdma_handler = get_rdma_handler()
         self.provision_handler = get_provision_handler()
         self.update_handler = get_update_handler()
-
+        cmd = "cat /etc/udev/rules.d/70-persistent-net.rules"
+        p = Popen(cmd, shell=True, stdin=PIPE, stdout=PIPE, stderr=STDOUT, close_fds=True)
+        output = p.stdout.read()
+        logger.info("****************************************************************")
+        logger.info("******dumping udev persistent-net.rules ******:{0}", output)
+        logger.info("****************************************************************")
+    
+        
         # Create lib dir
         if not os.path.isdir(conf.get_lib_dir()):
             fileutil.mkdir(conf.get_lib_dir(), mode=0o700)
