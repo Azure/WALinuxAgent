@@ -16,8 +16,13 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
+import time
+
+import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.shellutil as shellutil
+
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
+
 
 class Ubuntu14OSUtil(DefaultOSUtil):
     def __init__(self):
@@ -41,6 +46,7 @@ class Ubuntu14OSUtil(DefaultOSUtil):
     def get_dhcp_lease_endpoint(self):
         return self.get_endpoint_from_leases_path('/var/lib/dhcp/dhclient.*.leases')
 
+
 class Ubuntu12OSUtil(Ubuntu14OSUtil):
     def __init__(self):
         super(Ubuntu12OSUtil, self).__init__()
@@ -50,7 +56,11 @@ class Ubuntu12OSUtil(Ubuntu14OSUtil):
         ret = shellutil.run_get_output("pidof dhclient3", chk_err=False)
         return ret[1] if ret[0] == 0 else None
 
-class UbuntuOSUtil(Ubuntu14OSUtil):
+
+class Ubuntu16OSUtil(Ubuntu14OSUtil):
+    """
+    Ubuntu 16.04, 16.10, and 17.04.
+    """
     def __init__(self):
         super(UbuntuOSUtil, self).__init__()
 
@@ -59,6 +69,30 @@ class UbuntuOSUtil(Ubuntu14OSUtil):
 
     def unregister_agent_service(self):
         return shellutil.run("systemctl mask walinuxagent", chk_err=False)
+
+
+class UbuntuOSUtil(Ubuntu16OSUtil):
+    def __init__(self):
+        super(UbuntuOSUtil, self).__init__()
+
+    def restart_if(self, ifname, retries=3, wait=5):
+        """
+        Restart an interface by bouncing the link. systemd-networkd observes
+        this event, and forces a renew of DHCP.
+        """
+        retry_limit=retries+1
+        for attempt in range(1, retry_limit):
+            return_code=shellutil.run("ip link set {0} down && ip link set {0} up".format(ifname))
+            if return_code == 0:
+                return
+            logger.warn("failed to restart {0}: return code {1}".format(ifname, return_code))
+            if attempt < retry_limit:
+                logger.info("retrying in {0} seconds".format(wait))
+                time.sleep(wait)
+            else:
+                logger.warn("exceeded restart retries")
+
+
 
 class UbuntuSnappyOSUtil(Ubuntu14OSUtil):
     def __init__(self):
