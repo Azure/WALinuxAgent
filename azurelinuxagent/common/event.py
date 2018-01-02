@@ -66,6 +66,7 @@ class WALAEventOperation:
     GuestState = "GuestState"
     ReportStatus = "ReportStatus"
     Restart = "Restart"
+    SkipUpdate = "SkipUpdate"
     UnhandledError = "UnhandledError"
     UnInstall = "UnInstall"
     Unknown = "Unknown"

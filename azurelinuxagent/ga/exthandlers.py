@@ -333,11 +333,14 @@ class ExtHandlersHandler(object):
                 if self.last_etag != etag:
                     self.set_log_upgrade_guid(ext_handler, True)
 
+                msg = "New GUID is the same as the old GUID. Exiting without upgrading."
                 if self.get_log_upgrade_guid(ext_handler):
-                    ext_handler_i.logger.info("New GUID is the same as the old GUID. Exiting without upgrading.")
+                    ext_handler_i.logger.info(msg)
                     self.set_log_upgrade_guid(ext_handler, False)
                 ext_handler_i.set_handler_state(ExtHandlerState.Enabled)
                 ext_handler_i.set_handler_status(status="Ready", message="No change")
+                ext_handler_i.set_operation(WALAEventOperation.SkipUpdate)
+                ext_handler_i.report_event(message=ustr(msg), is_success=True)
                 return
 
             self.set_log_upgrade_guid(ext_handler, True)
