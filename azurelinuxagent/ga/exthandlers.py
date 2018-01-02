@@ -177,7 +177,7 @@ class ExtHandlersHandler(object):
         self.protocol = None
         self.ext_handlers = None
         self.last_etag = None
-        self.last_guids = {}
+        self.last_upgrade_guids = {}
         self.log_report = False
         self.log_etag = True
 
@@ -222,19 +222,19 @@ class ExtHandlersHandler(object):
         self.report_ext_handlers_status()
         return
 
-    def get_guid(self, name):
-        return self.last_guids.get(name, (None, False))[0]
+    def get_upgrade_guid(self, name):
+        return self.last_upgrade_guids.get(name, (None, False))[0]
 
-    def get_log_guid(self, ext_handler):
-        return self.last_guids.get(ext_handler.name, (None, False))[1]
+    def get_log_upgrade_guid(self, ext_handler):
+        return self.last_upgrade_guids.get(ext_handler.name, (None, False))[1]
 
-    def set_log_guid(self, ext_handler, log_val):
-        guid = self.get_guid(ext_handler.name)
+    def set_log_upgrade_guid(self, ext_handler, log_val):
+        guid = self.get_upgrade_guid(ext_handler.name)
         if guid is not None:
-            self.last_guids[ext_handler.name] = (guid, log_val)
+            self.last_upgrade_guids[ext_handler.name] = (guid, log_val)
 
     def is_new_guid(self, ext_handler):
-        last_guid = self.get_guid(ext_handler.name)
+        last_guid = self.get_upgrade_guid(ext_handler.name)
         if last_guid is None:
             return True
         return last_guid != ext_handler.properties.upgradeGuid
@@ -331,16 +331,16 @@ class ExtHandlersHandler(object):
                 ext_handler_i.ext_handler.properties.version = ext_handler_i.get_installed_version()
                 ext_handler_i.set_logger()
                 if self.last_etag != etag:
-                    self.set_log_guid(ext_handler, True)
+                    self.set_log_upgrade_guid(ext_handler, True)
 
-                if self.get_log_guid(ext_handler):
+                if self.get_log_upgrade_guid(ext_handler):
                     ext_handler_i.logger.info("New GUID is the same as the old GUID. Exiting without upgrading.")
-                    self.set_log_guid(ext_handler, False)
+                    self.set_log_upgrade_guid(ext_handler, False)
                 ext_handler_i.set_handler_state(ExtHandlerState.Enabled)
                 ext_handler_i.set_handler_status(status="Ready", message="No change")
                 return
 
-            self.set_log_guid(ext_handler, True)
+            self.set_log_upgrade_guid(ext_handler, True)
             ext_handler_i.decide_version(target_state=state)
             if not ext_handler_i.is_upgrade and self.last_etag == etag:
                 if self.log_etag:
@@ -357,15 +357,15 @@ class ExtHandlersHandler(object):
                 self.handle_enable(ext_handler_i)
                 if ext_handler.properties.upgradeGuid is not None:
                     ext_handler_i.logger.info("New Upgrade GUID: {0}", ext_handler.properties.upgradeGuid)
-                    self.last_guids[ext_handler.name] = (ext_handler.properties.upgradeGuid, True)
+                    self.last_upgrade_guids[ext_handler.name] = (ext_handler.properties.upgradeGuid, True)
             elif state == u"disabled":
                 self.handle_disable(ext_handler_i)
                 # Remove the GUID from the dictionary so that it is upgraded upon re-enable
-                self.last_guids.pop(ext_handler.name, None)
+                self.last_upgrade_guids.pop(ext_handler.name, None)
             elif state == u"uninstall":
                 self.handle_uninstall(ext_handler_i)
                 # Remove the GUID from the dictionary so that it is upgraded upon re-install
-                self.last_guids.pop(ext_handler.name, None)
+                self.last_upgrade_guids.pop(ext_handler.name, None)
             else:
                 message = u"Unknown ext handler state:{0}".format(state)
                 raise ExtensionError(message)
@@ -450,7 +450,7 @@ class ExtHandlersHandler(object):
         handler_status = ext_handler_i.get_handler_status() 
         if handler_status is None:
             return
-        guid = self.get_guid(ext_handler.name)
+        guid = self.get_upgrade_guid(ext_handler.name)
         if guid is not None:
             handler_status.upgradeGuid = guid
 
