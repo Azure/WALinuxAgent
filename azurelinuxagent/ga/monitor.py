@@ -203,7 +203,8 @@ class MonitorHandler(object):
                     version=CURRENT_VERSION,
                     op=WALAEventOperation.HeartBeat,
                     is_success=True,
-                    message=msg)
+                    message=msg,
+                    log_event=False)
 
                 counter += 1
 
