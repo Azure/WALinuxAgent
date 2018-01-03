@@ -182,8 +182,7 @@ class ExtHandlersHandler(object):
         self.log_report = False
         self.log_etag = True
 
-        delta = datetime.timedelta(minutes=15)
-        self.report_status_error_state = ErrorState(delta)
+        self.report_status_error_state = ErrorState()
 
     def run(self):
         self.ext_handlers, etag = None, None

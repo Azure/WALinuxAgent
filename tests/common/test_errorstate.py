@@ -53,17 +53,17 @@ class TestErrorState(unittest.TestCase):
         test_subject.incr()
         self.assertTrue(test_subject.is_triggered())
 
-    def test_errorstate04(self, mock_time):
+    def test_errorstate04(self):
         """
         If ErrorState is reset the timestamp of the last incr() is reset to
         None.
         """
 
         test_subject = ErrorState(timedelta(minutes=15))
-        self.assertTrue(test_subject.timestamp is not None)
+        self.assertTrue(test_subject.timestamp is None)
 
         test_subject.incr()
-        self.assertTrue(test_subject.timestamp is None)
+        self.assertTrue(test_subject.timestamp is not None)
 
         test_subject.reset()
         self.assertTrue(test_subject.timestamp is None)

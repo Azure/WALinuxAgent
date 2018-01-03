@@ -2,11 +2,12 @@ from datetime import datetime, timedelta
 
 ERROR_STATE_DELTA = timedelta(minutes=15)
 
+
 class ErrorState(object):
-    def __init__(self, min_timedelta):
+    def __init__(self, min_timedelta = ERROR_STATE_DELTA):
         self.min_timedelta = min_timedelta
 
-        self.count = 0;
+        self.count = 0
         self.timestamp = None
 
     def incr(self):
