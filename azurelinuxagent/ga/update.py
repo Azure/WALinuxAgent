@@ -660,7 +660,7 @@ class UpdateHandler(object):
                     continue
 
                 msg = u"Exception retrieving agent manifests: {0}".format(
-                            ustr(e))
+                            ustr(traceback.format_exc()))
                 logger.warn(msg)
                 add_event(
                     AGENT_NAME,
