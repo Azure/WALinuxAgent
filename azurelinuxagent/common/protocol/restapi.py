@@ -321,9 +321,9 @@ class Protocol(DataContract):
     def get_artifacts_profile(self):
         raise NotImplementedError()
 
-    def download_ext_handler_pkg(self, uri, headers=None):
+    def download_ext_handler_pkg(self, uri, headers=None, use_proxy=True):
         try:
-            resp = restutil.http_get(uri, use_proxy=True, headers=headers)
+            resp = restutil.http_get(uri, headers=headers, use_proxy=use_proxy)
             if restutil.request_succeeded(resp):
                 return resp.read()
         except Exception as e:
