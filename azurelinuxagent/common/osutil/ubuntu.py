@@ -62,7 +62,7 @@ class Ubuntu16OSUtil(Ubuntu14OSUtil):
     Ubuntu 16.04, 16.10, and 17.04.
     """
     def __init__(self):
-        super(UbuntuOSUtil, self).__init__()
+        super(Ubuntu16OSUtil, self).__init__()
 
     def register_agent_service(self):
         return shellutil.run("systemctl unmask walinuxagent", chk_err=False)
@@ -91,7 +91,6 @@ class UbuntuOSUtil(Ubuntu16OSUtil):
                 time.sleep(wait)
             else:
                 logger.warn("exceeded restart retries")
-
 
 
 class UbuntuSnappyOSUtil(Ubuntu14OSUtil):

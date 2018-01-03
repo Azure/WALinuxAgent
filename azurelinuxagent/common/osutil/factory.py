@@ -52,7 +52,7 @@ def get_osutil(distro_name=DISTRO_NAME,
         elif Version(distro_version) in [Version("14.04"), Version("14.10")]:
             return Ubuntu14OSUtil()
         elif Version(distro_version) in [Version('16.04'), Version('16.10'), Version('17.04')]:
-            return Ubuntu16OSUtil
+            return Ubuntu16OSUtil()
         elif distro_full_name == "Snappy Ubuntu Core":
             return UbuntuSnappyOSUtil()
         else:
