@@ -704,13 +704,13 @@ class GuestAgent(object):
         version = None
         if path is not None:
             m = AGENT_DIR_PATTERN.match(path)
-            if m == None:
+            if m is None:
                 raise UpdateError(u"Illegal agent directory: {0}".format(path))
             version = m.group(1)
         elif self.pkg is not None:
             version = pkg.version
 
-        if version == None:
+        if version is None:
             raise UpdateError(u"Illegal agent version: {0}".format(version))
         self.version = FlexibleVersion(version)
 
@@ -725,6 +725,13 @@ class GuestAgent(object):
             self._ensure_loaded()
         except Exception as e:
             if isinstance(e, ResourceGoneError):
+                raise
+
+            # The agent was improperly blacklisting versions due to a timeout
+            # encountered while downloading a later version. Errors of type
+            # socket.error are IOError, so this should provide sufficient
+            # protection against a large class of I/O operation failures.
+            if isinstance(e, IOError):
                 raise
 
             # Note the failure, blacklist the agent if the package downloaded
