@@ -389,6 +389,30 @@ class TestGuestAgent(UpdateTestCase):
 
     @patch("azurelinuxagent.ga.update.GuestAgent._ensure_downloaded")
     @patch("azurelinuxagent.ga.update.GuestAgent._ensure_loaded")
+    def test_resource_gone_error_not_blacklisted(self, mock_loaded, mock_downloaded):
+        try:
+            mock_downloaded.side_effect = ResourceGoneError()
+            agent = GuestAgent(path=self.agent_path)
+            self.assertFalse(agent.is_blacklisted)
+        except ResourceGoneError:
+            pass
+        except:
+            self.fail("Exception was not expected!")
+
+    @patch("azurelinuxagent.ga.update.GuestAgent._ensure_downloaded")
+    @patch("azurelinuxagent.ga.update.GuestAgent._ensure_loaded")
+    def test_ioerror_not_blacklisted(self, mock_loaded, mock_downloaded):
+        try:
+            mock_downloaded.side_effect = IOError()
+            agent = GuestAgent(path=self.agent_path)
+            self.assertFalse(agent.is_blacklisted)
+        except IOError:
+            pass
+        except:
+            self.fail("Exception was not expected!")
+
+    @patch("azurelinuxagent.ga.update.GuestAgent._ensure_downloaded")
+    @patch("azurelinuxagent.ga.update.GuestAgent._ensure_loaded")
     def test_is_downloaded(self, mock_loaded, mock_downloaded):
         agent = GuestAgent(path=self.agent_path)
         self.assertFalse(agent.is_downloaded)
@@ -1550,6 +1574,7 @@ class ProtocolMock(object):
         self.call_counts["update_goal_state"] += 1
         self.goal_state_forced = self.goal_state_forced or forced
 
+
 class ResponseMock(Mock):
     def __init__(self, status=restutil.httpclient.OK, response=None, reason=None):
         Mock.__init__(self)
@@ -1578,6 +1603,7 @@ class TimeMock(Mock):
         current_time = self.next_time
         self.next_time += self.time_increment
         return current_time
+
 
 if __name__ == '__main__':
     unittest.main()
