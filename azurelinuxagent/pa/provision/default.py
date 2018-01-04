@@ -89,7 +89,7 @@ class ProvisionHandler(object):
 
             self.write_provisioned()
 
-            self.report_event("Provision succeeded",
+            self.report_event("Provisioning succeeded",
                 is_success=True,
                 duration=elapsed_milliseconds(utc_start))
 

@@ -64,7 +64,7 @@ class CloudInitProvisionHandler(ProvisionHandler):
             logger.info("Finished provisioning")
 
             self.report_ready(thumbprint)
-            self.report_event("Provision succeed",
+            self.report_event("Provisioning with cloud-init succeeded",
                 is_success=True,
                 duration=elapsed_milliseconds(utc_start))
             self.report_event(self.create_guest_state_telemetry_messsage(),

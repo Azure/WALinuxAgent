@@ -203,7 +203,8 @@ class MonitorHandler(object):
                     version=CURRENT_VERSION,
                     op=WALAEventOperation.HeartBeat,
                     is_success=True,
-                    message=msg)
+                    message=msg,
+                    log_event=False)
 
                 counter += 1
 
@@ -222,7 +223,7 @@ class MonitorHandler(object):
                         version=CURRENT_VERSION,
                         op=WALAEventOperation.HttpErrors,
                         is_success=False,
-                        msg=msg)
+                        message=msg)
 
             try:
                 self.collect_and_send_events()
