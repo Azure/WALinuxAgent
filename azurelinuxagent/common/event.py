@@ -60,6 +60,7 @@ class WALAEventOperation:
     HttpErrors = "HttpErrors"
     Install = "Install"
     InitializeHostPlugin = "InitializeHostPlugin"
+    Log = "Log"
     Partition = "Partition"
     ProcessGoalState = "ProcessGoalState"
     Provision = "Provision"
@@ -77,7 +78,7 @@ class WALAEventOperation:
 class EventStatus(object):
     EVENT_STATUS_FILE = "event_status.json"
 
-    def __init__(self, status_dir=conf.get_lib_dir()):
+    def __init__(self):
         self._path = None
         self._status = {}
 
@@ -92,7 +93,7 @@ class EventStatus(object):
         event = self._event_name(name, version, op)
         if event not in self._status:
             return True
-        return self._status[event] == True
+        return self._status[event] is True
 
     def initialize(self, status_dir=conf.get_lib_dir()):
         self._path = os.path.join(status_dir, EventStatus.EVENT_STATUS_FILE)
@@ -100,7 +101,7 @@ class EventStatus(object):
 
     def mark_event_status(self, name, version, op, status):
         event = self._event_name(name, version, op)
-        self._status[event] = (status == True)
+        self._status[event] = (status is True)
         self._save()
 
     def _event_name(self, name, version, op):
@@ -122,6 +123,7 @@ class EventStatus(object):
                 json.dump(self._status, f)
         except Exception as e:
             logger.warn("Exception occurred saving event status: {0}".format(e))
+
 
 __event_status__ = EventStatus()
 __event_status_operations__ = [
@@ -225,6 +227,20 @@ class EventLogger(object):
         except EventError as e:
             logger.error("{0}", e)
 
+    def add_log_event(self, level, message):
+        event = TelemetryEvent(7, "FFF0196F-EE4C-4EAF-9AA5-776F622DEB4F")
+        event.parameters.append(TelemetryEventParam('EventName', WALAEventOperation.Log))
+        event.parameters.append(TelemetryEventParam('CapabilityUsed', logger.LogLevel.STRINGS[level]))
+        event.parameters.append(TelemetryEventParam('Context1', ''))
+        event.parameters.append(TelemetryEventParam('Context2', str(CURRENT_AGENT)))
+        event.parameters.append(TelemetryEventParam('Context3', str(message)))
+
+        data = get_properties(event)
+        try:
+            self.save_event(json.dumps(data))
+        except EventError:
+            pass
+
 
 __event_logger__ = EventLogger()
 
@@ -234,6 +250,7 @@ def elapsed_milliseconds(utc_start):
     return int(((d.days * 24 * 60 * 60 + d.seconds) * 1000) + \
                     (d.microseconds / 1000.0))
 
+
 def report_event(op, is_success=True, message=''):
     from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
     add_event(AGENT_NAME,
@@ -242,6 +259,7 @@ def report_event(op, is_success=True, message=''):
               message=message,
               op=op)
 
+
 def report_periodic(delta, op, is_success=True, message=''):
     from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
     add_periodic(delta, AGENT_NAME,
@@ -249,6 +267,7 @@ def report_periodic(delta, op, is_success=True, message=''):
               is_success=is_success,
               message=message,
               op=op)
+
 
 def add_event(name, op=WALAEventOperation.Unknown, is_success=True, duration=0,
               version=CURRENT_VERSION,
@@ -266,6 +285,14 @@ def add_event(name, op=WALAEventOperation.Unknown, is_success=True, duration=0,
             version=str(version), message=message, evt_type=evt_type,
             is_internal=is_internal, log_event=log_event)
 
+
+def add_log_event(level, message, reporter=__event_logger__):
+    if reporter.event_dir is None:
+        return
+
+    reporter.add_log_event(level, message)
+
+
 def add_periodic(
     delta, name, op=WALAEventOperation.Unknown, is_success=True, duration=0,
     version=CURRENT_VERSION,
@@ -281,9 +308,11 @@ def add_periodic(
         version=str(version), message=message, evt_type=evt_type,
         is_internal=is_internal, log_event=log_event, force=force)
 
+
 def mark_event_status(name, version, op, status):
     if op in __event_status_operations__:
         __event_status__.mark_event_status(name, version, op, status)
+
 
 def should_emit_event(name, version, op, status):
     return \
@@ -292,11 +321,14 @@ def should_emit_event(name, version, op, status):
         not __event_status__.event_marked(name, version, op) or \
         __event_status__.event_succeeded(name, version, op) != status
 
+
 def init_event_logger(event_dir):
     __event_logger__.event_dir = event_dir
 
+
 def init_event_status(status_dir):
     __event_status__.initialize(status_dir)
+
 
 def dump_unhandled_err(name):
     if hasattr(sys, 'last_type') and hasattr(sys, 'last_value') and \

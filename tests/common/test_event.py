@@ -49,8 +49,7 @@ class TestEvent(AgentTestCase):
         self.assertTrue(es.event_succeeded("Foo", "1.2", "FauxOperation"))
 
     def test_event_status_records_status(self):
-        d = tempfile.mkdtemp()
-        es = event.EventStatus(tempfile.mkdtemp())
+        es = event.EventStatus()
 
         es.mark_event_status("Foo", "1.2", "FauxOperation", True)
         self.assertTrue(es.event_succeeded("Foo", "1.2", "FauxOperation"))
@@ -70,7 +69,7 @@ class TestEvent(AgentTestCase):
         self.assertFalse(es.event_succeeded("Foo", "1.2", "FauxOperation"))
 
     def test_should_emit_event_ignores_unknown_operations(self):
-        event.__event_status__ = event.EventStatus(tempfile.mkdtemp())
+        event.__event_status__ = event.EventStatus()
 
         self.assertTrue(event.should_emit_event("Foo", "1.2", "FauxOperation", True))
         self.assertTrue(event.should_emit_event("Foo", "1.2", "FauxOperation", False))
@@ -83,7 +82,7 @@ class TestEvent(AgentTestCase):
 
 
     def test_should_emit_event_handles_known_operations(self):
-        event.__event_status__ = event.EventStatus(tempfile.mkdtemp())
+        event.__event_status__ = event.EventStatus()
 
         # Known operations always initially "fire"
         for op in event.__event_status_operations__:

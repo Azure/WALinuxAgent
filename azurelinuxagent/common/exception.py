@@ -44,7 +44,7 @@ class AgentConfigError(AgentError):
 
 class AgentNetworkError(AgentError):
     """
-    When network is not avaiable.
+    When network is not available\.
     """
 
     def __init__(self, msg=None, inner=None):
@@ -85,6 +85,7 @@ class DhcpError(AgentError):
 
     def __init__(self, msg=None, inner=None):
         super(DhcpError, self).__init__(msg, inner)
+
 
 class OSUtilError(AgentError):
     """

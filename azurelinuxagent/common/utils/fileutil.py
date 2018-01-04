@@ -27,7 +27,6 @@ import os
 import pwd
 import re
 import shutil
-import string
 
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.textutil as textutil

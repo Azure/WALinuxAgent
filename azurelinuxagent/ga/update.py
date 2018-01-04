@@ -50,7 +50,7 @@ from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol import get_protocol_util
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
-from azurelinuxagent.common.protocol.wire import WireProtocol, RestartError
+from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, AGENT_LONG_VERSION, \
                                             AGENT_DIR_GLOB, AGENT_PKG_GLOB, \
@@ -284,10 +284,7 @@ class UpdateHandler(object):
                 utc_start = datetime.utcnow()
 
                 last_etag = exthandlers_handler.last_etag
-                try:
-                    exthandlers_handler.run()
-                except RestartError:
-                    continue
+                exthandlers_handler.run()
 
                 if last_etag != exthandlers_handler.last_etag:
                     self._ensure_readonly_files()
@@ -299,7 +296,7 @@ class UpdateHandler(object):
                         duration=elapsed_milliseconds(utc_start),
                         message="Incarnation {0}".format(
                                             exthandlers_handler.last_etag),
-                        log_event=exthandlers_handler.log_process)
+                        log_event=True)
 
                 time.sleep(GOAL_STATE_INTERVAL)
 
@@ -708,13 +705,13 @@ class GuestAgent(object):
         version = None
         if path is not None:
             m = AGENT_DIR_PATTERN.match(path)
-            if m is None:
+            if m == None:
                 raise UpdateError(u"Illegal agent directory: {0}".format(path))
             version = m.group(1)
         elif self.pkg is not None:
             version = pkg.version
 
-        if version is None:
+        if version == None:
             raise UpdateError(u"Illegal agent version: {0}".format(version))
         self.version = FlexibleVersion(version)
 
