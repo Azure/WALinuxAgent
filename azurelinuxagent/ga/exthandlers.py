@@ -181,6 +181,7 @@ class ExtHandlersHandler(object):
         self.last_upgrade_guids = {}
         self.log_report = False
         self.log_etag = True
+        self.log_process = False
 
         self.report_status_error_state = ErrorState()
 
@@ -380,6 +381,7 @@ class ExtHandlersHandler(object):
             ext_handler_i.report_event(message=ustr(e), is_success=False)
     
     def handle_enable(self, ext_handler_i):
+        self.log_process = True
         old_ext_handler_i = ext_handler_i.get_installed_ext_handler()
         if old_ext_handler_i is not None and \
            old_ext_handler_i.version_gt(ext_handler_i):
@@ -406,6 +408,7 @@ class ExtHandlersHandler(object):
         ext_handler_i.enable() 
 
     def handle_disable(self, ext_handler_i):
+        self.log_process = True
         handler_state = ext_handler_i.get_handler_state()
         ext_handler_i.logger.info("[Disable] current handler state is: {0}",
                                   handler_state.lower())
@@ -413,6 +416,7 @@ class ExtHandlersHandler(object):
             ext_handler_i.disable()
 
     def handle_uninstall(self, ext_handler_i):
+        self.log_process = True
         handler_state = ext_handler_i.get_handler_state()
         ext_handler_i.logger.info("[Uninstall] current handler state is: {0}",
                                   handler_state.lower())

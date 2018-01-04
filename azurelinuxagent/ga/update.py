@@ -295,7 +295,7 @@ class UpdateHandler(object):
                         duration=elapsed_milliseconds(utc_start),
                         message="Incarnation {0}".format(
                                             exthandlers_handler.last_etag),
-                        log_event=False)
+                        log_event=exthandlers_handler.log_process)
 
                 time.sleep(GOAL_STATE_INTERVAL)
 
