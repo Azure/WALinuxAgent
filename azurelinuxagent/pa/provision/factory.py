@@ -16,9 +16,7 @@
 #
 
 import azurelinuxagent.common.conf as conf
-import azurelinuxagent.common.logger as logger
 
-from azurelinuxagent.common.utils.textutil import Version
 from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_VERSION, \
                                      DISTRO_FULL_NAME
 

@@ -151,7 +151,7 @@ class TestProvision(AgentTestCase):
 
         ph.run()
 
-        call1 = call("Provision succeeded", duration=ANY, is_success=True)
+        call1 = call("Provisioning succeeded", duration=ANY, is_success=True)
         call2 = call(ANY, is_success=True, operation=WALAEventOperation.GuestState)
         ph.report_event.assert_has_calls([call1, call2])
 
