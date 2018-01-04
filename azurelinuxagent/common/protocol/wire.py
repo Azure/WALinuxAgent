@@ -172,7 +172,7 @@ class WireProtocol(Protocol):
             logger.warn("Download did not succeed, falling back to host plugin")
             host = self.client.get_host_plugin()
             uri, headers = host.get_artifact_request(uri, host.manifest_uri)
-            package = super(WireProtocol, self).download_ext_handler_pkg(uri, headers=headers)
+            package = super(WireProtocol, self).download_ext_handler_pkg(uri, headers=headers, use_proxy=False)
         return package
 
     def report_provision_status(self, provision_status):
