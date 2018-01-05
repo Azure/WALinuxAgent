@@ -91,7 +91,7 @@ class SUSERDMAHandler(RDMAHandler):
                 logger.info("Package '%s' is not a match." % entry)
             else:
                 logger.info("Package '%s' is a match. Installing." % entry)
-                complete_name = '%s-%s' % (package_name, version)
+                complete_name = '%s-%s' % (package_name, entry)
                 cmd = zypper_install % complete_name
                 result = shellutil.run(cmd)
                 if result:
