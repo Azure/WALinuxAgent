@@ -37,6 +37,8 @@ class TestEnv(AgentTestCase):
             ("ExtensionsConfig", "xml")
         ]
 
+        env = EnvHandler()
+
         tmp_dir = tempfile.mkdtemp()
         mock_conf.return_value = tmp_dir
 
@@ -58,7 +60,7 @@ class TestEnv(AgentTestCase):
             p = os.path.join(tmp_dir, '{0}.*.{1}'.format(*t))
             self.assertEqual(2 * MAXIMUM_CACHED_FILES, len(glob.glob(p)))
 
-        EnvHandler().purge_disk_cache()
+        env.purge_disk_cache()
 
         # ensure the expected number of files remain
         for t in names:
@@ -69,3 +71,16 @@ class TestEnv(AgentTestCase):
             self.assertTrue(os.path.exists(incarnation1))
             self.assertFalse(os.path.exists(incarnation2))
 
+        # write incarnation 101
+        for t in names:
+            f = os.path.join(tmp_dir, '.'.join((t[0], '101', t[1])))
+            fileutil.write_file(f, "faux content")
+
+        # call to purge should be ignored, since interval has not elapsed
+        env.purge_disk_cache()
+
+        for t in names:
+            p = os.path.join(tmp_dir, '{0}.*.{1}'.format(*t))
+            incarnation1 = os.path.join(tmp_dir, '{0}.1.{1}'.format(t[0], t[1]))
+            self.assertEqual(MAXIMUM_CACHED_FILES + 1, len(glob.glob(p)))
+            self.assertTrue(os.path.exists(incarnation1))

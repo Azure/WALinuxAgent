@@ -159,8 +159,8 @@ class EnvHandler(object):
         current incarnation.  
         """
         if self.last_purge is not None \
-                and self.last_purge + CACHE_PURGE_INTERVAL < \
-                datetime.datetime.utcnow():
+                and datetime.datetime.utcnow() < \
+                self.last_purge + CACHE_PURGE_INTERVAL:
             return
 
         current_incarnation = -1
