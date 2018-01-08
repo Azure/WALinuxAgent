@@ -180,13 +180,14 @@ class EnvHandler(object):
         # Create tuples: (prefix, suffix, incarnation, name, file_modified)
         files = []
         for f in os.listdir(conf.get_lib_dir()):
+            full_path = os.path.join(conf.get_lib_dir(), f)
             for pattern in CACHE_PATTERNS:
                 m = pattern.match(f)
                 if m is not None:
                     prefix = m.group(1)
                     suffix = m.group(3)
                     incarnation = int(m.group(2))
-                    file_modified = os.path.getmtime(f)
+                    file_modified = os.path.getmtime(full_path)
                     t = (prefix, suffix, incarnation, f, file_modified)
                     files.append(t)
                     break

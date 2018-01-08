@@ -373,10 +373,10 @@ class TestWireProtocol(AgentTestCase):
             'formattedMessage': formatted_msg
         }
         v1_ga_guest_info = {
-            'computerName' : socket.gethostname(),
-            'osName' : DISTRO_NAME,
-            'osVersion' : DISTRO_VERSION,
-            'version' : str(CURRENT_VERSION),
+            'computerName': socket.gethostname(),
+            'osName': DISTRO_NAME,
+            'osVersion': DISTRO_VERSION,
+            'version': str(CURRENT_VERSION),
         }
         v1_agg_status = {
             'guestAgentStatus': v1_ga_status,
@@ -390,11 +390,6 @@ class TestWireProtocol(AgentTestCase):
         }
         self.assertEqual(json.dumps(v1_vm_status), actual.to_json())
 
-    def _create_files(self, tmp_dir, prefix, suffix, count):
-        for i in range(count):
-            f = os.path.join(tmp_dir, '.'.join((prefix, str(i), suffix)))
-            fileutil.write_file(f, "faux content")
-
 
 class MockResponse:
     def __init__(self, body, status_code):
@@ -403,6 +398,7 @@ class MockResponse:
 
     def read(self):
         return self.body
+
 
 if __name__ == '__main__':
     unittest.main()
