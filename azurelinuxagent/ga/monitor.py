@@ -225,7 +225,7 @@ class MonitorHandler(object):
                         name=AGENT_NAME,
                         version=CURRENT_VERSION,
                         op=WALAEventOperation.HttpErrors,
-                        is_success=False,
+                        is_success=True,
                         message=msg,
                         log_event=False)
 
