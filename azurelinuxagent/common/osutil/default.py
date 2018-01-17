@@ -167,10 +167,14 @@ class DefaultOSUtil(object):
 
             # If the DROP rule exists, make no changes
             drop_rule = FIREWALL_DROP.format(wait, "C", dst_ip)
-
-            if shellutil.run(drop_rule, chk_err=False) == 0:
+            rc = shellutil.run(drop_rule, chk_err=False)
+            if rc == 0:
                 logger.verbose("Firewall appears established")
                 return True
+            elif rc == 2:
+                msg = "please upgrade iptables to a version that supports the -C option"
+                logger.warn(msg)
+                raise Exception(msg)
 
             # Otherwise, append both rules
             accept_rule = FIREWALL_ACCEPT.format(wait, "A", dst_ip, uid)

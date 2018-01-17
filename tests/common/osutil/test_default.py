@@ -638,6 +638,34 @@ Chain OUTPUT (policy ACCEPT 104 packets, 43628 bytes)
         ])
         self.assertFalse(osutil._enable_firewall)
 
+    @patch('azurelinuxagent.common.utils.shellutil.run_get_output')
+    @patch('azurelinuxagent.common.utils.shellutil.run')
+    def test_enable_firewall_checks_for_invalid_iptables_options(self, mock_run, mock_output):
+        osutil._enable_firewall = True
+        util = osutil.DefaultOSUtil()
+
+        dst = '1.2.3.4'
+        version = "iptables v{0}".format(osutil.IPTABLES_LOCKING_VERSION)
+        wait = "-w"
+
+        # iptables uses the following exit codes
+        #  0 - correct function
+        #  1 - other errors
+        #  2 - errors which appear to be caused by invalid or abused command
+        #      line parameters
+        mock_run.side_effect = [2]
+        mock_output.return_value = (0, version)
+
+        self.assertFalse(util.enable_firewall(dst_ip='1.2.3.4', uid=42))
+        self.assertFalse(osutil._enable_firewall)
+
+        mock_run.assert_has_calls([
+            call(osutil.FIREWALL_DROP.format(wait, "C", dst), chk_err=False),
+        ])
+        mock_output.assert_has_calls([
+            call(osutil.IPTABLES_VERSION)
+        ])
+
     @patch('os.getuid', return_value=42)
     @patch('azurelinuxagent.common.utils.shellutil.run_get_output')
     @patch('azurelinuxagent.common.utils.shellutil.run')
