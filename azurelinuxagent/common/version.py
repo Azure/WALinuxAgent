@@ -161,13 +161,16 @@ def set_current_agent():
         version = AGENT_VERSION
     return agent, FlexibleVersion(version)
 
+
 def is_agent_package(path):
     path = os.path.basename(path)
     return not re.match(AGENT_PKG_PATTERN, path) is None
 
+
 def is_agent_path(path):
     path = os.path.basename(path)
     return not re.match(AGENT_NAME_PATTERN, path) is None
+
 
 CURRENT_AGENT, CURRENT_VERSION = set_current_agent()
 
