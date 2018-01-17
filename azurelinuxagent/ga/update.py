@@ -44,12 +44,13 @@ from azurelinuxagent.common.event import add_event, add_periodic, \
                                     WALAEventOperation
 from azurelinuxagent.common.exception import ProtocolError, \
                                             ResourceGoneError, \
+                                            RestartError, \
                                             UpdateError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol import get_protocol_util
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
-from azurelinuxagent.common.protocol.wire import WireProtocol
+from azurelinuxagent.common.protocol.wire import WireProtocol, RestartError
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, AGENT_LONG_VERSION, \
                                             AGENT_DIR_GLOB, AGENT_PKG_GLOB, \
@@ -283,7 +284,10 @@ class UpdateHandler(object):
                 utc_start = datetime.utcnow()
 
                 last_etag = exthandlers_handler.last_etag
-                exthandlers_handler.run()
+                try:
+                    exthandlers_handler.run()
+                except RestartError:
+                    continue
 
                 if last_etag != exthandlers_handler.last_etag:
                     self._ensure_readonly_files()
