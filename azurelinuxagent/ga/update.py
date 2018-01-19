@@ -826,8 +826,9 @@ class GuestAgent(object):
         self._load_error()
 
     def _download(self):
-        random.shuffle(self.pkg.uris)
-        for uri in self.pkg.uris:
+        uris_shuffled = self.pkg.uris
+        random.shuffle(uris_shuffled)
+        for uri in uris_shuffled:
             if not HostPluginProtocol.is_default_channel() and self._fetch(uri.uri):
                 break
 

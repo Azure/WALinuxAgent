@@ -706,8 +706,9 @@ class ExtHandlerInstance(object):
             raise ExtensionError("No package uri found")
         
         package = None
-        random.shuffle(self.pkg.uris)
-        for uri in self.pkg.uris:
+        uris_shuffled = self.pkg.uris
+        random.shuffle(uris_shuffled)
+        for uri in uris_shuffled:
             try:
                 package = self.protocol.download_ext_handler_pkg(uri.uri)
                 if package is not None:
