@@ -21,6 +21,7 @@ import glob
 import json
 import os
 import platform
+import random
 import re
 import shutil
 import signal
@@ -825,6 +826,7 @@ class GuestAgent(object):
         self._load_error()
 
     def _download(self):
+        random.shuffle(self.pkg.uris)
         for uri in self.pkg.uris:
             if not HostPluginProtocol.is_default_channel() and self._fetch(uri.uri):
                 break
