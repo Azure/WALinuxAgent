@@ -66,6 +66,10 @@ FIREWALL_LIST = "iptables {0} -t security -L -nxv"
 FIREWALL_PACKETS = "iptables {0} -t security -L OUTPUT --zero OUTPUT -nxv"
 FIREWALL_FLUSH = "iptables {0} -t security --flush"
 
+# Precisely delete the rules created by the agent.
+FIREWALL_DELETE_CONNTRACK = "iptables {0} -t security -D OUTPUT -d {1} -p tcp -m conntrack --ctstate INVALID,NEW -j ACCEPT"
+FIREWALL_DELETE_OWNER = "iptables {0} -t security -D OUTPUT -d {1} -p tcp -m owner --uid-owner {2} -j ACCEPT"
+
 PACKET_PATTERN = "^\s*(\d+)\s+(\d+)\s+DROP\s+.*{0}[^\d]*$"
 
 _enable_firewall = True
@@ -76,8 +80,8 @@ UUID_PATTERN = re.compile(
     r'^\s*[A-F0-9]{8}(?:\-[A-F0-9]{4}){3}\-[A-F0-9]{12}\s*$',
     re.IGNORECASE)
 
-class DefaultOSUtil(object):
 
+class DefaultOSUtil(object):
     def __init__(self):
         self.agent_conf_file_path = '/etc/waagent.conf'
         self.selinux = None
@@ -129,24 +133,40 @@ class DefaultOSUtil(object):
                 else ""
         return wait
 
-    def remove_firewall(self):
+    def _delete_rule(self, rule):
+        """
+        Continually execute the delete operation until the return
+        code is non-zero.
+        """
+        while True:
+            rc = shellutil.run(rule, chk_err=False)
+            if rc == 1:
+                return
+            elif rc == 2:
+                raise Exception("invalid firewall deletion rule '{0}'".format(rule))
+
+    def remove_firewall(self, dst_ip=None, uid=None):
         # If a previous attempt failed, do not retry
         global _enable_firewall
         if not _enable_firewall:
             return False
 
         try:
+            if dst_ip is None or uid is None:
+                msg = "Missing arguments to enable_firewall"
+                logger.warn(msg)
+                raise Exception(msg)
+
             wait = self.get_firewall_will_wait()
 
-            flush_rule = FIREWALL_FLUSH.format(wait)
-            if shellutil.run(flush_rule, chk_err=True) != 0:
-                raise Exception("non-zero return code")
+            self._delete_rule(FIREWALL_DELETE_CONNTRACK.format(wait, dst_ip))
+            self._delete_rule(FIREWALL_DELETE_OWNER.format(wait, dst_ip, uid))
 
             return True
 
         except Exception as e:
             _enable_firewall = False
-            logger.info("Unable to flush firewall -- "
+            logger.info("Unable to remove firewall -- "
                         "no further attempts will be made: "
                         "{0}".format(ustr(e)))
             return False
@@ -172,6 +192,7 @@ class DefaultOSUtil(object):
                 logger.verbose("Firewall appears established")
                 return True
             elif rc == 2:
+                self.remove_firewall(dst_ip, uid)
                 msg = "please upgrade iptables to a version that supports the -C option"
                 logger.warn(msg)
                 raise Exception(msg)

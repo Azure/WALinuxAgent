@@ -698,12 +698,15 @@ Chain OUTPUT (policy ACCEPT 104 packets, 43628 bytes)
         version = "iptables v{0}".format(osutil.IPTABLES_LOCKING_VERSION)
         wait = "-w"
 
-        mock_run.side_effect = [0, 0]
+        mock_run.side_effect = [0, 1, 0, 1]
         mock_output.side_effect = [(0, version), (0, "Output")]
-        self.assertTrue(util.remove_firewall())
+        self.assertTrue(util.remove_firewall(dst, uid))
 
         mock_run.assert_has_calls([
-            call(osutil.FIREWALL_FLUSH.format(wait), chk_err=True)
+            call(osutil.FIREWALL_DELETE_CONNTRACK.format(wait, dst), chk_err=False),
+            call(osutil.FIREWALL_DELETE_CONNTRACK.format(wait, dst), chk_err=False),
+            call(osutil.FIREWALL_DELETE_OWNER.format(wait, dst, uid), chk_err=False),
+            call(osutil.FIREWALL_DELETE_OWNER.format(wait, dst, uid), chk_err=False),
         ])
         mock_output.assert_has_calls([
             call(osutil.IPTABLES_VERSION)
@@ -717,15 +720,17 @@ Chain OUTPUT (policy ACCEPT 104 packets, 43628 bytes)
         osutil._enable_firewall = True
         util = osutil.DefaultOSUtil()
 
+        dst_ip='1.2.3.4'
+        uid=42
         version = "iptables v{0}".format(osutil.IPTABLES_LOCKING_VERSION)
         wait = "-w"
 
-        mock_run.side_effect = [1, 0]
+        mock_run.side_effect = [2]
         mock_output.side_effect = [(0, version), (1, "Output")]
-        self.assertFalse(util.remove_firewall())
+        self.assertFalse(util.remove_firewall(dst_ip, uid))
 
         mock_run.assert_has_calls([
-            call(osutil.FIREWALL_FLUSH.format(wait), chk_err=True)
+            call(osutil.FIREWALL_DELETE_CONNTRACK.format(wait, dst_ip), chk_err=False),
         ])
         mock_output.assert_has_calls([
             call(osutil.IPTABLES_VERSION)
