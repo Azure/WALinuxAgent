@@ -15,32 +15,28 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
+import atexit
+import datetime
+import json
 import os
 import sys
-import traceback
-import atexit
-import json
 import time
-import datetime
-import threading
-import platform
+import traceback
 
-from datetime import datetime, timedelta
+from datetime import datetime
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 
-from azurelinuxagent.common.exception import EventError, ProtocolError
+from azurelinuxagent.common.exception import EventError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.restapi import TelemetryEventParam, \
-    TelemetryEventList, \
     TelemetryEvent, \
-    set_properties, get_properties
-from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_VERSION, \
-    DISTRO_CODE_NAME, AGENT_VERSION, \
-    CURRENT_AGENT, CURRENT_VERSION
+    get_properties
+from azurelinuxagent.common.version import CURRENT_VERSION
 
 _EVENT_MSG = "Event: name={0}, op={1}, message={2}, duration={3}"
+
 
 class WALAEventOperation:
     ActivateResourceDisk = "ActivateResourceDisk"
@@ -228,12 +224,24 @@ class EventLogger(object):
             logger.error("{0}", e)
 
     def add_log_event(self, level, message):
+        # By the time the message has gotten to this point it is formatted as
+        #
+        #   YYYY/MM/DD HH:mm:ss.fffffff LEVEL <text>.
+        #
+        # The timestamp and the level are redundant, and should be stripped.
+        # The logging library does not schematize this data, so I am forced
+        # to parse the message.  The format is regular, so the burden is low.
+
+        parts = message.split(' ', 3)
+        msg = parts[3] if len(parts) == 4 \
+            else message
+
         event = TelemetryEvent(7, "FFF0196F-EE4C-4EAF-9AA5-776F622DEB4F")
         event.parameters.append(TelemetryEventParam('EventName', WALAEventOperation.Log))
         event.parameters.append(TelemetryEventParam('CapabilityUsed', logger.LogLevel.STRINGS[level]))
-        event.parameters.append(TelemetryEventParam('Context1', ''))
-        event.parameters.append(TelemetryEventParam('Context2', str(CURRENT_AGENT)))
-        event.parameters.append(TelemetryEventParam('Context3', str(message)))
+        event.parameters.append(TelemetryEventParam('Context1', msg))
+        event.parameters.append(TelemetryEventParam('Context2', ''))
+        event.parameters.append(TelemetryEventParam('Context3', ''))
 
         data = get_properties(event)
         try:

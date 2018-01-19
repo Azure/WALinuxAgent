@@ -935,7 +935,7 @@ class WireClient(object):
             logger.info("Wire protocol version:{0}", PROTOCOL_VERSION)
         elif PROTOCOL_VERSION in version_info.get_supported():
             logger.info("Wire protocol version:{0}", PROTOCOL_VERSION)
-            logger.warn("Server preferred version:{0}", preferred)
+            logger.info("Server preferred version:{0}", preferred)
         else:
             error = ("Agent supported wire protocol version: {0} was not "
                      "advised by Fabric.").format(PROTOCOL_VERSION)

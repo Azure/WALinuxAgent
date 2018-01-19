@@ -89,16 +89,16 @@ class TestLogger(AgentTestCase):
         self.assertEqual(5, len(telemetry_json['parameters']))
         for x in telemetry_json['parameters']:
             if x['name'] == 'EventName':
-                self.assertEqual('Log', x['value'])
+                self.assertEqual(x['value'], 'Log')
 
             elif x['name'] == 'CapabilityUsed':
-                self.assertEqual('WARNING', x['value'])
+                self.assertEqual(x['value'], 'WARNING')
 
             elif x['name'] == 'Context1':
-                self.assertEqual('', x['value'])
+                self.assertEqual(x['value'], '--unit-test--')
 
             elif x['name'] == 'Context2':
-                self.assertEqual(CURRENT_AGENT, x['value'])
+                self.assertEqual(x['value'], '')
 
             elif x['name'] == 'Context3':
-                self.assertEqual("--unit-test--", x['value'])
+                self.assertEqual(x['value'], '')
