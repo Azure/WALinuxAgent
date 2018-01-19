@@ -998,7 +998,7 @@ class DefaultOSUtil(object):
         if not os.path.exists(hostname_record):
             # this file is created at provisioning time with agents >= 2.2.3
             hostname = socket.gethostname()
-            logger.warn('Hostname record does not exist, '
+            logger.info('Hostname record does not exist, '
                         'creating [{0}] with hostname [{1}]',
                         hostname_record,
                         hostname)
