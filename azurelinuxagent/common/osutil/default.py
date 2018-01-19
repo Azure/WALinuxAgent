@@ -136,9 +136,9 @@ class DefaultOSUtil(object):
     def _delete_rule(self, rule):
         """
         Continually execute the delete operation until the return
-        code is non-zero.
+        code is non-zero or the limit has been reached.
         """
-        while True:
+        for i in range(1, 100):
             rc = shellutil.run(rule, chk_err=False)
             if rc == 1:
                 return
