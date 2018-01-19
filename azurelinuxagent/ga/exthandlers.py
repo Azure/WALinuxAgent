@@ -22,6 +22,7 @@ import glob
 import json
 import os
 import os.path
+import random
 import re
 import shutil
 import stat
@@ -32,26 +33,21 @@ import zipfile
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
-import azurelinuxagent.common.utils.restutil as restutil
-import azurelinuxagent.common.utils.shellutil as shellutil
 import azurelinuxagent.common.version as version
 from azurelinuxagent.common.errorstate import ErrorState, ERROR_STATE_DELTA
 
 from azurelinuxagent.common.event import add_event, WALAEventOperation, elapsed_milliseconds
-from azurelinuxagent.common.exception import ExtensionError, ProtocolError, HttpError, RestartError
+from azurelinuxagent.common.exception import ExtensionError, ProtocolError, RestartError
 from azurelinuxagent.common.future import ustr
-from azurelinuxagent.common.version import AGENT_VERSION
 from azurelinuxagent.common.protocol.restapi import ExtHandlerStatus, \
                                                     ExtensionStatus, \
                                                     ExtensionSubStatus, \
-                                                    Extension, \
                                                     VMStatus, ExtHandler, \
                                                     get_properties, \
                                                     set_properties
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
-from azurelinuxagent.common.utils.textutil import Version
 from azurelinuxagent.common.protocol import get_protocol_util
-from azurelinuxagent.common.version import AGENT_NAME, CURRENT_AGENT, CURRENT_VERSION
+from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 
 
 #HandlerEnvironment.json schema version
@@ -710,6 +706,7 @@ class ExtHandlerInstance(object):
             raise ExtensionError("No package uri found")
         
         package = None
+        random.shuffle(self.pkg.uris)
         for uri in self.pkg.uris:
             try:
                 package = self.protocol.download_ext_handler_pkg(uri.uri)
