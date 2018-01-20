@@ -19,6 +19,7 @@
 import json
 import operator
 import os
+import random
 import re
 import time
 import xml.sax.saxutils as saxutils
@@ -599,7 +600,10 @@ class WireClient(object):
 
     def fetch_manifest(self, version_uris):
         logger.verbose("Fetch manifest")
-        for version in version_uris:
+        version_uris_shuffled = version_uris
+        random.shuffle(version_uris_shuffled)
+
+        for version in version_uris_shuffled:
             response = None
             if not HostPluginProtocol.is_default_channel():
                 response = self.fetch(version.uri)
