@@ -375,10 +375,10 @@ class TestWireProtocol(AgentTestCase):
             'formattedMessage': formatted_msg
         }
         v1_ga_guest_info = {
-            'computerName' : socket.gethostname(),
-            'osName' : DISTRO_NAME,
-            'osVersion' : DISTRO_VERSION,
-            'version' : str(CURRENT_VERSION),
+            'computerName': socket.gethostname(),
+            'osName': DISTRO_NAME,
+            'osVersion': DISTRO_VERSION,
+            'version': str(CURRENT_VERSION),
         }
         v1_agg_status = {
             'guestAgentStatus': v1_ga_status,
@@ -392,39 +392,6 @@ class TestWireProtocol(AgentTestCase):
         }
         self.assertEqual(json.dumps(v1_vm_status), actual.to_json())
 
-    def _create_files(self, tmp_dir, prefix, suffix, count):
-        for i in range(count):
-            f = os.path.join(tmp_dir, '.'.join((prefix, str(i), suffix)))
-            fileutil.write_file(f, "faux content")
-
-    @patch("azurelinuxagent.common.conf.get_lib_dir")
-    def test_purge_cache_purges(self, mock_conf, *args):
-        names = [
-            ("Prod", "agentsManifest"),
-            ("Test", "agentsManifest"),
-            ("FauxExtension1", "manifest.xml"),
-            ("FauxExtension2", "manifest.xml"),
-            ("GoalState", "xml"),
-            ("ExtensionsConfig", "xml")
-        ]
-
-        tmp_dir = tempfile.mkdtemp()
-        mock_conf.return_value = tmp_dir
-
-        for t in names:
-            self._create_files(tmp_dir, t[0], t[1], 2 * MAXIMUM_CACHED_FILES)
-
-        for t in names:
-            p = os.path.join(tmp_dir, '{0}.*.{1}'.format(*t))
-            self.assertEqual(2 * MAXIMUM_CACHED_FILES, len(glob.glob(p)))
-
-        client = WireProtocol(wireserver_url).client
-        client.purge_cache()
-
-        for t in names:
-            p = os.path.join(tmp_dir, '{0}.*.{1}'.format(*t))
-            self.assertEqual(MAXIMUM_CACHED_FILES, len(glob.glob(p)))
-
 
 class MockResponse:
     def __init__(self, body, status_code):
@@ -433,6 +400,7 @@ class MockResponse:
 
     def read(self):
         return self.body
+
 
 if __name__ == '__main__':
     unittest.main()

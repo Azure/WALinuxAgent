@@ -17,7 +17,6 @@
 # Requires Python 2.4+ and Openssl 1.0+
 
 import json
-import operator
 import os
 import random
 import re
@@ -56,14 +55,6 @@ MANIFEST_FILE_NAME = "{0}.{1}.manifest.xml"
 AGENTS_MANIFEST_FILE_NAME = "{0}.{1}.agentsManifest"
 TRANSPORT_CERT_FILE_NAME = "TransportCert.pem"
 TRANSPORT_PRV_FILE_NAME = "TransportPrivate.pem"
-
-CACHE_PATTERNS = [
-    re.compile("^(.*)\.(\d+)\.(agentsManifest)$", re.IGNORECASE),
-    re.compile("^(.*)\.(\d+)\.(manifest\.xml)$", re.IGNORECASE),
-    re.compile("^(.*)\.(\d+)\.(xml)$", re.IGNORECASE)
-]
-
-MAXIMUM_CACHED_FILES = 50
 
 PROTOCOL_VERSION = "2012-11-30"
 ENDPOINT_FINE_NAME = "WireServer"
@@ -738,7 +729,6 @@ class WireClient(object):
                 if self.host_plugin is not None:
                     self.host_plugin.container_id = goal_state.container_id
                     self.host_plugin.role_config_name = goal_state.role_config_name
-                self.purge_cache()
 
                 return
 
@@ -759,40 +749,6 @@ class WireClient(object):
                 raise
 
         raise ProtocolError("Exceeded max retry updating goal state")
-
-    def purge_cache(self):
-        '''
-        Ensure the number of cached files does not exceed a maximum
-        '''
-        # Create a list of file tuples of (prefix, suffix, incarnation, name)
-        # -- Convert the incarnation to an integer for proper sorting
-        files = []
-        for f in os.listdir(conf.get_lib_dir()):
-            for pattern in CACHE_PATTERNS:
-                m = pattern.match(f)
-                if m is not None:
-                    t = (m.group(1), m.group(3), int(m.group(2)), f)
-                    files.append(t)
-                    break
-
-        if len(files) <= 0:
-            return
-
-        # Sort by (prefix, suffix, incarnation) in reverse order
-        # (This puts more recent incarnations first in the list)
-        files = sorted(files, key=operator.itemgetter(0,1,2), reverse=True)
-
-        # Remove any files in excess of the maximum allowed
-        # -- Restart then whenever the (prefix, suffix) change
-        last_match = [None, None]
-        for f in files:
-            if last_match != f[0:2]:
-                last_match = f[0:2]
-                count = 0
-            count += 1
-
-            if count > MAXIMUM_CACHED_FILES:
-                os.remove(os.path.join(conf.get_lib_dir(), f[3]))
 
     def get_goal_state(self):
         if self.goal_state is None:

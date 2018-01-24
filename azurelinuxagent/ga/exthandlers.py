@@ -191,10 +191,10 @@ class ExtHandlersHandler(object):
                 ustr(e))
             logger.warn(msg)
             add_event(AGENT_NAME,
-                version=CURRENT_VERSION,
-                op=WALAEventOperation.ExtensionProcessing,
-                is_success=False,
-                message=msg)
+                      version=CURRENT_VERSION,
+                      op=WALAEventOperation.ExtensionProcessing,
+                      is_success=False,
+                      message=msg)
             return
 
         try:
@@ -214,10 +214,10 @@ class ExtHandlersHandler(object):
                 ustr(e))
             logger.warn(msg)
             add_event(AGENT_NAME,
-                version=CURRENT_VERSION,
-                op=WALAEventOperation.ExtensionProcessing,
-                is_success=False,
-                message=msg)
+                      version=CURRENT_VERSION,
+                      op=WALAEventOperation.ExtensionProcessing,
+                      is_success=False,
+                      message=msg)
             return
 
     def run_status(self):
