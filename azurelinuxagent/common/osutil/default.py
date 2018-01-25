@@ -97,6 +97,11 @@ class DefaultOSUtil(object):
             wait = self.get_firewall_will_wait()
 
             rc, output = shellutil.run_get_output(FIREWALL_PACKETS.format(wait))
+            if rc == 3:
+                # Transient error  that we ignore.  This code fires every loop
+                # of the daemon (60m), so we will get the value eventually.
+                return 0
+
             if rc != 0:
                 return -1
 

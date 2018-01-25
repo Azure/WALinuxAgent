@@ -516,6 +516,16 @@ Match host 192.168.1.2\n\
         self.assertEqual(-1, util.get_firewall_dropped_packets("not used"))
 
     @patch('azurelinuxagent.common.utils.shellutil.run_get_output')
+    def test_get_firewall_dropped_packets_transient_error_ignored(self, mock_output):
+        osutil._enable_firewall = True
+        util = osutil.DefaultOSUtil()
+
+        mock_output.side_effect = [
+            (0, "iptables v{0}".format(osutil.IPTABLES_LOCKING_VERSION)),
+            (3, "can't initialize iptables table `security': iptables who? (do you need to insmod?)")]
+        self.assertEqual(0, util.get_firewall_dropped_packets("not used"))
+
+    @patch('azurelinuxagent.common.utils.shellutil.run_get_output')
     def test_get_firewall_dropped_packets(self, mock_output):
         osutil._enable_firewall = True
         util = osutil.DefaultOSUtil()
