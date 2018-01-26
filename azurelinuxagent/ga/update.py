@@ -21,6 +21,7 @@ import glob
 import json
 import os
 import platform
+import random
 import re
 import shutil
 import signal
@@ -44,6 +45,7 @@ from azurelinuxagent.common.event import add_event, add_periodic, \
                                     WALAEventOperation
 from azurelinuxagent.common.exception import ProtocolError, \
                                             ResourceGoneError, \
+                                            RestartError, \
                                             UpdateError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
@@ -295,7 +297,7 @@ class UpdateHandler(object):
                         duration=elapsed_milliseconds(utc_start),
                         message="Incarnation {0}".format(
                                             exthandlers_handler.last_etag),
-                        log_event=exthandlers_handler.log_process)
+                        log_event=True)
 
                 time.sleep(GOAL_STATE_INTERVAL)
 
@@ -704,13 +706,13 @@ class GuestAgent(object):
         version = None
         if path is not None:
             m = AGENT_DIR_PATTERN.match(path)
-            if m is None:
+            if m == None:
                 raise UpdateError(u"Illegal agent directory: {0}".format(path))
             version = m.group(1)
         elif self.pkg is not None:
             version = pkg.version
 
-        if version is None:
+        if version == None:
             raise UpdateError(u"Illegal agent version: {0}".format(version))
         self.version = FlexibleVersion(version)
 
@@ -824,7 +826,9 @@ class GuestAgent(object):
         self._load_error()
 
     def _download(self):
-        for uri in self.pkg.uris:
+        uris_shuffled = self.pkg.uris
+        random.shuffle(uris_shuffled)
+        for uri in uris_shuffled:
             if not HostPluginProtocol.is_default_channel() and self._fetch(uri.uri):
                 break
 

@@ -15,17 +15,20 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
+import json
 from datetime import datetime
 
 import azurelinuxagent.common.logger as logger
+from azurelinuxagent.common.event import add_log_event
+from azurelinuxagent.common.version import CURRENT_AGENT, CURRENT_VERSION
 
 from tests.tools import *
 
 _MSG = "This is our test logging message {0} {1}"
 _DATA = ["arg1", "arg2"]
 
-class TestLogger(AgentTestCase):
 
+class TestLogger(AgentTestCase):
     @patch('azurelinuxagent.common.logger.Logger.info')
     def test_periodic_emits_if_not_previously_sent(self, mock_info):
         logger.reset_periodic()
@@ -64,3 +67,38 @@ class TestLogger(AgentTestCase):
 
         logger.periodic(logger.EVERY_DAY, _MSG, *_DATA)
         mock_info.assert_called_once_with(_MSG, *_DATA)
+
+    def test_telemetry_logger(self):
+        mock = MagicMock()
+        appender = logger.TelemetryAppender(logger.LogLevel.WARNING, mock)
+        appender.write(logger.LogLevel.WARNING, "--unit-test--")
+
+        mock.assert_called_once_with(logger.LogLevel.WARNING, "--unit-test--")
+
+    @patch('azurelinuxagent.common.event.EventLogger.save_event')
+    def test_telemetry_logger1(self, mock_save):
+        appender = logger.TelemetryAppender(logger.LogLevel.WARNING, add_log_event)
+        appender.write(logger.LogLevel.WARNING, "--unit-test--")
+
+        self.assertEqual(1, mock_save.call_count)
+        telemetry_json = json.loads(mock_save.call_args[0][0])
+
+        self.assertEqual('FFF0196F-EE4C-4EAF-9AA5-776F622DEB4F', telemetry_json['providerId'])
+        self.assertEqual(7, telemetry_json['eventId'])
+
+        self.assertEqual(5, len(telemetry_json['parameters']))
+        for x in telemetry_json['parameters']:
+            if x['name'] == 'EventName':
+                self.assertEqual(x['value'], 'Log')
+
+            elif x['name'] == 'CapabilityUsed':
+                self.assertEqual(x['value'], 'WARNING')
+
+            elif x['name'] == 'Context1':
+                self.assertEqual(x['value'], '--unit-test--')
+
+            elif x['name'] == 'Context2':
+                self.assertEqual(x['value'], '')
+
+            elif x['name'] == 'Context3':
+                self.assertEqual(x['value'], '')

@@ -63,6 +63,9 @@ class Agent(object):
                                  path="/var/log/waagent.log")
         logger.add_logger_appender(logger.AppenderType.CONSOLE, level,
                                  path="/dev/console")
+        logger.add_logger_appender(logger.AppenderType.TELEMETRY,
+                                   logger.LogLevel.WARNING,
+                                   path=event.add_log_event)
 
         ext_log_dir = conf.get_ext_log_dir()
         try:

@@ -26,13 +26,16 @@ import tempfile
 import unittest
 from functools import wraps
 
+import time
+
 import azurelinuxagent.common.event as event
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
+from azurelinuxagent.common.utils import fileutil
 
 from azurelinuxagent.common.version import PY_VERSION_MAJOR
 
-#Import mock module for Python2 and Python3
+# Import mock module for Python2 and Python3
 try:
     from unittest.mock import Mock, patch, MagicMock, DEFAULT, ANY, call
 except ImportError:
@@ -45,10 +48,11 @@ debug = False
 if os.environ.get('DEBUG') == '1':
     debug = True
 
-#Enable verbose logger to stdout
+# Enable verbose logger to stdout
 if debug:
     logger.add_logger_appender(logger.AppenderType.STDOUT, 
                                logger.LogLevel.VERBOSE)
+
 
 class AgentTestCase(unittest.TestCase):
     def setUp(self):
@@ -72,11 +76,19 @@ class AgentTestCase(unittest.TestCase):
         if not debug and self.tmp_dir is not None:
             shutil.rmtree(self.tmp_dir)
 
+    def _create_files(self, tmp_dir, prefix, suffix, count, with_sleep=0):
+        for i in range(count):
+            f = os.path.join(tmp_dir, '.'.join((prefix, str(i), suffix)))
+            fileutil.write_file(f, "faux content")
+            time.sleep(with_sleep)
+
+
 def load_data(name):
     """Load test data"""
     path = os.path.join(data_dir, name)
     with open(path, "r") as data_file:
         return data_file.read()
+
 
 def load_bin_data(name):
     """Load test bin data"""
@@ -106,11 +118,13 @@ supported_distro = [
 
 ]
 
+
 def open_patch():
     open_name = '__builtin__.open'
     if PY_VERSION_MAJOR == 3:
         open_name = 'builtins.open'
     return open_name
+
 
 def distros(distro_name=".*", distro_version=".*", distro_full_name=".*"):
     """Run test on multiple distros"""
@@ -128,8 +142,8 @@ def distros(distro_name=".*", distro_version=".*", distro_full_name=".*"):
                     new_args.extend(args)
                     new_args.extend(distro)
                     test_method(self, *new_args, **kwargs)
-                    #Call tearDown and setUp to create seprated environment for 
-                    #distro testing
+                    # Call tearDown and setUp to create separated environment
+                    # for distro testing
                     self.tearDown()
                     self.setUp()
         return wrapper

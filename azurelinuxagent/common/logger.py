@@ -17,8 +17,8 @@
 """
 Log utils
 """
-import os
 import sys
+
 from azurelinuxagent.common.future import ustr
 from datetime import datetime, timedelta
 
@@ -27,6 +27,7 @@ EVERY_HALF_DAY = timedelta(hours=12)
 EVERY_HOUR = timedelta(hours=1)
 EVERY_HALF_HOUR = timedelta(minutes=30)
 EVERY_FIFTEEN_MINUTES = timedelta(minutes=15)
+
 
 class Logger(object):
     """
@@ -92,6 +93,7 @@ class Logger(object):
         appender = _create_logger_appender(appender_type, level, path)
         self.appenders.append(appender)
 
+
 class ConsoleAppender(object):
     def __init__(self, level, path):
         self.level = level
@@ -104,6 +106,7 @@ class ConsoleAppender(object):
                     console.write(msg)
             except IOError:
                 pass
+
 
 class FileAppender(object):
     def __init__(self, level, path):
@@ -118,6 +121,7 @@ class FileAppender(object):
             except IOError:
                 pass
 
+
 class StdoutAppender(object):
     def __init__(self, level):
         self.level = level
@@ -129,8 +133,23 @@ class StdoutAppender(object):
             except IOError:
                 pass
 
+
+class TelemetryAppender(object):
+    def __init__(self, level, event_func):
+        self.level = level
+        self.event_func = event_func
+
+    def write(self, level, msg):
+        if self.level <= level:
+            try:
+                self.event_func(level, msg)
+            except IOError:
+                pass
+
+
 #Initialize logger instance
 DEFAULT_LOGGER = Logger()
+
 
 class LogLevel(object):
     VERBOSE = 0
@@ -144,34 +163,45 @@ class LogLevel(object):
         "ERROR"
     ]
 
+
 class AppenderType(object):
     FILE = 0
     CONSOLE = 1
     STDOUT = 2
+    TELEMETRY = 3
+
 
 def add_logger_appender(appender_type, level=LogLevel.INFO, path=None):
     DEFAULT_LOGGER.add_appender(appender_type, level, path)
 
+
 def reset_periodic():
     DEFAULT_LOGGER.reset_periodic()
+
 
 def periodic(delta, msg_format, *args):
     DEFAULT_LOGGER.periodic(delta, msg_format, *args)
 
+
 def verbose(msg_format, *args):
     DEFAULT_LOGGER.verbose(msg_format, *args)
+
 
 def info(msg_format, *args):
     DEFAULT_LOGGER.info(msg_format, *args)
 
+
 def warn(msg_format, *args):
     DEFAULT_LOGGER.warn(msg_format, *args)
+
 
 def error(msg_format, *args):
     DEFAULT_LOGGER.error(msg_format, *args)
 
+
 def log(level, msg_format, *args):
     DEFAULT_LOGGER.log(level, msg_format, args)
+
 
 def _create_logger_appender(appender_type, level=LogLevel.INFO, path=None):
     if appender_type == AppenderType.CONSOLE:
@@ -180,6 +210,8 @@ def _create_logger_appender(appender_type, level=LogLevel.INFO, path=None):
         return FileAppender(level, path)
     elif appender_type == AppenderType.STDOUT:
         return StdoutAppender(level)
+    elif appender_type == AppenderType.TELEMETRY:
+        return TelemetryAppender(level, path)
     else:
         raise ValueError("Unknown appender type")
 

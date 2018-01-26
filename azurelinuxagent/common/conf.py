@@ -40,11 +40,11 @@ class ConfigurationProvider(object):
             raise AgentConfigError("Can't not parse empty configuration")
         for line in content.split('\n'):
             if not line.startswith("#") and "=" in line:
-                parts = line.split('=')
+                parts = line.split('=', 1)
                 if len(parts) < 2:
                     continue
                 key = parts[0].strip()
-                value = parts[1].split('#')[0].strip("\" ")
+                value = parts[1].split('#')[0].strip("\" ").strip()
                 self.values[key] = value if value != "None" else None
 
     def get(self, key, default_val):
@@ -137,6 +137,7 @@ __INTEGER_OPTIONS__ = {
     "ResourceDisk.SwapSizeMB" : 0,
     "Autoupdate.Frequency" : 3600
 }
+
 
 def get_configuration(conf=__conf__):
     options = {}

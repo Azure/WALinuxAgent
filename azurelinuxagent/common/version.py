@@ -113,7 +113,7 @@ def get_distro():
 
 AGENT_NAME = "WALinuxAgent"
 AGENT_LONG_NAME = "Azure Linux Agent"
-AGENT_VERSION = '2.2.19'
+AGENT_VERSION = '2.2.20'
 AGENT_LONG_VERSION = "{0}-{1}".format(AGENT_NAME, AGENT_VERSION)
 AGENT_DESCRIPTION = """
 The Azure Linux Agent supports the provisioning and running of Linux
@@ -161,13 +161,16 @@ def set_current_agent():
         version = AGENT_VERSION
     return agent, FlexibleVersion(version)
 
+
 def is_agent_package(path):
     path = os.path.basename(path)
     return not re.match(AGENT_PKG_PATTERN, path) is None
 
+
 def is_agent_path(path):
     path = os.path.basename(path)
     return not re.match(AGENT_NAME_PATTERN, path) is None
+
 
 CURRENT_AGENT, CURRENT_VERSION = set_current_agent()
 

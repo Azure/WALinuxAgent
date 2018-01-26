@@ -17,17 +17,12 @@
 
 from __future__ import print_function
 
-from datetime import datetime
-
-import json
-import shutil
-import stat
-
 from azurelinuxagent.common.event import *
 from azurelinuxagent.common.protocol.hostplugin import *
 from azurelinuxagent.common.protocol.metadata import *
 from azurelinuxagent.common.protocol.wire import *
 from azurelinuxagent.common.utils.fileutil import *
+from azurelinuxagent.common.version import AGENT_PKG_GLOB, AGENT_DIR_GLOB
 from azurelinuxagent.ga.update import *
 
 from tests.tools import *
