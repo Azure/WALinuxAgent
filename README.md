@@ -397,6 +397,17 @@ If set, the agent will use this proxy server to access the internet. These value
 *will* override the `http_proxy` or `https_proxy` environment variables. Lastly,
 `HttpProxy.Host` is required (if to be used) and `HttpProxy.Port` is optional.
 
+### DATA/TELEMETRY
+WALinuxAgent collects usage data and sends it to Microsoft to help improve our
+products and services. The data collected is used to track service health and
+assist with Azure support requests. Data collected does not include any personally
+identifiable information. Read our [privacy statement](http://go.microsoft.com/fwlink/?LinkId=521839)
+to learn more.
+
+WALinuxAgent does not support disabling telemetry at this time. WALinuxAgent
+must be removed to disable telemetry collection. If you need this feature,
+please open an issue in GitHub and explain your requirement.
+
 ### APPENDIX
 
 We do not maintain packaging information in this repo but some samples 
