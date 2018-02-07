@@ -86,8 +86,22 @@ def get_distro():
                                                   supported_dists=supported))
         full_name = platform.linux_distribution()[0].strip()
         osinfo.append(full_name)
-    else:
+    elif 'dist' in dir(platform):
         osinfo = platform.dist()
+
+    # In the case that platform.dist doesn't provide this information
+    # (see https://bugs.python.org/issue1322)
+    # take the details from the environment for Clear Linux (as the
+    # waagent.service will add them).
+    #
+    # Eventually consider using a library to handle other distros like:
+    # https://pypi.python.org/pypi/distro which is built to do this as
+    # the stdlib folks prefer this functionality live in pypi.
+    if not osinfo or osinfo[0] == '' and os.environ.get('NAME'):
+        osinfo = [os.environ['NAME'],
+                  os.environ['VERSION_ID'],
+                  os.environ['ID'],
+                  os.environ['PRETTY_NAME']]
 
     # The platform.py lib has issue with detecting oracle linux distribution.
     # Merge the following patch provided by oracle as a temporary fix.
