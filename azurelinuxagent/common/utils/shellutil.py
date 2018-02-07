@@ -19,6 +19,7 @@
 
 import subprocess
 import azurelinuxagent.common.logger as logger
+from azurelinuxagent.common.cgroups import Cgroup
 from azurelinuxagent.common.future import ustr
 
 if not hasattr(subprocess, 'check_output'):
@@ -80,7 +81,8 @@ def run_get_output(cmd, chk_err=True, log_cmd=True):
     try:
         output = subprocess.check_output(cmd,
                                          stderr=subprocess.STDOUT,
-                                         shell=True)
+                                         shell=True,
+                                         preexec_fn=Cgroup.azure_cgroup)
         output = ustr(output,
                       encoding='utf-8',
                       errors="backslashreplace")

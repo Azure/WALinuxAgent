@@ -36,6 +36,8 @@ import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.version as version
+from azurelinuxagent.common.cgroups import Cgroup
+from azurelinuxagent.common.errorstate import ErrorState, ERROR_STATE_DELTA
 from azurelinuxagent.common.errorstate import ErrorState, ERROR_STATE_DELTA_DEFAULT, ERROR_STATE_DELTA_INSTALL
 
 from azurelinuxagent.common.event import add_event, WALAEventOperation, elapsed_milliseconds, report_event
@@ -1000,6 +1002,8 @@ class ExtHandlerInstance(object):
                                   preexec_fn=os.setsid)
         except OSError as e:
             raise ExtensionError("Failed to launch '{0}': {1}".format(full_path, e.strerror))
+
+        # TODO Cgroup.add_to_cgroup(extension name, process.pid)
 
         msg = capture_from_process(process, cmd, timeout)
 
