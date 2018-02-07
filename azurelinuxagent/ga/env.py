@@ -27,6 +27,7 @@ import datetime
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
+from azurelinuxagent.common.cgroups import Cgroup
 
 from azurelinuxagent.common.cgroups import CGroups
 from azurelinuxagent.common.dhcp import get_dhcp_handler
@@ -139,7 +140,22 @@ class EnvHandler(object):
 
             self.archive_history()
 
+            self.setup_cgroup()
+
             time.sleep(5)
+
+    def setup_cgroup(self):
+
+        cg = Cgroup('azure')
+        cg.set_cpu_limit(50)
+        cg.set_memory_limit(500)
+
+        # add the daemon process
+        pid_file = conf.get_agent_pid_file_path()
+        if os.path.isfile(pid_file):
+            pid = fileutil.read_file(pid_file)
+            cg.add(pid)
+
 
     def handle_hostname_update(self):
         curr_hostname = socket.gethostname()
