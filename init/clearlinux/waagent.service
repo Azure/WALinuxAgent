@@ -8,6 +8,7 @@ ConditionPathExists=/usr/share/defaults/waagent/waagent.conf
 
 [Service]
 Type=simple
+EnvironmentFile=/usr/lib/os-release
 ExecStart=/usr/bin/python -u /usr/bin/waagent -daemon
 Restart=always
 RestartSec=5
