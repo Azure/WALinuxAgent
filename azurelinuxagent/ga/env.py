@@ -155,6 +155,9 @@ class EnvHandler(object):
         if os.path.isfile(pid_file):
             pid = fileutil.read_file(pid_file)
             cg.add(pid)
+            logger.info("added {0} to {1}".format(pid, cg.name))
+        else:
+            logger.warn("no pid file at {0}".format(pid_file))
 
 
     def handle_hostname_update(self):
