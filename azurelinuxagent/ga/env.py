@@ -94,6 +94,7 @@ class EnvHandler(object):
         self.server_thread = threading.Thread(target=self.monitor)
         self.server_thread.setDaemon(True)
         self.server_thread.start()
+        self.setup_cgroup()
 
     def monitor(self):
         """
@@ -139,8 +140,6 @@ class EnvHandler(object):
             self.handle_dhclient_restart()
 
             self.archive_history()
-
-            self.setup_cgroup()
 
             time.sleep(5)
 

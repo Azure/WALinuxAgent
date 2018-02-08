@@ -8,6 +8,7 @@ from __future__ import division
 import os
 import getpass
 
+from azurelinuxagent.common import logger
 from .common import BASE_CGROUPS, CgroupsException
 from .user import create_user_cgroups
 
@@ -193,7 +194,8 @@ class Cgroup(object):
             return None
 
     @staticmethod
-    def azure_cgroup():
+    def add_to_azure_cgroup():
         pid = os.getpid()
         cg = Cgroup('azure')
+        logger.info("add subprocess {0} to {1}".format(pid, cg.name))
         cg.add(pid)
