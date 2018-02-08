@@ -146,6 +146,7 @@ class EnvHandler(object):
 
     def setup_cgroup(self):
 
+        logger.info("setup cgroups")
         cg = Cgroup('azure')
         cg.set_cpu_limit(50)
         cg.set_memory_limit(500)
