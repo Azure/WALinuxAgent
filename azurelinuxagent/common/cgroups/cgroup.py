@@ -198,4 +198,4 @@ class Cgroup(object):
         pid = os.getpid()
         cg = Cgroup('azure')
         logger.info("add subprocess {0} to {1}".format(pid, cg.name))
-        cg.add(pid)
+        cg.add(int(pid))
