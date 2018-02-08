@@ -194,8 +194,12 @@ class Cgroup(object):
             return None
 
     @staticmethod
-    def add_to_azure_cgroup(msg):
+    def add_to_azure_cgroup(msg, log):
         pid = os.getpid()
         cg = Cgroup('azure')
-        logger.info("Add pid {0} to {1} cgroup [{2}]".format(pid, cg.name, msg))
+        m = "Add pid {0} to {1} cgroup [{2}]".format(pid, cg.name, msg)
+        if log:
+            logger.info(m)
+        else:
+            logger.verbose(m)
         cg.add(int(pid))
