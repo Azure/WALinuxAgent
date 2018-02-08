@@ -20,6 +20,9 @@ import re
 import platform
 import sys
 
+if float(sys.version[:3]) >= 3.5:
+    import distro
+
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.utils.fileutil as fileutil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
@@ -80,14 +83,27 @@ def get_distro():
     elif 'OpenBSD' in platform.system():
         release = re.sub('\-.*\Z', '', ustr(platform.release()))
         osinfo = ['openbsd', release, '', 'openbsd']
-    elif 'linux_distribution' in dir(platform):
-        supported = platform._supported_dists + ('alpine',)
-        osinfo = list(platform.linux_distribution(full_distribution_name=0,
-                                                  supported_dists=supported))
-        full_name = platform.linux_distribution()[0].strip()
+    elif 'Linux' in platform.system():
+        # platform.linux_distribution and platform.dist deprecated in
+        # Python 3.5 and removed in Python 3.7
+        if float(sys.version[:3]) >= 3.5:
+            platform_module = distro
+            osinfo = list(distro.linux_distribution(full_distribution_name=0))
+        else:
+            platform_module = platform
+            supported = platform._supported_dists + ('alpine',)
+            osinfo = list(platform.linux_distribution(
+                full_distribution_name=0,
+                supported_dists=supported
+            ))
+        full_name = platform_module.linux_distribution()[0].strip()
         osinfo.append(full_name)
     else:
-        osinfo = platform.dist()
+        try:
+            # dist() removed in Python 3.7
+            osinfo = platform.dist()
+        except:
+            osinfo = ('UNKNOWN', 'FFFF', '')
 
     # The platform.py lib has issue with detecting oracle linux distribution.
     # Merge the following patch provided by oracle as a temporary fix.
