@@ -147,18 +147,23 @@ class EnvHandler(object):
     def setup_cgroup(self):
 
         logger.info("setup cgroups")
+
         cg = Cgroup('azure')
         cg.set_cpu_limit(50)
         cg.set_memory_limit(500)
 
+        logger.info("add daemon process")
+
         # add the daemon process
         pid_file = conf.get_agent_pid_file_path()
         if os.path.isfile(pid_file):
+            logger.info("add {0} to {1}".format(pid, cg.name))
             pid = fileutil.read_file(pid_file)
             cg.add(pid)
-            logger.info("added {0} to {1}".format(pid, cg.name))
         else:
             logger.warn("no pid file at {0}".format(pid_file))
+
+        logger.info("cgroups setup")
 
 
     def handle_hostname_update(self):
