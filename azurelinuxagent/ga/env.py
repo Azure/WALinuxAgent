@@ -148,9 +148,12 @@ class EnvHandler(object):
 
         logger.info("setup cgroups")
 
-        cg = Cgroup('azure')
-        cg.set_cpu_limit(50)
-        cg.set_memory_limit(500)
+        try:
+            cg = Cgroup('azure')
+            cg.set_cpu_limit(50)
+            cg.set_memory_limit(500)
+        except Exception as e:
+            logger.error(e.message)
 
         logger.info("add daemon process")
 
