@@ -157,8 +157,8 @@ class EnvHandler(object):
         # add the daemon process
         pid_file = conf.get_agent_pid_file_path()
         if os.path.isfile(pid_file):
-            logger.info("add {0} to {1}".format(pid, cg.name))
             pid = fileutil.read_file(pid_file)
+            logger.info("add {0} to {1}".format(pid, cg.name))
             cg.add(pid)
         else:
             logger.warn("no pid file at {0}".format(pid_file))
