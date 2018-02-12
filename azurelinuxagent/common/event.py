@@ -254,7 +254,11 @@ __event_logger__ = EventLogger()
 
 
 def elapsed_milliseconds(utc_start):
-    d = datetime.utcnow() - utc_start
+    now = datetime.utcnow()
+    if now < utc_start:
+        return 0
+
+    d = now - utc_start
     return int(((d.days * 24 * 60 * 60 + d.seconds) * 1000) + \
                     (d.microseconds / 1000.0))
 
