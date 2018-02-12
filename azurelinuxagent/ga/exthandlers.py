@@ -91,6 +91,7 @@ def parse_ext_substatus(substatus):
     status.message = parse_formatted_message(formatted_message)
     return status
 
+
 def parse_ext_status(ext_status, data):
     if data is None or len(data) is None:
         return
@@ -117,6 +118,7 @@ def parse_ext_status(ext_status, data):
     for substatus in substatus_list:
         if substatus is not None:
             ext_status.substatusList.append(parse_ext_substatus(substatus))
+
 
 # This code migrates, if it exists, handler state and status from an
 # agent-owned directory into the handler-owned config directory
@@ -178,6 +180,7 @@ class ExtHandlersHandler(object):
         self.log_report = False
         self.log_etag = True
         self.log_process = False
+        self._global_enabled_forced = False # Extensions are always enabled on first start of the agent.
 
         self.report_status_error_state = ErrorState()
 
@@ -319,6 +322,10 @@ class ExtHandlersHandler(object):
         for ext_handler in self.ext_handlers.extHandlers:
             # TODO: handle install in sequence, enable in parallel
             self.handle_ext_handler(ext_handler, etag)
+
+        # All extensions have been enabled at least once on reboot.  Subsequent enables will
+        # require an actual settings change.
+        self._global_enabled_forced = True
     
     def handle_ext_handler(self, ext_handler, etag):
         ext_handler_i = ExtHandlerInstance(ext_handler, self.protocol)
@@ -392,6 +399,9 @@ class ExtHandlersHandler(object):
         handler_state = ext_handler_i.get_handler_state()
         ext_handler_i.logger.info("[Enable] current handler state is: {0}",
                                   handler_state.lower())
+
+        should_enable_ext = ext_handler_i.should_enable()
+
         if handler_state == ExtHandlerState.NotInstalled:
             ext_handler_i.set_handler_state(ExtHandlerState.NotInstalled)
             ext_handler_i.download()
@@ -408,7 +418,10 @@ class ExtHandlersHandler(object):
         else:
             ext_handler_i.update_settings()
 
-        ext_handler_i.enable() 
+        if should_enable_ext or not self._global_enabled_forced:
+            ext_handler_i.enable()
+        else:
+            logger.verbose("[Enable] no change in settings detected, skipping")
 
     def handle_disable(self, ext_handler_i):
         self.log_process = True
@@ -640,17 +653,17 @@ class ExtHandlerInstance(object):
         return FlexibleVersion(self_version) > FlexibleVersion(other_version)
 
     def get_installed_ext_handler(self):
-        lastest_version = self.get_installed_version()
-        if lastest_version is None:
+        latest_version = self.get_installed_version()
+        if latest_version is None:
             return None
         
         installed_handler = ExtHandler()
         set_properties("ExtHandler", installed_handler, get_properties(self.ext_handler))
-        installed_handler.properties.version = lastest_version
+        installed_handler.properties.version = latest_version
         return ExtHandlerInstance(installed_handler, self.protocol)
 
     def get_installed_version(self):
-        lastest_version = None
+        latest_version = None
 
         for path in glob.iglob(os.path.join(conf.get_lib_dir(), self.ext_handler.name + "-*")):
             if not os.path.isdir(path):
@@ -667,10 +680,10 @@ class ExtHandlerInstance(object):
                     "{0}".format(path))
                 continue
 
-            if lastest_version is None or lastest_version < version:
-                lastest_version = version
+            if latest_version is None or latest_version < version:
+                latest_version = version
 
-        return str(lastest_version) if lastest_version is not None else None
+        return str(latest_version) if latest_version is not None else None
     
     def copy_status_files(self, old_ext_handler_i):
         self.logger.info("Copy status files from old plugin to new")
@@ -784,6 +797,30 @@ class ExtHandlerInstance(object):
         #Save HandlerEnvironment.json
         self.create_handler_env()
 
+    def should_enable(self):
+        """
+        Determine if an extension should be enabled.
+
+        Extensions should only be enabled if a new settings is passed to the extension.  This condition
+        is checked by looking for an existing settings file with the same sequence number as the current
+        configuration.  If a settings file already exists then it is assumed to have been processed.
+
+        The previous behavior was to call enable every time a goal state was received by the agent.  This
+        means the agent is calling enable more than is necessary, and while this has always been true it tends
+        to be problematic.  There have been bugs in extensions where re-execution caused bad problems for
+        customers.  The behavior is being changed, while still maintaining the existing extension contract,
+        in an attempt to mitigate some of these extensions bugs.  This also has the side effect of ensuring
+        logged enable commands actually correspond to a real enable.
+        """
+
+        should_enable_test = True
+        for ext in self.ext_handler.properties.extensions:
+            settings_file = os.path.join(self.get_conf_dir(), "{0}.settings".format(ext.sequenceNumber))
+            if os.path.exists(settings_file):
+                should_enable_test = False
+
+        return should_enable_test
+
     def enable(self):
         self.set_operation(WALAEventOperation.Enable)
         man = self.load_manifest()
@@ -855,12 +892,12 @@ class ExtHandlerInstance(object):
             item_path = os.path.join(conf_dir, item)
             if os.path.isfile(item_path):
                 try:
-                    seperator = item.rfind(".")
-                    if seperator > 0 and item[seperator + 1:] == 'settings':
+                    separator = item.rfind(".")
+                    if separator > 0 and item[separator + 1:] == 'settings':
                         curr_seq_no = int(item.split('.')[0])
                         if curr_seq_no > seq_no:
                             seq_no = curr_seq_no
-                except Exception as e:
+                except Exception:
                     self.logger.verbose("Failed to parse file name: {0}", item)
                     continue
         return seq_no
@@ -953,7 +990,7 @@ class ExtHandlerInstance(object):
                                      stdout=devnull,
                                      env=os.environ)
         except Exception as e:
-            #TODO do not catch all exception
+            # TODO do not catch all exception
             raise ExtensionError("Failed to launch: {0}, {1}".format(cmd, e))
 
         retry = timeout
@@ -965,7 +1002,7 @@ class ExtHandlerInstance(object):
             raise ExtensionError("Timeout({0}): {1}".format(timeout, cmd))
 
         ret = child.wait()
-        if ret == None or ret != 0:
+        if ret is None or ret != 0:
             raise ExtensionError("Non-zero exit code: {0}, {1}".format(ret, cmd))
 
         duration = elapsed_milliseconds(begin_utc)
@@ -1116,6 +1153,7 @@ class ExtHandlerInstance(object):
         return os.path.join(conf.get_ext_log_dir(), self.ext_handler.name,
                             str(self.ext_handler.properties.version))
 
+
 class HandlerEnvironment(object):
     def __init__(self, data):
         self.data = data
@@ -1134,6 +1172,7 @@ class HandlerEnvironment(object):
 
     def get_heartbeat_file(self):
         return self.data["handlerEnvironment"]["heartbeatFile"]
+
 
 class HandlerManifest(object):
     def __init__(self, data):
