@@ -1,8 +1,12 @@
 import platform
 import sys
 
-if float(sys.version[:3]) >= 3.5:
+# Note broken dependency handling to avoid potential backward
+# compantibility issues
+try:
     import distro
+except Exception:
+    pass
     
 """
 Add alias for python2 and python3 libs and functions.
@@ -32,20 +36,39 @@ else:
 
 def get_linux_distribution(get_full_name, supported_dists):
     """Abstract platform.linux_distribution() call which is deprecated as of
-       Python 3.5"""
-    if float(sys.version[:3]) >= 3.5:
-        platform_module = distro
-        osinfo = list(distro.linux_distribution(
-            full_distribution_name=get_full_name
-        ))
-    else:
-        platform_module = platform
+       Python 3.5 and removed in Python 3.7"""
+    try:
         supported = platform._supported_dists + (supported_dists,)
-        osinfo = list(platform.linux_distribution(
-            full_distribution_name=get_full_name,
-            supported_dists=supported
-        ))
-    full_name = platform_module.linux_distribution()[0].strip()
-    osinfo.append(full_name)
+        osinfo = list(
+            platform.linux_distribution(
+                full_distribution_name=get_full_name,
+                supported_dists=supported
+            )
+        )
+        if not osinfo or osinfo == ['','','']:
+            return get_linux_ditribution_from_distro(get_full_name)
+        full_name = platform_module.linux_distribution()[0].strip()
+        osinfo.append(full_name)
+    except Exception:
+        return get_linux_ditribution_from_distro(get_full_name)
 
     return osinfo
+
+def get_linux_ditribution_from_distro(get_full_name):
+    """Get the distribution information from the distro Python module."""
+    # If we get here we have to have the distro module, thus we do
+    # not wrap the call in a try-except block as it would mask the problem
+    # and result in a broken agent installation
+    osinfo = list(
+        distro.linux_distribution(
+            full_distribution_name=get_full_name
+        )
+    )
+    full_name = distro.linux_distribution()[0].strip()
+    osinfo.append(full_name)
+    return osinfo
+
+
+
+
+    

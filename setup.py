@@ -199,9 +199,14 @@ class install(_install):
             osutil.stop_agent_service()
             osutil.start_agent_service()
 
-requires = []
-if float(sys.version[:3]) >= 3.5:
-    requires = ['distro']
+# Note to packagers and users fromn source.
+# In version 3.5 of Python distribution information handling in the platform
+# module was deprecated. Depending on the Linux distribution the
+# implementation may be broken prior to Python 3.7 thus you may or may not
+# need to install the distro Python package. Due to concerns of breakage
+# the code cannot handle this automagically
+#if float(sys.version[:3]) >= 3.5:
+#    requires = ['distro']
 
 setuptools.setup(
     name=AGENT_NAME,
@@ -213,7 +218,6 @@ setuptools.setup(
     url='https://github.com/Azure/WALinuxAgent',
     license='Apache License Version 2.0',
     packages=find_packages(exclude=["tests"]),
-    install_requires=requires,
     py_modules=["__main__"],
     cmdclass={
         'install': install
