@@ -71,6 +71,36 @@ class Ubuntu16OSUtil(Ubuntu14OSUtil):
         return shellutil.run("systemctl mask walinuxagent", chk_err=False)
 
 
+class Ubuntu18OSUtil(Ubuntu16OSUtil):
+    """
+    Ubuntu 18.04
+    """
+    def __init__(self):
+        super(Ubuntu18OSUtil, self).__init__()
+
+    def get_dhcp_pid(self):
+        ret = shellutil.run_get_output("pidof systemd-networkd")
+        return ret[1] if ret[0] == 0 else None
+
+    def start_network(self):
+        return shellutil.run("systemctl start systemd-networkd", chk_err=False)
+
+    def stop_network(self):
+        return shellutil.run("systemctl stop systemd-networkd", chk_err=False)
+
+    def start_dhcp_service(self):
+        return self.start_network()
+
+    def stop_dhcp_service(self):
+        return self.stop_network()
+
+    def start_agent_service(self):
+        return shellutil.run("systemctl start walinuxagent", chk_err=False)
+
+    def stop_agent_service(self):
+        return shellutil.run("systemctl stop walinuxagent", chk_err=False)
+
+
 class UbuntuOSUtil(Ubuntu16OSUtil):
     def __init__(self):
         super(UbuntuOSUtil, self).__init__()

@@ -271,7 +271,6 @@ class DefaultOSUtil(object):
         return id_that == id_this or \
             id_that == self._correct_instance_id(id_this)
 
-
     def get_agent_conf_file_path(self):
         return self.agent_conf_file_path
 
@@ -621,7 +620,7 @@ class DefaultOSUtil(object):
         return shellutil.run("umount {0}".format(mount_point), chk_err=chk_err)
 
     def allow_dhcp_broadcast(self):
-        #Open DHCP port if iptables is enabled.
+        # Open DHCP port if iptables is enabled.
         # We supress error logging on error.
         shellutil.run("iptables -D INPUT -p udp --dport 68 -j ACCEPT",
                       chk_err=False)
