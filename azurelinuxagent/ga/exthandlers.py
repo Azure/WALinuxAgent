@@ -945,9 +945,22 @@ class ExtHandlerInstance(object):
         begin_utc = datetime.datetime.utcnow()
         self.logger.verbose("Launch command: [{0}]", cmd)
         base_dir = self.get_base_dir()
+        base_dir_and_cmd = base_dir + "/" + cmd
+        try:
+            filename = base_dir_and_cmd.split(" ", 1)[0]
+            file_stat = os.stat(filename)
+            os.chmod(filename, file_stat.st_mode | stat.S_IEXEC)
+            with open(filename, "r") as f:
+                contents = f.read()
+            # Python automatically converts Windows newlines to Linux newlines
+            with open(filename, "w") as f:
+                f.write(contents)
+        except Exception as e:
+            self.logger.verbose("Failed to do one of: stat cmd file, set chmod a+x, or fix Windows newlines: {0}".format(e))
+
         try:
             devnull = open(os.devnull, 'w')
-            child = subprocess.Popen(base_dir + "/" + cmd,
+            child = subprocess.Popen(base_dir_and_cmd,
                                      shell=True,
                                      cwd=base_dir,
                                      stdout=devnull,
