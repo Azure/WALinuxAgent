@@ -199,14 +199,14 @@ class install(_install):
             osutil.stop_agent_service()
             osutil.start_agent_service()
 
-# Note to packagers and users fromn source.
+# Note to packagers and users from source.
 # In version 3.5 of Python distribution information handling in the platform
 # module was deprecated. Depending on the Linux distribution the
-# implementation may be broken prior to Python 3.7 thus you may or may not
-# need to install the distro Python package. Due to concerns of breakage
-# the code cannot handle this automagically
-#if float(sys.version[:3]) >= 3.5:
-#    requires = ['distro']
+# implementation may be broken prior to Python 3.7 wher the functionality
+# will be removed from Python 3
+requires = []
+if float(sys.version[:3]) >= 3.7:
+    requires = ['distro']
 
 setuptools.setup(
     name=AGENT_NAME,
@@ -219,6 +219,7 @@ setuptools.setup(
     license='Apache License Version 2.0',
     packages=find_packages(exclude=["tests"]),
     py_modules=["__main__"],
+    install_requires=requires,
     cmdclass={
         'install': install
     }

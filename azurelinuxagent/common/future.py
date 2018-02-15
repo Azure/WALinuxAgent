@@ -2,7 +2,7 @@ import platform
 import sys
 
 # Note broken dependency handling to avoid potential backward
-# compantibility issues
+# compatibility issues on different distributions
 try:
     import distro
 except Exception:
@@ -46,15 +46,15 @@ def get_linux_distribution(get_full_name, supported_dists):
             )
         )
         if not osinfo or osinfo == ['','','']:
-            return get_linux_ditribution_from_distro(get_full_name)
-        full_name = platform_module.linux_distribution()[0].strip()
+            return get_linux_distribution_from_distro(get_full_name)
+        full_name = platform.linux_distribution()[0].strip()
         osinfo.append(full_name)
-    except Exception:
-        return get_linux_ditribution_from_distro(get_full_name)
+    except AttributeError:
+        return get_linux_distribution_from_distro(get_full_name)
 
     return osinfo
 
-def get_linux_ditribution_from_distro(get_full_name):
+def get_linux_distribution_from_distro(get_full_name):
     """Get the distribution information from the distro Python module."""
     # If we get here we have to have the distro module, thus we do
     # not wrap the call in a try-except block as it would mask the problem
