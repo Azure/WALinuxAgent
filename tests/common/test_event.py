@@ -17,14 +17,10 @@
 
 from __future__ import print_function
 
-from datetime import datetime
-
-import azurelinuxagent.common.event as event
-import azurelinuxagent.common.logger as logger
+from datetime import datetime, timedelta
 
 from azurelinuxagent.common.event import add_event, \
-                                    mark_event_status, should_emit_event, \
-                                    WALAEventOperation
+    WALAEventOperation, elapsed_milliseconds
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.version import CURRENT_VERSION
 
@@ -217,3 +213,7 @@ class TestEvent(AgentTestCase):
         with open(last_event) as last_fh:
             last_event_text = last_fh.read()
             self.assertTrue('last event' in last_event_text)
+
+    def test_elapsed_milliseconds(self):
+        utc_start = datetime.utcnow() + timedelta(days=1)
+        self.assertEqual(0, elapsed_milliseconds(utc_start))

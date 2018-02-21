@@ -28,8 +28,7 @@ import azurelinuxagent.common.utils.textutil as textutil
 
 from azurelinuxagent.common.exception import HttpError, ResourceGoneError
 from azurelinuxagent.common.future import httpclient, urlparse, ustr
-from azurelinuxagent.common.version import PY_VERSION_MAJOR
-
+from azurelinuxagent.common.version import PY_VERSION_MAJOR, AGENT_NAME, GOAL_STATE_AGENT_VERSION
 
 SECURE_WARNING_EMITTED = False
 
@@ -78,6 +77,7 @@ RETRY_EXCEPTIONS = [
 
 HTTP_PROXY_ENV = "http_proxy"
 HTTPS_PROXY_ENV = "https_proxy"
+HTTP_USER_AGENT = "{0}/{1}".format(AGENT_NAME, GOAL_STATE_AGENT_VERSION)
 
 DEFAULT_PROTOCOL_ENDPOINT='168.63.129.16'
 HOST_PLUGIN_PORT = 32526
@@ -175,11 +175,13 @@ def _http_request(method, host, rel_uri, port=None, data=None, secure=False,
     if port is None:
         port = 443 if secure else 80
 
+    if 'User-Agent' not in headers:
+        headers['User-Agent'] = HTTP_USER_AGENT
+
     if use_proxy:
         conn_host, conn_port = proxy_host, proxy_port
         scheme = "https" if secure else "http"
         url = "{0}://{1}:{2}{3}".format(scheme, host, port, rel_uri)
-
     else:
         conn_host, conn_port = host, port
         url = rel_uri
@@ -190,7 +192,6 @@ def _http_request(method, host, rel_uri, port=None, data=None, secure=False,
                                         timeout=10)
         if use_proxy:
             conn.set_tunnel(host, port)
-
     else:
         conn = httpclient.HTTPConnection(conn_host,
                                         conn_port,

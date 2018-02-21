@@ -15,13 +15,11 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
-import os
-import unittest
-
 from azurelinuxagent.common.exception import HttpError, \
-                                            ProtocolError, \
                                             ResourceGoneError
+
 import azurelinuxagent.common.utils.restutil as restutil
+from azurelinuxagent.common.utils.restutil import HTTP_USER_AGENT
 
 from azurelinuxagent.common.future import httpclient, ustr
 
@@ -197,7 +195,7 @@ class TestHttpOperations(AgentTestCase):
         ])
         HTTPSConnection.assert_not_called()
         mock_conn.request.assert_has_calls([
-            call(method="GET", url="/bar", body=None, headers={})
+            call(method="GET", url="/bar", body=None, headers={'User-Agent': HTTP_USER_AGENT})
         ])
         mock_conn.getresponse.assert_called_once()
         self.assertNotEquals(None, resp)
@@ -220,7 +218,7 @@ class TestHttpOperations(AgentTestCase):
             call("foo", 443, timeout=10)
         ])
         mock_conn.request.assert_has_calls([
-            call(method="GET", url="/bar", body=None, headers={})
+            call(method="GET", url="/bar", body=None, headers={'User-Agent': HTTP_USER_AGENT})
         ])
         mock_conn.getresponse.assert_called_once()
         self.assertNotEquals(None, resp)
@@ -244,7 +242,7 @@ class TestHttpOperations(AgentTestCase):
         ])
         HTTPSConnection.assert_not_called()
         mock_conn.request.assert_has_calls([
-            call(method="GET", url="http://foo:80/bar", body=None, headers={})
+            call(method="GET", url="http://foo:80/bar", body=None, headers={'User-Agent': HTTP_USER_AGENT})
         ])
         mock_conn.getresponse.assert_called_once()
         self.assertNotEquals(None, resp)
@@ -269,7 +267,7 @@ class TestHttpOperations(AgentTestCase):
             call("foo.bar", 23333, timeout=10)
         ])
         mock_conn.request.assert_has_calls([
-            call(method="GET", url="https://foo:443/bar", body=None, headers={})
+            call(method="GET", url="https://foo:443/bar", body=None, headers={'User-Agent': HTTP_USER_AGENT})
         ])
         mock_conn.getresponse.assert_called_once()
         self.assertNotEquals(None, resp)
