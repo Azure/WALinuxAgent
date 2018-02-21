@@ -161,7 +161,7 @@ class UpdateHandler(object):
                 stdout=sys.stdout,
                 stderr=sys.stderr,
                 env=os.environ,
-                preexec_fn=Cgroup.add_to_azure_cgroup(agent_cmd))
+                preexec_fn=Cgroup.add_to_agent_cgroup(agent_cmd))
 
             logger.verbose(u"Agent {0} launched with command '{1}'", agent_name, agent_cmd)
 
