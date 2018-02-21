@@ -27,7 +27,6 @@ import datetime
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
-from azurelinuxagent.common.cgroups import Cgroup
 
 from azurelinuxagent.common.cgroups import CGroups
 from azurelinuxagent.common.dhcp import get_dhcp_handler
@@ -93,7 +92,6 @@ class EnvHandler(object):
         self.server_thread = threading.Thread(target=self.monitor)
         self.server_thread.setDaemon(True)
         self.server_thread.start()
-        self.setup_cgroup()
 
     def monitor(self):
         """
@@ -142,26 +140,6 @@ class EnvHandler(object):
             self.archive_history()
 
             time.sleep(5)
-
-    def setup_cgroup(self):
-        logger.info("Setup cgroups")
-        try:
-            cg = Cgroup('azure')
-            cg.set_cpu_limit(50)
-            cg.set_memory_limit(500)
-
-            # add the daemon process
-            pid_file = conf.get_agent_pid_file_path()
-            if os.path.isfile(pid_file):
-                pid = fileutil.read_file(pid_file)
-                logger.info("Add daemon process pid {0} to {1} cgroup"
-                            .format(pid, cg.name))
-                cg.add(int(pid))
-            else:
-                logger.warn("no pid file at {0}".format(pid_file))
-
-        except Exception as e:
-            logger.error(e.message)
 
     def handle_hostname_update(self):
         curr_hostname = socket.gethostname()
