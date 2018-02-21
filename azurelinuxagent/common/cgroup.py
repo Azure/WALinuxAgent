@@ -259,15 +259,24 @@ class CGroup(object):
             return None
 
     @staticmethod
-    def add_to_azure_cgroup(msg):
-        pid = os.getpid()
-        cg = CGroup(CGROUP_AGENT)
-        logger.info("Add pid {0} to cgroup {1} [{2}]".format(pid, cg.name, msg))
-        cg.add(int(pid))
+    def add_to_agent_cgroup(msg):
+        try:
+            pid = os.getpid()
+            cg = CGroup(CGROUP_AGENT)
+            logger.info("Add pid {0} to cgroup {1} [{2}]".format(pid,
+                                                                 cg.name,
+                                                                 msg))
+            cg.add(int(pid))
+        except Exception as e:
+            logger.error("Add to agent cgroup: " + e.message)
 
     @staticmethod
     def add_to_extension_cgroup(name):
-        pid = os.getpid()
-        cg = CGroup(CGROUP_EXTENSION_FORMAT.format(name))
-        logger.info("Add pid {0} to cgroup {1}".format(pid, cg.name))
-        cg.add(int(pid))
+        try:
+            pid = os.getpid()
+            cg = CGroup(CGROUP_EXTENSION_FORMAT.format(name))
+            logger.info("Add pid {0} to cgroup {1}".format(pid,
+                                                           cg.name))
+            cg.add(int(pid))
+        except Exception as e:
+            logger.error("Add to extension cgroup: " + e.message)
