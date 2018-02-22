@@ -19,6 +19,7 @@ import getpass
 
 from pwd import getpwnam
 from azurelinuxagent.common import logger, conf
+from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.utils import fileutil
 
 BASE_CGROUPS = '/sys/fs/cgroup'
@@ -37,6 +38,8 @@ CGROUPS_ENABLED = True
 
 
 class CGroupsException(Exception):
+    global CGROUPS_ENABLED
+
     if CGROUPS_ENABLED:
         logger.warn("Disabling cgroup support")
         CGROUPS_ENABLED = False
@@ -107,7 +110,7 @@ class CGroup(object):
                 logger.warn("No pid file at {0}".format(pid_file))
 
         except Exception as e:
-            logger.error(e)
+            logger.error(ustr(e))
 
     @staticmethod
     def add_to_agent_cgroup():
@@ -116,7 +119,7 @@ class CGroup(object):
             cg = CGroup(CGROUP_AGENT)
             cg.add(int(pid))
         except Exception as e:
-            logger.error("Agent cgroup error: {0}".format(e))
+            logger.error("Agent cgroup error: {0}".format(ustr(e)))
 
     @staticmethod
     def add_to_extension_cgroup(name):
@@ -126,7 +129,7 @@ class CGroup(object):
             cg = CGroup(CGROUP_EXTENSION_FORMAT.format(name))
             cg.add(int(pid))
         except Exception as e:
-            logger.error("Extension cgroup error: {0}".format(e))
+            logger.error("Extension cgroup error: {0}".format(ustr(e)))
 
     @staticmethod
     def get_user_info(user):
