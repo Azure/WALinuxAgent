@@ -102,6 +102,7 @@ class EnvHandler(object):
         """
         protocol = self.protocol_util.get_protocol()
         reset_firewall_fules = False
+        CGroup.add_to_agent_cgroup()
         while not self.stopped:
             self.osutil.remove_rules_files()
 

@@ -27,6 +27,7 @@ import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.logger as logger
 
+from azurelinuxagent.common.cgroup import CGroup
 from azurelinuxagent.common.event import add_event, WALAEventOperation
 from azurelinuxagent.common.exception import EventError, ProtocolError, OSUtilError, HttpError
 from azurelinuxagent.common.future import ustr
@@ -207,6 +208,8 @@ class MonitorHandler(object):
         period = datetime.timedelta(minutes=30)
         protocol = self.protocol_util.get_protocol()        
         last_heartbeat = datetime.datetime.utcnow() - period
+
+        CGroup.add_to_agent_cgroup()
 
         # Create a new identifier on each restart and reset the counter
         heartbeat_id = str(uuid.uuid4()).upper()
