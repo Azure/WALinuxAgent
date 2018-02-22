@@ -33,19 +33,29 @@ CGROUP_AGENT = 'azure-agent'
 
 CGROUP_EXTENSION_FORMAT = 'azure-ext-{0}'
 
+CGROUPS_ENABLED = True
+
 
 class CGroupsException(Exception):
+    if CGROUPS_ENABLED:
+        logger.warn("Disabling cgroup support")
+        CGROUPS_ENABLED = False
     pass
 
 
 class CGroup(object):
 
     def __init__(self, name):
+
         self.name = name
         self.user = getpass.getuser()
         self.user_cgroups = {}
         self.cgroups = {}
         self.hierarchies = HIERARCHIES
+        self.enabled = CGROUPS_ENABLED
+
+        if not self.enabled:
+            return
 
         system_hierarchies = os.listdir(BASE_CGROUPS)
         for hierarchy in self.hierarchies:
@@ -62,9 +72,26 @@ class CGroup(object):
                 os.mkdir(cgroup)
             self.cgroups[hierarchy] = cgroup
 
+    def add(self, pid):
+        try:
+            if not self.enabled:
+                return
+
+            # determine if pid exists
+            os.kill(pid, 0)
+        except OSError:
+            raise CGroupsException('PID {0} does not exist'.format(pid))
+        for hierarchy, cgroup in self.cgroups.items():
+            tasks_file = self._get_cgroup_file(hierarchy, 'tasks')
+            with open(tasks_file, 'r+') as f:
+                cgroups_pids = f.read().split('\n')
+            if not str(pid) in cgroups_pids:
+                with open(tasks_file, 'a+') as f:
+                    f.write('%s\n' % pid)
+
     @staticmethod
-    def setup():
-        logger.info("Setup cgroups")
+    def setup_daemon():
+        logger.info("Setup daemon cgroup")
         try:
             cg = CGroup(CGROUP_AGENT)
             # cg.set_cpu_limit(50)
@@ -80,7 +107,26 @@ class CGroup(object):
                 logger.warn("No pid file at {0}".format(pid_file))
 
         except Exception as e:
-            logger.error(e.message)
+            logger.error(e)
+
+    @staticmethod
+    def add_to_agent_cgroup():
+        try:
+            pid = os.getpid()
+            cg = CGroup(CGROUP_AGENT)
+            cg.add(int(pid))
+        except Exception as e:
+            logger.error("Agent cgroup error: {0}".format(e))
+
+    @staticmethod
+    def add_to_extension_cgroup(name):
+        try:
+            pid = os.getpid()
+            logger.info("Create extension group: {0}".format(name))
+            cg = CGroup(CGROUP_EXTENSION_FORMAT.format(name))
+            cg.add(int(pid))
+        except Exception as e:
+            logger.error("Extension cgroup error: {0}".format(e))
 
     @staticmethod
     def get_user_info(user):
@@ -123,57 +169,6 @@ class CGroup(object):
     def _get_cgroup_file(self, hierarchy, file_name):
         return os.path.join(self.cgroups[hierarchy], file_name)
 
-    def _get_user_file(self, hierarchy, file_name):
-        return os.path.join(self.user_cgroups[hierarchy], file_name)
-
-    def delete(self):
-        for hierarchy, cgroup in self.cgroups.items():
-            # Put all pids of name cgroup in user cgroup
-            tasks_file = self._get_cgroup_file(hierarchy, 'tasks')
-            with open(tasks_file, 'r+') as f:
-                tasks = f.read().split('\n')
-            user_tasks_file =  self._get_user_file(hierarchy, 'tasks')
-            with open(user_tasks_file, 'a+') as f:
-                f.write('\n'.join(tasks))
-            os.rmdir(cgroup)
-
-    def add(self, pid):
-        try:
-            # determine if pid exists
-            os.kill(pid, 0)
-        except OSError:
-            raise CGroupsException('PID {0} does not exist'.format(pid))
-        for hierarchy, cgroup in self.cgroups.items():
-            tasks_file = self._get_cgroup_file(hierarchy, 'tasks')
-            with open(tasks_file, 'r+') as f:
-                cgroups_pids = f.read().split('\n')
-            if not str(pid) in cgroups_pids:
-                with open(tasks_file, 'a+') as f:
-                    f.write('%s\n' % pid)
-
-    def remove(self, pid):
-        try:
-            os.kill(pid, 0)
-        except OSError:
-            raise CGroupsException('Pid %s does not exists' % pid)
-        for hierarchy, cgroup in self.cgroups.items():
-            tasks_file = self._get_cgroup_file(hierarchy, 'tasks')
-            with open(tasks_file, 'r+') as f:
-                pids = f.read().split('\n')
-                if str(pid) in pids:
-                    user_tasks_file = self._get_user_file(hierarchy, 'tasks')
-                    with open(user_tasks_file, 'a+') as f:
-                        f.write('%s\n' % pid)
-
-    @property
-    def pids(self):
-        hierarchy = self.hierarchies[0]
-        tasks_file = self._get_cgroup_file(hierarchy, 'tasks')
-        with open(tasks_file, 'r+') as f:
-            pids = f.read().split('\n')[:-1]
-        pids = [int(pid) for pid in pids]
-        return pids
-
     @staticmethod
     def _format_cpu_value(limit=None):
         if limit is None:
@@ -199,17 +194,6 @@ class CGroup(object):
                 f.write("{0}\n".format(value))
         else:
             raise CGroupsException("CPU hierarchy not available in this cgroup")
-
-    @property
-    def cpu_limit(self):
-        if 'cpu' in self.cgroups:
-            cpu_shares_file = self._get_cgroup_file('cpu', 'cpu.shares')
-            with open(cpu_shares_file, 'r+') as f:
-                value = int(f.read().split('\n')[0])
-                value = int(round((value / CPU_DEFAULT) * 100))
-                return value
-        else:
-            return None
 
     @staticmethod
     def _format_memory_value(unit, limit=None):
@@ -242,34 +226,3 @@ class CGroup(object):
                 f.write("{0}\n".format(value))
         else:
             raise CGroupsException("Memory hierarchy not available in this cgroup")
-
-    @property
-    def memory_limit(self):
-        if 'memory' in self.cgroups:
-            memory_limit_file = self._get_cgroup_file(
-                'memory', 'memory.limit_in_bytes')
-            with open(memory_limit_file, 'r+') as f:
-                value = f.read().split('\n')[0]
-                value = int(int(value) / 1024 / 1024)
-                return value
-        else:
-            return None
-
-    @staticmethod
-    def add_to_agent_cgroup():
-        try:
-            pid = os.getpid()
-            cg = CGroup(CGROUP_AGENT)
-            cg.add(int(pid))
-        except Exception as e:
-            logger.error("Agent cgroup error: {0}".format(e))
-
-    @staticmethod
-    def add_to_extension_cgroup(name):
-        try:
-            pid = os.getpid()
-            logger.info("Create extension group: {0}".format(name))
-            cg = CGroup(CGROUP_EXTENSION_FORMAT.format(name))
-            cg.add(int(pid))
-        except Exception as e:
-            logger.error("Extension cgroup error: {0}".format(e))

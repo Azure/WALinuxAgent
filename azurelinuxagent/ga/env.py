@@ -92,7 +92,6 @@ class EnvHandler(object):
         self.server_thread = threading.Thread(target=self.monitor)
         self.server_thread.setDaemon(True)
         self.server_thread.start()
-        CGroup.setup()
 
     def monitor(self):
         """
