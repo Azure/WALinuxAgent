@@ -94,7 +94,6 @@ class CGroup(object):
         return uid, gid
 
     def create_user_cgroups(self, user):
-        logger.info("Creating cgroups for {0}".format(user))
         try:
             hierarchies = os.listdir(BASE_CGROUPS)
         except OSError as e:
@@ -120,8 +119,6 @@ class CGroup(object):
                 else:
                     uid, gid = self.get_user_info(user)
                     os.chown(user_cgroup, uid, gid)
-
-        logger.info("cgroups created for {0}".format(user))
 
     def _get_cgroup_file(self, hierarchy, file_name):
         return os.path.join(self.cgroups[hierarchy], file_name)
@@ -259,13 +256,10 @@ class CGroup(object):
             return None
 
     @staticmethod
-    def add_to_agent_cgroup(msg):
+    def add_to_agent_cgroup():
         try:
             pid = os.getpid()
             cg = CGroup(CGROUP_AGENT)
-            logger.info("CGroup: add pid {0} to cgroup {1} [{2}]".format(pid,
-                                                                         cg.name,
-                                                                         msg))
             cg.add(int(pid))
         except Exception as e:
             logger.error("Agent cgroup error: {0}".format(e))
@@ -274,9 +268,8 @@ class CGroup(object):
     def add_to_extension_cgroup(name):
         try:
             pid = os.getpid()
+            logger.info("Create extension group: {0}".format(name))
             cg = CGroup(CGROUP_EXTENSION_FORMAT.format(name))
-            logger.info("CGroup: add pid {0} to cgroup {1}".format(pid,
-                                                                   cg.name))
             cg.add(int(pid))
         except Exception as e:
             logger.error("Extension cgroup error: {0}".format(e))

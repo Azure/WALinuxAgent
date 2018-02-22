@@ -162,7 +162,7 @@ class UpdateHandler(object):
                 stdout=sys.stdout,
                 stderr=sys.stderr,
                 env=os.environ,
-                preexec_fn=CGroup.add_to_agent_cgroup(agent_cmd))
+                preexec_fn=CGroup.add_to_agent_cgroup)
 
             logger.verbose(u"Agent {0} launched with command '{1}'", agent_name, agent_cmd)
 
