@@ -264,11 +264,11 @@ class CGroup(object):
             pid = os.getpid()
             cg = CGroup(CGROUP_AGENT)
             logger.info("CGroup: add pid {0} to cgroup {1} [{2}]".format(pid,
-                                                                 cg.name,
-                                                                 msg))
+                                                                         cg.name,
+                                                                         msg))
             cg.add(int(pid))
         except Exception as e:
-            logger.error("Add to agent cgroup: " + e.message)
+            logger.error("Agent cgroup error: {0}".format(e))
 
     @staticmethod
     def add_to_extension_cgroup(name):
@@ -276,7 +276,7 @@ class CGroup(object):
             pid = os.getpid()
             cg = CGroup(CGROUP_EXTENSION_FORMAT.format(name))
             logger.info("CGroup: add pid {0} to cgroup {1}".format(pid,
-                                                           cg.name))
+                                                                   cg.name))
             cg.add(int(pid))
         except Exception as e:
-            logger.error("Add to extension cgroup: " + e.message)
+            logger.error("Extension cgroup error: {0}".format(e))
