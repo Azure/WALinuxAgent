@@ -263,7 +263,7 @@ class CGroup(object):
         try:
             pid = os.getpid()
             cg = CGroup(CGROUP_AGENT)
-            logger.info("Add pid {0} to cgroup {1} [{2}]".format(pid,
+            logger.info("CGroup: add pid {0} to cgroup {1} [{2}]".format(pid,
                                                                  cg.name,
                                                                  msg))
             cg.add(int(pid))
@@ -275,7 +275,7 @@ class CGroup(object):
         try:
             pid = os.getpid()
             cg = CGroup(CGROUP_EXTENSION_FORMAT.format(name))
-            logger.info("Add pid {0} to cgroup {1}".format(pid,
+            logger.info("CGroup: add pid {0} to cgroup {1}".format(pid,
                                                            cg.name))
             cg.add(int(pid))
         except Exception as e:
