@@ -61,7 +61,11 @@ class Ubuntu14OSUtil(DefaultOSUtil):
                        mount_point='/sys/fs/cgroup/cpu,cpuacct/',
                        option="-t cgroup -o cpu,cpuacct",
                        chk_err=False)
-            os.link('/sys/fs/cgroup/cpu,cpuacct/', '/sys/fs/cgroup/cpu')
+
+            link = '/sys/fs/cgroup/cpu'
+            if not os.path.exists(link):
+                os.symlink(source='/sys/fs/cgroup/cpu,cpuacct/',
+                           link_name=link)
 
             fileutil.mkdir('/sys/fs/cgroup/memory')
             self.mount(device='memory',
