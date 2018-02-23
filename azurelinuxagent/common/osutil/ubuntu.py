@@ -17,11 +17,14 @@
 #
 
 import time
+import os
 
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.shellutil as shellutil
 
+from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
+from azurelinuxagent.common.utils import fileutil
 
 
 class Ubuntu14OSUtil(DefaultOSUtil):
@@ -45,6 +48,29 @@ class Ubuntu14OSUtil(DefaultOSUtil):
 
     def get_dhcp_lease_endpoint(self):
         return self.get_endpoint_from_leases_path('/var/lib/dhcp/dhclient.*.leases')
+
+    def mount_cgroups(self):
+        try:
+            self.mount(device='cgroup_root',
+                       mount_point='/sys/fs/cgroup',
+                       option="-t tmpfs",
+                       chk_err=False)
+
+            fileutil.mkdir('/sys/fs/cgroup/cpu,cpuacct')
+            self.mount(device='cpu,cpuacct',
+                       mount_point='/sys/fs/cgroup/cpu,cpuacct/',
+                       option="-t cgroup -o cpu,cpuacct",
+                       chk_err=False)
+            os.link(source='/sys/fs/cgroup/cpu,cpuacct/',
+                    link_name='/sys/fs/cgroup/cpu')
+
+            fileutil.mkdir('/sys/fs/cgroup/memory')
+            self.mount(device='memory',
+                       mount_point='/sys/fs/cgroup/memory/',
+                       option="-t cgroup -o memory",
+                       chk_err=False)
+        except Exception as e:
+            logger.error("Could not mount cgroups: {0}", ustr(e))
 
 
 class Ubuntu12OSUtil(Ubuntu14OSUtil):

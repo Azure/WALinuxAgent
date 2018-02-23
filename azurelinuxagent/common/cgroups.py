@@ -18,7 +18,7 @@ import os
 import getpass
 
 from pwd import getpwnam
-from azurelinuxagent.common import logger, conf
+from azurelinuxagent.common import logger, conf, osutil
 from azurelinuxagent.common.utils import fileutil
 
 BASE_CGROUPS = '/sys/fs/cgroup'
@@ -38,17 +38,17 @@ class CGroupsException(Exception):
 
     def __init__(self, msg):
         self.msg = msg
-        if CGroup.enabled():
+        if CGroups.enabled():
             pid = os.getpid()
             logger.verbose("[{1}] Disabling cgroup support: {0}"
                            .format(msg, pid))
-            CGroup.disable()
+            CGroups.disable()
 
     def __str__(self):
         return repr(self.msg)
 
 
-class CGroup(object):
+class CGroups(object):
 
     # whether cgroup support is enabled
     _enabled = True
@@ -66,7 +66,8 @@ class CGroup(object):
         system_hierarchies = os.listdir(BASE_CGROUPS)
         for hierarchy in self.hierarchies:
             if hierarchy not in system_hierarchies:
-                raise CGroupsException("Hierarchy {0} is not mounted".format(hierarchy))
+                raise CGroupsException("Hierarchy {0} is not mounted"
+                                       .format(hierarchy))
 
             user_cgroup = os.path.join(BASE_CGROUPS, hierarchy, self.user)
             self.user_cgroups[hierarchy] = user_cgroup
@@ -96,20 +97,28 @@ class CGroup(object):
 
     @staticmethod
     def enabled():
-        return CGroup._enabled
+        return CGroups._enabled
 
     @staticmethod
     def disable():
-        CGroup._enabled = False
+        CGroups._enabled = False
 
     @staticmethod
-    def setup_daemon():
+    #
+    # Mount the cgroup fs if necessary, and add the daemon
+    # pid to the azure-agent cgroup with appropriate limits
+    #
+    def setup():
         status = ""
         cgroups_enabled = False
         try:
-            cg = CGroup(CGROUP_AGENT)
+            osutil.get_osutil().mount_cgroups()
+            cg = CGroups(CGROUP_AGENT)
+
+            # TODO: set limits, simply record telemetry for now
             # cg.set_cpu_limit(50)
             # cg.set_memory_limit(500)
+
             # add the daemon process
             pid_file = conf.get_agent_pid_file_path()
             if os.path.isfile(pid_file):
@@ -137,7 +146,7 @@ class CGroup(object):
     def add_to_agent_cgroup():
         try:
             pid = os.getpid()
-            cg = CGroup(CGROUP_AGENT)
+            cg = CGroups(CGROUP_AGENT)
             cg.add(int(pid))
         except Exception:
             pass
@@ -147,7 +156,7 @@ class CGroup(object):
         try:
             pid = os.getpid()
             logger.info("Create extension group: {0}".format(name))
-            cg = CGroup(CGROUP_EXTENSION_FORMAT.format(name))
+            cg = CGroups(CGROUP_EXTENSION_FORMAT.format(name))
             cg.add(int(pid))
         except Exception:
             pass

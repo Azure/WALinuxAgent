@@ -39,7 +39,7 @@ import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.restutil as restutil
 import azurelinuxagent.common.utils.textutil as textutil
-from azurelinuxagent.common.cgroup import CGroup
+from azurelinuxagent.common.cgroup import CGroups
 
 from azurelinuxagent.common.event import add_event, add_periodic, \
                                     elapsed_milliseconds, \
@@ -162,7 +162,7 @@ class UpdateHandler(object):
                 stdout=sys.stdout,
                 stderr=sys.stderr,
                 env=os.environ,
-                preexec_fn=CGroup.add_to_agent_cgroup)
+                preexec_fn=CGroups.add_to_agent_cgroup)
 
             logger.verbose(u"Agent {0} launched with command '{1}'", agent_name, agent_cmd)
 

@@ -28,7 +28,7 @@ import datetime
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 
-from azurelinuxagent.common.cgroup import CGroup
+from azurelinuxagent.common.cgroup import CGroups
 from azurelinuxagent.common.dhcp import get_dhcp_handler
 from azurelinuxagent.common.event import add_periodic, WALAEventOperation
 from azurelinuxagent.common.osutil import get_osutil
@@ -102,7 +102,7 @@ class EnvHandler(object):
         """
         protocol = self.protocol_util.get_protocol()
         reset_firewall_fules = False
-        CGroup.add_to_agent_cgroup()
+        CGroups.add_to_agent_cgroup()
         while not self.stopped:
             self.osutil.remove_rules_files()
 
