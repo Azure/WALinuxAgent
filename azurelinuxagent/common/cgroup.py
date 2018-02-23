@@ -19,7 +19,6 @@ import getpass
 
 from pwd import getpwnam
 from azurelinuxagent.common import logger, conf
-from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.utils import fileutil
 
 BASE_CGROUPS = '/sys/fs/cgroup'
@@ -34,13 +33,15 @@ CGROUP_AGENT = 'azure-agent'
 
 CGROUP_EXTENSION_FORMAT = 'azure-ext-{0}'
 
+_cgroups_enabled = True
+
 
 class CGroupsException(Exception):
 
     def __init__(self, msg):
         self.msg = msg
         if CGroup.enabled():
-            logger.warn("Disabling cgroup support")
+            logger.warn("Disabling cgroup support: {0}".format(msg))
             CGroup.disable()
 
     def __str__(self):
@@ -48,8 +49,6 @@ class CGroupsException(Exception):
 
 
 class CGroup(object):
-
-    CGROUP_ENABLED = True
 
     def __init__(self, name):
         self.name = name
@@ -95,11 +94,13 @@ class CGroup(object):
 
     @staticmethod
     def enabled():
-        return CGroup.CGROUP_ENABLED
+        global _cgroups_enabled
+        return _cgroups_enabled
 
     @staticmethod
     def disable():
-        CGroup.CGROUP_ENABLED = False
+        global _cgroups_enabled
+        _cgroups_enabled = False
 
     @staticmethod
     def setup_daemon():
@@ -117,9 +118,8 @@ class CGroup(object):
                 cg.add(int(pid))
             else:
                 logger.warn("No pid file at {0}".format(pid_file))
-
-        except Exception as e:
-            logger.error(ustr(e))
+        except Exception:
+            pass
 
     @staticmethod
     def add_to_agent_cgroup():
@@ -127,8 +127,8 @@ class CGroup(object):
             pid = os.getpid()
             cg = CGroup(CGROUP_AGENT)
             cg.add(int(pid))
-        except Exception as e:
-            logger.error("Agent cgroup error: {0}".format(ustr(e)))
+        except Exception:
+            pass
 
     @staticmethod
     def add_to_extension_cgroup(name):
@@ -137,8 +137,8 @@ class CGroup(object):
             logger.info("Create extension group: {0}".format(name))
             cg = CGroup(CGROUP_EXTENSION_FORMAT.format(name))
             cg.add(int(pid))
-        except Exception as e:
-            logger.error("Extension cgroup error: {0}".format(ustr(e)))
+        except Exception:
+            pass
 
     @staticmethod
     def get_user_info(user):
