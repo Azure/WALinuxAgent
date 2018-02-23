@@ -1414,6 +1414,12 @@ class ExtensionsConfig(object):
         ext_handler.properties.upgradeGuid = getattrib(plugin, "upgradeGuid")
         if not ext_handler.properties.upgradeGuid:
             ext_handler.properties.upgradeGuid = None
+
+        try:
+            ext_handler.properties.dependencyLevel = int(getattrib(plugin, "dependencyLevel"))
+        except ValueError:
+            ext_handler.properties.dependencyLevel = 0
+
         auto_upgrade = getattrib(plugin, "autoUpgrade")
         if auto_upgrade is not None and auto_upgrade.lower() == "true":
             ext_handler.properties.upgradePolicy = "auto"

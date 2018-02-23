@@ -260,14 +260,15 @@ class TestHandlerStateMigration(AgentTestCase):
 class TestExtension(AgentTestCase):
 
     def _assert_handler_status(self, report_vm_status, expected_status, 
-                               expected_ext_count, version):
+                               expected_ext_count, version,
+                               expected_handler_name="OSTCExtensions.ExampleHandlerLinux"):
         self.assertTrue(report_vm_status.called)
         args, kw = report_vm_status.call_args
         vm_status = args[0]
         self.assertNotEquals(0, len(vm_status.vmAgent.extensionHandlers))
         handler_status = vm_status.vmAgent.extensionHandlers[0]
         self.assertEquals(expected_status, handler_status.status)
-        self.assertEquals("OSTCExtensions.ExampleHandlerLinux",
+        self.assertEquals(expected_handler_name,
                           handler_status.name)
         self.assertEquals(version, handler_status.version)
         self.assertEquals(expected_ext_count, len(handler_status.extensions))
@@ -381,6 +382,71 @@ class TestExtension(AgentTestCase):
         exthandlers_handler.run()
         self._assert_no_handler_status(protocol.report_vm_status)
     
+    def test_ext_handler_sequencing(self, *args):
+        test_data = WireProtocolData(DATA_FILE_EXT_SEQUENCING)
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+
+        #Test enable scenario.
+        exthandlers_handler.run()
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0",
+                                    expected_handler_name="OSTCExtensions.OtherExampleHandlerLinux")
+        self._assert_ext_status(protocol.report_ext_status, "success", 0)
+
+        # check handler list
+        self.assertTrue(exthandlers_handler.ext_handlers is not None)
+        self.assertTrue(exthandlers_handler.ext_handlers.extHandlers is not None)
+        self.assertEqual(len(exthandlers_handler.ext_handlers.extHandlers), 2)
+        self.assertEqual(exthandlers_handler.ext_handlers.extHandlers[0].properties.dependencyLevel, 1)
+        self.assertEqual(exthandlers_handler.ext_handlers.extHandlers[1].properties.dependencyLevel, 2)
+
+        #Test goal state not changed
+        exthandlers_handler.run()
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0",
+                                    expected_handler_name="OSTCExtensions.OtherExampleHandlerLinux")
+
+        #Test goal state changed
+        test_data.goal_state = test_data.goal_state.replace("<Incarnation>1<",
+                                                            "<Incarnation>2<")
+        test_data.ext_conf = test_data.ext_conf.replace("seqNo=\"0\"",
+                                                        "seqNo=\"1\"")
+        test_data.ext_conf = test_data.ext_conf.replace("dependencyLevel=\"2\"",
+                                                        "dependencyLevel=\"3\"")
+        test_data.ext_conf = test_data.ext_conf.replace("dependencyLevel=\"1\"",
+                                                        "dependencyLevel=\"4\"")
+        exthandlers_handler.run()
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
+        self._assert_ext_status(protocol.report_ext_status, "success", 1)
+
+        self.assertEqual(len(exthandlers_handler.ext_handlers.extHandlers), 2)
+        self.assertEqual(exthandlers_handler.ext_handlers.extHandlers[0].properties.dependencyLevel, 3)
+        self.assertEqual(exthandlers_handler.ext_handlers.extHandlers[1].properties.dependencyLevel, 4)
+
+        #Test disable
+        test_data.goal_state = test_data.goal_state.replace("<Incarnation>2<",
+                                                            "<Incarnation>3<")
+        test_data.ext_conf = test_data.ext_conf.replace("enabled", "disabled")
+        exthandlers_handler.run()
+        self._assert_handler_status(protocol.report_vm_status, "NotReady",
+                                    1, "1.0.0",
+                                    expected_handler_name="OSTCExtensions.OtherExampleHandlerLinux")
+        self.assertEqual(len(exthandlers_handler.ext_handlers.extHandlers), 2)
+        self.assertEqual(exthandlers_handler.ext_handlers.extHandlers[0].properties.dependencyLevel, 4)
+        self.assertEqual(exthandlers_handler.ext_handlers.extHandlers[1].properties.dependencyLevel, 3)
+
+        #Test uninstall
+        test_data.goal_state = test_data.goal_state.replace("<Incarnation>3<",
+                                                            "<Incarnation>4<")
+        test_data.ext_conf = test_data.ext_conf.replace("disabled", "uninstall")
+        test_data.ext_conf = test_data.ext_conf.replace("dependencyLevel=\"3\"",
+                                                        "dependencyLevel=\"6\"")
+        test_data.ext_conf = test_data.ext_conf.replace("dependencyLevel=\"4\"",
+                                                        "dependencyLevel=\"5\"")
+        exthandlers_handler.run()
+        self._assert_no_handler_status(protocol.report_vm_status)
+        self.assertEqual(len(exthandlers_handler.ext_handlers.extHandlers), 2)
+        self.assertEqual(exthandlers_handler.ext_handlers.extHandlers[0].properties.dependencyLevel, 6)
+        self.assertEqual(exthandlers_handler.ext_handlers.extHandlers[1].properties.dependencyLevel, 5)
+
     def test_ext_handler_rollingupgrade(self, *args):
         test_data = WireProtocolData(DATA_FILE_EXT_ROLLINGUPGRADE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
