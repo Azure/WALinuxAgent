@@ -33,14 +33,17 @@ CGROUP_AGENT = 'azure-agent'
 
 CGROUP_EXTENSION_FORMAT = 'azure-ext-{0}'
 
+_cgroup_enabled = True
+
 
 class CGroupsException(Exception):
 
     def __init__(self, msg):
         self.msg = msg
-        if CGroup.enabled():
+        global _cgroup_enabled
+        if _cgroup_enabled:
             logger.warn("Disabling cgroup support: {0}".format(msg))
-            CGroup.disable()
+            _cgroup_enabled = False
 
     def __str__(self):
         return repr(self.msg)
@@ -95,11 +98,12 @@ class CGroup(object):
 
     @staticmethod
     def enabled():
-        return CGroup._enabled
+        return _cgroup_enabled
 
     @staticmethod
     def disable():
-        CGroup._enabled = False
+        global _cgroup_enabled
+        _cgroup_enabled = False
 
     @staticmethod
     def setup_daemon():
