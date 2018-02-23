@@ -59,6 +59,7 @@ class WALAEventOperation:
     HttpErrors = "HttpErrors"
     Install = "Install"
     InitializeHostPlugin = "InitializeHostPlugin"
+    InitializeCGroups = "InitializeCGroups"
     Log = "Log"
     Partition = "Partition"
     ProcessGoalState = "ProcessGoalState"

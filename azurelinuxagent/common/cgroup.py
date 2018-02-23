@@ -19,7 +19,9 @@ import getpass
 
 from pwd import getpwnam
 from azurelinuxagent.common import logger, conf
+from azurelinuxagent.common.event import add_event, WALAEventOperation
 from azurelinuxagent.common.utils import fileutil
+from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 
 BASE_CGROUPS = '/sys/fs/cgroup'
 
@@ -40,7 +42,8 @@ class CGroupsException(Exception):
         self.msg = msg
         if CGroup.enabled():
             pid = os.getpid()
-            logger.warn("[{1}] Disabling cgroup support: {0}".format(msg, pid))
+            logger.verbose("[{1}] Disabling cgroup support: {0}"
+                           .format(msg, pid))
             CGroup.disable()
 
     def __str__(self):
@@ -103,6 +106,7 @@ class CGroup(object):
 
     @staticmethod
     def setup_daemon():
+        cgroups_enabled = False
         logger.info("Setup daemon cgroup")
         try:
             cg = CGroup(CGROUP_AGENT)
@@ -115,10 +119,19 @@ class CGroup(object):
                 logger.info("Add daemon process pid {0} to {1} cgroup"
                             .format(pid, cg.name))
                 cg.add(int(pid))
+                cgroups_enabled = True
             else:
                 logger.warn("No pid file at {0}".format(pid_file))
         except Exception:
             pass
+
+        add_event(
+            AGENT_NAME,
+            version=CURRENT_VERSION,
+            op=WALAEventOperation.InitializeCGroups,
+            is_success=cgroups_enabled,
+            message="Setup daemon cgroup",
+            log_event=False)
 
     @staticmethod
     def add_to_agent_cgroup():
