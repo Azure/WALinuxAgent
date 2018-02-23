@@ -39,7 +39,7 @@ import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.restutil as restutil
 import azurelinuxagent.common.utils.textutil as textutil
-from azurelinuxagent.common.cgroup import CGroups
+from azurelinuxagent.common.cgroups import CGroups
 
 from azurelinuxagent.common.event import add_event, add_periodic, \
                                     elapsed_milliseconds, \

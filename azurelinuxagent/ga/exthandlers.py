@@ -36,7 +36,7 @@ import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.version as version
-from azurelinuxagent.common.cgroup import CGroups
+from azurelinuxagent.common.cgroups import CGroups
 from azurelinuxagent.common.errorstate import ErrorState, ERROR_STATE_DELTA
 from azurelinuxagent.common.errorstate import ErrorState, ERROR_STATE_DELTA_DEFAULT, ERROR_STATE_DELTA_INSTALL
 

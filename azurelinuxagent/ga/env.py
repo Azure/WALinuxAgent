@@ -28,7 +28,7 @@ import datetime
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 
-from azurelinuxagent.common.cgroup import CGroups
+from azurelinuxagent.common.cgroups import CGroups
 from azurelinuxagent.common.dhcp import get_dhcp_handler
 from azurelinuxagent.common.event import add_periodic, WALAEventOperation
 from azurelinuxagent.common.osutil import get_osutil
