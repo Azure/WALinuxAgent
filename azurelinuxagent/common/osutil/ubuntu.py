@@ -64,8 +64,7 @@ class Ubuntu14OSUtil(DefaultOSUtil):
 
             link = '/sys/fs/cgroup/cpu'
             if not os.path.exists(link):
-                os.symlink(source='/sys/fs/cgroup/cpu,cpuacct/',
-                           link_name=link)
+                os.symlink('/sys/fs/cgroup/cpu,cpuacct/', link)
 
             fileutil.mkdir('/sys/fs/cgroup/memory')
             self.mount(device='memory',
