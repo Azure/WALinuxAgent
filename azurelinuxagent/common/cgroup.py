@@ -38,18 +38,19 @@ CGROUPS_ENABLED = True
 
 
 class CGroupsException(Exception):
-    global CGROUPS_ENABLED
 
-    if CGROUPS_ENABLED:
-        logger.warn("Disabling cgroup support")
-        CGROUPS_ENABLED = False
-    pass
+    def __init__(self):
+        global CGROUPS_ENABLED
+        if CGROUPS_ENABLED:
+            logger.warn("Disabling cgroup support")
+            CGROUPS_ENABLED = False
+        pass
 
 
 class CGroup(object):
 
     def __init__(self, name):
-
+        global CGROUPS_ENABLED
         self.name = name
         self.user = getpass.getuser()
         self.user_cgroups = {}
