@@ -51,9 +51,6 @@ class CGroupsException(Exception):
 
 class CGroup(object):
 
-    # whether cgroups support is enabled
-    _enabled = True
-
     def __init__(self, name):
         self.name = name
         self.user = getpass.getuser()
@@ -61,7 +58,7 @@ class CGroup(object):
         self.cgroups = {}
         self.hierarchies = HIERARCHIES
 
-        if not self.enabled():
+        if not _cgroup_enabled:
             return
 
         system_hierarchies = os.listdir(BASE_CGROUPS)
@@ -81,9 +78,8 @@ class CGroup(object):
 
     def add(self, pid):
         try:
-            if not self.enabled():
+            if not _cgroup_enabled:
                 return
-
             # determine if pid exists
             os.kill(pid, 0)
         except OSError:
@@ -95,15 +91,6 @@ class CGroup(object):
             if not str(pid) in cgroups_pids:
                 with open(tasks_file, 'a+') as f:
                     f.write('%s\n' % pid)
-
-    @staticmethod
-    def enabled():
-        return _cgroup_enabled
-
-    @staticmethod
-    def disable():
-        global _cgroup_enabled
-        _cgroup_enabled = False
 
     @staticmethod
     def setup_daemon():
