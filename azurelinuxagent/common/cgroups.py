@@ -18,7 +18,7 @@ import os
 import getpass
 
 from pwd import getpwnam
-from azurelinuxagent.common import logger, conf, osutil
+from azurelinuxagent.common import logger, conf
 from azurelinuxagent.common.utils import fileutil
 
 BASE_CGROUPS = '/sys/fs/cgroup'
@@ -112,6 +112,7 @@ class CGroups(object):
         status = ""
         cgroups_enabled = False
         try:
+            from azurelinuxagent.common import osutil
             osutil.get_osutil().mount_cgroups()
             cg = CGroups(CGROUP_AGENT)
 
