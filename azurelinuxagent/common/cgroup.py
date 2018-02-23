@@ -104,8 +104,8 @@ class CGroup(object):
 
     @staticmethod
     def setup_daemon():
+        status = ""
         cgroups_enabled = False
-        logger.info("Setup daemon cgroup")
         try:
             cg = CGroup(CGROUP_AGENT)
             # cg.set_cpu_limit(50)
@@ -120,8 +120,8 @@ class CGroup(object):
                 cgroups_enabled = True
             else:
                 logger.warn("No pid file at {0}".format(pid_file))
-        except Exception:
-            pass
+        except CGroupsException as cge:
+            status = cge.msg
 
         from azurelinuxagent.common.event import add_event, WALAEventOperation
         from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
@@ -130,7 +130,7 @@ class CGroup(object):
             version=CURRENT_VERSION,
             op=WALAEventOperation.InitializeCGroups,
             is_success=cgroups_enabled,
-            message="Setup daemon cgroup",
+            message=status,
             log_event=False)
 
     @staticmethod
