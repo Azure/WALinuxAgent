@@ -129,7 +129,7 @@ class CGroup(object):
                 op=WALAEventOperation.InitializeCGroups,
                 is_success=cgroups_enabled,
                 message="Setup daemon cgroup",
-                log_event=False)
+                log_event=True)
 
         except Exception:
             pass
