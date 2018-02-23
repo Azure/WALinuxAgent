@@ -131,7 +131,7 @@ class CGroup(object):
             op=WALAEventOperation.InitializeCGroups,
             is_success=cgroups_enabled,
             message="Setup daemon cgroup",
-            log_event=True)
+            log_event=False)
 
     @staticmethod
     def add_to_agent_cgroup():
