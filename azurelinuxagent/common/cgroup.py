@@ -19,9 +19,7 @@ import getpass
 
 from pwd import getpwnam
 from azurelinuxagent.common import logger, conf
-from azurelinuxagent.common.event import add_event, WALAEventOperation
 from azurelinuxagent.common.utils import fileutil
-from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 
 BASE_CGROUPS = '/sys/fs/cgroup'
 
@@ -122,16 +120,19 @@ class CGroup(object):
                 cgroups_enabled = True
             else:
                 logger.warn("No pid file at {0}".format(pid_file))
+
+            from azurelinuxagent.common.event import add_event, WALAEventOperation
+            from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
+            add_event(
+                AGENT_NAME,
+                version=CURRENT_VERSION,
+                op=WALAEventOperation.InitializeCGroups,
+                is_success=cgroups_enabled,
+                message="Setup daemon cgroup",
+                log_event=False)
+
         except Exception:
             pass
-
-        add_event(
-            AGENT_NAME,
-            version=CURRENT_VERSION,
-            op=WALAEventOperation.InitializeCGroups,
-            is_success=cgroups_enabled,
-            message="Setup daemon cgroup",
-            log_event=False)
 
     @staticmethod
     def add_to_agent_cgroup():
