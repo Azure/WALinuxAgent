@@ -131,7 +131,9 @@ class CGroup(object):
                 message="Setup daemon cgroup",
                 log_event=True)
 
-        except Exception:
+        except Exception as e:
+            from azurelinuxagent.common.future import ustr
+            logger.error(ustr(e))
             pass
 
     @staticmethod
