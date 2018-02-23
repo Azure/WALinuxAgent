@@ -120,21 +120,18 @@ class CGroup(object):
                 cgroups_enabled = True
             else:
                 logger.warn("No pid file at {0}".format(pid_file))
-
-            from azurelinuxagent.common.event import add_event, WALAEventOperation
-            from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
-            add_event(
-                AGENT_NAME,
-                version=CURRENT_VERSION,
-                op=WALAEventOperation.InitializeCGroups,
-                is_success=cgroups_enabled,
-                message="Setup daemon cgroup",
-                log_event=True)
-
-        except Exception as e:
-            from azurelinuxagent.common.future import ustr
-            logger.error(ustr(e))
+        except Exception:
             pass
+
+        from azurelinuxagent.common.event import add_event, WALAEventOperation
+        from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
+        add_event(
+            AGENT_NAME,
+            version=CURRENT_VERSION,
+            op=WALAEventOperation.InitializeCGroups,
+            is_success=cgroups_enabled,
+            message="Setup daemon cgroup",
+            log_event=True)
 
     @staticmethod
     def add_to_agent_cgroup():
