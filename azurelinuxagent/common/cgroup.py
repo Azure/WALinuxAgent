@@ -42,7 +42,8 @@ class CGroupsException(Exception):
         self.msg = msg
         global _cgroup_enabled
         if _cgroup_enabled:
-            logger.warn("Disabling cgroup support: {0}".format(msg))
+            pid = os.getpid()
+            logger.warn("[{1}] Disabling cgroup support: {0}".format(msg, pid))
             _cgroup_enabled = False
 
     def __str__(self):
