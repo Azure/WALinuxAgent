@@ -51,6 +51,10 @@ class Ubuntu14OSUtil(DefaultOSUtil):
 
     def mount_cgroups(self):
         try:
+            if os.path.exists('/sys/fs/cgroup/cpu,cpuacct'):
+                # assume cgroups fs mounted
+                return
+
             self.mount(device='cgroup_root',
                        mount_point='/sys/fs/cgroup',
                        option="-t tmpfs",
@@ -83,6 +87,9 @@ class Ubuntu12OSUtil(Ubuntu14OSUtil):
         ret = shellutil.run_get_output("pidof dhclient3", chk_err=False)
         return ret[1] if ret[0] == 0 else None
 
+    def mount_cgroups(self):
+        pass
+
 
 class Ubuntu16OSUtil(Ubuntu14OSUtil):
     """
@@ -96,6 +103,9 @@ class Ubuntu16OSUtil(Ubuntu14OSUtil):
 
     def unregister_agent_service(self):
         return shellutil.run("systemctl mask walinuxagent", chk_err=False)
+
+    def mount_cgroups(self):
+        pass
 
 
 class Ubuntu18OSUtil(Ubuntu16OSUtil):
@@ -149,8 +159,14 @@ class UbuntuOSUtil(Ubuntu16OSUtil):
             else:
                 logger.warn("exceeded restart retries")
 
+    def mount_cgroups(self):
+        pass
+
 
 class UbuntuSnappyOSUtil(Ubuntu14OSUtil):
     def __init__(self):
         super(UbuntuSnappyOSUtil, self).__init__()
         self.conf_file_path = '/apps/walinuxagent/current/waagent.conf'
+
+    def mount_cgroups(self):
+        pass
