@@ -58,6 +58,7 @@ class CGroup(object):
         self.cgroups = {}
         self.hierarchies = HIERARCHIES
 
+        global _cgroup_enabled
         if not _cgroup_enabled:
             return
 
@@ -78,6 +79,7 @@ class CGroup(object):
 
     def add(self, pid):
         try:
+            global _cgroup_enabled
             if not _cgroup_enabled:
                 return
             # determine if pid exists
