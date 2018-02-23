@@ -98,7 +98,7 @@ class CGroup(object):
         return CGroup._enabled
 
     @staticmethod
-    @def disable():
+    def disable():
         CGroup._enabled = False
 
     @staticmethod
