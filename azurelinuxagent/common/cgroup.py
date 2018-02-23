@@ -39,12 +39,15 @@ CGROUPS_ENABLED = True
 
 class CGroupsException(Exception):
 
-    def __init__(self):
+    def __init__(self, msg):
+        self.msg = msg
         global CGROUPS_ENABLED
         if CGROUPS_ENABLED:
             logger.warn("Disabling cgroup support")
             CGROUPS_ENABLED = False
-        pass
+
+    def __str__(self):
+        return repr(self.msg)
 
 
 class CGroup(object):
