@@ -34,17 +34,14 @@ CGROUP_AGENT = 'azure-agent'
 
 CGROUP_EXTENSION_FORMAT = 'azure-ext-{0}'
 
-CGROUPS_ENABLED = True
-
 
 class CGroupsException(Exception):
 
     def __init__(self, msg):
         self.msg = msg
-        global CGROUPS_ENABLED
-        if CGROUPS_ENABLED:
+        if CGroup.enabled():
             logger.warn("Disabling cgroup support")
-            CGROUPS_ENABLED = False
+            CGroup.disable()
 
     def __str__(self):
         return repr(self.msg)
@@ -52,16 +49,16 @@ class CGroupsException(Exception):
 
 class CGroup(object):
 
+    CGROUP_ENABLED = True
+
     def __init__(self, name):
-        global CGROUPS_ENABLED
         self.name = name
         self.user = getpass.getuser()
         self.user_cgroups = {}
         self.cgroups = {}
         self.hierarchies = HIERARCHIES
-        self.enabled = CGROUPS_ENABLED
 
-        if not self.enabled:
+        if not self.enabled():
             return
 
         system_hierarchies = os.listdir(BASE_CGROUPS)
@@ -81,7 +78,7 @@ class CGroup(object):
 
     def add(self, pid):
         try:
-            if not self.enabled:
+            if not self.enabled():
                 return
 
             # determine if pid exists
@@ -95,6 +92,14 @@ class CGroup(object):
             if not str(pid) in cgroups_pids:
                 with open(tasks_file, 'a+') as f:
                     f.write('%s\n' % pid)
+
+    @staticmethod
+    def enabled():
+        return CGroup.CGROUP_ENABLED
+
+    @staticmethod
+    def disable():
+        CGroup.CGROUP_ENABLED = False
 
     @staticmethod
     def setup_daemon():
