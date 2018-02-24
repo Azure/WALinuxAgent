@@ -45,6 +45,7 @@ class WALAEventOperation:
     AgentEnabled = "AgentEnabled"
     AutoUpdate = "AutoUpdate"
     CustomData = "CustomData"
+    CPU = "CPU"
     Deploy = "Deploy"
     Disable = "Disable"
     Downgrade = "Downgrade"

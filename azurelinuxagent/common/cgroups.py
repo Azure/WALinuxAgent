@@ -13,9 +13,10 @@
 # limitations under the License.
 #
 # Requires Python 2.4+ and Openssl 1.0+
-
+import glob
 import os
 import getpass
+import re
 
 from pwd import getpwnam
 from azurelinuxagent.common import logger, conf
@@ -32,6 +33,48 @@ CPU_DEFAULT = 1024
 CGROUP_AGENT = 'azure-agent'
 
 CGROUP_EXTENSION_FORMAT = 'azure-ext-{0}'
+
+
+class CGroupsTelemetry(object):
+    def __init__(self, name):
+        self.name = name
+        self.cpu_count = 0
+        self.current_cpu_total = 0
+        self.previous_cpu_total = 0
+        self.current_system_cpu = 0
+        self.previous_system_cpu = 0
+        self.cgroup = CGroups(name)
+
+    def get_cpu_percent(self):
+        self.previous_cpu_total = self.current_cpu_total
+        self.previous_system_cpu = self.current_system_cpu
+        self.current_cpu_total = self.get_current_cpu_total()
+        self.current_system_cpu = self.get_current_system_cpu()
+
+        cpu_delta = self.current_cpu_total - self.previous_cpu_total
+        system_delta = max(1, self.current_system_cpu - self.previous_system_cpu)
+
+        return (float(cpu_delta) / float(system_delta)) * self.cpu_count * 100
+
+    def get_current_cpu_total(self):
+        cpu_total = 0
+        cpu_stat = self.cgroup.get_cpu_stat()
+        m = re.match('user (\d+)\nsystem (\d+)\n', cpu_stat)
+        if m:
+            cpu_total = int(m.groups()[0]) + int(m.groups()[1])
+        return cpu_total
+
+    def get_current_system_cpu(self):
+        system_cpu = 0
+        proc_stat = self.cgroup.get_proc_stat()
+        if proc_stat is not None:
+            cpu_entries = [l for l in proc_stat.splitlines() if l.startswith('cpu')]
+            for line in cpu_entries:
+                if re.match('cpu .*', line):
+                    system_cpu = sum(int(i) for i in line.split(' ')[2:7])
+                    break
+            self.cpu_count = len(cpu_entries) - 1
+        return system_cpu
 
 
 class CGroupsException(Exception):
@@ -229,6 +272,18 @@ class CGroups(object):
         else:
             raise CGroupsException("CPU hierarchy not available in this cgroup")
 
+    def get_cpu_stat(self):
+        cpu_stat = None
+        if 'cpu' in self.cgroups:
+            cpu_stat_file = self._get_cgroup_file('cpu', 'cpuacct.stat')
+            cpu_stat = fileutil.read_file(cpu_stat_file)
+        return cpu_stat
+
+    @staticmethod
+    def get_proc_stat():
+        proc_stat = fileutil.read_file('/proc/stat')
+        return proc_stat
+
     @staticmethod
     def _format_memory_value(unit, limit=None):
         units = ('bytes', 'kilobytes', 'megabytes', 'gigabytes')
@@ -260,3 +315,11 @@ class CGroups(object):
                 f.write("{0}\n".format(value))
         else:
             raise CGroupsException("Memory hierarchy not available in this cgroup")
+
+    @staticmethod
+    def get_extension_group_names():
+        return [os.path.basename(p) for p in
+                glob.glob(os.path.join(BASE_CGROUPS,
+                                       HIERARCHIES[0],
+                                       getpass.getuser(),
+                                       CGROUP_EXTENSION_FORMAT.format('*')))]

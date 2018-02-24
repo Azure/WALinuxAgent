@@ -27,7 +27,8 @@ import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.logger as logger
 
-from azurelinuxagent.common.cgroups import CGroups
+from azurelinuxagent.common.cgroups import CGroups, CGroupsTelemetry, \
+    CGROUP_AGENT
 from azurelinuxagent.common.event import add_event, WALAEventOperation
 from azurelinuxagent.common.exception import EventError, ProtocolError, OSUtilError, HttpError
 from azurelinuxagent.common.future import ustr
@@ -205,9 +206,15 @@ class MonitorHandler(object):
             logger.error("{0}", e)
 
     def daemon(self):
+        protocol = self.protocol_util.get_protocol()
+
+        # heartbeat
         period = datetime.timedelta(minutes=30)
-        protocol = self.protocol_util.get_protocol()        
         last_heartbeat = datetime.datetime.utcnow() - period
+
+        # performance counters
+        collection_period = datetime.timedelta(minutes=1)
+        last_collection = datetime.datetime.utcnow() - collection_period
 
         CGroups.add_to_agent_cgroup()
 
@@ -215,6 +222,7 @@ class MonitorHandler(object):
         heartbeat_id = str(uuid.uuid4()).upper()
         counter = 0
         while True:
+            # heartbeat
             if datetime.datetime.utcnow() >= (last_heartbeat + period):
                 last_heartbeat = datetime.datetime.utcnow()
                 incarnation = protocol.get_incarnation()
@@ -254,6 +262,20 @@ class MonitorHandler(object):
                         is_success=True,
                         message=msg,
                         log_event=False)
+
+            # performance counters
+            if datetime.datetime.utcnow() >= (last_collection + collection_period):
+                last_collection = datetime.datetime.utcnow()
+                for name in [CGROUP_AGENT, CGroups.get_extension_group_names()]:
+                    current_cpu = CGroupsTelemetry(name).get_cpu_percent()
+                    msg = "{0}:{1}".format(name, current_cpu)
+                    add_event(
+                        name=AGENT_NAME,
+                        version=CURRENT_VERSION,
+                        op=WALAEventOperation.CPU,
+                        is_success=True,
+                        message=msg,
+                        log_event=True)
 
             try:
                 self.collect_and_send_events()
