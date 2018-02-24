@@ -318,8 +318,11 @@ class CGroups(object):
 
     @staticmethod
     def get_extension_group_names():
-        return [os.path.basename(p) for p in
-                glob.glob(os.path.join(BASE_CGROUPS,
-                                       HIERARCHIES[0],
-                                       getpass.getuser(),
-                                       CGROUP_EXTENSION_FORMAT.format('*')))]
+        group_names = list()
+        group_names.append([os.path.basename(p) for p in
+                            glob.glob(os.path.join(BASE_CGROUPS,
+                                                   HIERARCHIES[0],
+                                                   getpass.getuser(),
+                                                   CGROUP_EXTENSION_FORMAT
+                                                   .format('*')))])
+        return group_names
