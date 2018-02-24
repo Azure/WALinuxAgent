@@ -222,60 +222,66 @@ class MonitorHandler(object):
         heartbeat_id = str(uuid.uuid4()).upper()
         counter = 0
         while True:
-            # heartbeat
-            if datetime.datetime.utcnow() >= (last_heartbeat + period):
-                last_heartbeat = datetime.datetime.utcnow()
-                incarnation = protocol.get_incarnation()
-                dropped_packets = self.osutil.get_firewall_dropped_packets(
-                                                    protocol.endpoint)
+            try:
+                # heartbeat
+                if datetime.datetime.utcnow() >= (last_heartbeat + period):
+                    last_heartbeat = datetime.datetime.utcnow()
+                    incarnation = protocol.get_incarnation()
+                    dropped_packets = self.osutil.get_firewall_dropped_packets(
+                                                        protocol.endpoint)
 
-                msg = "{0};{1};{2};{3}".format(
-                    incarnation, counter, heartbeat_id, dropped_packets)
+                    msg = "{0};{1};{2};{3}".format(
+                        incarnation, counter, heartbeat_id, dropped_packets)
 
-                add_event(
-                    name=AGENT_NAME,
-                    version=CURRENT_VERSION,
-                    op=WALAEventOperation.HeartBeat,
-                    is_success=True,
-                    message=msg,
-                    log_event=False)
-
-                counter += 1
-
-                io_errors = IOErrorCounter.get_and_reset()
-                hostplugin_errors = io_errors.get("hostplugin")
-                protocol_errors = io_errors.get("protocol")
-                other_errors = io_errors.get("other")
-
-                if hostplugin_errors > 0 \
-                        or protocol_errors > 0 \
-                        or other_errors > 0:
-
-                    msg = "hostplugin:{0};protocol:{1};other:{2}"\
-                        .format(hostplugin_errors,
-                                protocol_errors,
-                                other_errors)
                     add_event(
                         name=AGENT_NAME,
                         version=CURRENT_VERSION,
-                        op=WALAEventOperation.HttpErrors,
+                        op=WALAEventOperation.HeartBeat,
                         is_success=True,
                         message=msg,
                         log_event=False)
 
-            # performance counters
-            if datetime.datetime.utcnow() >= (last_collection + collection_period):
-                last_collection = datetime.datetime.utcnow()
-                for name in [CGROUP_AGENT, CGroups.get_extension_group_names()]:
-                    current_cpu = CGroupsTelemetry(name).get_cpu_percent()
-                    msg = "{0}:{1}".format(name, current_cpu)
-                    add_event(
-                        name=AGENT_NAME,
-                        version=CURRENT_VERSION,
-                        op=WALAEventOperation.CPU,
-                        is_success=True,
-                        message=msg,
-                        log_event=True)
+                    counter += 1
+
+                    io_errors = IOErrorCounter.get_and_reset()
+                    hostplugin_errors = io_errors.get("hostplugin")
+                    protocol_errors = io_errors.get("protocol")
+                    other_errors = io_errors.get("other")
+
+                    if hostplugin_errors > 0 \
+                            or protocol_errors > 0 \
+                            or other_errors > 0:
+
+                        msg = "hostplugin:{0};protocol:{1};other:{2}"\
+                            .format(hostplugin_errors,
+                                    protocol_errors,
+                                    other_errors)
+                        add_event(
+                            name=AGENT_NAME,
+                            version=CURRENT_VERSION,
+                            op=WALAEventOperation.HttpErrors,
+                            is_success=True,
+                            message=msg,
+                            log_event=False)
+            except Exception as e:
+                logger.warn("Failed to send heartbeat: {0}", e)
+
+            try:
+                # performance counters
+                if datetime.datetime.utcnow() >= (last_collection + collection_period):
+                    last_collection = datetime.datetime.utcnow()
+                    for name in [CGROUP_AGENT, CGroups.get_extension_group_names()]:
+                        current_cpu = CGroupsTelemetry(name).get_cpu_percent()
+                        msg = "{0}:{1}".format(name, current_cpu)
+                        add_event(
+                            name=AGENT_NAME,
+                            version=CURRENT_VERSION,
+                            op=WALAEventOperation.CPU,
+                            is_success=True,
+                            message=msg,
+                            log_event=True)
+            except Exception as e:
+                logger.warn("Failed to collect performance metrics: {0}", e)
 
             try:
                 self.collect_and_send_events()
