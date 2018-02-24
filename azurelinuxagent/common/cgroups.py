@@ -67,7 +67,6 @@ class CGroupsTelemetry(object):
     def get_current_system_cpu(self):
         system_cpu = 0
         proc_stat = self.cgroup.get_proc_stat()
-        logger.info("proc stat: [{0}]".format(proc_stat))
         if proc_stat is not None:
             cpu_entries = [l for l in proc_stat.splitlines() if l.startswith('cpu')]
             for line in cpu_entries:
