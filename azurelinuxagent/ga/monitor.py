@@ -21,6 +21,7 @@ import os
 import platform
 import time
 import threading
+import traceback
 import uuid
 
 import azurelinuxagent.common.conf as conf
@@ -275,6 +276,7 @@ class MonitorHandler(object):
                                 report_metric(metric_group, metric_name, cgroup_name, value)
             except Exception as e:
                 logger.warn("Failed to collect performance metrics: {0}", e)
+                traceback.format_exc()
 
             # Look for extension cgroups we're not already tracking and track them
             CGroupsTelemetry.update_tracked()
