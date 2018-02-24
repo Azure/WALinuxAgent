@@ -271,7 +271,8 @@ class MonitorHandler(object):
                 # performance counters
                 if datetime.datetime.utcnow() >= (last_collection + collection_period):
                     last_collection = datetime.datetime.utcnow()
-                    names = list(CGROUP_AGENT)
+                    names = []
+                    names.append(CGROUP_AGENT)
                     names.extend(CGroups.get_extension_group_names())
                     for name in names:
                         logger.info("Processing: {0}", name)
