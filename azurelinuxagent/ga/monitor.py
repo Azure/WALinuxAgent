@@ -21,6 +21,7 @@ import os
 import platform
 import time
 import threading
+import traceback
 import uuid
 
 import azurelinuxagent.common.conf as conf
@@ -282,6 +283,7 @@ class MonitorHandler(object):
                             log_event=True)
             except Exception as e:
                 logger.warn("Failed to collect performance metrics: {0}", e)
+                traceback.format_exc()
 
             try:
                 self.collect_and_send_events()
