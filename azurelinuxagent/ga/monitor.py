@@ -214,7 +214,7 @@ class MonitorHandler(object):
         last_heartbeat = datetime.datetime.utcnow() - period
 
         # performance counters
-        collection_period = datetime.timedelta(minutes=1)
+        collection_period = datetime.timedelta(minutes=5)
         last_collection = datetime.datetime.utcnow() - collection_period
 
         CGroups.add_to_agent_cgroup()
@@ -275,7 +275,6 @@ class MonitorHandler(object):
                     names.append(CGROUP_AGENT)
                     names.extend(CGroups.get_extension_group_names())
                     for name in names:
-                        logger.info("Processing: {0}", name)
                         current_cpu = CGroupsTelemetry(name).get_cpu_percent()
                         msg = "{0}:{1}".format(name, current_cpu)
                         add_event(
@@ -284,10 +283,9 @@ class MonitorHandler(object):
                             op=WALAEventOperation.CPU,
                             is_success=True,
                             message=msg,
-                            log_event=True)
+                            log_event=False)
             except Exception as e:
                 logger.warn("Failed to collect performance metrics: {0}", e)
-                logger.warn(traceback.format_exc())
 
             try:
                 self.collect_and_send_events()
