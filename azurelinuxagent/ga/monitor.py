@@ -271,7 +271,9 @@ class MonitorHandler(object):
                 # performance counters
                 if datetime.datetime.utcnow() >= (last_collection + collection_period):
                     last_collection = datetime.datetime.utcnow()
-                    for name in CGroups.get_extension_group_names().append(CGROUP_AGENT):
+                    names = list(CGROUP_AGENT)
+                    names.extend(CGroups.get_extension_group_names())
+                    for name in names:
                         logger.info("Processing: {0}", name)
                         current_cpu = CGroupsTelemetry(name).get_cpu_percent()
                         msg = "{0}:{1}".format(name, current_cpu)
