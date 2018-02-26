@@ -163,6 +163,7 @@ class ExtHandlerProperties(DataContract):
         self.version = None
         self.upgradePolicy = None
         self.upgradeGuid = None
+        self.dependencyLevel = None
         self.state = None
         self.extensions = DataContractList(Extension)
 
@@ -177,6 +178,16 @@ class ExtHandler(DataContract):
         self.name = name
         self.properties = ExtHandlerProperties()
         self.versionUris = DataContractList(ExtHandlerVersionUri)
+
+    def sort_key(self):
+        level = self.properties.dependencyLevel
+        if level is None:
+            level = 0
+        # Process uninstall or disabled before enabled, in reverse order
+        # remap 0 to -1, 1 to -2, 2 to -3, etc
+        if self.properties.state != u"enabled":
+            level = (0 - level) - 1
+        return level
 
 
 class ExtHandlerList(DataContract):

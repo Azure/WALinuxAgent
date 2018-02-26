@@ -20,6 +20,7 @@
 import datetime
 import glob
 import json
+import operator
 import os
 import os.path
 import random
@@ -316,6 +317,7 @@ class ExtHandlersHandler(object):
                 logger.info("Extension handling is on hold")
                 return
 
+        self.ext_handlers.extHandlers.sort(key=operator.methodcaller('sort_key'))
         for ext_handler in self.ext_handlers.extHandlers:
             # TODO: handle install in sequence, enable in parallel
             self.handle_ext_handler(ext_handler, etag)
