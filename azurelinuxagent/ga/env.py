@@ -82,6 +82,12 @@ class EnvHandler(object):
         self.dhcp_handler.conf_routes()
         self.hostname = self.osutil.get_hostname_record()
         self.dhcp_id = self.osutil.get_dhcp_pid()
+        self.start()
+
+    def is_alive(self):
+        return self.server_thread.is_alive()
+
+    def start(self):
         self.server_thread = threading.Thread(target=self.monitor)
         self.server_thread.setDaemon(True)
         self.server_thread.start()

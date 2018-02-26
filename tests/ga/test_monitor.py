@@ -18,6 +18,7 @@
 from tests.tools import *
 from azurelinuxagent.ga.monitor import *
 
+
 class TestMonitor(AgentTestCase):
     def test_parse_xml_event(self):
         data_str = load_data('ext/event.xml')
