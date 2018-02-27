@@ -144,7 +144,7 @@ class EventLogger(object):
 
     def save_event(self, data):
         if self.event_dir is None:
-            logger.warn("Cannot save event -- Event reporter is not initialized.")
+            logger.info("Cannot save event -- Event reporter is not initialized.")
             return
 
         if not os.path.exists(self.event_dir):
@@ -155,7 +155,7 @@ class EventLogger(object):
         if len(existing_events) >= 1000:
             existing_events.sort()
             oldest_files = existing_events[:-999]
-            logger.warn("Too many files under: {0}, removing oldest".format(self.event_dir))
+            logger.info("Too many files under: {0}, removing oldest".format(self.event_dir))
             try:
                 for f in oldest_files:
                     os.remove(os.path.join(self.event_dir, f))
