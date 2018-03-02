@@ -773,7 +773,7 @@ class ExtHandlerInstance(object):
                         "code" : 0
                     }
                 }
-                fileutil.write_file(json.dumps(status), status_path)
+                fileutil.write_file(status_path, json.dumps(status))
 
             conf_dir = self.get_conf_dir()
             fileutil.mkdir(conf_dir, mode=0o700)
