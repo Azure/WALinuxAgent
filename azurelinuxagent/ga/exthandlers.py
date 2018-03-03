@@ -390,7 +390,12 @@ class ExtHandlersHandler(object):
         old_ext_handler_i = ext_handler_i.get_installed_ext_handler()
         if old_ext_handler_i is not None and \
            old_ext_handler_i.version_gt(ext_handler_i):
-            raise ExtensionError(u"Downgrade not allowed")
+            msg = "Downgrade is not allowed. Skipping install and enable."
+            ext_handler_i.logger.error(msg)
+            ext_handler_i.set_operation(WALAEventOperation.Downgrade)
+            ext_handler_i.report_event(message=ustr(msg), is_success=True)
+            return
+
         handler_state = ext_handler_i.get_handler_state()
         ext_handler_i.logger.info("[Enable] current handler state is: {0}",
                                   handler_state.lower())
