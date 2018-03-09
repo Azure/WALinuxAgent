@@ -390,6 +390,8 @@ class ExtHandlersHandler(object):
            old_ext_handler_i.version_gt(ext_handler_i):
             msg = "Downgrade is not allowed. Skipping install and enable."
             ext_handler_i.logger.error(msg)
+            ext_handler_i.set_handler_state(ExtHandlerState.Enabled)
+            ext_handler_i.set_handler_status(status="Ready", message="No change")
             ext_handler_i.set_operation(WALAEventOperation.Downgrade)
             ext_handler_i.report_event(message=ustr(msg), is_success=True)
             return
