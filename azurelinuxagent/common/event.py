@@ -46,6 +46,7 @@ class WALAEventOperation:
     CustomData = "CustomData"
     Deploy = "Deploy"
     Disable = "Disable"
+    Downgrade = "Downgrade"
     Download = "Download"
     Enable = "Enable"
     ExtensionProcessing = "ExtensionProcessing"
