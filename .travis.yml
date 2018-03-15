@@ -11,4 +11,4 @@ install:
   #- pip install -r requirements.txt
   - pip install pyasn1
 # command to run tests
-script: nosetests tests
+script: ./scripts/tests.sh
