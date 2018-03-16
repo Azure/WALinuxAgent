@@ -1429,11 +1429,6 @@ class ExtensionsConfig(object):
         if not ext_handler.properties.upgradeGuid:
             ext_handler.properties.upgradeGuid = None
 
-        try:
-            ext_handler.properties.dependencyLevel = int(getattrib(plugin, "dependencyLevel"))
-        except ValueError:
-            ext_handler.properties.dependencyLevel = 0
-
         auto_upgrade = getattrib(plugin, "autoUpgrade")
         if auto_upgrade is not None and auto_upgrade.lower() == "true":
             ext_handler.properties.upgradePolicy = "auto"
@@ -1471,6 +1466,26 @@ class ExtensionsConfig(object):
             logger.error("Invalid extension settings")
             return
 
+        depends_on = None
+        depends_on_node = find(settings[0], "DependsOn")
+
+        depends_on_name = getattrib(depends_on_node, "name")
+        if depends_on_name == "":
+            depends_on_name = ext_handler.name
+
+        try:
+            depends_on_level = int(getattrib(depends_on_node, "dependencyLevel"))
+        except (ValueError, TypeError):
+            depends_on_level = 0
+
+        dependencies = []
+        for dependency in findall(depends_on_node, "DependsOnExtension"):
+            handler_name = gettext(dependency)
+            ext_name = getattrib(dependency, "name")
+            if ext_name == "":
+                ext_name = handler_name
+            dependencies.append((handler_name, ext_name))
+
         for plugin_settings_list in runtime_settings["runtimeSettings"]:
             handler_settings = plugin_settings_list["handlerSettings"]
             ext = Extension()
@@ -1480,6 +1495,9 @@ class ExtensionsConfig(object):
             ext.sequenceNumber = seqNo
             ext.publicSettings = handler_settings.get("publicSettings")
             ext.protectedSettings = handler_settings.get("protectedSettings")
+            if ext.name == depends_on_name:
+                ext.dependencies = dependencies
+                ext.dependencyLevel = depends_on_level
             thumbprint = handler_settings.get(
                 "protectedSettingsCertThumbprint")
             ext.certificateThumbprint = thumbprint
