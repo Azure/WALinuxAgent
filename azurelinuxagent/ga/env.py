@@ -94,10 +94,21 @@ class EnvHandler(object):
         Purge unnecessary files from disk cache.
         """
         protocol = self.protocol_util.get_protocol()
+        reset_firewall_fules = False
         while not self.stopped:
             self.osutil.remove_rules_files()
 
             if conf.enable_firewall():
+
+                # If the rules ever change we must reset all rules and start over again.
+                #
+                # There was a rule change at 2.2.24, which started dropping non-root traffic
+                # to WireServer.  The previous rules allowed traffic.  Having both rules in
+                # place negated the fix in 2.2.24.
+                if not reset_firewall_fules:
+                    self.osutil.remove_firewall(dst_ip=protocol.endpoint, uid=os.getuid())
+                    reset_firewall_fules = True
+
                 success = self.osutil.enable_firewall(
                                 dst_ip=protocol.endpoint,
                                 uid=os.getuid())

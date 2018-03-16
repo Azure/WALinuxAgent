@@ -60,15 +60,17 @@ FIREWALL_ACCEPT = "iptables {0} -t security -{1} OUTPUT -d {2} -p tcp -m owner -
 # Note:
 # -- Initially "flight" the change to ACCEPT packets and develop a metric baseline
 #    A subsequent release will convert the ACCEPT to DROP
-FIREWALL_DROP = "iptables {0} -t security -{1} OUTPUT -d {2} -p tcp -m conntrack --ctstate INVALID,NEW -j ACCEPT"
-# FIREWALL_DROP = "iptables {0} -t security -{1} OUTPUT -d {2} -p tcp -m conntrack --ctstate INVALID,NEW -j DROP"
+# FIREWALL_DROP = "iptables {0} -t security -{1} OUTPUT -d {2} -p tcp -m conntrack --ctstate INVALID,NEW -j ACCEPT"
+FIREWALL_DROP = "iptables {0} -t security -{1} OUTPUT -d {2} -p tcp -m conntrack --ctstate INVALID,NEW -j DROP"
 FIREWALL_LIST = "iptables {0} -t security -L -nxv"
 FIREWALL_PACKETS = "iptables {0} -t security -L OUTPUT --zero OUTPUT -nxv"
 FIREWALL_FLUSH = "iptables {0} -t security --flush"
 
 # Precisely delete the rules created by the agent.
-FIREWALL_DELETE_CONNTRACK = "iptables {0} -t security -D OUTPUT -d {1} -p tcp -m conntrack --ctstate INVALID,NEW -j ACCEPT"
-FIREWALL_DELETE_OWNER = "iptables {0} -t security -D OUTPUT -d {1} -p tcp -m owner --uid-owner {2} -j ACCEPT"
+# this rule was used <= 2.2.24.  This rule helped to validate our change, and detemine impact.
+FIREWALL_DELETE_CONNTRACK_ACCEPT = "iptables {0} -t security -D OUTPUT -d {1} -p tcp -m conntrack --ctstate INVALID,NEW -j ACCEPT"
+FIREWALL_DELETE_OWNER_ACCEPT = "iptables {0} -t security -D OUTPUT -d {1} -p tcp -m owner --uid-owner {2} -j ACCEPT"
+FIREWALL_DELETE_CONNTRACK_DROP = "iptables {0} -t security -D OUTPUT -d {1} -p tcp -m conntrack --ctstate INVALID,NEW -j DROP"
 
 PACKET_PATTERN = "^\s*(\d+)\s+(\d+)\s+DROP\s+.*{0}[^\d]*$"
 
@@ -164,8 +166,12 @@ class DefaultOSUtil(object):
 
             wait = self.get_firewall_will_wait()
 
-            self._delete_rule(FIREWALL_DELETE_CONNTRACK.format(wait, dst_ip))
-            self._delete_rule(FIREWALL_DELETE_OWNER.format(wait, dst_ip, uid))
+            # This rule was <= 2.2.24 only, and may still exist on some VMs.  Until 2.2.24
+            # has aged out, keep this cleanup in place.
+            self._delete_rule(FIREWALL_DELETE_CONNTRACK_ACCEPT.format(wait, dst_ip))
+
+            self._delete_rule(FIREWALL_DELETE_OWNER_ACCEPT.format(wait, dst_ip, uid))
+            self._delete_rule(FIREWALL_DELETE_CONNTRACK_DROP.format(wait, dst_ip))
 
             return True
 
