@@ -1019,8 +1019,8 @@ class TestUpdate(UpdateTestCase):
         self.assertTrue(2 < len(self.update_handler.agents))
 
         # Purge every other agent
-        kept_agents = self.update_handler.agents[1::2]
-        purged_agents = self.update_handler.agents[::2]
+        kept_agents = self.update_handler.agents[::2]
+        purged_agents = self.update_handler.agents[1::2]
 
         # Reload and assert only the kept agents remain on disk
         self.update_handler.agents = kept_agents
