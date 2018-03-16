@@ -116,9 +116,7 @@ def parse_ext_status(ext_status, data):
     ext_status.code = status_data.get('code', 0)
     formatted_message = status_data.get('formattedMessage')
     ext_status.message = parse_formatted_message(formatted_message)
-    substatus_list = status_data.get('substatus')
-    if substatus_list is None:
-        return
+    substatus_list = status_data.get('substatus', [])
     for substatus in substatus_list:
         if substatus is not None:
             ext_status.substatusList.append(parse_ext_substatus(substatus))
@@ -362,9 +360,35 @@ class ExtHandlersHandler(object):
 
         self.ext_handlers.extHandlers.sort(key=operator.methodcaller('sort_key'))
         for ext_handler in self.ext_handlers.extHandlers:
-            # TODO: handle install in sequence, enable in parallel
+            self.wait_on_ext_handler_dependencies(ext_handler)
             self.handle_ext_handler(ext_handler, etag)
-    
+
+    def wait_on_ext_handler_dependencies(self, ext_handler):
+        dependencies = sum([e.dependencies for e in ext_handler.properties.extensions], [])
+        for dependency in dependencies:
+            handler_i = ExtHandlerInstance(dependency.handler, self.protocol)
+            timeout = 90 if dependency.timeout is None else dependency.timeout
+            timeout_delta = datetime.timedelta(seconds=(timeout * 60))
+            begin = datetime.datetime.utcnow()
+            for ext in dependency.exts:
+                while timeout_delta > (datetime.datetime.utcnow() - begin):
+                    status = handler_i.collect_ext_status(ext)
+                    if status is None:
+                        break
+                    all_success = status.status == "success"
+                    for substatus in status.substatusList:
+                        if substatus.status != "success":
+                            all_success = False
+                            break
+                    if all_success:
+                        break
+                    time.sleep(10)
+                if (datetime.datetime.utcnow() - begin) > timeout_delta:
+                    raise ExtensionError("Timeout waiting for success status "
+                                         "from dependency {}/{} for {}",
+                                         dependency.handler, ext,
+                                         ext_handler.name)
+
     def handle_ext_handler(self, ext_handler, etag):
         ext_handler_i = ExtHandlerInstance(ext_handler, self.protocol)
 
