@@ -861,8 +861,8 @@ class TestUpdate(UpdateTestCase):
         self.update_handler._set_agents([GuestAgent(path=path) for path in self.agent_dirs()])
         self.assertEqual(len(self.agent_dirs()), len(self.update_handler.agents))
 
-        kept_agents = self.update_handler.agents[1::2]
-        blacklisted_agents = self.update_handler.agents[::2]
+        kept_agents = self.update_handler.agents[::2]
+        blacklisted_agents = self.update_handler.agents[1::2]
         for agent in blacklisted_agents:
             agent.mark_failure(is_fatal=True)
         self.update_handler._filter_blacklisted_agents()

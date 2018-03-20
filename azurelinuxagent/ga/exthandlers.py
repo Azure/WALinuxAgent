@@ -37,7 +37,7 @@ import azurelinuxagent.common.version as version
 from azurelinuxagent.common.errorstate import ErrorState, ERROR_STATE_DELTA
 
 from azurelinuxagent.common.event import add_event, WALAEventOperation, elapsed_milliseconds
-from azurelinuxagent.common.exception import ExtensionError, ProtocolError, RestartError
+from azurelinuxagent.common.exception import ExtensionError, ProtocolError, HttpError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.restapi import ExtHandlerStatus, \
                                                     ExtensionStatus, \
@@ -207,8 +207,6 @@ class ExtHandlersHandler(object):
 
             self.report_ext_handlers_status()
             self.cleanup_outdated_handlers()
-        except RestartError:
-            raise
         except Exception as e:
             msg = u"Exception processing extension handlers: {0}".format(
                 ustr(e))
@@ -346,7 +344,7 @@ class ExtHandlersHandler(object):
                 return
 
             self.set_log_upgrade_guid(ext_handler, True)
-            ext_handler_i.decide_version(etag=etag, target_state=state)
+            ext_handler_i.decide_version(target_state=state)
             if not ext_handler_i.is_upgrade and self.last_etag == etag:
                 if self.log_etag:
                     ext_handler_i.logger.verbose("Version {0} is current for etag {1}",
@@ -374,11 +372,6 @@ class ExtHandlersHandler(object):
             else:
                 message = u"Unknown ext handler state:{0}".format(state)
                 raise ExtensionError(message)
-        except RestartError:
-            ext_handler_i.logger.info("GoalState became stale during "
-                                      "processing. Restarting with new "
-                                      "GoalState")
-            raise
         except Exception as e:
             ext_handler_i.set_handler_status(message=ustr(e), code=-1)
             ext_handler_i.report_event(message=ustr(e), is_success=False)
@@ -388,14 +381,7 @@ class ExtHandlersHandler(object):
         old_ext_handler_i = ext_handler_i.get_installed_ext_handler()
         if old_ext_handler_i is not None and \
            old_ext_handler_i.version_gt(ext_handler_i):
-            msg = "Downgrade is not allowed. Skipping install and enable."
-            ext_handler_i.logger.info(msg)
-            ext_handler_i.set_handler_state(ExtHandlerState.Enabled)
-            ext_handler_i.set_handler_status(status="Ready", message="No change")
-            ext_handler_i.set_operation(WALAEventOperation.Downgrade)
-            ext_handler_i.report_event(message=ustr(msg), is_success=True)
-            return
-
+            raise ExtensionError(u"Downgrade not allowed")
         handler_state = ext_handler_i.get_handler_state()
         ext_handler_i.logger.info("[Enable] current handler state is: {0}",
                                   handler_state.lower())
@@ -525,9 +511,12 @@ class ExtHandlerInstance(object):
         self.logger.add_appender(logger.AppenderType.FILE,
                                  logger.LogLevel.INFO, log_file)
 
-    def decide_version(self, etag, target_state=None):
+    def decide_version(self, target_state=None):
         self.logger.verbose("Decide which version to use")
-        pkg_list = self.protocol.get_ext_handler_pkgs(self.ext_handler, etag)
+        try:
+            pkg_list = self.protocol.get_ext_handler_pkgs(self.ext_handler)
+        except ProtocolError as e:
+            raise ExtensionError("Failed to get ext handler pkgs", e)
 
         # Determine the desired and installed versions
         requested_version = FlexibleVersion(

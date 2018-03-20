@@ -39,7 +39,7 @@ class TestMetadataProtocolGetters(AgentTestCase):
             protocol.get_certs()
             ext_handlers, etag = protocol.get_ext_handlers()
             for ext_handler in ext_handlers.extHandlers:
-                protocol.get_ext_handler_pkgs(ext_handler, etag)
+                protocol.get_ext_handler_pkgs(ext_handler)
 
     def test_getters(self, *args):
         test_data = MetadataProtocolData(DATA_FILE)
