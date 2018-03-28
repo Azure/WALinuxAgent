@@ -176,7 +176,7 @@ class UpdateTestCase(AgentTestCase):
         return
 
     def prepare_agents(self,
-                       count=5,
+                       count=20,
                        is_available=True):
 
         # Ensure the test data is copied over
@@ -699,7 +699,7 @@ class TestUpdate(UpdateTestCase):
             pass
         self.event_patch.stop()
 
-    def _create_protocol(self, count=5, versions=None):
+    def _create_protocol(self, count=20, versions=None):
         latest_version = self.prepare_agents(count=count)
         if versions is None or len(versions) <= 0:
             versions = [latest_version]
@@ -861,8 +861,8 @@ class TestUpdate(UpdateTestCase):
         self.update_handler._set_agents([GuestAgent(path=path) for path in self.agent_dirs()])
         self.assertEqual(len(self.agent_dirs()), len(self.update_handler.agents))
 
-        kept_agents = self.update_handler.agents[1::2]
-        blacklisted_agents = self.update_handler.agents[::2]
+        kept_agents = self.update_handler.agents[::2]
+        blacklisted_agents = self.update_handler.agents[1::2]
         for agent in blacklisted_agents:
             agent.mark_failure(is_fatal=True)
         self.update_handler._filter_blacklisted_agents()
@@ -898,6 +898,7 @@ class TestUpdate(UpdateTestCase):
         protocol = WireProtocol('12.34.56.78')
         mock_get_host.return_value = "faux host"
         host = self.update_handler._get_host_plugin(protocol=protocol)
+        print("mock_get_host call cound={0}".format(mock_get_host.call_count))
         mock_get_host.assert_called_once()
         self.assertEqual("faux host", host)
 
@@ -1018,8 +1019,8 @@ class TestUpdate(UpdateTestCase):
         self.assertTrue(2 < len(self.update_handler.agents))
 
         # Purge every other agent
-        purged_agents = self.update_handler.agents[1::2]
-        kept_agents = self.update_handler.agents[::2]
+        kept_agents = self.update_handler.agents[1::2]
+        purged_agents = self.update_handler.agents[::2]
 
         # Reload and assert only the kept agents remain on disk
         self.update_handler.agents = kept_agents
@@ -1330,7 +1331,7 @@ class TestUpdate(UpdateTestCase):
             base_version=FlexibleVersion(AGENT_VERSION),
             protocol=None,
             versions=None,
-            count=5):
+            count=20):
 
         if protocol is None:
             protocol = self._create_protocol(count=count, versions=versions)
@@ -1378,7 +1379,7 @@ class TestUpdate(UpdateTestCase):
     def test_upgrade_available_purges_old_agents(self):
         self.prepare_agents()
         agent_count = self.agent_count()
-        self.assertEqual(5, agent_count)
+        self.assertEqual(20, agent_count)
 
         agent_versions = self.agent_versions()[:3]
         self.assertTrue(self._test_upgrade_available(versions=agent_versions))
