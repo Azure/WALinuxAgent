@@ -326,7 +326,7 @@ class Protocol(DataContract):
     def get_ext_handlers(self):
         raise NotImplementedError()
 
-    def get_ext_handler_pkgs(self, extension, etag):
+    def get_ext_handler_pkgs(self, extension):
         raise NotImplementedError()
 
     def get_artifacts_profile(self):

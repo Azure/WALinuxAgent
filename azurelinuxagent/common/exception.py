@@ -114,15 +114,6 @@ class ProtocolNotFoundError(ProtocolError):
         super(ProtocolNotFoundError, self).__init__(msg, inner)
 
 
-class RestartError(ProtocolError):
-    """
-    Variant of ProtocolError used to restart processing if the GoalState
-    becomes stale.
-    """
-
-    pass
-
-
 class HttpError(AgentError):
     """
     Http request failure

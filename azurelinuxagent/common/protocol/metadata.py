@@ -240,7 +240,7 @@ class MetadataProtocol(Protocol):
             set_properties("extensionHandlers", ext_list.extHandlers, data)
         return ext_list, etag
 
-    def get_ext_handler_pkgs(self, ext_handler, etag):
+    def get_ext_handler_pkgs(self, ext_handler):
         logger.verbose("Get extension handler packages")
         pkg_list = ExtHandlerPackageList()
 

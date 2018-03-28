@@ -645,12 +645,12 @@ class TestExtension(AgentTestCase):
                         decision_version = '1.0.0'
 
                 _, protocol = self._create_mock(WireProtocolData(datafile), *args)
-                ext_handlers, etag = protocol.get_ext_handlers()
+                ext_handlers, _ = protocol.get_ext_handlers()
                 self.assertEqual(1, len(ext_handlers.extHandlers))
                 ext_handler = ext_handlers.extHandlers[0]
                 self.assertEqual('OSTCExtensions.ExampleHandlerLinux', ext_handler.name)
                 self.assertEqual(config_version, ext_handler.properties.version, "config version.")
-                ExtHandlerInstance(ext_handler, protocol).decide_version(etag)
+                ExtHandlerInstance(ext_handler, protocol).decide_version()
                 self.assertEqual(decision_version, ext_handler.properties.version, "decision version.")
 
     def test_ext_handler_version_decide_between_minor_versions(self, *args):
@@ -677,7 +677,6 @@ class TestExtension(AgentTestCase):
         _, protocol = self._create_mock(WireProtocolData(DATA_FILE), *args)
         version_uri = Mock()
         version_uri.uri = 'http://some/Microsoft.OSTCExtensions_ExampleHandlerLinux_asiaeast_manifest.xml'
-        incarnation = 1
 
         for (installed_version, config_version, expected_version, autoupgrade_expected_version) in cases:
             ext_handler = Mock()
@@ -689,9 +688,8 @@ class TestExtension(AgentTestCase):
             ext_handler_instance = ExtHandlerInstance(ext_handler, protocol)
             ext_handler_instance.get_installed_version = Mock(return_value=installed_version)
 
-            ext_handler_instance.decide_version(incarnation)
+            ext_handler_instance.decide_version()
             self.assertEqual(expected_version, ext_handler.properties.version)
-            incarnation += 1
 
             ext_handler.properties.version = config_version
             ext_handler.properties.upgradePolicy = 'auto'
@@ -699,9 +697,8 @@ class TestExtension(AgentTestCase):
             ext_handler_instance = ExtHandlerInstance(ext_handler, protocol)
             ext_handler_instance.get_installed_version = Mock(return_value=installed_version)
 
-            ext_handler_instance.decide_version(incarnation)
+            ext_handler_instance.decide_version()
             self.assertEqual(autoupgrade_expected_version, ext_handler.properties.version)
-            incarnation += 1
 
 
 if __name__ == '__main__':
