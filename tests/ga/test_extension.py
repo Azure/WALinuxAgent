@@ -38,6 +38,7 @@ from azurelinuxagent.common.protocol.restapi import ExtHandlerStatus, \
 from azurelinuxagent.ga.exthandlers import *
 from azurelinuxagent.common.protocol.wire import WireProtocol
 
+
 class TestExtensionCleanup(AgentTestCase):
     def setUp(self):
         AgentTestCase.setUp(self)
@@ -134,6 +135,7 @@ class TestExtensionCleanup(AgentTestCase):
         self.assertEqual(self._count_packages(), 5)
         self.assertEqual(self._count_installed(), 5)
         self.assertEqual(self._count_uninstalled(), 0)
+
 
 class TestHandlerStateMigration(AgentTestCase):
     def setUp(self):
@@ -254,6 +256,7 @@ class TestHandlerStateMigration(AgentTestCase):
         except Exception as e:
             self.assertTrue(False, "Unexpected exception: {0}".format(str(e)))
         return
+
 
 @patch("azurelinuxagent.common.protocol.wire.CryptUtil")
 @patch("azurelinuxagent.common.utils.restutil.http_get")
@@ -702,6 +705,130 @@ class TestExtension(AgentTestCase):
             ext_handler_instance.decide_version(incarnation)
             self.assertEqual(autoupgrade_expected_version, ext_handler.properties.version)
             incarnation += 1
+
+
+OS_PATH_EXISTS = os.path.exists
+
+
+@patch("azurelinuxagent.common.protocol.wire.CryptUtil")
+@patch("azurelinuxagent.common.utils.restutil.http_get")
+class TestExtensionEnable(AgentTestCase):
+    def _assert_handler_status(self, report_vm_status, expected_status,
+                               expected_ext_count, version):
+        self.assertTrue(report_vm_status.called)
+        args, kw = report_vm_status.call_args
+        vm_status = args[0]
+        self.assertNotEquals(0, len(vm_status.vmAgent.extensionHandlers))
+        handler_status = vm_status.vmAgent.extensionHandlers[0]
+        self.assertEquals(expected_status, handler_status.status)
+        self.assertEquals("OSTCExtensions.ExampleHandlerLinux",
+                          handler_status.name)
+        self.assertEquals(version, handler_status.version)
+        self.assertEquals(expected_ext_count, len(handler_status.extensions))
+        return
+
+    def _create_mock(self, test_data, mock_http_get, MockCryptUtil):
+        """Test enable/disable/uninstall of an extension"""
+        handler = get_exthandlers_handler()
+
+        #Mock protocol to return test data
+        mock_http_get.side_effect = test_data.mock_http_get
+        MockCryptUtil.side_effect = test_data.mock_crypt_util
+
+        protocol = WireProtocol("foo.bar")
+        protocol.detect()
+        protocol.report_ext_status = MagicMock()
+        protocol.report_vm_status = MagicMock()
+
+        handler.protocol_util.get_protocol = Mock(return_value=protocol)
+        return handler, protocol
+
+
+    @staticmethod
+    def _settings_file_does_not_exist(*args, **kwargs):
+        if args[0].endswith(".settings"):
+            return False
+        else:
+            return OS_PATH_EXISTS(args[0])
+
+    @staticmethod
+    def _settings_file_does_exist(*args, **kwargs):
+        if args[0].endswith(".settings"):
+            return True
+        else:
+            return OS_PATH_EXISTS(args[0])
+
+    def test_global_enabled_forced_should_be_true_after_first_run(self, *args):
+        """
+        ExtHandlersHandler starts with the condition that it should force all extensions
+        to be enabled regardless if there is a new settings document or not.  After the
+        first "run" extensions are no longer forced. This test verifies those two truths.
+        """
+        test_data = WireProtocolData(DATA_FILE)
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+
+        self.assertEqual(False, exthandlers_handler._global_enabled_forced)
+        exthandlers_handler.run()
+        self.assertEqual(True, exthandlers_handler._global_enabled_forced)
+
+    @patch('os.path.exists')
+    def test_enable_on_agent_restart(self, mock_exists, *args):
+        """
+        ExtensionHandlersHandler should always call enable on agent (re)start.
+        """
+        test_data = WireProtocolData(DATA_FILE)
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+
+        # Even though the settings file already exists enable is still called because this
+        # is an agent restart.
+        mock_exists.side_effect = self._settings_file_does_exist
+        exthandlers_handler.last_etag = "--unit-test--00"
+        with patch.object(ExtHandlerInstance, 'enable') as ext_handler_i:
+            exthandlers_handler.run()
+            self.assertEqual(1, ext_handler_i.call_count)
+
+    @patch('os.path.exists')
+    def test_enable_new_settings_only(self, mock_exists, *args):
+        """
+        ExtensionHandlersHandler should only enable an extension if the settings
+        document does not exists.
+        """
+        test_data = WireProtocolData(DATA_FILE)
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+        # Set the value to False, which tells ExtensionHandlersHandler that this is
+        # not an agent restart.  An agent restarts forces an enable to happen for
+        # all extensions.
+        exthandlers_handler._global_enabled_forced = False
+
+
+        # Setup an enable for the first settings.  This settings has not been executed
+        # and must be enabled.
+        mock_exists.side_effect = self._settings_file_does_not_exist
+        exthandlers_handler.last_etag = "--unit-test--00"
+        with patch.object(ExtHandlerInstance, 'enable') as ext_handler_i:
+            exthandlers_handler.run()
+            self.assertEqual(1, ext_handler_i.call_count)
+
+        # Execute an enable again.  This shoiuld not be executed, but the same settings
+        # document is being used.
+        #
+        # The ETag must be updated else we will not even get to enable in the first place.
+        mock_exists.side_effect = self._settings_file_does_exist
+        exthandlers_handler.last_etag = "--unit-test--01"
+        with patch.object(ExtHandlerInstance, 'enable') as ext_handler_i:
+            exthandlers_handler.run()
+            self.assertEqual(0, ext_handler_i.call_count)
+            ext_handler_i.assert_not_called()
+
+        # Execute an enable again, but update the settings.  The extension should be
+        # enabled as a result of updating the setttings.
+        #
+        # The ETag must be updated else we will not even get to enable in the first place.
+        mock_exists.side_effect = self._settings_file_does_not_exist
+        exthandlers_handler.last_etag = "--unit-test--02"
+        with patch.object(ExtHandlerInstance, 'enable') as ext_handler_i:
+            exthandlers_handler.run()
+            self.assertEqual(1, ext_handler_i.call_count)
 
 
 if __name__ == '__main__':
