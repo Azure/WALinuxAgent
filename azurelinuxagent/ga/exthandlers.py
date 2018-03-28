@@ -38,7 +38,7 @@ import azurelinuxagent.common.version as version
 from azurelinuxagent.common.errorstate import ErrorState, ERROR_STATE_DELTA
 
 from azurelinuxagent.common.event import add_event, WALAEventOperation, elapsed_milliseconds
-from azurelinuxagent.common.exception import ExtensionError, ProtocolError, HttpError
+from azurelinuxagent.common.exception import ExtensionError, ProtocolError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.restapi import ExtHandlerStatus, \
                                                     ExtensionStatus, \
