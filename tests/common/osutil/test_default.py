@@ -713,13 +713,13 @@ Chain OUTPUT (policy ACCEPT 104 packets, 43628 bytes)
         self.assertTrue(util.remove_firewall(dst, uid))
 
         mock_run.assert_has_calls([
-            # delete rules < 2.2.24
+            # delete rules < 2.2.25
             call(osutil.FIREWALL_DELETE_CONNTRACK_ACCEPT.format(wait, dst), chk_err=False),
             call(osutil.FIREWALL_DELETE_CONNTRACK_ACCEPT.format(wait, dst), chk_err=False),
             call(osutil.FIREWALL_DELETE_OWNER_ACCEPT.format(wait, dst, uid), chk_err=False),
             call(osutil.FIREWALL_DELETE_OWNER_ACCEPT.format(wait, dst, uid), chk_err=False),
 
-            # delete rules >= 2.2.24
+            # delete rules >= 2.2.25
             call(osutil.FIREWALL_DELETE_CONNTRACK_DROP.format(wait, dst), chk_err=False),
             call(osutil.FIREWALL_DELETE_CONNTRACK_DROP.format(wait, dst), chk_err=False),
         ])

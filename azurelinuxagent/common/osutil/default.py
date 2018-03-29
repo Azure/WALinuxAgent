@@ -67,7 +67,7 @@ FIREWALL_PACKETS = "iptables {0} -t security -L OUTPUT --zero OUTPUT -nxv"
 FIREWALL_FLUSH = "iptables {0} -t security --flush"
 
 # Precisely delete the rules created by the agent.
-# this rule was used <= 2.2.24.  This rule helped to validate our change, and detemine impact.
+# this rule was used <= 2.2.25.  This rule helped to validate our change, and detemine impact.
 FIREWALL_DELETE_CONNTRACK_ACCEPT = "iptables {0} -t security -D OUTPUT -d {1} -p tcp -m conntrack --ctstate INVALID,NEW -j ACCEPT"
 FIREWALL_DELETE_OWNER_ACCEPT = "iptables {0} -t security -D OUTPUT -d {1} -p tcp -m owner --uid-owner {2} -j ACCEPT"
 FIREWALL_DELETE_CONNTRACK_DROP = "iptables {0} -t security -D OUTPUT -d {1} -p tcp -m conntrack --ctstate INVALID,NEW -j DROP"
@@ -166,7 +166,7 @@ class DefaultOSUtil(object):
 
             wait = self.get_firewall_will_wait()
 
-            # This rule was <= 2.2.24 only, and may still exist on some VMs.  Until 2.2.24
+            # This rule was <= 2.2.25 only, and may still exist on some VMs.  Until 2.2.25
             # has aged out, keep this cleanup in place.
             self._delete_rule(FIREWALL_DELETE_CONNTRACK_ACCEPT.format(wait, dst_ip))
 
