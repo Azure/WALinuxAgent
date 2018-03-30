@@ -674,6 +674,7 @@ class DefaultOSUtil(object):
                              socket.IPPROTO_UDP)
         param = struct.pack('256s', (ifname[:15]+('\0'*241)).encode('latin-1'))
         info = fcntl.ioctl(sock.fileno(), IOCTL_SIOCGIFHWADDR, param)
+        sock.close()
         return ''.join(['%02X' % textutil.str_to_ord(char) for char in info[18:24]])
 
     @staticmethod
@@ -698,13 +699,16 @@ class DefaultOSUtil(object):
 
         buff = array.array('B', b'\0' * array_size)
         param = struct.pack('iL', array_size, buff.buffer_info()[0])
+
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
         ret = fcntl.ioctl(sock.fileno(), IOCTL_SIOCGIFCONF, param)
         retsize = (struct.unpack('iL', ret)[0])
+        sock.close()
+
         if retsize == array_size:
             logger.warn(('SIOCGIFCONF returned more than {0} up '
                          'network interfaces.'), expected)
-        sock = None
+
         ifconf_buff = buff.tostring()
 
         ifaces = {}
@@ -820,6 +824,7 @@ class DefaultOSUtil(object):
         if not self.disable_route_warning:
             logger.info('interface [{0}] has flags [{1}], '
                         'is loopback [{2}]'.format(ifname, flags, isloopback))
+        s.close()
         return isloopback
 
     def get_dhcp_lease_endpoint(self):
