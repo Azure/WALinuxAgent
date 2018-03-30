@@ -233,6 +233,24 @@ class TestHandlerStateMigration(AgentTestCase):
         self.assertEquals(handler_status.message, message)
         return
 
+    def test_set_handler_status_ignores_none_content(self):
+        """
+        Validate that set_handler_status ignore cases where json.dumps
+        returns a value of None.
+        """
+        self._prepare_handler_state()
+        self._prepare_handler_config()
+
+        status = "Ready"
+        code = 0
+        message = "A message"
+
+        try:
+           with patch('json.dumps', return_value=None):
+                self.ext_handler_i.set_handler_status(status=status, code=code, message=message)
+        except Exception as e:
+            self.fail("set_handler_status threw an exception")
+
     @patch("shutil.move", side_effect=Exception)
     def test_migration_ignores_move_errors(self, shutil_mock):
         self._prepare_handler_state()

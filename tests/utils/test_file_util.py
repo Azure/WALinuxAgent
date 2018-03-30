@@ -38,7 +38,19 @@ class TestFileOperations(AgentTestCase):
         content_read = fileutil.read_file(test_file)
         self.assertEquals(content, content_read)
         os.remove(test_file)
-    
+
+    def test_write_file_content_is_None(self):
+        """
+        write_file throws when content is None. No file is created.
+        """
+        try:
+            test_file=os.path.join(self.tmp_dir, self.test_file)
+            fileutil.write_file(test_file, None)
+
+            self.fail("expected write_file to throw an exception")
+        except:
+            self.assertEquals(False, os.path.exists(test_file))
+
     def test_rw_utf8_file(self):
         test_file=os.path.join(self.tmp_dir, self.test_file)
         content = u"\u6211"
