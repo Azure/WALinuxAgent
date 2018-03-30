@@ -335,9 +335,10 @@ class ExtHandlersHandler(object):
                     time.sleep(10)
                 if (datetime.datetime.utcnow() - begin) > timeout_delta:
                     raise ExtensionError("Timeout waiting for success status "
-                                         "from dependency {}/{} for {}",
-                                         dependency.handler, ext,
-                                         ext_handler.name)
+                                         "from dependency {}/{} for {}"
+                                         "status was: {}".format(
+                                             dependency.handler.name, ext.name,
+                                             ext_handler.name, status))
 
     def handle_ext_handler(self, ext_handler, etag):
         ext_handler_i = ExtHandlerInstance(ext_handler, self.protocol)
