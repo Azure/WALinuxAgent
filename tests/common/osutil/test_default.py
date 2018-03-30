@@ -97,9 +97,27 @@ class TestOSUtil(AgentTestCase):
         except socket.error:
             self.fail("not a valid ip address")
 
+    def test_get_first_if_nosuchprimary(self):
+        fake_ifaces = {'eth0':'192.0.2.100','lo':'127.0.0.1'}
+        with patch.object(osutil.DefaultOSUtil, 'get_primary_interface', return_value='bogus0'):
+            with patch.object(osutil.DefaultOSUtil, '_get_all_interfaces', return_value=fake_ifaces):
+                ifname, ipaddr = osutil.DefaultOSUtil().get_first_if()
+                self.assertTrue(ifname.startswith('eth'))
+                self.assertTrue(ipaddr is not None)
+                try:
+                    socket.inet_aton(ipaddr)
+                except socket.error:
+                    self.fail("not a valid ip address")
+
+    def test_get_first_if_all_loopback(self):
+        fake_ifaces = {'lo':'127.0.0.1'}
+        with patch.object(osutil.DefaultOSUtil, 'get_primary_interface', return_value='bogus0'):
+            with patch.object(osutil.DefaultOSUtil, '_get_all_interfaces', return_value=fake_ifaces):
+                self.assertRaises(Exception, osutil.DefaultOSUtil().get_first_if)
+
     def test_isloopback(self):
-        self.assertTrue(osutil.DefaultOSUtil().is_loopback(b'lo'))
-        self.assertFalse(osutil.DefaultOSUtil().is_loopback(b'eth0'))
+        self.assertTrue(osutil.DefaultOSUtil().is_loopback('lo'))
+        self.assertFalse(osutil.DefaultOSUtil().is_loopback('eth0'))
 
     def test_isprimary(self):
         routing_table = "\
