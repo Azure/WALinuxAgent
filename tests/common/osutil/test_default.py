@@ -113,8 +113,7 @@ class TestOSUtil(AgentTestCase):
         fake_ifaces = {'lo':'127.0.0.1'}
         with patch.object(osutil.DefaultOSUtil, 'get_primary_interface', return_value='bogus0'):
             with patch.object(osutil.DefaultOSUtil, '_get_all_interfaces', return_value=fake_ifaces):
-                with self.assertRaises(Exception):
-                    ifname, ipaddr = osutil.DefaultOSUtil().get_first_if()
+                self.assertRaises(Exception, osutil.DefaultOSUtil().get_first_if)
 
     def test_isloopback(self):
         self.assertTrue(osutil.DefaultOSUtil().is_loopback('lo'))
