@@ -144,6 +144,21 @@ class VMAgentManifestList(DataContract):
         self.vmAgentManifests = DataContractList(VMAgentManifest)
 
 
+class Dependency(object):
+    """
+    Represents an extension upon which another extension is dependent
+    handler - the ExtHandler of the dependency
+    exts - the Extension(s) of the dependency
+    timeout - the timeout for the extension to get to the Ready state
+              timeout is expressed in minutes.
+    """
+
+    def __init__(self, handler=None, exts=None, timeout=None):
+        self.handler = handler
+        self.exts = exts
+        self.timeout = timeout
+
+
 class Extension(DataContract):
     def __init__(self,
                  name=None,
@@ -160,6 +175,23 @@ class Extension(DataContract):
         self.certificateThumbprint = certificateThumbprint
         self.dependencyLevel = dependencyLevel
         self.dependencies = [] if dependencies is None else dependencies
+
+    def resolve_dependencies(self, ext_handlers):
+        resolved_dependencies = []
+        for (handler_name, ext_name) in self.dependencies:
+            # Gracefully handle garbage cases where handler name does
+            # not exist or is not unique. Same for the extension name.
+            for handler in ext_handlers:
+                if handler_name != handler.name:
+                    continue
+                resolved_dependencies.append(
+                    Dependency(
+                        handler = handler,
+                        exts = [ext for ext in handler.properties.extensions
+                                if ext.name == ext_name]
+                    )
+                )
+        self.dependencies = resolved_dependencies
 
 
 class ExtHandlerProperties(DataContract):
