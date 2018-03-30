@@ -80,6 +80,9 @@ UUID_PATTERN = re.compile(
     r'^\s*[A-F0-9]{8}(?:\-[A-F0-9]{4}){3}\-[A-F0-9]{12}\s*$',
     re.IGNORECASE)
 
+IOCTL_SIOCGIFCONF = 0x8912
+IOCTL_SIOCGIFFLAGS = 0x8913
+IOCTL_SIOCGIFHWADDR = 0x8927
 
 class DefaultOSUtil(object):
     def __init__(self):
@@ -669,49 +672,71 @@ class DefaultOSUtil(object):
                              socket.SOCK_DGRAM,
                              socket.IPPROTO_UDP)
         param = struct.pack('256s', (ifname[:15]+('\0'*241)).encode('latin-1'))
-        info = fcntl.ioctl(sock.fileno(), 0x8927, param)
+        info = fcntl.ioctl(sock.fileno(), IOCTL_SIOCGIFHWADDR, param)
         return ''.join(['%02X' % textutil.str_to_ord(char) for char in info[18:24]])
+
+    @staticmethod
+    def _get_struct_ifconf_size():
+        """
+        Return the sizeof struct ifinfo. On 64-bit platforms the size is 40 bytes;
+        on 32-bit platforms the size is 32 bytes.
+        """
+        python_arc = platform.architecture()[0]
+        struct_size = 32 if python_arc == '32bit' else 40
+        return struct_size
+
+
+    def _get_all_interfaces(self):
+        """
+        Return a dictionary mapping from interface name to IPv4 address.
+        Interfaces without a name are ignored.
+        """
+        expected=16 # how many devices should I expect...
+        struct_size = DefaultOSUtil._get_struct_ifconf_size()
+        array_size = expected * struct_size
+
+        buff = array.array('B', b'\0' * array_size)
+        param = struct.pack('iL', array_size, buff.buffer_info()[0])
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+        ret = fcntl.ioctl(sock.fileno(), IOCTL_SIOCGIFCONF, param)
+        retsize = (struct.unpack('iL', ret)[0])
+        if retsize == array_size:
+            logger.warn(('SIOCGIFCONF returned more than {0} up '
+                         'network interfaces.'), expected)
+        sock = None
+        ifconf_buff = buff.tostring()
+
+        ifaces = {}
+        for i in range(0, array_size, struct_size):
+            iface = ifconf_buff[i:i+16].split(b'\0', 1)[0]
+            if len(iface) > 0:
+                iface_name = iface.decode('latin-1')
+                if iface_name not in ifaces:
+                    ifaces[iface_name] = socket.inet_ntoa(ifconf_buff[i+20:i+24])
+        return ifaces
+
 
     def get_first_if(self):
         """
         Return the interface name, and ip addr of the
         first active non-loopback interface.
         """
-        iface=''
-        expected=16 # how many devices should I expect...
+        primary = self.get_primary_interface()
+        ifaces = self._get_all_interfaces()
+        if primary in ifaces:
+            return primary, ifaces[primary]
 
-        # for 64bit the size is 40 bytes
-        # for 32bit the size is 32 bytes
-        python_arc = platform.architecture()[0]
-        struct_size = 32 if python_arc == '32bit' else 40
+        logger.warn(('Primary interface {0} not found in ifconf list'), primary)
+        for iface_name in ifaces.keys():
+            if not self.is_loopback(iface_name):
+                if not self.disable_route_warning:
+                    logger.info("Choosing non-primary {0}".format(iface_name))
+                return iface_name, ifaces[iface_name]
 
-        sock = socket.socket(socket.AF_INET,
-                             socket.SOCK_DGRAM,
-                             socket.IPPROTO_UDP)
-        buff=array.array('B', b'\0' * (expected * struct_size))
-        param = struct.pack('iL',
-                            expected*struct_size,
-                            buff.buffer_info()[0])
-        ret = fcntl.ioctl(sock.fileno(), 0x8912, param)
-        retsize=(struct.unpack('iL', ret)[0])
-        if retsize == (expected * struct_size):
-            logger.warn(('SIOCGIFCONF returned more than {0} up '
-                         'network interfaces.'), expected)
-        sock = buff.tostring()
-        primary = bytearray(self.get_primary_interface(), encoding='utf-8')
-        for i in range(0, struct_size * expected, struct_size):
-            iface=sock[i:i+16].split(b'\0', 1)[0]
-            if len(iface) == 0 or self.is_loopback(iface) or iface != primary:
-                # test the next one
-                if len(iface) != 0 and not self.disable_route_warning:
-                    logger.info('Interface [{0}] skipped'.format(iface))
-                continue
-            else:
-                # use this one
-                logger.info('Interface [{0}] selected'.format(iface))
-                break
+        msg = 'No non-loopback interface found in ifconf list'
+        logger.warn(msg)
+        raise Exception(msg)
 
-        return iface.decode('latin-1'), socket.inet_ntoa(sock[i+20:i+24])
 
     def get_primary_interface(self):
         """
@@ -783,8 +808,12 @@ class DefaultOSUtil(object):
         return self.get_primary_interface() == ifname
 
     def is_loopback(self, ifname):
+        """
+        Determine if a named interface is loopback.
+        """
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
-        result = fcntl.ioctl(s.fileno(), 0x8913, struct.pack('256s', ifname[:15]))
+        ifname_buff = ifname + ('\0'*256)
+        result = fcntl.ioctl(s.fileno(), IOCTL_SIOCGIFFLAGS, ifname_buff)
         flags, = struct.unpack('H', result[16:18])
         isloopback = flags & 8 == 8
         if not self.disable_route_warning:
