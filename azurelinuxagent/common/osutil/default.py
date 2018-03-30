@@ -83,6 +83,7 @@ UUID_PATTERN = re.compile(
 IOCTL_SIOCGIFCONF = 0x8912
 IOCTL_SIOCGIFFLAGS = 0x8913
 IOCTL_SIOCGIFHWADDR = 0x8927
+IFNAMSIZ = 16
 
 class DefaultOSUtil(object):
     def __init__(self):
@@ -708,7 +709,7 @@ class DefaultOSUtil(object):
 
         ifaces = {}
         for i in range(0, array_size, struct_size):
-            iface = ifconf_buff[i:i+16].split(b'\0', 1)[0]
+            iface = ifconf_buff[i:i+IFNAMSIZ].split(b'\0', 1)[0]
             if len(iface) > 0:
                 iface_name = iface.decode('latin-1')
                 if iface_name not in ifaces:
@@ -718,8 +719,8 @@ class DefaultOSUtil(object):
 
     def get_first_if(self):
         """
-        Return the interface name, and ip addr of the
-        first active non-loopback interface.
+        Return the interface name, and IPv4 addr of the "primary" interface or,
+        failing that, any active non-loopback interface.
         """
         primary = self.get_primary_interface()
         ifaces = self._get_all_interfaces()
