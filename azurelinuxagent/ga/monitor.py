@@ -276,14 +276,7 @@ class MonitorHandler(object):
                     names.extend(CGroups.get_extension_group_names())
                     for name in names:
                         current_cpu = CGroupsTelemetry(name).get_cpu_percent()
-                        msg = "{0}:{1}".format(name, current_cpu)
-                        add_event(
-                            name=AGENT_NAME,
-                            version=CURRENT_VERSION,
-                            op=WALAEventOperation.CPU,
-                            is_success=True,
-                            message=msg,
-                            log_event=False)
+                        report_metric("Process", "% Processor Time", name, current_cpu)
             except Exception as e:
                 logger.warn("Failed to collect performance metrics: {0}", e)
 

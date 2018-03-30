@@ -28,7 +28,7 @@ HIERARCHIES = ['cpu', 'memory']
 
 MEMORY_DEFAULT = -1
 
-CPU_DEFAULT = 1024
+CPU_DEFAULT = 0.25
 
 CGROUP_AGENT = 'azure-agent'
 
@@ -38,14 +38,20 @@ CGROUP_EXTENSION_FORMAT = 'azure-ext-{0}'
 class CGroupsTelemetry(object):
     def __init__(self, name):
         self.name = name
-        self.cpu_count = 0
-        self.current_cpu_total = 0
-        self.previous_cpu_total = 0
-        self.current_system_cpu = 0
-        self.previous_system_cpu = 0
         self.cgroup = CGroups(name)
+        self.cpu_count = Cgroups.get_num_cores()
+        self.current_cpu_total = self.get_current_cpu_total()
+        self.previous_cpu_total = 0
+        self.current_system_cpu = self.get_current_system_cpu()
+        self.previous_system_cpu = 0
 
     def get_cpu_percent(self):
+        """
+        Compute the percent CPU time used by this cgroup over the elapsed time since the last call to this method
+        (or since this object was instantiated).  If the cgroup fully consumed 2 cores on a 4 core system, return 200.
+
+        :return: float
+        """
         self.previous_cpu_total = self.current_cpu_total
         self.previous_system_cpu = self.current_system_cpu
         self.current_cpu_total = self.get_current_cpu_total()
@@ -54,9 +60,14 @@ class CGroupsTelemetry(object):
         cpu_delta = self.current_cpu_total - self.previous_cpu_total
         system_delta = max(1, self.current_system_cpu - self.previous_system_cpu)
 
-        return (float(cpu_delta) / float(system_delta)) * self.cpu_count * 100
+        return float(cpu_delta * self.cpu_count * 100) / float(system_delta)
 
     def get_current_cpu_total(self):
+        """
+        Compute the number of ticks of CPU time (user and system) consumed by this cgroup since boot.
+
+        :return: int
+        """
         cpu_total = 0
         cpu_stat = self.cgroup.get_cpu_stat()
         m = re.match('user (\d+)\nsystem (\d+)\n', cpu_stat)
@@ -65,15 +76,18 @@ class CGroupsTelemetry(object):
         return cpu_total
 
     def get_current_system_cpu(self):
+        """
+        Compute the total ticks of CPU time (in all categories and all cores) since boot.
+
+        :return: int
+        """
         system_cpu = 0
         proc_stat = self.cgroup.get_proc_stat()
         if proc_stat is not None:
-            cpu_entries = [l for l in proc_stat.splitlines() if l.startswith('cpu')]
-            for line in cpu_entries:
-                if re.match('cpu .*', line):
+            for line in proc_stat.splitlines():
+                if re.match('^cpu .*', line):
                     system_cpu = sum(int(i) for i in line.split(' ')[2:7])
                     break
-            self.cpu_count = len(cpu_entries) - 1
         return system_cpu
 
 
@@ -226,6 +240,7 @@ class CGroups(object):
             else:
                 raise OSError(e)
 
+        uid, gid = self.get_user_info(user)
         for hierarchy in hierarchies:
             user_cgroup = os.path.join(BASE_CGROUPS, hierarchy, user)
             if not os.path.exists(user_cgroup):
@@ -240,35 +255,62 @@ class CGroups(object):
                     else:
                         raise OSError(e)
                 else:
-                    uid, gid = self.get_user_info(user)
                     os.chown(user_cgroup, uid, gid)
 
     def _get_cgroup_file(self, hierarchy, file_name):
         return os.path.join(self.cgroups[hierarchy], file_name)
 
     @staticmethod
-    def _format_cpu_value(limit=None):
-        if limit is None:
-            value = CPU_DEFAULT
+    def _format_cpu_value(value=None):
+        if value is None:
+            limit = CPU_DEFAULT
         else:
             try:
-                limit = float(limit)
+                limit = float(value)
             except ValueError:
-                raise CGroupsException('Limit must be convertible to a float')
+                raise CGroupsException('CPU Limit must be convertible to a float')
             else:
-                if limit <= float(0) or limit > float(100):
-                    raise CGroupsException('Limit must be between 0 and 100')
+                if limit <= float(0) or limit > float(getProcessorCores() * 100):
+                    raise CGroupsException('CPU Limit must be between 0 and 100 * numCores')
                 else:
                     limit = limit / 100
-                    value = int(round(CPU_DEFAULT * limit))
-        return value
+        return limit
+
+    def get_parameter(self, subsystem, parameter):
+        """
+        Retrieve the value of a parameter from a subsystem.
+
+        :param subsystem: str
+        :param parameter: str
+        :return: str
+        """
+        if subsystem in self.cgroups:
+            parameter_file = self._get_cgroup_file(subsystem, parameter)
+            try:
+                with open(parameter_file, 'r') as f:
+                    values = f.read().split('\n')
+                    return values[0]
+            except Exception:
+                raise CGroupsException("Could not retrieve cgroup parameter {0}/{1}".format(subsystem, parameter))
+        else:
+            raise CGroupsException("{0} subsystem not available".format(subsystem))
 
     def set_cpu_limit(self, limit=None):
+        """
+        Limit this cgroup to a percentage of a single core. limit=10 means 10% of one core; 150 means 150%, which
+        is useful only in multicore systems.
+        To limit a cgroup to utilize 10% of a single CPU, use the following commands:
+            # echo 10000 > /cgroup/cpu/red/cpu.cfs_quota_us
+            # echo 100000 > /cgroup/cpu/red/cpu.cfs_period_us
+
+        :param limit:
+        """
         if 'cpu' in self.cgroups:
-            value = self._format_cpu_value(limit)
-            cpu_shares_file = self._get_cgroup_file('cpu', 'cpu.shares')
+            total_units = float(self.get_parameter('cpu', 'cpu.cfs_period_us'))
+            limit_units = self._format_cpu_value(limit) * total_units
+            cpu_shares_file = self._get_cgroup_file('cpu', 'cpu.cfs_quota_us')
             with open(cpu_shares_file, 'w+') as f:
-                f.write("{0}\n".format(value))
+                f.write("{0}\n".format(limit_units))
         else:
             raise CGroupsException("CPU hierarchy not available in this cgroup")
 
@@ -281,14 +323,39 @@ class CGroups(object):
 
     @staticmethod
     def get_proc_stat():
+        """
+        Return the contents of /proc/stat
+
+        :return: str
+        """
         proc_stat = fileutil.read_file('/proc/stat')
+        if proc_stat is None:
+            raise CGroupsException("Could not read /proc/stat")
         return proc_stat
 
     @staticmethod
+    def get_num_cores():
+        """
+        Return the number of CPU cores exposed to this system.
+
+        :return: int
+        """
+        proc_count = 0
+        proc_stat = CGroups.get_proc_stat()
+        if proc_stat is None:
+            raise CGroupsException("Could not read /proc/stat")
+        for line in proc_stat.splitlines():
+            if re.match('^cpu[0-9]', line):
+                proc_count += 1
+        if proc_count == 0:
+            proc_count = 1
+        return proc_count
+
+    @staticmethod
     def _format_memory_value(unit, limit=None):
-        units = ('bytes', 'kilobytes', 'megabytes', 'gigabytes')
+        units = {'bytes': 1, 'kilobytes': 1024, 'megabytes': 1024*1024, 'gigabytes': 1024*1024*1024}
         if unit not in units:
-            raise CGroupsException('Unit must be in %s' % units)
+            raise CGroupsException("Unit must be one of {0}".format(units.keys()))
         if limit is None:
             value = MEMORY_DEFAULT
         else:
@@ -297,14 +364,7 @@ class CGroups(object):
             except ValueError:
                 raise CGroupsException('Limit must be convertible to an int')
             else:
-                if unit == 'bytes':
-                    value = limit
-                elif unit == 'kilobytes':
-                    value = limit * 1024
-                elif unit == 'megabytes':
-                    value = limit * 1024 * 1024
-                elif unit == 'gigabytes':
-                    value = limit * 1024 * 1024 * 1024
+                value = limit * units[unit]
         return value
 
     def set_memory_limit(self, limit=None, unit='megabytes'):

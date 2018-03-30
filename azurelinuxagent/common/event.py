@@ -303,6 +303,33 @@ class EventLogger(object):
         except EventError:
             pass
 
+    def add_metric(self, category, counter, instance, value, log_it=False):
+        """
+        Create and save an event which contains a telemetry event.
+
+        :param category: str
+        :param counter: str
+        :param instance: str
+        :param value:
+        :param log_it: bool
+        """
+        if log_it:
+            from azurelinuxagent.common.version import AGENT_NAME
+            message = "Metric {0}/{1} [{2}] = {3}".format(category, counter, instance, value)
+            _log_event(AGENT_NAME, "METRIC", message, 0)
+
+        event = TelemetryEvent(4, "69B669B9-4AF8-4C50-BDC4-6006FA76E975")
+        event.parameters.append(TelemetryEventParam('Category', category))
+        event.parameters.append(TelemetryEventParam('Counter', counter))
+        event.parameters.append(TelemetryEventParam('Instance', instance))
+        event.parameters.append(TelemetryEventParam('Value', value))
+
+        data = get_properties(event)
+        try:
+            self.save_event(json.dumps(data))
+        except EventError as e:
+            logger.error("{0}", e)
+
 
 __event_logger__ = EventLogger()
 
@@ -333,6 +360,27 @@ def report_periodic(delta, op, is_success=True, message=''):
               is_success=is_success,
               message=message,
               op=op)
+
+
+def report_metric(category, counter, instance, value, log_it=False, reporter=__event_logger__):
+    """
+    Send a telemetry event reporting a single instance of a performance counter.
+
+    :param category: str
+    :param counter: str
+    :param instance: str
+    :param value:
+    :param log_it: bool
+    :param reporter: EventLogger
+    """
+    if reporter.event_dir is None:
+        from azurelinuxagent.common.version import AGENT_NAME
+        logger.warn("Cannot add metric event -- Event reporter is not initialized.")
+        message = "Metric {0}/{1} [{2}] = {3}".format(category, counter, instance, value)
+        _log_event(AGENT_NAME, "METRIC", message, 0)
+        return
+
+    reporter.add_metric(category, counter, instance, value, log_it)
 
 
 def add_event(name, op=WALAEventOperation.Unknown, is_success=True, duration=0,
