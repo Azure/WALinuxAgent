@@ -1530,21 +1530,6 @@ class Certificates(object):
         return file_name
 
 
-class Dependency(object):
-    """
-    Represents an extension upon which another extension is dependent
-    handler - the ExtHandler of the dependency
-    exts - the Extension(s) of the dependency
-    timeout - the timeout for the extension to get to the Ready state
-              timeout is expressed in minutes.
-    """
-
-    def __init__(self, handler=None, exts=None, timeout=None):
-        self.handler = handler
-        self.exts = exts
-        self.timeout = timeout
-
-
 class ExtensionsConfig(object):
     """
     parse ExtensionsConfig, downloading and unpacking them to /var/lib/waagent.
@@ -1593,18 +1578,7 @@ class ExtensionsConfig(object):
 
         for ext_handler in self.ext_handlers.extHandlers:
             for extension in ext_handler.properties.extensions:
-                resolved_dependencies = []
-                for (handler_name, ext_name) in extension.dependencies:
-                    # Gracefully handle garbage cases where handler name does
-                    # not exist or is not unique. Same for the extension name.
-                    handlers = [handler for handler in self.ext_handlers.extHandlers
-                                if handler_name == handler.name]
-                    for handler in handlers:
-                        exts = [e for e in handler.properties.extensions
-                                if ext_name == e.name]
-                        resolved_dependencies.append(
-                            Dependency(handler=handler, exts=exts))
-                extension.dependencies = resolved_dependencies
+                extension.resolve_dependencies(self.ext_handlers.extHandlers)
 
         self.status_upload_blob = findtext(xml_doc, "StatusUploadBlob")
         self.artifacts_profile_blob = findtext(xml_doc, "InVMArtifactsProfileBlob")
