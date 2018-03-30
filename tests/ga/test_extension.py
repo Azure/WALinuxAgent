@@ -18,6 +18,9 @@
 import os.path
 
 from tests.protocol.mockwiredata import *
+
+from azurelinuxagent.common.protocol.wire import Dependency
+from azurelinuxagent.common.protocol.restapi import Extension
 from azurelinuxagent.ga.exthandlers import *
 from azurelinuxagent.common.protocol.wire import WireProtocol
 
@@ -628,6 +631,63 @@ class TestExtension(AgentTestCase):
         exthandlers_handler.run()
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
         self._assert_ext_status(protocol.report_ext_status, "error", 0)
+
+    def _test_wait_on_ext_handler_dependencies(self, exthandlers_handler, timeout=None):
+        handler_name = "Handler"
+        exthandler = ExtHandler(name=handler_name)
+        dependency_ext = Extension(name=handler_name)
+        extension = Extension(name=handler_name)
+
+        dependency = Dependency(handler=exthandler, exts=[ dependency_ext ], timeout=timeout)
+        extension.dependencies.append(dependency)
+        exthandler.properties.extensions.append(extension)
+
+        fun = exthandlers_handler.wait_on_ext_handler_dependencies
+        if timeout is None:
+            fun(exthandler)
+        else:
+            expected_msg = "Timeout.*{0}/{1} for {2}".format(handler_name, handler_name, handler_name)
+            self.assertRaisesRegexp(ExtensionError, expected_msg, fun, exthandler)
+
+    def test_wait_on_ext_handler_dependencies_none(self, *args):
+        test_data = WireProtocolData(DATA_FILE)
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+
+        ExtHandlerInstance.collect_ext_status = MagicMock(return_value=None)
+        self._test_wait_on_ext_handler_dependencies(exthandlers_handler)
+
+    def test_wait_on_ext_handler_dependencies_success_status(self, *args):
+        test_data = WireProtocolData(DATA_FILE)
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+
+        status = ExtensionStatus(seq_no=0)
+        status.status = "success"
+
+        ExtHandlerInstance.collect_ext_status = MagicMock(return_value=status)
+        self._test_wait_on_ext_handler_dependencies(exthandlers_handler)
+
+    def test_wait_on_ext_handler_dependencies_success_status_with_substatus(self, *args):
+        test_data = WireProtocolData(DATA_FILE)
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+
+        status = ExtensionStatus(seq_no=0)
+        status.status = "success"
+        substatus = ExtensionSubStatus()
+        substatus.status = "success"
+        status.substatusList.append(substatus)
+
+        ExtHandlerInstance.collect_ext_status = MagicMock(return_value=status)
+        self._test_wait_on_ext_handler_dependencies(exthandlers_handler)
+
+    def test_wait_on_ext_handler_dependencies_timeout(self, *args):
+        test_data = WireProtocolData(DATA_FILE)
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+
+        status = ExtensionStatus(seq_no=0)
+        status.status = "error"
+
+        ExtHandlerInstance.collect_ext_status = MagicMock(return_value=status)
+        self._test_wait_on_ext_handler_dependencies(exthandlers_handler, timeout=1)
 
     def test_ext_handler_version_decide_autoupgrade_internalversion(self, *args):
         for internal in [False, True]:
