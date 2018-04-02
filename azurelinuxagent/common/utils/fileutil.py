@@ -193,9 +193,10 @@ def findstr_in_file(file_path, line_str):
     (Trailing whitespace is ignored.)
     """
     try:
-        for line in (open(file_path, 'r')).readlines():
-            if line_str == line.rstrip():
-                return True
+        with open(file_path, 'r') as fh:
+            for line in fh.readlines():
+                if line_str == line.rstrip():
+                    return True
     except Exception:
         # swallow exception
         pass
@@ -207,11 +208,12 @@ def findre_in_file(file_path, line_re):
     Return match object if found in file.
     """
     try:
-        pattern = re.compile(line_re)
-        for line in (open(file_path, 'r')).readlines():
-            match = re.search(pattern, line)
-            if match:
-                return match
+        with open(file_path, 'r') as fh:
+            pattern = re.compile(line_re)
+            for line in fh.readlines():
+                match = re.search(pattern, line)
+                if match:
+                    return match
     except:
         pass
 
