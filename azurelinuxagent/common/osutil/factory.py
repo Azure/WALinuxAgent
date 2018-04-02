@@ -69,7 +69,7 @@ def get_osutil(distro_name=DISTRO_NAME,
     if distro_name == "coreos" or distro_code_name == "coreos":
         return CoreOSUtil()
 
-    if distro_name == "suse":
+    if distro_name in ("suse", "sles", "opensuse"):
         if distro_full_name == 'SUSE Linux Enterprise Server' \
                 and Version(distro_version) < Version('12') \
                 or distro_full_name == 'openSUSE' and Version(distro_version) < Version('13.2'):
