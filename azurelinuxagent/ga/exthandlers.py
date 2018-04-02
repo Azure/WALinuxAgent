@@ -29,6 +29,7 @@ import shutil
 import stat
 import subprocess
 import time
+import traceback
 import zipfile
 
 import azurelinuxagent.common.conf as conf
@@ -1073,11 +1074,17 @@ class ExtHandlerInstance(object):
         status_file = os.path.join(state_dir, "HandlerStatus")
 
         try:
-            fileutil.write_file(status_file, json.dumps(get_properties(handler_status)))
+            handler_status_json = json.dumps(get_properties(handler_status))
+            if handler_status_json is not None:
+                fileutil.write_file(status_file, handler_status_json)
+            else:
+                self.logger.error("Failed to create JSON document of handler status for {0} version {1}".format(
+                    self.ext_handler.name,
+                    self.ext_handler.properties.version))
         except (IOError, ValueError, ProtocolError) as e:
             fileutil.clean_ioerror(e,
                 paths=[status_file])
-            self.logger.error("Failed to save handler status: {0}", e)
+            self.logger.error("Failed to save handler status: {0}", traceback.format_exc())
         
     def get_handler_status(self):
         state_dir = self.get_conf_dir()
