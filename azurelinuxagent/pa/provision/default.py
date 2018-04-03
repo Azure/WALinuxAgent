@@ -22,7 +22,6 @@ Provision handler
 import os
 import os.path
 import re
-import socket
 import time
 
 from datetime import datetime
@@ -92,10 +91,6 @@ class ProvisionHandler(object):
             self.report_event("Provisioning succeeded",
                 is_success=True,
                 duration=elapsed_milliseconds(utc_start))
-
-            self.report_event(self.create_guest_state_telemetry_messsage(),
-                is_success=True,
-                operation=WALAEventOperation.GuestState)
 
             self.report_ready(thumbprint)
             logger.info("Provisioning complete")
@@ -269,53 +264,12 @@ class ProvisionHandler(object):
             logger.info("Deploy ssh key pairs.")
             self.osutil.deploy_ssh_keypair(ovfenv.username, keypair)
 
-    def report_event(self, message, is_success=False, duration=0,
-                     operation=WALAEventOperation.Provision):
+    def report_event(self, message, is_success=False, duration=0):
         add_event(name=AGENT_NAME,
                     message=message,
                     duration=duration,
                     is_success=is_success,
-                    op=operation)
-
-    def get_cpu_count(self):
-        try:
-            count = len([x for x in open('/proc/cpuinfo').readlines()
-                         if x.startswith("processor")])
-            return count
-        except Exception as e:
-            logger.verbose(u"Failed to determine the CPU count: {0}.", ustr(e))
-            pass
-        return -1
-
-    def get_mem_size_mb(self):
-        try:
-            for line in open('/proc/meminfo').readlines():
-                m = re.match('^MemTotal:\s*(\d+) kB$', line)
-                if m is not None:
-                    return int(int(m.group(1)) / 1024)
-        except Exception as e:
-            logger.verbose(u"Failed to determine the memory size: {0}..", ustr(e))
-            pass
-        return -1
-
-    def create_guest_state_telemetry_messsage(self):
-        """
-        Create a GuestState JSON message that contains the current CPU, Memory
-        (MB), and hostname of the guest.
-
-        e.g.
-
-        {
-         "cpu": 1,
-         "mem": 1024,
-         "hostname": "server1234"
-        }
-        """
-        cpu = self.get_cpu_count()
-        mem = self.get_mem_size_mb()
-
-        return """{{"cpu": {0}, "mem": {1}, "hostname": "{2}"}}"""\
-            .format(cpu, mem, socket.gethostname())
+                    op=WALAEventOperation.Provision)
 
     def report_not_ready(self, sub_status, description):
         status = ProvisionStatus(status="NotReady", subStatus=sub_status,
