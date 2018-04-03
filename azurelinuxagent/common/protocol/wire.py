@@ -897,7 +897,7 @@ class WireClient(object):
         agent_manifest = os.path.join(conf.get_lib_dir(), fn)
 
         if os.path.exists(agent_manifest):
-            fileutil.rm_files([agent_manifest])
+            os.unlink(agent_manifest)
 
     def check_wire_protocol_version(self):
         uri = VERSION_INFO_URI.format(self.endpoint)
