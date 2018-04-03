@@ -110,16 +110,17 @@ class ProvisionHandler(object):
             pids = []
         for pid in pids:
             try:
-                pname = open(os.path.join('/proc', pid, 'cmdline'), 'rb').read()
-                if CLOUD_INIT_REGEX.match(pname):
-                    is_running = True
-                    msg = "cloud-init is running [PID {0}, {1}]".format(pid,
-                                                                        pname)
-                    if is_expected:
-                        logger.verbose(msg)
-                    else:
-                        logger.error(msg)
-                    break
+                with open(os.path.join('/proc', pid, 'cmdline'), 'rb') as fh:
+                    pname = fh.read()
+                    if CLOUD_INIT_REGEX.match(pname):
+                        is_running = True
+                        msg = "cloud-init is running [PID {0}, {1}]".format(pid,
+                                                                            pname)
+                        if is_expected:
+                            logger.verbose(msg)
+                        else:
+                            logger.error(msg)
+                        break
             except IOError:
                 continue
         return is_running == is_expected
@@ -264,12 +265,13 @@ class ProvisionHandler(object):
             logger.info("Deploy ssh key pairs.")
             self.osutil.deploy_ssh_keypair(ovfenv.username, keypair)
 
-    def report_event(self, message, is_success=False, duration=0):
+    def report_event(self, message, is_success=False, duration=0,
+                     operation=WALAEventOperation.Provision):
         add_event(name=AGENT_NAME,
                     message=message,
                     duration=duration,
                     is_success=is_success,
-                    op=WALAEventOperation.Provision)
+                    op=operation)
 
     def report_not_ready(self, sub_status, description):
         status = ProvisionStatus(status="NotReady", subStatus=sub_status,
