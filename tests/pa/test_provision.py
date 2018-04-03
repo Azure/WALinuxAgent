@@ -15,11 +15,6 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
-import json
-import socket
-
-import azurelinuxagent.common.utils.fileutil as fileutil
-
 from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.exception import ProvisionError
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
@@ -152,14 +147,7 @@ class TestProvision(AgentTestCase):
         ph.run()
 
         call1 = call("Provisioning succeeded", duration=ANY, is_success=True)
-        call2 = call(ANY, is_success=True, operation=WALAEventOperation.GuestState)
-        ph.report_event.assert_has_calls([call1, call2])
-
-        args, kwargs = ph.report_event.call_args_list[1]
-        guest_state_json = json.loads(args[0])
-        self.assertTrue(1 <= guest_state_json['cpu'])
-        self.assertTrue(1 <= guest_state_json['mem'])
-        self.assertEqual(socket.gethostname(), guest_state_json['hostname'])
+        ph.report_event.assert_has_calls([call1])
 
     @distros()
     @patch(
@@ -196,7 +184,6 @@ class TestProvision(AgentTestCase):
         ph.run()
         ph.report_event.assert_called_once_with(
             "[ProvisionError] --unit-test--")
-
 
 if __name__ == '__main__':
     unittest.main()
