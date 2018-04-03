@@ -414,6 +414,10 @@ class TestExtension(ExtensionTestCase):
         self.assertEqual(len(exthandlers_handler.ext_handlers.extHandlers), 2)
         self.assertEqual(exthandlers_handler.ext_handlers.extHandlers[0].properties.extensions[0].dependencyLevel, 1)
         self.assertEqual(exthandlers_handler.ext_handlers.extHandlers[1].properties.extensions[0].dependencyLevel, 2)
+        self.assertEqual(exthandlers_handler.ext_handlers.extHandlers[1].properties.extensions[0].dependencies[0].handler,
+                         exthandlers_handler.ext_handlers.extHandlers[0])
+        self.assertEqual(exthandlers_handler.ext_handlers.extHandlers[1].properties.extensions[0].dependencies[0].exts[0],
+                         exthandlers_handler.ext_handlers.extHandlers[0].properties.extensions[0])
 
         #Test goal state not changed
         exthandlers_handler.run()
@@ -669,12 +673,42 @@ class TestExtension(ExtensionTestCase):
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
         self._assert_ext_status(protocol.report_ext_status, "error", 0)
 
+    def test_wait_on_ext_handler_dependencies_empty_exts(self, *args):
+        test_data = WireProtocolData(DATA_FILE)
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+
+        handler_name = "Handler"
+        exthandler = ExtHandler(name=handler_name)
+        extension = Extension(name=handler_name)
+
+        dependency = Dependency(handler=exthandler, exts=[])
+        extension.dependencies.append(dependency)
+        exthandler.properties.extensions.append(extension)
+
+        exthandlers_handler.wait_on_ext_handler_dependencies(exthandler)
+
+    def test_wait_on_ext_handler_dependencies_two_exts(self, *args):
+        test_data = WireProtocolData(DATA_FILE)
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+
+        handler_name = "Handler"
+        exthandler = ExtHandler(name=handler_name)
+        dependency_exts = [Extension(name=handler_name), Extension(name=handler_name)]
+        extension = Extension(name=handler_name)
+
+        dependency = Dependency(handler=exthandler, exts=dependency_exts)
+        extension.dependencies.append(dependency)
+        exthandler.properties.extensions.append(extension)
+
+        ExtHandlerInstance.collect_ext_status = MagicMock(return_value=None)
+        exthandlers_handler.wait_on_ext_handler_dependencies(exthandler)
+
     def _test_wait_on_ext_handler_dependencies(self, exthandlers_handler, timeout=None):
         handler_name = "Handler"
         exthandler = ExtHandler(name=handler_name)
         dependency_ext = Extension(name=handler_name)
         extension = Extension(name=handler_name)
-
+        
         dependency = Dependency(handler=exthandler, exts=[ dependency_ext ], timeout=timeout)
         extension.dependencies.append(dependency)
         exthandler.properties.extensions.append(extension)
@@ -684,8 +718,11 @@ class TestExtension(ExtensionTestCase):
             fun(exthandler)
         else:
             expected_msg = "Timeout.*{0}/{1} for {2}".format(handler_name, handler_name, handler_name)
-            self.assertRaisesRegexp(ExtensionError, expected_msg, fun, exthandler)
-
+            try:
+                self.assertRaisesRegexp(ExtensionError, expected_msg, fun, exthandler)
+            except AttributeError:
+                pass  # Python 2.6 doesn't like assertRaisesRegexp
+                
     def test_wait_on_ext_handler_dependencies_none(self, *args):
         test_data = WireProtocolData(DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
@@ -724,7 +761,7 @@ class TestExtension(ExtensionTestCase):
         status.status = "error"
 
         ExtHandlerInstance.collect_ext_status = MagicMock(return_value=status)
-        self._test_wait_on_ext_handler_dependencies(exthandlers_handler, timeout=1)
+        self._test_wait_on_ext_handler_dependencies(exthandlers_handler, timeout=0)
 
     def test_ext_handler_version_decide_autoupgrade_internalversion(self, *args):
         for internal in [False, True]:
