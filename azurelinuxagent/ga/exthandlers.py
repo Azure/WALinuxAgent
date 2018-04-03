@@ -371,6 +371,7 @@ class ExtHandlersHandler(object):
             timeout_delta = datetime.timedelta(seconds=(timeout * 60))
             begin = datetime.datetime.utcnow()
             for ext in dependency.exts:
+                status = None
                 while timeout_delta > (datetime.datetime.utcnow() - begin):
                     status = handler_i.collect_ext_status(ext)
                     if status is None:
