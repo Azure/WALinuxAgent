@@ -15,28 +15,12 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
-import glob
-import os
 import os.path
-import shutil
-import tempfile
-import zipfile
-
-import azurelinuxagent.common.conf as conf
-import azurelinuxagent.common.utils.fileutil as fileutil
 
 from tests.protocol.mockwiredata import *
-
-from azurelinuxagent.common.exception import *
-from azurelinuxagent.common.protocol import get_protocol_util
-from azurelinuxagent.common.protocol.restapi import ExtHandlerStatus, \
-                                                    ExtensionStatus, \
-                                                    ExtensionSubStatus, \
-                                                    Extension, \
-                                                    VMStatus, ExtHandler, \
-                                                    get_properties
 from azurelinuxagent.ga.exthandlers import *
 from azurelinuxagent.common.protocol.wire import WireProtocol
+
 
 class TestExtensionCleanup(AgentTestCase):
     def setUp(self):
@@ -134,6 +118,7 @@ class TestExtensionCleanup(AgentTestCase):
         self.assertEqual(self._count_packages(), 5)
         self.assertEqual(self._count_installed(), 5)
         self.assertEqual(self._count_uninstalled(), 0)
+
 
 class TestHandlerStateMigration(AgentTestCase):
     def setUp(self):
@@ -272,6 +257,7 @@ class TestHandlerStateMigration(AgentTestCase):
         except Exception as e:
             self.assertTrue(False, "Unexpected exception: {0}".format(str(e)))
         return
+
 
 @patch("azurelinuxagent.common.protocol.wire.CryptUtil")
 @patch("azurelinuxagent.common.utils.restutil.http_get")
