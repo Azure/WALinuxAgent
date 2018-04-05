@@ -63,7 +63,7 @@ class TestConf(AgentTestCase):
         "OS.CheckRdmaDriver" : False,
         "AutoUpdate.Enabled" : True,
         "AutoUpdate.GAFamily" : "Prod",
-        "EnableOverProvisioning" : False,
+        "EnableOverProvisioning" : True,
         "OS.AllowHTTP" : False,
         "OS.EnableFirewall" : False
     }
