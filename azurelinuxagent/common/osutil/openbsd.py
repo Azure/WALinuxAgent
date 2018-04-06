@@ -1,6 +1,6 @@
 # Microsoft Azure Linux Agent
 #
-# Copyright 2014 Microsoft Corporation
+# Copyright 2018 Microsoft Corporation
 # Copyright 2017 Reyk Floeter <reyk@openbsd.org>
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,7 +15,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# Requires Python 2.4+ and OpenSSL 1.0+
+# Requires Python 2.6+ and OpenSSL 1.0+
 
 import os
 import re
