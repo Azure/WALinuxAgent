@@ -52,6 +52,13 @@ def copy_file(from_path, to_path=None, to_dir=None):
     return to_path
 
 
+def move_file(from_path, to_path=None, to_dir=None):
+    if to_path is None:
+        to_path = os.path.join(to_dir, os.path.basename(from_path))
+    shutil.move(from_path, to_path)
+    return to_path
+
+
 def read_file(filepath, asbin=False, remove_bom=False, encoding='utf-8'):
     """
     Read and return contents of 'filepath'.
@@ -140,7 +147,7 @@ def rm_files(*args):
 
 def rm_dirs(*args):
     """
-    Remove the contents of each directry
+    Remove the contents of each directory
     """
     for p in args:
         if not os.path.isdir(p):
