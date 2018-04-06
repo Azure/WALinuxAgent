@@ -88,7 +88,7 @@ class ProvisionHandler(object):
 
             self.write_provisioned()
 
-            self.report_event("Provisioning succeeded",
+            self.report_event("Provisioning succeeded ({0})".format(self._get_uptime_seconds()),
                 is_success=True,
                 duration=elapsed_milliseconds(utc_start))
 
@@ -124,6 +124,15 @@ class ProvisionHandler(object):
             except IOError:
                 continue
         return is_running == is_expected
+
+    @staticmethod
+    def _get_uptime_seconds():
+        try:
+            with open('/proc/uptime') as fh:
+                uptime, _ = fh.readline().split()
+                return uptime
+        except:
+            return 0
 
     def reg_ssh_host_key(self):
         keypair_type = conf.get_ssh_host_keypair_type()
