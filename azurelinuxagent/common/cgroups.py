@@ -12,15 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# Requires Python 2.4+ and Openssl 1.0+
-import glob
-import os
-import getpass
-import re
+# Requires Python 2.6+ and Openssl 1.0+
 
-from pwd import getpwnam
+import os
+import re
+import time
+
 from azurelinuxagent.common import logger, conf
 from azurelinuxagent.common.utils import fileutil
+from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 
 BASE_CGROUPS = '/sys/fs/cgroup'
 
@@ -30,70 +30,11 @@ MEMORY_DEFAULT = -1
 
 CPU_DEFAULT = 0.25
 
-CGROUP_AGENT = 'azure-agent'
-
-CGROUP_EXTENSION_FORMAT = 'azure-ext-{0}'
-
-
-class CGroupsTelemetry(object):
-    def __init__(self, name):
-        self.name = name
-        self.cgroup = CGroups(name)
-        self.cpu_count = Cgroups.get_num_cores()
-        self.current_cpu_total = self.get_current_cpu_total()
-        self.previous_cpu_total = 0
-        self.current_system_cpu = self.get_current_system_cpu()
-        self.previous_system_cpu = 0
-
-    def get_cpu_percent(self):
-        """
-        Compute the percent CPU time used by this cgroup over the elapsed time since the last call to this method
-        (or since this object was instantiated).  If the cgroup fully consumed 2 cores on a 4 core system, return 200.
-
-        :return: float
-        """
-        self.previous_cpu_total = self.current_cpu_total
-        self.previous_system_cpu = self.current_system_cpu
-        self.current_cpu_total = self.get_current_cpu_total()
-        self.current_system_cpu = self.get_current_system_cpu()
-
-        cpu_delta = self.current_cpu_total - self.previous_cpu_total
-        system_delta = max(1, self.current_system_cpu - self.previous_system_cpu)
-
-        return float(cpu_delta * self.cpu_count * 100) / float(system_delta)
-
-    def get_current_cpu_total(self):
-        """
-        Compute the number of ticks of CPU time (user and system) consumed by this cgroup since boot.
-
-        :return: int
-        """
-        cpu_total = 0
-        cpu_stat = self.cgroup.get_cpu_stat()
-        m = re.match('user (\d+)\nsystem (\d+)\n', cpu_stat)
-        if m:
-            cpu_total = int(m.groups()[0]) + int(m.groups()[1])
-        return cpu_total
-
-    def get_current_system_cpu(self):
-        """
-        Compute the total ticks of CPU time (in all categories and all cores) since boot.
-
-        :return: int
-        """
-        system_cpu = 0
-        proc_stat = self.cgroup.get_proc_stat()
-        if proc_stat is not None:
-            for line in proc_stat.splitlines():
-                if re.match('^cpu .*', line):
-                    system_cpu = sum(int(i) for i in line.split(' ')[2:7])
-                    break
-        return system_cpu
-
 
 class CGroupsException(Exception):
 
     def __init__(self, msg):
+
         self.msg = msg
         if CGroups.enabled():
             pid = os.getpid()
@@ -105,52 +46,276 @@ class CGroupsException(Exception):
         return repr(self.msg)
 
 
-class CGroups(object):
+class Cpu(object):
+    def __init__(self, cgt):
+        """
+        Initialize data collection for the Cpu hierarchy
 
+        :param cgt: CGroupsTelemetry
+        :return:
+        """
+        self.cgt = cgt
+        self.current_cpu_total = self.get_current_cpu_total()
+        self.previous_cpu_total = 0
+        self.current_system_cpu = Cpu.get_current_system_cpu()
+        self.previous_system_cpu = 0
+
+    def get_current_cpu_total(self):
+        """
+        Compute the number of USER_HZ of CPU time (user and system) consumed by this cgroup since boot.
+
+        :return: int
+        """
+        cpu_total = 0
+        cpu_stat = self.cgt.cgroup.get_file('cpu', 'cpuacct.stat')
+        if cpu_stat is not None:
+            m = re.match('user (\d+)\nsystem (\d+)\n', cpu_stat)
+            if m:
+                cpu_total = int(m.groups()[0]) + int(m.groups()[1])
+        return cpu_total
+
+    @staticmethod
+    def get_current_system_cpu():
+        """
+        Compute the number of USER_HZ units of time have elapsed in all categories, across all cores, since boot.
+
+        :return: int
+        """
+        system_cpu = 0
+        proc_stat = fileutil.read_file('/proc/stat')
+        if proc_stat is not None:
+            for line in proc_stat.splitlines():
+                if re.match('^cpu .*', line):
+                    system_cpu = sum(int(i) for i in line.split(' ')[2:7])
+                    break
+        return system_cpu
+
+    def update(self):
+        """
+        Compute the percent CPU time used by this cgroup over the elapsed time since the last call to this method
+        (or since this object was instantiated).  If the cgroup fully consumed 2 cores on a 4 core system, return 200.
+
+        :return: float
+        """
+        self.previous_cpu_total = self.current_cpu_total
+        self.previous_system_cpu = self.current_system_cpu
+        self.current_cpu_total = self.get_current_cpu_total()
+        self.current_system_cpu = Cpu.get_current_system_cpu()
+
+    def get_cpu_percent(self):
+        cpu_delta = self.current_cpu_total - self.previous_cpu_total
+        system_delta = max(1, self.current_system_cpu - self.previous_system_cpu)
+
+        return float(cpu_delta * self.cgt.cpu_count * 100) / float(system_delta)
+
+    def collect(self):
+        """
+        Collect and return a list of all cpu metrics
+
+        :return: [(str, str, float)]
+        """
+        self.update()
+        return [("Process", "% Processor Time", self.get_cpu_percent())]
+
+
+class Memory(object):
+    def __init__(self, cgt):
+        """
+        Initialize data collection for the Memory hierarchy
+
+        :param cgt: CGroupsTelemetry
+        :return:
+        """
+        self.cgt = cgt
+
+    def update(self):
+        pass
+
+    def collect(self):
+        """
+        Collect and return a list of all memory metrics
+        """
+        self.update()
+        return []
+
+
+class CGroupsTelemetry(object):
+    """
+    Encapsulate the cgroup-based telemetry for the agent or one of its extensions, or for the aggregation across
+    the agent and all of its extensions. These objects should have lifetimes that span the time window over which
+    measurements are desired; in general, they're not terribly effective at providing instantaneous measurements.
+    """
+    _tracked = {}
+    _metrics = {
+        "cpu": Cpu,
+        "memory": Memory
+    }
+    _hierarchies = _metrics.keys()
+
+    @staticmethod
+    def hierarchies():
+        return CGroupsTelemetry._hierarchies
+
+    @staticmethod
+    def track_cgroup(cgroup):
+        """
+        Create a CGroupsTelemetry object to track a particular CGroups instance. In practical usage:
+        1) Create a CGroups object
+        2) Ask CGroupsTelemetry to track it
+        3) Tell the CGroups object to add one or more processes
+
+        :param cgroup: CGroups
+        :return:
+        """
+        name = cgroup.name
+        tracker = CGroupsTelemetry(name, cgroup=cgroup)
+        CGroupsTelemetry._tracked[name] = tracker
+
+    @staticmethod
+    def is_tracked(name):
+        return name in CGroupsTelemetry._tracked
+
+    @staticmethod
+    def collect_all_tracked():
+        """
+        Return a dictionary mapping from the name of a tracked cgroup to the list of collected metrics for that cgroup.
+
+        :return: dict(str: [(str, str, float)])
+        """
+        results = {}
+        for (cgroup_name, collector) in CGroupsTelemetry._tracked:
+            results[cgroup_name] = collector.collect()
+        return results
+
+    @staticmethod
+    def update_tracked():
+        """
+        Add any extension cgroups we're not already tracking. Remove any extension cgroups with no processes.
+        """
+        root_path = CGroups.construct_path_for_hierarchy(list(CGroupsTelemetry.hierarchies())[0])
+        candidates = [name for name in os.listdir(root_path) if name != AGENT_NAME and os.path.isdir(name)]
+        for item in candidates:
+            member_path = os.path.join(root_path, item, "cgroup.procs")
+            is_empty = True
+            try:
+                pid_list = fileutil.read_file(member_path, 'r')
+                if pid_list:
+                    is_empty = False
+            except:
+                pass
+            if item in CGroupsTelemetry._tracked:
+                if is_empty:
+                    del(CGroupsTelemetry._tracked[item])
+            else:   # item not in _tracked
+                if not is_empty:
+                    cgroup = CGroups(item)
+                    CGroupsTelemetry.track_cgroup(cgroup)
+
+    def __init__(self, name, cgroup=None):
+        """
+        Create the necessary state to collect metrics for the agent, one of its extensions, or the aggregation across
+        the agent and all of its extensions. To access aggregated metrics, instantiate this object with an empty string
+        or None.
+
+        :param name: str
+        """
+        if name is None:
+            name = ""
+        self.name = name
+        if cgroup is None:
+            cgroup = CGroups(name)
+        self.cgroup = cgroup
+        self.cpu_count = CGroups.get_num_cores()
+        self.current_wall_time = time.time()
+        self.previous_wall_time = 0
+
+        self.data = {}
+        for hierarchy in CGroupsTelemetry.hierarchies():
+            self.data[hierarchy] = CGroupsTelemetry._metrics[hierarchy](self)
+
+    def collect(self):
+        """
+        Return a list of collected metrics. Each element is a tuple of
+        (metric group name, metric name, metric value)
+        :return: [(str, str, float)]
+        """
+        results = []
+        for collector in self.data.values():
+            results.append(collector.collect())
+        return results
+
+
+class CGroups(object):
+    """
+    This class represents the cgroup folders for the agent or an extension. This is a pretty lightweight object
+    without much state worth preserving; it's not unreasonable to create one just when you need it.
+    """
     # whether cgroup support is enabled
     _enabled = True
+    _hierarchies = CGroupsTelemetry.hierarchies()
 
     def __init__(self, name):
+        """
+        Construct CGroups object. Create appropriately-named directory for each hierarchy of interest.
+
+        :param name: str
+        """
         self.name = name
-        self.user = getpass.getuser()
-        self.user_cgroups = {}
         self.cgroups = {}
-        self.hierarchies = HIERARCHIES
 
         if not self.enabled():
             return
 
         system_hierarchies = os.listdir(BASE_CGROUPS)
-        for hierarchy in self.hierarchies:
+        for hierarchy in CGroups._hierarchies:
             if hierarchy not in system_hierarchies:
-                raise CGroupsException("Hierarchy {0} is not mounted"
-                                       .format(hierarchy))
+                raise CGroupsException("Hierarchy {0} is not mounted".format(hierarchy))
 
-            user_cgroup = os.path.join(BASE_CGROUPS, hierarchy, self.user)
-            self.user_cgroups[hierarchy] = user_cgroup
+            cgroup_path = os.path.join(CGroups.construct_path_for_hierarchy(hierarchy), self.name)
+            if not os.path.exists(cgroup_path):
+                logger.info("Creating cgroup {0}".format(cgroup_path))
+                CGroups._try_mkdir(cgroup_path)
+            self.cgroups[hierarchy] = cgroup_path
 
-        self.create_user_cgroups(self.user)
-        for hierarchy, user_cgroup in self.user_cgroups.items():
-            cgroup = os.path.join(user_cgroup, self.name)
-            if not os.path.exists(cgroup):
-                os.mkdir(cgroup)
-            self.cgroups[hierarchy] = cgroup
+    @staticmethod
+    def _try_mkdir(path):
+        """
+        Try to create a directory. If it already exists as such, do nothing. Raise appropriate exceptions if an error
+        should occur.
+
+        :param path: str
+        """
+        if not os.path.isdir(path):
+            try:
+                os.mkdir(path)
+            except OSError as e:
+                if e.errno == 13:
+                    raise CGroupsException("Create directory for cgroup {0} permission denied".format(path))
+                elif e.errno == 17:
+                    raise CGroupsException(
+                        "Can't create directory for cgroup {0}: a file already exists with that name".format(path)
+                    )
+                else:
+                    raise OSError(e)
+
+    @staticmethod
+    def construct_path_for_hierarchy(hierarchy):
+        return os.path.join(BASE_CGROUPS, hierarchy, AGENT_NAME)
 
     def add(self, pid):
+        """
+        Add a process to the cgroups for this agent/extension.
+        """
+        if not self.enabled():
+            return
         try:
-            if not self.enabled():
-                return
-            # determine if pid exists
+            # determine if pid exists by sending signal 0 to it
             os.kill(pid, 0)
         except OSError:
             raise CGroupsException('PID {0} does not exist'.format(pid))
         for hierarchy, cgroup in self.cgroups.items():
-            tasks_file = self._get_cgroup_file(hierarchy, 'tasks')
-            with open(tasks_file, 'r+') as f:
-                cgroups_pids = f.read().split('\n')
-            if not str(pid) in cgroups_pids:
-                with open(tasks_file, 'a+') as f:
-                    f.write('%s\n' % pid)
+            tasks_file = self._get_cgroup_file(hierarchy, 'cgroup.procs')
+            fileutil.append_file(tasks_file, "{0}\n".format(pid), asbin=True)
 
     @staticmethod
     def enabled():
@@ -160,38 +325,60 @@ class CGroups(object):
     def disable():
         CGroups._enabled = False
 
+    def set_limits(self):
+        """
+        Set per-hierarchy limits based on the cgroup name (agent or particular extension)
+        """
+        # TODO: set limits, simply record telemetry for now
+        # cg.set_cpu_limit(50)
+        # cg.set_memory_limit(500)
+        pass
+
     @staticmethod
-    #
-    # Mount the cgroup fs if necessary, and add the daemon
-    # pid to the azure-agent cgroup with appropriate limits
-    #
+    def _apply_wrapper_limits(path, hierarchy):
+        """
+        Find wrapping limits for the hierarchy and apply them to the cgroup denoted by the path
+
+        :param path: str
+        :param hierarchy: str
+        """
+        pass
+
+    @staticmethod
+    def _setup_wrapper_groups():
+        """
+        For each hierarchy, construct the wrapper cgroup and apply the appropriate limits
+        """
+        for hierarchy in HIERARCHIES:
+            root_dir = CGroups.construct_path_for_hierarchy(hierarchy)
+            CGroups._try_mkdir(root_dir)
+            CGroups._apply_wrapper_limits(root_dir, hierarchy)
+
+    @staticmethod
     def setup():
+        """
+        Mount the cgroup fs if necessary.
+        Create wrapper cgroups for agent-plus-extensions and set limits on them
+        Create cgroups for the agent (which also sets limits as appropriate
+        Enable tracking of metrics in those cgroups
+        Add this process to them
+        """
         status = ""
         cgroups_enabled = False
         try:
             from azurelinuxagent.common import osutil
             osutil.get_osutil().mount_cgroups()
-            cg = CGroups(CGROUP_AGENT)
-
-            # TODO: set limits, simply record telemetry for now
-            # cg.set_cpu_limit(50)
-            # cg.set_memory_limit(500)
-
-            # add the daemon process
-            pid_file = conf.get_agent_pid_file_path()
-            if os.path.isfile(pid_file):
-                pid = fileutil.read_file(pid_file)
-                logger.info("Add daemon process pid {0} to {1} cgroup"
-                            .format(pid, cg.name))
-                cg.add(int(pid))
-                cgroups_enabled = True
-            else:
-                logger.warn("No pid file at {0}".format(pid_file))
+            CGroups._setup_wrapper_groups()
+            pid = int(os.getpid())
+            cg = CGroups(AGENT_NAME)
+            CGroupsTelemetry.track_cgroup(cg)
+            cg.add(pid)
+            logger.info("Add daemon process pid {0} to {1} cgroup".format(pid, cg.name))
+            cgroups_enabled = True
         except CGroupsException as cge:
             status = cge.msg
 
         from azurelinuxagent.common.event import add_event, WALAEventOperation
-        from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
         add_event(
             AGENT_NAME,
             version=CURRENT_VERSION,
@@ -201,61 +388,67 @@ class CGroups(object):
             log_event=False)
 
     @staticmethod
-    def add_to_agent_cgroup():
-        try:
-            pid = os.getpid()
-            cg = CGroups(CGROUP_AGENT)
-            cg.add(int(pid))
-        except Exception:
-            pass
-
-    @staticmethod
     def add_to_extension_cgroup(name):
+        """
+        Create cgroup directories for this extension in each of the hierarchies, then add this process to the new cgroup
+
+        :param name: str
+        """
+        if not CGroups.enabled():
+            return
+        if name == AGENT_NAME:
+            raise CGroupsException('Extension cgroup name cannot match agent cgroup name({0})'.format(AGENT_NAME))
+
+        pid = int(os.getpid())
         try:
-            pid = os.getpid()
-            logger.info("Create extension group: {0}".format(name))
-            cg = CGroups(CGROUP_EXTENSION_FORMAT.format(name))
-            cg.add(int(pid))
-        except Exception:
-            pass
+            logger.info("Move process {0} into cgroups for extension {1}".format(pid, name))
+            cg = CGroups(name)
+            cg.add(pid)
+        except Exception as ex:
+            logger.warn("Unable to move process {0} into cgroups for {1}: {2}".format(pid, name, ex))
 
     @staticmethod
-    def get_user_info(user):
-        try:
-            user_system = getpwnam(user)
-        except KeyError:
-            raise CGroupsException("User {0} does not exist".format(user))
-        else:
-            uid = user_system.pw_uid
-            gid = user_system.pw_gid
-        return uid, gid
+    def get_my_cgroup_path(hierarchy_id):
+        """
+        Get the cgroup path "suffix" for this process for the given hierarchy ID. The leading "/" is always stripped,
+        so the suffix is suitable for passing to os.path.join(). (If the process is in the root cgroup, an empty
+        string is returned, and os.path.join() will still do the right thing.)
 
-    def create_user_cgroups(self, user):
-        try:
-            hierarchies = os.listdir(BASE_CGROUPS)
-        except OSError as e:
-            if e.errno == 2:
-                raise CGroupsException("cgroups not mounted on {0}"
-                                       .format(BASE_CGROUPS))
-            else:
-                raise OSError(e)
+        :param hierarchy_id: str
+        :return: str
+        """
+        cgroup_paths = fileutil.read_file("/proc/self/cgroup")
+        for entry in cgroup_paths.splitlines():
+            fields = entry.split(':')
+            if fields[0] == hierarchy_id:
+                return fields[2].lstrip("/").encode("utf8")
+        raise CGroupsException("This process belongs to no cgroup for hierarchy ID {0}".format(hierarchy_id))
 
-        uid, gid = self.get_user_info(user)
-        for hierarchy in hierarchies:
-            user_cgroup = os.path.join(BASE_CGROUPS, hierarchy, user)
-            if not os.path.exists(user_cgroup):
-                try:
-                    os.mkdir(user_cgroup)
-                except OSError as e:
-                    if e.errno == 13:
-                        raise CGroupsException("Create cgroup permission denied")
-                    elif e.errno == 17:
-                        # file exists
-                        pass
-                    else:
-                        raise OSError(e)
-                else:
-                    os.chown(user_cgroup, uid, gid)
+    @staticmethod
+    def get_hierarchy_id(hierarchy):
+        """
+        Get the cgroups hierarchy ID for a given hierarchy name
+
+        :param hierarchy:
+        :return: str
+        """
+        cgroup_states = fileutil.read_file("/proc/cgroups")
+        for entry in cgroup_states.splitlines():
+            fields = entry.split('\t')
+            if fields[0] == hierarchy:
+                return fields[1]
+        raise CGroupsException("Cgroup hierarchy {0} not found in /proc/cgroups".format(hierarchy))
+
+    @staticmethod
+    def get_my_cgroup_folder(hierarchy):
+        """
+        Find the path of the cgroup in which this process currently lives for the given hierarchy.
+
+        :param hierarchy: str
+        :return: str
+        """
+        id = CGroups.get_hierarchy_id(hierarchy)
+        return os.path.join(BASE_CGROUPS, hierarchy, CGroups.get_my_cgroup_path(id))
 
     def _get_cgroup_file(self, hierarchy, file_name):
         return os.path.join(self.cgroups[hierarchy], file_name)
@@ -270,30 +463,39 @@ class CGroups(object):
             except ValueError:
                 raise CGroupsException('CPU Limit must be convertible to a float')
             else:
-                if limit <= float(0) or limit > float(getProcessorCores() * 100):
+                if limit <= float(0) or limit > float(CGroups.get_num_cores() * 100):
                     raise CGroupsException('CPU Limit must be between 0 and 100 * numCores')
                 else:
                     limit = limit / 100
         return limit
 
-    def get_parameter(self, subsystem, parameter):
+    def get_file(self, hierarchy, file_name):
         """
-        Retrieve the value of a parameter from a subsystem.
+        Retrieve the value of a parameter from a hierarchy.
 
-        :param subsystem: str
-        :param parameter: str
+        :param hierarchy: str
+        :param file_name: str
+        :return: st
+        """
+        if hierarchy in self.cgroups:
+            parameter_file = self._get_cgroup_file(hierarchy, file_name)
+            try:
+                return fileutil.read_file(parameter_file)
+            except Exception:
+                raise CGroupsException("Could not retrieve cgroup file {0}/{1}".format(hierarchy, file_name))
+        else:
+            raise CGroupsException("{0} subsystem not available".format(hierarchy))
+
+    def get_parameter(self, hierarchy, parameter_name):
+        """
+        Retrieve the value of a parameter from a hierarchy.
+
+        :param hierarchy: str
+        :param parameter_name: str
         :return: str
         """
-        if subsystem in self.cgroups:
-            parameter_file = self._get_cgroup_file(subsystem, parameter)
-            try:
-                with open(parameter_file, 'r') as f:
-                    values = f.read().split('\n')
-                    return values[0]
-            except Exception:
-                raise CGroupsException("Could not retrieve cgroup parameter {0}/{1}".format(subsystem, parameter))
-        else:
-            raise CGroupsException("{0} subsystem not available".format(subsystem))
+        values = self.get_file(hierarchy, parameter_name).splitlines
+        return values[0]
 
     def set_cpu_limit(self, limit=None):
         """
@@ -305,33 +507,17 @@ class CGroups(object):
 
         :param limit:
         """
+        if limit is None:
+            return
+        limit = float(limit) / 100.0    # Convert percentage to fraction of unity
+
         if 'cpu' in self.cgroups:
             total_units = float(self.get_parameter('cpu', 'cpu.cfs_period_us'))
             limit_units = self._format_cpu_value(limit) * total_units
             cpu_shares_file = self._get_cgroup_file('cpu', 'cpu.cfs_quota_us')
-            with open(cpu_shares_file, 'w+') as f:
-                f.write("{0}\n".format(limit_units))
+            fileutil.write_file(cpu_shares_file, "{0}\n".format(limit_units))
         else:
             raise CGroupsException("CPU hierarchy not available in this cgroup")
-
-    def get_cpu_stat(self):
-        cpu_stat = None
-        if 'cpu' in self.cgroups:
-            cpu_stat_file = self._get_cgroup_file('cpu', 'cpuacct.stat')
-            cpu_stat = fileutil.read_file(cpu_stat_file)
-        return cpu_stat
-
-    @staticmethod
-    def get_proc_stat():
-        """
-        Return the contents of /proc/stat
-
-        :return: str
-        """
-        proc_stat = fileutil.read_file('/proc/stat')
-        if proc_stat is None:
-            raise CGroupsException("Could not read /proc/stat")
-        return proc_stat
 
     @staticmethod
     def get_num_cores():
@@ -375,12 +561,3 @@ class CGroups(object):
                 f.write("{0}\n".format(value))
         else:
             raise CGroupsException("Memory hierarchy not available in this cgroup")
-
-    @staticmethod
-    def get_extension_group_names():
-        return ([os.path.basename(p) for p in
-                 glob.glob(os.path.join(BASE_CGROUPS,
-                                        HIERARCHIES[0],
-                                        getpass.getuser(),
-                                        CGROUP_EXTENSION_FORMAT
-                                        .format('*')))])

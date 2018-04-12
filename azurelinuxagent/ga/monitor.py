@@ -28,6 +28,9 @@ import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.logger as logger
 
+from azurelinuxagent.common.cgroups import CGroups, CGroupsTelemetry, CGROUP_AGENT
+from azurelinuxagent.common.event import add_event, WALAEventOperation, report_metric
+from azurelinuxagent.common.exception import EventError, ProtocolError, OSUtilError
 from azurelinuxagent.common.cgroups import CGroups, CGroupsTelemetry, \
     CGROUP_AGENT
 from azurelinuxagent.common.event import add_event, WALAEventOperation
@@ -271,14 +274,21 @@ class MonitorHandler(object):
                 # performance counters
                 if datetime.datetime.utcnow() >= (last_collection + collection_period):
                     last_collection = datetime.datetime.utcnow()
-                    names = []
-                    names.append(CGROUP_AGENT)
-                    names.extend(CGroups.get_extension_group_names())
-                    for name in names:
-                        current_cpu = CGroupsTelemetry(name).get_cpu_percent()
-                        report_metric("Process", "% Processor Time", name, current_cpu)
+                    for (cgroup_name, metrics) in CGroupsTelemetry.collect_all_tracked().items():
+                        for (metric_group, metric_name, value) in metrics:
+                            if value > 0:
+                                report_metric(metric_group, metric_name, cgroup_name, value)
             except Exception as e:
                 logger.warn("Failed to collect performance metrics: {0}", e)
+
+            # Look for extension cgroups we're not already tracking and track them
+            CGroupsTelemetry.update_tracked()
+
+            # Ensure this process is in the agent cgroup. Should always be so, but with agent upgrades and the like,
+            # it's best to be very defensive.
+            if not CGroups.get_my_cgroup_folder('cpu').endswith(AGENT_NAME):
+                logger.warn("Agent not in agent cgroup; moving it.")
+                CGroups(AGENT_NAME).add(int(os.getpid()))
 
             try:
                 self.collect_and_send_events()

@@ -36,7 +36,7 @@ import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.version as version
-from azurelinuxagent.common.cgroups import CGroups
+from azurelinuxagent.common.cgroups import CGroups, CGroupsTelemetry
 from azurelinuxagent.common.errorstate import ErrorState, ERROR_STATE_DELTA
 from azurelinuxagent.common.errorstate import ErrorState, ERROR_STATE_DELTA_DEFAULT, ERROR_STATE_DELTA_INSTALL
 
@@ -983,6 +983,14 @@ class ExtHandlerInstance(object):
         return last_update <= 600
 
     def launch_command(self, cmd, timeout=300):
+        """
+        Run cmd to start the extension to perform the desired action. Ensure the newly-created process winds up in the
+        cgroups dedicated to that extension. Arrange to track the usage metrics for those cgroups.
+
+        :param cmd:
+        :param timeout:
+        :return:
+        """
         begin_utc = datetime.datetime.utcnow()
         self.logger.verbose("Launch command: [{0}]", cmd)
         base_dir = self.get_base_dir()

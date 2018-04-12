@@ -81,8 +81,7 @@ def run_get_output(cmd, chk_err=True, log_cmd=True):
     try:
         output = subprocess.check_output(cmd,
                                          stderr=subprocess.STDOUT,
-                                         shell=True,
-                                         preexec_fn=CGroups.add_to_agent_cgroup)
+                                         shell=True)
         output = ustr(output,
                       encoding='utf-8',
                       errors="backslashreplace")
