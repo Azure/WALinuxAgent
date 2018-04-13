@@ -154,6 +154,11 @@ def get_data_files(name, version, fullname):
         set_bin_files(data_files, dest="/usr/local/sbin")
         set_conf_files(data_files, src=["config/openbsd/waagent.conf"])
         set_openbsd_rc_files(data_files)
+    elif name == 'debian':
+        set_bin_files(data_files)
+        set_conf_files(data_files, src=["config/debian/waagent.conf"])
+        set_logrotate_files(data_files)
+        set_udev_files(data_files, dest="/lib/udev/rules.d")
     else:
         # Use default setting
         set_bin_files(data_files)
