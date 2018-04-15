@@ -23,6 +23,7 @@ import re
 import string
 import struct
 import sys
+import zlib
 import xml.dom.minidom as minidom
 
 from distutils.version import LooseVersion as Version
@@ -272,9 +273,9 @@ def replace_non_ascii(incoming, replace_char=''):
 
 
 def remove_bom(c):
-    '''
+    """
     bom is comprised of a sequence of three chars,0xef, 0xbb, 0xbf, in case of utf-8.
-    '''
+    """
     if not is_str_none_or_whitespace(c) and \
        len(c) > 2 and \
        str_to_ord(c[0]) > 128 and \
@@ -302,6 +303,13 @@ def get_bytes_from_pem(pem_str):
     return base64_bytes
 
 
+def compress(s):
+    from azurelinuxagent.common.version import PY_VERSION_MAJOR
+    if PY_VERSION_MAJOR > 2:
+        return zlib.compress(bytes(s, 'utf-8'))
+    return zlib.compress(s)
+
+
 def b64encode(s):
     from azurelinuxagent.common.version import PY_VERSION_MAJOR
     if PY_VERSION_MAJOR > 2:
@@ -323,6 +331,7 @@ def safe_shlex_split(s):
         return shlex.split(s.encode('utf-8'))
     return shlex.split(s)
 
+
 def swap_hexstring(s, width=2):
     r = len(s) % width
     if r != 0:
@@ -333,6 +342,7 @@ def swap_hexstring(s, width=2):
                                 r'[a-f0-9]{{{0}}}'.format(width),
                                 s,
                                 re.IGNORECASE)))
+
 
 def parse_json(json_str):
     """
@@ -345,6 +355,7 @@ def parse_json(json_str):
         result = json.loads(json_str.rstrip(' \t\r\n\0'))
 
     return result
+
 
 def is_str_none_or_whitespace(s):
     return s is None or len(s) == 0 or s.isspace()

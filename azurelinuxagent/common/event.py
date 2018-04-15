@@ -35,6 +35,7 @@ from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.restapi import TelemetryEventParam, \
     TelemetryEvent, \
     get_properties
+from azurelinuxagent.common.utils import textutil
 from azurelinuxagent.common.version import CURRENT_VERSION
 
 _EVENT_MSG = "Event: name={0}, op={1}, message={2}, duration={3}"
@@ -166,9 +167,9 @@ def _encode_message(op, message):
         return message
 
     try:
-        return base64.b64encode(zlib.compress(message))
+        return textutil.b64encode(textutil.compress(message))
     except Exception:
-        # If the message could not be encoded and dummy message is returned.
+        # If the message could not be encoded a dummy message ('<>') is returned.
         # The original message was still sent via telemetry, so all is not lost.
         return "<>"
 
