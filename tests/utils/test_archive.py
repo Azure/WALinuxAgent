@@ -178,18 +178,26 @@ class TestArchive(AgentTestCase):
         except:
             raise AssertionError("the value '{0}' is not an ISO8601 formatted timestamp".format(s))
 
+    def _total_seconds(self, td):
+        """
+        Compute the total_seconds for a timedelta because 2.6 does not have total_seconds.
+        """
+        return (0.0 + td.microseconds + (td.seconds + td.days * 24 * 60 * 60) * 10 ** 6) / 10 ** 6
+
     def assertDateTimeCloseTo(self, t1, t2, within):
         if t1 <= t2:
             diff = t2 -t1
         else:
             diff = t1 - t2
 
-        secs = (within - diff).total_seconds()
+        secs = self._total_seconds(within - diff)
         if secs < 0:
             self.fail("the timestamps are outside of the tolerance of by {0} seconds".format(secs))
 
     def assertZipContains(self, zip_fn, files):
-        with zipfile.ZipFile(zip_fn, 'r') as zip:
-            zip_files = [x.filename for x in zip.filelist]
-            for f in files:
-                self.assertTrue(f in zip_files, "'{0}' was not found in {1}".format(f, zip_fn))
+        zip = zipfile.ZipFile(zip_fn, 'r')
+        zip_files = [x.filename for x in zip.filelist]
+        for f in files:
+            self.assertTrue(f in zip_files, "'{0}' was not found in {1}".format(f, zip_fn))
+
+        zip.close()

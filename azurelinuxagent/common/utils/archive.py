@@ -166,10 +166,12 @@ class StateDirectory(State):
         fn_tmp = "{0}.zip.tmp".format(self._path)
         fn = "{0}.zip".format(self._path)
 
-        with zipfile.ZipFile(fn_tmp, 'w') as zip:
-            for f in os.listdir(self._path):
-                full_path = os.path.join(self._path, f)
-                zip.write(full_path, f, zipfile.ZIP_DEFLATED)
+        zip = zipfile.ZipFile(fn_tmp, 'w')
+        for f in os.listdir(self._path):
+            full_path = os.path.join(self._path, f)
+            zip.write(full_path, f, zipfile.ZIP_DEFLATED)
+
+        zip.close()
 
         os.rename(fn_tmp, fn)
         shutil.rmtree(self._path)
