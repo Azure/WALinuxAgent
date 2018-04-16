@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# Requires Python 2.7+ and Openssl 1.0+
+# Requires Python 2.6+ and Openssl 1.0+
 #
 
 import subprocess
@@ -131,7 +131,7 @@ class TestProcessUtils(AgentTestCase):
                                    preexec_fn=os.setsid)
 
         if sys.version_info < (2, 7):
-            self.assertRaises(ExtensionError, capture_from_process_raw, (process, cmd, 10))
+            self.assertRaises(ExtensionError, capture_from_process_raw, process, cmd, 10)
         else:
             with self.assertRaises(ExtensionError) as ee:
                 capture_from_process_raw(process, cmd, 10)
@@ -159,7 +159,7 @@ class TestProcessUtils(AgentTestCase):
                                    env=os.environ)
 
         if sys.version_info < (2, 7):
-            self.assertRaises(ExtensionError, capture_from_process, (process, cmd, 10))
+            self.assertRaises(ExtensionError, capture_from_process, process, cmd, 10)
         else:
             with self.assertRaises(ExtensionError) as ee:
                 capture_from_process(process, cmd, 10)
