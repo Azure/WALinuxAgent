@@ -45,20 +45,6 @@ KNOWN_IOERRORS = [
 ]
 
 
-def copy_file(from_path, to_path=None, to_dir=None):
-    if to_path is None:
-        to_path = os.path.join(to_dir, os.path.basename(from_path))
-    shutil.copyfile(from_path, to_path)
-    return to_path
-
-
-def move_file(from_path, to_path=None, to_dir=None):
-    if to_path is None:
-        to_path = os.path.join(to_dir, os.path.basename(from_path))
-    shutil.move(from_path, to_path)
-    return to_path
-
-
 def read_file(filepath, asbin=False, remove_bom=False, encoding='utf-8'):
     """
     Read and return contents of 'filepath'.

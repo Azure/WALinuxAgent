@@ -1,21 +1,6 @@
-# Microsoft Azure Linux Agent
-#
-# Copyright 2018 Microsoft Corporation
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-#
-# Requires Python 2.6+ and Openssl 1.0+
-#
+# Copyright (c) Microsoft Corporation. All rights reserved.
+# Licensed under the Apache License.
+
 import os
 import re
 import shutil
@@ -31,7 +16,7 @@ archive.py
 
 The module supports the archiving of guest agent state. Guest
 agent state is flushed whenever there is a incarnation change.
-The flush is archived periodically (once an hour).
+The flush is archived periodically (once a day).
 
 The process works as follows whenever a new incarnation arrives.
 
@@ -92,12 +77,12 @@ class StateFlusher(object):
         return files
 
     def _archive(self, files):
-        for file in files:
-            fileutil.move_file(file, to_dir=self._target)
+        for f in files:
+            shutil.move(f, self._target)
 
     def _purge(self, files):
-        for file in files:
-            os.remove(file)
+        for f in files:
+            os.remove(f)
 
     def _mkdir(self):
         try:
@@ -107,6 +92,7 @@ class StateFlusher(object):
             return False
 
 
+# TODO: use @total_ordering once RHEL/CentOS and SLES 11 are EOL.
 # @total_ordering first appeared in Python 2.7 and 3.2
 # If there are more use cases for @total_ordering, I will
 # consider re-implementing it.
@@ -141,7 +127,7 @@ class State(object):
         return self._timestamp <= other.timestamp
 
     def __ge__(self, other):
-        return self._timestamp >=  other.timestamp
+        return self._timestamp >= other.timestamp
 
 
 class StateZip(State):
@@ -150,9 +136,6 @@ class StateZip(State):
 
     def delete(self):
         os.remove(self._path)
-
-    def archive(self):
-        pass
 
 
 class StateDirectory(State):
@@ -166,12 +149,12 @@ class StateDirectory(State):
         fn_tmp = "{0}.zip.tmp".format(self._path)
         fn = "{0}.zip".format(self._path)
 
-        zip = zipfile.ZipFile(fn_tmp, 'w')
+        ziph = zipfile.ZipFile(fn_tmp, 'w')
         for f in os.listdir(self._path):
             full_path = os.path.join(self._path, f)
-            zip.write(full_path, f, zipfile.ZIP_DEFLATED)
+            ziph.write(full_path, f, zipfile.ZIP_DEFLATED)
 
-        zip.close()
+        ziph.close()
 
         os.rename(fn_tmp, fn)
         shutil.rmtree(self._path)

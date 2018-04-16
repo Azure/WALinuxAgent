@@ -1,19 +1,5 @@
-# Copyright 2018 Microsoft Corporation
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-#
-# Requires Python 2.6+ and Openssl 1.0+
-#
+# Copyright (c) Microsoft Corporation. All rights reserved.
+# Licensed under the Apache License.
 
 from __future__ import print_function
 
@@ -22,7 +8,6 @@ from azurelinuxagent.common.protocol.hostplugin import *
 from azurelinuxagent.common.protocol.metadata import *
 from azurelinuxagent.common.protocol.wire import *
 from azurelinuxagent.common.utils.fileutil import *
-from azurelinuxagent.common.version import AGENT_PKG_GLOB, AGENT_DIR_GLOB
 from azurelinuxagent.ga.update import *
 
 from tests.tools import *
@@ -147,7 +132,7 @@ class UpdateTestCase(AgentTestCase):
         if len(agents) <= 0:
             agents = get_agent_pkgs()
         for agent in agents:
-            fileutil.copy_file(agent, to_dir=self.tmp_dir)
+            shutil.copy(agent, self.tmp_dir)
         return
 
     def expand_agents(self):

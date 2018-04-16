@@ -1,19 +1,5 @@
-# Copyright 2018 Microsoft Corporation
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-#
-# Requires Python 2.6+ and Openssl 1.0+
-#
+# Copyright (c) Microsoft Corporation. All rights reserved.
+# Licensed under the Apache License.
 
 import zipfile
 
@@ -195,9 +181,9 @@ class TestArchive(AgentTestCase):
             self.fail("the timestamps are outside of the tolerance of by {0} seconds".format(secs))
 
     def assertZipContains(self, zip_fn, files):
-        zip = zipfile.ZipFile(zip_fn, 'r')
-        zip_files = [x.filename for x in zip.filelist]
+        ziph = zipfile.ZipFile(zip_fn, 'r')
+        zip_files = [x.filename for x in ziph.filelist]
         for f in files:
             self.assertTrue(f in zip_files, "'{0}' was not found in {1}".format(f, zip_fn))
 
-        zip.close()
+        ziph.close()
