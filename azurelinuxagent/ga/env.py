@@ -36,6 +36,7 @@ from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol import get_protocol_util
 from azurelinuxagent.common.protocol.wire import INCARNATION_FILE_NAME
 from azurelinuxagent.common.utils import fileutil
+from azurelinuxagent.common.utils.archive import StateArchiver
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 
 CACHE_PATTERNS = [
@@ -46,7 +47,7 @@ CACHE_PATTERNS = [
 
 MAXIMUM_CACHED_FILES = 50
 
-CACHE_PURGE_INTERVAL = datetime.timedelta(hours=24)
+ARCHIVE_INTERVAL = datetime.timedelta(hours=24)
 
 
 def get_env_handler():
@@ -70,7 +71,8 @@ class EnvHandler(object):
         self.dhcp_id = None
         self.server_thread = None
         self.dhcp_warning_enabled = True
-        self.last_purge = None
+        self.last_archive = None
+        self.archiver = StateArchiver(conf.get_lib_dir())
 
     def run(self):
         if not self.stopped:
@@ -124,7 +126,7 @@ class EnvHandler(object):
 
             self.handle_dhclient_restart()
 
-            self.purge_disk_cache()
+            self.archive_history()
 
             time.sleep(5)
 
@@ -158,71 +160,18 @@ class EnvHandler(object):
             self.dhcp_handler.conf_routes()
             self.dhcp_id = new_pid
 
-    def purge_disk_cache(self):
+    def archive_history(self):
         """
-        Ensure the number of cached files does not exceed a maximum count.
-        Purge only once per interval, and never delete files related to the
-        current incarnation.  
+        Purge history if we have exceed the maximum count.
+        Create a .zip of the history that has been preserved.
         """
-        if self.last_purge is not None \
+        if self.last_archive is not None \
                 and datetime.datetime.utcnow() < \
-                self.last_purge + CACHE_PURGE_INTERVAL:
+                self.last_archive + ARCHIVE_INTERVAL:
             return
 
-        current_incarnation = -1
-        self.last_purge = datetime.datetime.utcnow()
-        incarnation_file = os.path.join(conf.get_lib_dir(),
-                                        INCARNATION_FILE_NAME)
-        if os.path.exists(incarnation_file):
-            last_incarnation = fileutil.read_file(incarnation_file)
-            if last_incarnation is not None:
-                current_incarnation = int(last_incarnation)
-
-        logger.info("Purging disk cache, current incarnation is {0}"
-                    .format('not found'
-                            if current_incarnation == -1
-                            else current_incarnation))
-
-        # Create tuples: (prefix, suffix, incarnation, name, file_modified)
-        files = []
-        for f in os.listdir(conf.get_lib_dir()):
-            full_path = os.path.join(conf.get_lib_dir(), f)
-            for pattern in CACHE_PATTERNS:
-                m = pattern.match(f)
-                if m is not None:
-                    prefix = m.group(1)
-                    suffix = m.group(3)
-                    incarnation = int(m.group(2))
-                    file_modified = os.path.getmtime(full_path)
-                    t = (prefix, suffix, incarnation, f, file_modified)
-                    files.append(t)
-                    break
-
-        if len(files) <= 0:
-            return
-
-        # Sort by (prefix, suffix, file_modified) in reverse order
-        files = sorted(files, key=operator.itemgetter(0, 1, 4), reverse=True)
-
-        # Remove any files in excess of the maximum allowed
-        # -- Restart then whenever the (prefix, suffix) change
-        count = 0
-        last_match = [None, None]
-        for f in files:
-            if last_match != f[0:2]:
-                last_match = f[0:2]
-                count = 0
-
-            if current_incarnation == f[2]:
-                logger.verbose("Skipping {0}".format(f[3]))
-                continue
-
-            count += 1
-
-            if count > MAXIMUM_CACHED_FILES:
-                full_name = os.path.join(conf.get_lib_dir(), f[3])
-                logger.verbose("Deleting {0}".format(full_name))
-                os.remove(full_name)
+        self.archiver.purge()
+        self.archiver.archive()
 
     def stop(self):
         """

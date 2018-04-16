@@ -32,6 +32,7 @@ from azurelinuxagent.common.exception import ProtocolNotFoundError, \
 from azurelinuxagent.common.future import httpclient, bytebuffer
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.restapi import *
+from azurelinuxagent.common.utils.archive import StateFlusher
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, \
     findtext, getattrib, gettext, remove_bom, get_bytes_from_pem, parse_json
@@ -530,6 +531,7 @@ class WireClient(object):
         self.ext_conf = None
         self.host_plugin = None
         self.status_blob = StatusBlob(self)
+        self.goal_state_flusher = StateFlusher(conf.get_lib_dir())
 
     def call_wireserver(self, http_req, *args, **kwargs):
         try:
@@ -716,6 +718,8 @@ class WireClient(object):
                                         last_incarnation == new_incarnation:
                             # Goalstate is not updated.
                             return
+
+                self.goal_state_flusher.flush()
 
                 self.goal_state = goal_state
                 file_name = GOAL_STATE_FILE_NAME.format(goal_state.incarnation)
