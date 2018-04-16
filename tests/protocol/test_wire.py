@@ -1,4 +1,4 @@
-# Copyright 2014 Microsoft Corporation
+# Copyright 2018 Microsoft Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# Requires Python 2.4+ and Openssl 1.0+
+# Requires Python 2.6+ and Openssl 1.0+
 #
 
 import glob
@@ -43,9 +43,8 @@ class TestWireProtocol(AgentTestCase):
             protocol.get_vminfo()
             protocol.get_certs()
             ext_handlers, etag = protocol.get_ext_handlers()
-            self.assertEqual("1", etag)
             for ext_handler in ext_handlers.extHandlers:
-                protocol.get_ext_handler_pkgs(ext_handler, etag)
+                protocol.get_ext_handler_pkgs(ext_handler)
 
             crt1 = os.path.join(self.tmp_dir,
                                 '33B0ABCE4673538650971C10F7D7397E71561F35.crt')
@@ -93,7 +92,6 @@ class TestWireProtocol(AgentTestCase):
         #    fetched often; however, the dependent documents, such as the
         #    HostingEnvironmentConfig, will be retrieved the expected number
         self.assertEqual(2, test_data.call_counts["hostingenvuri"])
-
 
     def test_call_storage_kwargs(self,
                                  mock_cryptutil,

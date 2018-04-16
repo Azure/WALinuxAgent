@@ -1,6 +1,6 @@
 # Microsoft Azure Linux Agent
 #
-# Copyright 2014 Microsoft Corporation
+# Copyright 2018 Microsoft Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# Requires Python 2.4+ and Openssl 1.0+
+# Requires Python 2.6+ and Openssl 1.0+
 #
 
 import os
@@ -26,9 +26,9 @@ from datetime import datetime
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
+import azurelinuxagent.common.utils.shellutil as shellutil
 
-from azurelinuxagent.common.event import elapsed_milliseconds, \
-    WALAEventOperation
+from azurelinuxagent.common.event import elapsed_milliseconds
 from azurelinuxagent.common.exception import ProvisionError, ProtocolError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol import OVF_FILE_NAME
@@ -64,12 +64,9 @@ class CloudInitProvisionHandler(ProvisionHandler):
             logger.info("Finished provisioning")
 
             self.report_ready(thumbprint)
-            self.report_event("Provisioning with cloud-init succeeded",
+            self.report_event("Provisioning with cloud-init succeeded ({0})".format(self._get_uptime_seconds()),
                 is_success=True,
                 duration=elapsed_milliseconds(utc_start))
-            self.report_event(self.create_guest_state_telemetry_messsage(),
-                  is_success=True,
-                  operation=WALAEventOperation.GuestState)
 
         except ProvisionError as e:
             logger.error("Provisioning failed: {0}", ustr(e))

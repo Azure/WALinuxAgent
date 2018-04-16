@@ -1,6 +1,6 @@
 # Microsoft Azure Linux Agent
 #
-# Copyright 2014 Microsoft Corporation
+# Copyright 2018 Microsoft Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# Requires Python 2.4+ and Openssl 1.0+
+# Requires Python 2.6+ and Openssl 1.0+
 
 import base64
 import json
@@ -240,7 +240,7 @@ class MetadataProtocol(Protocol):
             set_properties("extensionHandlers", ext_list.extHandlers, data)
         return ext_list, etag
 
-    def get_ext_handler_pkgs(self, ext_handler, etag):
+    def get_ext_handler_pkgs(self, ext_handler):
         logger.verbose("Get extension handler packages")
         pkg_list = ExtHandlerPackageList()
 

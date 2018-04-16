@@ -1,6 +1,6 @@
 # Windows Azure Linux Agent
 #
-# Copyright 2014 Microsoft Corporation
+# Copyright 2018 Microsoft Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# Requires Python 2.4+ and Openssl 1.0+
+# Requires Python 2.6+ and Openssl 1.0+
 #
 
 import glob
@@ -45,7 +45,6 @@ from azurelinuxagent.common.event import add_event, add_periodic, \
                                     WALAEventOperation
 from azurelinuxagent.common.exception import ProtocolError, \
                                             ResourceGoneError, \
-                                            RestartError, \
                                             UpdateError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
@@ -249,10 +248,12 @@ class UpdateHandler(object):
 
             # Launch monitoring threads
             from azurelinuxagent.ga.monitor import get_monitor_handler
-            get_monitor_handler().run()
+            monitor_thread = get_monitor_handler()
+            monitor_thread.run()
 
             from azurelinuxagent.ga.env import get_env_handler
-            get_env_handler().run()
+            env_thread = get_env_handler()
+            env_thread.run()
 
             from azurelinuxagent.ga.exthandlers import get_exthandlers_handler, migrate_handler_state
             exthandlers_handler = get_exthandlers_handler()
@@ -268,6 +269,14 @@ class UpdateHandler(object):
                     logger.info("Agent {0} is an orphan -- exiting",
                                 CURRENT_AGENT)
                     break
+
+                if not monitor_thread.is_alive():
+                    logger.warn(u"Monitor thread died, restarting")
+                    monitor_thread.start()
+
+                if not env_thread.is_alive():
+                    logger.warn(u"Environment thread died, restarting")
+                    env_thread.start()
 
                 if self._upgrade_available():
                     available_agent = self.get_latest_agent()

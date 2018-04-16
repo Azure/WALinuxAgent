@@ -1,6 +1,6 @@
 # Microsoft Azure Linux Agent
 #
-# Copyright 2014 Microsoft Corporation
+# Copyright 2018 Microsoft Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# Requires Python 2.4+ and Openssl 1.0+
+# Requires Python 2.6+ and Openssl 1.0+
 #
 
 """
@@ -63,9 +63,10 @@ class Agent(object):
                                  path="/var/log/waagent.log")
         logger.add_logger_appender(logger.AppenderType.CONSOLE, level,
                                  path="/dev/console")
-        logger.add_logger_appender(logger.AppenderType.TELEMETRY,
-                                   logger.LogLevel.WARNING,
-                                   path=event.add_log_event)
+        # See issue #1035
+        # logger.add_logger_appender(logger.AppenderType.TELEMETRY,
+        #                            logger.LogLevel.WARNING,
+        #                            path=event.add_log_event)
 
         ext_log_dir = conf.get_ext_log_dir()
         try:

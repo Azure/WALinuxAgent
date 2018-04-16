@@ -26,6 +26,7 @@ from azurelinuxagent.common.osutil import get_osutil
 import setuptools
 from setuptools import find_packages
 from setuptools.command.install import install as  _install
+import sys
 
 root_dir = os.path.dirname(os.path.abspath(__file__))
 os.chdir(root_dir)
@@ -131,7 +132,7 @@ def get_data_files(name, version, fullname):
             # Ubuntu15.04+ uses systemd
             set_systemd_files(data_files,
                               src=["init/ubuntu/walinuxagent.service"])
-    elif name == 'suse':
+    elif name == 'suse' or name == 'opensuse':
         set_bin_files(data_files)
         set_conf_files(data_files, src=["config/suse/waagent.conf"])
         set_logrotate_files(data_files)
@@ -153,6 +154,11 @@ def get_data_files(name, version, fullname):
         set_bin_files(data_files, dest="/usr/local/sbin")
         set_conf_files(data_files, src=["config/openbsd/waagent.conf"])
         set_openbsd_rc_files(data_files)
+    elif name == 'debian':
+        set_bin_files(data_files)
+        set_conf_files(data_files, src=["config/debian/waagent.conf"])
+        set_logrotate_files(data_files)
+        set_udev_files(data_files, dest="/lib/udev/rules.d")
     else:
         # Use default setting
         set_bin_files(data_files)
@@ -198,6 +204,14 @@ class install(_install):
             osutil.stop_agent_service()
             osutil.start_agent_service()
 
+# Note to packagers and users from source.
+# In version 3.5 of Python distribution information handling in the platform
+# module was deprecated. Depending on the Linux distribution the
+# implementation may be broken prior to Python 3.7 wher the functionality
+# will be removed from Python 3
+requires = []
+if float(sys.version[:3]) >= 3.7:
+    requires = ['distro']
 
 setuptools.setup(
     name=AGENT_NAME,
@@ -210,6 +224,7 @@ setuptools.setup(
     license='Apache License Version 2.0',
     packages=find_packages(exclude=["tests"]),
     py_modules=["__main__"],
+    install_requires=requires,
     cmdclass={
         'install': install
     }

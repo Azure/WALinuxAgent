@@ -1,4 +1,4 @@
-# Copyright 2014 Microsoft Corporation
+# Copyright 2018 Microsoft Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,21 +12,24 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# Requires Python 2.4+ and Openssl 1.0+
+# Requires Python 2.6+ and Openssl 1.0+
 #
 
 import socket
 import glob
 import mock
+import traceback
 
 import azurelinuxagent.common.osutil.default as osutil
 import azurelinuxagent.common.utils.shellutil as shellutil
 from azurelinuxagent.common.exception import OSUtilError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
-from azurelinuxagent.common.utils import fileutil
-from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from tests.tools import *
+
+
+def fake_is_loopback(_, iface):
+    return iface.startswith('lo')
 
 
 class TestOSUtil(AgentTestCase):
@@ -88,7 +91,27 @@ class TestOSUtil(AgentTestCase):
                         self.assertTrue(msg in ustr(ose))
                         self.assertTrue(patch_run.call_count == 6)
 
-    def test_get_first_if(self):
+
+    @patch('azurelinuxagent.common.osutil.default.DefaultOSUtil.get_primary_interface', return_value='eth0')
+    @patch('azurelinuxagent.common.osutil.default.DefaultOSUtil._get_all_interfaces', return_value={'eth0':'10.0.0.1'})
+    @patch('azurelinuxagent.common.osutil.default.DefaultOSUtil.is_loopback', fake_is_loopback)
+    def test_get_first_if(self, get_all_interfaces_mock, get_primary_interface_mock):
+        """
+        Validate that the agent can find the first active non-loopback
+        interface.
+
+        This test case used to run live, but not all developers have an eth*
+        interface. It is perfectly valid to have a br*, but this test does not
+        account for that.
+        """
+        ifname, ipaddr = osutil.DefaultOSUtil().get_first_if()
+        self.assertEqual(ifname, 'eth0')
+        self.assertEqual(ipaddr, '10.0.0.1')
+
+    @patch('azurelinuxagent.common.osutil.default.DefaultOSUtil.get_primary_interface', return_value='bogus0')
+    @patch('azurelinuxagent.common.osutil.default.DefaultOSUtil._get_all_interfaces', return_value={'eth0':'10.0.0.1', 'lo': '127.0.0.1'})
+    @patch('azurelinuxagent.common.osutil.default.DefaultOSUtil.is_loopback', fake_is_loopback)
+    def test_get_first_if_nosuchprimary(self, get_all_interfaces_mock, get_primary_interface_mock):
         ifname, ipaddr = osutil.DefaultOSUtil().get_first_if()
         self.assertTrue(ifname.startswith('eth'))
         self.assertTrue(ipaddr is not None)
@@ -97,9 +120,15 @@ class TestOSUtil(AgentTestCase):
         except socket.error:
             self.fail("not a valid ip address")
 
+    def test_get_first_if_all_loopback(self):
+        fake_ifaces = {'lo':'127.0.0.1'}
+        with patch.object(osutil.DefaultOSUtil, 'get_primary_interface', return_value='bogus0'):
+            with patch.object(osutil.DefaultOSUtil, '_get_all_interfaces', return_value=fake_ifaces):
+                self.assertRaises(Exception, osutil.DefaultOSUtil().get_first_if)
+
     def test_isloopback(self):
-        self.assertTrue(osutil.DefaultOSUtil().is_loopback(b'lo'))
-        self.assertFalse(osutil.DefaultOSUtil().is_loopback(b'eth0'))
+        self.assertTrue(osutil.DefaultOSUtil().is_loopback('lo'))
+        self.assertFalse(osutil.DefaultOSUtil().is_loopback('eth0'))
 
     def test_isprimary(self):
         routing_table = "\
@@ -178,6 +207,7 @@ class TestOSUtil(AgentTestCase):
             try:
                 osutil.DefaultOSUtil().get_first_if()[0]
             except Exception as e:
+                print(traceback.format_exc())
                 exception = True
             self.assertFalse(exception)
 

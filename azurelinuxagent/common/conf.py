@@ -1,6 +1,6 @@
 # Microsoft Azure Linux Agent
 #
-# Copyright 2014 Microsoft Corporation
+# Copyright 2018 Microsoft Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# Requires Python 2.4+ and Openssl 1.0+
+# Requires Python 2.6+ and Openssl 1.0+
 #
 
 """
@@ -107,7 +107,7 @@ __SWITCH_OPTIONS__ = {
     "ResourceDisk.Format" : False,
     "ResourceDisk.EnableSwap" : False,
     "AutoUpdate.Enabled" : True,
-    "EnableOverProvisioning" : False
+    "EnableOverProvisioning" : True
 }
 
 __STRING_OPTIONS__ = {
@@ -323,7 +323,7 @@ def get_autoupdate_frequency(conf=__conf__):
     return conf.get_int("Autoupdate.Frequency", 3600)
 
 def get_enable_overprovisioning(conf=__conf__):
-    return conf.get_switch("EnableOverProvisioning", False)
+    return conf.get_switch("EnableOverProvisioning", True)
 
 def get_allow_http(conf=__conf__):
     return conf.get_switch("OS.AllowHTTP", False)

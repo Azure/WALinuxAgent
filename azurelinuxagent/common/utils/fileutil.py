@@ -1,6 +1,6 @@
 # Microsoft Azure Linux Agent
 #
-# Copyright 2014 Microsoft Corporation
+# Copyright 2018 Microsoft Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# Requires Python 2.4+ and Openssl 1.0+
+# Requires Python 2.6+ and Openssl 1.0+
 #
 
 """
@@ -193,9 +193,10 @@ def findstr_in_file(file_path, line_str):
     (Trailing whitespace is ignored.)
     """
     try:
-        for line in (open(file_path, 'r')).readlines():
-            if line_str == line.rstrip():
-                return True
+        with open(file_path, 'r') as fh:
+            for line in fh.readlines():
+                if line_str == line.rstrip():
+                    return True
     except Exception:
         # swallow exception
         pass
@@ -207,11 +208,12 @@ def findre_in_file(file_path, line_re):
     Return match object if found in file.
     """
     try:
-        pattern = re.compile(line_re)
-        for line in (open(file_path, 'r')).readlines():
-            match = re.search(pattern, line)
-            if match:
-                return match
+        with open(file_path, 'r') as fh:
+            pattern = re.compile(line_re)
+            for line in fh.readlines():
+                match = re.search(pattern, line)
+                if match:
+                    return match
     except:
         pass
 

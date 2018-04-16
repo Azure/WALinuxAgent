@@ -1,6 +1,6 @@
 # Microsoft Azure Linux Agent
 #
-# Copyright 2014 Microsoft Corporation
+# Copyright 2018 Microsoft Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# Requires Python 2.4+ and Openssl 1.0+
+# Requires Python 2.6+ and Openssl 1.0+
 
 import json
 import os
@@ -28,7 +28,7 @@ import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.textutil as textutil
 
 from azurelinuxagent.common.exception import ProtocolNotFoundError, \
-                                            ResourceGoneError, RestartError
+                                            ResourceGoneError
 from azurelinuxagent.common.future import httpclient, bytebuffer
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.restapi import *
@@ -145,9 +145,10 @@ class WireProtocol(Protocol):
         # In wire protocol, incarnation is equivalent to ETag
         return ext_conf.ext_handlers, goal_state.incarnation
 
-    def get_ext_handler_pkgs(self, ext_handler, etag):
+    def get_ext_handler_pkgs(self, ext_handler):
         logger.verbose("Get extension handler package")
-        man = self.client.get_ext_manifest(ext_handler, etag)
+        goal_state = self.client.get_goal_state()
+        man = self.client.get_ext_manifest(ext_handler, goal_state)
         return man.pkg_list
 
     def get_artifacts_profile(self):
@@ -799,35 +800,25 @@ class WireClient(object):
                 self.ext_conf = ExtensionsConfig(xml_text)
         return self.ext_conf
 
-    def get_ext_manifest(self, ext_handler, incarnation):
-
+    def get_ext_manifest(self, ext_handler, goal_state):
         for update_goal_state in [False, True]:
             try:
                 if update_goal_state:
                     self.update_goal_state(forced=True)
-                    incarnation = self.get_goal_state().incarnation
+                    goal_state = self.get_goal_state()
 
                 local_file = MANIFEST_FILE_NAME.format(
                                 ext_handler.name,
-                                incarnation)
+                                goal_state.incarnation)
                 local_file = os.path.join(conf.get_lib_dir(), local_file)
-
-                xml_text = None
-                if not update_goal_state:
-                    try:
-                        xml_text = self.fetch_cache(local_file)
-                    except ProtocolError:
-                        pass
-
-                if xml_text is None:
-                    xml_text = self.fetch_manifest(ext_handler.versionUris)
-                    self.save_cache(local_file, xml_text)
+                xml_text = self.fetch_manifest(ext_handler.versionUris)
+                self.save_cache(local_file, xml_text)
                 return ExtensionManifest(xml_text)
 
             except ResourceGoneError:
                 continue
 
-        raise RestartError("Failed to retrieve extension manifest")
+        raise ProtocolError("Failed to retrieve extension manifest")
 
     def filter_package_list(self, family, ga_manifest, goal_state):
         complete_list = ga_manifest.pkg_list
@@ -871,6 +862,10 @@ class WireClient(object):
                     self.update_goal_state(forced=True)
                     goal_state = self.get_goal_state()
 
+                self._remove_stale_agent_manifest(
+                    vmagent_manifest.family,
+                    goal_state.incarnation)
+
                 local_file = MANIFEST_FILE_NAME.format(
                                 vmagent_manifest.family,
                                 goal_state.incarnation)
@@ -884,6 +879,25 @@ class WireClient(object):
                 continue
 
         raise ProtocolError("Failed to retrieve GAFamily manifest")
+
+    def _remove_stale_agent_manifest(self, family, incarnation):
+        """
+        The incarnation number can reset at any time, which means there
+        could be a stale agentsManifest on disk.  Stale files are cleaned
+        on demand as new goal states arrive from WireServer. If the stale
+        file is not removed agent upgrade may be delayed.
+
+        :param family: GA family, e.g. Prod or Test
+        :param incarnation: incarnation of the current goal state
+        """
+        fn = AGENTS_MANIFEST_FILE_NAME.format(
+            family,
+            incarnation)
+
+        agent_manifest = os.path.join(conf.get_lib_dir(), fn)
+
+        if os.path.exists(agent_manifest):
+            os.unlink(agent_manifest)
 
     def check_wire_protocol_version(self):
         uri = VERSION_INFO_URI.format(self.endpoint)
@@ -1414,6 +1428,12 @@ class ExtensionsConfig(object):
         ext_handler.properties.upgradeGuid = getattrib(plugin, "upgradeGuid")
         if not ext_handler.properties.upgradeGuid:
             ext_handler.properties.upgradeGuid = None
+
+        try:
+            ext_handler.properties.dependencyLevel = int(getattrib(plugin, "dependencyLevel"))
+        except ValueError:
+            ext_handler.properties.dependencyLevel = 0
+
         auto_upgrade = getattrib(plugin, "autoUpgrade")
         if auto_upgrade is not None and auto_upgrade.lower() == "true":
             ext_handler.properties.upgradePolicy = "auto"

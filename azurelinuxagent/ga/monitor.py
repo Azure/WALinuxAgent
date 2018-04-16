@@ -1,4 +1,4 @@
-# Copyright 2014 Microsoft Corporation
+# Copyright 2018 Microsoft Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# Requires Python 2.4+ and Openssl 1.0+
+# Requires Python 2.6+ and Openssl 1.0+
 #
 
 import datetime
@@ -94,13 +94,19 @@ class MonitorHandler(object):
         self.osutil = get_osutil()
         self.protocol_util = get_protocol_util()
         self.sysinfo = []
+        self.event_thread = None
 
     def run(self):
         self.init_sysinfo()
+        self.start()
 
-        event_thread = threading.Thread(target=self.daemon)
-        event_thread.setDaemon(True)
-        event_thread.start()
+    def is_alive(self):
+        return self.event_thread.is_alive()
+
+    def start(self):
+        self.event_thread = threading.Thread(target=self.daemon)
+        self.event_thread.setDaemon(True)
+        self.event_thread.start()
 
     def init_sysinfo(self):
         osversion = "{0}:{1}-{2}-{3}:{4}".format(platform.system(),

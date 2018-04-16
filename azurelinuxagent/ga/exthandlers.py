@@ -1,6 +1,6 @@
 # Microsoft Azure Linux Agent
 #
-# Copyright 2014 Microsoft Corporation
+# Copyright 2018 Microsoft Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,12 +14,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# Requires Python 2.4+ and Openssl 1.0+
+# Requires Python 2.6+ and Openssl 1.0+
 #
 
 import datetime
 import glob
 import json
+import operator
 import os
 import os.path
 import random
@@ -28,6 +29,7 @@ import shutil
 import stat
 import subprocess
 import time
+import traceback
 import zipfile
 
 import azurelinuxagent.common.conf as conf
@@ -37,7 +39,7 @@ import azurelinuxagent.common.version as version
 from azurelinuxagent.common.errorstate import ErrorState, ERROR_STATE_DELTA
 
 from azurelinuxagent.common.event import add_event, WALAEventOperation, elapsed_milliseconds
-from azurelinuxagent.common.exception import ExtensionError, ProtocolError, RestartError
+from azurelinuxagent.common.exception import ExtensionError, ProtocolError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.restapi import ExtHandlerStatus, \
                                                     ExtensionStatus, \
@@ -62,6 +64,9 @@ HANDLER_NAME_PATTERN = re.compile(HANDLER_PATTERN+"$", re.IGNORECASE)
 HANDLER_PKG_EXT = ".zip"
 HANDLER_PKG_PATTERN = re.compile(HANDLER_PATTERN+"\\"+HANDLER_PKG_EXT+"$",
                                 re.IGNORECASE)
+
+TELEMETRY_MESSAGE_MAX_LEN = 3200
+
 
 def validate_has_key(obj, key, fullname):
     if key not in obj:
@@ -158,6 +163,47 @@ def migrate_handler_state():
     return
 
 
+def format_stdout_stderr(stdout, stderr, max_len=TELEMETRY_MESSAGE_MAX_LEN):
+    """
+    Format stdout and stderr's output to make it suitable in telemetry.
+    The goal is to maximize the amount of output given the constraints
+    of telemetry.
+
+    For example, if there is more stderr output than stdout output give
+    more buffer space to stderr.
+
+    :param stdout: stdout output as a string
+    :param stderr: stderr output as a string
+    :param max_len: maximum length of the string to return
+
+    :return: a string formatted with stdout and stderr that is less than
+    or equal to max_len.
+    """
+    template = "[stdout]\n{0}\n\n[stderr]\n{1}"
+    # +6 == len("{0}") + len("{1}")
+    max_len_each = int((max_len - len(template) + 6) / 2)
+
+    if max_len_each <= 0:
+        return ''
+
+    def to_s(stdout, stdout_offset, stderr, stderr_offset):
+        s = template.format(stdout[stdout_offset:], stderr[stderr_offset:])
+        return s
+
+    if len(stdout) + len(stderr) < max_len:
+        return to_s(stdout, 0, stderr, 0)
+    elif len(stdout) < max_len_each:
+        bonus = max_len_each - len(stdout)
+        stderr_len = min(max_len_each + bonus, len(stderr))
+        return to_s(stdout, 0, stderr, -1*stderr_len)
+    elif len(stderr) < max_len_each:
+        bonus = max_len_each - len(stderr)
+        stdout_len = min(max_len_each + bonus, len(stdout))
+        return to_s(stdout, -1*stdout_len, stderr, 0)
+    else:
+        return to_s(stdout, -1*max_len_each, stderr, -1*max_len_each)
+
+
 class ExtHandlerState(object):
     NotInstalled = "NotInstalled"
     Installed = "Installed"
@@ -207,8 +253,6 @@ class ExtHandlersHandler(object):
 
             self.report_ext_handlers_status()
             self.cleanup_outdated_handlers()
-        except RestartError:
-            raise
         except Exception as e:
             msg = u"Exception processing extension handlers: {0}".format(
                 ustr(e))
@@ -316,6 +360,7 @@ class ExtHandlersHandler(object):
                 logger.info("Extension handling is on hold")
                 return
 
+        self.ext_handlers.extHandlers.sort(key=operator.methodcaller('sort_key'))
         for ext_handler in self.ext_handlers.extHandlers:
             # TODO: handle install in sequence, enable in parallel
             self.handle_ext_handler(ext_handler, etag)
@@ -346,7 +391,7 @@ class ExtHandlersHandler(object):
                 return
 
             self.set_log_upgrade_guid(ext_handler, True)
-            ext_handler_i.decide_version(etag=etag, target_state=state)
+            ext_handler_i.decide_version(target_state=state)
             if not ext_handler_i.is_upgrade and self.last_etag == etag:
                 if self.log_etag:
                     ext_handler_i.logger.verbose("Version {0} is current for etag {1}",
@@ -374,11 +419,6 @@ class ExtHandlersHandler(object):
             else:
                 message = u"Unknown ext handler state:{0}".format(state)
                 raise ExtensionError(message)
-        except RestartError:
-            ext_handler_i.logger.info("GoalState became stale during "
-                                      "processing. Restarting with new "
-                                      "GoalState")
-            raise
         except Exception as e:
             ext_handler_i.set_handler_status(message=ustr(e), code=-1)
             ext_handler_i.report_event(message=ustr(e), is_success=False)
@@ -388,7 +428,12 @@ class ExtHandlersHandler(object):
         old_ext_handler_i = ext_handler_i.get_installed_ext_handler()
         if old_ext_handler_i is not None and \
            old_ext_handler_i.version_gt(ext_handler_i):
-            raise ExtensionError(u"Downgrade not allowed")
+            msg = "Downgrade is not allowed. Skipping install and enable."
+            ext_handler_i.logger.error(msg)
+            ext_handler_i.set_operation(WALAEventOperation.Downgrade)
+            ext_handler_i.report_event(message=ustr(msg), is_success=True)
+            return
+
         handler_state = ext_handler_i.get_handler_state()
         ext_handler_i.logger.info("[Enable] current handler state is: {0}",
                                   handler_state.lower())
@@ -518,9 +563,12 @@ class ExtHandlerInstance(object):
         self.logger.add_appender(logger.AppenderType.FILE,
                                  logger.LogLevel.INFO, log_file)
 
-    def decide_version(self, etag, target_state=None):
+    def decide_version(self, target_state=None):
         self.logger.verbose("Decide which version to use")
-        pkg_list = self.protocol.get_ext_handler_pkgs(self.ext_handler, etag)
+        try:
+            pkg_list = self.protocol.get_ext_handler_pkgs(self.ext_handler)
+        except ProtocolError as e:
+            raise ExtensionError("Failed to get ext handler pkgs", e)
 
         # Determine the desired and installed versions
         requested_version = FlexibleVersion(
@@ -771,7 +819,7 @@ class ExtHandlerInstance(object):
                         "code" : 0
                     }
                 }
-                fileutil.write_file(json.dumps(status), status_path)
+                fileutil.write_file(status_path, json.dumps(status))
 
             conf_dir = self.get_conf_dir()
             fileutil.mkdir(conf_dir, mode=0o700)
@@ -945,31 +993,37 @@ class ExtHandlerInstance(object):
         begin_utc = datetime.datetime.utcnow()
         self.logger.verbose("Launch command: [{0}]", cmd)
         base_dir = self.get_base_dir()
+
+        def sanitize(s):
+            return ustr(s, encoding='utf-8', errors='backslashreplace')
+
         try:
-            devnull = open(os.devnull, 'w')
-            child = subprocess.Popen(base_dir + "/" + cmd,
-                                     shell=True,
-                                     cwd=base_dir,
-                                     stdout=devnull,
-                                     env=os.environ)
+            # This should be .run(), but due to the wide variety
+            # of Python versions we must support we must use .communicate().
+            process = subprocess.Popen(os.path.join(base_dir, cmd),
+                                  shell=True,
+                                  cwd=base_dir,
+                                  stdout=subprocess.PIPE,
+                                  stderr=subprocess.PIPE,
+                                  env=os.environ)
+            stdout, stderr = process.communicate(timeout)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            stdout, stderr = process.communicate()
+            msg = format_stdout_stderr(sanitize(stdout), sanitize(stderr))
+            raise ExtensionError("Timeout({0}): {1}\n{2}".format(timeout, cmd, msg))
         except Exception as e:
-            #TODO do not catch all exception
+            process.kill()
+            process.wait()
             raise ExtensionError("Failed to launch: {0}, {1}".format(cmd, e))
 
-        retry = timeout
-        while retry > 0 and child.poll() is None:
-            time.sleep(1)
-            retry -= 1
-        if retry == 0:
-            os.kill(child.pid, 9)
-            raise ExtensionError("Timeout({0}): {1}".format(timeout, cmd))
-
-        ret = child.wait()
-        if ret == None or ret != 0:
+        ret = process.poll()
+        if ret is None or ret != 0:
             raise ExtensionError("Non-zero exit code: {0}, {1}".format(ret, cmd))
 
         duration = elapsed_milliseconds(begin_utc)
-        self.report_event(message="Launch command succeeded: {0}".format(cmd), duration=duration)
+        msg = format_stdout_stderr(sanitize(stdout), sanitize(stderr))
+        self.report_event(message="{0}\n{1}".format(cmd, msg), duration=duration)
 
     def load_manifest(self):
         man_file = self.get_manifest_file()
@@ -1070,11 +1124,17 @@ class ExtHandlerInstance(object):
         status_file = os.path.join(state_dir, "HandlerStatus")
 
         try:
-            fileutil.write_file(status_file, json.dumps(get_properties(handler_status)))
+            handler_status_json = json.dumps(get_properties(handler_status))
+            if handler_status_json is not None:
+                fileutil.write_file(status_file, handler_status_json)
+            else:
+                self.logger.error("Failed to create JSON document of handler status for {0} version {1}".format(
+                    self.ext_handler.name,
+                    self.ext_handler.properties.version))
         except (IOError, ValueError, ProtocolError) as e:
             fileutil.clean_ioerror(e,
                 paths=[status_file])
-            self.logger.error("Failed to save handler status: {0}", e)
+            self.logger.error("Failed to save handler status: {0}", traceback.format_exc())
         
     def get_handler_status(self):
         state_dir = self.get_conf_dir()

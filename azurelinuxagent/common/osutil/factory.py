@@ -1,4 +1,4 @@
-# Copyright 2014 Microsoft Corporation
+# Copyright 2018 Microsoft Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# Requires Python 2.4+ and Openssl 1.0+
+# Requires Python 2.6+ and Openssl 1.0+
 #
 
 import azurelinuxagent.common.logger as logger
@@ -28,7 +28,7 @@ from .openbsd import OpenBSDOSUtil
 from .redhat import RedhatOSUtil, Redhat6xOSUtil
 from .suse import SUSEOSUtil, SUSE11OSUtil
 from .ubuntu import UbuntuOSUtil, Ubuntu12OSUtil, Ubuntu14OSUtil, \
-    UbuntuSnappyOSUtil, Ubuntu16OSUtil
+    UbuntuSnappyOSUtil, Ubuntu16OSUtil, Ubuntu18OSUtil
 from .alpine import AlpineOSUtil
 from .bigip import BigIpOSUtil
 from .gaia import GaiaOSUtil
@@ -53,6 +53,8 @@ def get_osutil(distro_name=DISTRO_NAME,
             return Ubuntu14OSUtil()
         elif Version(distro_version) in [Version('16.04'), Version('16.10'), Version('17.04')]:
             return Ubuntu16OSUtil()
+        elif Version(distro_version) in [Version('18.04')]:
+            return Ubuntu18OSUtil()
         elif distro_full_name == "Snappy Ubuntu Core":
             return UbuntuSnappyOSUtil()
         else:
@@ -67,7 +69,7 @@ def get_osutil(distro_name=DISTRO_NAME,
     if distro_name == "coreos" or distro_code_name == "coreos":
         return CoreOSUtil()
 
-    if distro_name == "suse":
+    if distro_name in ("suse", "sles", "opensuse"):
         if distro_full_name == 'SUSE Linux Enterprise Server' \
                 and Version(distro_version) < Version('12') \
                 or distro_full_name == 'openSUSE' and Version(distro_version) < Version('13.2'):
