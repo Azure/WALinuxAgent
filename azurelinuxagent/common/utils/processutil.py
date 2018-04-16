@@ -202,8 +202,7 @@ def capture_from_process_raw(process, cmd, timeout):
             _destroy_process(process, signal.SIGKILL)
             raise ExtensionError("Subprocess was not root of its own process group")
 
-        if sys.version_info.major == 2 \
-                or (sys.version_info.major == 3 and sys.version_info.minor < 3):
+        if sys.version_info < (3, 3):
             stdout, stderr = capture_from_process_pre_33(process, cmd, timeout)
         else:
             stdout, stderr = capture_from_process_modern(process, cmd, timeout)
