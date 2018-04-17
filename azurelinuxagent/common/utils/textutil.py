@@ -26,8 +26,6 @@ import sys
 import zlib
 import xml.dom.minidom as minidom
 
-from distutils.version import LooseVersion as Version
-
 
 def parse_doc(xml_text):
     """

@@ -15,14 +15,15 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-import azurelinuxagent.common.logger as logger
-from azurelinuxagent.common.utils.textutil import Version
 from azurelinuxagent.common.version import DISTRO_NAME, \
                                            DISTRO_VERSION, \
                                            DISTRO_FULL_NAME
 from .default import ResourceDiskHandler
 from .freebsd import FreeBSDResourceDiskHandler
 from .openbsd import OpenBSDResourceDiskHandler
+
+from distutils.version import LooseVersion as Version
+
 
 def get_resourcedisk_handler(distro_name=DISTRO_NAME, 
                              distro_version=DISTRO_VERSION,
