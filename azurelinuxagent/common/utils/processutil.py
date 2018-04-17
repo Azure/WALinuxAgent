@@ -1,9 +1,8 @@
 # Microsoft Azure Linux Agent
 #
-# Copyright Microsoft Corporation
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
+# Copyright (c) Microsoft Corporation. All rights reserved.
+# Licensed under the Apache License.
+# You may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
 #     http://www.apache.org/licenses/LICENSE-2.0
@@ -104,7 +103,9 @@ def capture_from_process_modern(process, cmd, timeout):
     try:
         stdout, stderr = process.communicate(timeout=timeout)
     except subprocess.TimeoutExpired:
-        os.killpg(os.getpgid(process.pid), 9)
+        # Just kill the process. The .communicate method will gather stdout/stderr, close those pipes, and reap
+        # the zombie process. That is, .communicate() does all the other stuff that _destroy_process does.
+        os.killpg(os.getpgid(process.pid), signal.SIGKILL)
         stdout, stderr = process.communicate()
         msg = format_stdout_stderr(sanitize(stdout), sanitize(stderr))
         raise ExtensionError("Timeout({0}): {1}\n{2}".format(timeout, cmd, msg))
@@ -125,6 +126,9 @@ def capture_from_process_pre_33(process, cmd, timeout):
     """
     Can't use process.communicate(timeout=), so do it the hard way.
     """
+    watcher_process_exited = 0
+    watcher_process_timed_out = 1
+
     def kill_on_timeout(pid, watcher_timeout):
         """
         Check for the continued existence of pid once per second. If pid no longer exists, exit with code 0.
@@ -135,10 +139,10 @@ def capture_from_process_pre_33(process, cmd, timeout):
             try:
                 os.kill(pid, 0)
             except OSError as ex:
-                if 3 == ex.errno:   # Process no longer exists
-                    exit(0)
+                if ESRCH == ex.errno:   # Process no longer exists
+                    exit(watcher_process_exited)
         os.killpg(os.getpgid(pid), signal.SIGKILL)
-        exit(1)
+        exit(watcher_process_timed_out)
 
     watcher = Process(target=kill_on_timeout, args=(process.pid, timeout))
     watcher.start()
@@ -150,9 +154,6 @@ def capture_from_process_pre_33(process, cmd, timeout):
     except OSError as e:
         _destroy_process(process, signal.SIGKILL)
         raise ExtensionError("Error while running '{0}': {1}".format(cmd, e.strerror))
-    except RuntimeError as e:
-        _destroy_process(process, signal.SIGKILL)
-        raise ExtensionError("RuntimeError while running '{0}': {1}".format(cmd, e))
     except Exception as e:
         _destroy_process(process, signal.SIGKILL)
         raise ExtensionError("Exception while running '{0}': {1}".format(cmd, e))
@@ -162,7 +163,7 @@ def capture_from_process_pre_33(process, cmd, timeout):
     if watcher.is_alive():
         watcher.terminate()
     else:
-        timeout_happened = (watcher.exitcode == 1)
+        timeout_happened = (watcher.exitcode == watcher_process_timed_out)
 
     if timeout_happened:
         msg = format_stdout_stderr(sanitize(stdout), sanitize(stderr))
