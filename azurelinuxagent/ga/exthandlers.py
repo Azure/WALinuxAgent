@@ -886,14 +886,7 @@ class ExtHandlerInstance(object):
         return seq_no, path
 
     def collect_ext_status(self, ext):
-        """
-        TODO This method takes a parameter but ignores it. Should it return status for just that ext, or all of them?
-        Current behavior is to return an object that reflects the entire status. Should the implementation reach
-        inside the ext_status object and strip it down to just the information about ext?
-
-        :param ext:
-        :return:
-        """
+        # see github issue 1116
         self.logger.verbose("Collect extension status")
 
         seq_no, ext_status_file = self.get_status_file_path()
