@@ -54,7 +54,18 @@ if debug:
                                logger.LogLevel.VERBOSE)
 
 
+def _do_nothing():
+    pass
+
+
 class AgentTestCase(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        if not hasattr(cls, "assertRegex"):
+            cls.assertRegex = cls.assertRegexpMatches if hasattr(cls, "assertRegexpMatches") else _do_nothing
+        if not hasattr(cls, "assertNotRegex"):
+            cls.assertNotRegex = cls.assertNotRegexpMatches if hasattr(cls, "assertNotRegexpMatches") else _do_nothing
+
     def setUp(self):
         prefix = "{0}_".format(self.__class__.__name__)
 
@@ -76,7 +87,8 @@ class AgentTestCase(unittest.TestCase):
         if not debug and self.tmp_dir is not None:
             shutil.rmtree(self.tmp_dir)
 
-    def _create_files(self, tmp_dir, prefix, suffix, count, with_sleep=0):
+    @staticmethod
+    def _create_files(tmp_dir, prefix, suffix, count, with_sleep=0):
         for i in range(count):
             f = os.path.join(tmp_dir, '.'.join((prefix, str(i), suffix)))
             fileutil.write_file(f, "faux content")
