@@ -36,11 +36,6 @@ def set_files(data_files, dest=None, src=None):
     data_files.append((dest, src))
 
 
-def set_bin_files(data_files, dest="/usr/sbin",
-                  src=["bin/waagent", "bin/waagent2.0"]):
-    data_files.append((dest, src))
-
-
 def set_conf_files(data_files, dest="/etc", src=["config/waagent.conf"]):
     data_files.append((dest, src))
 
@@ -80,7 +75,6 @@ def get_data_files(name, version, fullname):
     data_files = []
 
     if name == 'redhat' or name == 'centos':
-        set_bin_files(data_files)
         set_conf_files(data_files)
         set_logrotate_files(data_files)
         set_udev_files(data_files)
@@ -94,13 +88,11 @@ def get_data_files(name, version, fullname):
                 set_sysv_files(data_files)
 
     elif name == 'arch':
-        set_bin_files(data_files, dest="/usr/bin")
         set_conf_files(data_files, src=["config/arch/waagent.conf"])
         set_udev_files(data_files)
         set_systemd_files(data_files, dest='/usr/lib/systemd/system',
                           src=["init/arch/waagent.service"])
     elif name == 'coreos':
-        set_bin_files(data_files, dest="/usr/share/oem/bin")
         set_conf_files(data_files, dest="/usr/share/oem",
                        src=["config/coreos/waagent.conf"])
         set_logrotate_files(data_files)
@@ -109,13 +101,11 @@ def get_data_files(name, version, fullname):
                   src=["init/coreos/cloud-config.yml"])
     elif name == 'clear linux os for intel architecture' \
             or name == 'clear linux software for intel architecture':
-        set_bin_files(data_files, dest="/usr/bin")
         set_conf_files(data_files, dest="/usr/share/defaults/waagent",
                        src=["config/clearlinux/waagent.conf"])
         set_systemd_files(data_files, dest='/usr/lib/systemd/system',
                           src=["init/clearlinux/waagent.service"])
     elif name == 'ubuntu':
-        set_bin_files(data_files)
         set_conf_files(data_files, src=["config/ubuntu/waagent.conf"])
         set_logrotate_files(data_files)
         set_udev_files(data_files)
@@ -133,7 +123,6 @@ def get_data_files(name, version, fullname):
             set_systemd_files(data_files,
                               src=["init/ubuntu/walinuxagent.service"])
     elif name == 'suse' or name == 'opensuse':
-        set_bin_files(data_files)
         set_conf_files(data_files, src=["config/suse/waagent.conf"])
         set_logrotate_files(data_files)
         set_udev_files(data_files)
@@ -147,11 +136,9 @@ def get_data_files(name, version, fullname):
             # sles 12+ and openSUSE 13.2+ use systemd
             set_systemd_files(data_files, dest='/usr/lib/systemd/system')
     elif name == 'freebsd':
-        set_bin_files(data_files, dest="/usr/local/sbin")
         set_conf_files(data_files, src=["config/freebsd/waagent.conf"])
         set_freebsd_rc_files(data_files)
     elif name == 'openbsd':
-        set_bin_files(data_files, dest="/usr/local/sbin")
         set_conf_files(data_files, src=["config/openbsd/waagent.conf"])
         set_openbsd_rc_files(data_files)
     elif name == 'debian':
@@ -161,7 +148,6 @@ def get_data_files(name, version, fullname):
         set_udev_files(data_files, dest="/lib/udev/rules.d")
     else:
         # Use default setting
-        set_bin_files(data_files)
         set_conf_files(data_files)
         set_logrotate_files(data_files)
         set_udev_files(data_files)
@@ -227,5 +213,8 @@ setuptools.setup(
     install_requires=requires,
     cmdclass={
         'install': install
-    }
+    },
+    entry_points = {
+        'console_scripts': ['waagent=azurelinuxagent.agent:main'],
+    },
 )
