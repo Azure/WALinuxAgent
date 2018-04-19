@@ -137,6 +137,11 @@ class TestTextUtil(AgentTestCase):
 
         for t in data:
             self.assertEqual(t[2], textutil.swap_hexstring(t[0], width=t[1]))
-        
+
+    def test_compress(self):
+        result = textutil.compress('[stdout]\nHello World\n\n[stderr]\n\n')
+        self.assertEqual('eJyLLi5JyS8tieXySM3JyVcIzy/KSeHiigaKphYVxXJxAQDAYQr2', result)
+
+
 if __name__ == '__main__':
     unittest.main()
