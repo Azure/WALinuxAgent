@@ -251,7 +251,11 @@ class EventLogger(object):
         if not is_success or log_event:
             _log_event(name, op, message, duration, is_success=is_success)
 
-        event = TelemetryEvent(1, "69B669B9-4AF8-4C50-BDC4-6006FA76E975")
+        self._add_event(duration, evt_type, is_internal, is_success, message, name, op, version, eventId=1)
+        self._add_event(duration, evt_type, is_internal, is_success, message, name, op, version, eventId=6)
+
+    def _add_event(self, duration, evt_type, is_internal, is_success, message, name, op, version, eventId):
+        event = TelemetryEvent(eventId, "69B669B9-4AF8-4C50-BDC4-6006FA76E975")
         event.parameters.append(TelemetryEventParam('Name', name))
         event.parameters.append(TelemetryEventParam('Version', str(version)))
         event.parameters.append(TelemetryEventParam('IsInternal', is_internal))
