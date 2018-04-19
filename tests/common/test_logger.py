@@ -34,7 +34,7 @@ class TestLogger(AgentTestCase):
         logger.reset_periodic()
 
         logger.periodic(logger.EVERY_DAY, _MSG, *_DATA)
-        mock_info.assert_called_once()
+        self.assertEqual(1, mock_info.call_count)
 
     @patch('azurelinuxagent.common.logger.Logger.info')
     def test_periodic_does_not_emit_if_previously_sent(self, mock_info):

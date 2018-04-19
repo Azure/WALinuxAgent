@@ -884,7 +884,7 @@ class TestUpdate(UpdateTestCase):
         mock_get_host.return_value = "faux host"
         host = self.update_handler._get_host_plugin(protocol=protocol)
         print("mock_get_host call cound={0}".format(mock_get_host.call_count))
-        mock_get_host.assert_called_once()
+        self.assertEqual(1, mock_get_host.call_count)
         self.assertEqual("faux host", host)
 
     @patch('azurelinuxagent.common.protocol.wire.WireClient.get_host_plugin')

@@ -78,7 +78,7 @@ class TestResourceDisk(AgentTestCase):
             # assert
             if sys.version_info >= (3,3):
                 with patch("os.posix_fallocate") as posix_fallocate:
-                    assert posix_fallocate.assert_not_called()
+                    self.assertEqual(0, posix_fallocate.call_count)
 
             assert run_patch.call_count == 1
             assert "dd if" in run_patch.call_args_list[0][0][0]
