@@ -16,6 +16,8 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 
+from datetime import datetime
+
 import json
 import os
 import random
@@ -719,7 +721,7 @@ class WireClient(object):
                             # Goalstate is not updated.
                             return
 
-                self.goal_state_flusher.flush()
+                self.goal_state_flusher.flush(datetime.utcnow())
 
                 self.goal_state = goal_state
                 file_name = GOAL_STATE_FILE_NAME.format(goal_state.incarnation)
