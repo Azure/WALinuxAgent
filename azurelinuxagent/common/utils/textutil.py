@@ -302,10 +302,18 @@ def get_bytes_from_pem(pem_str):
 
 
 def compress(s):
+    """
+    Compress a string, and return the base64 encoded result of the compression.
+
+    This method returns a string instead of a byte array.  It is expected
+    that this method is called to compress smallish strings, not to compress
+    the contents of a file. The output of this method is suitable for
+    embedding in log statements.
+    """
     from azurelinuxagent.common.version import PY_VERSION_MAJOR
     if PY_VERSION_MAJOR > 2:
-        return zlib.compress(bytes(s, 'utf-8'))
-    return zlib.compress(s)
+        return base64.b64encode(zlib.compress(bytes(s, 'utf-8'))).decode('utf-8')
+    return base64.b64encode(zlib.compress(s))
 
 
 def b64encode(s):

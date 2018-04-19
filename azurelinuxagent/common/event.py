@@ -16,14 +16,12 @@
 #
 
 import atexit
-import base64
 import datetime
 import json
 import os
 import sys
 import time
 import traceback
-import zlib
 
 from datetime import datetime
 
@@ -167,7 +165,7 @@ def _encode_message(op, message):
         return message
 
     try:
-        return textutil.b64encode(textutil.compress(message))
+        return textutil.compress(message)
     except Exception:
         # If the message could not be encoded a dummy message ('<>') is returned.
         # The original message was still sent via telemetry, so all is not lost.
