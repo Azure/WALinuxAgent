@@ -164,9 +164,18 @@ class TestArchive(AgentTestCase):
             'Microsoft.Azure.Extensions.CustomScript.0.xml'
         ]
 
-        def _write_goal_state_files(temp_files):
+        def _write_goal_state_files(temp_files, content=None):
             for f in temp_files:
-                self._write_file(f)
+                self._write_file(f, content)
+
+        def _check_history_files(timestamp_dir, files, content=None):
+            for f in files:
+                history_path = os.path.join(self.history_dir, timestamp_dir, f)
+                msg = "expected the temp file {0} to exist".format(history_path)
+                self.assertTrue(os.path.exists(history_path), msg)
+                expected_content = f if content is None else content
+                actual_content = fileutil.read_file(history_path)
+                self.assertEqual(expected_content, actual_content)
 
         timestamp = datetime.utcnow()
 
@@ -174,24 +183,7 @@ class TestArchive(AgentTestCase):
         test_subject = StateFlusher(self.tmp_dir)
         test_subject.flush(timestamp)
 
-        # Ensure that the file contets are what we expect after a flush.
-        # The file contents are simply the name of the file.
-        fn = os.path.join(self.history_dir, timestamp.isoformat(), 'Prod.0.manifest.xml')
-        self.assertEqual('Prod.0.manifest.xml', fileutil.read_file(fn))
-
-        # Modify the contents of the file on disk, and re-flush().
-        fileutil.write_file(fn, "--this-has-been-changed--")
-        self.assertEqual("--this-has-been-changed--", fileutil.read_file(fn))
-
-        # re-write all of the same files, and flush again. .flush()
-        # should overwrite the existing ones
-
-        _write_goal_state_files(temp_files)
-        test_subject.flush(timestamp)
-
-        # The contents of the file were overwritten as a result of the flush.
-        self.assertEqual('Prod.0.manifest.xml', fileutil.read_file(fn))
-
+        # Ensure history directory exists, has proper timestamped-based name,
         self.assertTrue(os.path.exists(self.history_dir))
         self.assertTrue(os.path.isdir(self.history_dir))
 
@@ -202,10 +194,16 @@ class TestArchive(AgentTestCase):
         ts = self.parse_isoformat(timestamp_dirs[0])
         self.assertDateTimeCloseTo(ts, datetime.utcnow(), timedelta(seconds=30))
 
-        for f in temp_files:
-            history_path = os.path.join(self.history_dir, timestamp_dirs[0], f)
-            msg = "expected the temp file {0} to exist".format(history_path)
-            self.assertTrue(os.path.exists(history_path), msg)
+        # Ensure saved files contain the right content
+        _check_history_files(timestamp_dirs[0], temp_files)
+
+        # re-write all of the same files with different content, and flush again.
+        # .flush() should overwrite the existing ones
+        _write_goal_state_files(temp_files, "--this-has-been-changed--")
+        test_subject.flush(timestamp)
+
+        # The contents of the saved files were overwritten as a result of the flush.
+        _check_history_files(timestamp_dirs[0], temp_files, "--this-has-been-changed--")
 
     def test_archive04(self):
         """
