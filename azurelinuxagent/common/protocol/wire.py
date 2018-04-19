@@ -1129,8 +1129,7 @@ class WireClient(object):
 
                         host = self.get_host_plugin()
                         uri, headers = host.get_artifact_request(blob)
-                        config = self.fetch(uri, headers, use_proxy=False)
-                        profile = self.decode_config(config)
+                        profile = self.fetch(uri, headers, use_proxy=False)
 
                     if not textutil.is_str_none_or_whitespace(profile):
                         logger.verbose("Artifacts profile downloaded")

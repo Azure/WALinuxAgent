@@ -342,7 +342,7 @@ class TestWireProtocol(AgentTestCase):
         wire_protocol_client.ext_conf.artifacts_profile_blob = testurl
         goal_state = GoalState(WireProtocolData(DATA_FILE).goal_state)
         wire_protocol_client.get_goal_state = Mock(return_value=goal_state)
-        wire_protocol_client.fetch = Mock(side_effect=[None, '{"onHold": "true"}'.encode('utf-8')])
+        wire_protocol_client.fetch = Mock(side_effect=[None, '{"onHold": "true"}'])
         with patch.object(HostPluginProtocol,
                           "get_artifact_request",
                           return_value=['dummy_url', {}]) as artifact_request:
