@@ -108,7 +108,7 @@ class TestEvent(AgentTestCase):
         event.__event_logger__.reset_periodic()
 
         event.add_periodic(logger.EVERY_DAY, "FauxEvent")
-        mock_event.assert_called_once()
+        self.assertEqual(1, mock_event.call_count)
 
     @patch('azurelinuxagent.common.event.EventLogger.add_event')
     def test_periodic_does_not_emit_if_previously_sent(self, mock_event):

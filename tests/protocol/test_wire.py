@@ -153,7 +153,7 @@ class TestWireProtocol(AgentTestCase):
             host_plugin = wire_protocol_client.get_host_plugin()
             self.assertEqual(goal_state.container_id, host_plugin.container_id)
             self.assertEqual(goal_state.role_config_name, host_plugin.role_config_name)
-            patch_get_goal_state.assert_called_once()
+            self.assertEqual(1, patch_get_goal_state.call_count)
 
     def test_download_ext_handler_pkg_fallback(self, *args):
         ext_uri = 'extension_uri'
@@ -218,7 +218,7 @@ class TestWireProtocol(AgentTestCase):
                     wire_protocol_client.get_goal_state = Mock(return_value=goal_state)
                     wire_protocol_client.upload_status_blob()
                     patch_default_upload.assert_called_once_with(testurl)
-                    wire_protocol_client.get_goal_state.assert_called_once()
+                    self.assertEqual(1, wire_protocol_client.get_goal_state.call_count)
                     patch_http.assert_called_once_with(testurl, wire_protocol_client.status_blob)
                     self.assertTrue(HostPluginProtocol.is_default_channel())
                     HostPluginProtocol.set_default_channel(False)
@@ -255,8 +255,8 @@ class TestWireProtocol(AgentTestCase):
             with patch.object(WireClient, "report_status_event") as mock_event:
                 wire_protocol_client.upload_status_blob()
 
-                mock_prepare.assert_called_once()
-                mock_event.assert_called_once()
+                self.assertEqual(1, mock_prepare.call_count)
+                self.assertEqual(1, mock_event.call_count)
 
     def test_get_in_vm_artifacts_profile_blob_not_available(self, *args):
         wire_protocol_client = WireProtocol(wireserver_url).client

@@ -571,13 +571,13 @@ class TestExtension(AgentTestCase):
         conf.get_enable_overprovisioning = Mock(return_value=False)
         with patch.object(ExtHandlersHandler, 'handle_ext_handler') as patch_handle_ext_handler:
             exthandlers_handler.handle_ext_handlers()
-            patch_handle_ext_handler.assert_called()
+            self.assertEqual(1, patch_handle_ext_handler.call_count)
 
         # enable extension handling blocking
         conf.get_enable_overprovisioning = Mock(return_value=True)
         with patch.object(ExtHandlersHandler, 'handle_ext_handler') as patch_handle_ext_handler:
             exthandlers_handler.handle_ext_handlers()
-            patch_handle_ext_handler.assert_not_called()
+            self.assertEqual(0, patch_handle_ext_handler.call_count)
 
 
     def test_handle_ext_handlers_on_hold_false(self, *args):
@@ -596,13 +596,13 @@ class TestExtension(AgentTestCase):
         protocol.get_artifacts_profile = Mock(return_value=mock_in_vm_artifacts_profile)
         with patch.object(ExtHandlersHandler, 'handle_ext_handler') as patch_handle_ext_handler:
             exthandlers_handler.handle_ext_handlers()
-            patch_handle_ext_handler.assert_called_once()
+            self.assertEqual(1, patch_handle_ext_handler.call_count)
 
         #Test when in_vm_artifacts_profile is not available
         protocol.get_artifacts_profile = Mock(return_value=None)
         with patch.object(ExtHandlersHandler, 'handle_ext_handler') as patch_handle_ext_handler:
             exthandlers_handler.handle_ext_handlers()
-            patch_handle_ext_handler.assert_called_once()
+            self.assertEqual(1, patch_handle_ext_handler.call_count)
 
     def _assert_ext_status(self, report_ext_status, expected_status,
                            expected_seq_no):

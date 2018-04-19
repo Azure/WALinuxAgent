@@ -65,9 +65,9 @@ class TestProvision(AgentTestCase):
 
         ph.run()
 
-        ph.is_provisioned.assert_not_called()
-        ph.report_ready.assert_called_once()
-        ph.write_provisioned.assert_called_once()
+        self.assertEqual(0, ph.is_provisioned.call_count)
+        self.assertEqual(1, ph.report_ready.call_count)
+        self.assertEqual(1, ph.write_provisioned.call_count)
 
     @patch('os.path.isfile', return_value=False)
     def test_is_provisioned_not_provisioned(self, mock_isfile):
@@ -90,8 +90,8 @@ class TestProvision(AgentTestCase):
         mock_deprovision.return_value = deprovision_handler
 
         self.assertTrue(ph.is_provisioned())
-        ph.osutil.is_current_instance_id.assert_called_once()
-        deprovision_handler.run_changed_unique_id.assert_not_called()
+        self.assertEqual(1, ph.osutil.is_current_instance_id.call_count)
+        self.assertEqual(0, deprovision_handler.run_changed_unique_id.call_count)
 
     @patch('os.path.isfile', return_value=True)
     @patch('azurelinuxagent.common.utils.fileutil.read_file',
@@ -110,8 +110,8 @@ class TestProvision(AgentTestCase):
         mock_deprovision.return_value = deprovision_handler
 
         self.assertTrue(ph.is_provisioned())
-        ph.osutil.is_current_instance_id.assert_called_once()
-        deprovision_handler.run_changed_unique_id.assert_called_once()
+        self.assertEqual(1, ph.osutil.is_current_instance_id.call_count)
+        self.assertEqual(1, deprovision_handler.run_changed_unique_id.call_count)
 
     @distros()
     @patch('azurelinuxagent.common.osutil.default.DefaultOSUtil.get_instance_id',
