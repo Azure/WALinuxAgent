@@ -420,6 +420,7 @@ class TestExtension(AgentTestCase):
                                                             "<Incarnation>2<")
         test_data.ext_conf = test_data.ext_conf.replace("seqNo=\"0\"",
                                                         "seqNo=\"1\"")
+        # Swap the dependency ordering
         test_data.ext_conf = test_data.ext_conf.replace("dependencyLevel=\"2\"",
                                                         "dependencyLevel=\"3\"")
         test_data.ext_conf = test_data.ext_conf.replace("dependencyLevel=\"1\"",
@@ -433,6 +434,9 @@ class TestExtension(AgentTestCase):
         self.assertEqual(exthandlers_handler.ext_handlers.extHandlers[1].properties.extensions[0].dependencyLevel, 4)
 
         #Test disable
+        # In the case of disable, the last extension to be enabled should be
+        # the first extension disabled. The first extension enabled should be
+        # the last one disabled.
         test_data.goal_state = test_data.goal_state.replace("<Incarnation>2<",
                                                             "<Incarnation>3<")
         test_data.ext_conf = test_data.ext_conf.replace("enabled", "disabled")
@@ -445,9 +449,13 @@ class TestExtension(AgentTestCase):
         self.assertEqual(exthandlers_handler.ext_handlers.extHandlers[1].properties.extensions[0].dependencyLevel, 3)
 
         #Test uninstall
+        # In the case of uninstall, the last extension to be installed should be
+        # the first extension uninstalled. The first extension installed
+        # should be the last one uninstalled.
         test_data.goal_state = test_data.goal_state.replace("<Incarnation>3<",
                                                             "<Incarnation>4<")
         test_data.ext_conf = test_data.ext_conf.replace("disabled", "uninstall")
+        # Swap the dependency ordering AGAIN
         test_data.ext_conf = test_data.ext_conf.replace("dependencyLevel=\"3\"",
                                                         "dependencyLevel=\"6\"")
         test_data.ext_conf = test_data.ext_conf.replace("dependencyLevel=\"4\"",

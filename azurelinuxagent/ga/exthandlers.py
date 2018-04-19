@@ -368,28 +368,20 @@ class ExtHandlersHandler(object):
         for dependency in dependencies:
             handler_i = ExtHandlerInstance(dependency.handler, self.protocol)
             timeout = 90 if dependency.timeout is None else dependency.timeout
-            timeout_delta = datetime.timedelta(seconds=(timeout * 60))
+            timeout = datetime.timedelta(seconds=(timeout * 60))
             begin = datetime.datetime.utcnow()
             for ext in dependency.exts:
-                status = None
-                while timeout_delta > (datetime.datetime.utcnow() - begin):
-                    status = handler_i.collect_ext_status(ext)
-                    if status is None:
-                        break
-                    all_success = status.status == "success"
-                    for substatus in status.substatusList:
-                        if substatus.status != "success":
-                            all_success = False
-                            break
-                    if all_success:
-                        break
-                    time.sleep(10)
-                if (datetime.datetime.utcnow() - begin) > timeout_delta:
-                    raise ExtensionError("Timeout waiting for success status "
-                                         "from dependency {}/{} for {}"
-                                         "status was: {}".format(
-                                             dependency.handler.name, ext.name,
-                                             ext_handler.name, status))
+                success_status, status = handler_i.is_ext_status_success(ext)
+                while not success_status:
+                    if (datetime.datetime.utcnow() - begin) > timeout:
+                        raise ExtensionError("Timeout waiting for success status "
+                                             "from dependency {}/{} for {}"
+                                             "status was: {}".format(
+                                                 dependency.handler.name, ext.name,
+                                                 ext_handler.name, status))
+                    else:
+                        time.sleep(10)
+                    success_status, status = handler_i.is_ext_status_success(ext)
 
     def handle_ext_handler(self, ext_handler, etag):
         ext_handler_i = ExtHandlerInstance(ext_handler, self.protocol)
@@ -973,6 +965,17 @@ class ExtHandlerInstance(object):
 
         return ext_status
     
+    def is_ext_status_success(self, ext):
+        status = self.collect_ext_status(ext)
+        if status is None:
+            return (True, status)
+        if status.status != "success":
+            return (False, status)
+        for substatus in status.substatusList:
+            if substatus.status != "success":
+                return (False, status)
+        return (True, status)
+
     def report_ext_status(self):
         active_exts = []
         for ext in self.ext_handler.properties.extensions:

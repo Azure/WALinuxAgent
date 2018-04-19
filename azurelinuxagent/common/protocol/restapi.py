@@ -155,7 +155,7 @@ class Dependency(object):
 
     def __init__(self, handler=None, exts=None, timeout=None):
         self.handler = handler
-        self.exts = exts
+        self.exts = [] if exts is None else exts
         self.timeout = timeout
 
 
