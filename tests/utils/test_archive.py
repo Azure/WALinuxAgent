@@ -1,11 +1,9 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the Apache License.
+from datetime import datetime, timedelta
 
 import zipfile
 
-from datetime import datetime, timedelta
-
-from azurelinuxagent.common.utils import shellutil
 from azurelinuxagent.common.utils.archive import StateFlusher, StateArchiver, MAX_ARCHIVED_STATES
 from tests.tools import *
 
@@ -57,7 +55,7 @@ class TestArchive(AgentTestCase):
             self._write_file(f)
 
         test_subject = StateFlusher(self.tmp_dir)
-        test_subject.flush()
+        test_subject.flush(datetime.utcnow())
 
         self.assertTrue(os.path.exists(self.history_dir))
         self.assertTrue(os.path.isdir(self.history_dir))
@@ -67,7 +65,7 @@ class TestArchive(AgentTestCase):
 
         self.assertIsIso8601(timestamp_dirs[0])
         ts = self.parse_isoformat(timestamp_dirs[0])
-        self.assertDateTimeCloseTo(ts, datetime.now(), timedelta(seconds=30))
+        self.assertDateTimeCloseTo(ts, datetime.utcnow(), timedelta(seconds=30))
 
         for f in temp_files:
             history_path = os.path.join(self.history_dir, timestamp_dirs[0], f)
@@ -92,7 +90,7 @@ class TestArchive(AgentTestCase):
             self._write_file(f)
 
         flusher = StateFlusher(self.tmp_dir)
-        flusher.flush()
+        flusher.flush(datetime.utcnow())
 
         test_subject = StateArchiver(self.tmp_dir)
         test_subject.archive()
@@ -105,7 +103,7 @@ class TestArchive(AgentTestCase):
 
         self.assertIsIso8601(ts_s)
         ts = self.parse_isoformat(ts_s)
-        self.assertDateTimeCloseTo(ts, datetime.now(), timedelta(seconds=30))
+        self.assertDateTimeCloseTo(ts, datetime.utcnow(), timedelta(seconds=30))
 
         zip_full = os.path.join(self.history_dir, zip_fn)
         self.assertZipContains(zip_full, temp_files)
@@ -154,6 +152,69 @@ class TestArchive(AgentTestCase):
             else:
                 fn = "{0}.zip".format(ts)
             self.assertTrue(fn in archived_entries, "'{0}' is not in the list of unpurged entires".format(fn))
+
+    def test_archive03(self):
+        """
+        If the StateFlusher has to flush the same file, it should
+        overwrite the existing one.
+        """
+        temp_files = [
+            'Prod.0.manifest.xml',
+            'Prod.0.agentsManifest',
+            'Microsoft.Azure.Extensions.CustomScript.0.xml'
+        ]
+
+        def _write_goal_state_files(temp_files):
+            for f in temp_files:
+                self._write_file(f)
+
+        timestamp = datetime.utcnow()
+
+        _write_goal_state_files(temp_files)
+        test_subject = StateFlusher(self.tmp_dir)
+        test_subject.flush(timestamp)
+
+        # Ensure that the file contets are what we expect after a flush.
+        # The file contents are simply the name of the file.
+        fn = os.path.join(self.history_dir, timestamp.isoformat(), 'Prod.0.manifest.xml')
+        self.assertEqual('Prod.0.manifest.xml', fileutil.read_file(fn))
+
+        # Modify the contents of the file on disk, and re-flush().
+        fileutil.write_file(fn, "--this-has-been-changed--")
+        self.assertEqual("--this-has-been-changed--", fileutil.read_file(fn))
+
+        # re-write all of the same files, and flush again. .flush()
+        # should overwrite the existing ones
+
+        _write_goal_state_files(temp_files)
+        test_subject.flush(timestamp)
+
+        # The contents of the file were overwritten as a result of the flush.
+        self.assertEqual('Prod.0.manifest.xml', fileutil.read_file(fn))
+
+        self.assertTrue(os.path.exists(self.history_dir))
+        self.assertTrue(os.path.isdir(self.history_dir))
+
+        timestamp_dirs = os.listdir(self.history_dir)
+        self.assertEqual(1, len(timestamp_dirs))
+
+        self.assertIsIso8601(timestamp_dirs[0])
+        ts = self.parse_isoformat(timestamp_dirs[0])
+        self.assertDateTimeCloseTo(ts, datetime.utcnow(), timedelta(seconds=30))
+
+        for f in temp_files:
+            history_path = os.path.join(self.history_dir, timestamp_dirs[0], f)
+            msg = "expected the temp file {0} to exist".format(history_path)
+            self.assertTrue(os.path.exists(history_path), msg)
+
+    def test_archive04(self):
+        """
+        The archive directory is created if it does not exist.
+
+        This failure was caught when .purge() was called before .archive().
+        """
+        test_subject = StateArchiver(os.path.join(self.tmp_dir, 'does-not-exist'))
+        test_subject.purge()
 
     def parse_isoformat(self, s):
         return datetime.strptime(s, '%Y-%m-%dT%H:%M:%S.%f')

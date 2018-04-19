@@ -1,14 +1,13 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the Apache License.
-
 import os
 import re
 import shutil
 import zipfile
 
-from datetime import datetime
-
 from azurelinuxagent.common.utils import fileutil
+
+import azurelinuxagent.common.logger as logger
 
 
 """
@@ -34,6 +33,8 @@ is /var/lib/waagent.
 The timestamp is an ISO8601 formatted value.
 """
 
+ARCHIVE_DIRECTORY_NAME = 'history'
+
 MAX_ARCHIVED_STATES = 50
 
 CACHE_PATTERNS = [
@@ -50,19 +51,20 @@ ARCHIVE_PATTERNS_ZIP       = re.compile('^\d{4}\-\d{2}\-\d{2}T\d{2}:\d{2}:\d{2}\
 
 class StateFlusher(object):
     def __init__(self, lib_dir):
-        self._timestamp = datetime.now()
         self._source = lib_dir
-        self._target = os.path.join(self._source, 'history', self._timestamp.isoformat())
 
-    def flush(self):
+    def flush(self, timestamp):
         files = self._get_files_to_archive()
         if len(files) == 0:
             return
 
-        if self._mkdir():
-            self._archive(files)
+        if self._mkdir(timestamp):
+            self._archive(files, timestamp)
         else:
             self._purge(files)
+
+    def history_dir(self, timestamp):
+        return os.path.join(self._source, ARCHIVE_DIRECTORY_NAME, timestamp.isoformat())
 
     def _get_files_to_archive(self):
         files = []
@@ -76,19 +78,23 @@ class StateFlusher(object):
 
         return files
 
-    def _archive(self, files):
+    def _archive(self, files, timestamp):
         for f in files:
-            shutil.move(f, self._target)
+            dst = os.path.join(self.history_dir(timestamp), os.path.basename(f))
+            shutil.move(f, dst)
 
     def _purge(self, files):
         for f in files:
             os.remove(f)
 
-    def _mkdir(self):
+    def _mkdir(self, timestamp):
+        d = self.history_dir(timestamp)
+
         try:
-            fileutil.mkdir(self._target, mode=0o700)
+            fileutil.mkdir(d, mode=0o700)
             return True
-        except:
+        except IOError as e:
+            logger.error("{0} : {1}".format(d, e.strerror))
             return False
 
 
@@ -162,7 +168,13 @@ class StateDirectory(State):
 
 class StateArchiver(object):
     def __init__(self, lib_dir):
-        self._source = os.path.join(lib_dir, 'history')
+        self._source = os.path.join(lib_dir, ARCHIVE_DIRECTORY_NAME)
+
+        if not os.path.isdir(self._source):
+            try:
+                fileutil.mkdir(self._source, mode=0o700)
+            except IOError as e:
+                logger.error("{0} : {1}", self._source, e.strerror)
 
     def purge(self):
         """
