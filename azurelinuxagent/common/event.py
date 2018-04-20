@@ -85,6 +85,7 @@ SHOULD_ENCODE_MESSAGE_OP = [
     WALAEventOperation.UnInstall,
 ]
 
+
 class EventStatus(object):
     EVENT_STATUS_FILE = "event_status.json"
 
@@ -114,7 +115,8 @@ class EventStatus(object):
         self._status[event] = (status is True)
         self._save()
 
-    def _event_name(self, name, version, op):
+    @staticmethod
+    def _event_name(name, version, op):
         return "{0}-{1}-{2}".format(name, version, op)
 
     def _load(self):
@@ -158,9 +160,10 @@ def _encode_message(op, message):
 
     You may need to install the pigz command.
 
-    :param op: Operation, e.g. Enable or Install
-    :param message: Message to encode
+    :param str op: Operation, e.g. Enable or Install
+    :param str message: Message to encode
     :return: gzip'ed and base64 encoded message, or the original message
+    :rtype: str
     """
 
     if len(message) == 0:
@@ -229,17 +232,17 @@ class EventLogger(object):
             (self.periodic_events[h] + delta) <= datetime.now()
 
     def add_periodic(self,
-        delta, name, op=WALAEventOperation.Unknown, is_success=True, duration=0,
-        version=CURRENT_VERSION, message="", evt_type="",
-        is_internal=False, log_event=True, force=False):
+                     delta, name, op=WALAEventOperation.Unknown, is_success=True, duration=0,
+                     version=CURRENT_VERSION, message="", evt_type="",
+                     is_internal=False, log_event=True, force=False):
 
         h = hash(name+op+ustr(is_success)+message)
         
         if force or self.is_period_elapsed(delta, h):
             self.add_event(name,
-                op=op, is_success=is_success, duration=duration,
-                version=version, message=message, evt_type=evt_type,
-                is_internal=is_internal, log_event=log_event)
+                           op=op, is_success=is_success, duration=duration,
+                           version=version, message=message, evt_type=evt_type,
+                           is_internal=is_internal, log_event=log_event)
             self.periodic_events[h] = datetime.now()
 
     def add_event(self,
@@ -307,11 +310,11 @@ class EventLogger(object):
         """
         Create and save an event which contains a telemetry event.
 
-        :param category: str
-        :param counter: str
-        :param instance: str
-        :param value:
-        :param log_it: bool
+        :param str category: The category of metric (e.g. "cpu", "memory")
+        :param str counter: The specific metric within the category (e.g. "%idle")
+        :param str instance: For instanced metrics, the instance identifier (filesystem name, cpu core#, etc.)
+        :param value: Value of the metric
+        :param bool log_it: If true, log the collected metric in the agent log
         """
         if log_it:
             from azurelinuxagent.common.version import AGENT_NAME
@@ -340,7 +343,7 @@ def elapsed_milliseconds(utc_start):
         return 0
 
     d = now - utc_start
-    return int(((d.days * 24 * 60 * 60 + d.seconds) * 1000) + \
+    return int(((d.days * 24 * 60 * 60 + d.seconds) * 1000) +
                     (d.microseconds / 1000.0))
 
 
@@ -356,22 +359,22 @@ def report_event(op, is_success=True, message=''):
 def report_periodic(delta, op, is_success=True, message=''):
     from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
     add_periodic(delta, AGENT_NAME,
-              version=CURRENT_VERSION,
-              is_success=is_success,
-              message=message,
-              op=op)
+                 version=CURRENT_VERSION,
+                 is_success=is_success,
+                 message=message,
+                 op=op)
 
 
 def report_metric(category, counter, instance, value, log_it=False, reporter=__event_logger__):
     """
     Send a telemetry event reporting a single instance of a performance counter.
 
-    :param category: str
-    :param counter: str
-    :param instance: str
-    :param value:
-    :param log_it: bool
-    :param reporter: EventLogger
+    :param str category: The category of the metric (cpu, memory, etc)
+    :param str counter: The name of the metric ("%idle", etc)
+    :param str instance: For instanced metrics, the identifier of the instance. E.g. a disk drive name, a cpu core#
+    :param     value: The value of the metric
+    :param bool log_it: If True, log the metric in the agent log as well
+    :param EventLogger reporter: The EventLogger instance to which metric events should be sent
     """
     if reporter.event_dir is None:
         from azurelinuxagent.common.version import AGENT_NAME
@@ -408,10 +411,10 @@ def add_log_event(level, message, reporter=__event_logger__):
 
 
 def add_periodic(
-    delta, name, op=WALAEventOperation.Unknown, is_success=True, duration=0,
-    version=CURRENT_VERSION,
-    message="", evt_type="", is_internal=False, log_event=True, force=False,
-    reporter=__event_logger__):
+                delta, name, op=WALAEventOperation.Unknown, is_success=True, duration=0,
+                version=CURRENT_VERSION,
+                message="", evt_type="", is_internal=False, log_event=True, force=False,
+                reporter=__event_logger__):
     if reporter.event_dir is None:
         logger.warn("Cannot add periodic event -- Event reporter is not initialized.")
         _log_event(name, op, message, duration, is_success=is_success)

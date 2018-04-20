@@ -28,11 +28,9 @@ import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.logger as logger
 
-from azurelinuxagent.common.cgroups import CGroups, CGroupsTelemetry, CGROUP_AGENT
-from azurelinuxagent.common.event import add_event, WALAEventOperation, report_metric
+from azurelinuxagent.common.event import report_metric
 from azurelinuxagent.common.exception import EventError, ProtocolError, OSUtilError
-from azurelinuxagent.common.cgroups import CGroups, CGroupsTelemetry, \
-    CGROUP_AGENT
+from azurelinuxagent.common.cgroups import CGroups, CGroupsTelemetry
 from azurelinuxagent.common.event import add_event, WALAEventOperation
 from azurelinuxagent.common.exception import EventError, ProtocolError, OSUtilError, HttpError
 from azurelinuxagent.common.future import ustr
@@ -219,8 +217,6 @@ class MonitorHandler(object):
         # performance counters
         collection_period = datetime.timedelta(minutes=5)
         last_collection = datetime.datetime.utcnow() - collection_period
-
-        CGroups.add_to_agent_cgroup()
 
         # Create a new identifier on each restart and reset the counter
         heartbeat_id = str(uuid.uuid4()).upper()
