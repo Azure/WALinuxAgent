@@ -61,10 +61,16 @@ def _do_nothing():
 class AgentTestCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        # Setup newer unittest assertions missing in prior versions of Python
+
         if not hasattr(cls, "assertRegex"):
             cls.assertRegex = cls.assertRegexpMatches if hasattr(cls, "assertRegexpMatches") else _do_nothing
         if not hasattr(cls, "assertNotRegex"):
             cls.assertNotRegex = cls.assertNotRegexpMatches if hasattr(cls, "assertNotRegexpMatches") else _do_nothing
+        if not hasattr(cls, "assertIn"):
+            cls.assertIn = cls.emulate_assertIn
+        if not hasattr(cls, "assertNotIn"):
+            cls.assertNotIn = cls.emulate_assertNotIn
 
     def setUp(self):
         prefix = "{0}_".format(self.__class__.__name__)
@@ -86,6 +92,12 @@ class AgentTestCase(unittest.TestCase):
     def tearDown(self):
         if not debug and self.tmp_dir is not None:
             shutil.rmtree(self.tmp_dir)
+
+    def emulate_assertIn(self, a, b, msg=None):
+        self.assertTrue(a in b, msg)
+
+    def emulate_assertNotIn(self, a, b, msg=None):
+        self.assertTrue(a not in b, msg)
 
     @staticmethod
     def _create_files(tmp_dir, prefix, suffix, count, with_sleep=0):

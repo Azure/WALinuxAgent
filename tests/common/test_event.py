@@ -218,8 +218,10 @@ class TestEvent(AgentTestCase):
         utc_start = datetime.utcnow() + timedelta(days=1)
         self.assertEqual(0, elapsed_milliseconds(utc_start))
 
-    @patch('azurelinuxagent.common.event.EventLogger.add_event')
+    @patch('azurelinuxagent.common.event.EventLogger.save_event')
     def test_report_metric(self, mock_event):
         event.report_metric("cpu", "%idle", "_total", 10.0)
         self.assertEqual(1, mock_event.call_count)
         event_json = mock_event.call_args[0][0]
+        self.assertIn("69B669B9-4AF8-4C50-BDC4-6006FA76E975", event_json)
+        self.assertIn("%idle", event_json)
