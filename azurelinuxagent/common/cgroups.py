@@ -18,7 +18,7 @@ import os
 import re
 import time
 
-from azurelinuxagent.common import logger, conf
+from azurelinuxagent.common import logger
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 
@@ -75,6 +75,21 @@ class Cpu(object):
         return cpu_total
 
     @staticmethod
+    def get_proc_stat():
+        """
+        Get the contents of /proc/stat.
+        :return: A single string with the contents of /proc/stat
+        :rtype: str
+        """
+        results = None
+        try:
+            results = fileutil.read_file('/proc/stat')
+        except (OSError, IOError) as ex:
+            logger.warn("Couldn't read /proc/stat: {0}".format(ex.strerror))
+
+        return results
+
+    @staticmethod
     def get_current_system_cpu():
         """
         Compute the number of USER_HZ units of time have elapsed in all categories, across all cores, since boot.
@@ -82,7 +97,7 @@ class Cpu(object):
         :return: int
         """
         system_cpu = 0
-        proc_stat = fileutil.read_file('/proc/stat')
+        proc_stat = Cpu.get_proc_stat()
         if proc_stat is not None:
             for line in proc_stat.splitlines():
                 if re.match('^cpu .*', line):
@@ -201,7 +216,7 @@ class CGroupsTelemetry(object):
                 pid_list = fileutil.read_file(member_path, 'r')
                 if pid_list:
                     is_empty = False
-            except:
+            except (OSError, IOError):
                 pass
             if item in CGroupsTelemetry._tracked:
                 if is_empty:
@@ -388,24 +403,29 @@ class CGroups(object):
             log_event=False)
 
     @staticmethod
-    def add_to_extension_cgroup(name):
+    def add_to_extension_cgroup(name, pid=int(os.getpid())):
         """
         Create cgroup directories for this extension in each of the hierarchies, then add this process to the new cgroup
 
-        :param name: str
+        :param str name: Short name of extension, suitable for naming directories in the filesystem
+        :param int pid: Process id of extension to be added to the cgroup
+        :return: The CGroups object into which the extension was moved. None if CGroups aren't enabled.
+        :rtype: str
         """
         if not CGroups.enabled():
-            return
+            return None
         if name == AGENT_NAME:
             raise CGroupsException('Extension cgroup name cannot match agent cgroup name({0})'.format(AGENT_NAME))
 
-        pid = int(os.getpid())
+        cg = None
         try:
             logger.info("Move process {0} into cgroups for extension {1}".format(pid, name))
             cg = CGroups(name)
             cg.add(pid)
         except Exception as ex:
             logger.warn("Unable to move process {0} into cgroups for {1}: {2}".format(pid, name, ex))
+
+        return cg
 
     @staticmethod
     def get_my_cgroup_path(hierarchy_id):
@@ -447,8 +467,8 @@ class CGroups(object):
         :param hierarchy: str
         :return: str
         """
-        id = CGroups.get_hierarchy_id(hierarchy)
-        return os.path.join(BASE_CGROUPS, hierarchy, CGroups.get_my_cgroup_path(id))
+        hierarchy_id = CGroups.get_hierarchy_id(hierarchy)
+        return os.path.join(BASE_CGROUPS, hierarchy, CGroups.get_my_cgroup_path(hierarchy_id))
 
     def _get_cgroup_file(self, hierarchy, file_name):
         return os.path.join(self.cgroups[hierarchy], file_name)
@@ -500,7 +520,7 @@ class CGroups(object):
     def set_cpu_limit(self, limit=None):
         """
         Limit this cgroup to a percentage of a single core. limit=10 means 10% of one core; 150 means 150%, which
-        is useful only in multicore systems.
+        is useful only in multi-core systems.
         To limit a cgroup to utilize 10% of a single CPU, use the following commands:
             # echo 10000 > /cgroup/cpu/red/cpu.cfs_quota_us
             # echo 100000 > /cgroup/cpu/red/cpu.cfs_period_us
@@ -527,7 +547,7 @@ class CGroups(object):
         :return: int
         """
         proc_count = 0
-        proc_stat = CGroups.get_proc_stat()
+        proc_stat = Cpu.get_proc_stat()
         if proc_stat is None:
             raise CGroupsException("Could not read /proc/stat")
         for line in proc_stat.splitlines():

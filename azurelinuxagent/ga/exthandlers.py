@@ -1011,8 +1011,8 @@ class ExtHandlerInstance(object):
         except OSError as e:
             raise ExtensionError("Failed to launch '{0}': {1}".format(full_path, e.strerror))
 
-        # TODO Cgroup.add_to_cgroup(extension name, process.pid)
-        # preexec_fn = Cgroup.add_to_azure_cgroup('launch ' + cmd, log=True))
+        cg = CGroups.add_to_extension_cgroup(self.ext_handler.name, pid=process.pid)
+        CGroupsTelemetry.track_cgroup(cg)
         msg = capture_from_process(process, cmd, timeout)
 
         ret = process.poll()
