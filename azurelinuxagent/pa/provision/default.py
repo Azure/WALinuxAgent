@@ -88,7 +88,7 @@ class ProvisionHandler(object):
 
             self.write_provisioned()
 
-            self.report_event("Provisioning succeeded ({0})".format(self._get_uptime_seconds()),
+            self.report_event("Provisioning succeeded ({0}s)".format(self._get_uptime_seconds()),
                 is_success=True,
                 duration=elapsed_milliseconds(utc_start))
 
