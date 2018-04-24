@@ -408,6 +408,7 @@ class ExtHandlersHandler(object):
                 ext_handler_i.copy_status_files(old_ext_handler_i)
                 ext_handler_i.update()
                 old_ext_handler_i.uninstall()
+                old_ext_handler_i.rm_ext_pkg_zip()
                 old_ext_handler_i.rm_ext_handler_dir()
                 ext_handler_i.update_with_install()
         else:
@@ -432,6 +433,7 @@ class ExtHandlersHandler(object):
             if handler_state == ExtHandlerState.Enabled:
                 ext_handler_i.disable()
             ext_handler_i.uninstall()
+            ext_handler_i.rm_ext_pkg_zip()
         ext_handler_i.rm_ext_handler_dir()
 
     def report_ext_handlers_status(self):
@@ -640,6 +642,14 @@ class ExtHandlerInstance(object):
         self.set_logger()
         return
 
+    @property
+    def name(self):
+        return self.ext_handler.name
+
+    @property
+    def version(self):
+        return self.ext_handler.properties.version
+
     def set_logger(self):
         prefix = "[{0}]".format(self.get_full_name())
         self.logger = logger.Logger(logger.DEFAULT_LOGGER, prefix)
@@ -707,6 +717,70 @@ class ExtHandlerInstance(object):
         ext_handler_version = self.ext_handler.properties.version
         add_event(name=self.ext_handler.name, version=ext_handler_version, message=message,
                   op=self.operation, is_success=is_success, duration=duration)
+
+    def try_get_pkg_file(self):
+        """
+        Attempt to get the full name of an extension ZIP package that was downloaded
+        based on the name and the version of the extension handler.
+
+        This is not a simple process. The extension name in goal state combines
+        namespace and type, but the version is separate. When the agent downloads
+        the extension from storage, the name separates namespace, type, and version.
+
+        This means the code has to figure out how to divide a combined namespace
+        and type. This is not hard, but the inconsistency between systems is
+        annoying.
+
+        Here are the naming conventions used in different places.
+
+        Goal State:
+          name="<Namespace>.<Type>" version="1.0.0"
+
+        URL:
+          "<Namespace>__<Type>__<Version>"
+
+        The code has to determine how to break namespace and type to properly
+        compare the Goal State value with the URL value. The approach taken by
+        the code below is to normalize the value to Goal State's view of the
+        world.
+
+        Given a namespace of Microsoft.OSTCExtensions, a typeof CustomScriptForLinux,
+          and a Version of 1.5.2.2
+        Then the method will determine that
+            name="Microsoft.OSTCExtensions.CustomScriptForLinux" version="1.5.2.2"
+          is equivalent to
+            "Microsoft.OSTCExtensions__CustomScriptForLinux__1.5.2.2
+          by normalizing both values to
+            "Microsoft.OSTCExtensions.CustomScriptForLinux.1.5.2.2
+        And that the full path to the extension's archive is
+            "/var/lib/waagent/Microsoft.OSTCExtensions.CustomScriptForLinux.1.5.2.2.zip"
+
+        :return: full path to package's .zip or None
+        :rtype: str
+        """
+        if self.pkg_file is not None:
+            return self.pkg_file
+
+        def normalize_ext_name(f):
+            parts = f.split('__')
+            if len(parts) != 3:
+                return None
+            return "{0}.{1}.{2}".format(parts[0], parts[1], parts[2])
+
+        try:
+            normalized_ext_name = "{0}.{1}.zip".format(
+                self.ext_handler.name,
+                self.ext_handler.properties.version)
+
+            pattern = os.path.join(conf.get_lib_dir(), '*.zip')
+            for f in glob.glob(pattern):
+                normalized_zip_name = normalize_ext_name(os.path.basename(f))
+                if normalized_zip_name == normalized_ext_name:
+                    return f
+
+            return None
+        except:
+            return None
 
     def download(self):
         begin_utc = datetime.datetime.utcnow()
@@ -830,7 +904,16 @@ class ExtHandlerInstance(object):
             self.launch_command(uninstall_cmd)
         except ExtensionError as e:
             self.report_event(message=ustr(e), is_success=False)
-    
+
+    def rm_ext_pkg_zip(self):
+        try:
+            fn = self.try_get_pkg_file()
+            if fn is not None and os.path.exists(fn):
+                self.logger.info("Remove extension package: {0}".format(fn))
+                os.remove(fn)
+        except IOError as e:
+            self.logger.warn("Failed to remove extension .zip: {0}".format(e.strerror))
+
     def rm_ext_handler_dir(self):
         try:
             base_dir = self.get_base_dir()
@@ -839,7 +922,7 @@ class ExtHandlerInstance(object):
                                  base_dir)
                 shutil.rmtree(base_dir)
         except IOError as e:
-            message = "Failed to remove extension handler directory: {0}".format(e)
+            message = "Failed to remove extension handler directory: {0}".format(e.strerror)
             self.report_event(message=message, is_success=False)
             self.logger.warn(message)
 
@@ -1112,8 +1195,7 @@ class ExtHandlerInstance(object):
             self.logger.error("Failed to get handler status: {0}", e)
 
     def get_full_name(self):
-        return "{0}-{1}".format(self.ext_handler.name, 
-                                self.ext_handler.properties.version)
+        return "{0}-{1}".format(self.name, self.version)
    
     def get_base_dir(self):
         return os.path.join(conf.get_lib_dir(), self.get_full_name())
@@ -1134,8 +1216,8 @@ class ExtHandlerInstance(object):
         return os.path.join(self.get_base_dir(), 'HandlerEnvironment.json')
 
     def get_log_dir(self):
-        return os.path.join(conf.get_ext_log_dir(), self.ext_handler.name,
-                            str(self.ext_handler.properties.version))
+        return os.path.join(conf.get_ext_log_dir(), self.name,
+                            str(self.version))
 
 
 class HandlerEnvironment(object):
