@@ -56,6 +56,7 @@ from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 # HandlerEnvironment.json schema version
 HANDLER_ENVIRONMENT_VERSION = 1.0
 
+EXTENSION_STATUS_ERROR = 'error'
 VALID_EXTENSION_STATUS = ['transitioning', 'error', 'success', 'warning']
 
 VALID_HANDLER_STATUS = ['Ready', 'NotReady', "Installing", "Unresponsive"]
@@ -107,14 +108,15 @@ def parse_ext_status(ext_status, data):
     validate_has_key(data, 'status', 'status')
     status_data = data['status']
     validate_has_key(status_data, 'status', 'status/status')
-    
-    validate_in_range(status_data['status'], VALID_EXTENSION_STATUS,
-                      'status/status')
+
+    status = status_data['status']
+    if status not in VALID_EXTENSION_STATUS:
+        status = EXTENSION_STATUS_ERROR
 
     applied_time = status_data.get('configurationAppliedTime')
     ext_status.configurationAppliedTime = applied_time
     ext_status.operation = status_data.get('operation')
-    ext_status.status = status_data.get('status')
+    ext_status.status = status
     ext_status.code = status_data.get('code', 0)
     formatted_message = status_data.get('formattedMessage')
     ext_status.message = parse_formatted_message(formatted_message)
