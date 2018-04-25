@@ -14,7 +14,6 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 #
-
 import signal
 import tempfile
 
@@ -157,15 +156,69 @@ class TestDeprovision(AgentTestCase):
 
 
     @distros("redhat")
-    def test_deprovision(self,
+    @patch("glob.glob")
+    def test_check_ifcfg_hwaddr(self,
                          distro_name,
                          distro_version,
-                         distro_full_name):
-        deprovision_handler = get_deprovision_handler(distro_name,
-                                                      distro_version,
-                                                      distro_full_name)
-        warnings, actions = deprovision_handler.setup(deluser=False)
-        assert any("/etc/resolv.conf" in w for w in warnings)
+                         distro_full_name,
+                         mock_glob):
+        """
+        If a VM has a HWADDR (or MACADDR) in their ifcfg-eth0 file, they
+        most likely will fail on re-deployment. Warn users of this situation.
+        """
+
+        tmp = tempfile.mkdtemp()
+
+        for setting in ['HWADDR', 'MACADDR']:
+            ifcfg_eth0_fn = os.path.join(tmp, 'etc', 'sysconfig', 'network-scripts', 'ifcfg-eth0')
+            fileutil.mkdir(os.path.dirname(ifcfg_eth0_fn))
+            fileutil.write_file(ifcfg_eth0_fn, '''
+    DEVICE=eth0
+    {0}=00:01:02:03:04:05
+    ONBOOT=yes
+    BOOTPROTO=dhcp
+    '''.format(setting))
+
+            mock_glob.return_value = [ifcfg_eth0_fn]
+
+            deprovision_handler = get_deprovision_handler(distro_name,
+                                                          distro_version,
+                                                          distro_full_name)
+
+            warnings = []
+            deprovision_handler.check_ifcfg_hwaddr(warnings)
+            assert any(setting in w for w in warnings)
+
+    @distros("redhat")
+    @patch("glob.glob")
+    def test_check_ifcfg_hwaddr_ignores_commented_out_value(self,
+                         distro_name,
+                         distro_version,
+                         distro_full_name,
+                         mock_glob):
+
+        tmp = tempfile.mkdtemp()
+
+        for setting in ['HWADDR', 'MACADDR']:
+            ifcfg_eth0_fn = os.path.join(tmp, 'etc', 'sysconfig', 'network-scripts', 'ifcfg-eth0')
+            fileutil.mkdir(os.path.dirname(ifcfg_eth0_fn))
+            fileutil.write_file(ifcfg_eth0_fn, '''
+DEVICE=eth0
+#{0}=00:01:02:03:04:05
+ONBOOT=yes
+BOOTPROTO=dhcp
+'''.format(setting))
+
+            mock_glob.return_value = [ifcfg_eth0_fn]
+
+            deprovision_handler = get_deprovision_handler(distro_name,
+                                                          distro_version,
+                                                          distro_full_name)
+
+            warnings = []
+            deprovision_handler.check_ifcfg_hwaddr(warnings)
+            assert not any(setting in w for w in warnings)
+
 
     @distros("ubuntu")
     def test_deprovision_ubuntu(self,

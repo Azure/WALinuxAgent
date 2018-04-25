@@ -24,17 +24,18 @@ import sys
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.utils.fileutil as fileutil
-import azurelinuxagent.common.utils.shellutil as shellutil
 
 from azurelinuxagent.common.exception import ProtocolError
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol import get_protocol_util
+
 
 def read_input(message):
     if sys.version_info[0] >= 3:
         return input(message)
     else:
         return raw_input(message)
+
 
 class DeprovisionAction(object):
     def __init__(self, func, args=[], kwargs={}):
@@ -44,6 +45,7 @@ class DeprovisionAction(object):
 
     def invoke(self):
         self.func(*self.args, **self.kwargs)
+
 
 class DeprovisionHandler(object):
     def __init__(self):
@@ -72,7 +74,6 @@ class DeprovisionHandler(object):
                          "will be deleted.").format(username))
         actions.append(DeprovisionAction(self.osutil.del_account, 
                                          [username]))
-
 
     def regen_ssh_host_key(self, warnings, actions):
         warnings.append("WARNING! All SSH host key pairs will be deleted.")
@@ -118,7 +119,6 @@ class DeprovisionHandler(object):
         actions.append(DeprovisionAction(fileutil.rm_files,
                                          ["/var/lib/NetworkManager/dhclient-*.lease"]))
 
-
     def del_lib_dir_files(self, warnings, actions):
         known_files = [
             'HostingEnvironmentConfig.xml',
@@ -135,9 +135,9 @@ class DeprovisionHandler(object):
         ]
 
         lib_dir = conf.get_lib_dir()
-        files = [f for f in \
-                    [os.path.join(lib_dir, kf) for kf in known_files] \
-                        if os.path.isfile(f)]
+        files = [f for f in
+                 [os.path.join(lib_dir, kf) for kf in known_files]
+                 if os.path.isfile(f)]
         for p in known_files_glob:
             files += glob.glob(os.path.join(lib_dir, p))
 
@@ -170,15 +170,15 @@ class DeprovisionHandler(object):
 
     def del_cloud_init(self, warnings, actions,
             include_once=True, deluser=False):
-        dirs = [d for d in self.cloud_init_dirs(include_once=include_once) \
-                    if os.path.isdir(d)]
+        dirs = [d for d in self.cloud_init_dirs(include_once=include_once)
+                if os.path.isdir(d)]
         if len(dirs) > 0:
             actions.append(DeprovisionAction(fileutil.rm_dirs, dirs))
 
         files = [f for f in self.cloud_init_files(
                                     include_once=include_once,
-                                    deluser=deluser) \
-                    if os.path.isfile(f)]
+                                    deluser=deluser)
+                 if os.path.isfile(f)]
         if len(files) > 0:
             actions.append(DeprovisionAction(fileutil.rm_files, files))
 
@@ -188,6 +188,11 @@ class DeprovisionHandler(object):
                                          localhost))
         actions.append(DeprovisionAction(self.osutil.set_dhcp_hostname, 
                                          localhost))
+
+    def check_ifcfg_hwaddr(self, warnings):
+        for f in glob.glob("/etc/sysconfig/network-scripts/ifcfg-*"):
+            if os.path.isfile(f) and fileutil.findre_in_file(f, '^\s*(HW|MAC)ADDR='):
+                warnings.append('WARNING! {0} has a HWADDR (or MACADDR) value, which may prevent successful re-deployment')
 
     def setup(self, deluser):
         warnings = []
@@ -207,6 +212,8 @@ class DeprovisionHandler(object):
         self.del_dirs(warnings, actions)
         self.del_files(warnings, actions)
         self.del_resolv(warnings, actions)
+
+        self.check_ifcfg_hwaddr(warnings)
 
         if deluser:
             self.del_user(warnings, actions)
