@@ -736,6 +736,7 @@ class ExtHandlerInstance(object):
         try:
             fileutil.write_file(self.pkg_file, bytearray(package), asbin=True)
             zipfile.ZipFile(self.pkg_file).extractall(self.get_base_dir())
+            os.remove(self.pkg_file)
         except IOError as e:
             fileutil.clean_ioerror(e,
                 paths=[self.get_base_dir(), self.pkg_file])
