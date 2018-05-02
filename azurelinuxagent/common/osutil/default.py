@@ -286,13 +286,14 @@ class DefaultOSUtil(object):
         If nothing works (for old VMs), return the empty string
         '''
         if os.path.isfile(PRODUCT_ID_FILE):
-            s = fileutil.read_file(PRODUCT_ID_FILE).strip()
-
-        else:
-            rc, s = shellutil.run_get_output(DMIDECODE_CMD)
-            if rc != 0 or UUID_PATTERN.match(s) is None:
-                return ""
-
+            try:
+                s = fileutil.read_file(PRODUCT_ID_FILE).strip()
+                return self._correct_instance_id(s.strip())
+            except IOError:
+                pass
+        rc, s = shellutil.run_get_output(DMIDECODE_CMD)
+        if rc != 0 or UUID_PATTERN.match(s) is None:
+            return ""
         return self._correct_instance_id(s.strip())
 
     def get_userentry(self, username):
