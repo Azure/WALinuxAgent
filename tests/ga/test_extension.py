@@ -693,7 +693,7 @@ class TestExtension(ExtensionTestCase):
         extension.dependencies.append(dependency)
         exthandler.properties.extensions.append(extension)
 
-        exthandlers_handler.wait_on_ext_handler_dependencies(exthandler)
+        exthandlers_handler.wait_on_ext_handler_dependencies(exthandler, datetime.datetime.utcnow())
 
     def test_wait_on_ext_handler_dependencies_two_exts(self, *args):
         test_data = WireProtocolData(DATA_FILE)
@@ -709,7 +709,7 @@ class TestExtension(ExtensionTestCase):
         exthandler.properties.extensions.append(extension)
 
         ExtHandlerInstance.collect_ext_status = MagicMock(return_value=None)
-        exthandlers_handler.wait_on_ext_handler_dependencies(exthandler)
+        exthandlers_handler.wait_on_ext_handler_dependencies(exthandler, datetime.datetime.utcnow())
 
     def _test_wait_on_ext_handler_dependencies(self, exthandlers_handler, timeout=None):
         handler_name = "Handler"
@@ -723,11 +723,11 @@ class TestExtension(ExtensionTestCase):
 
         fun = exthandlers_handler.wait_on_ext_handler_dependencies
         if timeout is None:
-            fun(exthandler)
+            fun(exthandler, datetime.datetime.utcnow())
         else:
             expected_msg = "Timeout.*{0}/{1} for {2}".format(handler_name, handler_name, handler_name)
             try:
-                self.assertRaisesRegexp(ExtensionError, expected_msg, fun, exthandler)
+                self.assertRaisesRegexp(ExtensionError, expected_msg, fun, exthandler, datetime.datetime.utcnow())
             except AttributeError:
                 pass  # Python 2.6 doesn't like assertRaisesRegexp
                 
