@@ -21,7 +21,7 @@
 <PluginSettings>
   <Plugin name="OSTCExtensions.ExampleHandlerLinux" version="1.0.0">
     <DependsOn dependencyLevel="2">
-      <DependsOnExtension>OSTCExtensions.OtherExampleHandlerLinux</DependsOnExtension>
+      <DependsOnExtension handler="OSTCExtensions.OtherExampleHandlerLinux" />
     </DependsOn>
     <RuntimeSettings seqNo="0">{"runtimeSettings":[{"handlerSettings":{"protectedSettingsCertThumbprint":"4037FBF5F1F3014F99B5D6C7799E9B20E6871CB3","protectedSettings":"MIICWgYJK","publicSettings":{"foo":"bar"}}}]}</RuntimeSettings>
   </Plugin>
