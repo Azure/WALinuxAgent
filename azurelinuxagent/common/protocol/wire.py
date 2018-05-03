@@ -1484,8 +1484,8 @@ class ExtensionsConfig(object):
 
         dependencies = []
         for dependency in findall(depends_on_node, "DependsOnExtension"):
-            handler_name = gettext(dependency)
-            ext_name = getattrib(dependency, "name")
+            handler_name = getattrib(dependency, "handler")
+            ext_name = getattrib(dependency, "extension")
             if ext_name == "":
                 ext_name = handler_name
             dependencies.append((handler_name, ext_name))
