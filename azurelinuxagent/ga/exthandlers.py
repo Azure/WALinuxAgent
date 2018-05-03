@@ -67,6 +67,7 @@ HANDLER_PKG_PATTERN = re.compile(HANDLER_PATTERN+"\\"+HANDLER_PKG_EXT+"$",
 
 TELEMETRY_MESSAGE_MAX_LEN = 3200
 
+DEFAULT_EXT_TIMEOUT_MINUTES = 90
 
 def validate_has_key(obj, key, fullname):
     if key not in obj:
@@ -358,22 +359,29 @@ class ExtHandlersHandler(object):
                 logger.info("Extension handling is on hold")
                 return
 
+        dep_level = None
+        deps_wait_until = None
+        handlers_wait_until = datetime.datetime.utcnow()
+
         self.ext_handlers.extHandlers.sort(key=operator.methodcaller('sort_key'))
         for ext_handler in self.ext_handlers.extHandlers:
-            self.wait_on_ext_handler_dependencies(ext_handler)
+            if dep_level != ext_handler.sort_key():
+                dep_level = ext_handler.sort_key()
+                deps_wait_until = handlers_wait_until
+                handlers_wait_until += datetime.timedelta(seconds=(DEFAULT_EXT_TIMEOUT_MINUTES * 60))
+            self.wait_on_ext_handler_dependencies(ext_handler, deps_wait_until)
             self.handle_ext_handler(ext_handler, etag)
 
-    def wait_on_ext_handler_dependencies(self, ext_handler):
+    def wait_on_ext_handler_dependencies(self, ext_handler, wait_until):
         dependencies = sum([e.dependencies for e in ext_handler.properties.extensions], [])
         for dependency in dependencies:
             handler_i = ExtHandlerInstance(dependency.handler, self.protocol)
-            timeout = 90 if dependency.timeout is None else dependency.timeout
-            timeout = datetime.timedelta(seconds=(timeout * 60))
-            begin = datetime.datetime.utcnow()
+            if dependency.timeout is not None and dependency.timeout < DEFAULT_EXT_TIMEOUT_MINUTES:
+                wait_until -= datetime.timedelta(seconds=( (DEFAULT_EXT_TIMEOUT_MINUTES - dependency.timeout) * 60))
             for ext in dependency.exts:
                 success_status, status = handler_i.is_ext_status_success(ext)
                 while not success_status:
-                    if (datetime.datetime.utcnow() - begin) > timeout:
+                    if datetime.datetime.utcnow() > wait_until:
                         raise ExtensionError("Timeout waiting for success status "
                                              "from dependency {}/{} for {}"
                                              "status was: {}".format(
