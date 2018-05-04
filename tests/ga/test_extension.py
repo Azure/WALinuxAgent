@@ -484,7 +484,7 @@ class TestExtension(AgentTestCase):
                                                             "<Incarnation>4<")
         test_data.ext_conf = test_data.ext_conf.replace("1.0.0", "1.1.0")
         exthandlers_handler.run()
-        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.1.0")
         self._assert_ext_status(protocol.report_ext_status, "success", 0)
 
         #Test GUID change with hotfix
@@ -530,7 +530,7 @@ class TestExtension(AgentTestCase):
                                                             "<Incarnation>10<")
         test_data.ext_conf = test_data.ext_conf.replace("1.1.1", "1.2.0")
         exthandlers_handler.run()
-        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.1.1")
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.2.0")
         self._assert_ext_status(protocol.report_ext_status, "success", 0)
 
         #Test GUID change with upgrade available

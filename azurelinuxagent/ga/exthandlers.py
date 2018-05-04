@@ -185,7 +185,6 @@ class ExtHandlersHandler(object):
         self.protocol = None
         self.ext_handlers = None
         self.last_etag = None
-        self.last_upgrade_guids = {}
         self.log_report = False
         self.log_etag = True
         self.log_process = False
@@ -235,23 +234,6 @@ class ExtHandlersHandler(object):
                       is_success=False,
                       message=msg)
             return
-
-    def get_upgrade_guid(self, name):
-        return self.last_upgrade_guids.get(name, (None, False))[0]
-
-    def get_log_upgrade_guid(self, ext_handler):
-        return self.last_upgrade_guids.get(ext_handler.name, (None, False))[1]
-
-    def set_log_upgrade_guid(self, ext_handler, log_val):
-        guid = self.get_upgrade_guid(ext_handler.name)
-        if guid is not None:
-            self.last_upgrade_guids[ext_handler.name] = (guid, log_val)
-
-    def is_new_guid(self, ext_handler):
-        last_guid = self.get_upgrade_guid(ext_handler.name)
-        if last_guid is None:
-            return True
-        return last_guid != ext_handler.properties.upgradeGuid
 
     def cleanup_outdated_handlers(self):
         handlers = []
@@ -333,27 +315,6 @@ class ExtHandlersHandler(object):
 
         try:
             state = ext_handler.properties.state
-            # The extension is to be enabled, there is an upgrade GUID
-            # and the GUID is NOT new
-            if state == u"enabled" and \
-                    ext_handler.properties.upgradeGuid is not None and \
-                    not self.is_new_guid(ext_handler):
-                ext_handler_i.ext_handler.properties.version = ext_handler_i.get_installed_version()
-                ext_handler_i.set_logger()
-                if self.last_etag != etag:
-                    self.set_log_upgrade_guid(ext_handler, True)
-
-                msg = "New GUID is the same as the old GUID. Exiting without upgrading."
-                if self.get_log_upgrade_guid(ext_handler):
-                    ext_handler_i.logger.info(msg)
-                    self.set_log_upgrade_guid(ext_handler, False)
-                ext_handler_i.set_handler_state(ExtHandlerState.Enabled)
-                ext_handler_i.set_handler_status(status="Ready", message="No change")
-                ext_handler_i.set_operation(WALAEventOperation.SkipUpdate)
-                ext_handler_i.report_event(message=ustr(msg), is_success=True)
-                return
-
-            self.set_log_upgrade_guid(ext_handler, True)
             while ext_handler_i.decide_version(target_state=state) is None:
                 continue
             self.get_artifact_error_state.reset()
@@ -370,17 +331,10 @@ class ExtHandlersHandler(object):
             ext_handler_i.logger.info("Target handler state: {0}", state)
             if state == u"enabled":
                 self.handle_enable(ext_handler_i)
-                if ext_handler.properties.upgradeGuid is not None:
-                    ext_handler_i.logger.info("New Upgrade GUID: {0}", ext_handler.properties.upgradeGuid)
-                    self.last_upgrade_guids[ext_handler.name] = (ext_handler.properties.upgradeGuid, True)
             elif state == u"disabled":
                 self.handle_disable(ext_handler_i)
-                # Remove the GUID from the dictionary so that it is upgraded upon re-enable
-                self.last_upgrade_guids.pop(ext_handler.name, None)
             elif state == u"uninstall":
                 self.handle_uninstall(ext_handler_i)
-                # Remove the GUID from the dictionary so that it is upgraded upon re-install
-                self.last_upgrade_guids.pop(ext_handler.name, None)
             else:
                 message = u"Unknown ext handler state:{0}".format(state)
                 raise ExtensionError(message)
@@ -503,9 +457,6 @@ class ExtHandlersHandler(object):
         handler_status = ext_handler_i.get_handler_status() 
         if handler_status is None:
             return
-        guid = self.get_upgrade_guid(ext_handler.name)
-        if guid is not None:
-            handler_status.upgradeGuid = guid
 
         handler_state = ext_handler_i.get_handler_state()
         if handler_state != ExtHandlerState.NotInstalled:
