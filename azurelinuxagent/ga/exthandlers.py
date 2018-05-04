@@ -354,7 +354,8 @@ class ExtHandlersHandler(object):
                 return
 
             self.set_log_upgrade_guid(ext_handler, True)
-            ext_handler_i.decide_version(target_state=state)
+            while ext_handler_i.decide_version(target_state=state) is None:
+                continue
             self.get_artifact_error_state.reset()
             if not ext_handler_i.is_upgrade and self.last_etag == etag:
                 if self.log_etag:
@@ -562,74 +563,21 @@ class ExtHandlerInstance(object):
         # - Find the installed package (its version must exactly match)
         # - Find the internal candidate (its version must exactly match)
         # - Separate the public packages
-        internal_pkg = None
+        selected_pkg = None
         installed_pkg = None
-        public_pkgs = []
+        pkg_list.versions.sort(key=lambda p: FlexibleVersion(p.version))
         for pkg in pkg_list.versions:
             pkg_version = FlexibleVersion(pkg.version)
             if pkg_version == installed_version:
                 installed_pkg = pkg
-            if pkg.isinternal and pkg_version == requested_version:
-                internal_pkg = pkg
-            if not pkg.isinternal:
-                public_pkgs.append(pkg)
-
-        internal_version = FlexibleVersion(internal_pkg.version) \
-                            if internal_pkg is not None \
-                            else FlexibleVersion()
-        public_pkgs.sort(key=lambda p: FlexibleVersion(p.version), reverse=True)
-
-        # Determine the preferred version and type of upgrade occurring
-        preferred_version = max(requested_version, installed_version)
-        is_major_upgrade = preferred_version.major > installed_version.major
-        allow_minor_upgrade = self.ext_handler.properties.upgradePolicy == 'auto'
-
-        # Find the first public candidate which
-        # - Matches the preferred major version
-        # - Does not upgrade to a new, disallowed major version
-        # - And only increments the minor version if allowed
-        # Notes:
-        # - The patch / hotfix version is not considered
-        public_pkg = None
-        for pkg in public_pkgs:
-            pkg_version = FlexibleVersion(pkg.version)
-            if pkg_version.major == preferred_version.major \
-                    and (not pkg.disallow_major_upgrade or not is_major_upgrade) \
-                    and (allow_minor_upgrade or pkg_version.minor == preferred_version.minor):
-                public_pkg = pkg
-                break
-
-        # If there are no candidates, locate the highest public version whose
-        # major matches that installed
-        if internal_pkg is None and public_pkg is None:
-            for pkg in public_pkgs:
-                pkg_version = FlexibleVersion(pkg.version)
-                if pkg_version.major == installed_version.major:
-                    public_pkg = pkg
-                    break
-
-        public_version = FlexibleVersion(public_pkg.version) \
-                            if public_pkg is not None \
-                            else FlexibleVersion()
-
-        # Select the candidate
-        # - Use the public candidate if there is no internal candidate or
-        #   the public is more recent (e.g., a hotfix patch)
-        # - Otherwise use the internal candidate
-        if internal_pkg is None or (public_pkg is not None and public_version > internal_version):
-            selected_pkg = public_pkg
-        else:
-            selected_pkg = internal_pkg
-
-        selected_version = FlexibleVersion(selected_pkg.version) \
-                            if selected_pkg is not None \
-                            else FlexibleVersion()
+            if requested_version.matches(pkg_version):
+                selected_pkg = pkg
 
         # Finally, update the version only if not downgrading
         # Note:
         #  - A downgrade, which will be bound to the same major version,
         #    is allowed if the installed version is no longer available
-        if target_state == u"uninstall":
+        if target_state == u"uninstall" or target_state == u"disabled":
             if installed_pkg is None:
                 msg = "Failed to find installed version of {0} " \
                     "to uninstall".format(self.ext_handler.name)
@@ -637,26 +585,19 @@ class ExtHandlerInstance(object):
             self.pkg = installed_pkg
             self.ext_handler.properties.version = str(installed_version) \
                                     if installed_version is not None else None
-        elif selected_pkg is None \
-                or (installed_pkg is not None and selected_version < installed_version):
-            self.pkg = installed_pkg
-            self.ext_handler.properties.version = str(installed_version) \
-                                    if installed_version is not None else None
         else:
             self.pkg = selected_pkg
-            self.ext_handler.properties.version = str(selected_pkg.version)
+            if self.pkg is not None:
+                self.ext_handler.properties.version = str(selected_pkg.version)
 
-        # Note if the selected package is greater than that installed
+        # Note if the selected package is different than that installed
         if installed_pkg is None \
-                or FlexibleVersion(self.pkg.version) > FlexibleVersion(installed_pkg.version):
+                or FlexibleVersion(self.pkg.version) != FlexibleVersion(installed_pkg.version):
             self.is_upgrade = True
-
-        if self.pkg is None:
-            raise ExtensionError("Failed to find any valid extension package")
 
         self.logger.verbose("Use version: {0}", self.pkg.version)
         self.set_logger()
-        return
+        return self.pkg
 
     def set_logger(self):
         prefix = "[{0}]".format(self.get_full_name())

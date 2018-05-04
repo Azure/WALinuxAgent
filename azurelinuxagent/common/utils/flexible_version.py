@@ -147,6 +147,18 @@ class FlexibleVersion(version.Version):
 
         return True
 
+    def matches(self, that):
+        if self.sep != that.sep or len(self.version) > len(that.version):
+            return False
+
+        for i in range(len(self.version)):
+            if self.version[i] != that.version[i]:
+                return False
+        if self.prerel_tags:
+            return self.prerel_tags == that.prerel_tags
+
+        return True
+
     def _assemble(self, version, sep, prerel_sep, prerelease):
         s = sep.join(map(str, version))
         if prerelease is not None:
