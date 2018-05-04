@@ -1570,12 +1570,6 @@ class ExtensionsConfig(object):
         except ValueError:
             ext_handler.properties.dependencyLevel = 0
 
-        auto_upgrade = getattrib(plugin, "autoUpgrade")
-        if auto_upgrade is not None and auto_upgrade.lower() == "true":
-            ext_handler.properties.upgradePolicy = "auto"
-        else:
-            ext_handler.properties.upgradePolicy = "manual"
-
         location = getattrib(plugin, "location")
         failover_location = getattrib(plugin, "failoverlocation")
         for uri in [location, failover_location]:
