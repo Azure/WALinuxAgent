@@ -28,7 +28,6 @@ from azurelinuxagent.common.utils.textutil import hex_dump, hex_dump2, \
     int_to_ip4_addr
 from azurelinuxagent.common.exception import DhcpError
 from azurelinuxagent.common.osutil import get_osutil
-import azurelinuxagent.common.conf as conf
 
 # the kernel routing table representation of 168.63.129.16
 KNOWN_WIRESERVER_IP_ENTRY = '10813FA8'

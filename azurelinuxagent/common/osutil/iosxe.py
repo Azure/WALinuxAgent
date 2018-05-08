@@ -64,3 +64,21 @@ class IosxeOSUtil(DefaultOSUtil):
 
     def is_dhcp_available(self):
         return (False, '168.63.129.16')
+
+    def get_instance_id(self):
+        '''
+        Azure records a UUID as the instance ID
+        First check /sys/class/dmi/id/product_uuid.
+        If that is missing, then extracts from dmidecode
+        If nothing works (for old VMs), return the empty string
+        '''
+        if os.path.isfile(PRODUCT_ID_FILE):
+            try:
+                s = fileutil.read_file(PRODUCT_ID_FILE).strip()
+                return self._correct_instance_id(s.strip())
+            except IOError:
+                pass
+        rc, s = shellutil.run_get_output(DMIDECODE_CMD)
+        if rc != 0 or UUID_PATTERN.match(s) is None:
+            return ""
+        return self._correct_instance_id(s.strip())

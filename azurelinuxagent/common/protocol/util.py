@@ -145,7 +145,6 @@ class ProtocolUtil(object):
     def _detect_wire_protocol(self):
         endpoint = self.dhcp_handler.endpoint
         if endpoint is None:
-            self.endpoint = endpoint
             '''
             Check if DHCP can be used to get the wire protocol endpoint
             '''
