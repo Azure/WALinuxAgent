@@ -152,11 +152,12 @@ class DhcpHandler(object):
 
     def send_dhcp_req(self):
         """
-        Check if DHCP is enabled
+        Check if DHCP is available
         """
-        if not conf.get_dhcp_enabled():
-            logger.info("send_dhcp_req: DHCP not enabled. Set endpoint from configuration")
-            self.endpoint = conf.get_provision_endpoint()
+        (dhcp_available, endpoint) =  self.osutil.is_dhcp_available():
+        if not dhcp_available:
+            logger.info("send_dhcp_req: DHCP not available")
+            self.endpoint = endpoint
             return
 
         """

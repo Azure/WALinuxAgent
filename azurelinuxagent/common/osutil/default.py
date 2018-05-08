@@ -916,6 +916,9 @@ class DefaultOSUtil(object):
         shellutil.run("route del 255.255.255.255 dev {0}".format(ifname),
                       chk_err=False)
 
+    def is_dhcp_available(self):
+        return (True, '')
+
     def is_dhcp_enabled(self):
         return False
 

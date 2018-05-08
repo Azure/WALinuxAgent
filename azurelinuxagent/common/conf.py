@@ -94,7 +94,6 @@ __SWITCH_OPTIONS__ = {
     "OS.CheckRdmaDriver" : False,
     "Logs.Verbose" : False,
     "Provisioning.Enabled" : True,
-    "DHCP.Enabled" : True,
     "Provisioning.UseCloudInit" : False,
     "Provisioning.AllowResetSysUser" : False,
     "Provisioning.RegenerateSshHostKeyPair" : False,
@@ -128,8 +127,7 @@ __STRING_OPTIONS__ = {
     "ResourceDisk.MountPoint" : "/mnt/resource",
     "ResourceDisk.MountOptions" : None,
     "ResourceDisk.Filesystem" : "ext3",
-    "AutoUpdate.GAFamily" : "Prod",
-    "Provisioning.Endpoint" : "168.63.129.16"
+    "AutoUpdate.GAFamily" : "Prod"
 }
 
 __INTEGER_OPTIONS__ = {
@@ -241,12 +239,6 @@ def get_ssh_host_keypair_mode(conf=__conf__):
 
 def get_provision_enabled(conf=__conf__):
     return conf.get_switch("Provisioning.Enabled", True)
-
-def get_dhcp_enabled(conf=__conf__):
-    return conf.get_switch("DHCP.Enabled", True)
-
-def get_provision_endpoint(conf=__conf__):
-    return conf.get("Provisioning.Endpoint", "168.63.129.16")
 
 def get_provision_cloudinit(conf=__conf__):
     return conf.get_switch("Provisioning.UseCloudInit", False)
