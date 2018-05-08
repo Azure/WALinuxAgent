@@ -21,15 +21,12 @@ import os
 import platform
 import time
 import threading
-import traceback
 import uuid
 
 import azurelinuxagent.common.conf as conf
-import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.logger as logger
 
 from azurelinuxagent.common.event import report_metric
-from azurelinuxagent.common.exception import EventError, ProtocolError, OSUtilError
 from azurelinuxagent.common.cgroups import CGroups, CGroupsTelemetry
 from azurelinuxagent.common.event import add_event, WALAEventOperation
 from azurelinuxagent.common.exception import EventError, ProtocolError, OSUtilError, HttpError
@@ -44,8 +41,7 @@ from azurelinuxagent.common.protocol.restapi import TelemetryEventParam, \
 from azurelinuxagent.common.utils.restutil import IOErrorCounter
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, getattrib
 from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_VERSION, \
-            DISTRO_CODE_NAME, AGENT_LONG_VERSION, \
-            AGENT_NAME, CURRENT_AGENT, CURRENT_VERSION
+            DISTRO_CODE_NAME, AGENT_NAME, CURRENT_AGENT, CURRENT_VERSION
 
 
 def parse_event(data_str):
@@ -115,12 +111,12 @@ class MonitorHandler(object):
         self.event_thread.start()
 
     def init_sysinfo(self):
-        osversion = "{0}:{1}-{2}-{3}:{4}".format(platform.system(),
-                                                 DISTRO_NAME,
-                                                 DISTRO_VERSION,
-                                                 DISTRO_CODE_NAME,
-                                                 platform.release())
-        self.sysinfo.append(TelemetryEventParam("OSVersion", osversion))
+        os_version = "{0}:{1}-{2}-{3}:{4}".format(platform.system(),
+                                                  DISTRO_NAME,
+                                                  DISTRO_VERSION,
+                                                  DISTRO_CODE_NAME,
+                                                  platform.release())
+        self.sysinfo.append(TelemetryEventParam("OSVersion", os_version))
         self.sysinfo.append(
             TelemetryEventParam("GAVersion", CURRENT_AGENT))
 
@@ -134,32 +130,32 @@ class MonitorHandler(object):
 
         try:
             protocol = self.protocol_util.get_protocol()
-            vminfo = protocol.get_vminfo()
+            vm_info = protocol.get_vminfo()
             self.sysinfo.append(TelemetryEventParam("VMName",
-                                                    vminfo.vmName))
+                                                    vm_info.vmName))
             self.sysinfo.append(TelemetryEventParam("TenantName",
-                                                    vminfo.tenantName))
+                                                    vm_info.tenantName))
             self.sysinfo.append(TelemetryEventParam("RoleName",
-                                                    vminfo.roleName))
+                                                    vm_info.roleName))
             self.sysinfo.append(TelemetryEventParam("RoleInstanceName",
-                                                    vminfo.roleInstanceName))
+                                                    vm_info.roleInstanceName))
             self.sysinfo.append(TelemetryEventParam("ContainerId",
-                                                    vminfo.containerId))
+                                                    vm_info.containerId))
         except ProtocolError as e:
             logger.warn("Failed to get system info: {0}", e)
 
         try:
-            vminfo = self.imds_client.get_compute()
+            vm_info = self.imds_client.get_compute()
             self.sysinfo.append(TelemetryEventParam('Location',
-                                                    vminfo.location))
+                                                    vm_info.location))
             self.sysinfo.append(TelemetryEventParam('SubscriptionId',
-                                                    vminfo.subscriptionId))
+                                                    vm_info.subscriptionId))
             self.sysinfo.append(TelemetryEventParam('ResourceGroupName',
-                                                    vminfo.resourceGroupName))
+                                                    vm_info.resourceGroupName))
             self.sysinfo.append(TelemetryEventParam('VMId',
-                                                    vminfo.vmId))
+                                                    vm_info.vmId))
             self.sysinfo.append(TelemetryEventParam('ImageOrigin',
-                                                    vminfo.image_origin))
+                                                    vm_info.image_origin))
         except (HttpError, ValueError) as e:
             logger.warn("failed to get IMDS info: {0}", e)
 
@@ -217,6 +213,9 @@ class MonitorHandler(object):
         # performance counters
         collection_period = datetime.timedelta(minutes=5)
         last_collection = datetime.datetime.utcnow() - collection_period
+        if not CGroupsTelemetry.is_tracked(AGENT_NAME):
+            logger.info("Monitor process {0} will now track cgroup {1}".format(os.getpid(), AGENT_NAME))
+            CGroupsTelemetry.track_cgroup(CGroups(AGENT_NAME))
 
         # Create a new identifier on each restart and reset the counter
         heartbeat_id = str(uuid.uuid4()).upper()
@@ -270,8 +269,8 @@ class MonitorHandler(object):
                 # performance counters
                 if datetime.datetime.utcnow() >= (last_collection + collection_period):
                     last_collection = datetime.datetime.utcnow()
-                    for (cgroup_name, metrics) in CGroupsTelemetry.collect_all_tracked().items():
-                        for (metric_group, metric_name, value) in metrics:
+                    for cgroup_name, metrics in CGroupsTelemetry.collect_all_tracked().items():
+                        for metric_group, metric_name, value in metrics:
                             if value > 0:
                                 report_metric(metric_group, metric_name, cgroup_name, value)
             except Exception as e:
@@ -282,9 +281,12 @@ class MonitorHandler(object):
 
             # Ensure this process is in the agent cgroup. Should always be so, but with agent upgrades and the like,
             # it's best to be very defensive.
-            if not CGroups.get_my_cgroup_folder('cpu').endswith(AGENT_NAME):
-                logger.warn("Agent not in agent cgroup; moving it.")
-                CGroups(AGENT_NAME).add(int(os.getpid()))
+            try:
+                if not CGroups.get_my_cgroup_folder('cpu').endswith(AGENT_NAME):
+                    logger.warn("Agent not in agent cgroup; moving it.")
+                    CGroups(AGENT_NAME).add(int(os.getpid()))
+            except Exception as e:
+                logger.warn("Failed to find cgroup containing agent: {0}", e)
 
             try:
                 self.collect_and_send_events()

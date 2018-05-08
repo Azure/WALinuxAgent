@@ -23,11 +23,8 @@ from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 
 BASE_CGROUPS = '/sys/fs/cgroup'
-
 HIERARCHIES = ['cpu', 'memory']
-
 MEMORY_DEFAULT = -1
-
 CPU_DEFAULT = 0.25
 
 
@@ -46,18 +43,23 @@ class CGroupsException(Exception):
         return repr(self.msg)
 
 
+re_all_CPUs = re.compile('^cpu .*')
+re_user_system_times = re.compile('user (\d+)\nsystem (\d+)\n')
+
+
 class Cpu(object):
     def __init__(self, cgt):
         """
-        Initialize data collection for the Cpu hierarchy
+        Initialize data collection for the Cpu hierarchy. User must call update() before attempting to get
+        any useful metrics.
 
         :param cgt: CGroupsTelemetry
         :return:
         """
         self.cgt = cgt
-        self.current_cpu_total = self.get_current_cpu_total()
+        self.current_cpu_total = 0
         self.previous_cpu_total = 0
-        self.current_system_cpu = Cpu.get_current_system_cpu()
+        self.current_system_cpu = 0
         self.previous_system_cpu = 0
 
     def get_current_cpu_total(self):
@@ -69,7 +71,7 @@ class Cpu(object):
         cpu_total = 0
         cpu_stat = self.cgt.cgroup.get_file('cpu', 'cpuacct.stat')
         if cpu_stat is not None:
-            m = re.match('user (\d+)\nsystem (\d+)\n', cpu_stat)
+            m = re_user_system_times.match(cpu_stat)
             if m:
                 cpu_total = int(m.groups()[0]) + int(m.groups()[1])
         return cpu_total
@@ -100,17 +102,15 @@ class Cpu(object):
         proc_stat = Cpu.get_proc_stat()
         if proc_stat is not None:
             for line in proc_stat.splitlines():
-                if re.match('^cpu .*', line):
-                    system_cpu = sum(int(i) for i in line.split(' ')[2:7])
+                if re_all_CPUs.match(line):
+                    system_cpu = sum(int(i) for i in line.split(' ')[1:7])
                     break
         return system_cpu
 
     def update(self):
         """
-        Compute the percent CPU time used by this cgroup over the elapsed time since the last call to this method
-        (or since this object was instantiated).  If the cgroup fully consumed 2 cores on a 4 core system, return 200.
-
-        :return: float
+        Update all raw data required to compute metrics of interest. The intent is to call update() once, then
+        call the various get_*() methods which use this data, which we've collected exactly once.
         """
         self.previous_cpu_total = self.current_cpu_total
         self.previous_system_cpu = self.current_system_cpu
@@ -118,6 +118,12 @@ class Cpu(object):
         self.current_system_cpu = Cpu.get_current_system_cpu()
 
     def get_cpu_percent(self):
+        """
+        Compute the percent CPU time used by this cgroup over the elapsed time since the last time this instance was
+        update()ed.  If the cgroup fully consumed 2 cores on a 4 core system, return 200.
+
+        :return: float
+        """
         cpu_delta = self.current_cpu_total - self.previous_cpu_total
         system_delta = max(1, self.current_system_cpu - self.previous_system_cpu)
 
@@ -125,7 +131,7 @@ class Cpu(object):
 
     def collect(self):
         """
-        Collect and return a list of all cpu metrics
+        Collect and return a list of all cpu metrics. If no metrics are collected, return an empty list.
 
         :return: [(str, str, float)]
         """
@@ -198,7 +204,7 @@ class CGroupsTelemetry(object):
         :return: dict(str: [(str, str, float)])
         """
         results = {}
-        for (cgroup_name, collector) in CGroupsTelemetry._tracked:
+        for cgroup_name, collector in CGroupsTelemetry._tracked.items():
             results[cgroup_name] = collector.collect()
         return results
 
@@ -220,10 +226,12 @@ class CGroupsTelemetry(object):
                 pass
             if item in CGroupsTelemetry._tracked:
                 if is_empty:
+                    logger.info("No longer tracking empty cgroup {0}".format(item))
                     del(CGroupsTelemetry._tracked[item])
             else:   # item not in _tracked
                 if not is_empty:
                     cgroup = CGroups(item)
+                    logger.info("Now tracking cgroup {0}".format(item))
                     CGroupsTelemetry.track_cgroup(cgroup)
 
     def __init__(self, name, cgroup=None):
@@ -256,7 +264,7 @@ class CGroupsTelemetry(object):
         """
         results = []
         for collector in self.data.values():
-            results.append(collector.collect())
+            results.extend(collector.collect())
         return results
 
 
@@ -330,7 +338,7 @@ class CGroups(object):
             raise CGroupsException('PID {0} does not exist'.format(pid))
         for hierarchy, cgroup in self.cgroups.items():
             tasks_file = self._get_cgroup_file(hierarchy, 'cgroup.procs')
-            fileutil.append_file(tasks_file, "{0}\n".format(pid), asbin=True)
+            fileutil.append_file(tasks_file, "{0}\n".format(pid))
 
     @staticmethod
     def enabled():
@@ -441,7 +449,7 @@ class CGroups(object):
         for entry in cgroup_paths.splitlines():
             fields = entry.split(':')
             if fields[0] == hierarchy_id:
-                return fields[2].lstrip("/").encode("utf8")
+                return fields[2].lstrip("/")
         raise CGroupsException("This process belongs to no cgroup for hierarchy ID {0}".format(hierarchy_id))
 
     @staticmethod
