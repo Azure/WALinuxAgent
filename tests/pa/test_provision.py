@@ -15,7 +15,6 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.exception import ProvisionError
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
 from azurelinuxagent.common.protocol import OVF_FILE_NAME
@@ -66,9 +65,9 @@ class TestProvision(AgentTestCase):
 
         ph.run()
 
-        ph.is_provisioned.assert_not_called()
-        ph.report_ready.assert_called_once()
-        ph.write_provisioned.assert_called_once()
+        self.assertEqual(0, ph.is_provisioned.call_count)
+        self.assertEqual(1, ph.report_ready.call_count)
+        self.assertEqual(1, ph.write_provisioned.call_count)
 
     @patch('os.path.isfile', return_value=False)
     def test_is_provisioned_not_provisioned(self, mock_isfile):
@@ -91,8 +90,8 @@ class TestProvision(AgentTestCase):
         mock_deprovision.return_value = deprovision_handler
 
         self.assertTrue(ph.is_provisioned())
-        ph.osutil.is_current_instance_id.assert_called_once()
-        deprovision_handler.run_changed_unique_id.assert_not_called()
+        self.assertEqual(1, ph.osutil.is_current_instance_id.call_count)
+        self.assertEqual(0, deprovision_handler.run_changed_unique_id.call_count)
 
     @patch('os.path.isfile', return_value=True)
     @patch('azurelinuxagent.common.utils.fileutil.read_file',
@@ -111,8 +110,8 @@ class TestProvision(AgentTestCase):
         mock_deprovision.return_value = deprovision_handler
 
         self.assertTrue(ph.is_provisioned())
-        ph.osutil.is_current_instance_id.assert_called_once()
-        deprovision_handler.run_changed_unique_id.assert_called_once()
+        self.assertEqual(1, ph.osutil.is_current_instance_id.call_count)
+        self.assertEqual(1, deprovision_handler.run_changed_unique_id.call_count)
 
     @distros()
     @patch('azurelinuxagent.common.osutil.default.DefaultOSUtil.get_instance_id',
@@ -148,8 +147,8 @@ class TestProvision(AgentTestCase):
 
         self.assertEqual(1, ph.report_event.call_count)
         positional_args, kw_args = ph.report_event.call_args
-        # [call('Provisioning succeeded (146473.68)', duration=65, is_success=True)]
-        self.assertTrue(re.match(r'Provisioning succeeded \(\d+\.\d+\)', positional_args[0]) is not None)
+        # [call('Provisioning succeeded (146473.68s)', duration=65, is_success=True)]
+        self.assertTrue(re.match(r'Provisioning succeeded \(\d+\.\d+s\)', positional_args[0]) is not None)
         self.assertTrue(isinstance(kw_args['duration'], int))
         self.assertTrue(kw_args['is_success'])
 

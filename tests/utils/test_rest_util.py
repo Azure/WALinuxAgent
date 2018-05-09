@@ -132,8 +132,8 @@ class TestHttpOperations(AgentTestCase):
         h, p = restutil._get_http_proxy()
         self.assertEqual("host", h)
         self.assertEqual(None, p)
-        mock_host.assert_called_once()
-        mock_port.assert_called_once()
+        self.assertEqual(1, mock_host.call_count)
+        self.assertEqual(1, mock_port.call_count)
 
     @patch('azurelinuxagent.common.conf.get_httpproxy_port')
     @patch('azurelinuxagent.common.conf.get_httpproxy_host')
@@ -143,8 +143,8 @@ class TestHttpOperations(AgentTestCase):
         h, p = restutil._get_http_proxy()
         self.assertEqual(None, h)
         self.assertEqual(None, p)
-        mock_host.assert_called_once()
-        mock_port.assert_not_called()
+        self.assertEqual(1, mock_host.call_count)
+        self.assertEqual(0, mock_port.call_count)
 
     @patch('azurelinuxagent.common.conf.get_httpproxy_host')
     def test_get_http_proxy_http_uses_httpproxy(self, mock_host):
@@ -195,9 +195,9 @@ class TestHttpOperations(AgentTestCase):
         ])
         HTTPSConnection.assert_not_called()
         mock_conn.request.assert_has_calls([
-            call(method="GET", url="/bar", body=None, headers={'User-Agent': HTTP_USER_AGENT})
+            call(method="GET", url="/bar", body=None, headers={'User-Agent': HTTP_USER_AGENT, 'Connection': 'close'})
         ])
-        mock_conn.getresponse.assert_called_once()
+        self.assertEqual(1, mock_conn.getresponse.call_count)
         self.assertNotEquals(None, resp)
         self.assertEquals("TheResults", resp.read())
 
@@ -218,9 +218,9 @@ class TestHttpOperations(AgentTestCase):
             call("foo", 443, timeout=10)
         ])
         mock_conn.request.assert_has_calls([
-            call(method="GET", url="/bar", body=None, headers={'User-Agent': HTTP_USER_AGENT})
+            call(method="GET", url="/bar", body=None, headers={'User-Agent': HTTP_USER_AGENT, 'Connection': 'close'})
         ])
-        mock_conn.getresponse.assert_called_once()
+        self.assertEqual(1, mock_conn.getresponse.call_count)
         self.assertNotEquals(None, resp)
         self.assertEquals("TheResults", resp.read())
 
@@ -242,9 +242,9 @@ class TestHttpOperations(AgentTestCase):
         ])
         HTTPSConnection.assert_not_called()
         mock_conn.request.assert_has_calls([
-            call(method="GET", url="http://foo:80/bar", body=None, headers={'User-Agent': HTTP_USER_AGENT})
+            call(method="GET", url="http://foo:80/bar", body=None, headers={'User-Agent': HTTP_USER_AGENT, 'Connection': 'close'})
         ])
-        mock_conn.getresponse.assert_called_once()
+        self.assertEqual(1, mock_conn.getresponse.call_count)
         self.assertNotEquals(None, resp)
         self.assertEquals("TheResults", resp.read())
 
@@ -267,9 +267,9 @@ class TestHttpOperations(AgentTestCase):
             call("foo.bar", 23333, timeout=10)
         ])
         mock_conn.request.assert_has_calls([
-            call(method="GET", url="https://foo:443/bar", body=None, headers={'User-Agent': HTTP_USER_AGENT})
+            call(method="GET", url="https://foo:443/bar", body=None, headers={'User-Agent': HTTP_USER_AGENT, 'Connection': 'close'})
         ])
-        mock_conn.getresponse.assert_called_once()
+        self.assertEqual(1, mock_conn.getresponse.call_count)
         self.assertNotEquals(None, resp)
         self.assertEquals("TheResults", resp.read())
 

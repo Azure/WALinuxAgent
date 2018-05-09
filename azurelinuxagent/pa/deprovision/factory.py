@@ -15,8 +15,6 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-import azurelinuxagent.common.logger as logger
-from azurelinuxagent.common.utils.textutil import Version
 from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_VERSION, \
                                      DISTRO_FULL_NAME
 
@@ -25,6 +23,9 @@ from .arch import ArchDeprovisionHandler
 from .clearlinux import ClearLinuxDeprovisionHandler
 from .coreos import CoreOSDeprovisionHandler
 from .ubuntu import UbuntuDeprovisionHandler
+
+from distutils.version import LooseVersion as Version
+
 
 def get_deprovision_handler(distro_name=DISTRO_NAME, 
                             distro_version=DISTRO_VERSION,

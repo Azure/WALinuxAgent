@@ -16,6 +16,8 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 
+from datetime import datetime
+
 import json
 import os
 import random
@@ -32,6 +34,7 @@ from azurelinuxagent.common.exception import ProtocolNotFoundError, \
 from azurelinuxagent.common.future import httpclient, bytebuffer
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.restapi import *
+from azurelinuxagent.common.utils.archive import StateFlusher
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, \
     findtext, getattrib, gettext, remove_bom, get_bytes_from_pem, parse_json
@@ -530,6 +533,7 @@ class WireClient(object):
         self.ext_conf = None
         self.host_plugin = None
         self.status_blob = StatusBlob(self)
+        self.goal_state_flusher = StateFlusher(conf.get_lib_dir())
 
     def call_wireserver(self, http_req, *args, **kwargs):
         try:
@@ -596,6 +600,12 @@ class WireClient(object):
         random.shuffle(version_uris_shuffled)
 
         for version in version_uris_shuffled:
+            # GA expects a location and failoverLocation in ExtensionsConfig, but
+            # this is not always the case. See #1147.
+            if version.uri is None:
+                logger.verbose('The specified manifest URL is empty, ignored.')
+                continue
+
             response = None
             if not HostPluginProtocol.is_default_channel():
                 response = self.fetch(version.uri)
@@ -716,6 +726,8 @@ class WireClient(object):
                                         last_incarnation == new_incarnation:
                             # Goalstate is not updated.
                             return
+
+                self.goal_state_flusher.flush(datetime.utcnow())
 
                 self.goal_state = goal_state
                 file_name = GOAL_STATE_FILE_NAME.format(goal_state.incarnation)
@@ -1125,8 +1137,7 @@ class WireClient(object):
 
                         host = self.get_host_plugin()
                         uri, headers = host.get_artifact_request(blob)
-                        config = self.fetch(uri, headers, use_proxy=False)
-                        profile = self.decode_config(config)
+                        profile = self.fetch(uri, headers, use_proxy=False)
 
                     if not textutil.is_str_none_or_whitespace(profile):
                         logger.verbose("Artifacts profile downloaded")

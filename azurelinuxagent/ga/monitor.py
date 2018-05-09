@@ -28,10 +28,11 @@ import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.logger as logger
 
 from azurelinuxagent.common.event import add_event, WALAEventOperation
-from azurelinuxagent.common.exception import EventError, ProtocolError, OSUtilError
+from azurelinuxagent.common.exception import EventError, ProtocolError, OSUtilError, HttpError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol import get_protocol_util
+from azurelinuxagent.common.protocol.imds import get_imds_client
 from azurelinuxagent.common.protocol.restapi import TelemetryEventParam, \
                                                     TelemetryEventList, \
                                                     TelemetryEvent, \
@@ -93,6 +94,7 @@ class MonitorHandler(object):
     def __init__(self):
         self.osutil = get_osutil()
         self.protocol_util = get_protocol_util()
+        self.imds_client = get_imds_client()
         self.sysinfo = []
         self.event_thread = None
 
@@ -141,6 +143,19 @@ class MonitorHandler(object):
                                                     vminfo.containerId))
         except ProtocolError as e:
             logger.warn("Failed to get system info: {0}", e)
+
+        try:
+            vminfo = self.imds_client.get_compute()
+            self.sysinfo.append(TelemetryEventParam('Location',
+                                                    vminfo.location))
+            self.sysinfo.append(TelemetryEventParam('SubscriptionId',
+                                                    vminfo.subscriptionId))
+            self.sysinfo.append(TelemetryEventParam('ResourceGroupName',
+                                                    vminfo.resourceGroupName))
+            self.sysinfo.append(TelemetryEventParam('VMId',
+                                                    vminfo.vmId))
+        except (HttpError, ValueError) as e:
+            logger.warn("failed to get IMDS info: {0}", e)
 
     def collect_event(self, evt_file_name):
         try:

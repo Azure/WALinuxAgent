@@ -15,8 +15,8 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
+
 import azurelinuxagent.common.logger as logger
-from azurelinuxagent.common.utils.textutil import Version
 from azurelinuxagent.common.version import *
 from .default import DefaultOSUtil
 from .arch import ArchUtil
@@ -32,6 +32,8 @@ from .ubuntu import UbuntuOSUtil, Ubuntu12OSUtil, Ubuntu14OSUtil, \
 from .alpine import AlpineOSUtil
 from .bigip import BigIpOSUtil
 from .gaia import GaiaOSUtil
+
+from distutils.version import LooseVersion as Version
 
 
 def get_osutil(distro_name=DISTRO_NAME,

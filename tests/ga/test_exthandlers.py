@@ -1,99 +1,74 @@
-# Copyright 2018 Microsoft Corporation
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-#
-# Requires Python 2.6+ and Openssl 1.0+
-#
+# Copyright (c) Microsoft Corporation. All rights reserved.
+# Licensed under the Apache License.
+import json
 
-from azurelinuxagent.ga.exthandlers import format_stdout_stderr
+from azurelinuxagent.common.protocol.restapi import ExtensionStatus
+from azurelinuxagent.ga.exthandlers import parse_ext_status
 from tests.tools import *
 
 
-class TestExtensionHandlers(AgentTestCase):
-    def test_format_stdout_stderr00(self):
+class TestExtHandlers(AgentTestCase):
+    def test_parse_extension_status00(self):
         """
-        If stdout and stderr are both smaller than the max length,
-        the full representation should be displayed.
-        """
-        stdout = "The quick brown fox jumps over the lazy dog."
-        stderr = "The five boxing wizards jump quickly."
-
-        expected = "[stdout]\n{0}\n\n[stderr]\n{1}".format(stdout, stderr)
-        actual = format_stdout_stderr(stdout, stderr, 1000)
-        self.assertEqual(expected, actual)
-
-    def test_format_stdout_stderr01(self):
-        """
-        If stdout and stderr both exceed the max length,
-        then both stdout and stderr are trimmed equally.
-        """
-        stdout = "The quick brown fox jumps over the lazy dog."
-        stderr = "The five boxing wizards jump quickly."
-
-        expected = '[stdout]\ns over the lazy dog.\n\n[stderr]\nizards jump quickly.'
-        actual = format_stdout_stderr(stdout, stderr, 60)
-        self.assertEqual(expected, actual)
-        self.assertEqual(60, len(actual))
-
-    def test_format_stdout_stderr02(self):
-        """
-        If stderr is much larger than stdout, stderr is allowed
-        to borrow space from stdout's quota.
-        """
-        stdout = "empty"
-        stderr = "The five boxing wizards jump quickly."
-
-        expected = '[stdout]\nempty\n\n[stderr]\ns jump quickly.'
-        actual = format_stdout_stderr(stdout, stderr, 40)
-        self.assertEqual(expected, actual)
-        self.assertEqual(40, len(actual))
-
-    def test_format_stdout_stderr03(self):
-        """
-        If stdout is much larger than stderr, stdout is allowed
-        to borrow space from stderr's quota.
-        """
-        stdout = "The quick brown fox jumps over the lazy dog."
-        stderr = "empty"
-
-        expected = '[stdout]\nr the lazy dog.\n\n[stderr]\nempty'
-        actual = format_stdout_stderr(stdout, stderr, 40)
-        self.assertEqual(expected, actual)
-        self.assertEqual(40, len(actual))
-
-    def test_format_stdout_stderr04(self):
-        """
-        If the max length is not sufficient to even hold the stdout
-        and stderr markers an empty string is returned.
-        """
-        stdout = "The quick brown fox jumps over the lazy dog."
-        stderr = "The five boxing wizards jump quickly."
-
-        expected = ''
-        actual = format_stdout_stderr(stdout, stderr, 4)
-        self.assertEqual(expected, actual)
-        self.assertEqual(0, len(actual))
-
-    def test_format_stdout_stderr05(self):
-        """
-        If stdout and stderr are empty, an empty template is returned.
+        Parse a status report for a successful execution of an extension.
         """
 
-        expected = '[stdout]\n\n\n[stderr]\n'
-        actual = format_stdout_stderr('', '', 1000)
-        self.assertEqual(expected, actual)
+        s = '''[{
+    "status": {
+      "status": "success",
+      "formattedMessage": {
+        "lang": "en-US",
+        "message": "Command is finished."
+      },
+      "operation": "Daemon",
+      "code": "0",
+      "name": "Microsoft.OSTCExtensions.CustomScriptForLinux"
+    },
+    "version": "1.0",
+    "timestampUTC": "2018-04-20T21:20:24Z"
+  }
+]'''
+        ext_status = ExtensionStatus(seq_no=0)
+        parse_ext_status(ext_status, json.loads(s))
 
+        self.assertEqual('0', ext_status.code)
+        self.assertEqual(None, ext_status.configurationAppliedTime)
+        self.assertEqual('Command is finished.', ext_status.message)
+        self.assertEqual('Daemon', ext_status.operation)
+        self.assertEqual('success', ext_status.status)
+        self.assertEqual(0, ext_status.sequenceNumber)
+        self.assertEqual(0, len(ext_status.substatusList))
 
-if __name__ == '__main__':
-    unittest.main()
+    def test_parse_extension_status01(self):
+        """
+        Parse a status report for a failed execution of an extension.
 
+        The extension returned a bad status/status of failed.
+        The agent should handle this gracefully, and convert all unknown
+        status/status values into an error.
+        """
+
+        s = '''[{
+    "status": {
+      "status": "failed",
+      "formattedMessage": {
+        "lang": "en-US",
+        "message": "Enable failed: Failed with error: commandToExecute is empty or invalid ..."
+      },
+      "operation": "Enable",
+      "code": "0",
+      "name": "Microsoft.OSTCExtensions.CustomScriptForLinux"
+    },
+    "version": "1.0",
+    "timestampUTC": "2018-04-20T20:50:22Z"
+}]'''
+        ext_status = ExtensionStatus(seq_no=0)
+        parse_ext_status(ext_status, json.loads(s))
+
+        self.assertEqual('0', ext_status.code)
+        self.assertEqual(None, ext_status.configurationAppliedTime)
+        self.assertEqual('Enable failed: Failed with error: commandToExecute is empty or invalid ...', ext_status.message)
+        self.assertEqual('Enable', ext_status.operation)
+        self.assertEqual('error', ext_status.status)
+        self.assertEqual(0, ext_status.sequenceNumber)
+        self.assertEqual(0, len(ext_status.substatusList))
