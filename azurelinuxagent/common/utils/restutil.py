@@ -170,6 +170,8 @@ def _http_request(method, host, rel_uri, port=None, data=None, secure=False,
                   headers=None, proxy_host=None, proxy_port=None):
 
     headers = {} if headers is None else headers
+    headers['Connection'] = 'close'
+
     use_proxy = proxy_host is not None and proxy_port is not None
 
     if port is None:
