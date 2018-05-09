@@ -862,10 +862,6 @@ class WireClient(object):
                     self.update_goal_state(forced=True)
                     goal_state = self.get_goal_state()
 
-                self._remove_stale_agent_manifest(
-                    vmagent_manifest.family,
-                    goal_state.incarnation)
-
                 local_file = MANIFEST_FILE_NAME.format(
                                 vmagent_manifest.family,
                                 goal_state.incarnation)
@@ -879,25 +875,6 @@ class WireClient(object):
                 continue
 
         raise ProtocolError("Failed to retrieve GAFamily manifest")
-
-    def _remove_stale_agent_manifest(self, family, incarnation):
-        """
-        The incarnation number can reset at any time, which means there
-        could be a stale agentsManifest on disk.  Stale files are cleaned
-        on demand as new goal states arrive from WireServer. If the stale
-        file is not removed agent upgrade may be delayed.
-
-        :param family: GA family, e.g. Prod or Test
-        :param incarnation: incarnation of the current goal state
-        """
-        fn = AGENTS_MANIFEST_FILE_NAME.format(
-            family,
-            incarnation)
-
-        agent_manifest = os.path.join(conf.get_lib_dir(), fn)
-
-        if os.path.exists(agent_manifest):
-            fileutil.rm_files([agent_manifest])
 
     def check_wire_protocol_version(self):
         uri = VERSION_INFO_URI.format(self.endpoint)
