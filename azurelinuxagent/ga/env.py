@@ -102,9 +102,9 @@ class EnvHandler(object):
 
                 # If the rules ever change we must reset all rules and start over again.
                 #
-                # There was a rule change at 2.2.25, which started dropping non-root traffic
+                # There was a rule change at 2.2.26, which started dropping non-root traffic
                 # to WireServer.  The previous rules allowed traffic.  Having both rules in
-                # place negated the fix in 2.2.25.
+                # place negated the fix in 2.2.26.
                 if not reset_firewall_fules:
                     self.osutil.remove_firewall(dst_ip=protocol.endpoint, uid=os.getuid())
                     reset_firewall_fules = True
