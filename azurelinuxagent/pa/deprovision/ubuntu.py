@@ -40,3 +40,13 @@ class UbuntuDeprovisionHandler(DeprovisionHandler):
             files_to_del = ["/etc/resolvconf/resolv.conf.d/tail",
                             "/etc/resolvconf/resolv.conf.d/original"]
             actions.append(DeprovisionAction(fileutil.rm_files, files_to_del))
+
+
+class Ubuntu1804DeprovisionHandler(UbuntuDeprovisionHandler):
+    def __init__(self):
+        super(Ubuntu1804DeprovisionHandler, self).__init__()
+
+    def del_resolv(self, warnings, actions):
+        # no changes will be made to /etc/resolv.conf
+        warnings.append("WARNING! /etc/resolv.conf will NOT be removed, this is a behavior change to earlier "
+                        "versions of Ubuntu.")

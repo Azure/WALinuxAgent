@@ -22,7 +22,8 @@ from .default import DeprovisionHandler
 from .arch import ArchDeprovisionHandler
 from .clearlinux import ClearLinuxDeprovisionHandler
 from .coreos import CoreOSDeprovisionHandler
-from .ubuntu import UbuntuDeprovisionHandler
+from .ubuntu import UbuntuDeprovisionHandler, Ubuntu1804DeprovisionHandler
+
 
 from distutils.version import LooseVersion as Version
 
@@ -33,7 +34,10 @@ def get_deprovision_handler(distro_name=DISTRO_NAME,
     if distro_name == "arch":
         return ArchDeprovisionHandler()
     if distro_name == "ubuntu":
-        return UbuntuDeprovisionHandler()
+        if Version(distro_version) in [Version('18.04')]:
+            return Ubuntu1804DeprovisionHandler()
+        else:
+            return UbuntuDeprovisionHandler()
     if distro_name == "coreos":
         return CoreOSDeprovisionHandler()
     if distro_name == "clear linux":
