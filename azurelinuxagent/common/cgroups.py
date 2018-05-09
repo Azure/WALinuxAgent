@@ -103,7 +103,7 @@ class Cpu(object):
         if proc_stat is not None:
             for line in proc_stat.splitlines():
                 if re_all_CPUs.match(line):
-                    system_cpu = sum(int(i) for i in line.split(' ')[1:7])
+                    system_cpu = sum(int(i) for i in line.split()[1:7])
                     break
         return system_cpu
 
