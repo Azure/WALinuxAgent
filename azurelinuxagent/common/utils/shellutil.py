@@ -57,6 +57,11 @@ if not hasattr(subprocess, 'check_output'):
 Shell command util functions
 """
 
+def has_command(cmd):
+    """
+    Return True if the given command is on the path
+    """
+    return not run(cmd, False)
 
 def run(cmd, chk_err=True):
     """
