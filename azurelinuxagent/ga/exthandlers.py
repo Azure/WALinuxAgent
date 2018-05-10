@@ -417,10 +417,13 @@ class ExtHandlersHandler(object):
             ext_handler_i.update_settings()
             if old_ext_handler_i is None:
                 ext_handler_i.install()
-            elif ext_handler_i.version_gt(old_ext_handler_i):
+            elif ext_handler_i.version_ne(old_ext_handler_i):
                 old_ext_handler_i.disable()
                 ext_handler_i.copy_status_files(old_ext_handler_i)
-                ext_handler_i.update()
+                if ext_handler_i.version_gt(old_ext_handler_i):
+                    ext_handler_i.update()
+                else:
+                    old_ext_handler_i.update(version=ext_handler_i.ext_handler.properties.version)
                 old_ext_handler_i.uninstall()
                 old_ext_handler_i.rm_ext_handler_dir()
                 ext_handler_i.update_with_install()
@@ -667,6 +670,11 @@ class ExtHandlerInstance(object):
         other_version = other.ext_handler.properties.version
         return FlexibleVersion(self_version) > FlexibleVersion(other_version)
 
+    def version_ne(self, other):
+        self_version = self.ext_handler.properties.version
+        other_version = other.ext_handler.properties.version
+        return FlexibleVersion(self_version) != FlexibleVersion(other_version)
+
     def get_installed_ext_handler(self):
         lastest_version = self.get_installed_version()
         if lastest_version is None:
@@ -862,12 +870,15 @@ class ExtHandlerInstance(object):
             self.report_event(message=message, is_success=False)
             self.logger.warn(message)
 
-    def update(self):
+    def update(self, version=None):
+        if version is None:
+            version = self.ext_handler.properties.version
+
         self.set_operation(WALAEventOperation.Update)
         man = self.load_manifest()
         update_cmd = man.get_update_command()
         self.logger.info("Update extension [{0}]".format(update_cmd))
-        self.launch_command(update_cmd, timeout=900)
+        self.launch_command(update_cmd, timeout=900, env={'VERSION': version})
     
     def update_with_install(self):
         man = self.load_manifest()
@@ -980,10 +991,14 @@ class ExtHandlerInstance(object):
         last_update = int(time.time() - os.stat(heartbeat_file).st_mtime)
         return last_update <= 600
 
-    def launch_command(self, cmd, timeout=300):
+    def launch_command(self, cmd, timeout=300, env=None):
         begin_utc = datetime.datetime.utcnow()
         self.logger.verbose("Launch command: [{0}]", cmd)
         base_dir = self.get_base_dir()
+
+        if env is None:
+            env = {}
+        env.update(os.environ)
 
         try:
             # This should be .run(), but due to the wide variety
@@ -1006,7 +1021,7 @@ class ExtHandlerInstance(object):
                                        cwd=base_dir,
                                        stdout=subprocess.PIPE,
                                        stderr=subprocess.PIPE,
-                                       env=os.environ,
+                                       env=env,
                                        preexec_fn=pre_exec_function)
         except OSError as e:
             raise ExtensionError("Failed to launch '{0}': {1}".format(full_path, e.strerror))
