@@ -148,7 +148,7 @@ class ProtocolUtil(object):
             '''
             Check if DHCP can be used to get the wire protocol endpoint
             '''
-            (dhcp_available, conf_endpoint) =  self.osutil.is_dhcp_available():
+            (dhcp_available, conf_endpoint) =  self.osutil.is_dhcp_available()
             if dhcp_available:
                 logger.info("WireServer endpoint is not found. Rerun dhcp handler")
                 try:
