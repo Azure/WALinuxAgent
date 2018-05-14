@@ -331,6 +331,13 @@ class DefaultOSUtil(object):
             return True
         else:
             return False
+    
+    def getusers(self):
+        """
+        Gets all users that can log into the machine
+        """
+        users = [i.split(':') for i in open('/etc/shadow').readlines()]
+        return users
 
     def useradd(self, username, expiration=None):
         """

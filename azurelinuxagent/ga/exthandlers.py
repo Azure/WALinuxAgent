@@ -28,8 +28,9 @@ import re
 import shutil
 import stat
 import subprocess
+import textwrap
 import time
-import traceback
+import traceback 
 import zipfile
 
 import azurelinuxagent.common.conf as conf
@@ -37,6 +38,7 @@ import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.version as version
 from azurelinuxagent.common.errorstate import ErrorState, ERROR_STATE_DELTA_DEFAULT, ERROR_STATE_DELTA_INSTALL
+
 
 from azurelinuxagent.common.event import add_event, WALAEventOperation, elapsed_milliseconds, report_event
 from azurelinuxagent.common.exception import ExtensionError, ProtocolError
@@ -47,10 +49,13 @@ from azurelinuxagent.common.protocol.restapi import ExtHandlerStatus, \
                                                     VMStatus, ExtHandler, \
                                                     get_properties, \
                                                     set_properties
+from azurelinuxagent.common.protocol.metadata import MetadataProtocol
+from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.utils.processutil import capture_from_process
 from azurelinuxagent.common.protocol import get_protocol_util
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
+from azurelinuxagent.common.osutil import get_osutil
 
 
 # HandlerEnvironment.json schema version
@@ -182,23 +187,25 @@ def get_exthandlers_handler():
 class ExtHandlersHandler(object):
     def __init__(self):
         self.protocol_util = get_protocol_util()
-        self.protocol = None
+        self.protocol = self.protocol_util.get_protocol()
         self.ext_handlers = None
+        # self.remote_access = None
         self.last_etag = None
         self.last_upgrade_guids = {}
         self.log_report = False
         self.log_etag = True
         self.log_process = False
-
+        self.osUtil = get_osutil()
+        self.cryptUtil = CryptUtil(conf.get_openssl_cmd())
         self.report_status_error_state = ErrorState()
         self.get_artifact_error_state = ErrorState(min_timedelta=ERROR_STATE_DELTA_INSTALL)
 
     def run(self):
         self.ext_handlers, etag = None, None
         try:
-            self.protocol = self.protocol_util.get_protocol()
             self.ext_handlers, etag = self.protocol.get_ext_handlers()
             self.get_artifact_error_state.reset()
+
         except Exception as e:
             msg = u"Exception retrieving extension handlers: {0}".format(ustr(e))
             self.get_artifact_error_state.incr()
@@ -221,6 +228,7 @@ class ExtHandlersHandler(object):
             # Log status report success on new config
             self.log_report = True
             self.handle_ext_handlers(etag)
+            self.handle_remote_access()
             self.last_etag = etag
 
             self.report_ext_handlers_status()
@@ -235,6 +243,10 @@ class ExtHandlersHandler(object):
                       is_success=False,
                       message=msg)
             return
+
+    def run_status(self):
+        self.report_ext_handlers_status()
+        return
 
     def get_upgrade_guid(self, name):
         return self.last_upgrade_guids.get(name, (None, False))[0]
@@ -307,10 +319,52 @@ class ExtHandlersHandler(object):
             if os.path.isfile(pkg):
                 try:
                     os.remove(pkg)
-                    logger.verbose("Removed extension package {0}".format(pkg))
-                except OSError as e:
-                    logger.warn("Failed to remove extension package {0}: {1}".format(pkg, e.strerror))
-   
+                    logger.verbose("Removed extension package "
+                                "{0}".format(pkg))
+                except Exception as e:
+                    logger.warn("Failed to remove extension package: "
+                                "{0}".format(pkg))
+    
+    #TODO: Why is this here with extension handlers... this doesn't seem right.
+    def handle_remote_access(self):
+        logger.verbose("Entered handle_remote_access")
+        self.protocol.client.update_goal_state(True)
+        self.protocol.client.update_remote_access_conf(self.protocol.client.goal_state)
+        remote_access = self.protocol.client.remote_access
+        if remote_access is not None:
+            # Get existing users.
+            osUtils = get_osutil()
+            existingUsers = osUtils.getusers()
+            userNames = []
+            for usr in existingUsers:
+                userNames.append(usr[0])            
+            for acc in remote_access.Users:
+                try:
+                    dateTimeString = acc.Expiration
+                    accExp = datetime.strptime(dateTimeString, "%a, %d %b %Y %H:%M:%S %Z") + timedelta(days=1)
+                    now = datetime.utcnow()
+                    if acc.Name not in userNames and now < accExp :
+                        logger.verbose("Adding user {0} with expiration {1}".format(acc.Name, acc.Expiration))
+                        expirationString = accExp.strftime("%Y-%m-%d")
+                        osUtils.useradd(acc.Name, expirationString)
+                        cachefile = os.path.join(conf.get_lib_dir(), "temp.dat")
+                        prvKey = os.path.join(conf.get_lib_dir(), "TransportPrivate.pem")
+                        pwd = self.cryptUtil.decryptSecret(acc.EncryptedPassword, prvKey, cachefile)   
+                        osUtils.chpasswd(acc.Name, pwd, conf.get_password_cryptid(), conf.get_password_crypt_salt_len())
+                        osUtils.conf_sudoer(acc.Name)
+                        logger.info("User '{0}' added successfully".format(acc.Name))
+                except Exception as e:
+                    #TODO: Better error handling and cap to retry logic.
+                    logger.error("handle_remote_access: {0}".format(str(e)))
+        else:
+            logger.verbose("handle_remote_access remote_access is null")
+    
+    def addUser(self):
+        pass
+    
+    def removeUser(self):
+        pass
+    
     def handle_ext_handlers(self, etag=None):
         if self.ext_handlers.extHandlers is None or \
                 len(self.ext_handlers.extHandlers) == 0:
