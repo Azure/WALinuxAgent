@@ -579,7 +579,6 @@ class TestExtension(AgentTestCase):
             exthandlers_handler.handle_ext_handlers()
             self.assertEqual(0, patch_handle_ext_handler.call_count)
 
-
     def test_handle_ext_handlers_on_hold_false(self, *args):
         test_data = WireProtocolData(DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)

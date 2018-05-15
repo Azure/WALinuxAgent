@@ -485,7 +485,8 @@ class TestGuestAgent(UpdateTestCase):
         self.assertFalse(os.path.isdir(self.agent_path))
 
         agent_pkg = load_bin_data(os.path.join("ga", get_agent_file_name()))
-        mock_http_get.return_value= ResponseMock(response=agent_pkg)
+        mock_http_get().__enter__.return_value = ResponseMock(response=agent_pkg)
+        mock_http_get().__exit__.return_value = None
 
         pkg = ExtHandlerPackage(version=str(get_agent_version()))
         pkg.uris.append(ExtHandlerPackageUri())
@@ -501,7 +502,8 @@ class TestGuestAgent(UpdateTestCase):
         self.remove_agents()
         self.assertFalse(os.path.isdir(self.agent_path))
 
-        mock_http_get.return_value= ResponseMock(status=restutil.httpclient.SERVICE_UNAVAILABLE)
+        mock_http_get().__enter__.return_value = ResponseMock(status=restutil.httpclient.SERVICE_UNAVAILABLE)
+        mock_http_get().__exit__.return_value = None
 
         pkg = ExtHandlerPackage(version=str(get_agent_version()))
         pkg.uris.append(ExtHandlerPackageUri())
@@ -518,9 +520,10 @@ class TestGuestAgent(UpdateTestCase):
         self.remove_agents()
         self.assertFalse(os.path.isdir(self.agent_path))
 
-        mock_http_get.return_value = ResponseMock(
+        mock_http_get().__enter__.return_value = ResponseMock(
             status=restutil.httpclient.SERVICE_UNAVAILABLE,
             response="")
+        mock_http_get().__exit__.return_value = None
 
         ext_uri = 'ext_uri'
         host_uri = 'host_uri'
@@ -537,7 +540,7 @@ class TestGuestAgent(UpdateTestCase):
 
         # ensure fallback fails gracefully, no http
         self.assertRaises(UpdateError, agent._download)
-        self.assertEqual(mock_http_get.call_count, 2)
+        self.assertEqual(mock_http_get.call_count, 4)
         self.assertEqual(mock_http_get.call_args_list[0][0][0], ext_uri)
         self.assertEqual(mock_http_get.call_args_list[1][0][0], api_uri)
 
@@ -577,7 +580,8 @@ class TestGuestAgent(UpdateTestCase):
         self.assertFalse(os.path.isdir(self.agent_path))
 
         agent_pkg = load_bin_data(os.path.join("ga", get_agent_file_name()))
-        mock_http_get.return_value= ResponseMock(response=agent_pkg)
+        mock_http_get().__enter__.return_value = ResponseMock(response=agent_pkg)
+        mock_http_get().__exit__.return_value = None
 
         pkg = ExtHandlerPackage(version=str(get_agent_version()))
         pkg.uris.append(ExtHandlerPackageUri())

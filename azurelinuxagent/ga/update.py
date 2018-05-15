@@ -879,16 +879,16 @@ class GuestAgent(object):
     def _fetch(self, uri, headers=None, use_proxy=True):
         package = None
         try:
-            resp = restutil.http_get(uri, use_proxy=use_proxy, headers=headers)
-            if restutil.request_succeeded(resp):
-                package = resp.read()
-                fileutil.write_file(self.get_agent_pkg_path(),
-                                    bytearray(package),
-                                    asbin=True)
-                logger.verbose(u"Agent {0} downloaded from {1}", self.name, uri)
-            else:
-                logger.verbose("Fetch was unsuccessful [{0}]",
-                               restutil.read_response_error(resp))
+            with restutil.http_get(uri, use_proxy=use_proxy, headers=headers) as resp:
+                if restutil.request_succeeded(resp):
+                    package = resp.read()
+                    fileutil.write_file(self.get_agent_pkg_path(),
+                                        bytearray(package),
+                                        asbin=True)
+                    logger.verbose(u"Agent {0} downloaded from {1}", self.name, uri)
+                else:
+                    logger.verbose("Fetch was unsuccessful [{0}]",
+                                   restutil.read_response_error(resp))
         except restutil.HttpError as http_error:
             if isinstance(http_error, ResourceGoneError):
                 raise

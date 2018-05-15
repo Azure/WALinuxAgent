@@ -14,7 +14,7 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 #
-
+from azurelinuxagent.common.utils.restutil import HTTPResponseContext
 from tests.tools import *
 from azurelinuxagent.common.future import httpclient
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
@@ -62,5 +62,6 @@ class MetadataProtocolData(object):
             resp.read = Mock(return_value=None)
         else:
             resp.read = Mock(return_value=content.encode("utf-8"))
-        return resp
+
+        return HTTPResponseContext(Mock(), resp)
 

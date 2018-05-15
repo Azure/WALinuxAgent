@@ -213,7 +213,8 @@ class TestHostPlugin(AgentTestCase):
                         bytearray(faux_status, encoding='utf-8'))
 
         with patch.object(restutil, "http_request") as patch_http:
-            patch_http.return_value = Mock(status=httpclient.OK)
+            patch_http().__enter__.return_value = Mock(status=httpclient.OK)
+            patch_http().__exit__.return_value = None
 
             wire_protocol_client.get_goal_state = Mock(return_value=test_goal_state)
             plugin = wire_protocol_client.get_host_plugin()
@@ -267,7 +268,8 @@ class TestHostPlugin(AgentTestCase):
                         bytearray(faux_status, encoding='utf-8'))
 
         with patch.object(restutil, "http_request") as patch_http:
-            patch_http.return_value = Mock(status=httpclient.OK)
+            patch_http().__enter__.return_value = Mock(status=httpclient.OK)
+            patch_http().__exit__.return_value = None
 
             with patch.object(wire.HostPluginProtocol,
                           "get_api_versions") as patch_get:

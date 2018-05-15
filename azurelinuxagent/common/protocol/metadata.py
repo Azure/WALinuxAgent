@@ -84,36 +84,35 @@ class MetadataProtocol(Protocol):
 
     def _get_data(self, url, headers=None):
         try:
-            resp = restutil.http_get(url, headers=headers)
+            with restutil.http_get(url, headers=headers) as resp:
+                if restutil.request_failed(resp):
+                    raise ProtocolError("{0} - GET: {1}".format(resp.status, url))
+
+                data = resp.read()
+                etag = resp.getheader('ETag')
+                if data is not None:
+                    data = json.loads(ustr(data, encoding="utf-8"))
+                return data, etag
         except HttpError as e:
             raise ProtocolError(ustr(e))
-
-        if restutil.request_failed(resp):
-            raise ProtocolError("{0} - GET: {1}".format(resp.status, url))
-
-        data = resp.read()
-        etag = resp.getheader('ETag')
-        if data is not None:
-            data = json.loads(ustr(data, encoding="utf-8"))
-        return data, etag
 
     def _put_data(self, url, data, headers=None):
         headers = _add_content_type(headers)
         try:
-            resp = restutil.http_put(url, json.dumps(data), headers=headers)
+            with restutil.http_put(url, json.dumps(data), headers=headers) as resp:
+                if restutil.request_failed(resp):
+                    raise ProtocolError("{0} - PUT: {1}".format(resp.status, url))
         except HttpError as e:
             raise ProtocolError(ustr(e))
-        if restutil.request_failed(resp):
-            raise ProtocolError("{0} - PUT: {1}".format(resp.status, url))
 
     def _post_data(self, url, data, headers=None):
         headers = _add_content_type(headers)
         try:
-            resp = restutil.http_post(url, json.dumps(data), headers=headers)
+            with restutil.http_post(url, json.dumps(data), headers=headers) as resp:
+                if resp.status != httpclient.CREATED:
+                    logger.warn("{0} for POST {1}".format(resp.status, url))
         except HttpError as e:
             raise ProtocolError(ustr(e))
-        if resp.status != httpclient.CREATED:
-            logger.warn("{0} for POST {1}".format(resp.status, url))
 
     def _get_trans_cert(self):
         trans_crt_file = os.path.join(conf.get_lib_dir(),

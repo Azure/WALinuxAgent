@@ -13,7 +13,7 @@ from tests.tools import *
 class TestImds(AgentTestCase):
     @patch("azurelinuxagent.ga.update.restutil.http_get")
     def test_get(self, mock_http_get):
-        mock_http_get.return_value = ResponseMock(response='''{
+        mock_http_get().__enter__.return_value = ResponseMock(response='''{
         "location": "westcentralus",
         "name": "unit_test",
         "offer": "UnitOffer",
@@ -30,6 +30,7 @@ class TestImds(AgentTestCase):
         "version": "UnitVersion",
         "vmSize": "Standard_D1_v2"
         }'''.encode('utf-8'))
+        mock_http_get().__exit__.return_value = None
 
         test_subject = ImdsClient()
         test_subject.get_compute()
@@ -44,14 +45,16 @@ class TestImds(AgentTestCase):
 
     @patch("azurelinuxagent.ga.update.restutil.http_get")
     def test_get_bad_request(self, mock_http_get):
-        mock_http_get.return_value = ResponseMock(status=restutil.httpclient.BAD_REQUEST)
+        mock_http_get().__enter__.return_value = ResponseMock(status=restutil.httpclient.BAD_REQUEST)
+        mock_http_get().__exit__.return_value = ResponseMock(status=restutil.httpclient.BAD_REQUEST)
 
         test_subject = ImdsClient()
         self.assertRaises(HttpError, test_subject.get_compute)
 
     @patch("azurelinuxagent.ga.update.restutil.http_get")
     def test_get_empty_response(self, mock_http_get):
-        mock_http_get.return_value = ResponseMock(response=''.encode('utf-8'))
+        mock_http_get().__enter__.return_value = ResponseMock(response=''.encode('utf-8'))
+        mock_http_get().__exit__.return_value = ResponseMock(response=''.encode('utf-8'))
 
         test_subject = ImdsClient()
         self.assertRaises(ValueError, test_subject.get_compute)
