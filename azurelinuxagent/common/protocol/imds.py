@@ -74,16 +74,14 @@ class ImdsClient(object):
         :return: instance of a ComputeInfo
         :rtype: ComputeInfo
         """
+        with restutil.http_get(self.compute_url, headers=self._headers) as resp:
+            if restutil.request_failed(resp):
+                raise HttpError("{0} - GET: {1}".format(resp.status, self.compute_url))
 
-        resp = restutil.http_get(self.compute_url, headers=self._headers)
+            data = resp.read()
+            data = json.loads(ustr(data, encoding="utf-8"))
 
-        if restutil.request_failed(resp):
-            raise HttpError("{0} - GET: {1}".format(resp.status, self.compute_url))
+            compute_info = ComputeInfo()
+            set_properties('compute', compute_info, data)
 
-        data = resp.read()
-        data = json.loads(ustr(data, encoding="utf-8"))
-
-        compute_info = ComputeInfo()
-        set_properties('compute', compute_info, data)
-
-        return compute_info
+            return compute_info

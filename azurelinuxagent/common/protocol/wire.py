@@ -427,10 +427,10 @@ class StatusBlob(object):
     def put_block_blob(self, url, data):
         logger.verbose("Put block blob")
         headers = self.get_block_blob_headers(len(data))
-        resp = self.client.call_storage_service(restutil.http_put, url, data, headers)
-        if resp.status != httpclient.CREATED:
-            raise UploadError(
-                "Failed to upload block blob: {0}".format(resp.status))
+        with self.client.call_storage_service(restutil.http_put, url, data, headers) as resp:
+            if resp.status != httpclient.CREATED:
+                raise UploadError(
+                    "Failed to upload block blob: {0}".format(resp.status))
 
     def get_page_blob_create_headers(self, blob_size):
         return {
@@ -458,10 +458,10 @@ class StatusBlob(object):
         page_blob_size = int((len(data) + 511) / 512) * 512
 
         headers = self.get_page_blob_create_headers(page_blob_size)
-        resp = self.client.call_storage_service(restutil.http_put, url, "", headers)
-        if resp.status != httpclient.CREATED:
-            raise UploadError(
-                "Failed to clean up page blob: {0}".format(resp.status))
+        with self.client.call_storage_service(restutil.http_put, url, "", headers) as resp:
+            if resp.status != httpclient.CREATED:
+                raise UploadError(
+                    "Failed to clean up page blob: {0}".format(resp.status))
 
         if url.count("?") <= 0:
             url = "{0}?comp=page".format(url)
@@ -481,14 +481,15 @@ class StatusBlob(object):
             buf = bytearray(buf_size)
             buf[0: content_size] = data[start: end]
             headers = self.get_page_blob_page_headers(start, page_end)
-            resp = self.client.call_storage_service(
+            with self.client.call_storage_service(
                 restutil.http_put,
                 url,
                 bytebuffer(buf),
-                headers)
-            if resp is None or resp.status != httpclient.CREATED:
-                raise UploadError(
-                    "Failed to upload page blob: {0}".format(resp.status))
+                headers) as resp:
+                if resp is None or resp.status != httpclient.CREATED:
+                    raise UploadError(
+                        "Failed to upload page blob: {0}".format(resp.status))
+
             start = end
 
 
@@ -565,10 +566,10 @@ class WireClient(object):
         return xml_text
 
     def fetch_config(self, uri, headers):
-        resp = self.call_wireserver(restutil.http_get,
-                                    uri,
-                                    headers=headers)
-        return self.decode_config(resp.read())
+        with self.call_wireserver(restutil.http_get,
+                                  uri,
+                                  headers=headers) as resp:
+            return self.decode_config(resp.read())
 
     def fetch_cache(self, local_file):
         if not os.path.isfile(local_file):
@@ -642,20 +643,20 @@ class WireClient(object):
     def fetch(self, uri, headers=None, use_proxy=None):
         logger.verbose("Fetch [{0}] with headers [{1}]", uri, headers)
         try:
-            resp = self.call_storage_service(
+            with self.call_storage_service(
                         restutil.http_get,
                         uri,
                         headers=headers,
-                        use_proxy=use_proxy)
+                        use_proxy=use_proxy) as resp:
 
-            if restutil.request_failed(resp):
-                msg = "[Storage Failed] URI {0} ".format(uri)
-                if resp is not None:
-                    msg += restutil.read_response_error(resp)
-                logger.warn(msg)
-                raise ProtocolError(msg)
+                if restutil.request_failed(resp):
+                    msg = "[Storage Failed] URI {0} ".format(uri)
+                    if resp is not None:
+                        msg += restutil.read_response_error(resp)
+                    logger.warn(msg)
+                    raise ProtocolError(msg)
 
-            return self.decode_config(resp.read())
+                return self.decode_config(resp.read())
 
         except (HttpError, ProtocolError) as e:
             logger.verbose("Fetch failed from [{0}]: {1}", uri, e)
@@ -986,17 +987,17 @@ class WireClient(object):
         role_prop_uri = ROLE_PROP_URI.format(self.endpoint)
         headers = self.get_header_for_xml_content()
         try:
-            resp = self.call_wireserver(restutil.http_post,
-                                        role_prop_uri,
-                                        role_prop,
-                                        headers=headers)
+            with self.call_wireserver(restutil.http_post,
+                                      role_prop_uri,
+                                      role_prop,
+                                      headers=headers) as resp:
+                if resp.status != httpclient.ACCEPTED:
+                    raise ProtocolError((u"Failed to send role properties: "
+                                         u",{0}: {1}").format(resp.status,
+                                                              resp.read()))
         except HttpError as e:
             raise ProtocolError((u"Failed to send role properties: "
                                  u"{0}").format(e))
-        if resp.status != httpclient.ACCEPTED:
-            raise ProtocolError((u"Failed to send role properties: "
-                                 u",{0}: {1}").format(resp.status,
-                                                      resp.read()))
 
     def report_health(self, status, substatus, description):
         goal_state = self.get_goal_state()
@@ -1013,19 +1014,20 @@ class WireClient(object):
             # 30 retries with 10s sleep gives ~5min for wireserver updates;
             # this is retried 3 times with 15s sleep before throwing a
             # ProtocolError, for a total of ~15min.
-            resp = self.call_wireserver(restutil.http_post,
-                                        health_report_uri,
-                                        health_report,
-                                        headers=headers,
-                                        max_retry=30,
-                                        retry_delay=15)
+            with self.call_wireserver(restutil.http_post,
+                                      health_report_uri,
+                                      health_report,
+                                      headers=headers,
+                                      max_retry=30,
+                                      retry_delay=15) as resp:
+
+                if restutil.request_failed(resp):
+                    raise ProtocolError((u"Failed to send provision status: "
+                                         u",{0}: {1}").format(resp.status,
+                                                              resp.read()))
         except HttpError as e:
             raise ProtocolError((u"Failed to send provision status: "
                                  u"{0}").format(e))
-        if restutil.request_failed(resp):
-            raise ProtocolError((u"Failed to send provision status: "
-                                 u",{0}: {1}").format(resp.status,
-                                                      resp.read()))
 
     def send_event(self, provider_id, event_str):
         uri = TELEMETRY_URI.format(self.endpoint)
@@ -1037,14 +1039,14 @@ class WireClient(object):
         data = data_format.format(provider_id, event_str)
         try:
             header = self.get_header_for_xml_content()
-            resp = self.call_wireserver(restutil.http_post, uri, data, header)
+            with self.call_wireserver(restutil.http_post, uri, data, header) as resp:
+                if restutil.request_failed(resp):
+                    logger.verbose(resp.read())
+                    raise ProtocolError(
+                        "Failed to send events:{0}".format(resp.status))
         except HttpError as e:
             raise ProtocolError("Failed to send events:{0}".format(e))
 
-        if restutil.request_failed(resp):
-            logger.verbose(resp.read())
-            raise ProtocolError(
-                "Failed to send events:{0}".format(resp.status))
 
     def report_event(self, event_list):
         buf = {}

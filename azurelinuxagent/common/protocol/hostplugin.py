@@ -85,13 +85,13 @@ class HostPluginProtocol(object):
         return_val = []
         try:
             headers = {HEADER_CONTAINER_ID: self.container_id}
-            response = restutil.http_get(url, headers)
-            if restutil.request_failed(response):
-                logger.error(
-                    "HostGAPlugin: Failed Get API versions: {0}".format(
-                        restutil.read_response_error(response)))
-            else:
-                return_val = ustr(remove_bom(response.read()), encoding='utf-8')
+            with restutil.http_get(url, headers) as response:
+                if restutil.request_failed(response):
+                    logger.error(
+                        "HostGAPlugin: Failed Get API versions: {0}".format(
+                            restutil.read_response_error(response)))
+                else:
+                    return_val = ustr(remove_bom(response.read()), encoding='utf-8')
 
         except HttpError as e:
             logger.error("HostGAPlugin: Exception Get API versions: {0}".format(e))
@@ -155,18 +155,18 @@ class HostPluginProtocol(object):
     def _put_block_blob_status(self, sas_url, status_blob):
         url = URI_FORMAT_PUT_VM_STATUS.format(self.endpoint, HOST_PLUGIN_PORT)
 
-        response = restutil.http_put(url,
-                        data=self._build_status_data(
-                                    sas_url,
-                                    status_blob.get_block_blob_headers(len(status_blob.data)),
-                                    bytearray(status_blob.data, encoding='utf-8')),
-                        headers=self._build_status_headers())
+        with restutil.http_put(url,
+                               data=self._build_status_data(
+                                   sas_url,
+                                   status_blob.get_block_blob_headers(len(status_blob.data)),
+                                   bytearray(status_blob.data, encoding='utf-8')),
+                               headers=self._build_status_headers()) as response:
 
-        if restutil.request_failed(response):
-            raise HttpError("HostGAPlugin: Put BlockBlob failed: {0}".format(
-                restutil.read_response_error(response)))
-        else:
-            logger.verbose("HostGAPlugin: Put BlockBlob status succeeded")
+            if restutil.request_failed(response):
+                raise HttpError("HostGAPlugin: Put BlockBlob failed: {0}".format(
+                    restutil.read_response_error(response)))
+            else:
+                logger.verbose("HostGAPlugin: Put BlockBlob status succeeded")
 
     def _put_page_blob_status(self, sas_url, status_blob):
         url = URI_FORMAT_PUT_VM_STATUS.format(self.endpoint, HOST_PLUGIN_PORT)
@@ -177,18 +177,18 @@ class HostPluginProtocol(object):
         status = bytearray(status_blob.data.ljust(status_size), encoding='utf-8')
 
         # First, initialize an empty blob
-        response = restutil.http_put(url,
-                        data=self._build_status_data(
-                                    sas_url,
-                                    status_blob.get_page_blob_create_headers(status_size)),
-                        headers=self._build_status_headers())
+        with restutil.http_put(url,
+                               data=self._build_status_data(
+                                   sas_url,
+                                   status_blob.get_page_blob_create_headers(status_size)),
+                               headers=self._build_status_headers()) as response:
 
-        if restutil.request_failed(response):
-            raise HttpError(
-                "HostGAPlugin: Failed PageBlob clean-up: {0}".format(
-                    restutil.read_response_error(response)))
-        else:
-            logger.verbose("HostGAPlugin: PageBlob clean-up succeeded")
+            if restutil.request_failed(response):
+                raise HttpError(
+                    "HostGAPlugin: Failed PageBlob clean-up: {0}".format(
+                        restutil.read_response_error(response)))
+            else:
+                logger.verbose("HostGAPlugin: PageBlob clean-up succeeded")
         
         # Then, upload the blob in pages
         if sas_url.count("?") <= 0:
@@ -206,18 +206,18 @@ class HostPluginProtocol(object):
             buf[0: end - start] = status[start: end]
 
             # Send the page
-            response = restutil.http_put(url,
-                            data=self._build_status_data(
-                                        sas_url,
-                                        status_blob.get_page_blob_page_headers(start, end),
-                                        buf),
-                            headers=self._build_status_headers())
+            with restutil.http_put(url,
+                                   data=self._build_status_data(
+                                       sas_url,
+                                       status_blob.get_page_blob_page_headers(start, end),
+                                       buf),
+                                   headers=self._build_status_headers()) as response:
 
-            if restutil.request_failed(response):
-                raise HttpError(
-                    "HostGAPlugin Error: Put PageBlob bytes [{0},{1}]: " \
-                    "{2}".format(
-                        start, end, restutil.read_response_error(response)))
+                if restutil.request_failed(response):
+                    raise HttpError(
+                        "HostGAPlugin Error: Put PageBlob bytes [{0},{1}]: " \
+                        "{2}".format(
+                            start, end, restutil.read_response_error(response)))
 
             # Advance to the next page (if any)
             start = end

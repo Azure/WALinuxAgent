@@ -334,9 +334,9 @@ class Protocol(DataContract):
 
     def download_ext_handler_pkg(self, uri, headers=None, use_proxy=True):
         try:
-            resp = restutil.http_get(uri, headers=headers, use_proxy=use_proxy)
-            if restutil.request_succeeded(resp):
-                return resp.read()
+            with restutil.http_get(uri, headers=headers, use_proxy=use_proxy) as resp:
+                if restutil.request_succeeded(resp):
+                    return resp.read()
         except Exception as e:
             logger.warn("Failed to download from: {0}".format(uri), e)
 
