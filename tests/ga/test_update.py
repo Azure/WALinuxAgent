@@ -1706,35 +1706,5 @@ class ProtocolMock(object):
         self.goal_state_forced = self.goal_state_forced or forced
 
 
-class ResponseMock(Mock):
-    def __init__(self, status=restutil.httpclient.OK, response=None, reason=None):
-        Mock.__init__(self)
-        self.status = status
-        self.reason = reason
-        self.response = response
-
-    def read(self):
-        return self.response
-
-
-class TimeMock(Mock):
-    def __init__(self, time_increment=1):
-        Mock.__init__(self)
-        self.next_time = time.time()
-        self.time_call_count = 0
-        self.time_increment = time_increment
-
-        self.sleep_interval = None
-
-    def sleep(self, n):
-        self.sleep_interval = n
-
-    def time(self):
-        self.time_call_count += 1
-        current_time = self.next_time
-        self.next_time += self.time_increment
-        return current_time
-
-
 if __name__ == '__main__':
     unittest.main()

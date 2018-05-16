@@ -31,7 +31,6 @@ import azurelinuxagent.common.protocol.wire as wire
 import azurelinuxagent.common.protocol.hostplugin as hostplugin
 
 from azurelinuxagent.common.protocol.hostplugin import API_VERSION
-from azurelinuxagent.common.utils import restutil
 
 from tests.protocol.mockwiredata import WireProtocolData, DATA_FILE
 from tests.tools import *
@@ -303,7 +302,7 @@ class TestHostPlugin(AgentTestCase):
         page_status = bytearray(status_blob.data.ljust(page_size), encoding='utf-8')
         page = bytearray(page_size)
         page[0: page_size] = page_status[0: len(page_status)]
-        mock_response = MockResponse('', httpclient.OK)
+        mock_response = ResponseMock(response='')
 
         with patch.object(restutil, "http_request") as patch_http:
             patch_http().__enter__.return_value = mock_response
@@ -358,14 +357,6 @@ class TestHostPlugin(AgentTestCase):
                 self.assertTrue(k in actual_headers)
                 self.assertEqual(expected_headers[k], actual_headers[k])
     
-
-class MockResponse:
-    def __init__(self, body, status_code):
-        self.body = body
-        self.status = status_code
-
-    def read(self):
-        return self.body
 
 if __name__ == '__main__':
     unittest.main()

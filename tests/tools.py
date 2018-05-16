@@ -31,7 +31,7 @@ import time
 import azurelinuxagent.common.event as event
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
-from azurelinuxagent.common.utils import fileutil
+from azurelinuxagent.common.utils import fileutil, restutil
 
 from azurelinuxagent.common.version import PY_VERSION_MAJOR
 
@@ -93,6 +93,36 @@ class AgentTestCase(unittest.TestCase):
             f = os.path.join(tmp_dir, '.'.join((prefix, str(i), suffix)))
             fileutil.write_file(f, "faux content")
             time.sleep(with_sleep)
+
+
+class TimeMock(Mock):
+    def __init__(self, time_increment=1):
+        Mock.__init__(self)
+        self.next_time = time.time()
+        self.time_call_count = 0
+        self.time_increment = time_increment
+
+        self.sleep_interval = None
+
+    def sleep(self, n):
+        self.sleep_interval = n
+
+    def time(self):
+        self.time_call_count += 1
+        current_time = self.next_time
+        self.next_time += self.time_increment
+        return current_time
+
+
+class ResponseMock(Mock):
+    def __init__(self, status=restutil.httpclient.OK, response=None, reason=None):
+        Mock.__init__(self)
+        self.status = status
+        self.reason = reason
+        self.response = response
+
+    def read(self):
+        return self.response
 
 
 def load_data(name):
