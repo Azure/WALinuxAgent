@@ -540,21 +540,23 @@ class TestGuestAgent(UpdateTestCase):
 
         # ensure fallback fails gracefully, no http
         self.assertRaises(UpdateError, agent._download)
-        self.assertEqual(mock_http_get.call_count, 4)
-        self.assertEqual(mock_http_get.call_args_list[0][0][0], ext_uri)
-        self.assertEqual(mock_http_get.call_args_list[1][0][0], api_uri)
+        self.assertEqual(mock_http_get().__enter__.call_count, 2)
+        self.assertEqual(mock_http_get().__exit__.call_count, 2)
+        self.assertEqual(mock_http_get.call_args_list[2][0][0], ext_uri)
+        self.assertEqual(mock_http_get.call_args_list[3][0][0], api_uri)
 
         # ensure fallback fails gracefully, artifact api failure
         with patch.object(HostPluginProtocol,
                           "ensure_initialized",
                           return_value=True):
             self.assertRaises(UpdateError, agent._download)
-            self.assertEqual(mock_http_get.call_count, 4)
+            self.assertEqual(mock_http_get().__enter__.call_count, 4)
+            self.assertEqual(mock_http_get().__exit__.call_count, 4)
 
-            self.assertEqual(mock_http_get.call_args_list[2][0][0], ext_uri)
+            self.assertEqual(mock_http_get.call_args_list[6][0][0], ext_uri)
 
-            self.assertEqual(mock_http_get.call_args_list[3][0][0], art_uri)
-            a, k = mock_http_get.call_args_list[3]
+            self.assertEqual(mock_http_get.call_args_list[7][0][0], art_uri)
+            a, k = mock_http_get.call_args_list[7]
             self.assertEqual(False, k['use_proxy'])
 
             # ensure fallback works as expected
@@ -562,16 +564,16 @@ class TestGuestAgent(UpdateTestCase):
                               "get_artifact_request",
                               return_value=[art_uri, {}]):
                 self.assertRaises(UpdateError, agent._download)
-                self.assertEqual(mock_http_get.call_count, 6)
+                self.assertEqual(mock_http_get().__enter__.call_count, 6)
+                self.assertEqual(mock_http_get().__exit__.call_count, 6)
 
-                a, k = mock_http_get.call_args_list[3]
+                a, k = mock_http_get.call_args_list[7]
                 self.assertEqual(False, k['use_proxy'])
 
-                self.assertEqual(mock_http_get.call_args_list[4][0][0], ext_uri)
-                a, k = mock_http_get.call_args_list[4]
+                self.assertEqual(mock_http_get.call_args_list[10][0][0], ext_uri)
 
-                self.assertEqual(mock_http_get.call_args_list[5][0][0], art_uri)
-                a, k = mock_http_get.call_args_list[5]
+                self.assertEqual(mock_http_get.call_args_list[11][0][0], art_uri)
+                a, k = mock_http_get.call_args_list[11]
                 self.assertEqual(False, k['use_proxy'])
 
     @patch("azurelinuxagent.ga.update.restutil.http_get")
