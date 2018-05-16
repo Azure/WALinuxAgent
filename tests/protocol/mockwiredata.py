@@ -14,7 +14,7 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 #
-
+from azurelinuxagent.common.utils.restutil import HTTPResponseContext
 from tests.tools import *
 from azurelinuxagent.common.exception import HttpError, ResourceGoneError
 from azurelinuxagent.common.future import httpclient
@@ -153,7 +153,8 @@ class WireProtocolData(object):
                 raise Exception("Bad url {0}".format(url))
 
         resp.read = Mock(return_value=content.encode("utf-8"))
-        return resp
+
+        return HTTPResponseContext(Mock(), resp)
 
     def mock_crypt_util(self, *args, **kw):
         #Partially patch instance method of class CryptUtil
