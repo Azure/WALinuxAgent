@@ -19,8 +19,6 @@ import base64
 import json
 import sys
 
-from azurelinuxagent.common.future import ustr
-
 if sys.version_info[0] == 3:
     import http.client as httpclient
     bytebuffer = memoryview
@@ -32,8 +30,6 @@ import azurelinuxagent.common.protocol.restapi as restapi
 import azurelinuxagent.common.protocol.wire as wire
 import azurelinuxagent.common.protocol.hostplugin as hostplugin
 
-from azurelinuxagent.common import event
-from azurelinuxagent.common.exception import ProtocolError, HttpError
 from azurelinuxagent.common.protocol.hostplugin import API_VERSION
 from azurelinuxagent.common.utils import restutil
 
@@ -55,8 +51,8 @@ faux_status_b64 = base64.b64encode(bytes(bytearray(faux_status, encoding='utf-8'
 if PY_VERSION_MAJOR > 2:
     faux_status_b64 = faux_status_b64.decode('utf-8')
 
-class TestHostPlugin(AgentTestCase):
 
+class TestHostPlugin(AgentTestCase):
     def _compare_data(self, actual, expected):
         for k in iter(expected.keys()):
             if k == 'content' or k == 'requestUri':
@@ -223,9 +219,9 @@ class TestHostPlugin(AgentTestCase):
                 patch_api.return_value = API_VERSION
                 plugin.put_vm_status(status_blob, sas_url, block_blob_type)
 
-                self.assertTrue(patch_http.call_count == 1)
+                self.assertTrue(patch_http.call_count == 3)
                 self._validate_hostplugin_args(
-                    patch_http.call_args_list[0],
+                    patch_http.call_args_list[2],
                     test_goal_state,
                     exp_method, exp_url, exp_data)
 
@@ -276,9 +272,9 @@ class TestHostPlugin(AgentTestCase):
                 patch_get.return_value = api_versions
                 host_client.put_vm_status(status_blob, sas_url)
 
-                self.assertTrue(patch_http.call_count == 1)
+                self.assertEqual(patch_http.call_count, 3)
                 self._validate_hostplugin_args(
-                    patch_http.call_args_list[0],
+                    patch_http.call_args_list[2],
                     test_goal_state,
                     exp_method, exp_url, exp_data)
     
@@ -309,20 +305,23 @@ class TestHostPlugin(AgentTestCase):
         page[0: page_size] = page_status[0: len(page_status)]
         mock_response = MockResponse('', httpclient.OK)
 
-        with patch.object(restutil, "http_request",
-                    return_value=mock_response) as patch_http:
+        with patch.object(restutil, "http_request") as patch_http:
+            patch_http().__enter__.return_value = mock_response
+            patch_http().__exit__.return_value = None
+
             with patch.object(wire.HostPluginProtocol,
                             "get_api_versions") as patch_get:
                 patch_get.return_value = api_versions
                 host_client.put_vm_status(status_blob, sas_url)
 
-                self.assertTrue(patch_http.call_count == 2)
+                self.assertEqual(patch_http().__enter__.call_count, 2)
+                self.assertEqual(patch_http().__exit__.call_count, 2)
 
                 exp_data = self._hostplugin_data(
                                 status_blob.get_page_blob_create_headers(
                                 page_size))
                 self._validate_hostplugin_args(
-                    patch_http.call_args_list[0],
+                    patch_http.call_args_list[2],
                     test_goal_state,
                     exp_method, exp_url, exp_data)
 
@@ -332,7 +331,7 @@ class TestHostPlugin(AgentTestCase):
                                     page)
                 exp_data['requestUri'] += "?comp=page" 
                 self._validate_hostplugin_args(
-                    patch_http.call_args_list[1],
+                    patch_http.call_args_list[3],
                     test_goal_state,
                     exp_method, exp_url, exp_data)
 
