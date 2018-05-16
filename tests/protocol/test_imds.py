@@ -35,7 +35,7 @@ class TestImds(AgentTestCase):
         test_subject = ImdsClient()
         test_subject.get_compute()
 
-        self.assertEqual(1, mock_http_get.call_count)
+        self.assertEqual(3, mock_http_get.call_count)
         positional_args, kw_args = mock_http_get.call_args
 
         self.assertEqual('http://169.254.169.254/metadata/instance/compute?api-version=2017-08-01', positional_args[0])
@@ -46,7 +46,7 @@ class TestImds(AgentTestCase):
     @patch("azurelinuxagent.ga.update.restutil.http_get")
     def test_get_bad_request(self, mock_http_get):
         mock_http_get().__enter__.return_value = ResponseMock(status=restutil.httpclient.BAD_REQUEST)
-        mock_http_get().__exit__.return_value = ResponseMock(status=restutil.httpclient.BAD_REQUEST)
+        mock_http_get().__exit__.return_value = None
 
         test_subject = ImdsClient()
         self.assertRaises(HttpError, test_subject.get_compute)
@@ -54,7 +54,7 @@ class TestImds(AgentTestCase):
     @patch("azurelinuxagent.ga.update.restutil.http_get")
     def test_get_empty_response(self, mock_http_get):
         mock_http_get().__enter__.return_value = ResponseMock(response=''.encode('utf-8'))
-        mock_http_get().__exit__.return_value = ResponseMock(response=''.encode('utf-8'))
+        mock_http_get().__exit__.return_value = None
 
         test_subject = ImdsClient()
         self.assertRaises(ValueError, test_subject.get_compute)
