@@ -205,6 +205,7 @@ class CGroupsTelemetry(object):
         """
         results = {}
         for cgroup_name, collector in CGroupsTelemetry._tracked.items():
+            cgroup_name = cgroup_name if cgroup_name else "Agent+Extensions"
             results[cgroup_name] = collector.collect()
         return results
 
@@ -283,7 +284,13 @@ class CGroups(object):
 
         :param name: str
         """
-        self.name = name
+        if name == "":
+            self.name = "Agents+Extensions"
+            self.is_wrapper_cgroup = True
+        else:
+            self.name = name
+            self.is_wrapper_cgroup = False
+
         self.cgroups = {}
 
         if not self.enabled():
@@ -294,7 +301,10 @@ class CGroups(object):
             if hierarchy not in system_hierarchies:
                 raise CGroupsException("Hierarchy {0} is not mounted".format(hierarchy))
 
-            cgroup_path = os.path.join(CGroups.construct_path_for_hierarchy(hierarchy), self.name)
+            if self.is_wrapper_cgroup:
+                cgroup_path = CGroups.construct_path_for_hierarchy(hierarchy)
+            else:
+                cgroup_path = os.path.join(CGroups.construct_path_for_hierarchy(hierarchy), self.name)
             if not os.path.exists(cgroup_path):
                 logger.info("Creating cgroup {0}".format(cgroup_path))
                 CGroups._try_mkdir(cgroup_path)
@@ -331,6 +341,10 @@ class CGroups(object):
         """
         if not self.enabled():
             return
+
+        if self.is_wrapper_cgroup:
+            raise CGroupsException("Cannot add a process to the Agents+Extensions wrapper cgroup")
+
         try:
             # determine if pid exists by sending signal 0 to it
             os.kill(pid, 0)

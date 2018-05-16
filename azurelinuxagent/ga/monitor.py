@@ -214,9 +214,10 @@ class MonitorHandler(object):
         # performance counters
         collection_period = datetime.timedelta(minutes=5)
         last_collection = datetime.datetime.utcnow() - collection_period
-        if not CGroupsTelemetry.is_tracked(AGENT_NAME):
-            logger.info("Monitor process {0} will now track cgroup {1}".format(os.getpid(), AGENT_NAME))
-            CGroupsTelemetry.track_cgroup(CGroups(AGENT_NAME))
+        logger.info("Monitor process {0} will now track cgroup for Agent+Extensions".format(os.getpid()))
+        CGroupsTelemetry.track_cgroup(CGroups(""))
+        logger.info("Monitor process {0} will now track cgroup {1}".format(os.getpid(), AGENT_NAME))
+        CGroupsTelemetry.track_cgroup(CGroups(AGENT_NAME))
 
         # Create a new identifier on each restart and reset the counter
         heartbeat_id = str(uuid.uuid4()).upper()
