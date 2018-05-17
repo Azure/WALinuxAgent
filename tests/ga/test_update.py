@@ -3,11 +3,9 @@
 
 from __future__ import print_function
 
-from azurelinuxagent.common.event import *
 from azurelinuxagent.common.protocol.hostplugin import *
 from azurelinuxagent.common.protocol.metadata import *
 from azurelinuxagent.common.protocol.wire import *
-from azurelinuxagent.common.utils.fileutil import *
 from azurelinuxagent.ga.update import *
 
 from tests.tools import *

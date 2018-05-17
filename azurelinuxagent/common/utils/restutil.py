@@ -150,6 +150,22 @@ class HTTPResponseContext(object):
         self._conn.close()
 
 
+class HTTPResponseMaterialized(object):
+    def __init__(self, resp):
+        self.status = resp.status
+        self.reason = resp.reason
+        self._content = resp.read()
+
+    def read(self):
+        return self._content
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        pass
+
+
 def _compute_delay(retry_attempt=1, delay=DELAY_IN_SECONDS):
     fib = (1, 1)
     for n in range(retry_attempt):

@@ -15,7 +15,7 @@
 # limitations under the License.
 #
 # Requires Python 2.6+ and Openssl 1.0+
-
+import traceback
 from datetime import datetime
 
 import json
@@ -36,6 +36,7 @@ from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.restapi import *
 from azurelinuxagent.common.utils.archive import StateFlusher
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
+from azurelinuxagent.common.utils.restutil import HTTPResponseMaterialized
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, \
     findtext, getattrib, gettext, remove_bom, get_bytes_from_pem, parse_json
 
@@ -537,24 +538,26 @@ class WireClient(object):
         self.goal_state_flusher = StateFlusher(conf.get_lib_dir())
 
     def call_wireserver(self, http_req, *args, **kwargs):
+        resp = None
         try:
             # Never use the HTTP proxy for wireserver
             kwargs['use_proxy'] = False
-            resp = http_req(*args, **kwargs)
-
-            if restutil.request_failed(resp):
-                msg = "[Wireserver Failed] URI {0} ".format(args[0])
-                if resp is not None:
-                    msg += " [HTTP Failed] Status Code {0}".format(resp.status)
-                raise ProtocolError(msg)
+            with http_req(*args, **kwargs) as http_resp:
+                resp = HTTPResponseMaterialized(http_resp)
+                if restutil.request_failed(resp):
+                    msg = "[Wireserver Failed] URI {0} ".format(args[0])
+                    if resp is not None:
+                        msg += " [HTTP Failed] Status Code {0}".format(resp.status)
+                    raise ProtocolError(msg)
 
         # If the GoalState is stale, pass along the exception to the caller
-        except ResourceGoneError:
+        except ResourceGoneError as e:
+            print("WTF: {0}".format(traceback.format_exc()))
             raise
 
         except Exception as e:
-            raise ProtocolError("[Wireserver Exception] {0}".format(
-                ustr(e)))
+            raise ProtocolError("[Wireserver Exception] {0} : {1}".format(
+                ustr(e), traceback.format_exc()))
 
         return resp
 
@@ -569,7 +572,8 @@ class WireClient(object):
         with self.call_wireserver(restutil.http_get,
                                   uri,
                                   headers=headers) as resp:
-            return self.decode_config(resp.read())
+            content = resp.read()
+            return self.decode_config(content)
 
     def fetch_cache(self, local_file):
         if not os.path.isfile(local_file):
