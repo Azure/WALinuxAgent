@@ -62,6 +62,7 @@ class WALAEventOperation:
     Partition = "Partition"
     ProcessGoalState = "ProcessGoalState"
     Provision = "Provision"
+    ProvisionGuestAgent = "ProvisionGuestAgent"
     ReportStatus = "ReportStatus"
     Restart = "Restart"
     SkipUpdate = "SkipUpdate"

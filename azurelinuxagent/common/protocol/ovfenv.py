@@ -52,6 +52,7 @@ class OvfEnv(object):
         self.disable_ssh_password_auth = True
         self.ssh_pubkeys = []
         self.ssh_keypairs = []
+        self.provision_guest_agent = False
         self.parse(xml_text)
 
     def parse(self, xml_text):
@@ -111,3 +112,13 @@ class OvfEnv(object):
             fingerprint = findtext(keypair, "Fingerprint", namespace=wans)
             self.ssh_keypairs.append((path, fingerprint))
 
+        platform_settings_section = find(environment, "PlatformSettingsSection", namespace=wans)
+        _validate_ovf(platform_settings_section, "PlatformSettingsSection for found")
+
+        platform_settings = find(platform_settings_section, "PlatformSettings", namespace=wans)
+        _validate_ovf(platform_settings, "PlatformSettings for found")
+
+        provision_guest_agent_text = findtext(platform_settings, "ProvisionGuestAgent", namespace=wans)
+        _validate_ovf(provision_guest_agent_text, "ProvisionGuestAgent not found")
+
+        self.provision_guest_agent = bool(provision_guest_agent_text)
