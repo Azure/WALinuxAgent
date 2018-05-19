@@ -145,11 +145,16 @@ class TestProvision(AgentTestCase):
 
         ph.run()
 
-        self.assertEqual(1, ph.report_event.call_count)
-        positional_args, kw_args = ph.report_event.call_args
+        self.assertEqual(2, ph.report_event.call_count)
+        positional_args, kw_args = ph.report_event.call_args_list[0]
         # [call('Provisioning succeeded (146473.68s)', duration=65, is_success=True)]
         self.assertTrue(re.match(r'Provisioning succeeded \(\d+\.\d+s\)', positional_args[0]) is not None)
         self.assertTrue(isinstance(kw_args['duration'], int))
+        self.assertTrue(kw_args['is_success'])
+
+        positional_args, kw_args = ph.report_event.call_args_list[1]
+        self.assertTrue(kw_args['operation'] == 'ProvisionGuestAgent')
+        self.assertTrue(kw_args['message'] == 'false')
         self.assertTrue(kw_args['is_success'])
 
     @distros()

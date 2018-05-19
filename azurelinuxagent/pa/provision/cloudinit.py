@@ -28,7 +28,7 @@ import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.shellutil as shellutil
 
-from azurelinuxagent.common.event import elapsed_milliseconds
+from azurelinuxagent.common.event import elapsed_milliseconds, WALAEventOperation
 from azurelinuxagent.common.exception import ProvisionError, ProtocolError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol import OVF_FILE_NAME
@@ -82,7 +82,11 @@ class CloudInitProvisionHandler(ProvisionHandler):
         for retry in range(0, max_retry):
             if os.path.isfile(ovf_file_path):
                 try:
-                    OvfEnv(fileutil.read_file(ovf_file_path))
+                    ovf_env = OvfEnv(fileutil.read_file(ovf_file_path))
+                    self.report_event(message=ovf_env.provision_guest_agent,
+                                      is_success=True,
+                                      duration=0,
+                                      operation=WALAEventOperation.ProvisionGuestAgent)
                     return
                 except ProtocolError as pe:
                     raise ProvisionError("OVF xml could not be parsed "

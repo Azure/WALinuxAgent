@@ -26,4 +26,15 @@
         <CustomData>CustomData</CustomData>
       </LinuxProvisioningConfigurationSet>
     </wa:ProvisioningSection>
+    <wa:PlatformSettingsSection>
+		<wa:Version>1.0</wa:Version>
+		<wa:PlatformSettings>
+			<wa:KmsServerHostname>kms.core.windows.net</wa:KmsServerHostname>
+			<wa:ProvisionGuestAgent>false</wa:ProvisionGuestAgent>
+			<wa:GuestAgentPackageName xsi:nil="true"/>
+			<wa:RetainWindowsPEPassInUnattend>true</wa:RetainWindowsPEPassInUnattend>
+			<wa:RetainOfflineServicingPassInUnattend>true</wa:RetainOfflineServicingPassInUnattend>
+			<wa:PreprovisionedVm>false</wa:PreprovisionedVm>
+		</wa:PlatformSettings>
+	</wa:PlatformSettingsSection>
  </Environment>
