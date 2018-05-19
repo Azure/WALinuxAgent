@@ -83,7 +83,7 @@ class CloudInitProvisionHandler(ProvisionHandler):
             if os.path.isfile(ovf_file_path):
                 try:
                     ovf_env = OvfEnv(fileutil.read_file(ovf_file_path))
-                    self.report_event(message="{0}".format(ovf_env.provision_guest_agent),
+                    self.report_event(message=ovf_env.provision_guest_agent,
                                       is_success=True,
                                       duration=0,
                                       operation=WALAEventOperation.ProvisionGuestAgent)

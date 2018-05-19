@@ -92,7 +92,7 @@ class ProvisionHandler(object):
                 is_success=True,
                 duration=elapsed_milliseconds(utc_start))
 
-            self.report_event(message="{0}".format(ovf_env.provision_guest_agent),
+            self.report_event(message=ovf_env.provision_guest_agent,
                               is_success=True,
                               duration=0,
                               operation=WALAEventOperation.ProvisionGuestAgent)

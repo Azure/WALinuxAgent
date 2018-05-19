@@ -154,6 +154,7 @@ class TestProvision(AgentTestCase):
 
         positional_args, kw_args = ph.report_event.call_args_list[1]
         self.assertTrue(kw_args['operation'] == 'ProvisionGuestAgent')
+        self.assertTrue(kw_args['message'] == 'false')
         self.assertTrue(kw_args['is_success'])
 
     @distros()
