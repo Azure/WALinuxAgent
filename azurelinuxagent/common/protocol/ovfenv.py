@@ -113,10 +113,10 @@ class OvfEnv(object):
             self.ssh_keypairs.append((path, fingerprint))
 
         platform_settings_section = find(environment, "PlatformSettingsSection", namespace=wans)
-        _validate_ovf(platform_settings_section, "PlatformSettingsSection for found")
+        _validate_ovf(platform_settings_section, "PlatformSettingsSection not found")
 
         platform_settings = find(platform_settings_section, "PlatformSettings", namespace=wans)
-        _validate_ovf(platform_settings, "PlatformSettings for found")
+        _validate_ovf(platform_settings, "PlatformSettings not found")
 
         self.provision_guest_agent = findtext(platform_settings, "ProvisionGuestAgent", namespace=wans)
         _validate_ovf(self.provision_guest_agent, "ProvisionGuestAgent not found")
