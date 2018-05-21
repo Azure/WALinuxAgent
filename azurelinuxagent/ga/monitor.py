@@ -220,11 +220,11 @@ class MonitorHandler(object):
             frame = stat.traceback[0]
             # replace "/path/to/module/file.py" with "module/file.py"
             filename = os.sep.join(frame.filename.split(os.sep)[-2:])
-            output.write("#%s: %s:%s: %.1f KiB\n"
+            output.write("#%s: %s:%s: %.1f KiB -- "
                   % (index, filename, frame.lineno, stat.size / 1024))
             line = linecache.getline(frame.filename, frame.lineno).strip()
             if line:
-                output.write("    %s\n" % line)
+                output.write("%s\n" % line)
 
         other = top_stats[limit:]
         if other:
@@ -245,11 +245,11 @@ class MonitorHandler(object):
             frame = stat.traceback[0]
             # replace "/path/to/module/file.py" with "module/file.py"
             filename = os.sep.join(frame.filename.split(os.sep)[-2:])
-            output.write("#%s: %s:%s: total=%.1f KiB, new=%.1f KiB, new blocks=%d, total blocks=%d\n"
+            output.write("#%s: %s:%s: total=%.1f KiB, new=%.1f KiB, new blocks=%d, total blocks=%d -- "
                   % (index, filename, frame.lineno, stat.size_diff / 1024, stat.size / 1024, stat.count_diff, stat.count))
             line = linecache.getline(frame.filename, frame.lineno).strip()
             if line:
-                output.write("    %s\n" % line)
+                output.write("%s\n" % line)
 
         other = top_stats[limit:]
         if other:
