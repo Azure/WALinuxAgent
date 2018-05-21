@@ -541,16 +541,29 @@ class TestExtension(AgentTestCase):
         self._assert_ext_status(protocol.report_ext_status, "success", 0)
 
     @patch('azurelinuxagent.ga.exthandlers.add_event')
-    def test_ext_handler_download_failure(self, mock_add_event, *args):
+    def test_ext_handler_download_failure_transient(self, mock_add_event, *args):
         test_data = WireProtocolData(DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
         protocol.download_ext_handler_pkg = Mock(side_effect=ProtocolError)
 
         exthandlers_handler.run()
-        args, kw = mock_add_event.call_args
+        self.assertEquals(0, mock_add_event.call_count)
+
+    @patch('azurelinuxagent.common.errorstate.ErrorState.is_triggered')
+    @patch('azurelinuxagent.common.event.add_event')
+    def test_ext_handler_download_failure_permanent(self, mock_add_event, mock_error_state, *args):
+        test_data = WireProtocolData(DATA_FILE)
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+        protocol.get_ext_handler_pkgs = Mock(side_effect=ProtocolError)
+
+        mock_error_state.return_value = True
+        exthandlers_handler.run()
+        self.assertEquals(1, mock_add_event.call_count)
+        args, kw = mock_add_event.call_args_list[0]
         self.assertEquals(False, kw['is_success'])
-        self.assertEquals("OSTCExtensions.ExampleHandlerLinux", kw['name'])
-        self.assertEquals("Download", kw['op'])
+        self.assertTrue("Failed to get ext handler pkgs" in kw['message'])
+        self.assertTrue("Failed to get artifact" in kw['message'])
+        self.assertEquals("GetArtifactExtended", kw['op'])
 
     @patch('azurelinuxagent.ga.exthandlers.fileutil')
     def test_ext_handler_io_error(self, mock_fileutil, *args):

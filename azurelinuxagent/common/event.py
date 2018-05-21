@@ -52,6 +52,7 @@ class WALAEventOperation:
     Enable = "Enable"
     ExtensionProcessing = "ExtensionProcessing"
     Firewall = "Firewall"
+    GetArtifactExtended = "GetArtifactExtended"
     HealthCheck = "HealthCheck"
     HeartBeat = "HeartBeat"
     HostPlugin = "HostPlugin"

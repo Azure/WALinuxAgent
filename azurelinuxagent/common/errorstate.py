@@ -4,7 +4,7 @@ ERROR_STATE_DELTA = timedelta(minutes=15)
 
 
 class ErrorState(object):
-    def __init__(self, min_timedelta = ERROR_STATE_DELTA):
+    def __init__(self, min_timedelta=ERROR_STATE_DELTA):
         self.min_timedelta = min_timedelta
 
         self.count = 0
