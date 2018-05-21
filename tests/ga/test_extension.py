@@ -550,6 +550,21 @@ class TestExtension(AgentTestCase):
         self.assertEquals(0, mock_add_event.call_count)
 
     @patch('azurelinuxagent.common.errorstate.ErrorState.is_triggered')
+    @patch('azurelinuxagent.ga.exthandlers.add_event')
+    def test_ext_handler_report_status_permanent(self, mock_add_event, mock_error_state, *args):
+        test_data = WireProtocolData(DATA_FILE)
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+        protocol.report_vm_status = Mock(side_effect=ProtocolError)
+
+        mock_error_state.return_value = True
+        exthandlers_handler.run()
+        self.assertEquals(5, mock_add_event.call_count)
+        args, kw = mock_add_event.call_args
+        self.assertEquals(False, kw['is_success'])
+        self.assertTrue("Failed to report vm agent status" in kw['message'])
+        self.assertEquals("ReportStatusExtended", kw['op'])
+
+    @patch('azurelinuxagent.common.errorstate.ErrorState.is_triggered')
     @patch('azurelinuxagent.common.event.add_event')
     def test_ext_handler_download_failure_permanent(self, mock_add_event, mock_error_state, *args):
         test_data = WireProtocolData(DATA_FILE)

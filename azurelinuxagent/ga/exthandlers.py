@@ -36,7 +36,7 @@ import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.version as version
-from azurelinuxagent.common.errorstate import ErrorState, ERROR_STATE_DELTA
+from azurelinuxagent.common.errorstate import ErrorState, ERROR_STATE_DELTA_DEFAULT, ERROR_STATE_DELTA_INSTALL
 
 from azurelinuxagent.common.event import add_event, WALAEventOperation, elapsed_milliseconds, report_event
 from azurelinuxagent.common.exception import ExtensionError, ProtocolError
@@ -191,7 +191,7 @@ class ExtHandlersHandler(object):
         self.log_process = False
 
         self.report_status_error_state = ErrorState()
-        self.get_artifact_error_state = ErrorState(min_timedelta=datetime.timedelta(minutes=5))
+        self.get_artifact_error_state = ErrorState(min_timedelta=ERROR_STATE_DELTA_INSTALL)
 
     def run(self):
         self.ext_handlers, etag = None, None
@@ -486,7 +486,7 @@ class ExtHandlersHandler(object):
 
         if self.report_status_error_state.is_triggered():
             message = "Failed to report vm agent status for more than {0}"\
-                .format(ERROR_STATE_DELTA)
+                .format(self.report_status_error_state.min_timedelta)
 
             add_event(AGENT_NAME,
                 version=CURRENT_VERSION,
