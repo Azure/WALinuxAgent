@@ -37,7 +37,7 @@ class TestImds(AgentTestCase):
         self.assertEqual(1, mock_http_get.call_count)
         positional_args, kw_args = mock_http_get.call_args
 
-        self.assertEqual('http://169.254.169.254/metadata/instance/compute?api-version=2017-08-01', positional_args[0])
+        self.assertEqual('http://169.254.169.254/metadata/instance/compute?api-version=2017-12-01', positional_args[0])
         self.assertTrue('User-Agent' in kw_args['headers'])
         self.assertTrue('Metadata' in kw_args['headers'])
         self.assertEqual(True, kw_args['headers']['Metadata'])

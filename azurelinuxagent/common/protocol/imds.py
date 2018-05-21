@@ -8,7 +8,7 @@ from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.restapi import DataContract, set_properties
 
 IMDS_ENDPOINT = '169.254.169.254'
-APIVERSION = '2017-08-01'
+APIVERSION = '2017-12-01'
 BASE_URI = "http://{0}/metadata/instance/{1}?api-version={2}"
 
 
