@@ -154,6 +154,8 @@ class MonitorHandler(object):
                                                     vminfo.resourceGroupName))
             self.sysinfo.append(TelemetryEventParam('VMId',
                                                     vminfo.vmId))
+            self.sysinfo.append(TelemetryEventParam('ImageOrigin',
+                                                    vminfo.image_origin))
         except (HttpError, ValueError) as e:
             logger.warn("failed to get IMDS info: {0}", e)
 
