@@ -36,9 +36,9 @@ import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.version as version
-from azurelinuxagent.common.errorstate import ErrorState, ERROR_STATE_DELTA
+from azurelinuxagent.common.errorstate import ErrorState, ERROR_STATE_DELTA_DEFAULT, ERROR_STATE_DELTA_INSTALL
 
-from azurelinuxagent.common.event import add_event, WALAEventOperation, elapsed_milliseconds
+from azurelinuxagent.common.event import add_event, WALAEventOperation, elapsed_milliseconds, report_event
 from azurelinuxagent.common.exception import ExtensionError, ProtocolError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.restapi import ExtHandlerStatus, \
@@ -191,21 +191,28 @@ class ExtHandlersHandler(object):
         self.log_process = False
 
         self.report_status_error_state = ErrorState()
+        self.get_artifact_error_state = ErrorState(min_timedelta=ERROR_STATE_DELTA_INSTALL)
 
     def run(self):
         self.ext_handlers, etag = None, None
         try:
             self.protocol = self.protocol_util.get_protocol()
             self.ext_handlers, etag = self.protocol.get_ext_handlers()
+            self.get_artifact_error_state.reset()
         except Exception as e:
-            msg = u"Exception retrieving extension handlers: {0}".format(
-                ustr(e))
-            logger.warn(msg)
-            add_event(AGENT_NAME,
-                      version=CURRENT_VERSION,
-                      op=WALAEventOperation.ExtensionProcessing,
-                      is_success=False,
-                      message=msg)
+            msg = u"Exception retrieving extension handlers: {0}".format(ustr(e))
+            self.get_artifact_error_state.incr()
+
+            if self.get_artifact_error_state.is_triggered():
+                add_event(AGENT_NAME,
+                          version=CURRENT_VERSION,
+                          op=WALAEventOperation.GetArtifactExtended,
+                          is_success=False,
+                          message="Failed to get extension artifact for over "
+                                  "{0): {1}".format(self.get_artifact_error_state.min_timedelta, msg))
+                self.get_artifact_error_state.reset()
+            else:
+                logger.warn(msg)
             return
 
         try:
@@ -352,6 +359,7 @@ class ExtHandlersHandler(object):
 
             self.set_log_upgrade_guid(ext_handler, True)
             ext_handler_i.decide_version(target_state=state)
+            self.get_artifact_error_state.reset()
             if not ext_handler_i.is_upgrade and self.last_etag == etag:
                 if self.log_etag:
                     ext_handler_i.logger.verbose("Version {0} is current for etag {1}",
@@ -380,8 +388,18 @@ class ExtHandlersHandler(object):
                 message = u"Unknown ext handler state:{0}".format(state)
                 raise ExtensionError(message)
         except Exception as e:
-            ext_handler_i.set_handler_status(message=ustr(e), code=-1)
-            ext_handler_i.report_event(message=ustr(e), is_success=False)
+            msg = ustr(e)
+            ext_handler_i.set_handler_status(message=msg, code=-1)
+
+            self.get_artifact_error_state.incr()
+            if self.get_artifact_error_state.is_triggered():
+                report_event(op=WALAEventOperation.GetArtifactExtended,
+                             message="Failed to get artifact for over "
+                                     "{0}: {1}".format(self.get_artifact_error_state.min_timedelta, msg),
+                             is_success=False)
+                self.get_artifact_error_state.reset()
+            else:
+                ext_handler_i.logger.warn(msg)
     
     def handle_enable(self, ext_handler_i):
         self.log_process = True
@@ -468,11 +486,11 @@ class ExtHandlersHandler(object):
 
         if self.report_status_error_state.is_triggered():
             message = "Failed to report vm agent status for more than {0}"\
-                .format(ERROR_STATE_DELTA)
+                .format(self.report_status_error_state.min_timedelta)
 
             add_event(AGENT_NAME,
                 version=CURRENT_VERSION,
-                op=WALAEventOperation.ExtensionProcessing,
+                op=WALAEventOperation.ReportStatusExtended,
                 is_success=False,
                 message=message)
 
