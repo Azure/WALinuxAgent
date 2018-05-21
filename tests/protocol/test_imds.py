@@ -72,7 +72,9 @@ class TestImds(AgentTestCase):
         "tags": "Key1:Value1;Key2:Value2",
         "vmId": "f62f23fb-69e2-4df0-a20b-cb5c201a3e7a",
         "version": "UnitVersion",
-        "vmSize": "Standard_D1_v2"
+        "vmSize": "Standard_D1_v2",
+        "vmScaleSetName": "MyScaleSet",
+        "zone": "In"
         }'''
 
         data = json.loads(s, encoding='utf-8')
@@ -95,6 +97,8 @@ class TestImds(AgentTestCase):
         self.assertEqual('f62f23fb-69e2-4df0-a20b-cb5c201a3e7a', compute_info.vmId)
         self.assertEqual('UnitVersion', compute_info.version)
         self.assertEqual('Standard_D1_v2', compute_info.vmSize)
+        self.assertEqual('MyScaleSet', compute_info.vmScaleSetName)
+        self.assertEqual('In', compute_info.zone)
 
         self.assertEqual('UnitPublisher:UnitOffer:UnitSku:UnitVersion', compute_info.image_info)
 
