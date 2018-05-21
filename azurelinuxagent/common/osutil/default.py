@@ -662,7 +662,7 @@ class DefaultOSUtil(object):
 
     def get_mac_addr(self):
         """
-        Convienience function, returns mac addr bound to
+        Convenience function, returns mac addr bound to
         first non-loopback interface.
         """
         ifname = ''
