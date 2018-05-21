@@ -64,6 +64,7 @@ class WALAEventOperation:
     Provision = "Provision"
     ProvisionGuestAgent = "ProvisionGuestAgent"
     ReportStatus = "ReportStatus"
+    ReportStatusExtended = "ReportStatusExtended"
     Restart = "Restart"
     SkipUpdate = "SkipUpdate"
     UnhandledError = "UnhandledError"

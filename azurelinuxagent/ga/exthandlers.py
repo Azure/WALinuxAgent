@@ -472,7 +472,7 @@ class ExtHandlersHandler(object):
 
             add_event(AGENT_NAME,
                 version=CURRENT_VERSION,
-                op=WALAEventOperation.ExtensionProcessing,
+                op=WALAEventOperation.ReportStatusExtended,
                 is_success=False,
                 message=message)
 
