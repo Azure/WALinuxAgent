@@ -42,6 +42,9 @@ class Logger(object):
     def reset_periodic(self):
         self.logger.periodic_messages = {}
 
+    def set_prefix(self, prefix):
+        self.prefix = prefix
+
     def is_period_elapsed(self, delta, h):
         return h not in self.logger.periodic_messages or \
             (self.logger.periodic_messages[h] + delta) <= datetime.now()
@@ -178,6 +181,8 @@ def add_logger_appender(appender_type, level=LogLevel.INFO, path=None):
 def reset_periodic():
     DEFAULT_LOGGER.reset_periodic()
 
+def set_prefix(prefix):
+    DEFAULT_LOGGER.set_prefix(prefix)
 
 def periodic(delta, msg_format, *args):
     DEFAULT_LOGGER.periodic(delta, msg_format, *args)
