@@ -17,6 +17,10 @@ def get_imds_client():
 
 
 class ComputeInfo(DataContract):
+    @property
+    def image_info(self):
+        return "{0}:{1}:{2}:{3}".format(self.publisher, self.offer, self.sku, self.version)
+
     def __init__(self,
                  location=None,
                  name=None,
@@ -32,7 +36,9 @@ class ComputeInfo(DataContract):
                  tags=None,
                  version=None,
                  vmId=None,
-                 vmSize=None):
+                 vmSize=None,
+                 vmScaleSetName=None,
+                 zone=None):
         self.location = location
         self.name = name
         self.offer = offer
@@ -48,10 +54,8 @@ class ComputeInfo(DataContract):
         self.version = version
         self.vmId = vmId
         self.vmSize = vmSize
-
-    @property
-    def image_info(self):
-        return "{0}:{1}:{2}:{3}".format(self.publisher, self.offer, self.sku, self.version)
+        self.vmScaleSetName = vmScaleSetName
+        self.zone = zone
 
 
 class ImdsClient(object):
