@@ -89,6 +89,7 @@ class Agent(object):
         """
         Run agent daemon
         """
+        logger.set_prefix("Daemon")
         child_args = None \
             if self.conf_file_path is None \
                 else "-configuration-path:{0}".format(self.conf_file_path)
@@ -128,6 +129,7 @@ class Agent(object):
         """
         Run the update and extension handler
         """
+        logger.set_prefix("Upd/Ext-Handler")
         from azurelinuxagent.ga.update import get_update_handler
         update_handler = get_update_handler()
         update_handler.run()
