@@ -305,13 +305,13 @@ class ResourceDiskHandler(object):
                 # Probable errors:
                 #  - OSError: Seen on Cygwin, libc notimpl?
                 #  - AttributeError: What if someone runs this under...
-                with open(filename, 'w') as f:
-                    try:
+                try:
+                    with open(filename, 'w') as f:
                         os.posix_fallocate(f.fileno(), 0, nbytes)
                         return 0
-                    except:
-                        # Not confident with this thing, just keep trying...
-                        pass
+                except:
+                    # Not confident with this thing, just keep trying...
+                    pass
 
             # fallocate command
             ret = shellutil.run(
