@@ -1062,8 +1062,8 @@ class DefaultOSUtil(object):
                                         device = d.split(':')[1]
                                         break
                         break
-            except OSError:
-                pass
+            except OSError as oe:
+                logger.warn('Could not obtain device for IDE port {0}: {1}', port_id, ustr(oe))
         return device
 
     def set_hostname_record(self, hostname):
