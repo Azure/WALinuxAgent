@@ -75,7 +75,7 @@ GOAL_STATE_INTERVAL = 3
 
 ORPHAN_WAIT_INTERVAL = 15 * 60
 
-AGENT_SENTINAL_FILE = "current_version"
+AGENT_SENTINEL_FILE = "current_version"
 
 READONLY_FILE_GLOBS = [
     "*.crt",
@@ -313,7 +313,7 @@ class UpdateHandler(object):
         except Exception as e:
             msg = u"Agent {0} failed with exception: {1}".format(
                 CURRENT_AGENT, ustr(e))
-            self._set_sentinal(msg=msg)
+            self._set_sentinel(msg=msg)
             logger.warn(msg)
             logger.warn(traceback.format_exc())
             sys.exit(1)
@@ -324,12 +324,7 @@ class UpdateHandler(object):
         sys.exit(0)
 
     def forward_signal(self, signum, frame):
-        # Note:
-        #  - At present, the handler is registered only for SIGTERM.
-        #    However, clean shutdown is both SIGTERM and SIGKILL.
-        #    A SIGKILL handler is not being registered at this time to
-        #    minimize perturbing the code.
-        if signum in (signal.SIGTERM, signal.SIGKILL):
+        if signum == signal.SIGTERM:
             self._shutdown()
 
         if self.child_process is None:
@@ -340,13 +335,14 @@ class UpdateHandler(object):
             CURRENT_AGENT,
             signum,
             self.child_agent.name if self.child_agent is not None else CURRENT_AGENT)
+
         self.child_process.send_signal(signum)
 
         if self.signal_handler not in (None, signal.SIG_IGN, signal.SIG_DFL):
             self.signal_handler(signum, frame)
         elif self.signal_handler is signal.SIG_DFL:
             if signum == signal.SIGTERM:
-                # TODO: This should set self.running to False vs. just exiting
+                self._shutdown()
                 sys.exit(0)
         return
 
@@ -371,7 +367,7 @@ class UpdateHandler(object):
         try:
             if not self._is_clean_start:
                 msg = u"Agent did not terminate cleanly: {0}".format(
-                            fileutil.read_file(self._sentinal_file_path()))
+                            fileutil.read_file(self._sentinel_file_path()))
                 logger.info(msg)
                 add_event(
                     AGENT_NAME,
@@ -382,7 +378,6 @@ class UpdateHandler(object):
         except Exception:
             pass
 
-        self._set_sentinal(msg="Starting")
         return
 
     def _ensure_no_orphans(self, orphan_wait_interval=ORPHAN_WAIT_INTERVAL):
@@ -500,7 +495,7 @@ class UpdateHandler(object):
 
     @property
     def _is_clean_start(self):
-        return not os.path.isfile(self._sentinal_file_path())
+        return not os.path.isfile(self._sentinel_file_path())
 
     @property
     def _is_orphaned(self):
@@ -570,33 +565,33 @@ class UpdateHandler(object):
         self.agents.sort(key=lambda agent: agent.version, reverse=True)
         return
 
-    def _set_sentinal(self, agent=CURRENT_AGENT, msg="Unknown cause"):
+    def _set_sentinel(self, agent=CURRENT_AGENT, msg="Unknown cause"):
         try:
             fileutil.write_file(
-                self._sentinal_file_path(),
+                self._sentinel_file_path(),
                 "[{0}] [{1}]".format(agent, msg))
         except Exception as e:
             logger.warn(
-                u"Exception writing sentinal file {0}: {1}",
-                self._sentinal_file_path(),
+                u"Exception writing sentinel file {0}: {1}",
+                self._sentinel_file_path(),
                 str(e))
         return
 
-    def _sentinal_file_path(self):
-        return os.path.join(conf.get_lib_dir(), AGENT_SENTINAL_FILE)
+    def _sentinel_file_path(self):
+        return os.path.join(conf.get_lib_dir(), AGENT_SENTINEL_FILE)
 
     def _shutdown(self):
         self.running = False
 
-        if not os.path.isfile(self._sentinal_file_path()):
+        if not os.path.isfile(self._sentinel_file_path()):
             return
 
         try:
-            os.remove(self._sentinal_file_path())
+            os.remove(self._sentinel_file_path())
         except Exception as e:
             logger.warn(
-                u"Exception removing sentinal file {0}: {1}",
-                self._sentinal_file_path(),
+                u"Exception removing sentinel file {0}: {1}",
+                self._sentinel_file_path(),
                 str(e))
         return
 
