@@ -988,7 +988,10 @@ class ExtHandlerInstance(object):
         try:
             # This should be .run(), but due to the wide variety
             # of Python versions we must support we must use .communicate().
-            process = subprocess.Popen(os.path.join(base_dir, cmd),
+            # Some extensions erroneously begin cmd with a slash; don't interpret those
+            # as root-relative. (Issue #1170)
+            full_path = os.path.join(base_dir, cmd.lstrip(os.sep))
+            process = subprocess.Popen(full_path,
                                   shell=True,
                                   cwd=base_dir,
                                   stdout=subprocess.PIPE,
@@ -996,7 +999,7 @@ class ExtHandlerInstance(object):
                                   env=os.environ,
                                   preexec_fn=os.setsid)
         except OSError as e:
-            raise ExtensionError("Failed to launch '{0}': {1}".format(cmd, e.strerror))
+            raise ExtensionError("Failed to launch '{0}': {1}".format(full_path, e.strerror))
 
         msg = capture_from_process(process, cmd, timeout)
 
