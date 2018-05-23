@@ -669,11 +669,6 @@ class TestUpdate(UpdateTestCase):
 
         self.assertEqual(None, self.update_handler.signal_handler)
 
-    def test_emit_restart_event_writes_sentinal_file(self):
-        self.assertFalse(os.path.isfile(self.update_handler._sentinal_file_path()))
-        self.update_handler._emit_restart_event()
-        self.assertTrue(os.path.isfile(self.update_handler._sentinal_file_path()))
-
     def test_emit_restart_event_emits_event_if_not_clean_start(self):
         try:
             mock_event = self.event_patch.start()

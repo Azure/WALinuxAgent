@@ -324,12 +324,7 @@ class UpdateHandler(object):
         sys.exit(0)
 
     def forward_signal(self, signum, frame):
-        # Note:
-        #  - At present, the handler is registered only for SIGTERM.
-        #    However, clean shutdown is both SIGTERM and SIGKILL.
-        #    A SIGKILL handler is not being registered at this time to
-        #    minimize perturbing the code.
-        if signum in (signal.SIGTERM, signal.SIGKILL):
+        if signum == signal.SIGTERM:
             self._shutdown()
 
         if self.child_process is None:
@@ -340,13 +335,14 @@ class UpdateHandler(object):
             CURRENT_AGENT,
             signum,
             self.child_agent.name if self.child_agent is not None else CURRENT_AGENT)
+
         self.child_process.send_signal(signum)
 
         if self.signal_handler not in (None, signal.SIG_IGN, signal.SIG_DFL):
             self.signal_handler(signum, frame)
         elif self.signal_handler is signal.SIG_DFL:
             if signum == signal.SIGTERM:
-                # TODO: This should set self.running to False vs. just exiting
+                self._shutdown()
                 sys.exit(0)
         return
 
@@ -382,7 +378,6 @@ class UpdateHandler(object):
         except Exception:
             pass
 
-        self._set_sentinal(msg="Starting")
         return
 
     def _ensure_no_orphans(self, orphan_wait_interval=ORPHAN_WAIT_INTERVAL):
