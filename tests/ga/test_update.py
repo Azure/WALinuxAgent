@@ -672,7 +672,7 @@ class TestUpdate(UpdateTestCase):
     def test_emit_restart_event_emits_event_if_not_clean_start(self):
         try:
             mock_event = self.event_patch.start()
-            self.update_handler._set_sentinal()
+            self.update_handler._set_sentinel()
             self.update_handler._emit_restart_event()
             self.assertEqual(1, mock_event.call_count)
         except Exception as e:
@@ -936,16 +936,16 @@ class TestUpdate(UpdateTestCase):
         for p in pid_files:
             self.assertTrue(pid_re.match(os.path.basename(p)))
 
-    def test_is_clean_start_returns_true_when_no_sentinal(self):
-        self.assertFalse(os.path.isfile(self.update_handler._sentinal_file_path()))
+    def test_is_clean_start_returns_true_when_no_sentinel(self):
+        self.assertFalse(os.path.isfile(self.update_handler._sentinel_file_path()))
         self.assertTrue(self.update_handler._is_clean_start)
 
-    def test_is_clean_start_returns_false_when_sentinal_exists(self):
-        self.update_handler._set_sentinal(agent=CURRENT_AGENT)
+    def test_is_clean_start_returns_false_when_sentinel_exists(self):
+        self.update_handler._set_sentinel(agent=CURRENT_AGENT)
         self.assertFalse(self.update_handler._is_clean_start)
 
     def test_is_clean_start_returns_false_for_exceptions(self):
-        self.update_handler._set_sentinal()
+        self.update_handler._set_sentinel()
         with patch("azurelinuxagent.common.utils.fileutil.read_file", side_effect=Exception):
             self.assertFalse(self.update_handler._is_clean_start)
 
@@ -1243,14 +1243,14 @@ class TestUpdate(UpdateTestCase):
         with patch('os.getppid', return_value=1):
             self._test_run(invocations=0, calls=[], enable_updates=True)
 
-    def test_run_clears_sentinal_on_successful_exit(self):
+    def test_run_clears_sentinel_on_successful_exit(self):
         self._test_run()
-        self.assertFalse(os.path.isfile(self.update_handler._sentinal_file_path()))
+        self.assertFalse(os.path.isfile(self.update_handler._sentinel_file_path()))
 
-    def test_run_leaves_sentinal_on_unsuccessful_exit(self):
+    def test_run_leaves_sentinel_on_unsuccessful_exit(self):
         self.update_handler._upgrade_available = Mock(side_effect=Exception)
         self._test_run(invocations=0, calls=[], enable_updates=True)
-        self.assertTrue(os.path.isfile(self.update_handler._sentinal_file_path()))
+        self.assertTrue(os.path.isfile(self.update_handler._sentinel_file_path()))
 
     def test_run_emits_restart_event(self):
         self.update_handler._emit_restart_event = Mock()
@@ -1274,31 +1274,31 @@ class TestUpdate(UpdateTestCase):
             self.assertTrue(v > a.version)
             v = a.version
 
-    def test_set_sentinal(self):
-        self.assertFalse(os.path.isfile(self.update_handler._sentinal_file_path()))
-        self.update_handler._set_sentinal()
-        self.assertTrue(os.path.isfile(self.update_handler._sentinal_file_path()))
+    def test_set_sentinel(self):
+        self.assertFalse(os.path.isfile(self.update_handler._sentinel_file_path()))
+        self.update_handler._set_sentinel()
+        self.assertTrue(os.path.isfile(self.update_handler._sentinel_file_path()))
 
-    def test_set_sentinal_writes_current_agent(self):
-        self.update_handler._set_sentinal()
+    def test_set_sentinel_writes_current_agent(self):
+        self.update_handler._set_sentinel()
         self.assertTrue(
-            fileutil.read_file(self.update_handler._sentinal_file_path()),
+            fileutil.read_file(self.update_handler._sentinel_file_path()),
             CURRENT_AGENT)
 
     def test_shutdown(self):
-        self.update_handler._set_sentinal()
+        self.update_handler._set_sentinel()
         self.update_handler._shutdown()
         self.assertFalse(self.update_handler.running)
-        self.assertFalse(os.path.isfile(self.update_handler._sentinal_file_path()))
+        self.assertFalse(os.path.isfile(self.update_handler._sentinel_file_path()))
 
-    def test_shutdown_ignores_missing_sentinal_file(self):
-        self.assertFalse(os.path.isfile(self.update_handler._sentinal_file_path()))
+    def test_shutdown_ignores_missing_sentinel_file(self):
+        self.assertFalse(os.path.isfile(self.update_handler._sentinel_file_path()))
         self.update_handler._shutdown()
         self.assertFalse(self.update_handler.running)
-        self.assertFalse(os.path.isfile(self.update_handler._sentinal_file_path()))
+        self.assertFalse(os.path.isfile(self.update_handler._sentinel_file_path()))
 
     def test_shutdown_ignores_exceptions(self):
-        self.update_handler._set_sentinal()
+        self.update_handler._set_sentinel()
 
         try:
             with patch("os.remove", side_effect=Exception):
