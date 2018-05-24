@@ -665,9 +665,7 @@ class DefaultOSUtil(object):
         Convenience function, returns mac addr bound to
         first non-loopback interface.
         """
-        ifname = ''
-        while len(ifname) < 2:
-            ifname = self.get_first_if()[0]
+        ifname = self.get_if_name()
         addr = self.get_if_mac(ifname)
         return textutil.hexstr_to_bytearray(addr)
 
@@ -734,17 +732,15 @@ class DefaultOSUtil(object):
         """
         primary = self.get_primary_interface()
         ifaces = self._get_all_interfaces()
+
         if primary in ifaces:
             return primary, ifaces[primary]
 
-        logger.warn('Primary interface {0} not found in ifconf list', primary)
         for iface_name in ifaces.keys():
             if not self.is_loopback(iface_name):
-                if not self.disable_route_warning:
-                    logger.info("Choosing non-primary {0}".format(iface_name))
+                logger.info("Choosing non-primary [{0}]".format(iface_name))
                 return iface_name, ifaces[iface_name]
 
-        logger.warn('No non-loopback interface found in ifconf list')
         return '', ''
 
 
@@ -907,10 +903,14 @@ class DefaultOSUtil(object):
         return True
 
     def get_if_name(self):
-        ifname = ''
-        while len(ifname) < 2:
-            ifname = self.get_first_if()[0]
-        return ifname
+        if_name = ''
+        if_found = False
+        while not if_found:
+            if_name = self.get_first_if()[0]
+            if_found = len(if_name) >= 2
+            if not if_found:
+                time.sleep(2)
+        return if_name
 
     def get_ip4_addr(self):
         return self.get_first_if()[1]
