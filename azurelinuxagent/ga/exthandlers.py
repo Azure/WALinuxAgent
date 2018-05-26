@@ -22,7 +22,6 @@ import glob
 import json
 import operator
 import os
-import os.path
 import random
 import re
 import shutil
@@ -1011,7 +1010,7 @@ class ExtHandlerInstance(object):
             raise ExtensionError("Failed to launch '{0}': {1}".format(full_path, e.strerror))
 
         cg = CGroups.add_to_extension_cgroup(self.ext_handler.name, pid=process.pid)
-        CGroupsTelemetry.track_cgroup(cg)
+        CGroupsTelemetry.track_extension(self.ext_handler.name, cg)
         msg = capture_from_process(process, cmd, timeout)
 
         ret = process.poll()

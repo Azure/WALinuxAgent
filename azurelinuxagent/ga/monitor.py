@@ -214,10 +214,12 @@ class MonitorHandler(object):
         # performance counters
         collection_period = datetime.timedelta(minutes=5)
         last_collection = datetime.datetime.utcnow() - collection_period
-        logger.info("Monitor process {0} will now track cgroup for Agent+Extensions".format(os.getpid()))
-        CGroupsTelemetry.track_cgroup(CGroups(""))
-        logger.info("Monitor process {0} will now track cgroup {1}".format(os.getpid(), AGENT_NAME))
-        CGroupsTelemetry.track_cgroup(CGroups(AGENT_NAME))
+        # Track metrics for the roll-up cgroup and for the agent cgroup
+        CGroupsTelemetry.track_cgroup(CGroups.for_extension(""))
+        if CGroups.is_systemd_manager():
+            CGroupsTelemetry.track_systemd_service(AGENT_NAME)
+        else:
+            CGroupsTelemetry.track_cgroup(CGroups.for_extension(AGENT_NAME))
 
         # Create a new identifier on each restart and reset the counter
         heartbeat_id = str(uuid.uuid4()).upper()
@@ -280,16 +282,8 @@ class MonitorHandler(object):
                 logger.warn(traceback.format_exc())
 
             # Look for extension cgroups we're not already tracking and track them
-            CGroupsTelemetry.update_tracked()
-
-            # Ensure this process is in the agent cgroup. Should always be so, but with agent upgrades and the like,
-            # it's best to be very defensive.
-            try:
-                if not CGroups.get_my_cgroup_folder('cpu').endswith(AGENT_NAME):
-                    logger.warn("Agent not in agent cgroup; moving it.")
-                    CGroups(AGENT_NAME).add(int(os.getpid()))
-            except Exception as e:
-                logger.warn("Failed to find cgroup containing agent: {0}", e)
+            ext_handlers_list, incarnation = protocol.get_ext_handlers()
+            CGroupsTelemetry.update_tracked(ext_handlers_list.ext_handlers)
 
             try:
                 self.collect_and_send_events()

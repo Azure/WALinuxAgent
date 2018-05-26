@@ -14,6 +14,7 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 
+import errno
 import os
 import re
 import time
@@ -21,11 +22,19 @@ import time
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
+# from azurelinuxagent.common.protocol.restapi import ExtHandler
 
 BASE_CGROUPS = '/sys/fs/cgroup'
 HIERARCHIES = ['cpu', 'memory']
 MEMORY_DEFAULT = -1
 CPU_DEFAULT = 0.25
+re_all_CPUs = re.compile('^cpu .*')
+re_user_system_times = re.compile('user (\d+)\nsystem (\d+)\n')
+
+related_services = {
+    "Microsoft.OSTCExtensions.LinuxDiagnostic":    ["omid", "omsagent-LAD", "mdsd-lde"],
+    "Microsoft.Azure.Diagnostics.LinuxDiagnostic": ["omid", "omsagent-LAD", "mdsd-lde"],
+}
 
 
 class CGroupsException(Exception):
@@ -41,10 +50,6 @@ class CGroupsException(Exception):
 
     def __str__(self):
         return repr(self.msg)
-
-
-re_all_CPUs = re.compile('^cpu .*')
-re_user_system_times = re.compile('user (\d+)\nsystem (\d+)\n')
 
 
 class Cpu(object):
@@ -180,28 +185,70 @@ class CGroupsTelemetry(object):
     @staticmethod
     def track_cgroup(cgroup):
         """
-        Create a CGroupsTelemetry object to track a particular CGroups instance. In practical usage:
+        Create a CGroupsTelemetry object to track a particular CGroups instance. Typical usage:
         1) Create a CGroups object
         2) Ask CGroupsTelemetry to track it
-        3) Tell the CGroups object to add one or more processes
+        3) Tell the CGroups object to add one or more processes (or let systemd handle that, for its cgroups)
 
-        :param cgroup: CGroups
-        :return:
+        :param CGroups cgroup: The cgroup to track
         """
         name = cgroup.name
-        tracker = CGroupsTelemetry(name, cgroup=cgroup)
-        CGroupsTelemetry._tracked[name] = tracker
+        if not CGroupsTelemetry.is_tracked(name):
+            tracker = CGroupsTelemetry(name, cgroup=cgroup)
+            CGroupsTelemetry._tracked[name] = tracker
+
+    @staticmethod
+    def track_systemd_service(name):
+        """
+        Create the CGroups object for a systemd service and track it.
+
+        :param str name: Service name (without .service suffix) to be tracked.
+        """
+        service_name = "{0}.service".format(name)
+        if not CGroupsTelemetry.is_tracked(service_name):
+            cgroup = CGroups.for_systemd_service(service_name)
+            tracker = CGroupsTelemetry(service_name, cgroup=cgroup)
+            CGroupsTelemetry._tracked[service_name] = tracker
+
+    @staticmethod
+    def track_extension(name, cgroup=None):
+        """
+        Create all required CGroups to track all metrics for an extension and its associated services.
+
+        :param str name: Full name of the extension to be tracked
+        :param CGroups cgroup: CGroup for the extension itself. This method will create it if none is supplied.
+        """
+        if not CGroupsTelemetry.is_tracked(name):
+            cgroup = CGroups.for_extension(name) if cgroup is None else cgroup
+            logger.info("Now tracking cgroup {0}".format(name))
+            CGroupsTelemetry.track_cgroup(cgroup)
+        if CGroups.is_systemd_manager():
+            if name in related_services:
+                for service_name in related_services[name]:
+                    CGroupsTelemetry.track_systemd_service(service_name)
 
     @staticmethod
     def is_tracked(name):
         return name in CGroupsTelemetry._tracked
 
     @staticmethod
+    def stop_tracking(name):
+        """
+        Stop tracking telemetry for the CGroups associated with an extension. If any system services are being
+        tracked, those will continue to be tracked; multiple extensions might rely upon the same service.
+
+        :param str name: Extension to be dropped from tracking
+        """
+        if CGroupsTelemetry.is_tracked(name):
+            del (CGroupsTelemetry._tracked[name])
+
+    @staticmethod
     def collect_all_tracked():
         """
         Return a dictionary mapping from the name of a tracked cgroup to the list of collected metrics for that cgroup.
 
-        :return: dict(str: [(str, str, float)])
+        :returns: Dictionary of collected metrics, by cgroup
+        :rtype: dict(str: [(str, str, float)])
         """
         results = {}
         for cgroup_name, collector in CGroupsTelemetry._tracked.items():
@@ -210,30 +257,24 @@ class CGroupsTelemetry(object):
         return results
 
     @staticmethod
-    def update_tracked():
+    def update_tracked(ext_handlers):
         """
-        Add any extension cgroups we're not already tracking. Remove any extension cgroups with no processes.
+        Track CGroups for all enabled extensions.
+        Track CGroups for services created by enabled extensions.
+        Stop tracking CGroups for not-enabled extensions.
+
+        :param List(ExtHandler) ext_handlers:
         """
-        root_path = CGroups.construct_path_for_hierarchy(list(CGroupsTelemetry.hierarchies())[0])
-        candidates = [name for name in os.listdir(root_path) if name != AGENT_NAME and os.path.isdir(name)]
-        for item in candidates:
-            member_path = os.path.join(root_path, item, "cgroup.procs")
-            is_empty = True
-            try:
-                pid_list = fileutil.read_file(member_path, 'r')
-                if pid_list:
-                    is_empty = False
-            except (OSError, IOError):
-                pass
-            if item in CGroupsTelemetry._tracked:
-                if is_empty:
-                    logger.info("No longer tracking empty cgroup {0}".format(item))
-                    del(CGroupsTelemetry._tracked[item])
-            else:   # item not in _tracked
-                if not is_empty:
-                    cgroup = CGroups(item)
-                    logger.info("Now tracking cgroup {0}".format(item))
-                    CGroupsTelemetry.track_cgroup(cgroup)
+        not_enabled_extensions = set()
+        for extension in ext_handlers:
+            if extension.properties.state == u"enabled":
+                CGroupsTelemetry.track_extension(extension.name)
+            else:
+                not_enabled_extensions.add(extension.name)
+
+        for name in CGroupsTelemetry._tracked.keys():
+            if name in not_enabled_extensions:
+                CGroupsTelemetry.stop_tracking(name)
 
     def __init__(self, name, cgroup=None):
         """
@@ -247,7 +288,7 @@ class CGroupsTelemetry(object):
             name = ""
         self.name = name
         if cgroup is None:
-            cgroup = CGroups(name)
+            cgroup = CGroups.for_extension(name)
         self.cgroup = cgroup
         self.cpu_count = CGroups.get_num_cores()
         self.current_wall_time = time.time()
@@ -277,12 +318,22 @@ class CGroups(object):
     # whether cgroup support is enabled
     _enabled = True
     _hierarchies = CGroupsTelemetry.hierarchies()
+    _use_systemd = None     # Tri-state: None (i.e. "unknown"), True, False
 
-    def __init__(self, name):
+    @staticmethod
+    def for_extension(name):
+        return CGroups(name, CGroups.construct_custom_path_for_hierarchy)
+
+    @staticmethod
+    def for_systemd_service(name):
+        return CGroups(name.lower(), CGroups.construct_systemd_path_for_hierarchy)
+
+    def __init__(self, name, path_maker):
         """
         Construct CGroups object. Create appropriately-named directory for each hierarchy of interest.
 
-        :param name: str
+        :param str name: Name for the cgroup (usually the full name of the extension)
+        :param path_maker: Function which constructs the root path for a given hierarchy where this cgroup lives
         """
         if name == "":
             self.name = "Agents+Extensions"
@@ -302,13 +353,30 @@ class CGroups(object):
                 raise CGroupsException("Hierarchy {0} is not mounted".format(hierarchy))
 
             if self.is_wrapper_cgroup:
-                cgroup_path = CGroups.construct_path_for_hierarchy(hierarchy)
+                cgroup_path = path_maker(hierarchy)
             else:
-                cgroup_path = os.path.join(CGroups.construct_path_for_hierarchy(hierarchy), self.name)
+                cgroup_path = os.path.join(path_maker(hierarchy), self.name)
             if not os.path.exists(cgroup_path):
                 logger.info("Creating cgroup {0}".format(cgroup_path))
                 CGroups._try_mkdir(cgroup_path)
             self.cgroups[hierarchy] = cgroup_path
+
+    @staticmethod
+    def is_systemd_manager():
+        """
+        Determine if systemd is managing system services. Many extensions are structured as a set of services,
+        including the agent itself; systemd expects those services to remain in the cgroups in which it placed them.
+        If this process (presumed to be the agent) is in a cgroup that looks like one created by systemd, we can
+        assume systemd is in use.
+
+        :return: True if systemd is managing system services
+        :rtype: Bool
+        """
+        if CGroups._use_systemd is None:
+            hierarchy = HIERARCHIES[0]
+            path = CGroups.get_my_cgroup_folder(hierarchy)
+            CGroups._use_systemd = path.startswith(CGroups.construct_systemd_path_for_hierarchy(hierarchy))
+        return CGroups._use_systemd
 
     @staticmethod
     def _try_mkdir(path):
@@ -322,18 +390,26 @@ class CGroups(object):
             try:
                 os.mkdir(path)
             except OSError as e:
-                if e.errno == 13:
-                    raise CGroupsException("Create directory for cgroup {0} permission denied".format(path))
-                elif e.errno == 17:
-                    raise CGroupsException(
-                        "Can't create directory for cgroup {0}: a file already exists with that name".format(path)
-                    )
+                if e.errno == errno.EEXIST:
+                    if not os.path.isdir(path):
+                        raise CGroupsException(
+                            "Create directory for cgroup {0}: normal file already exists with that name".format(path)
+                        )
+                    else:
+                        pass    # There was a race to create the directory, but it's there now, and that's fine
+                elif e.errno == errno.EACCES:
+                    # This is unexpected, as the agent runs as root
+                    raise CGroupsException("Create directory for cgroup {0}: permission denied".format(path))
                 else:
                     raise OSError(e)
 
     @staticmethod
-    def construct_path_for_hierarchy(hierarchy):
+    def construct_custom_path_for_hierarchy(hierarchy):
         return os.path.join(BASE_CGROUPS, hierarchy, AGENT_NAME)
+
+    @staticmethod
+    def construct_systemd_path_for_hierarchy(hierarchy):
+        return os.path.join(BASE_CGROUPS, hierarchy, 'system.slice')
 
     def add(self, pid):
         """
@@ -387,31 +463,33 @@ class CGroups(object):
         For each hierarchy, construct the wrapper cgroup and apply the appropriate limits
         """
         for hierarchy in HIERARCHIES:
-            root_dir = CGroups.construct_path_for_hierarchy(hierarchy)
+            root_dir = CGroups.construct_custom_path_for_hierarchy(hierarchy)
             CGroups._try_mkdir(root_dir)
             CGroups._apply_wrapper_limits(root_dir, hierarchy)
 
     @staticmethod
     def setup():
         """
-        Mount the cgroup fs if necessary.
-        Create wrapper cgroups for agent-plus-extensions and set limits on them
-        Create cgroups for the agent (which also sets limits as appropriate
-        Enable tracking of metrics in those cgroups
-        Add this process to them
+        Only needs to be called once, and should be called from the -daemon instance of the agent.
+            Mount the cgroup fs if necessary
+            Create wrapper cgroups for agent-plus-extensions and set limits on them;
+            Add this process to the "agent" cgroup, if required
+        Actual collection of metrics from cgroups happens in the -run-exthandlers instance
         """
-        status = ""
         cgroups_enabled = False
         try:
             from azurelinuxagent.common import osutil
             osutil.get_osutil().mount_cgroups()
             CGroups._setup_wrapper_groups()
             pid = int(os.getpid())
-            cg = CGroups(AGENT_NAME)
-            CGroupsTelemetry.track_cgroup(cg)
-            cg.add(pid)
-            logger.info("Add daemon process pid {0} to {1} cgroup".format(pid, cg.name))
+            if not CGroups.is_systemd_manager():
+                cg = CGroups.for_extension(AGENT_NAME)
+                cg.add(pid)
+                logger.info("Add daemon process pid {0} to {1} cgroup".format(pid, cg.name))
+            else:
+                logger.info("Daemon process pid {0} cgroup managed by systemd".format(pid))
             cgroups_enabled = True
+            status = "OK"
         except CGroupsException as cge:
             status = cge.msg
 
@@ -432,7 +510,7 @@ class CGroups(object):
         :param str name: Short name of extension, suitable for naming directories in the filesystem
         :param int pid: Process id of extension to be added to the cgroup
         :return: The CGroups object into which the extension was moved. None if CGroups aren't enabled.
-        :rtype: str
+        :rtype: CGroups
         """
         if not CGroups.enabled():
             return None
@@ -442,7 +520,7 @@ class CGroups(object):
         cg = None
         try:
             logger.info("Move process {0} into cgroups for extension {1}".format(pid, name))
-            cg = CGroups(name)
+            cg = CGroups.for_extension(name)
             cg.add(pid)
         except Exception as ex:
             logger.warn("Unable to move process {0} into cgroups for {1}: {2}".format(pid, name, ex))
