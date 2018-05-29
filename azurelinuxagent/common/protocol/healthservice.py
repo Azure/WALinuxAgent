@@ -18,9 +18,9 @@
 #
 
 import json
+from datetime import datetime
 
 from azurelinuxagent.common import logger
-from azurelinuxagent.common.dhcp import KNOWN_WIRESERVER_IP
 from azurelinuxagent.common.exception import HttpError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.utils import restutil
@@ -45,16 +45,14 @@ class Observation(object):
 
 class HealthService(object):
 
-    VNET_ENDPOINT = '169.254.169.254'
     ENDPOINT = 'http://{0}:80/HealthService'
     API = 'reporttargethealth'
+    VERSION = "1.0"
     OBSERVER_NAME = 'WALinuxAgent'
-    VERSION = 1
     HOST_PLUGIN_HEARTBEAT_OBSERVATION_NAME = 'HostPluginHeartbeat'
 
     def __init__(self, endpoint):
-        self.endpoint = HealthService.ENDPOINT.format(endpoint if endpoint != KNOWN_WIRESERVER_IP
-                                                      else HealthService.VNET_ENDPOINT)
+        self.endpoint = HealthService.ENDPOINT.format(endpoint)
         self.api = HealthService.API
         self.version = HealthService.VERSION
         self.source = HealthService.OBSERVER_NAME
@@ -73,8 +71,8 @@ class HealthService(object):
     def observe_host_plugin_heartbeat(self, is_healthy):
         self.observations.append(Observation(name=HealthService.HOST_PLUGIN_HEARTBEAT_OBSERVATION_NAME,
                                              is_healthy=is_healthy,
-                                             description='',
-                                             value=''))
+                                             description=datetime.utcnow(),
+                                             value=is_healthy))
 
     def report(self):
         logger.verbose('HealthService: report observations')
