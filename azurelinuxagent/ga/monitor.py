@@ -282,7 +282,14 @@ class MonitorHandler(object):
             logger.info("HostGAPlugin health: {0}", is_healthy)
 
         except Exception as e:
-            logger.error("Could not send host plugin heartbeat: {0}", ustr(e))
+            msg = "Exception sending host plugin heartbeat: {0}".format(ustr(e))
+            add_event(
+                name=AGENT_NAME,
+                version=CURRENT_VERSION,
+                op=WALAEventOperation.HostPluginHeartbeat,
+                is_success=False,
+                message=msg,
+                log_event=False)
 
         return datetime.datetime.utcnow()
 
