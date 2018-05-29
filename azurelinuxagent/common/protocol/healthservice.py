@@ -76,10 +76,8 @@ class HealthService(object):
     def report(self):
         logger.verbose('HealthService: report observations')
         try:
-            # TODO: remove
-            logger.info('Report observation to {0}: {1}', self.endpoint, self.as_json)
-
             restutil.http_post(self.endpoint, self.as_json, headers={'Content-Type': 'application/json'})
             del self.observations[:]
+            logger.verbose('HealthService: Reported observations to {0}: {1}', self.endpoint, self.as_json)
         except HttpError as e:
-            logger.warn("HealthService could not report observations: {0}", ustr(e))
+            logger.warn("HealthService: could not report observations: {0}", ustr(e))
