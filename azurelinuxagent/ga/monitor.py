@@ -283,7 +283,7 @@ class MonitorHandler(object):
 
             # Look for extension cgroups we're not already tracking and track them
             ext_handlers_list, incarnation = protocol.get_ext_handlers()
-            CGroupsTelemetry.update_tracked(ext_handlers_list.ext_handlers)
+            CGroupsTelemetry.update_tracked(ext_handlers_list.extHandlers)
 
             try:
                 self.collect_and_send_events()

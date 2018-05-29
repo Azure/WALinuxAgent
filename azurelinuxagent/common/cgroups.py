@@ -132,7 +132,7 @@ class Cpu(object):
         cpu_delta = self.current_cpu_total - self.previous_cpu_total
         system_delta = max(1, self.current_system_cpu - self.previous_system_cpu)
 
-        return float(cpu_delta * self.cgt.cpu_count * 100) / float(system_delta)
+        return round(float(cpu_delta * self.cgt.cpu_count * 100) / float(system_delta), 3)
 
     def collect(self):
         """
@@ -141,7 +141,8 @@ class Cpu(object):
         :return: [(str, str, float)]
         """
         self.update()
-        return [("Process", "% Processor Time", self.get_cpu_percent())]
+        usage = self.get_cpu_percent()
+        return [("Process", "% Processor Time", usage)]
 
 
 class Memory(object):
@@ -177,6 +178,7 @@ class CGroupsTelemetry(object):
         "memory": Memory
     }
     _hierarchies = _metrics.keys()
+    was_tracked = ""
 
     @staticmethod
     def hierarchies():
@@ -272,9 +274,19 @@ class CGroupsTelemetry(object):
             else:
                 not_enabled_extensions.add(extension.name)
 
+        names = []
         for name in CGroupsTelemetry._tracked.keys():
             if name in not_enabled_extensions:
                 CGroupsTelemetry.stop_tracking(name)
+            else:
+                names.append("[{0}]".format(name))
+        now_tracking = " ".join(names)
+        if now_tracking != CGroupsTelemetry.was_tracked:
+            if len(now_tracking):
+                logger.info("After updating cgroup telemetry, tracking {0}".format(now_tracking))
+            else:
+                logger.warn("After updating cgroup telemetry, tracking no cgroups.")
+            CGroupsTelemetry.was_tracked = now_tracking
 
     def __init__(self, name, cgroup=None):
         """
@@ -357,7 +369,7 @@ class CGroups(object):
             else:
                 cgroup_path = os.path.join(path_maker(hierarchy), self.name)
             if not os.path.exists(cgroup_path):
-                logger.info("Creating cgroup {0}".format(cgroup_path))
+                logger.info("Creating cgroup directory {0}".format(cgroup_path))
                 CGroups._try_mkdir(cgroup_path)
             self.cgroups[hierarchy] = cgroup_path
 
