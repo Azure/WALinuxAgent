@@ -114,8 +114,9 @@ class TestHostPlugin(AgentTestCase):
 
     def test_fallback(self):
         """
-        Validate fallback to upload status using HostGAPlugin is happening when
-        status reporting via default method is unsuccessful
+        Status now defaults to HostPlugin. Validate that any errors on the public
+        channel are ignored.  Validate that the default channel is never changed
+        as part of status upload.
         """
         test_goal_state = wire.GoalState(WireProtocolData(DATA_FILE).goal_state)
         status = restapi.VMStatus(status="Ready", message="Guest Agent is running")
@@ -132,16 +133,16 @@ class TestHostPlugin(AgentTestCase):
                     wire_protocol_client.ext_conf.status_upload_blob_type = page_blob_type
                     wire_protocol_client.status_blob.set_vm_status(status)
                     wire_protocol_client.upload_status_blob()
-                    self.assertEqual(patch_upload.call_count, 1)
+                    self.assertEqual(patch_upload.call_count, 0)
                     self.assertTrue(patch_put.call_count == 1,
                                     "Fallback was not engaged")
                     self.assertTrue(patch_put.call_args[0][0] == sas_url)
-                    self.assertTrue(wire.HostPluginProtocol.is_default_channel())
-                    wire.HostPluginProtocol.set_default_channel(False)
+                    self.assertFalse(wire.HostPluginProtocol.is_default_channel())
 
     def test_fallback_failure(self):
         """
-        Validate that when host plugin fails, the default channel is reset
+        Validate that if host plugin fails and the direct connection fails the
+        default channel remains unchanged.
         """
         test_goal_state = wire.GoalState(WireProtocolData(DATA_FILE).goal_state)
         status = restapi.VMStatus(status="Ready",
@@ -152,10 +153,11 @@ class TestHostPlugin(AgentTestCase):
                           return_value=True):
             with patch.object(wire.StatusBlob,
                               "upload",
-                              return_value=False):
+                              return_value=False) as patch_upload:
                 with patch.object(wire.HostPluginProtocol,
                                   "_put_page_blob_status",
                                   side_effect=wire.HttpError("put failure")) as patch_put:
+                    self.assertFalse(wire.HostPluginProtocol.is_default_channel())
                     client = wire.WireProtocol(wireserver_url).client
                     client.get_goal_state = Mock(return_value=test_goal_state)
                     client.ext_conf = wire.ExtensionsConfig(None)
@@ -163,8 +165,8 @@ class TestHostPlugin(AgentTestCase):
                     client.ext_conf.status_upload_blob_type = page_blob_type
                     client.status_blob.set_vm_status(status)
                     client.upload_status_blob()
-                    self.assertTrue(patch_put.call_count == 1,
-                                    "Fallback was not engaged")
+                    self.assertEqual(1, patch_put.call_count)
+                    self.assertEqual(1, patch_upload.call_count)
                     self.assertFalse(wire.HostPluginProtocol.is_default_channel())
 
     def test_put_status_error_reporting(self):
@@ -192,9 +194,16 @@ class TestHostPlugin(AgentTestCase):
                     with patch.object(wire.HostPluginProtocol,
                                       "ensure_initialized", return_value=True):
                         wire_protocol_client.upload_status_blob()
-                        self.assertFalse(wire.HostPluginProtocol.is_default_channel())
-                        self.assertTrue(patch_add_event.call_count == 1)
 
+                        # The agent tries to upload via HostPlugin and that fails due to
+                        # http_put having a side effect of "put_error"
+                        #
+                        # The agent tries to upload using a direct connection, and that succeeds.
+                        self.assertEqual(1, wire_protocol_client.status_blob.upload.call_count)
+                        # The agent never touches the default protocol is this code path, so no change.
+                        self.assertFalse(wire.HostPluginProtocol.is_default_channel())
+                        # The agent never logs a telemetry event for a bad HTTP call
+                        self.assertEqual(patch_add_event.call_count, 0)
 
     def test_validate_http_request(self):
         """Validate correct set of data is sent to HostGAPlugin when reporting VM status"""
