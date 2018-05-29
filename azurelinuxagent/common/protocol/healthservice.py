@@ -48,7 +48,7 @@ class HealthService(object):
     API = 'reporttargethealth'
     VERSION = "1.0"
     OBSERVER_NAME = 'WALinuxAgent'
-    HOST_PLUGIN_HEARTBEAT_OBSERVATION_NAME = 'HostPluginHeartbeat'
+    HOST_PLUGIN_HEARTBEAT_OBSERVATION_NAME = 'GuestAgentPluginHeartbeat'
 
     def __init__(self, endpoint):
         self.endpoint = HealthService.ENDPOINT.format(endpoint)
