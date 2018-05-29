@@ -241,7 +241,8 @@ class MonitorHandler(object):
             last_host_plugin_heartbeat = self.send_host_plugin_heartbeat(protocol,
                                                                          last_host_plugin_heartbeat,
                                                                          host_plugin_errorstate)
-            time.sleep(5)
+            # currently the smallest delta is 1 minute
+            time.sleep(60)
 
     def add_sysinfo(self, event):
         sysinfo_names = [v.name for v in self.sysinfo]
