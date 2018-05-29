@@ -33,6 +33,7 @@ from azurelinuxagent.common.exception import EventError, ProtocolError, OSUtilEr
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol import get_protocol_util
+from azurelinuxagent.common.protocol.healthservice import HealthService
 from azurelinuxagent.common.protocol.imds import get_imds_client
 from azurelinuxagent.common.protocol.restapi import TelemetryEventParam, \
                                                     TelemetryEventList, \
@@ -230,6 +231,7 @@ class MonitorHandler(object):
         heartbeat_id = str(uuid.uuid4()).upper()
         protocol = self.protocol_util.get_protocol()
         host_plugin_errorstate = ErrorState(min_timedelta=MonitorHandler.HOST_PLUGIN_HEALTH_PERIOD)
+        health_service = HealthService(protocol.endpoint)
 
         while True:
             last_telemetry_heartbeat = self.send_telemetry_heartbeat(protocol,
@@ -240,7 +242,8 @@ class MonitorHandler(object):
                                                                  last_event_collection)
             last_host_plugin_heartbeat = self.send_host_plugin_heartbeat(protocol,
                                                                          last_host_plugin_heartbeat,
-                                                                         host_plugin_errorstate)
+                                                                         host_plugin_errorstate,
+                                                                         health_service)
             # currently the smallest delta is 1 minute
             time.sleep(60)
 
@@ -254,7 +257,7 @@ class MonitorHandler(object):
                 event.parameters.remove(param)
         event.parameters.extend(self.sysinfo)
 
-    def send_host_plugin_heartbeat(self, protocol, last_host_plugin_heartbeat, host_plugin_errorstate):
+    def send_host_plugin_heartbeat(self, protocol, last_host_plugin_heartbeat, host_plugin_errorstate, health_service):
 
         """
         Send a health signal every HOST_PLUGIN_HEARTBEAT_PERIOD. The signal is 'Healthy' when we have been able to
@@ -278,9 +281,10 @@ class MonitorHandler(object):
                 host_plugin_errorstate.incr()
 
             is_healthy = host_plugin_errorstate.is_triggered() is False
+            logger.verbose("HostGAPlugin health: {0}", is_healthy)
 
-            # TODO: send healthstore signal
-            logger.info("HostGAPlugin health: {0}", is_healthy)
+            health_service.observe_host_plugin_heartbeat(is_healthy)
+            health_service.report()
 
         except Exception as e:
             msg = "Exception sending host plugin heartbeat: {0}".format(ustr(e))
