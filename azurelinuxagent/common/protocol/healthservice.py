@@ -18,7 +18,6 @@
 #
 
 import json
-from datetime import datetime
 
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.exception import HttpError
@@ -71,8 +70,8 @@ class HealthService(object):
     def observe_host_plugin_heartbeat(self, is_healthy):
         self.observations.append(Observation(name=HealthService.HOST_PLUGIN_HEARTBEAT_OBSERVATION_NAME,
                                              is_healthy=is_healthy,
-                                             description=datetime.utcnow(),
-                                             value=is_healthy))
+                                             description='',
+                                             value=''))
 
     def report(self):
         logger.verbose('HealthService: report observations')
