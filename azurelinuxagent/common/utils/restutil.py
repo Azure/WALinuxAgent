@@ -385,11 +385,14 @@ def http_delete(url, headers=None, use_proxy=False,
                         retry_codes=retry_codes,
                         retry_delay=retry_delay)
 
+
 def request_failed(resp, ok_codes=OK_CODES):
     return not request_succeeded(resp, ok_codes=ok_codes)
 
+
 def request_succeeded(resp, ok_codes=OK_CODES):
     return resp is not None and resp.status in ok_codes
+
 
 def read_response_error(resp):
     result = ''

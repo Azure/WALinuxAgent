@@ -35,6 +35,7 @@ URI_FORMAT_GET_API_VERSIONS = "http://{0}:{1}/versions"
 URI_FORMAT_GET_EXTENSION_ARTIFACT = "http://{0}:{1}/extensionArtifact"
 URI_FORMAT_PUT_VM_STATUS = "http://{0}:{1}/status"
 URI_FORMAT_PUT_LOG = "http://{0}:{1}/vmAgentLog"
+URI_FORMAT_HEALTH = "http://{0}:{1}/health"
 API_VERSION = "2015-09-01"
 HEADER_CONTAINER_ID = "x-ms-containerid"
 HEADER_VERSION = "x-ms-version"
@@ -76,6 +77,22 @@ class HostPluginProtocol(object):
             report_event(WALAEventOperation.InitializeHostPlugin,
                          is_success=self.is_available)
         return self.is_available
+
+    def get_health(self):
+        """
+        Call the /health endpoint
+        :return: True if 200 received, False otherwise
+        """
+        url = URI_FORMAT_HEALTH.format(self.endpoint,
+                                       HOST_PLUGIN_PORT)
+        logger.verbose("HostGAPlugin: Getting health from [{0}]", url)
+        status_ok = False
+        try:
+            response = restutil.http_get(url, max_retry=1)
+            status_ok = restutil.request_succeeded(response)
+        except HttpError as e:
+            logger.verbose("HostGAPlugin: Exception getting health", ustr(e))
+        return status_ok
 
     def get_api_versions(self):
         url = URI_FORMAT_GET_API_VERSIONS.format(self.endpoint,

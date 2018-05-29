@@ -26,6 +26,7 @@ import uuid
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.logger as logger
+from azurelinuxagent.common.errorstate import ErrorState
 
 from azurelinuxagent.common.event import add_event, WALAEventOperation
 from azurelinuxagent.common.exception import EventError, ProtocolError, OSUtilError, HttpError
@@ -92,8 +93,10 @@ def get_monitor_handler():
 
 class MonitorHandler(object):
 
-    TELEMETRY_HEARTBEAT_PERIOD = datetime.timedelta(minutes=30)
     EVENT_COLLECTION_PERIOD = datetime.timedelta(minutes=1)
+    TELEMETRY_HEARTBEAT_PERIOD = datetime.timedelta(minutes=30)
+    HOST_PLUGIN_HEARTBEAT_PERIOD = datetime.timedelta(minutes=1)
+    HOST_PLUGIN_HEALTH_PERIOD = datetime.timedelta(minutes=5)
 
     def __init__(self):
         self.osutil = get_osutil()
@@ -218,12 +221,16 @@ class MonitorHandler(object):
         return datetime.datetime.utcnow()
 
     def daemon(self):
+
         # Create a new identifier on each restart, reset the counter and all events
         counter = 0
         last_event_collection = None
         last_telemetry_heartbeat = None
+        last_host_plugin_heartbeat = None
         heartbeat_id = str(uuid.uuid4()).upper()
         protocol = self.protocol_util.get_protocol()
+        host_plugin_errorstate = ErrorState(min_timedelta=MonitorHandler.HOST_PLUGIN_HEALTH_PERIOD)
+
         while True:
             last_telemetry_heartbeat = self.send_telemetry_heartbeat(protocol,
                                                                      counter,
@@ -231,6 +238,9 @@ class MonitorHandler(object):
                                                                      last_telemetry_heartbeat)
             last_event_collection = self.collect_and_send_events(protocol,
                                                                  last_event_collection)
+            last_host_plugin_heartbeat = self.send_host_plugin_heartbeat(protocol,
+                                                                         last_host_plugin_heartbeat,
+                                                                         host_plugin_errorstate)
             time.sleep(5)
 
     def add_sysinfo(self, event):
@@ -242,6 +252,39 @@ class MonitorHandler(object):
                                param.value)
                 event.parameters.remove(param)
         event.parameters.extend(self.sysinfo)
+
+    def send_host_plugin_heartbeat(self, protocol, last_host_plugin_heartbeat, host_plugin_errorstate):
+
+        """
+        Send a health signal every HOST_PLUGIN_HEARTBEAT_PERIOD. The signal is 'Healthy' when we have been able to
+        communicate with HostGAPlugin at least once in the last HOST_PLUGIN_HEALTH_PERIOD.
+        """
+
+        if last_host_plugin_heartbeat is None:
+            last_host_plugin_heartbeat = datetime.datetime.utcnow() - MonitorHandler.HOST_PLUGIN_HEARTBEAT_PERIOD
+
+        if datetime.datetime.utcnow() < (last_host_plugin_heartbeat + MonitorHandler.HOST_PLUGIN_HEARTBEAT_PERIOD):
+            return last_host_plugin_heartbeat
+
+        try:
+            host_plugin = protocol.client.get_host_plugin()
+            host_plugin.ensure_initialized()
+            is_currently_healthy = host_plugin.get_health()
+
+            if is_currently_healthy:
+                host_plugin_errorstate.reset()
+            else:
+                host_plugin_errorstate.incr()
+
+            is_healthy = host_plugin_errorstate.is_triggered() is False
+
+            # TODO: send healthstore signal
+            logger.info("HostGAPlugin health: {0}", is_healthy)
+
+        except Exception as e:
+            logger.error("Could not send host plugin heartbeat: {0}", ustr(e))
+
+        return datetime.datetime.utcnow()
 
     def send_telemetry_heartbeat(self, protocol, counter, heartbeat_id, last_telemetry_heartbeat):
 
