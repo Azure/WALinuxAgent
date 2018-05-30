@@ -251,12 +251,10 @@ def _build_health_report(incarnation, container_id, role_instance_id,
     return xml
 
 
-"""
-Convert VMStatus object to status blob format
-"""
-
-
 def ga_status_to_guest_info(ga_status):
+    """
+    Convert VMStatus object to status blob format
+    """
     v1_ga_guest_info = {
         "computerName" : ga_status.hostname,
         "osName" : ga_status.osname,
@@ -277,6 +275,7 @@ def ga_status_to_v1(ga_status):
         "formattedMessage" : formatted_msg
     }
     return v1_ga_status
+
 
 def ext_substatus_to_v1(sub_status_list):
     status_list = []
@@ -1155,6 +1154,7 @@ class WireClient(object):
                         ustr(e)))
 
         return None
+
 
 class VersionInfo(object):
     def __init__(self, xml_text):

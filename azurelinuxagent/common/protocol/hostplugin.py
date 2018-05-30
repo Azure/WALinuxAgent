@@ -97,8 +97,8 @@ class HostPluginProtocol(object):
     def get_api_versions(self):
         url = URI_FORMAT_GET_API_VERSIONS.format(self.endpoint,
                                                  HOST_PLUGIN_PORT)
-        logger.verbose("HostGAPlugin: Getting API versions at [{0}]".format(
-            url))
+        logger.verbose("HostGAPlugin: Getting API versions at [{0}]"
+                       .format(url))
         return_val = []
         try:
             headers = {HEADER_CONTAINER_ID: self.container_id}
