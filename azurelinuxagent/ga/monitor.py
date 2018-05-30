@@ -281,7 +281,7 @@ class MonitorHandler(object):
                 host_plugin_errorstate.incr()
 
             is_healthy = host_plugin_errorstate.is_triggered() is False
-            logger.verbose("HostGAPlugin health: {0}", is_healthy)
+            logger.info("HostGAPlugin health: {0}", is_healthy)
 
             health_service.report_host_plugin_heartbeat(is_healthy)
 
@@ -293,7 +293,7 @@ class MonitorHandler(object):
                 op=WALAEventOperation.HostPluginHeartbeat,
                 is_success=False,
                 message=msg,
-                log_event=False)
+                log_event=True)
 
         return datetime.datetime.utcnow()
 
