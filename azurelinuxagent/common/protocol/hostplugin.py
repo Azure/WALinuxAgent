@@ -25,6 +25,7 @@ from azurelinuxagent.common import logger
 from azurelinuxagent.common.exception import HttpError, ProtocolError, \
                                             ResourceGoneError
 from azurelinuxagent.common.future import ustr, httpclient
+from azurelinuxagent.common.protocol.healthservice import HealthService
 from azurelinuxagent.common.utils import restutil
 from azurelinuxagent.common.utils import textutil
 from azurelinuxagent.common.utils.textutil import remove_bom
@@ -59,6 +60,7 @@ class HostPluginProtocol(object):
         self.deployment_id = None
         self.role_config_name = role_config_name
         self.manifest_uri = None
+        self.health_service = HealthService(endpoint)
 
     @staticmethod
     def is_default_channel():
@@ -100,18 +102,21 @@ class HostPluginProtocol(object):
         logger.verbose("HostGAPlugin: Getting API versions at [{0}]"
                        .format(url))
         return_val = []
+        error_response = ''
+        is_healthy = False
         try:
             headers = {HEADER_CONTAINER_ID: self.container_id}
             response = restutil.http_get(url, headers)
             if restutil.request_failed(response):
-                logger.error(
-                    "HostGAPlugin: Failed Get API versions: {0}".format(
-                        restutil.read_response_error(response)))
+                error_response = restutil.read_response_error(response)
+                logger.error("HostGAPlugin: Failed Get API versions: {0}".format(error_response))
             else:
                 return_val = ustr(remove_bom(response.read()), encoding='utf-8')
-
+                is_healthy = True
         except HttpError as e:
             logger.error("HostGAPlugin: Exception Get API versions: {0}".format(e))
+
+        self.health_service.report_host_plugin_versions(is_healthy=is_healthy, response=error_response)
 
         return return_val
 

@@ -49,6 +49,9 @@ class HealthService(object):
     VERSION = "1.0"
     OBSERVER_NAME = 'WALinuxAgent'
     HOST_PLUGIN_HEARTBEAT_OBSERVATION_NAME = 'GuestAgentPluginHeartbeat'
+    HOST_PLUGIN_STATUS_OBSERVATION_NAME = 'GuestAgentPluginStatus'
+    HOST_PLUGIN_VERSIONS_OBSERVATION_NAME = 'GuestAgentPluginVersions'
+    HOST_PLUGIN_ARTIFACT_OBSERVATION_NAME = 'GuestAgentPluginArtifact'
 
     def __init__(self, endpoint):
         self.endpoint = HealthService.ENDPOINT.format(endpoint)
@@ -67,17 +70,36 @@ class HealthService(object):
         }
         return json.dumps(data)
 
-    def observe_host_plugin_heartbeat(self, is_healthy):
+    def report_host_plugin_heartbeat(self, is_healthy):
+        """
+        Reports a signal for /health
+        :param is_healthy: whether the call suceeded
+        """
         self.observations.append(Observation(name=HealthService.HOST_PLUGIN_HEARTBEAT_OBSERVATION_NAME,
                                              is_healthy=is_healthy,
                                              description='',
                                              value=''))
+        self.report()
+
+    def report_host_plugin_versions(self, is_healthy, response):
+        """
+        Reports a signal for /versions
+        :param is_healthy: whether the api call succeeded
+        :param response: debugging information for failures
+        """
+        self.observations.append(Observation(name=HealthService.HOST_PLUGIN_VERSIONS_OBSERVATION_NAME,
+                                             is_healthy=is_healthy,
+                                             description='',
+                                             value=response))
+        self.report()
 
     def report(self):
         logger.verbose('HealthService: report observations')
         try:
             restutil.http_post(self.endpoint, self.as_json, headers={'Content-Type': 'application/json'})
-            del self.observations[:]
             logger.verbose('HealthService: Reported observations to {0}: {1}', self.endpoint, self.as_json)
         except HttpError as e:
             logger.warn("HealthService: could not report observations: {0}", ustr(e))
+
+        # these signals are not timestamped, so there is no value in persisting data
+        del self.observations[:]

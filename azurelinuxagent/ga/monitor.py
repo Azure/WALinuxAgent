@@ -231,7 +231,7 @@ class MonitorHandler(object):
         heartbeat_id = str(uuid.uuid4()).upper()
         protocol = self.protocol_util.get_protocol()
         host_plugin_errorstate = ErrorState(min_timedelta=MonitorHandler.HOST_PLUGIN_HEALTH_PERIOD)
-        health_service = HealthService(protocol.endpoint)
+        health_service = HealthService()
 
         while True:
             last_telemetry_heartbeat = self.send_telemetry_heartbeat(protocol,
@@ -283,8 +283,7 @@ class MonitorHandler(object):
             is_healthy = host_plugin_errorstate.is_triggered() is False
             logger.verbose("HostGAPlugin health: {0}", is_healthy)
 
-            health_service.observe_host_plugin_heartbeat(is_healthy)
-            health_service.report()
+            health_service.report_host_plugin_heartbeat(is_healthy)
 
         except Exception as e:
             msg = "Exception sending host plugin heartbeat: {0}".format(ustr(e))
