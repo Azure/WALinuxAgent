@@ -517,17 +517,18 @@ class CGroups(object):
     @staticmethod
     def add_to_extension_cgroup(name, pid=int(os.getpid())):
         """
-        Create cgroup directories for this extension in each of the hierarchies, then add this process to the new cgroup
+        Create cgroup directories for this extension in each of the hierarchies and add this process to the new cgroup.
+        Should only be called when creating subprocesses and invoked inside the fork/exec window using the preexec_fn
+        mechanism. As a result, there's no point in returning the CGroups object itself; the goal is to move the
+        child process into the new cgroup the new code even starts running.
 
         :param str name: Short name of extension, suitable for naming directories in the filesystem
         :param int pid: Process id of extension to be added to the cgroup
-        :return: The CGroups object into which the extension was moved. None if CGroups aren't enabled.
-        :rtype: CGroups
         """
         if not CGroups.enabled():
-            return None
+            return
         if name == AGENT_NAME:
-            raise CGroupsException('Extension cgroup name cannot match agent cgroup name({0})'.format(AGENT_NAME))
+            logger.warn('Extension cgroup name cannot match agent cgroup name({0})'.format(AGENT_NAME))
 
         cg = None
         try:
@@ -535,9 +536,7 @@ class CGroups(object):
             cg = CGroups.for_extension(name)
             cg.add(pid)
         except Exception as ex:
-            logger.warn("Unable to move process {0} into cgroups for {1}: {2}".format(pid, name, ex))
-
-        return cg
+            logger.warn("Unable to move process {0} into cgroups for extension {1}: {2}".format(pid, name, ex))
 
     @staticmethod
     def get_my_cgroup_path(hierarchy_id):

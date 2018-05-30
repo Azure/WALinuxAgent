@@ -36,7 +36,7 @@ import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.version as version
 from azurelinuxagent.common.cgroups import CGroups, CGroupsTelemetry
-from azurelinuxagent.common.errorstate import ErrorState, ERROR_STATE_DELTA_DEFAULT, ERROR_STATE_DELTA_INSTALL
+from azurelinuxagent.common.errorstate import ErrorState, ERROR_STATE_DELTA_INSTALL
 
 from azurelinuxagent.common.event import add_event, WALAEventOperation, elapsed_milliseconds, report_event
 from azurelinuxagent.common.exception import ExtensionError, ProtocolError
@@ -668,17 +668,17 @@ class ExtHandlerInstance(object):
         return FlexibleVersion(self_version) > FlexibleVersion(other_version)
 
     def get_installed_ext_handler(self):
-        lastest_version = self.get_installed_version()
-        if lastest_version is None:
+        latest_version = self.get_installed_version()
+        if latest_version is None:
             return None
         
         installed_handler = ExtHandler()
         set_properties("ExtHandler", installed_handler, get_properties(self.ext_handler))
-        installed_handler.properties.version = lastest_version
+        installed_handler.properties.version = latest_version
         return ExtHandlerInstance(installed_handler, self.protocol)
 
     def get_installed_version(self):
-        lastest_version = None
+        latest_version = None
 
         for path in glob.iglob(os.path.join(conf.get_lib_dir(), self.ext_handler.name + "-*")):
             if not os.path.isdir(path):
@@ -695,10 +695,10 @@ class ExtHandlerInstance(object):
                     "{0}".format(path))
                 continue
 
-            if lastest_version is None or lastest_version < version_from_path:
-                lastest_version = version_from_path
+            if latest_version is None or latest_version < version_from_path:
+                latest_version = version_from_path
 
-        return str(lastest_version) if lastest_version is not None else None
+        return str(latest_version) if latest_version is not None else None
     
     def copy_status_files(self, old_ext_handler_i):
         self.logger.info("Copy status files from old plugin to new")
@@ -992,24 +992,33 @@ class ExtHandlerInstance(object):
         begin_utc = datetime.datetime.utcnow()
         self.logger.verbose("Launch command: [{0}]", cmd)
         base_dir = self.get_base_dir()
+        full_path = os.path.join(base_dir, cmd.lstrip(os.path.sep))
+
+        def pre_exec_function():
+            """
+            Change process state before the actual target process is started. Effectively, this runs between
+            the fork() and the exec() of sub-process creation.
+            :return:
+            """
+            os.setsid()
+            CGroups.add_to_extension_cgroup(self.ext_handler.name)
 
         try:
             # This should be .run(), but due to the wide variety
             # of Python versions we must support we must use .communicate().
             # Some extensions erroneously begin cmd with a slash; don't interpret those
             # as root-relative. (Issue #1170)
-            full_path = os.path.join(base_dir, cmd.lstrip(os.sep))
             process = subprocess.Popen(full_path,
                                   shell=True,
                                   cwd=base_dir,
                                   stdout=subprocess.PIPE,
                                   stderr=subprocess.PIPE,
                                   env=os.environ,
-                                  preexec_fn=os.setsid)
+                                  preexec_fn=pre_exec_function)
         except OSError as e:
             raise ExtensionError("Failed to launch '{0}': {1}".format(full_path, e.strerror))
 
-        cg = CGroups.add_to_extension_cgroup(self.ext_handler.name, pid=process.pid)
+        cg = CGroups.for_extension(self.ext_handler.name)
         CGroupsTelemetry.track_extension(self.ext_handler.name, cg)
         msg = capture_from_process(process, cmd, timeout)
 
