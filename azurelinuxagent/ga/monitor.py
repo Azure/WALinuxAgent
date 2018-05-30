@@ -231,7 +231,7 @@ class MonitorHandler(object):
         heartbeat_id = str(uuid.uuid4()).upper()
         protocol = self.protocol_util.get_protocol()
         host_plugin_errorstate = ErrorState(min_timedelta=MonitorHandler.HOST_PLUGIN_HEALTH_PERIOD)
-        health_service = HealthService()
+        health_service = HealthService(protocol.endpoint)
 
         while True:
             last_telemetry_heartbeat = self.send_telemetry_heartbeat(protocol,
