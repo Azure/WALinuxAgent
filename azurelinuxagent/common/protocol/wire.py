@@ -158,16 +158,15 @@ class WireProtocol(Protocol):
         logger.verbose("Get In-VM Artifacts Profile")
         return self.client.get_artifacts_profile()
 
-    def download_ext_handler_pkg(self, uri, headers=None):
-        package = super(WireProtocol, self).download_ext_handler_pkg(uri)
+    def download_ext_handler_pkg(self, uri, headers=None, use_proxy=True):
+        package = super(WireProtocol, self).download_ext_handler_pkg(uri, use_proxy=use_proxy)
 
-        if package is not None:
-            return package
-        else:
+        if package is None:
             logger.verbose("Download did not succeed, falling back to host plugin")
             host = self.client.get_host_plugin()
             uri, headers = host.get_artifact_request(uri, host.manifest_uri)
             package = super(WireProtocol, self).download_ext_handler_pkg(uri, headers=headers, use_proxy=False)
+
         return package
 
     def report_provision_status(self, provision_status):
