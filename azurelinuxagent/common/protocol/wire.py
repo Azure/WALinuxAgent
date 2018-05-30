@@ -614,7 +614,7 @@ class WireClient(object):
                     logger.verbose("Using host plugin as default channel")
                 else:
                     logger.verbose("Failed to download manifest, "
-                                        "switching to host plugin")
+                                   "switching to host plugin")
 
                 try:
                     host = self.get_host_plugin()
@@ -1132,7 +1132,7 @@ class WireClient(object):
                             logger.verbose("Using host plugin as default channel")
                         else:
                             logger.verbose("Failed to download artifacts profile, "
-                                                "switching to host plugin")
+                                           "switching to host plugin")
 
                         host = self.get_host_plugin()
                         uri, headers = host.get_artifact_request(blob)

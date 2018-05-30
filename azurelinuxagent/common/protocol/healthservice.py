@@ -90,15 +90,17 @@ class HealthService(object):
                                              value=response))
         self.report()
 
-    def report_host_plugin_extension_artifact(self, is_healthy, response):
+    def report_host_plugin_extension_artifact(self, is_healthy, source, response):
         """
         Reports a signal for /extensionArtifact
         :param is_healthy: whether the api call succeeded
+        :param source: specifies the api caller for debugging failures
         :param response: debugging information for failures
         :return:
         """
         self.observations.append(Observation(name=HealthService.HOST_PLUGIN_ARTIFACT_OBSERVATION_NAME,
                                              is_healthy=is_healthy,
+                                             description=source,
                                              value=response))
         self.report()
 
