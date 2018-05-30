@@ -212,14 +212,18 @@ class MonitorHandler(object):
         last_heartbeat = datetime.datetime.utcnow() - period
 
         # performance counters
-        collection_period = datetime.timedelta(minutes=5)
-        last_collection = datetime.datetime.utcnow() - collection_period
+
         # Track metrics for the roll-up cgroup and for the agent cgroup
         CGroupsTelemetry.track_cgroup(CGroups.for_extension(""))
         if CGroups.is_systemd_manager():
             CGroupsTelemetry.track_systemd_service(AGENT_NAME)
         else:
             CGroupsTelemetry.track_cgroup(CGroups.for_extension(AGENT_NAME))
+
+        # Deliberately wait to collect data until some time has passed to avoid glitching the first sample.
+        # If the agent is restarted, we "lose" the usage between the last collected sample and the time of restart.
+        collection_period = datetime.timedelta(minutes=5)
+        last_collection = datetime.datetime.utcnow()
 
         # Create a new identifier on each restart and reset the counter
         heartbeat_id = str(uuid.uuid4()).upper()

@@ -64,8 +64,8 @@ class Cpu(object):
         self.cgt = cgt
         self.current_cpu_total = 0
         self.previous_cpu_total = 0
-        self.current_system_cpu = 0
-        self.previous_system_cpu = 0
+        self.current_system_cpu = self.get_current_cpu_total()
+        self.previous_system_cpu = Cpu.get_current_system_cpu()
 
     def get_current_cpu_total(self):
         """
