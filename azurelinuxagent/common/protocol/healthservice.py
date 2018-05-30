@@ -96,6 +96,9 @@ class HealthService(object):
     def report(self):
         logger.verbose('HealthService: report observations')
         try:
+            # TODO: debugging
+            logger.info("{0}", self.as_json)
+
             restutil.http_post(self.endpoint, self.as_json, headers={'Content-Type': 'application/json'})
             logger.verbose('HealthService: Reported observations to {0}: {1}', self.endpoint, self.as_json)
         except HttpError as e:
