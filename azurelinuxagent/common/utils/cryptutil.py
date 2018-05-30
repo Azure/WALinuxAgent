@@ -19,6 +19,7 @@
 
 import base64
 import struct
+import sys
 import os.path
 import subprocess
 
@@ -26,7 +27,8 @@ from azurelinuxagent.common.future import ustr, bytebuffer
 from azurelinuxagent.common.exception import CryptError
 
 import azurelinuxagent.common.logger as logger
-import azurelinuxagent.common.utils.shellutil as shellutil 
+import azurelinuxagent.common.utils.shellutil as shellutil
+import azurelinuxagent.common.utils.textutil as textutil
 
 class CryptUtil(object):
     def __init__(self, openssl_cmd):
@@ -73,16 +75,14 @@ class CryptUtil(object):
         if rc != 0:
             logger.error("Failed to decrypt {0}".format(p7m_file))
     
-    def decrypt_encrypted_file(self, privateKey, encryptedFile):
-        cmd = "{0} cms -decrypt -inform DER -inkey {1} -in {2}".format(self.openssl_cmd, privateKey, encryptedFile)
-        output = shellutil.run_get_output(cmd)
-        if output[0] != 0:
-            msg = "Error decrypting file {0}".format(output[1])
+    def decrypt_encrypted_file(self, private_key, encryptedFile):
+        cmd = "{0} cms -decrypt -inform DER -inkey {1} -in {2}".format(self.openssl_cmd, private_key, encryptedFile)
+        rc, output = shellutil.run_get_output(cmd)
+        if rc != 0:
+            msg = "Error decrypting file {0}".format(output)
             logger.error(msg)
             raise CryptError(msg)
-        #return output[1].decode('utf8').replace("\0", "")
-        #TODO: find a better way to clean up the response.
-        return output[1].replace("\0", "").strip()
+        return output
 
     def crt_to_ssh(self, input_file, output_file):
         shellutil.run("ssh-keygen -i -m PKCS8 -f {0} >> {1}".format(input_file,
@@ -140,18 +140,14 @@ class CryptUtil(object):
                 curr = 0
                 index = 7
         return bytes(byte_array)
-
-    def decodeBase64ToFile(self, cacheFile, base64str):
-        with open(cacheFile, "wb") as c:
-            c.write(base64.b64decode(base64str))
-            #c.write(base64.decodestring(base64str))
     
-    def decryptSecret(self, encryptedPassword, privateKey, cacheFile):
-        try:            
-            self.decodeBase64ToFile(cacheFile, encryptedPassword)
-            decryptedSecret = self.decrypt_encrypted_file(privateKey, cacheFile)
-            return decryptedSecret
+    def decrypt_secret(self, encrypted_password, private_key, cache_file, encoding='utf-8'):
+        try:
+            decoded = textutil.b64decode(encrypted_password, encoding)
+            with open(cache_file, "wb") as c:
+                c.write(decoded)
+            decrypted_secret = self.decrypt_encrypted_file(private_key, cache_file)
+            return decrypted_secret
         finally:
-            if (os.path.isfile(cacheFile)):
-                os.remove(cacheFile)    
-
+            if os.path.isfile(cache_file):
+                os.remove(cache_file)   

@@ -3300,87 +3300,6 @@ class Certificates(object):
             filename = str(index) + ".prv"
         return self
 
-
-class RemoteAccess(object):
-    """
-    Parse goal state config related to the Remote Access.
-    """
-    #
-    # <RemoteAccess>
-    #   <Version/>
-    #   <Incarnation/>
-    #    <Users>
-    #       <User>
-    #         <Name/>
-    #         <Password/>
-    #         <Expiration/>
-    #         <Groups>
-    #           <GroupName/>
-    #           ...
-    #         </Groups>
-    #       </User>
-    #     </Users>
-    #   </RemoteAccess>
-    #
-
-    def __init(self):
-        self.reinitialize()
-
-    def reinitialize(self):
-        """
-        Reset members.
-        """
-        self.Incarnation = None
-        self.Users = []
-        self.xmlText = None
-    
-    def Parse(self, xmlText):
-        """
-        Parse Remote Access configuration.
-        """
-        LogIfVerbose(xmlText)
-        self.reinitialize()
-        self.xmlText = xmlText
-        dom = xml.dom.minidom.parseString(xmlText)
-        node = dom.childNodes[0]
-        if node.localName != "RemoteAccess":
-            Error("RemoteAccess.Parse: root not RemoteAccess")
-
-        incarnationNodes = dom.childNodes.getElementsByTagName("Incarnation")
-        if incarnationNodes is None or len(incarnationNodes) == 0:
-            Error("RemoteAccess.Parse: Incarnation not specified")
-        else:
-            self.Incarnation = incarnationNodes[0].data
-
-        userNodes = dom.childNodes.getElementsByTagName("User")
-        if userNodes is None or len(userNodes) == 0:
-            return self
-        for userNode in userNodes:
-            userAccount = UserAccount()
-            userAccount.Name = userNode.childNodes.getElementsByTagName("Name")[0].data
-            userAccount.EncryptedPassword = userNode.childNodes.getElementsByTagName("Password")[0].data
-            userAccount.Expiration = userNode.childNodes.getElementsByTagName("Expiration")[0].data
-            groupNodes = userNode.childNodes.getElementsByTagname("GroupName")
-            if groupNodes is not None and len(groupNodes) != 0:
-                for groupNode in groupNodes:
-                    userAccount.Groups.append(groupNode.data)
-            self.Users.append(userAccount)
-        return self
-
-    #def Process(self):
-        ##TODO: Process RemoteAccess
-
-
-class UserAccount(object):
-    """
-    Stores information about single user account
-    """
-    def __init__(self):
-        self.Name = None
-        self.EncryptedPassword = None
-        self.Expiration = None
-        self.Groups = []
-
 class SharedConfig(object):
     """
     Parse role endpoint server and goal state config.
@@ -4407,7 +4326,6 @@ class GoalState(Util):
     self.SharedConfig
     self.ExtensionsConfig
     self.Certificates
-    self.RemoteAccess
     """
     #
     # <GoalState xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="goalstate10.xsd">
@@ -4421,7 +4339,6 @@ class GoalState(Util):
     #   </Machine>
     #   <Container>
     #     <ContainerId>c6d5526c-5ac2-4200-b6e2-56f2b70c5ab2</ContainerId>
-    #     <RemoteAccessInfo>http://10.115.153.40:80/machine/c6d5526c-5ac2-4200-b6e2-56f2b70c5ab2/?comp=remoteaccessinfo&incarnation=1</RemoteAccessInfo>
     #     <RoleInstanceList>
     #       <RoleInstance>
     #         <InstanceId>MachineRole_IN_0</InstanceId>
@@ -4432,6 +4349,7 @@ class GoalState(Util):
     #           <Certificates>http://10.115.153.40:80/machine/c6d5526c-5ac2-4200-b6e2-56f2b70c5ab2/MachineRole%5FIN%5F0?comp=certificates&amp;incarnation=1</Certificates>
     #          <ExtensionsConfig>http://100.67.238.230:80/machine/9c87aa94-3bda-45e3-b2b7-0eb0fca7baff/1552dd64dc254e6884f8d5b8b68aa18f.eg%2Dplug%2Dvm?comp=config&amp;type=extensionsConfig&amp;incarnation=2</ExtensionsConfig>
     #         <FullConfig>http://100.67.238.230:80/machine/9c87aa94-3bda-45e3-b2b7-0eb0fca7baff/1552dd64dc254e6884f8d5b8b68aa18f.eg%2Dplug%2Dvm?comp=config&amp;type=fullConfig&amp;incarnation=2</FullConfig>
+
     #         </Configuration>
     #       </RoleInstance>
     #     </RoleInstanceList>
@@ -4463,9 +4381,6 @@ class GoalState(Util):
         self.CertificatesUrl = None
         self.CertificatesXml = None
         self.Certificates = None
-        self.RemoteAccessUrl = None
-        self.RemoteAccessXml = None
-        self.RemoteAccess = None
         self.ExtensionsConfigUrl = None
         self.ExtensionsConfigXml = None
         self.ExtensionsConfig = None
@@ -4481,7 +4396,6 @@ class GoalState(Util):
         Calls SharedConfig().Parse
         Calls ExtensionsConfig().Parse
         Calls HostingEnvironmentConfig().Parse
-        Calls RemoteAccess().Parse
         """
         self.reinitialize()
         LogIfVerbose(xmlText)
@@ -4543,12 +4457,6 @@ class GoalState(Util):
                                                                 LogIfVerbose("CertificatesUrl:" + self.CertificatesUrl)
                                                                 self.CertificatesXml = self.HttpSecureGetWithHeaders(self.CertificatesUrl, self.TransportCert)
                                                                 self.Certificates = Certificates().Parse(self.CertificatesXml)
-                            elif b.localName == "RemoteAccessInfo":
-                                self.RemoteAccessInfoUrl = GetNodeTextData(b)
-                                LogIfVerbose("RemoteAccessInfoUrl:" + self.RemoteAccessInfoUrl)
-                                if self.RemoteAccessInfoUrl != None:
-                                    self.RemoteAccessInfoXml = self.HttpSecureGetWithHeaders(self.RemoteAccessInfoUrl, self.TransportCert)
-                                    self.RemoteAccess = RemoteAccess().Parse(self.RemoteAccessInfoXml)
         if self.Incarnation == None:
             Error("GoalState.Parse: Incarnation missing")
             return None
@@ -4571,7 +4479,6 @@ class GoalState(Util):
         LogIfVerbose("Process goalstate")
         self.HostingEnvironmentConfig.Process()
         self.SharedConfig.Process()
-        self.RemoteAccess.Process()
         
 class OvfEnv(object):
     """
@@ -5444,7 +5351,7 @@ class Agent(Util):
 
     def UpdateGoalState(self):
         """
-        Retrieve goal state information from endpoint server.
+        Retreive goal state information from endpoint server.
         Parse xml and initialize Agent.GoalState object.
         Return object or None on error.
         """

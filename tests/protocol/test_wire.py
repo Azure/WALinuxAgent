@@ -60,22 +60,6 @@ class TestWireProtocol(AgentTestCase):
 
             self.assertEqual("1", protocol.get_incarnation())
 
-    def test_serialize_users(self, mock_cryptutil, mock_sleep):
-        users = None
-        expected = ''
-        actual = serialize_users(users)
-        self.assertEqual(expected, actual)
-
-        users = []
-        actual = serialize_users(users)
-        self.assertEqual(expected, actual)
-
-        user1 = ["testUser1", None, "2030-12-12, None"]
-        users.append(user1)
-        expected = '<User>testUser1</User>'
-        actual = serialize_users(users)
-        self.assertEqual(expected, actual)
-
     def test_getters(self, *args):
         """Normal case"""
         test_data = WireProtocolData(DATA_FILE)

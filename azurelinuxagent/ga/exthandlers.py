@@ -30,7 +30,7 @@ import stat
 import subprocess
 import textwrap
 import time
-import traceback 
+import traceback
 import zipfile
 
 import azurelinuxagent.common.conf as conf
@@ -187,15 +187,12 @@ def get_exthandlers_handler():
 class ExtHandlersHandler(object):
     def __init__(self):
         self.protocol_util = get_protocol_util()
-        self.protocol = self.protocol_util.get_protocol()
         self.ext_handlers = None
-        # self.remote_access = None
         self.last_etag = None
         self.last_upgrade_guids = {}
         self.log_report = False
         self.log_etag = True
         self.log_process = False
-        self.osUtil = get_osutil()
         self.cryptUtil = CryptUtil(conf.get_openssl_cmd())
         self.report_status_error_state = ErrorState()
         self.get_artifact_error_state = ErrorState(min_timedelta=ERROR_STATE_DELTA_INSTALL)
@@ -203,6 +200,7 @@ class ExtHandlersHandler(object):
     def run(self):
         self.ext_handlers, etag = None, None
         try:
+            self.protocol = self.protocol_util.get_protocol()
             self.ext_handlers, etag = self.protocol.get_ext_handlers()
             self.get_artifact_error_state.reset()
 
@@ -319,52 +317,11 @@ class ExtHandlersHandler(object):
             if os.path.isfile(pkg):
                 try:
                     os.remove(pkg)
-                    logger.verbose("Removed extension package "
-                                "{0}".format(pkg))
-                except Exception as e:
-                    logger.warn("Failed to remove extension package: "
-                                "{0}".format(pkg))
+                    logger.verbose("Removed extension package {0}".format(pkg))
+                except OSError as e:
+                    logger.warn("Failed to remove extension package {0}: {1}".format(pkg, e.strerror))
     
-    #TODO: Why is this here with extension handlers... this doesn't seem right.
-    def handle_remote_access(self):
-        logger.verbose("Entered handle_remote_access")
-        self.protocol.client.update_goal_state(True)
-        self.protocol.client.update_remote_access_conf(self.protocol.client.goal_state)
-        remote_access = self.protocol.client.remote_access
-        if remote_access is not None:
-            # Get existing users.
-            osUtils = get_osutil()
-            existingUsers = osUtils.getusers()
-            userNames = []
-            for usr in existingUsers:
-                userNames.append(usr[0])            
-            for acc in remote_access.Users:
-                try:
-                    dateTimeString = acc.Expiration
-                    accExp = datetime.strptime(dateTimeString, "%a, %d %b %Y %H:%M:%S %Z") + timedelta(days=1)
-                    now = datetime.utcnow()
-                    if acc.Name not in userNames and now < accExp :
-                        logger.verbose("Adding user {0} with expiration {1}".format(acc.Name, acc.Expiration))
-                        expirationString = accExp.strftime("%Y-%m-%d")
-                        osUtils.useradd(acc.Name, expirationString)
-                        cachefile = os.path.join(conf.get_lib_dir(), "temp.dat")
-                        prvKey = os.path.join(conf.get_lib_dir(), "TransportPrivate.pem")
-                        pwd = self.cryptUtil.decryptSecret(acc.EncryptedPassword, prvKey, cachefile)   
-                        osUtils.chpasswd(acc.Name, pwd, conf.get_password_cryptid(), conf.get_password_crypt_salt_len())
-                        osUtils.conf_sudoer(acc.Name)
-                        logger.info("User '{0}' added successfully".format(acc.Name))
-                except Exception as e:
-                    #TODO: Better error handling and cap to retry logic.
-                    logger.error("handle_remote_access: {0}".format(str(e)))
-        else:
-            logger.verbose("handle_remote_access remote_access is null")
-    
-    def addUser(self):
-        pass
-    
-    def removeUser(self):
-        pass
-    
+        
     def handle_ext_handlers(self, etag=None):
         if self.ext_handlers.extHandlers is None or \
                 len(self.ext_handlers.extHandlers) == 0:

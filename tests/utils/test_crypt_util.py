@@ -33,99 +33,89 @@ from tests.tools import *
 
 class TestCryptoUtilOperations(AgentTestCase):
 
-    privateKeySuffix = "PrvTEST.pem"
-    publicKeySuffix = "PubTEST.pem"
-    encryptedCacheFile = None
-
-    def encryptString(self, secret, pubKey):
-        self.encryptedCacheFile = os.path.join(self.tmp_dir, "encrypted.enc")
-        cmd = "echo {0} | openssl smime -encrypt -binary -des -out {2} -outform DER {1}".format(secret, pubKey, self.encryptedCacheFile)
+    def encrypt_string(self, secret, pubKey, cache_file=None):
+        if cache_file is None:
+            cache_file = os.path.join(self.tmp_dir, "encrypted.enc")
+        cmd = "echo -n {0} | openssl smime -encrypt -binary -des -out {2} -outform DER {1}".format(secret, pubKey, cache_file)
         shellutil.run_get_output(cmd)
 
         try:
-            with open(self.encryptedCacheFile, "rb") as data:
-                encryptedText = base64.b64encode(data.read())
+            with open(cache_file, "rb") as data:
+                encrypted_text = base64.b64encode(data.read())
         except Exception as e:
             self.fail("Failed to encrypt string.  This should be a test only error. {0}".format(str(e)))
-            pass
-        return encryptedText
-
+        return encrypted_text
     
-    def createKeys(self, baseKeyName):
-        privateKey = os.path.join(self.tmp_dir, "{0}{1}".format(baseKeyName, self.privateKeySuffix))
-        publicKey = os.path.join(self.tmp_dir, "{0}{1}".format(baseKeyName, self.publicKeySuffix))
-        cert = os.path.join(self.tmp_dir, "{0}{1}".format(baseKeyName, ".cert"))
+    def create_keys(self, private_key=None, public_key=None, cert=None):
+        if private_key is None:
+            private_key = os.path.join(self.tmp_dir, "TransportPrivate.pem")
+        if public_key is None:
+            public_key = os.path.join(self.tmp_dir, "TransportPublic.pem")
+        if cert is None:
+            cert = os.path.join(self.tmp_dir, "Transport.cert")
         try:
-            cryptutl = CryptUtil(conf.get_openssl_cmd())
-            cryptutl.gen_transport_cert(privateKey, cert)
-            pubKeyText = cryptutl.get_pubkey_from_prv(privateKey)
-            with open(publicKey, "w") as pk:
-                pk.write(pubKeyText)
+            crypto = CryptUtil(conf.get_openssl_cmd())
+            crypto.gen_transport_cert(private_key, cert)
+            pub_key_text = crypto.get_pubkey_from_prv(private_key)
+            with open(public_key, "w") as pk:
+                pk.write(pub_key_text)
         except Exception as e:
             self.fail("Error creating keys.  Test setup error.  {0}".format(str(e)))
 
-        return privateKey, publicKey, cert
+        return private_key, public_key, cert
 
     def test_decrypt_encrypted_text(self):
-        baseKeyName = "test"
+        base_key_name = "test"
         secret = "abc@123"
-        keys = self.createKeys(baseKeyName)
-        prvKey = keys[0]
-        cert = keys[2]
-        encryptedString = self.encryptString(secret, cert)
+        prv_key, pub_key, cert = self.create_keys()
+        encrypted_string = self.encrypt_string(secret, cert)
 
         crypto = CryptUtil(conf.get_openssl_cmd())
-        decryptedString = crypto.decryptSecret(encryptedString, prvKey, "temp.dat")
-        self.assertEquals(secret, decryptedString, "decrypted string does not match expected")
+        decrypted_string = crypto.decrypt_secret(encrypted_string, prv_key, "pwd.dat", None)
+        self.assertEquals(secret, decrypted_string, "decrypted string does not match expected")
 
     def test_decrypt_encrypted_text_missing_private_key(self):
-        baseKeyName = "test"
+        base_key_name = "test"
         secret = "abc@123"
-        keys = self.createKeys(baseKeyName)
-        prvKey = keys[0]
-        cert = keys[2]
-        encryptedString = self.encryptString(secret, cert)
+        prv_key, pub_key, cert = self.create_keys()
+        encrypted_string = self.encrypt_string(secret, cert)
 
         crypto = CryptUtil(conf.get_openssl_cmd())
         try:
-            crypto.decryptSecret(encryptedString, "abc" + prvKey, "temp.dat")
+            crypto.decrypt_secret(encrypted_string, "abc" + prv_key, "pwd.dat", None)
         except CryptError as e:
             self.assertTrue(("Error opening signing key file" in str(e)), "Expected exception not found.")
             return
         self.fail("Expected Excetpion, but none returned.")
     
     def test_decrypt_encrypted_text_wrong_private_key(self):
-        baseKeyName = "test"
+        base_key_name = "test"
         secret = "abc@123"
-        keys = self.createKeys(baseKeyName)
-        prvKey = keys[0]
-        cert = keys[2]
-        encryptedString = self.encryptString(secret, cert)
-        keys2 = self.createKeys("wrong" + baseKeyName)
-        w_prvKey = keys2[0]
-        w_cert = keys2[2]
+        prv_key, pub_key, cert = self.create_keys()
+        encrypted_string = self.encrypt_string(secret, cert)
+        w_prv = os.path.join(self.tmp_dir, "wrong_private_key.pem")
+        w_pub = os.path.join(self.tmp_dir, "wrong_public_key.pem")
+        w_cert = os.path.join(self.tmp_dir, "wrong_cert.cert")
+        w_prv_key, w_pub_key, w_cert = self.create_keys(w_prv, w_pub, w_cert)
         crypto = CryptUtil(conf.get_openssl_cmd())
         try:
-            crypto.decryptSecret(encryptedString, w_prvKey, "temp.dat")
+            crypto.decrypt_secret(encrypted_string, w_prv_key, "pwd.dat", None)
         except CryptError as e:
             self.assertTrue(("Error decrypting file" in str(e)), "Expected exception not found. {0}".format(str(e)))
             return
         self.fail("Expected Excetpion, but none returned.")
 
     def test_decrypt_encrypted_text_text_not_encrypted(self):
-        baseKeyName = "test"
-        secret = "abc@123"
-        keys = self.createKeys(baseKeyName)
-        prvKey = keys[0]
-        cert = keys[2]
-        encryptedString = "abc@123"        
+        base_key_name = "test"
+        prv_key, pub_key, cert = self.create_keys()
+        encrypted_string = "abc@123"        
         crypto = CryptUtil(conf.get_openssl_cmd())
         try:
-            crypto.decryptSecret(encryptedString, prvKey, "temp.dat")
+            crypto.decrypt_secret(encrypted_string, prv_key, "pwd.dat", None)
         except Exception as e:
             self.assertTrue(("Incorrect padding" in str(e)), "Expected exception not found. {0}".format(str(e)))
             return
-        self.fail("Expected Excetpion, but none returned.")
+        self.fail("Expected Exception, but none returned.")
 
 if __name__ == '__main__':
     unittest.main()

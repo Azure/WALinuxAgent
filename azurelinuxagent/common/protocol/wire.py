@@ -153,14 +153,6 @@ class WireProtocol(Protocol):
         # In wire protocol, incarnation is equivalent to ETag
         return ext_conf.ext_handlers, goal_state.incarnation
 
-    # def get_remote_access(self):
-    #     logger.verbose("Get remote access config")
-    #     # Update goal state to get latest remote access config
-    #     self.update_goal_state()
-    #     self.client.get_goal_state()
-    #     remote_access = self.client.get_remote_access_conf()
-    #     return remote_access
-
     def get_ext_handler_pkgs(self, ext_handler):
         logger.verbose("Get extension handler package")
         goal_state = self.client.get_goal_state()
@@ -227,11 +219,10 @@ def _build_role_properties(container_id, role_instance_id, thumbprint):
 
 
 def _build_health_report(incarnation, container_id, role_instance_id,
-                         status, substatus, description, users):
+                         status, substatus, description):
     # Escape '&', '<' and '>'
     description = saxutils.escape(ustr(description))
     detail = u''
-    users_element = serialize_users(users)
     if substatus is not None:
         substatus = saxutils.escape(ustr(substatus))
         detail = (u"<Details>"
@@ -245,13 +236,12 @@ def _build_health_report(incarnation, container_id, role_instance_id,
            u"<GoalStateIncarnation>{0}</GoalStateIncarnation>"
            u"<Container>"
            u"<ContainerId>{1}</ContainerId>"
-           u"<Users>{5}</Users>"
            u"<RoleInstanceList>"
            u"<Role>"
-           u"<InstanceId>{2}</InstanceId>"
+           u"<InstanceId>{3}</InstanceId>"
            u"<Health>"
-           u"<State>{3}</State>"
-           u"{4}"
+           u"<State>{4}</State>"
+           u"{5}"
            u"</Health>"
            u"</Role>"
            u"</RoleInstanceList>"
@@ -261,16 +251,7 @@ def _build_health_report(incarnation, container_id, role_instance_id,
                        container_id,
                        role_instance_id,
                        status,
-                       detail,
-                       users_element)
-    return xml
-
-
-def serialize_users(users):
-    xml = ''
-    if users is not None and len(users) != 0:
-        for user in users:
-            xml = xml + '<User>' + user[0] + '</User>'
+                       detail)
     return xml
 
 
@@ -723,14 +704,20 @@ class WireClient(object):
         self.certs = Certificates(self, xml_text)
 
     def update_remote_access_conf(self, goal_state):
-        if goal_state.remote_access_uri is not None:            
-            xml_text = self.fetch_config(goal_state.remote_access_uri, self.get_header_for_cert())
-        else:
-            logger.verbose("{0}: remote access uri is empty.".format(sys._getframe().f_code.co_name))
-            xml_text = ""
+        if goal_state.remote_access_uri is None:
+            raise ProtocolError("RemoteAccess uri is empty")
         local_file = os.path.join(conf.get_lib_dir(), REMOTE_ACCESS_FILE_NAME)
+        xml_text = self.fetch_config(goal_state.remote_access_uri, 
+                                     self.get_header_for_cert())
         self.save_cache(local_file, xml_text)
         self.remote_access = RemoteAccess(xml_text)
+
+        # xml_text = ""
+        # if goal_state.remote_access_uri is not None:            
+        #     xml_text = self.fetch_config(goal_state.remote_access_uri, self.get_header_for_cert())
+        # local_file = os.path.join(conf.get_lib_dir(), REMOTE_ACCESS_FILE_NAME)
+        # self.save_cache(local_file, xml_text)
+        # self.remote_access = RemoteAccess(xml_text)
 
     def update_ext_conf(self, goal_state):
         if goal_state.ext_uri is None:
@@ -765,8 +752,7 @@ class WireClient(object):
                         if last_incarnation is not None and \
                                         last_incarnation == new_incarnation:
                             # Goalstate is not updated.
-                            return
-                
+                            return                
                 self.goal_state_flusher.flush(datetime.utcnow())
 
                 self.goal_state = goal_state
@@ -850,27 +836,7 @@ class WireClient(object):
                 local_file = os.path.join(conf.get_lib_dir(), local_file)
                 xml_text = self.fetch_cache(local_file)
                 self.ext_conf = ExtensionsConfig(xml_text)
-        return self.ext_conf
-
-    # def get_remote_access_conf(self):
-    #     if self.remote_access is None:
-    #         goal_state = self.get_goal_state()
-    #         self.update_remote_access_conf(goal_state)
-    #         # TODO: if the URI exists, why are we reading from local cache 
-    #         # and it it doesn't exist we don't read from the cache file?
-    #         if goal_state.remote_access_uri is None:
-    #             logger.verbose("Remote access uri not present in the goal state")
-    #             self.remote_access = RemoteAccess(None)
-    #         else:
-    #             local_file = REMOTE_ACCESS_FILE_NAME
-    #             local_file = os.path.join(conf.get_lib_dir(), local_file)
-    #             xml_text = self.fetch_cache(local_file)
-    #             self.remote_access = RemoteAccess(xml_text)
-    #     return self.remote_access
-
-    def get_local_users(self):
-        osutil = get_osutil()
-        return osutil.getusers()        
+        return self.ext_conf      
 
     def get_ext_manifest(self, ext_handler, goal_state):
         for update_goal_state in [False, True]:
@@ -1079,14 +1045,12 @@ class WireClient(object):
 
     def report_health(self, status, substatus, description):
         goal_state = self.get_goal_state()
-        users = self.get_local_users()
         health_report = _build_health_report(goal_state.incarnation,
                                              goal_state.container_id,
                                              goal_state.role_instance_id,
                                              status,
                                              substatus,
-                                             description,
-                                             users)
+                                             description)
         health_report = health_report.encode("utf-8")
         health_report_uri = HEALTH_REPORT_URI.format(self.endpoint)
         headers = self.get_header_for_xml_content()
@@ -1274,7 +1238,7 @@ class GoalState(object):
     def __init__(self, xml_text):
         if xml_text is None:
             raise ValueError("GoalState.xml is None")
-        logger.verbose("------Load GoalState.xml")
+        logger.verbose("Load GoalState.xml")
         self.incarnation = None
         self.expected_state = None
         self.hosting_env_uri = None
@@ -1374,10 +1338,6 @@ class RemoteAccess(object):
     #         <Name/>
     #         <Password/>
     #         <Expiration/>
-    #         <Groups>
-    #           <GroupName/>
-    #           ...
-    #         </Groups>
     #       </User>
     #     </Users>
     #   </RemoteAccess>
@@ -1385,10 +1345,12 @@ class RemoteAccess(object):
 
     def __init__(self, xml_text):
         logger.verbose("Load RemoteAccess.xml")
-        self.Users = []
-        self.Incarnation = None
-        if xml_text is not None:
-            self.parse(xml_text)
+        self.version = None
+        self.incarnation = None
+        self.user_list = RemoteAccessUsersList()
+
+        self.xml_text = None
+        self.parse(xml_text)
 
     def parse(self, xml_text):
         """
@@ -1396,32 +1358,24 @@ class RemoteAccess(object):
         """
         if xml_text is None or len(xml_text) == 0:
             return self
-        dom = parse_doc(xml_text)
-        root = dom.childNodes[0]
-        if root.localName != "RemoteAccess":
-            logger.error("RemoteAccess.Parse: RemoteAccess not specified")
-            return None
-        incarnation = findtext(root, "Incarnation")
-        if incarnation is None or len(incarnation) == 0:
-            logger.error("RemoteAccess.Parse: Incarnation not specified")
-            return None
-        else:
-            self.Incarnation = int(incarnation)
-        userNodes = findall(root, "User")
-        if userNodes is None or len(userNodes) == 0:
-            return self
-        for userNode in userNodes:
-            userAccount = UserAccount()
-            userAccount.Name = findtext(userNode, "Name")
-            userAccount.EncryptedPassword = findtext(userNode, "Password")            
-            userAccount.Expiration = findtext(userNode, "Expiration")
-            # TODO: I don't think group membership really applies to Linux
-            # groupNodes = find(userNode, "Groups")
-            # if groupNodes is not None:
-            #     for groupNode in findall(groupNodes, "GroupName"):
-            #         userAccount.Groups.append(groupNode.firstChild.nodeValue)
-            self.Users.append(userAccount)
+        self.xml_text = xml_text
+        xml_doc = parse_doc(xml_text)
+        self.incarnation = findtext(xml_doc, "Incarnation")
+        self.version = findtext(xml_doc, "Version")
+        user_collection = find(xml_doc, "Users")
+        users = findall(user_collection, "User")
+
+        for user in users:
+            remote_access_user = self.parse_user(user)
+            self.user_list.users.append(remote_access_user)
         return self
+
+    def parse_user(self, user):
+        name = findtext(user, "Name")
+        encrypted_password = findtext(user, "Password")
+        expiration = findtext(user, "Expiration")
+        remote_access_user = RemoteAccessUser(name, encrypted_password, expiration)
+        return remote_access_user
 
 class UserAccount(object):
     """

@@ -74,6 +74,7 @@ class WALAEventOperation:
     Unknown = "Unknown"
     Upgrade = "Upgrade"
     Update = "Update"
+    HandleRemoteAccess = "RemoteAccessHandling"
 
 
 SHOULD_ENCODE_MESSAGE_LEN = 80

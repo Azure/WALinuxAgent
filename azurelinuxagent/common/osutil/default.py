@@ -43,6 +43,8 @@ from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 
+from pwd import getpwall
+
 __RULES_FILES__ = [ "/lib/udev/rules.d/75-persistent-net-generator.rules",
                     "/etc/udev/rules.d/70-persistent-net.rules" ]
 
@@ -92,6 +94,7 @@ class DefaultOSUtil(object):
         self.agent_conf_file_path = '/etc/waagent.conf'
         self.selinux = None
         self.disable_route_warning = False
+        self.jit_enabled = True
 
     def get_firewall_dropped_packets(self, dst_ip=None):
         # If a previous attempt failed, do not retry
@@ -331,15 +334,8 @@ class DefaultOSUtil(object):
             return True
         else:
             return False
-    
-    def getusers(self):
-        """
-        Gets all users that can log into the machine
-        """
-        users = [i.split(':') for i in open('/etc/shadow').readlines()]
-        return users
 
-    def useradd(self, username, expiration=None):
+    def useradd(self, username, expiration=None, comment=None):
         """
         Create user account with 'username'
         """
@@ -352,6 +348,9 @@ class DefaultOSUtil(object):
             cmd = "useradd -m {0} -e {1}".format(username, expiration)
         else:
             cmd = "useradd -m {0}".format(username)
+        
+        if comment is not None:
+            cmd += " -c {0}".format(comment)
         retcode, out = shellutil.run_get_output(cmd)
         if retcode != 0:
             raise OSUtilError(("Failed to create user account:{0}, "
@@ -368,6 +367,9 @@ class DefaultOSUtil(object):
         if ret != 0:
             raise OSUtilError(("Failed to set password for {0}: {1}"
                                "").format(username, output))
+    
+    def get_users(self):
+        return getpwall()
 
     def conf_sudoer(self, username, nopasswd=False, remove=False):
         sudoers_dir = conf.get_sudoers_dir()
