@@ -26,7 +26,7 @@ from azurelinuxagent.common.utils import restutil
 
 
 class Observation(object):
-    def __init__(self, name, is_healthy, description, value):
+    def __init__(self, name, is_healthy, description='', value=''):
         self.name = name
         self.is_healthy = is_healthy
         self.description = description
@@ -73,12 +73,10 @@ class HealthService(object):
     def report_host_plugin_heartbeat(self, is_healthy):
         """
         Reports a signal for /health
-        :param is_healthy: whether the call suceeded
+        :param is_healthy: whether the call succeeded
         """
         self.observations.append(Observation(name=HealthService.HOST_PLUGIN_HEARTBEAT_OBSERVATION_NAME,
-                                             is_healthy=is_healthy,
-                                             description='',
-                                             value=''))
+                                             is_healthy=is_healthy))
         self.report()
 
     def report_host_plugin_versions(self, is_healthy, response):
@@ -89,7 +87,18 @@ class HealthService(object):
         """
         self.observations.append(Observation(name=HealthService.HOST_PLUGIN_VERSIONS_OBSERVATION_NAME,
                                              is_healthy=is_healthy,
-                                             description='',
+                                             value=response))
+        self.report()
+
+    def report_host_plugin_extension_artifact(self, is_healthy, response):
+        """
+        Reports a signal for /extensionArtifact
+        :param is_healthy: whether the api call succeeded
+        :param response: debugging information for failures
+        :return:
+        """
+        self.observations.append(Observation(name=HealthService.HOST_PLUGIN_ARTIFACT_OBSERVATION_NAME,
+                                             is_healthy=is_healthy,
                                              value=response))
         self.report()
 
