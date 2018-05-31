@@ -179,6 +179,7 @@ class CGroupsTelemetry(object):
     }
     _hierarchies = _metrics.keys()
     was_tracked = ""
+    delete_empty_groups = False
 
     @staticmethod
     def hierarchies():
@@ -245,6 +246,10 @@ class CGroupsTelemetry(object):
             del (CGroupsTelemetry._tracked[name])
 
     @staticmethod
+    def set_delete_empty_groups(setting):
+        CGroupsTelemetry.delete_empty_groups = setting
+
+    @staticmethod
     def collect_all_tracked():
         """
         Return a dictionary mapping from the name of a tracked cgroup to the list of collected metrics for that cgroup.
@@ -276,10 +281,11 @@ class CGroupsTelemetry(object):
 
         names = []
         for name in CGroupsTelemetry._tracked.keys():
-            if name in not_enabled_extensions:
+            if CGroupsTelemetry.delete_empty_groups and name in not_enabled_extensions:
                 CGroupsTelemetry.stop_tracking(name)
             else:
                 names.append("[{0}]".format(name))
+
         now_tracking = " ".join(names)
         if now_tracking != CGroupsTelemetry.was_tracked:
             if len(now_tracking):
@@ -518,9 +524,9 @@ class CGroups(object):
     def add_to_extension_cgroup(name, pid=int(os.getpid())):
         """
         Create cgroup directories for this extension in each of the hierarchies and add this process to the new cgroup.
-        Should only be called when creating subprocesses and invoked inside the fork/exec window using the preexec_fn
-        mechanism. As a result, there's no point in returning the CGroups object itself; the goal is to move the
-        child process into the new cgroup the new code even starts running.
+        Should only be called when creating sub-processes and invoked inside the fork/exec window. As a result,
+        there's no point in returning the CGroups object itself; the goal is to move the child process into the
+        cgroup before the new code even starts running.
 
         :param str name: Short name of extension, suitable for naming directories in the filesystem
         :param int pid: Process id of extension to be added to the cgroup
@@ -530,11 +536,9 @@ class CGroups(object):
         if name == AGENT_NAME:
             logger.warn('Extension cgroup name cannot match agent cgroup name({0})'.format(AGENT_NAME))
 
-        cg = None
         try:
             logger.info("Move process {0} into cgroups for extension {1}".format(pid, name))
-            cg = CGroups.for_extension(name)
-            cg.add(pid)
+            CGroups.for_extension(name).add(pid)
         except Exception as ex:
             logger.warn("Unable to move process {0} into cgroups for extension {1}: {2}".format(pid, name, ex))
 

@@ -214,11 +214,14 @@ class MonitorHandler(object):
         # performance counters
 
         # Track metrics for the roll-up cgroup and for the agent cgroup
-        CGroupsTelemetry.track_cgroup(CGroups.for_extension(""))
-        if CGroups.is_systemd_manager():
-            CGroupsTelemetry.track_systemd_service(AGENT_NAME)
-        else:
-            CGroupsTelemetry.track_cgroup(CGroups.for_extension(AGENT_NAME))
+        try:
+            CGroupsTelemetry.track_cgroup(CGroups.for_extension(""))
+            if CGroups.is_systemd_manager():
+                CGroupsTelemetry.track_systemd_service(AGENT_NAME)
+            else:
+                CGroupsTelemetry.track_cgroup(CGroups.for_extension(AGENT_NAME))
+        except Exception as e:
+            logger.warn("monitor: Exception tracking wrapper and agent: {0} [{1}]".format(e, traceback.format_exc()))
 
         # Deliberately wait to collect data until some time has passed to avoid glitching the first sample.
         # If the agent is restarted, we "lose" the usage between the last collected sample and the time of restart.
@@ -271,7 +274,7 @@ class MonitorHandler(object):
                             message=msg,
                             log_event=False)
             except Exception as e:
-                logger.warn("Failed to send heartbeat: {0}", e)
+                logger.warn("Failed to send heartbeat: {0} [{1}]".format(e, traceback.format_exc()))
 
             try:
                 # performance counters
@@ -286,8 +289,11 @@ class MonitorHandler(object):
                 logger.warn(traceback.format_exc())
 
             # Look for extension cgroups we're not already tracking and track them
-            ext_handlers_list, incarnation = protocol.get_ext_handlers()
-            CGroupsTelemetry.update_tracked(ext_handlers_list.extHandlers)
+            try:
+                ext_handlers_list, incarnation = protocol.get_ext_handlers()
+                CGroupsTelemetry.update_tracked(ext_handlers_list.extHandlers)
+            except Exception as e:
+                logger.warn("Monitor: updating tracked extensions raised {0}: {1}".format(e, traceback.format_exc()))
 
             try:
                 self.collect_and_send_events()
