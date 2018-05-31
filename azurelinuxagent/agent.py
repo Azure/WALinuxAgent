@@ -129,7 +129,7 @@ class Agent(object):
         """
         Run the update and extension handler
         """
-        logger.set_prefix("Upd/Ext-Handler")
+        logger.set_prefix("ExtHandler")
         from azurelinuxagent.ga.update import get_update_handler
         update_handler = get_update_handler()
         update_handler.run()
