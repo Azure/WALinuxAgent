@@ -52,7 +52,6 @@ RETRY_CODES = [
 ]
 
 RESOURCE_GONE_CODES = [
-    httpclient.BAD_REQUEST,
     httpclient.GONE
 ]
 
