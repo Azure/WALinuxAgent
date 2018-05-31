@@ -155,29 +155,21 @@ class TestWireProtocol(AgentTestCase):
             self.assertEqual(goal_state.role_config_name, host_plugin.role_config_name)
             self.assertEqual(1, patch_get_goal_state.call_count)
 
-    def test_download_ext_handler_pkg_fallback(self, *args):
+    @patch("azurelinuxagent.common.utils.restutil.http_request", side_effect=IOError)
+    @patch("azurelinuxagent.common.protocol.wire.WireClient.get_host_plugin")
+    @patch("azurelinuxagent.common.protocol.hostplugin.HostPluginProtocol.get_artifact_request")
+    def test_download_ext_handler_pkg_fallback(self, patch_request, patch_get_host, patch_http, *args):
         ext_uri = 'extension_uri'
         host_uri = 'host_uri'
-        mock_host = HostPluginProtocol(host_uri, 'container_id', 'role_config')
-        with patch.object(restutil,
-                          "http_request",
-                          side_effect=IOError) as patch_http:
-            with patch.object(WireClient,
-                              "get_host_plugin",
-                              return_value=mock_host):
-                with patch.object(HostPluginProtocol,
-                                  "get_artifact_request",
-                                  return_value=[host_uri, {}]) as patch_request:
+        patch_get_host.return_value = HostPluginProtocol(host_uri, 'container_id', 'role_config')
+        patch_request.return_value = [host_uri, {}]
 
-                    WireProtocol(wireserver_url).download_ext_handler_pkg(ext_uri)
+        WireProtocol(wireserver_url).download_ext_handler_pkg(ext_uri)
 
-                    self.assertEqual(patch_http.call_count, 2)
-                    self.assertEqual(patch_request.call_count, 1)
-
-                    self.assertEqual(patch_http.call_args_list[0][0][1],
-                                     ext_uri)
-                    self.assertEqual(patch_http.call_args_list[1][0][1],
-                                     host_uri)
+        self.assertEqual(patch_http.call_count, 2)
+        self.assertEqual(patch_request.call_count, 1)
+        self.assertEqual(patch_http.call_args_list[0][0][1], ext_uri)
+        self.assertEqual(patch_http.call_args_list[1][0][1], host_uri)
 
     def test_upload_status_blob_default(self, *args):
         vmstatus = VMStatus(message="Ready", status="Ready")

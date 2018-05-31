@@ -62,6 +62,12 @@ OK_CODES = [
     httpclient.ACCEPTED
 ]
 
+HOSTPLUGIN_FAILURE_CODES = [
+    500,
+    502,
+    503
+]
+
 THROTTLE_CODES = [
     httpclient.FORBIDDEN,
     httpclient.SERVICE_UNAVAILABLE,
@@ -392,6 +398,10 @@ def request_failed(resp, ok_codes=OK_CODES):
 
 def request_succeeded(resp, ok_codes=OK_CODES):
     return resp is not None and resp.status in ok_codes
+
+
+def request_failed_at_hostplugin(resp, failure_codes=HOSTPLUGIN_FAILURE_CODES):
+    return resp is not None and resp.status in failure_codes
 
 
 def read_response_error(resp):

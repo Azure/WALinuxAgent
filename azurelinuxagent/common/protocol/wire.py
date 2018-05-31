@@ -32,7 +32,8 @@ import azurelinuxagent.common.utils.textutil as textutil
 from azurelinuxagent.common.exception import ProtocolNotFoundError, \
                                             ResourceGoneError
 from azurelinuxagent.common.future import httpclient, bytebuffer
-from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
+from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol, URI_FORMAT_GET_EXTENSION_ARTIFACT, \
+    HOST_PLUGIN_PORT
 from azurelinuxagent.common.protocol.restapi import *
 from azurelinuxagent.common.utils.archive import StateFlusher
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
@@ -159,13 +160,13 @@ class WireProtocol(Protocol):
         return self.client.get_artifacts_profile()
 
     def download_ext_handler_pkg(self, uri, headers=None, use_proxy=True):
-        package = super(WireProtocol, self).download_ext_handler_pkg(uri, use_proxy=use_proxy)
+        package = self.client.fetch(uri, headers=headers, use_proxy=use_proxy, decode=False)
 
         if package is None:
             logger.verbose("Download did not succeed, falling back to host plugin")
             host = self.client.get_host_plugin()
             uri, headers = host.get_artifact_request(uri, host.manifest_uri)
-            package = super(WireProtocol, self).download_ext_handler_pkg(uri, headers=headers, use_proxy=False)
+            package = self.client.fetch(uri, headers=headers, use_proxy=False, decode=False)
 
         return package
 
@@ -637,7 +638,8 @@ class WireClient(object):
 
         raise ProtocolError("Failed to fetch manifest from all sources")
 
-    def fetch(self, uri, headers=None, use_proxy=None):
+    def fetch(self, uri, headers=None, use_proxy=None, decode=True):
+        content = None
         logger.verbose("Fetch [{0}] with headers [{1}]", uri, headers)
         try:
             resp = self.call_storage_service(
@@ -647,21 +649,36 @@ class WireClient(object):
                         use_proxy=use_proxy)
 
             if restutil.request_failed(resp):
-                msg = "[Storage Failed] URI {0} ".format(uri)
-                if resp is not None:
-                    msg += restutil.read_response_error(resp)
+                error_response = restutil.read_response_error(resp)
+                msg = "Fetch failed from [{0}]: {1}".format(uri, error_response)
                 logger.warn(msg)
+
+                self.report_fetch(uri,
+                                  is_healthy=restutil.request_failed_at_hostplugin(resp),
+                                  response=error_response)
+
                 raise ProtocolError(msg)
 
-            return self.decode_config(resp.read())
+            response_content = resp.read()
+            content = self.decode_config(response_content) if decode else response_content
 
-        except (HttpError, ProtocolError) as e:
+            self.report_fetch(uri)
+
+        except (HttpError, ProtocolError, IOError) as e:
             logger.verbose("Fetch failed from [{0}]: {1}", uri, e)
 
             if isinstance(e, ResourceGoneError):
                 raise
 
-        return None
+        return content
+
+    def report_fetch(self, uri, is_healthy=True, source='WireClient', response=''):
+        if uri == URI_FORMAT_GET_EXTENSION_ARTIFACT.format(self.endpoint, HOST_PLUGIN_PORT) \
+                and self.host_plugin is not None \
+                and self.host_plugin.health_service is not None:
+            self.host_plugin.health_service.report_host_plugin_extension_artifact(is_healthy=is_healthy,
+                                                                                  source=source,
+                                                                                  response=response)
 
     def update_hosting_env(self, goal_state):
         if goal_state.hosting_env_uri is None:
