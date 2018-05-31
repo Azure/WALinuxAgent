@@ -104,6 +104,18 @@ class HealthService(object):
                                              value=response))
         self.report()
 
+    def report_host_plugin_status(self, is_healthy, response):
+        """
+        Reports a signal for /status
+        :param is_healthy: whether the api call succeeded
+        :param response: debugging information for failures
+        :return:
+        """
+        self.observations.append(Observation(name=HealthService.HOST_PLUGIN_STATUS_OBSERVATION_NAME,
+                                             is_healthy=is_healthy,
+                                             value=response))
+        self.report()
+
     def report(self):
         logger.verbose('HealthService: report observations')
         try:

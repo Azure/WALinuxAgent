@@ -652,15 +652,15 @@ class WireClient(object):
                 error_response = restutil.read_response_error(resp)
                 msg = "Fetch failed from [{0}]: {1}".format(uri, error_response)
                 logger.warn(msg)
-                self.host_plugin.report_fetch(uri,
-                                              is_healthy=restutil.request_failed_at_hostplugin(resp),
-                                              source='WireClient',
-                                              response=error_response)
+                self.host_plugin.report_fetch_health(uri,
+                                                     is_healthy=restutil.request_failed_at_hostplugin(resp),
+                                                     source='WireClient',
+                                                     response=error_response)
                 raise ProtocolError(msg)
             else:
                 response_content = resp.read()
                 content = self.decode_config(response_content) if decode else response_content
-                self.host_plugin.report_fetch(uri, source='WireClient')
+                self.host_plugin.report_fetch_health(uri, source='WireClient')
 
         except (HttpError, ProtocolError, IOError) as e:
             logger.verbose("Fetch failed from [{0}]: {1}", uri, e)

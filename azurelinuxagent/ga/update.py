@@ -890,7 +890,7 @@ class GuestAgent(object):
                 is_healthy = restutil.request_failed_at_hostplugin(resp)
 
             if self.host is not None:
-                self.host.report_fetch(uri, is_healthy, source='GuestAgent', response=error_response)
+                self.host.report_fetch_health(uri, is_healthy, source='GuestAgent', response=error_response)
 
         except restutil.HttpError as http_error:
             if isinstance(http_error, ResourceGoneError):
