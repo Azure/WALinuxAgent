@@ -145,7 +145,7 @@ class HostPluginProtocol(object):
 
         return url, headers
 
-    def report_fetch(self, uri, is_healthy=True, source='WireClient', response=''):
+    def report_fetch(self, uri, is_healthy=True, source='', response=''):
 
         if uri != URI_FORMAT_GET_EXTENSION_ARTIFACT.format(self.endpoint, HOST_PLUGIN_PORT):
             return

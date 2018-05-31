@@ -654,12 +654,13 @@ class WireClient(object):
                 logger.warn(msg)
                 self.host_plugin.report_fetch(uri,
                                               is_healthy=restutil.request_failed_at_hostplugin(resp),
+                                              source='WireClient',
                                               response=error_response)
                 raise ProtocolError(msg)
             else:
                 response_content = resp.read()
                 content = self.decode_config(response_content) if decode else response_content
-                self.host_plugin.report_fetch(uri)
+                self.host_plugin.report_fetch(uri, source='WireClient')
 
         except (HttpError, ProtocolError, IOError) as e:
             logger.verbose("Fetch failed from [{0}]: {1}", uri, e)

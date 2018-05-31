@@ -85,6 +85,7 @@ READONLY_FILE_GLOBS = [
     "ovf-env.xml"
 ]
 
+
 def get_update_handler():
     return UpdateHandler()
 
@@ -874,6 +875,8 @@ class GuestAgent(object):
     def _fetch(self, uri, headers=None, use_proxy=True):
         package = None
         try:
+            is_healthy = True
+            error_response = ''
             resp = restutil.http_get(uri, use_proxy=use_proxy, headers=headers)
             if restutil.request_succeeded(resp):
                 package = resp.read()
@@ -882,8 +885,13 @@ class GuestAgent(object):
                                     asbin=True)
                 logger.verbose(u"Agent {0} downloaded from {1}", self.name, uri)
             else:
-                logger.verbose("Fetch was unsuccessful [{0}]",
-                               restutil.read_response_error(resp))
+                error_response = restutil.read_response_error(resp)
+                logger.verbose("Fetch was unsuccessful [{0}]", error_response)
+                is_healthy = restutil.request_failed_at_hostplugin(resp)
+
+            if self.host is not None:
+                self.host.report_fetch(uri, is_healthy, source='GuestAgent', response=error_response)
+
         except restutil.HttpError as http_error:
             if isinstance(http_error, ResourceGoneError):
                 raise
