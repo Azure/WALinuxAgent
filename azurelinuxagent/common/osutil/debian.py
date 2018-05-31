@@ -35,6 +35,7 @@ from azurelinuxagent.common.osutil.default import DefaultOSUtil
 class DebianOSUtil(DefaultOSUtil):
     def __init__(self):
         super(DebianOSUtil, self).__init__()
+        self.jit_enabled = True
 
     def restart_ssh_service(self):
         return shellutil.run("systemctl --job-mode=ignore-dependencies try-reload-or-restart ssh", chk_err=False)

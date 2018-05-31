@@ -39,6 +39,7 @@ class OpenBSDOSUtil(DefaultOSUtil):
     def __init__(self):
         super(OpenBSDOSUtil, self).__init__()
         self._scsi_disks_timeout_set = False
+        self.jit_enabled = True
 
     def get_instance_id(self):
         ret, output = shellutil.run_get_output("sysctl -n hw.uuid")

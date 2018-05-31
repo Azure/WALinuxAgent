@@ -712,13 +712,14 @@ class WireClient(object):
         self.save_cache(local_file, xml_text)
         self.remote_access = RemoteAccess(xml_text)
 
-        # xml_text = ""
-        # if goal_state.remote_access_uri is not None:            
-        #     xml_text = self.fetch_config(goal_state.remote_access_uri, self.get_header_for_cert())
-        # local_file = os.path.join(conf.get_lib_dir(), REMOTE_ACCESS_FILE_NAME)
-        # self.save_cache(local_file, xml_text)
-        # self.remote_access = RemoteAccess(xml_text)
-
+    # def update_remote_access_conf(self, goal_state):
+    #     if goal_state.remote_access_uri is None:
+    #         raise ProtocolError("RemoteAccess uri is empty")
+    #     xml_text = self.fetch_config(goal_state.remote_access_uri, self.get_header_for_cert())
+    #     self.remote_access = RemoteAccess(xml_text)
+    #     local_file = os.path.join(conf.get_lib_dir(), REMOTE_ACCESS_FILE_NAME.format(self.remote_access.incarnation))        
+    #     self.save_cache(local_file, xml_text)
+        
     def update_ext_conf(self, goal_state):
         if goal_state.ext_uri is None:
             logger.info("ExtensionsConfig.xml uri is empty")

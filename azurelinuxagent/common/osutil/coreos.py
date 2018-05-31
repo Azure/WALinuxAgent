@@ -38,6 +38,7 @@ class CoreOSUtil(DefaultOSUtil):
         else:
             py_path = self.waagent_path
         os.environ['PYTHONPATH'] = py_path
+        self.jit_enabled = True
 
     def is_sys_user(self, username):
         # User 'core' is not a sysuser.

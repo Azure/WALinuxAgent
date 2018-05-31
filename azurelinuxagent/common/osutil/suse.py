@@ -36,6 +36,7 @@ class SUSE11OSUtil(DefaultOSUtil):
     def __init__(self):
         super(SUSE11OSUtil, self).__init__()
         self.dhclient_name='dhcpcd'
+        self.jit_enabled = True
 
     def set_hostname(self, hostname):
         fileutil.write_file('/etc/HOSTNAME', hostname)

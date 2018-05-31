@@ -25,6 +25,7 @@ class AlpineOSUtil(DefaultOSUtil):
     def __init__(self):
         super(AlpineOSUtil, self).__init__()
         self.agent_conf_file_path = '/etc/waagent.conf'
+        self.jit_enabled = True
 
     def is_dhcp_enabled(self):
         return True

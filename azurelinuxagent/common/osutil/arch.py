@@ -21,6 +21,8 @@ import azurelinuxagent.common.utils.shellutil as shellutil
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
 
 class ArchUtil(DefaultOSUtil):
+    jit_enabled = True
+    
     def is_dhcp_enabled(self):
         return True
 

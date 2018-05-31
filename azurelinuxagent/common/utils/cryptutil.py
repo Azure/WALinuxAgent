@@ -147,7 +147,7 @@ class CryptUtil(object):
             with open(cache_file, "wb") as c:
                 c.write(decoded)
             decrypted_secret = self.decrypt_encrypted_file(private_key, cache_file)
-            return decrypted_secret
+            return decrypted_secret.replace("\0", "")
         finally:
             if os.path.isfile(cache_file):
                 os.remove(cache_file)   

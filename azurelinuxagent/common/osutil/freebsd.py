@@ -53,7 +53,7 @@ class FreeBSDOSUtil(DefaultOSUtil):
         else:
             cmd = "pw useradd {0} -m".format(username)
         if comment is not None:
-            cmd += " -c {0}".format(comment)
+            cmd += " -c '{0}'".format(comment)
         retcode, out = shellutil.run_get_output(cmd)
         if retcode != 0:
             raise OSUtilError(("Failed to create user account:{0}, "

@@ -226,7 +226,6 @@ class ExtHandlersHandler(object):
             # Log status report success on new config
             self.log_report = True
             self.handle_ext_handlers(etag)
-            self.handle_remote_access()
             self.last_etag = etag
 
             self.report_ext_handlers_status()

@@ -24,12 +24,14 @@ import tempfile
 import uuid
 
 from datetime import datetime, timedelta, tzinfo
+from azurelinuxagent.common.protocol import get_protocol_util
 from azurelinuxagent.common.protocol.wire import *
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
-from azurelinuxagent.ga.remoteaccess import RemoteAccessHandler, REMOTE_USR_EXPIRATION_FORMAT
+from azurelinuxagent.ga.remoteaccess import RemoteAccessHandler, REMOTE_USR_EXPIRATION_FORMAT, MAX_TRY_ATTEMPT
 from tests.utils.test_crypt_util import TestCryptoUtilOperations
 from tests.common.osutil.mock_osutil import MockOSUtil
+from tests.protocol.mockwiredata import WireProtocolData, DATA_FILE
 from tests.tools import *
 
 class TestRemoteAccessHandler(AgentTestCase):
@@ -54,7 +56,7 @@ class TestRemoteAccessHandler(AgentTestCase):
         self.assertEqual(actual_user[7], (expiration - datetime.utcnow() + timedelta(days=1)).days)
         self.assertEqual(actual_user[4], "JIT Account")
             
-    def test_remove_user(self):
+    def test_delete_user(self):
         rah = RemoteAccessHandler()
         rah.os_util = MockOSUtil()
         tstpassword = "abc@123"
@@ -65,7 +67,7 @@ class TestRemoteAccessHandler(AgentTestCase):
         os_util = rah.os_util
         os_util.__class__ = MockOSUtil
         self.assertTrue(tstuser in os_util.all_users)
-        rah.remove_user(tstuser)
+        rah.delete_user(tstuser)
         self.assertFalse(tstuser in os_util.all_users)
     
     def test_handle_new_user(self):
@@ -77,8 +79,8 @@ class TestRemoteAccessHandler(AgentTestCase):
         expiration = (datetime.utcnow() + timedelta(days=1)).strftime("%a, %d %b %Y %H:%M:%S ") + "UTC"
         remote_access.user_list.users[0].expiration = expiration
         remote_access.user_list.users[0].encrypted_password = self.encrypt_password(tstpassword)
-
-        rah.handle_remote_access(remote_access)
+        rah.remote_access = remote_access
+        rah.handle_remote_access()
         os_util = rah.os_util
         os_util.__class__ = MockOSUtil
         self.assertTrue(remote_access.user_list.users[0].name in os_util.all_users)
@@ -94,11 +96,23 @@ class TestRemoteAccessHandler(AgentTestCase):
         remote_access = RemoteAccess(data_str)
         expiration = (datetime.utcnow() - timedelta(days=2)).strftime("%a, %d %b %Y %H:%M:%S ") + "UTC"
         remote_access.user_list.users[0].expiration = expiration
-
-        rah.handle_remote_access(remote_access)
+        rah.remote_access = remote_access
+        rah.handle_remote_access()
         os_util = rah.os_util
         os_util.__class__ = MockOSUtil
         self.assertFalse("testAccount" in os_util.all_users)
+
+    def test_error_add_user(self):
+        rah = RemoteAccessHandler()
+        rah.os_util = MockOSUtil()
+        tstuser = "foobar"
+        expiration = datetime.utcnow() + timedelta(days=1)
+        pwd = "bad password"
+        attempts = rah.add_user(tstuser, pwd, expiration, throttle=0)
+        os_util = rah.os_util
+        os_util.__class__ = MockOSUtil
+        self.assertFalse(tstuser in os_util.all_users)      
+        self.assertEqual(5, attempts)      
 
     def encrypt_password(self, password):
         crypto = TestCryptoUtilOperations()
@@ -108,4 +122,3 @@ class TestRemoteAccessHandler(AgentTestCase):
         cache_file = os.path.join(self.tmp_dir, "encrypted.enc")
         self.prv_key, self.pub_key, self.cert = crypto.create_keys(private_key, public_key, certificate)
         return crypto.encrypt_string(password, self.cert, cache_file)
-
