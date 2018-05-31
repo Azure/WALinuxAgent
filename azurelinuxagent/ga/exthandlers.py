@@ -28,7 +28,6 @@ import re
 import shutil
 import stat
 import subprocess
-import textwrap
 import time
 import traceback
 import zipfile
@@ -39,7 +38,6 @@ import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.version as version
 from azurelinuxagent.common.errorstate import ErrorState, ERROR_STATE_DELTA_DEFAULT, ERROR_STATE_DELTA_INSTALL
 
-
 from azurelinuxagent.common.event import add_event, WALAEventOperation, elapsed_milliseconds, report_event
 from azurelinuxagent.common.exception import ExtensionError, ProtocolError
 from azurelinuxagent.common.future import ustr
@@ -49,13 +47,10 @@ from azurelinuxagent.common.protocol.restapi import ExtHandlerStatus, \
                                                     VMStatus, ExtHandler, \
                                                     get_properties, \
                                                     set_properties
-from azurelinuxagent.common.protocol.metadata import MetadataProtocol
-from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.utils.processutil import capture_from_process
 from azurelinuxagent.common.protocol import get_protocol_util
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
-from azurelinuxagent.common.osutil import get_osutil
 
 
 # HandlerEnvironment.json schema version
@@ -187,13 +182,14 @@ def get_exthandlers_handler():
 class ExtHandlersHandler(object):
     def __init__(self):
         self.protocol_util = get_protocol_util()
+        self.protocol = None
         self.ext_handlers = None
         self.last_etag = None
         self.last_upgrade_guids = {}
         self.log_report = False
         self.log_etag = True
         self.log_process = False
-        self.cryptUtil = CryptUtil(conf.get_openssl_cmd())
+
         self.report_status_error_state = ErrorState()
         self.get_artifact_error_state = ErrorState(min_timedelta=ERROR_STATE_DELTA_INSTALL)
 
@@ -203,7 +199,6 @@ class ExtHandlersHandler(object):
             self.protocol = self.protocol_util.get_protocol()
             self.ext_handlers, etag = self.protocol.get_ext_handlers()
             self.get_artifact_error_state.reset()
-
         except Exception as e:
             msg = u"Exception retrieving extension handlers: {0}".format(ustr(e))
             self.get_artifact_error_state.incr()
@@ -319,8 +314,7 @@ class ExtHandlersHandler(object):
                     logger.verbose("Removed extension package {0}".format(pkg))
                 except OSError as e:
                     logger.warn("Failed to remove extension package {0}: {1}".format(pkg, e.strerror))
-    
-        
+   
     def handle_ext_handlers(self, etag=None):
         if self.ext_handlers.extHandlers is None or \
                 len(self.ext_handlers.extHandlers) == 0:
