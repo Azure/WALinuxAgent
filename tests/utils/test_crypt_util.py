@@ -30,9 +30,7 @@ from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.exception import CryptError
 from tests.tools import *
 
-
-class TestCryptoUtilOperations(AgentTestCase):
-
+class TestCryptoUtilOperations(AgentTestCase):    
     def encrypt_string(self, secret, pubKey, cache_file=None):
         if cache_file is None:
             cache_file = os.path.join(self.tmp_dir, "encrypted.enc")
@@ -63,7 +61,6 @@ class TestCryptoUtilOperations(AgentTestCase):
             self.fail("Error creating keys.  Test setup error.  {0}".format(str(e)))
 
         return private_key, public_key, cert
-
     def test_decrypt_encrypted_text(self):
         base_key_name = "test"
         secret = "abc@123"
