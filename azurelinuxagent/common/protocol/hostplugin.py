@@ -282,17 +282,19 @@ class HostPluginProtocol(object):
 
             # Send the page
             response = restutil.http_put(url,
-                            data=self._build_status_data(
-                                        sas_url,
-                                        status_blob.get_page_blob_page_headers(start, end),
-                                        buf),
-                            headers=self._build_status_headers())
+                                         data=self._build_status_data(
+                                             sas_url,
+                                             status_blob.get_page_blob_page_headers(start, end),
+                                             buf),
+                                         headers=self._build_status_headers())
 
             if restutil.request_failed(response):
+                error_response = restutil.read_response_error(response)
+                is_healthy = restutil.request_failed_at_hostplugin(response)
+                self.report_status_health(is_healthy=is_healthy, response=error_response)
                 raise HttpError(
-                    "HostGAPlugin Error: Put PageBlob bytes [{0},{1}]: " \
-                    "{2}".format(
-                        start, end, restutil.read_response_error(response)))
+                    "HostGAPlugin Error: Put PageBlob bytes "
+                    "[{0},{1}]: {2}".format(start, end, error_response))
 
             # Advance to the next page (if any)
             start = end

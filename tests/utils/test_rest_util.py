@@ -389,16 +389,6 @@ class TestHttpOperations(AgentTestCase):
 
     @patch("time.sleep")
     @patch("azurelinuxagent.common.utils.restutil._http_request")
-    def test_http_request_raises_for_bad_request(self, _http_request, _sleep):
-        _http_request.side_effect = [
-            Mock(status=httpclient.BAD_REQUEST)
-        ]
-
-        self.assertRaises(ResourceGoneError, restutil.http_get, "https://foo.bar")
-        self.assertEqual(1, _http_request.call_count)
-
-    @patch("time.sleep")
-    @patch("azurelinuxagent.common.utils.restutil._http_request")
     def test_http_request_raises_for_resource_gone(self, _http_request, _sleep):
         _http_request.side_effect = [
             Mock(status=httpclient.GONE)

@@ -28,13 +28,14 @@ wireserver_url = '168.63.129.16'
 
 @patch("time.sleep")
 @patch("azurelinuxagent.common.protocol.wire.CryptUtil")
+@patch("azurelinuxagent.common.protocol.healthservice.HealthService.report")
 class TestWireProtocol(AgentTestCase):
 
     def setUp(self):
         super(TestWireProtocol, self).setUp()
         HostPluginProtocol.set_default_channel(False)
     
-    def _test_getters(self, test_data, MockCryptUtil, _):
+    def _test_getters(self, test_data, __, MockCryptUtil, _):
         MockCryptUtil.side_effect = test_data.mock_crypt_util
 
         with patch.object(restutil, 'http_get', test_data.mock_http_get):
@@ -93,9 +94,7 @@ class TestWireProtocol(AgentTestCase):
         #    HostingEnvironmentConfig, will be retrieved the expected number
         self.assertEqual(2, test_data.call_counts["hostingenvuri"])
 
-    def test_call_storage_kwargs(self,
-                                 mock_cryptutil,
-                                 mock_sleep):
+    def test_call_storage_kwargs(self, *args):
         from azurelinuxagent.common.utils import restutil
         with patch.object(restutil, 'http_get') as http_patch:
             http_req = restutil.http_get
@@ -289,7 +288,6 @@ class TestWireProtocol(AgentTestCase):
 
             host_plugin_get_artifact_url_and_headers.assert_called_with(testurl)
 
-
     def test_get_in_vm_artifacts_profile_default(self, *args):
         wire_protocol_client = WireProtocol(wireserver_url).client
         wire_protocol_client.ext_conf = ExtensionsConfig(None)
@@ -302,8 +300,7 @@ class TestWireProtocol(AgentTestCase):
         self.assertEqual(dict(onHold='true'), in_vm_artifacts_profile.__dict__)
         self.assertTrue(in_vm_artifacts_profile.is_on_hold())
 
-    @patch("time.sleep")
-    def test_fetch_manifest_fallback(self, patch_sleep,  *args):
+    def test_fetch_manifest_fallback(self, *args):
         uri1 = ExtHandlerVersionUri()
         uri1.uri = 'ext_uri'
         uris = DataContractList(ExtHandlerVersionUri)

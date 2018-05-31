@@ -222,7 +222,7 @@ class TestHostPlugin(AgentTestCase):
                 patch_api.return_value = API_VERSION
                 plugin.put_vm_status(status_blob, sas_url, block_blob_type)
 
-                self.assertTrue(patch_http.call_count == 1)
+                self.assertTrue(patch_http.call_count == 2)
                 self._validate_hostplugin_args(
                     patch_http.call_args_list[0],
                     test_goal_state,
@@ -274,7 +274,7 @@ class TestHostPlugin(AgentTestCase):
                 patch_get.return_value = api_versions
                 host_client.put_vm_status(status_blob, sas_url)
 
-                self.assertTrue(patch_http.call_count == 1)
+                self.assertTrue(patch_http.call_count == 2)
                 self._validate_hostplugin_args(
                     patch_http.call_args_list[0],
                     test_goal_state,
@@ -314,7 +314,7 @@ class TestHostPlugin(AgentTestCase):
                 patch_get.return_value = api_versions
                 host_client.put_vm_status(status_blob, sas_url)
 
-                self.assertTrue(patch_http.call_count == 2)
+                self.assertTrue(patch_http.call_count == 3)
 
                 exp_data = self._hostplugin_data(
                                 status_blob.get_page_blob_create_headers(
@@ -330,7 +330,7 @@ class TestHostPlugin(AgentTestCase):
                                     page)
                 exp_data['requestUri'] += "?comp=page" 
                 self._validate_hostplugin_args(
-                    patch_http.call_args_list[1],
+                    patch_http.call_args_list[2],
                     test_goal_state,
                     exp_method, exp_url, exp_data)
 
