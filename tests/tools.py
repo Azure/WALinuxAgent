@@ -28,7 +28,7 @@ from functools import wraps
 
 import time
 
-import azurelinuxagent.common.event as event
+import azurelinuxagent.common.event
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.utils import fileutil
@@ -80,8 +80,8 @@ class AgentTestCase(unittest.TestCase):
 
         conf.get_agent_pid_file_path = Mock(return_value=os.path.join(self.tmp_dir, "waagent.pid"))
 
-        event.init_event_status(self.tmp_dir)
-        event.init_event_logger(self.tmp_dir)
+        azurelinuxagent.common.event.init_event_status(self.tmp_dir)
+        azurelinuxagent.common.event.init_event_logger(self.tmp_dir)
 
     def tearDown(self):
         if not debug and self.tmp_dir is not None:

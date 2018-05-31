@@ -38,6 +38,7 @@ from azurelinuxagent.common.utils.archive import StateFlusher
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, \
     findtext, getattrib, gettext, remove_bom, get_bytes_from_pem, parse_json
+from azurelinuxagent.common.version import AGENT_NAME
 
 VERSION_INFO_URI = "http://{0}/?comp=versions"
 GOAL_STATE_URI = "http://{0}/machine/?comp=goalstate"
@@ -952,25 +953,44 @@ class WireClient(object):
                             "Exception creating status blob: {0}", ustr(e))
                         return
 
-                    if not HostPluginProtocol.is_default_channel():
-                        try:
-                            if self.status_blob.upload(blob_uri):
-                                return
-                        except HttpError as e:
-                            pass
+                    # Swap the order of use for the HostPlugin vs. the "direct" route.
+                    # Prefer the use of HostPlugin. If HostPlugin fails fall back to the
+                    # direct route.
+                    #
+                    # The code previously preferred the "direct" route always, and only fell back
+                    # to the HostPlugin *if* there was an error.  We would like to move to
+                    # the HostPlugin for all traffic, but this is a big change.  We would like
+                    # to see how this behaves at scale, and have a fallback should things go
+                    # wrong.  This is why we try HostPlugin then direct.
+                    try:
+                        host = self.get_host_plugin()
+                        host.put_vm_status(self.status_blob,
+                                           ext_conf.status_upload_blob,
+                                           ext_conf.status_upload_blob_type)
+                        return
+                    except HttpError:
+                        pass
+                    except Exception as e:
+                        if not isinstance(e, ResourceGoneError):
+                            self.report_status_event("Exception uploading status blob (HostPlugin): {0}", ustr(e))
 
-                    host = self.get_host_plugin()
-                    host.put_vm_status(self.status_blob,
-                                    ext_conf.status_upload_blob,
-                                    ext_conf.status_upload_blob_type)
-                    HostPluginProtocol.set_default_channel(True)
+                    try:
+                        if self.status_blob.upload(blob_uri):
+                            from azurelinuxagent.common.event import add_event, WALAEventOperation
+                            add_event(
+                                name=AGENT_NAME,
+                                version=CURRENT_VERSION,
+                                op=WALAEventOperation.ReportStatus,
+                                is_success=True,
+                                message="direct",
+                                log_event=False)
+                            return
+                    except HttpError:
+                        pass
+
                     return
-
             except Exception as e:
-                # If the HostPlugin rejects the request,
-                # let the error continue, but set to use the HostPlugin
                 if isinstance(e, ResourceGoneError):
-                    HostPluginProtocol.set_default_channel(True)
                     continue
 
                 self.report_status_event(
