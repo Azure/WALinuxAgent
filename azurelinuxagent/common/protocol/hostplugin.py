@@ -18,10 +18,11 @@
 #
 
 import base64
+import datetime
 import json
-import traceback
 
 from azurelinuxagent.common import logger
+from azurelinuxagent.common.errorstate import ErrorState, ERROR_STATE_HOST_PLUGIN_FAILURE
 from azurelinuxagent.common.exception import HttpError, ProtocolError, \
                                             ResourceGoneError
 from azurelinuxagent.common.future import ustr, httpclient
@@ -50,6 +51,8 @@ class HostPluginProtocol(object):
     # TODO: debugging
     _is_default_channel = True
 
+    FETCH_REPORTING_PERIOD = datetime.timedelta(minutes=1)
+
     def __init__(self, endpoint, container_id, role_config_name):
         if endpoint is None:
             raise ProtocolError("HostGAPlugin: Endpoint not provided")
@@ -62,6 +65,8 @@ class HostPluginProtocol(object):
         self.role_config_name = role_config_name
         self.manifest_uri = None
         self.health_service = HealthService(endpoint)
+        self.fetch_error_state = ErrorState(min_timedelta=ERROR_STATE_HOST_PLUGIN_FAILURE)
+        self.fetch_last_timestamp = None
 
     @staticmethod
     def is_default_channel():
@@ -139,6 +144,28 @@ class HostPluginProtocol(object):
             headers[HEADER_ARTIFACT_MANIFEST_LOCATION] = artifact_manifest_url
 
         return url, headers
+
+    def report_fetch(self, uri, is_healthy=True, source='WireClient', response=''):
+
+        if uri != URI_FORMAT_GET_EXTENSION_ARTIFACT.format(self.endpoint, HOST_PLUGIN_PORT):
+            return
+
+        if is_healthy:
+            self.fetch_error_state.reset()
+        else:
+            self.fetch_error_state.incr()
+
+        if self.fetch_last_timestamp is None:
+            self.fetch_last_timestamp = datetime.datetime.utcnow() - HostPluginProtocol.FETCH_REPORTING_PERIOD
+
+        if datetime.datetime.utcnow() < (self.fetch_last_timestamp + HostPluginProtocol.FETCH_REPORTING_PERIOD):
+            return
+
+        self.fetch_last_timestamp = datetime.datetime.utcnow()
+        overall_health = self.fetch_error_state.is_triggered() is False
+        self.health_service.report_host_plugin_extension_artifact(is_healthy=overall_health,
+                                                                  source=source,
+                                                                  response=response)
 
     def put_vm_log(self, content):
         raise NotImplementedError("Unimplemented")

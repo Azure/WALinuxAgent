@@ -652,15 +652,14 @@ class WireClient(object):
                 error_response = restutil.read_response_error(resp)
                 msg = "Fetch failed from [{0}]: {1}".format(uri, error_response)
                 logger.warn(msg)
-                self.report_fetch(uri,
-                                  is_healthy=restutil.request_failed_at_hostplugin(resp),
-                                  response=error_response)
+                self.host_plugin.report_fetch(uri,
+                                              is_healthy=restutil.request_failed_at_hostplugin(resp),
+                                              response=error_response)
                 raise ProtocolError(msg)
             else:
                 response_content = resp.read()
                 content = self.decode_config(response_content) if decode else response_content
-
-                self.report_fetch(uri)
+                self.host_plugin.report_fetch(uri)
 
         except (HttpError, ProtocolError, IOError) as e:
             logger.verbose("Fetch failed from [{0}]: {1}", uri, e)
@@ -668,14 +667,6 @@ class WireClient(object):
                 raise
 
         return content
-
-    def report_fetch(self, uri, is_healthy=True, source='WireClient', response=''):
-        if uri == URI_FORMAT_GET_EXTENSION_ARTIFACT.format(self.endpoint, HOST_PLUGIN_PORT) \
-                and self.host_plugin is not None \
-                and self.host_plugin.health_service is not None:
-            self.host_plugin.health_service.report_host_plugin_extension_artifact(is_healthy=is_healthy,
-                                                                                  source=source,
-                                                                                  response=response)
 
     def update_hosting_env(self, goal_state):
         if goal_state.hosting_env_uri is None:
