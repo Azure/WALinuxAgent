@@ -106,11 +106,10 @@ class TestRemoteAccessHandler(AgentTestCase):
         tstuser = "foobar"
         expiration = datetime.utcnow() + timedelta(days=1)
         pwd = "bad password"
-        attempts = rah.add_user(tstuser, pwd, expiration, throttle=0)
+        rah.add_user(tstuser, pwd, expiration)
         os_util = rah.os_util
         os_util.__class__ = MockOSUtil
-        self.assertFalse(tstuser in os_util.all_users)      
-        self.assertEqual(5, attempts)      
+        self.assertFalse(tstuser in os_util.all_users) 
 
     def encrypt_string(self, secret):
         prv_key, pub_key, cert = self.create_keys()

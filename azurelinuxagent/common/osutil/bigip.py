@@ -41,9 +41,10 @@ except ImportError:
 
 
 class BigIpOSUtil(DefaultOSUtil):
+    jit_enabled = False
+
     def __init__(self):
         super(BigIpOSUtil, self).__init__()
-        self.jit_enabled = False
 
     def _wait_until_mcpd_is_initialized(self):
         """Wait for mcpd to become available

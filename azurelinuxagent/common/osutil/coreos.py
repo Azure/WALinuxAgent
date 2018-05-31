@@ -21,6 +21,8 @@ import azurelinuxagent.common.utils.shellutil as shellutil
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
 
 class CoreOSUtil(DefaultOSUtil):
+    jit_enabled = True
+
     def __init__(self):
         super(CoreOSUtil, self).__init__()
         self.agent_conf_file_path = '/usr/share/oem/waagent.conf'
@@ -38,7 +40,6 @@ class CoreOSUtil(DefaultOSUtil):
         else:
             py_path = self.waagent_path
         os.environ['PYTHONPATH'] = py_path
-        self.jit_enabled = True
 
     def is_sys_user(self, username):
         # User 'core' is not a sysuser.

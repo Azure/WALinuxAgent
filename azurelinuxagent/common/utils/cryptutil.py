@@ -75,8 +75,8 @@ class CryptUtil(object):
         if rc != 0:
             logger.error("Failed to decrypt {0}".format(p7m_file))
     
-    def decrypt_encrypted_file(self, private_key, encryptedFile):
-        cmd = "{0} cms -decrypt -inform DER -inkey {1} -in {2}".format(self.openssl_cmd, private_key, encryptedFile)
+    def decrypt_file(self, private_key, encrypted_file):
+        cmd = "{0} cms -decrypt -inform DER -inkey {1} -in {2}".format(self.openssl_cmd, private_key, encrypted_file)
         rc, output = shellutil.run_get_output(cmd)
         if rc != 0:
             msg = "Error decrypting file {0}".format(output)
@@ -146,7 +146,7 @@ class CryptUtil(object):
             decoded = textutil.b64decode(encrypted_password, encoding)
             with open(cache_file, "wb") as c:
                 c.write(decoded)
-            decrypted_secret = self.decrypt_encrypted_file(private_key, cache_file)
+            decrypted_secret = self.decrypt_file(private_key, cache_file)
             return decrypted_secret.replace("\0", "")
         finally:
             if os.path.isfile(cache_file):

@@ -33,9 +33,10 @@ import azurelinuxagent.common.utils.textutil as textutil
 
 
 class GaiaOSUtil(DefaultOSUtil):
+    jit_enabled = False
+
     def __init__(self):
         super(GaiaOSUtil, self).__init__()
-        self.jit_enabled = False
 
     def _run_clish(self, cmd, log_cmd=True):
         for i in xrange(10):

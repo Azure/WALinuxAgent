@@ -85,7 +85,6 @@ class RemoteAccessHandler(object):
             if self.os_util is None:
                 self.os_util = get_osutil()
             if self.os_util.jit_enabled:
-                logger.verbose("Handle remote access updates")
                 self.protocol = self.protocol_util.get_protocol()
                 self.protocol.client.update_goal_state(True)
                 self.protocol.client.update_remote_access_conf(self.protocol.client.goal_state)
@@ -97,8 +96,7 @@ class RemoteAccessHandler(object):
         except Exception as e:
             msg = u"Exception processing remote access handler: {0}".format(
                 ustr(e))
-            logger.warn(msg)
-            logger.info(str(e))
+            logger.error(msg)
             add_event(AGENT_NAME,
                       version=CURRENT_VERSION,
                       op=WALAEventOperation.HandleRemoteAccess,
@@ -122,42 +120,37 @@ class RemoteAccessHandler(object):
                 if acc.name not in jit_users and now < account_expiration:
                     self.add_user(acc.name, acc.encrypted_password, account_expiration)
 
-    def add_user(self, username, encrypted_password, account_expiration, retry=MAX_TRY_ATTEMPT, throttle=FAILED_ATTEMPT_THROTTLE):
+    def add_user(self, username, encrypted_password, account_expiration):
         created = False
-        attempt_count = 0
-        while attempt_count < retry:
-            try:
-                attempt_count += 1
-                expiration_date = account_expiration + timedelta(days=1) - datetime.utcnow()
-                logger.verbose("add_user: Adding user {0} with expiration in {1} day(s)".format(username, expiration_date.days))
-                self.os_util.useradd(username, expiration_date.days, REMOTE_ACCESS_ACCOUNT_COMMENT)
-                created = True
-                cache_file = os.path.join(conf.get_lib_dir(), "remote_access_pwd.dat")
-                prv_key = os.path.join(conf.get_lib_dir(), TRANSPORT_PRIVATE_CERT)
-                pwd = self.cryptUtil.decrypt_secret(encrypted_password, prv_key, cache_file, None)
-                self.os_util.chpasswd(username, pwd, conf.get_password_cryptid(), conf.get_password_crypt_salt_len())
-                self.os_util.conf_sudoer(username)
-                logger.info("add_user: User '{0}' added successfully with expiration in {1} day(s)".format(username, expiration_date.days))
-                return attempt_count
-            except OSError as oe:
-                self.handle_failed_create(username, oe.strerror, created)
-            except Exception as e:
-                self.handle_failed_create(username, str(e), created)
-            time.sleep(throttle)
-        logger.warn("add_user: Unable to add user {0} after {1} attemps. Will not try again for this incarnation.".format(username, MAX_TRY_ATTEMPT))
-        return attempt_count
+        try:
+            expiration_date = account_expiration + timedelta(days=1) - datetime.utcnow()
+            logger.verbose("[RemoteAccessHandler::add_user]: Adding user {0} with expiration in {1} day(s)".format(username, expiration_date.days))
+            self.os_util.useradd(username, expiration_date.days, REMOTE_ACCESS_ACCOUNT_COMMENT)
+            created = True
+            cache_file = os.path.join(conf.get_lib_dir(), "remote_access_pwd.dat")
+            prv_key = os.path.join(conf.get_lib_dir(), TRANSPORT_PRIVATE_CERT)
+            pwd = self.cryptUtil.decrypt_secret(encrypted_password, prv_key, cache_file, None)
+            self.os_util.chpasswd(username, pwd, conf.get_password_cryptid(), conf.get_password_crypt_salt_len())
+            self.os_util.conf_sudoer(username)
+            logger.info("[RemoteAccessHandler::add_user]: User '{0}' added successfully with expiration in {1} day(s)".format(username, expiration_date.days))
+            return
+        except OSError as oe:
+            self.handle_failed_create(username, oe.strerror, created)
+        except Exception as e:
+            self.handle_failed_create(username, str(e), created)
+        logger.warn("[RemoteAccessHandler::add_user]: Unable to add user {0}. Will not try again for this incarnation.".format(username))
+        return
 
     def handle_failed_create(self, username, error_message, created):
-        logger.error("add_user: Error adding user {0}. {1}".format(username, error_message))
+        logger.error("[RemoteAccessHandler::failed_create]: Error adding user {0}. {1}".format(username, error_message))
         if created:
             try:
                 self.delete_user(username)
             except OSError as oe:
-                logger.error("clean_failed_user_create: Failed to clean up after account creation for {0}. {1}".format(username, oe.strerror()))
+                logger.error("[RemoteAccessHandler::failed_create]: Failed to clean up after account creation for {0}. {1}".format(username, oe.strerror()))
             except Exception as e:
-                logger.error("clean_failed_user_create: Failed to clean up after account creation for {0}. {1}".format(username, str(e)))
+                logger.error("[RemoteAccessHandler::failed_create]: Failed to clean up after account creation for {0}. {1}".format(username, str(e)))
 
     def delete_user(self, username):
-        logger.info("Deleting user {0}".format(username))
         self.os_util.del_account(username)
-        logger.info("User deleted {0}".format(username))        
+        logger.info("[RemoteAccessHandler::delete_user]: User deleted {0}".format(username))        

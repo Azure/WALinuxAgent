@@ -309,7 +309,6 @@ def http_request(method,
                     continue
 
             if resp.status in RESOURCE_GONE_CODES:
-                logger.info("ResourceGoneError from restutil calling {0}".format(rel_uri))
                 raise ResourceGoneError()
 
             return resp

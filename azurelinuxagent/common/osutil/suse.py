@@ -33,10 +33,11 @@ from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_VERSION, DISTRO_F
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
 
 class SUSE11OSUtil(DefaultOSUtil):
+    jit_enabled = True
+
     def __init__(self):
         super(SUSE11OSUtil, self).__init__()
         self.dhclient_name='dhcpcd'
-        self.jit_enabled = True
 
     def set_hostname(self, hostname):
         fileutil.write_file('/etc/HOSTNAME', hostname)

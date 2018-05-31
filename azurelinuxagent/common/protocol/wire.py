@@ -238,10 +238,10 @@ def _build_health_report(incarnation, container_id, role_instance_id,
            u"<ContainerId>{1}</ContainerId>"
            u"<RoleInstanceList>"
            u"<Role>"
-           u"<InstanceId>{3}</InstanceId>"
+           u"<InstanceId>{2}</InstanceId>"
            u"<Health>"
-           u"<State>{4}</State>"
-           u"{5}"
+           u"<State>{3}</State>"
+           u"{4}"
            u"</Health>"
            u"</Role>"
            u"</RoleInstanceList>"
@@ -711,14 +711,6 @@ class WireClient(object):
                                      self.get_header_for_cert())
         self.save_cache(local_file, xml_text)
         self.remote_access = RemoteAccess(xml_text)
-
-    # def update_remote_access_conf(self, goal_state):
-    #     if goal_state.remote_access_uri is None:
-    #         raise ProtocolError("RemoteAccess uri is empty")
-    #     xml_text = self.fetch_config(goal_state.remote_access_uri, self.get_header_for_cert())
-    #     self.remote_access = RemoteAccess(xml_text)
-    #     local_file = os.path.join(conf.get_lib_dir(), REMOTE_ACCESS_FILE_NAME.format(self.remote_access.incarnation))        
-    #     self.save_cache(local_file, xml_text)
         
     def update_ext_conf(self, goal_state):
         if goal_state.ext_uri is None:
