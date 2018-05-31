@@ -47,7 +47,8 @@ MAXIMUM_PAGEBLOB_PAGE_SIZE = 4 * 1024 * 1024  # Max page size: 4MB
 
 
 class HostPluginProtocol(object):
-    _is_default_channel = False
+    # TODO: debugging
+    _is_default_channel = True
 
     def __init__(self, endpoint, container_id, role_config_name):
         if endpoint is None:

@@ -660,7 +660,7 @@ class WireClient(object):
                 response_content = resp.read()
                 content = self.decode_config(response_content) if decode else response_content
                 self.report_fetch(uri)
-                
+
         except (HttpError, ProtocolError, IOError) as e:
             logger.verbose("Fetch failed from [{0}]: {1}", uri, e)
             if isinstance(e, ResourceGoneError):
