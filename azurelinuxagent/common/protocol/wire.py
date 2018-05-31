@@ -659,7 +659,9 @@ class WireClient(object):
             else:
                 response_content = resp.read()
                 content = self.decode_config(response_content) if decode else response_content
-                self.report_fetch(uri)
+
+               # TODO: debugging
+                self.report_fetch(uri, source=headers['x-ms-artifact-location'])
 
         except (HttpError, ProtocolError, IOError) as e:
             logger.verbose("Fetch failed from [{0}]: {1}", uri, e)
@@ -672,6 +674,8 @@ class WireClient(object):
         if uri == URI_FORMAT_GET_EXTENSION_ARTIFACT.format(self.endpoint, HOST_PLUGIN_PORT) \
                 and self.host_plugin is not None \
                 and self.host_plugin.health_service is not None:
+            # TODO: debugging
+            logger.info("report_fetch: {0}", source)
             self.host_plugin.health_service.report_host_plugin_extension_artifact(is_healthy=is_healthy,
                                                                                   source=source,
                                                                                   response=response)
