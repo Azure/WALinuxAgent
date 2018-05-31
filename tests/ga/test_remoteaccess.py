@@ -35,8 +35,11 @@ class TestRemoteAccess(AgentTestCase):
     def test_update_remote_access_conf_no_remote_access(self, _):
         protocol = WireProtocol('12.34.56.78')
         goal_state = protocol.client.get_goal_state()
-        with self.assertRaises(ProtocolError):
+        try:
             protocol.client.update_remote_access_conf(goal_state)
+        except ProtocolError:
+            return
+        self.fail("expected exception did not occur.")
 
     @patch('azurelinuxagent.common.protocol.wire.WireClient.get_goal_state',
     return_value=GoalState(load_data('wire/goal_state_remote_access.xml')))
