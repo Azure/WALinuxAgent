@@ -123,22 +123,21 @@ class RemoteAccessHandler(object):
     def add_user(self, username, encrypted_password, account_expiration):
         created = False
         try:
-            expiration_date = account_expiration + timedelta(days=1) - datetime.utcnow()
-            logger.verbose("[RemoteAccessHandler::add_user]: Adding user {0} with expiration in {1} day(s)".format(username, expiration_date.days))
-            self.os_util.useradd(username, expiration_date.days, REMOTE_ACCESS_ACCOUNT_COMMENT)
+            expiration_date = (account_expiration + timedelta(days=1)).strftime(DATE_FORMAT)
+            logger.verbose("[RemoteAccessHandler::add_user]: Adding user {0} with expiration date {1}".format(username, expiration_date))
+            self.os_util.useradd(username, expiration_date, REMOTE_ACCESS_ACCOUNT_COMMENT)
             created = True
-            cache_file = os.path.join(conf.get_lib_dir(), "remote_access_pwd.dat")
             prv_key = os.path.join(conf.get_lib_dir(), TRANSPORT_PRIVATE_CERT)
-            pwd = self.cryptUtil.decrypt_secret(encrypted_password, prv_key, cache_file, None)
+            pwd = self.cryptUtil.decrypt_secret(encrypted_password, prv_key)
             self.os_util.chpasswd(username, pwd, conf.get_password_cryptid(), conf.get_password_crypt_salt_len())
             self.os_util.conf_sudoer(username)
-            logger.info("[RemoteAccessHandler::add_user]: User '{0}' added successfully with expiration in {1} day(s)".format(username, expiration_date.days))
+            logger.info("[RemoteAccessHandler::add_user]: User '{0}' added successfully with expiration in {1}".format(username, expiration_date))
             return
         except OSError as oe:
             self.handle_failed_create(username, oe.strerror, created)
         except Exception as e:
             self.handle_failed_create(username, str(e), created)
-        logger.warn("[RemoteAccessHandler::add_user]: Unable to add user {0}. Will not try again for this incarnation.".format(username))
+        logger.error("[RemoteAccessHandler::add_user]: Unable to add user {0}'. Will not try again for this incarnation.".format(username))
         return
 
     def handle_failed_create(self, username, error_message, created):

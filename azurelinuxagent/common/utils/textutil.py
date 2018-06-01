@@ -323,10 +323,10 @@ def b64encode(s):
     return base64.b64encode(s)
 
 
-def b64decode(s, encoding='utf-8'):
+def b64decode(s):
     from azurelinuxagent.common.version import PY_VERSION_MAJOR
-    if PY_VERSION_MAJOR > 2 and encoding != None:
-        return base64.b64decode(s).decode(encoding)
+    if PY_VERSION_MAJOR > 2:
+        return base64.b64decode(s).decode('utf-8')
     return base64.b64decode(s)
 
 

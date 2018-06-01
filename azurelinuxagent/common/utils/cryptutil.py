@@ -74,15 +74,6 @@ class CryptUtil(object):
         rc = shellutil.run(cmd)
         if rc != 0:
             logger.error("Failed to decrypt {0}".format(p7m_file))
-    
-    def decrypt_file(self, private_key, encrypted_file):
-        cmd = "{0} cms -decrypt -inform DER -inkey {1} -in {2}".format(self.openssl_cmd, private_key, encrypted_file)
-        rc, output = shellutil.run_get_output(cmd)
-        if rc != 0:
-            msg = "Error decrypting file {0}".format(output)
-            logger.error(msg)
-            raise CryptError(msg)
-        return output
 
     def crt_to_ssh(self, input_file, output_file):
         shellutil.run("ssh-keygen -i -m PKCS8 -f {0} >> {1}".format(input_file,
@@ -140,14 +131,13 @@ class CryptUtil(object):
                 curr = 0
                 index = 7
         return bytes(byte_array)
-    
-    def decrypt_secret(self, encrypted_password, private_key, cache_file, encoding='utf-8'):
-        try:
-            decoded = textutil.b64decode(encrypted_password, encoding)
-            with open(cache_file, "wb") as c:
-                c.write(decoded)
-            decrypted_secret = self.decrypt_file(private_key, cache_file)
-            return decrypted_secret.replace("\0", "")
-        finally:
-            if os.path.isfile(cache_file):
-                os.remove(cache_file)   
+
+    def decrypt_secret(self, encrypted_password, private_key):
+        decoded = base64.b64decode(encrypted_password)
+        p = subprocess.Popen([self.openssl_cmd, 'cms', '-decrypt', '-inform', 'DER', '-inkey', private_key, '-in', '/dev/stdin'], stdout=subprocess.PIPE, stdin=subprocess.PIPE, stderr=subprocess.STDOUT)
+        p.stdin.write(decoded)
+        output = p.communicate()[0]
+        retcode = p.poll()
+        if retcode:
+            raise subprocess.CalledProcessError(retcode, "openssl cms -decrypt", output=output)
+        return output.decode('utf-16')
