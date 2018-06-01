@@ -19,7 +19,14 @@ import base64
 import json
 import sys
 
-from azurelinuxagent.common.future import ustr
+import azurelinuxagent.common.protocol.restapi as restapi
+import azurelinuxagent.common.protocol.wire as wire
+import azurelinuxagent.common.protocol.hostplugin as hostplugin
+
+from azurelinuxagent.common.protocol.hostplugin import API_VERSION
+from azurelinuxagent.common.utils import restutil
+from tests.protocol.mockwiredata import WireProtocolData, DATA_FILE
+from tests.tools import *
 
 if sys.version_info[0] == 3:
     import http.client as httpclient
@@ -28,17 +35,6 @@ elif sys.version_info[0] == 2:
     import httplib as httpclient
     bytebuffer = buffer
 
-import azurelinuxagent.common.protocol.restapi as restapi
-import azurelinuxagent.common.protocol.wire as wire
-import azurelinuxagent.common.protocol.hostplugin as hostplugin
-
-from azurelinuxagent.common import event
-from azurelinuxagent.common.exception import ProtocolError, HttpError
-from azurelinuxagent.common.protocol.hostplugin import API_VERSION
-from azurelinuxagent.common.utils import restutil
-
-from tests.protocol.mockwiredata import WireProtocolData, DATA_FILE
-from tests.tools import *
 
 hostplugin_status_url = "http://168.63.129.16:32526/status"
 sas_url = "http://sas_url"
@@ -55,15 +51,15 @@ faux_status_b64 = base64.b64encode(bytes(bytearray(faux_status, encoding='utf-8'
 if PY_VERSION_MAJOR > 2:
     faux_status_b64 = faux_status_b64.decode('utf-8')
 
+
 class TestHostPlugin(AgentTestCase):
 
     def _compare_data(self, actual, expected):
         for k in iter(expected.keys()):
             if k == 'content' or k == 'requestUri':
                 if actual[k] != expected[k]:
-                    print("Mismatch: Actual '{0}'='{1}', " \
-                        "Expected '{0}'='{3}'".format(
-                            k, actual[k], expected[k]))
+                    print("Mismatch: Actual '{0}'='{1}', "
+                          "Expected '{0}'='{2}'".format(k, actual[k], expected[k]))
                     return False
             elif k == 'headers':
                 for h in expected['headers']:
@@ -93,7 +89,7 @@ class TestHostPlugin(AgentTestCase):
                 s = s.decode('utf-8')
             data['content'] = s
         return data
-    
+
     def _hostplugin_headers(self, goal_state):
         return {
             'x-ms-version': '2015-09-01',
@@ -101,7 +97,7 @@ class TestHostPlugin(AgentTestCase):
             'x-ms-containerid': goal_state.container_id,
             'x-ms-host-config-name': goal_state.role_config_name
         }
-    
+
     def _validate_hostplugin_args(self, args, goal_state, exp_method, exp_url, exp_data):
         args, kwargs = args
         self.assertEqual(exp_method, args[0])
@@ -195,7 +191,6 @@ class TestHostPlugin(AgentTestCase):
                         self.assertFalse(wire.HostPluginProtocol.is_default_channel())
                         self.assertTrue(patch_add_event.call_count == 1)
 
-
     def test_validate_http_request(self):
         """Validate correct set of data is sent to HostGAPlugin when reporting VM status"""
 
@@ -209,8 +204,8 @@ class TestHostPlugin(AgentTestCase):
         exp_method = 'PUT'
         exp_url = hostplugin_status_url
         exp_data = self._hostplugin_data(
-                        status_blob.get_block_blob_headers(len(faux_status)),
-                        bytearray(faux_status, encoding='utf-8'))
+            status_blob.get_block_blob_headers(len(faux_status)),
+            bytearray(faux_status, encoding='utf-8'))
 
         with patch.object(restutil, "http_request") as patch_http:
             patch_http.return_value = Mock(status=httpclient.OK)
@@ -263,14 +258,14 @@ class TestHostPlugin(AgentTestCase):
         exp_method = 'PUT'
         exp_url = hostplugin_status_url
         exp_data = self._hostplugin_data(
-                        status_blob.get_block_blob_headers(len(faux_status)),
-                        bytearray(faux_status, encoding='utf-8'))
+            status_blob.get_block_blob_headers(len(faux_status)),
+            bytearray(faux_status, encoding='utf-8'))
 
         with patch.object(restutil, "http_request") as patch_http:
             patch_http.return_value = Mock(status=httpclient.OK)
 
             with patch.object(wire.HostPluginProtocol,
-                          "get_api_versions") as patch_get:
+                              "get_api_versions") as patch_get:
                 patch_get.return_value = api_versions
                 host_client.put_vm_status(status_blob, sas_url)
 
@@ -279,7 +274,7 @@ class TestHostPlugin(AgentTestCase):
                     patch_http.call_args_list[0],
                     test_goal_state,
                     exp_method, exp_url, exp_data)
-    
+
     def test_validate_page_blobs(self):
         """Validate correct set of data is sent for page blobs"""
         wire_protocol_client = wire.WireProtocol(wireserver_url).client
@@ -308,27 +303,27 @@ class TestHostPlugin(AgentTestCase):
         mock_response = MockResponse('', httpclient.OK)
 
         with patch.object(restutil, "http_request",
-                    return_value=mock_response) as patch_http:
+                          return_value=mock_response) as patch_http:
             with patch.object(wire.HostPluginProtocol,
-                            "get_api_versions") as patch_get:
+                              "get_api_versions") as patch_get:
                 patch_get.return_value = api_versions
                 host_client.put_vm_status(status_blob, sas_url)
 
                 self.assertTrue(patch_http.call_count == 3)
 
                 exp_data = self._hostplugin_data(
-                                status_blob.get_page_blob_create_headers(
-                                page_size))
+                    status_blob.get_page_blob_create_headers(
+                        page_size))
                 self._validate_hostplugin_args(
                     patch_http.call_args_list[0],
                     test_goal_state,
                     exp_method, exp_url, exp_data)
 
                 exp_data = self._hostplugin_data(
-                                status_blob.get_page_blob_page_headers(
-                                    0, page_size),
-                                    page)
-                exp_data['requestUri'] += "?comp=page" 
+                    status_blob.get_page_blob_page_headers(
+                        0, page_size),
+                    page)
+                exp_data['requestUri'] += "?comp=page"
                 self._validate_hostplugin_args(
                     patch_http.call_args_list[2],
                     test_goal_state,
@@ -356,7 +351,7 @@ class TestHostPlugin(AgentTestCase):
             for k in expected_headers:
                 self.assertTrue(k in actual_headers)
                 self.assertEqual(expected_headers[k], actual_headers[k])
-    
+
 
 class MockResponse:
     def __init__(self, body, status_code):
@@ -365,6 +360,7 @@ class MockResponse:
 
     def read(self):
         return self.body
+
 
 if __name__ == '__main__':
     unittest.main()
