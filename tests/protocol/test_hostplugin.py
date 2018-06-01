@@ -218,10 +218,16 @@ class TestHostPlugin(AgentTestCase):
                 plugin.put_vm_status(status_blob, sas_url, block_blob_type)
 
                 self.assertTrue(patch_http.call_count == 2)
+
+                # first call is to host plugin
                 self._validate_hostplugin_args(
                     patch_http.call_args_list[0],
                     test_goal_state,
                     exp_method, exp_url, exp_data)
+
+                # second call is to health service
+                self.assertEqual('POST', patch_http.call_args_list[1][0][0])
+                self.assertEqual('http://168.63.129.16:80/HealthService', patch_http.call_args_list[1][0][1])
 
     def test_no_fallback(self):
         """
@@ -270,10 +276,16 @@ class TestHostPlugin(AgentTestCase):
                 host_client.put_vm_status(status_blob, sas_url)
 
                 self.assertTrue(patch_http.call_count == 2)
+
+                # first call is to host plugin
                 self._validate_hostplugin_args(
                     patch_http.call_args_list[0],
                     test_goal_state,
                     exp_method, exp_url, exp_data)
+
+                # second call is to health service
+                self.assertEqual('POST', patch_http.call_args_list[1][0][0])
+                self.assertEqual('http://168.63.129.16:80/HealthService', patch_http.call_args_list[1][0][1])
 
     def test_validate_page_blobs(self):
         """Validate correct set of data is sent for page blobs"""
@@ -311,6 +323,7 @@ class TestHostPlugin(AgentTestCase):
 
                 self.assertTrue(patch_http.call_count == 3)
 
+                # first call is to host plugin
                 exp_data = self._hostplugin_data(
                     status_blob.get_page_blob_create_headers(
                         page_size))
@@ -319,6 +332,11 @@ class TestHostPlugin(AgentTestCase):
                     test_goal_state,
                     exp_method, exp_url, exp_data)
 
+                # second call is to health service
+                self.assertEqual('POST', patch_http.call_args_list[1][0][0])
+                self.assertEqual('http://168.63.129.16:80/HealthService', patch_http.call_args_list[1][0][1])
+
+                # last call is to host plugin
                 exp_data = self._hostplugin_data(
                     status_blob.get_page_blob_page_headers(
                         0, page_size),
