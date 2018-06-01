@@ -306,7 +306,7 @@ class EventLogger(object):
         except EventError:
             pass
 
-    def add_metric(self, category, counter, instance, value, log_it=False):
+    def add_metric(self, category, counter, instance, value, log_event=False):
         """
         Create and save an event which contains a telemetry event.
 
@@ -314,9 +314,9 @@ class EventLogger(object):
         :param str counter: The specific metric within the category (e.g. "%idle")
         :param str instance: For instanced metrics, the instance identifier (filesystem name, cpu core#, etc.)
         :param value: Value of the metric
-        :param bool log_it: If true, log the collected metric in the agent log
+        :param bool log_event: If true, log the collected metric in the agent log
         """
-        if log_it:
+        if log_event:
             from azurelinuxagent.common.version import AGENT_NAME
             message = "Metric {0}/{1} [{2}] = {3}".format(category, counter, instance, value)
             _log_event(AGENT_NAME, "METRIC", message, 0)
@@ -365,7 +365,7 @@ def report_periodic(delta, op, is_success=True, message=''):
                  op=op)
 
 
-def report_metric(category, counter, instance, value, log_it=False, reporter=__event_logger__):
+def report_metric(category, counter, instance, value, log_event=False, reporter=__event_logger__):
     """
     Send a telemetry event reporting a single instance of a performance counter.
 
@@ -373,17 +373,17 @@ def report_metric(category, counter, instance, value, log_it=False, reporter=__e
     :param str counter: The name of the metric ("%idle", etc)
     :param str instance: For instanced metrics, the identifier of the instance. E.g. a disk drive name, a cpu core#
     :param     value: The value of the metric
-    :param bool log_it: If True, log the metric in the agent log as well
+    :param bool log_event: If True, log the metric in the agent log as well
     :param EventLogger reporter: The EventLogger instance to which metric events should be sent
     """
     if reporter.event_dir is None:
         from azurelinuxagent.common.version import AGENT_NAME
-        logger.warn("Cannot add metric event -- Event reporter is not initialized.")
+        logger.warn("Cannot report metric event -- Event reporter is not initialized.")
         message = "Metric {0}/{1} [{2}] = {3}".format(category, counter, instance, value)
         _log_event(AGENT_NAME, "METRIC", message, 0)
         return
 
-    reporter.add_metric(category, counter, instance, value, log_it)
+    reporter.add_metric(category, counter, instance, value, log_event)
 
 
 def add_event(name, op=WALAEventOperation.Unknown, is_success=True, duration=0,

@@ -76,7 +76,6 @@ class TestEvent(AgentTestCase):
         self.assertTrue(event.should_emit_event("Foo", "1.2", "FauxOperation", True))
         self.assertTrue(event.should_emit_event("Foo", "1.2", "FauxOperation", False))
 
-
     def test_should_emit_event_handles_known_operations(self):
         event.__event_status__ = event.EventStatus()
 
@@ -225,3 +224,13 @@ class TestEvent(AgentTestCase):
         event_json = mock_event.call_args[0][0]
         self.assertIn("69B669B9-4AF8-4C50-BDC4-6006FA76E975", event_json)
         self.assertIn("%idle", event_json)
+
+        import json
+        event_dictionary = json.loads(event_json)
+        self.assertEqual(event_dictionary['providerId'], "69B669B9-4AF8-4C50-BDC4-6006FA76E975")
+        for parameter in event_dictionary["parameters"]:
+            if parameter['name'] == 'Counter':
+                self.assertEqual(parameter['value'], '%idle')
+                break
+        else:
+            self.fail("Counter '%idle' not found in event parameters: {0}".format(repr(event_dictionary)))

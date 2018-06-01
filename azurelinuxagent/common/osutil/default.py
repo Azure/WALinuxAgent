@@ -1103,7 +1103,13 @@ class DefaultOSUtil(object):
         return multiprocessing.cpu_count()
 
     def check_pid_alive(self, pid):
-        return pid is not None and os.path.isdir(os.path.join('/proc', pid))
+        if pid is None:
+            return False
+        try:
+            os.kill(pid, 0)
+            return True
+        except OSError:
+            return False
 
     @property
     def is_64bit(self):

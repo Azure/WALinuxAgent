@@ -20,14 +20,19 @@ import re
 import time
 
 from azurelinuxagent.common import logger
+from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
-# from azurelinuxagent.common.protocol.restapi import ExtHandler
+
 
 BASE_CGROUPS = '/sys/fs/cgroup'
-HIERARCHIES = ['cpu', 'memory']
+WRAPPER_CGROUP_NAME = "Agent+Extensions"
+METRIC_HIERARCHIES = ['cpu', 'memory']
 MEMORY_DEFAULT = -1
-CPU_DEFAULT = 0.25
+
+# cpu  813599 3940 909253 154538746 874851 0 6589 0 0 0
+# cpu0 401094 1516 453006 77276738 452939 0 3312 0 0 0
+# cpu1 412505 2423 456246 77262007 421912 0 3276 0 0 0
 re_all_CPUs = re.compile('^cpu .*')
 re_user_system_times = re.compile('user (\d+)\nsystem (\d+)\n')
 
@@ -44,8 +49,7 @@ class CGroupsException(Exception):
         self.msg = msg
         if CGroups.enabled():
             pid = os.getpid()
-            logger.verbose("[{1}] Disabling cgroup support: {0}"
-                           .format(msg, pid))
+            logger.verbose("[{0}] Disabling cgroup support: {1}".format(pid, msg))
             CGroups.disable()
 
     def __str__(self):
@@ -99,7 +103,7 @@ class Cpu(object):
     @staticmethod
     def get_current_system_cpu():
         """
-        Compute the number of USER_HZ units of time have elapsed in all categories, across all cores, since boot.
+        Compute the number of USER_HZ units of time that have elapsed in all categories, across all cores, since boot.
 
         :return: int
         """
@@ -178,11 +182,10 @@ class CGroupsTelemetry(object):
         "memory": Memory
     }
     _hierarchies = _metrics.keys()
-    was_tracked = ""
-    delete_empty_groups = False
+    tracked_names = set()
 
     @staticmethod
-    def hierarchies():
+    def metrics_hierarchies():
         return CGroupsTelemetry._hierarchies
 
     @staticmethod
@@ -203,7 +206,7 @@ class CGroupsTelemetry(object):
     @staticmethod
     def track_systemd_service(name):
         """
-        Create the CGroups object for a systemd service and track it.
+        If not already tracking it, create the CGroups object for a systemd service and track it.
 
         :param str name: Service name (without .service suffix) to be tracked.
         """
@@ -254,12 +257,12 @@ class CGroupsTelemetry(object):
         """
         Return a dictionary mapping from the name of a tracked cgroup to the list of collected metrics for that cgroup.
 
-        :returns: Dictionary of collected metrics, by cgroup
+        :returns: Dictionary of list collected metrics (metric class, metric name, value), by cgroup
         :rtype: dict(str: [(str, str, float)])
         """
         results = {}
         for cgroup_name, collector in CGroupsTelemetry._tracked.items():
-            cgroup_name = cgroup_name if cgroup_name else "Agent+Extensions"
+            cgroup_name = cgroup_name if cgroup_name else WRAPPER_CGROUP_NAME
             results[cgroup_name] = collector.collect()
         return results
 
@@ -279,20 +282,14 @@ class CGroupsTelemetry(object):
             else:
                 not_enabled_extensions.add(extension.name)
 
-        names = []
-        for name in CGroupsTelemetry._tracked.keys():
-            if CGroupsTelemetry.delete_empty_groups and name in not_enabled_extensions:
-                CGroupsTelemetry.stop_tracking(name)
-            else:
-                names.append("[{0}]".format(name))
-
-        now_tracking = " ".join(names)
-        if now_tracking != CGroupsTelemetry.was_tracked:
+        names_now_tracked = set(CGroupsTelemetry._tracked.keys())
+        if CGroupsTelemetry.tracked_names != names_now_tracked:
+            now_tracking = " ".join("[{0}]".format(name) for name in names_now_tracked)
             if len(now_tracking):
                 logger.info("After updating cgroup telemetry, tracking {0}".format(now_tracking))
             else:
                 logger.warn("After updating cgroup telemetry, tracking no cgroups.")
-            CGroupsTelemetry.was_tracked = now_tracking
+            CGroupsTelemetry.tracked_names = names_now_tracked
 
     def __init__(self, name, cgroup=None):
         """
@@ -313,7 +310,7 @@ class CGroupsTelemetry(object):
         self.previous_wall_time = 0
 
         self.data = {}
-        for hierarchy in CGroupsTelemetry.hierarchies():
+        for hierarchy in CGroupsTelemetry.metrics_hierarchies():
             self.data[hierarchy] = CGroupsTelemetry._metrics[hierarchy](self)
 
     def collect(self):
@@ -335,8 +332,9 @@ class CGroups(object):
     """
     # whether cgroup support is enabled
     _enabled = True
-    _hierarchies = CGroupsTelemetry.hierarchies()
+    _hierarchies = CGroupsTelemetry.metrics_hierarchies()
     _use_systemd = None     # Tri-state: None (i.e. "unknown"), True, False
+    _osutil = get_osutil()
 
     @staticmethod
     def for_extension(name):
@@ -391,7 +389,7 @@ class CGroups(object):
         :rtype: Bool
         """
         if CGroups._use_systemd is None:
-            hierarchy = HIERARCHIES[0]
+            hierarchy = METRIC_HIERARCHIES[0]
             path = CGroups.get_my_cgroup_folder(hierarchy)
             CGroups._use_systemd = path.startswith(CGroups.construct_systemd_path_for_hierarchy(hierarchy))
         return CGroups._use_systemd
@@ -419,7 +417,7 @@ class CGroups(object):
                     # This is unexpected, as the agent runs as root
                     raise CGroupsException("Create directory for cgroup {0}: permission denied".format(path))
                 else:
-                    raise OSError(e)
+                    raise
 
     @staticmethod
     def construct_custom_path_for_hierarchy(hierarchy):
@@ -439,10 +437,7 @@ class CGroups(object):
         if self.is_wrapper_cgroup:
             raise CGroupsException("Cannot add a process to the Agents+Extensions wrapper cgroup")
 
-        try:
-            # determine if pid exists by sending signal 0 to it
-            os.kill(pid, 0)
-        except OSError:
+        if not self._osutil.check_pid_alive(pid):
             raise CGroupsException('PID {0} does not exist'.format(pid))
         for hierarchy, cgroup in self.cgroups.items():
             tasks_file = self._get_cgroup_file(hierarchy, 'cgroup.procs')
@@ -480,7 +475,7 @@ class CGroups(object):
         """
         For each hierarchy, construct the wrapper cgroup and apply the appropriate limits
         """
-        for hierarchy in HIERARCHIES:
+        for hierarchy in METRIC_HIERARCHIES:
             root_dir = CGroups.construct_custom_path_for_hierarchy(hierarchy)
             CGroups._try_mkdir(root_dir)
             CGroups._apply_wrapper_limits(root_dir, hierarchy)
@@ -534,7 +529,8 @@ class CGroups(object):
         if not CGroups.enabled():
             return
         if name == AGENT_NAME:
-            logger.warn('Extension cgroup name cannot match agent cgroup name({0})'.format(AGENT_NAME))
+            logger.warn('Extension cgroup name cannot match agent cgroup name ({0})'.format(AGENT_NAME))
+            return
 
         try:
             logger.info("Move process {0} into cgroups for extension {1}".format(pid, name))
@@ -556,7 +552,7 @@ class CGroups(object):
         for entry in cgroup_paths.splitlines():
             fields = entry.split(':')
             if fields[0] == hierarchy_id:
-                return fields[2].lstrip("/")
+                return fields[2].lstrip(os.path.sep)
         raise CGroupsException("This process belongs to no cgroup for hierarchy ID {0}".format(hierarchy_id))
 
     @staticmethod
@@ -589,20 +585,21 @@ class CGroups(object):
         return os.path.join(self.cgroups[hierarchy], file_name)
 
     @staticmethod
-    def _format_cpu_value(value=None):
-        if value is None:
-            limit = CPU_DEFAULT
-        else:
-            try:
-                limit = float(value)
-            except ValueError:
-                raise CGroupsException('CPU Limit must be convertible to a float')
-            else:
-                if limit <= float(0) or limit > float(CGroups.get_num_cores() * 100):
-                    raise CGroupsException('CPU Limit must be between 0 and 100 * numCores')
-                else:
-                    limit = limit / 100
-        return limit
+    def _convert_cpu_limit_to_fraction(value):
+        """
+        Convert a CPU limit from percent (e.g. 50 meaning 50%) to a decimal fraction (0.50).
+        :return: Fraction of one CPU to be made available (e.g. 0.5 means half a core)
+        :rtype: float
+        """
+        try:
+            limit = float(value)
+        except ValueError:
+            raise CGroupsException('CPU Limit must be convertible to a float')
+
+        if limit <= float(0) or limit > float(CGroups.get_num_cores() * 100):
+            raise CGroupsException('CPU Limit must be between 0 and 100 * numCores')
+
+        return limit / 100.0
 
     def get_file(self, hierarchy, file_name):
         """
@@ -644,11 +641,10 @@ class CGroups(object):
         """
         if limit is None:
             return
-        limit = float(limit) / 100.0    # Convert percentage to fraction of unity
 
         if 'cpu' in self.cgroups:
             total_units = float(self.get_parameter('cpu', 'cpu.cfs_period_us'))
-            limit_units = self._format_cpu_value(limit) * total_units
+            limit_units = self._convert_cpu_limit_to_fraction(limit) * total_units
             cpu_shares_file = self._get_cgroup_file('cpu', 'cpu.cfs_quota_us')
             fileutil.write_file(cpu_shares_file, "{0}\n".format(limit_units))
         else:
@@ -661,16 +657,7 @@ class CGroups(object):
 
         :return: int
         """
-        proc_count = 0
-        proc_stat = Cpu.get_proc_stat()
-        if proc_stat is None:
-            raise CGroupsException("Could not read /proc/stat")
-        for line in proc_stat.splitlines():
-            if re.match('^cpu[0-9]', line):
-                proc_count += 1
-        if proc_count == 0:
-            proc_count = 1
-        return proc_count
+        return CGroups._osutil.get_processor_cores()
 
     @staticmethod
     def _format_memory_value(unit, limit=None):

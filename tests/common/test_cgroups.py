@@ -17,9 +17,7 @@
 
 from __future__ import print_function
 
-import mock
-
-from azurelinuxagent.common.cgroups import CGroupsTelemetry, CGroups, CGroupsException
+from azurelinuxagent.common.cgroups import CGroupsTelemetry, CGroups, CGroupsException, BASE_CGROUPS, Cpu
 from tests.tools import *
 
 import os
@@ -27,68 +25,97 @@ import random
 import time
 
 
-def waste_time():
+def consume_cpu_time():
     waste = 0
-    for x in range(1,100000):
+    for x in range(1, 100000):
         waste += random.random()
     return waste
 
 
+def make_self_cgroups():
+    """
+    Build a CGroups object for the cgroup to which this process already belongs
+
+    :return: CGroups containing this process
+    :rtype: CGroups
+    """
+    suffix = CGroups.get_my_cgroup_path(CGroups.get_hierarchy_id('cpu'))
+
+    def path_maker(x):
+        return os.path.join(BASE_CGROUPS, x, suffix)
+
+    return CGroups("test", path_maker)
+
+
+def make_root_cgroups():
+    def path_maker(x):
+        return os.path.join(BASE_CGROUPS, x)
+
+    return CGroups("root", path_maker)
+
+
 class TestCGroups(AgentTestCase):
-    @patch("os.mkdir")
-    @patch("azurelinuxagent.common.cgroups.CGroups.create_user_cgroups")
-    def test_cgroups_telemetry_inplace(self, _, __):
+    def test_cgroups_telemetry_inplace(self):
         """
         Test raw measures and basic statistics for the cgroup in which this process is currently running.
         """
-        cpu_hierarchy_id = CGroups.get_hierarchy_id('cpu')
-        self.assertTrue(cpu_hierarchy_id != '')
-        in_root_cgroup = True
-        cgroup_path = CGroups.get_my_cgroup_path(cpu_hierarchy_id)
-        if cgroup_path.startswith("/"):
-            cgroup_path.lstrip("/")
-            in_root_cgroup = False
-        ct = CGroupsTelemetry(cgroup_path)
-        self.assertTrue(ct.cpu_count > 0)
-        self.assertTrue(ct.current_system_cpu > 0)
-        self.assertTrue(ct.current_cpu_total > 0)
-        if not in_root_cgroup:
-            # If I'm not in the root cgroup, then make sure I'm measuring my group distinctly from the whole system
-            self.assertTrue(ct.current_cpu_total < ct.current_system_cpu)
-        waste_time()    # Eat some CPU
-        time.sleep(1)   # Generate some idle time
-        percent_used = ct.get_cpu_percent()
-        self.assertTrue(ct.current_cpu_total > ct.previous_cpu_total)
-        self.assertTrue(ct.current_system_cpu > ct.previous_system_cpu)
-        self.assertTrue(percent_used > 0)
+        cg = make_self_cgroups()
+        ct = CGroupsTelemetry("test", cg)
+        cpu = Cpu(ct)
+        self.assertGreater(cpu.current_system_cpu, 0)
+        self.assertGreater(cpu.current_cpu_total, 0)
 
-    @patch("os.mkdir")
-    @patch("azurelinuxagent.common.cgroups.CGroups.create_user_cgroups")
-    @patch("azurelinuxagent.common.cgroups.CGroups._get_cgroup_file",
-           return_value="/sys/fs/cgroup/cpu/cpuacct.stat")
-    def test_cgroups_telemetry_instantiation(self, _, __, ___):
-        ct = CGroupsTelemetry('test')
-        self.assertTrue(ct.cpu_count > 0)
-        self.assertTrue(ct.current_system_cpu > 0)
-        self.assertTrue(ct.current_cpu_total > 0)
+        consume_cpu_time()  # Eat some CPU
+        time.sleep(1)       # Generate some idle time
+        cpu.update()
 
-    @patch("os.mkdir")
-    @patch("azurelinuxagent.common.cgroups.CGroups.create_user_cgroups")
-    @patch("azurelinuxagent.common.cgroups.CGroups._get_cgroup_file",
-           return_value="/sys/fs/cgroup/cpu/cpuacct.stat")
+        self.assertGreater(cpu.current_cpu_total, cpu.previous_cpu_total)
+        self.assertGreater(cpu.current_system_cpu, cpu.previous_system_cpu)
+
+        percent_used = cpu.get_cpu_percent()
+        self.assertGreater(percent_used, 0)
+
+    def test_cgroups_telemetry_in_place_non_root(self, _, __):
+        """
+        Ensure this (non-root) cgroup has distinct metrics from the root cgroup. Does nothing on systems where the
+        default cgroup for a randomly-created process (like this test invocation) is the root cgroup.
+        """
+        cg = make_self_cgroups()
+        root = make_root_cgroups()
+        if cg.cgroups['cpu'] != root.cgroups['cpu']:
+            ct = CGroupsTelemetry("test", cg)
+            cpu = Cpu(ct)
+            self.assertLess(cpu.current_cpu_total, cpu.current_system_cpu)
+
+            consume_cpu_time()  # Eat some CPU
+            time.sleep(1)       # Generate some idle time
+            cpu.update()
+            self.assertLess(cpu.current_cpu_total, cpu.current_system_cpu)
+
+    def test_cgroups_telemetry_instantiation(self):
+        pass
+
     def test_cgroups_telemetry_cpu(self, _, __, ___):
-        ct = CGroupsTelemetry('test')
-        p1 = ct.get_cpu_percent()
-        p2 = ct.get_cpu_percent()
-        self.assertTrue(p1 > 0)
-        self.assertTrue(p2 > 0)
-        self.assertTrue(p2 != p1)
+        cg = make_self_cgroups()
+        ct = CGroupsTelemetry('test', cg)
+        cpu = Cpu(ct)
+        ticks_before = cpu.current_cpu_total
+        p1 = cpu.get_cpu_percent()
+        self.assertGreater(p1, 0)
+        self.assertLess(p1, 100)
+        consume_cpu_time()
+        cpu.update()
+        ticks_after = cpu.current_cpu_total
+        p2 = cpu.get_cpu_percent()
+        self.assertGreater(p2, 0)
+        self.assertLess(p2, 100)
+        self.assertGreater(ticks_after, ticks_before)
 
     def test_format_memory_value(self):
-        self.assertTrue(-1 == CGroups._format_memory_value('bytes', None))
-        self.assertTrue(2048 == CGroups._format_memory_value('kilobytes', 2))
-        self.assertTrue(0 == CGroups._format_memory_value('kilobytes', 0))
-        self.assertTrue(2048000 == CGroups._format_memory_value('kilobytes', 2000))
-        self.assertTrue(2048*1024 == CGroups._format_memory_value('megabytes', 2))
-        self.assertTrue(1536 * 1024 * 1024 == CGroups._format_memory_value('gigabytes', 1.5))
+        self.assertEqual(-1, CGroups._format_memory_value('bytes', None))
+        self.assertEqual(2048, CGroups._format_memory_value('kilobytes', 2))
+        self.assertEqual(0, CGroups._format_memory_value('kilobytes', 0))
+        self.assertEqual(2048000, CGroups._format_memory_value('kilobytes', 2000))
+        self.assertEqual(2048*1024, CGroups._format_memory_value('megabytes', 2))
+        self.assertEqual(1536 * 1024 * 1024, CGroups._format_memory_value('gigabytes', 1.5))
         self.assertRaises(CGroupsException, CGroups._format_memory_value, ['KiloBytes', 1])

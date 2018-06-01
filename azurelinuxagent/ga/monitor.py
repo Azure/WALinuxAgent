@@ -246,7 +246,7 @@ class MonitorHandler(object):
                     add_event(
                         name=AGENT_NAME,
                         version=CURRENT_VERSION,
-                        op=WALAEventOperation.HeartBeat,
+                        op=WALAEventOperation.HttpErrors,
                         is_success=True,
                         message=msg,
                         log_event=False)
@@ -274,7 +274,7 @@ class MonitorHandler(object):
                             message=msg,
                             log_event=False)
             except Exception as e:
-                logger.warn("Failed to send heartbeat: {0} [{1}]".format(e, traceback.format_exc()))
+                logger.warn("Failed to send heartbeat: {0} [{1}]", e, traceback.format_exc())
 
             try:
                 # performance counters
@@ -285,15 +285,14 @@ class MonitorHandler(object):
                             if value > 0:
                                 report_metric(metric_group, metric_name, cgroup_name, value)
             except Exception as e:
-                logger.warn("Failed to collect performance metrics: {0}", e)
-                logger.warn(traceback.format_exc())
+                logger.warn("Failed to collect performance metrics: {0} [{1}]", e, traceback.format_exc())
 
             # Look for extension cgroups we're not already tracking and track them
             try:
                 ext_handlers_list, incarnation = protocol.get_ext_handlers()
                 CGroupsTelemetry.update_tracked(ext_handlers_list.extHandlers)
             except Exception as e:
-                logger.warn("Monitor: updating tracked extensions raised {0}: {1}".format(e, traceback.format_exc()))
+                logger.warn("Monitor: updating tracked extensions raised {0}: {1}", e, traceback.format_exc())
 
             try:
                 self.collect_and_send_events()
