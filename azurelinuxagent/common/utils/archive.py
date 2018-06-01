@@ -1,5 +1,6 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the Apache License.
+import errno
 import os
 import re
 import shutil
@@ -52,6 +53,14 @@ ARCHIVE_PATTERNS_ZIP       = re.compile('^\d{4}\-\d{2}\-\d{2}T\d{2}:\d{2}:\d{2}\
 class StateFlusher(object):
     def __init__(self, lib_dir):
         self._source = lib_dir
+
+        d = os.path.join(self._source, ARCHIVE_DIRECTORY_NAME)
+        if not os.path.exists(d):
+            try:
+                fileutil.mkdir(d)
+            except OSError as e:
+                if e.errno != errno.EEXIST:
+                    logger.error("{0} : {1}", self._source, e.strerror)
 
     def flush(self, timestamp):
         files = self._get_files_to_archive()
@@ -174,7 +183,8 @@ class StateArchiver(object):
             try:
                 fileutil.mkdir(self._source, mode=0o700)
             except IOError as e:
-                logger.error("{0} : {1}", self._source, e.strerror)
+                if e.errno != errno.EEXIST:
+                    logger.error("{0} : {1}", self._source, e.strerror)
 
     def purge(self):
         """
