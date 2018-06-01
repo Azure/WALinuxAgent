@@ -19,7 +19,6 @@
 
 import subprocess
 import azurelinuxagent.common.logger as logger
-from azurelinuxagent.common.cgroups import CGroups
 from azurelinuxagent.common.future import ustr
 
 if not hasattr(subprocess, 'check_output'):

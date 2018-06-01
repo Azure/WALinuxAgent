@@ -491,8 +491,7 @@ class CGroups(object):
         """
         cgroups_enabled = False
         try:
-            from azurelinuxagent.common import osutil
-            osutil.get_osutil().mount_cgroups()
+            CGroups._osutil.mount_cgroups()
             CGroups._setup_wrapper_groups()
             pid = int(os.getpid())
             if not CGroups.is_systemd_manager():
