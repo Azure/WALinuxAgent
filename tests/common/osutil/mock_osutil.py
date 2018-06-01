@@ -23,7 +23,11 @@ class MockOSUtil(DefaultOSUtil):
         self.sudo_users = set()
 
     def useradd(self, username, expiration=None, comment=None):
-        self.all_users[username] = ((username, None, None, None, comment, None, None, expiration))
+        if username == "":
+            raise Exception("test exception for bad username")
+        if username in self.all_users:
+            raise Exception("test exception, user already exists")
+        self.all_users[username] = (username, None, None, None, comment, None, None, expiration)
 
     def conf_sudoer(self, username, nopasswd=False, remove=False):
         if not remove:
@@ -32,10 +36,16 @@ class MockOSUtil(DefaultOSUtil):
             self.sudo_users.remove(username)
 
     def chpasswd(self, username, password, crypt_id=6, salt_len=10):
+        if password == "":
+            raise Exception("test exception for bad password")
         user = self.all_users[username]
-        self.all_users[username] = ((user[0], password, user[2], user[3], user[4], user[5], user[6], user[7]))
+        self.all_users[username] = (user[0], password, user[2], user[3], user[4], user[5], user[6], user[7])
 
     def del_account(self, username):
+        if username == "":
+            raise Exception("test exception, bad data")
+        if username not in self.all_users:
+            raise Exception("test exception, user does not exist to delete")
         self.all_users.pop(username)
 
     def get_users(self):
