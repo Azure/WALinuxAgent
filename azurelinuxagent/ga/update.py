@@ -541,7 +541,7 @@ class UpdateHandler(object):
 
         known_versions = [agent.version for agent in self.agents]
         if CURRENT_VERSION not in known_versions:
-            logger.info(
+            logger.verbose(
                 u"Running Agent {0} was not found in the agent manifest - adding to list",
                 CURRENT_VERSION)
             known_versions.append(CURRENT_VERSION)
