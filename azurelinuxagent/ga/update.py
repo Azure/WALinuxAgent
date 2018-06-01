@@ -191,7 +191,8 @@ class UpdateHandler(object):
                     version=agent_version,
                     op=WALAEventOperation.Enable,
                     is_success=True,
-                    message=msg)
+                    message=msg,
+                    log_event=False)
 
                 if ret is None:
                     ret = self.child_process.wait()
