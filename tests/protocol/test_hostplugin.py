@@ -22,8 +22,9 @@ import sys
 import azurelinuxagent.common.protocol.restapi as restapi
 import azurelinuxagent.common.protocol.wire as wire
 import azurelinuxagent.common.protocol.hostplugin as hostplugin
-from azurelinuxagent.common.exception import HttpError
 
+from azurelinuxagent.common import event
+from azurelinuxagent.common.exception import HttpError
 from azurelinuxagent.common.protocol.hostplugin import API_VERSION
 from azurelinuxagent.common.utils import restutil
 from tests.protocol.mockwiredata import WireProtocolData, DATA_FILE
