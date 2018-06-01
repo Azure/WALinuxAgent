@@ -888,7 +888,7 @@ class GuestAgent(object):
             else:
                 error_response = restutil.read_response_error(resp)
                 logger.verbose("Fetch was unsuccessful [{0}]", error_response)
-                is_healthy = restutil.request_failed_at_hostplugin(resp)
+                is_healthy = not restutil.request_failed_at_hostplugin(resp)
 
             if self.host is not None:
                 self.host.report_fetch_health(uri, is_healthy, source='GuestAgent', response=error_response)

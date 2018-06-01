@@ -654,7 +654,7 @@ class WireClient(object):
                 logger.warn(msg)
                 if self.host_plugin is not None:
                     self.host_plugin.report_fetch_health(uri,
-                                                         is_healthy=restutil.request_failed_at_hostplugin(resp),
+                                                         is_healthy=not restutil.request_failed_at_hostplugin(resp),
                                                          source='WireClient',
                                                          response=error_response)
                 raise ProtocolError(msg)

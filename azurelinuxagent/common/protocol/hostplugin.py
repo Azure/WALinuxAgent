@@ -232,7 +232,7 @@ class HostPluginProtocol(object):
 
         if restutil.request_failed(response):
             error_response = restutil.read_response_error(response)
-            is_healthy = restutil.request_failed_at_hostplugin(response)
+            is_healthy = not restutil.request_failed_at_hostplugin(response)
             self.report_status_health(is_healthy=is_healthy, response=error_response)
             raise HttpError("HostGAPlugin: Put BlockBlob failed: {0}"
                             .format(error_response))
@@ -257,7 +257,7 @@ class HostPluginProtocol(object):
 
         if restutil.request_failed(response):
             error_response = restutil.read_response_error(response)
-            is_healthy = restutil.request_failed_at_hostplugin(response)
+            is_healthy = not restutil.request_failed_at_hostplugin(response)
             self.report_status_health(is_healthy=is_healthy, response=error_response)
             raise HttpError("HostGAPlugin: Failed PageBlob clean-up: {0}"
                             .format(error_response))
@@ -290,7 +290,7 @@ class HostPluginProtocol(object):
 
             if restutil.request_failed(response):
                 error_response = restutil.read_response_error(response)
-                is_healthy = restutil.request_failed_at_hostplugin(response)
+                is_healthy = not restutil.request_failed_at_hostplugin(response)
                 self.report_status_health(is_healthy=is_healthy, response=error_response)
                 raise HttpError(
                     "HostGAPlugin Error: Put PageBlob bytes "
