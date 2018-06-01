@@ -30,6 +30,7 @@ import azurelinuxagent.common.utils.shellutil as shellutil
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.exception import CryptError
+from azurelinuxagent.common.version import PY_VERSION_MAJOR
 from tests.tools import *
 from subprocess import CalledProcessError
 
@@ -65,7 +66,10 @@ class TestCryptoUtilOperations(AgentTestCase):
             c.write(load_data("wire/sample.pem"))
         encrypted_string = u"abc@123"        
         crypto = CryptUtil(conf.get_openssl_cmd())
-        self.assertRaises(binascii.Error, crypto.decrypt_secret, encrypted_string, prv_key)
+        if PY_VERSION_MAJOR <= 2:
+            self.assertRaises(TypeError, crypto.decrypt_secret, encrypted_string, prv_key)
+        else:
+            self.assertRaises(binascii.Error, crypto.decrypt_secret, encrypted_string, prv_key)
 
 if __name__ == '__main__':
     unittest.main()
