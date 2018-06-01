@@ -403,14 +403,14 @@ class CGroups(object):
     @staticmethod
     def _try_mkdir(path):
         """
-        Try to create a directory. If it already exists as such, do nothing. Raise appropriate exceptions if an error
-        should occur.
+        Try to create a directory, recursively. If it already exists as such, do nothing. Raise the appropriate
+        exception should an error occur.
 
         :param path: str
         """
         if not os.path.isdir(path):
             try:
-                os.mkdir(path)
+                os.makedirs(path, 0o755)
             except OSError as e:
                 if e.errno == errno.EEXIST:
                     if not os.path.isdir(path):

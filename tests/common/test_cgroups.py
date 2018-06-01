@@ -60,6 +60,10 @@ def make_root_cgroups():
 
 
 class TestCGroups(AgentTestCase):
+    @classmethod
+    def setUpClass(cls):
+        CGroups.setup()
+
     def test_cgroups_telemetry_inplace(self):
         """
         Test raw measures and basic statistics for the cgroup in which this process is currently running.
