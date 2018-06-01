@@ -26,6 +26,8 @@ from azurelinuxagent.common.version import CURRENT_VERSION
 
 from tests.tools import *
 
+import azurelinuxagent.common.event as event
+
 
 class TestEvent(AgentTestCase):
     def test_event_status_event_marked(self):

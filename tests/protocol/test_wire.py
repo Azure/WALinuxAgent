@@ -171,6 +171,9 @@ class TestWireProtocol(AgentTestCase):
         self.assertEqual(patch_http.call_args_list[1][0][1], host_uri)
 
     def test_upload_status_blob_default(self, *args):
+        """
+        Default status blob method is HostPlugin.
+        """
         vmstatus = VMStatus(message="Ready", status="Ready")
         wire_protocol_client = WireProtocol(wireserver_url).client
         wire_protocol_client.ext_conf = ExtensionsConfig(None)
@@ -184,9 +187,12 @@ class TestWireProtocol(AgentTestCase):
                     HostPluginProtocol.set_default_channel(False)
                     wire_protocol_client.upload_status_blob()
 
-                    patch_default_upload.assert_called_once_with(testurl)
-                    patch_get_goal_state.assert_not_called()
-                    patch_host_ga_plugin_upload.assert_not_called()
+                    # do not call the direct method unless host plugin fails
+                    patch_default_upload.assert_not_called()
+                    # host plugin always fetches a goal state
+                    patch_get_goal_state.assert_called_once_with()
+                    # host plugin uploads the status blob
+                    patch_host_ga_plugin_upload.assert_called_once_with(ANY, testurl, 'BlockBlob')
 
     def test_upload_status_blob_host_ga_plugin(self, *args):
         vmstatus = VMStatus(message="Ready", status="Ready")
@@ -208,11 +214,10 @@ class TestWireProtocol(AgentTestCase):
                     HostPluginProtocol.set_default_channel(False)
                     wire_protocol_client.get_goal_state = Mock(return_value=goal_state)
                     wire_protocol_client.upload_status_blob()
-                    patch_default_upload.assert_called_once_with(testurl)
+                    patch_default_upload.assert_not_called()
                     self.assertEqual(1, wire_protocol_client.get_goal_state.call_count)
                     patch_http.assert_called_once_with(testurl, wire_protocol_client.status_blob)
-                    self.assertTrue(HostPluginProtocol.is_default_channel())
-                    HostPluginProtocol.set_default_channel(False)
+                    self.assertFalse(HostPluginProtocol.is_default_channel())
 
     def test_upload_status_blob_unknown_type_assumes_block(self, *args):
         vmstatus = VMStatus(message="Ready", status="Ready")
@@ -230,7 +235,7 @@ class TestWireProtocol(AgentTestCase):
 
                     patch_prepare.assert_called_once_with("BlockBlob")
                     patch_default_upload.assert_called_once_with(testurl)
-                    patch_get_goal_state.assert_not_called()
+                    patch_get_goal_state.assert_called_once_with()
 
     def test_upload_status_blob_reports_prepare_error(self, *args):
         vmstatus = VMStatus(message="Ready", status="Ready")
