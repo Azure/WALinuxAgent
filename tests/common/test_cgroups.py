@@ -68,7 +68,6 @@ class TestCGroups(AgentTestCase):
         ct = CGroupsTelemetry("test", cg)
         cpu = Cpu(ct)
         self.assertGreater(cpu.current_system_cpu, 0)
-        self.assertGreater(cpu.current_cpu_total, 0)
 
         consume_cpu_time()  # Eat some CPU
         time.sleep(1)       # Generate some idle time
@@ -105,9 +104,6 @@ class TestCGroups(AgentTestCase):
         ct = CGroupsTelemetry('test', cg)
         cpu = Cpu(ct)
         ticks_before = cpu.current_cpu_total
-        p1 = cpu.get_cpu_percent()
-        self.assertGreater(p1, 0)
-        self.assertLess(p1, 100)
         consume_cpu_time()
         cpu.update()
         ticks_after = cpu.current_cpu_total
@@ -122,5 +118,5 @@ class TestCGroups(AgentTestCase):
         self.assertEqual(0, CGroups._format_memory_value('kilobytes', 0))
         self.assertEqual(2048000, CGroups._format_memory_value('kilobytes', 2000))
         self.assertEqual(2048*1024, CGroups._format_memory_value('megabytes', 2))
-        self.assertEqual(1536 * 1024 * 1024, CGroups._format_memory_value('gigabytes', 1.5))
-        self.assertRaises(CGroupsException, CGroups._format_memory_value, ['KiloBytes', 1])
+        self.assertEqual((1024 + 512) * 1024 * 1024, CGroups._format_memory_value('gigabytes', 1.5))
+        self.assertRaises(CGroupsException, CGroups._format_memory_value, 'KiloBytes', 1)

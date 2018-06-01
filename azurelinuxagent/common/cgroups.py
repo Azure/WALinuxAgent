@@ -665,11 +665,11 @@ class CGroups(object):
             value = MEMORY_DEFAULT
         else:
             try:
-                limit = int(limit)
+                limit = float(limit)
             except ValueError:
-                raise CGroupsException('Limit must be convertible to an int')
+                raise CGroupsException('Limit must be convertible to a float')
             else:
-                value = limit * units[unit]
+                value = int(limit * units[unit])
         return value
 
     def set_memory_limit(self, limit=None, unit='megabytes'):
