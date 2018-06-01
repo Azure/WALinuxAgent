@@ -39,17 +39,22 @@ def make_self_cgroups():
     :return: CGroups containing this process
     :rtype: CGroups
     """
-    suffix = CGroups.get_my_cgroup_path(CGroups.get_hierarchy_id('cpu'))
+    def path_maker(hierarchy, __):
+        suffix = CGroups.get_my_cgroup_path(CGroups.get_hierarchy_id('cpu'))
+        return os.path.join(BASE_CGROUPS, hierarchy, suffix)
 
-    def path_maker(x):
-        return os.path.join(BASE_CGROUPS, x, suffix)
-
-    return CGroups("test", path_maker)
+    return CGroups("inplace", path_maker)
 
 
 def make_root_cgroups():
-    def path_maker(x):
-        return os.path.join(BASE_CGROUPS, x)
+    """
+    Build a CGroups object for the topmost cgroup
+
+    :return: CGroups for most-encompassing cgroup
+    :rtype: CGroups
+    """
+    def path_maker(hierarchy, _):
+        return os.path.join(BASE_CGROUPS, hierarchy)
 
     return CGroups("root", path_maker)
 
@@ -75,7 +80,7 @@ class TestCGroups(AgentTestCase):
         percent_used = cpu.get_cpu_percent()
         self.assertGreater(percent_used, 0)
 
-    def test_cgroups_telemetry_in_place_non_root(self, _, __):
+    def test_cgroups_telemetry_in_place_non_root(self):
         """
         Ensure this (non-root) cgroup has distinct metrics from the root cgroup. Does nothing on systems where the
         default cgroup for a randomly-created process (like this test invocation) is the root cgroup.
@@ -95,7 +100,7 @@ class TestCGroups(AgentTestCase):
     def test_cgroups_telemetry_instantiation(self):
         pass
 
-    def test_cgroups_telemetry_cpu(self, _, __, ___):
+    def test_cgroups_telemetry_cpu(self):
         cg = make_self_cgroups()
         ct = CGroupsTelemetry('test', cg)
         cpu = Cpu(ct)

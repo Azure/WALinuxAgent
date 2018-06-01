@@ -337,12 +337,20 @@ class CGroups(object):
     _osutil = get_osutil()
 
     @staticmethod
+    def _construct_custom_path_for_hierarchy(hierarchy, cgroup_name):
+        return os.path.join(BASE_CGROUPS, hierarchy, AGENT_NAME, cgroup_name).rstrip(os.path.sep)
+
+    @staticmethod
+    def _construct_systemd_path_for_hierarchy(hierarchy, cgroup_name):
+        return os.path.join(BASE_CGROUPS, hierarchy, 'system.slice', cgroup_name).rstrip(os.path.sep)
+
+    @staticmethod
     def for_extension(name):
-        return CGroups(name, CGroups.construct_custom_path_for_hierarchy)
+        return CGroups(name, CGroups._construct_custom_path_for_hierarchy)
 
     @staticmethod
     def for_systemd_service(name):
-        return CGroups(name.lower(), CGroups.construct_systemd_path_for_hierarchy)
+        return CGroups(name.lower(), CGroups._construct_systemd_path_for_hierarchy)
 
     def __init__(self, name, path_maker):
         """
@@ -368,10 +376,8 @@ class CGroups(object):
             if hierarchy not in system_hierarchies:
                 raise CGroupsException("Hierarchy {0} is not mounted".format(hierarchy))
 
-            if self.is_wrapper_cgroup:
-                cgroup_path = path_maker(hierarchy)
-            else:
-                cgroup_path = os.path.join(path_maker(hierarchy), self.name)
+            cgroup_name = "" if self.is_wrapper_cgroup else self.name
+            cgroup_path = path_maker(hierarchy, cgroup_name)
             if not os.path.exists(cgroup_path):
                 logger.info("Creating cgroup directory {0}".format(cgroup_path))
                 CGroups._try_mkdir(cgroup_path)
@@ -418,14 +424,6 @@ class CGroups(object):
                     raise CGroupsException("Create directory for cgroup {0}: permission denied".format(path))
                 else:
                     raise
-
-    @staticmethod
-    def construct_custom_path_for_hierarchy(hierarchy):
-        return os.path.join(BASE_CGROUPS, hierarchy, AGENT_NAME)
-
-    @staticmethod
-    def construct_systemd_path_for_hierarchy(hierarchy):
-        return os.path.join(BASE_CGROUPS, hierarchy, 'system.slice')
 
     def add(self, pid):
         """
