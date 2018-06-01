@@ -27,6 +27,18 @@ from azurelinuxagent.common.utils import restutil
 
 class Observation(object):
     def __init__(self, name, is_healthy, description='', value=''):
+        if name is None:
+            raise ValueError("Observation name must be provided")
+
+        if is_healthy is None:
+            raise ValueError("Observation health must be provided")
+
+        if value is None:
+            value = ''
+
+        if description is None:
+            description = ''
+
         self.name = name
         self.is_healthy = is_healthy
         self.description = description
@@ -35,10 +47,10 @@ class Observation(object):
     @property
     def as_obj(self):
         return {
-            "ObservationName": self.name,
+            "ObservationName": self.name[:64],
             "IsHealthy": self.is_healthy,
-            "Description": self.description,
-            "Value": self.value
+            "Description": self.description[:128],
+            "Value": self.value[:128]
         }
 
 
