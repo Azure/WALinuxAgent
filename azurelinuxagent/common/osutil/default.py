@@ -1106,6 +1106,7 @@ class DefaultOSUtil(object):
         if pid is None:
             return False
         try:
+            pid = int(pid)
             os.kill(pid, 0)
             return True
         except OSError:

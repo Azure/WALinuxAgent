@@ -397,7 +397,7 @@ class CGroups(object):
         if CGroups._use_systemd is None:
             hierarchy = METRIC_HIERARCHIES[0]
             path = CGroups.get_my_cgroup_folder(hierarchy)
-            CGroups._use_systemd = path.startswith(CGroups.construct_systemd_path_for_hierarchy(hierarchy))
+            CGroups._use_systemd = path.startswith(CGroups._construct_systemd_path_for_hierarchy(hierarchy, ""))
         return CGroups._use_systemd
 
     @staticmethod
@@ -474,7 +474,7 @@ class CGroups(object):
         For each hierarchy, construct the wrapper cgroup and apply the appropriate limits
         """
         for hierarchy in METRIC_HIERARCHIES:
-            root_dir = CGroups.construct_custom_path_for_hierarchy(hierarchy)
+            root_dir = CGroups._construct_custom_path_for_hierarchy(hierarchy, "")
             CGroups._try_mkdir(root_dir)
             CGroups._apply_wrapper_limits(root_dir, hierarchy)
 
