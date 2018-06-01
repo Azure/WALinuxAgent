@@ -717,10 +717,10 @@ class ExtHandlerInstance(object):
     def set_operation(self, op):
         self.operation = op
 
-    def report_event(self, message="", is_success=True, duration=0):
+    def report_event(self, message="", is_success=True, duration=0, log_event=True):
         ext_handler_version = self.ext_handler.properties.version
         add_event(name=self.ext_handler.name, version=ext_handler_version, message=message,
-                  op=self.operation, is_success=is_success, duration=duration)
+                  op=self.operation, is_success=is_success, duration=duration, log_event=log_event)
 
     def download(self):
         begin_utc = datetime.datetime.utcnow()
@@ -1004,7 +1004,7 @@ class ExtHandlerInstance(object):
             raise ExtensionError("Non-zero exit code: {0}, {1}\n{2}".format(ret, cmd, msg))
 
         duration = elapsed_milliseconds(begin_utc)
-        self.report_event(message="{0}\n{1}".format(cmd, msg), duration=duration)
+        self.report_event(message="{0}\n{1}".format(cmd, msg), duration=duration, log_event=False)
 
     def load_manifest(self):
         man_file = self.get_manifest_file()
