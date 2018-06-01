@@ -3,11 +3,9 @@
 
 from __future__ import print_function
 
-from azurelinuxagent.common.event import *
 from azurelinuxagent.common.protocol.hostplugin import *
 from azurelinuxagent.common.protocol.metadata import *
 from azurelinuxagent.common.protocol.wire import *
-from azurelinuxagent.common.utils.fileutil import *
 from azurelinuxagent.ga.update import *
 
 from tests.tools import *
@@ -485,7 +483,8 @@ class TestGuestAgent(UpdateTestCase):
         self.assertFalse(os.path.isdir(self.agent_path))
 
         agent_pkg = load_bin_data(os.path.join("ga", get_agent_file_name()))
-        mock_http_get.return_value= ResponseMock(response=agent_pkg)
+        mock_http_get().__enter__.return_value = ResponseMock(response=agent_pkg)
+        mock_http_get().__exit__.return_value = None
 
         pkg = ExtHandlerPackage(version=str(get_agent_version()))
         pkg.uris.append(ExtHandlerPackageUri())
@@ -501,7 +500,8 @@ class TestGuestAgent(UpdateTestCase):
         self.remove_agents()
         self.assertFalse(os.path.isdir(self.agent_path))
 
-        mock_http_get.return_value= ResponseMock(status=restutil.httpclient.SERVICE_UNAVAILABLE)
+        mock_http_get().__enter__.return_value = ResponseMock(status=restutil.httpclient.SERVICE_UNAVAILABLE)
+        mock_http_get().__exit__.return_value = None
 
         pkg = ExtHandlerPackage(version=str(get_agent_version()))
         pkg.uris.append(ExtHandlerPackageUri())
@@ -518,9 +518,10 @@ class TestGuestAgent(UpdateTestCase):
         self.remove_agents()
         self.assertFalse(os.path.isdir(self.agent_path))
 
-        mock_http_get.return_value = ResponseMock(
+        mock_http_get().__enter__.return_value = ResponseMock(
             status=restutil.httpclient.SERVICE_UNAVAILABLE,
             response="")
+        mock_http_get().__exit__.return_value = None
 
         ext_uri = 'ext_uri'
         host_uri = 'host_uri'
@@ -537,21 +538,23 @@ class TestGuestAgent(UpdateTestCase):
 
         # ensure fallback fails gracefully, no http
         self.assertRaises(UpdateError, agent._download)
-        self.assertEqual(mock_http_get.call_count, 2)
-        self.assertEqual(mock_http_get.call_args_list[0][0][0], ext_uri)
-        self.assertEqual(mock_http_get.call_args_list[1][0][0], api_uri)
+        self.assertEqual(mock_http_get().__enter__.call_count, 2)
+        self.assertEqual(mock_http_get().__exit__.call_count, 2)
+        self.assertEqual(mock_http_get.call_args_list[2][0][0], ext_uri)
+        self.assertEqual(mock_http_get.call_args_list[3][0][0], api_uri)
 
         # ensure fallback fails gracefully, artifact api failure
         with patch.object(HostPluginProtocol,
                           "ensure_initialized",
                           return_value=True):
             self.assertRaises(UpdateError, agent._download)
-            self.assertEqual(mock_http_get.call_count, 4)
+            self.assertEqual(mock_http_get().__enter__.call_count, 4)
+            self.assertEqual(mock_http_get().__exit__.call_count, 4)
 
-            self.assertEqual(mock_http_get.call_args_list[2][0][0], ext_uri)
+            self.assertEqual(mock_http_get.call_args_list[6][0][0], ext_uri)
 
-            self.assertEqual(mock_http_get.call_args_list[3][0][0], art_uri)
-            a, k = mock_http_get.call_args_list[3]
+            self.assertEqual(mock_http_get.call_args_list[7][0][0], art_uri)
+            a, k = mock_http_get.call_args_list[7]
             self.assertEqual(False, k['use_proxy'])
 
             # ensure fallback works as expected
@@ -559,16 +562,16 @@ class TestGuestAgent(UpdateTestCase):
                               "get_artifact_request",
                               return_value=[art_uri, {}]):
                 self.assertRaises(UpdateError, agent._download)
-                self.assertEqual(mock_http_get.call_count, 6)
+                self.assertEqual(mock_http_get().__enter__.call_count, 6)
+                self.assertEqual(mock_http_get().__exit__.call_count, 6)
 
-                a, k = mock_http_get.call_args_list[3]
+                a, k = mock_http_get.call_args_list[7]
                 self.assertEqual(False, k['use_proxy'])
 
-                self.assertEqual(mock_http_get.call_args_list[4][0][0], ext_uri)
-                a, k = mock_http_get.call_args_list[4]
+                self.assertEqual(mock_http_get.call_args_list[10][0][0], ext_uri)
 
-                self.assertEqual(mock_http_get.call_args_list[5][0][0], art_uri)
-                a, k = mock_http_get.call_args_list[5]
+                self.assertEqual(mock_http_get.call_args_list[11][0][0], art_uri)
+                a, k = mock_http_get.call_args_list[11]
                 self.assertEqual(False, k['use_proxy'])
 
     @patch("azurelinuxagent.ga.update.restutil.http_get")
@@ -577,7 +580,8 @@ class TestGuestAgent(UpdateTestCase):
         self.assertFalse(os.path.isdir(self.agent_path))
 
         agent_pkg = load_bin_data(os.path.join("ga", get_agent_file_name()))
-        mock_http_get.return_value= ResponseMock(response=agent_pkg)
+        mock_http_get().__enter__.return_value = ResponseMock(response=agent_pkg)
+        mock_http_get().__exit__.return_value = None
 
         pkg = ExtHandlerPackage(version=str(get_agent_version()))
         pkg.uris.append(ExtHandlerPackageUri())
@@ -1693,36 +1697,6 @@ class ProtocolMock(object):
     def update_goal_state(self, forced=False, max_retry=3):
         self.call_counts["update_goal_state"] += 1
         self.goal_state_forced = self.goal_state_forced or forced
-
-
-class ResponseMock(Mock):
-    def __init__(self, status=restutil.httpclient.OK, response=None, reason=None):
-        Mock.__init__(self)
-        self.status = status
-        self.reason = reason
-        self.response = response
-
-    def read(self):
-        return self.response
-
-
-class TimeMock(Mock):
-    def __init__(self, time_increment=1):
-        Mock.__init__(self)
-        self.next_time = time.time()
-        self.time_call_count = 0
-        self.time_increment = time_increment
-
-        self.sleep_interval = None
-
-    def sleep(self, n):
-        self.sleep_interval = n
-
-    def time(self):
-        self.time_call_count += 1
-        current_time = self.next_time
-        self.next_time += self.time_increment
-        return current_time
 
 
 if __name__ == '__main__':

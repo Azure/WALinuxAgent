@@ -16,15 +16,19 @@
 #
 
 import datetime
+import io
 import json
+import linecache
 import os
 import platform
 import time
 import threading
+import traceback
+
+import tracemalloc
 import uuid
 
 import azurelinuxagent.common.conf as conf
-import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.logger as logger
 
 from azurelinuxagent.common.event import add_event, WALAEventOperation
@@ -40,8 +44,7 @@ from azurelinuxagent.common.protocol.restapi import TelemetryEventParam, \
 from azurelinuxagent.common.utils.restutil import IOErrorCounter
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, getattrib
 from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_VERSION, \
-            DISTRO_CODE_NAME, AGENT_LONG_VERSION, \
-            AGENT_NAME, CURRENT_AGENT, CURRENT_VERSION
+            DISTRO_CODE_NAME, AGENT_NAME, CURRENT_AGENT, CURRENT_VERSION
 
 
 def parse_event(data_str):
@@ -97,6 +100,12 @@ class MonitorHandler(object):
         self.imds_client = get_imds_client()
         self.sysinfo = []
         self.event_thread = None
+
+        self.tracemalloc_snapshots = []
+        self.tracemalloc_filters = [
+            tracemalloc.Filter(False, linecache.__file__),
+            tracemalloc.Filter(False, tracemalloc.__file__),
+        ]
 
     def run(self):
         self.init_sysinfo()
@@ -203,6 +212,73 @@ class MonitorHandler(object):
         except ProtocolError as e:
             logger.error("{0}", e)
 
+    def display_top_stats(self, top_stats, header, limit=50):
+        output = io.StringIO()
+
+        output.write(header)
+        output.write("\n")
+        output.write("Top %s lines\n" % limit)
+        for index, stat in enumerate(top_stats[:limit], 1):
+            frame = stat.traceback[0]
+            # replace "/path/to/module/file.py" with "module/file.py"
+            filename = os.sep.join(frame.filename.split(os.sep)[-2:])
+            output.write("#%s: %s:%s: %.1f KiB -- "
+                  % (index, filename, frame.lineno, stat.size / 1024))
+            line = linecache.getline(frame.filename, frame.lineno).strip()
+            if line:
+                output.write("%s\n" % line)
+
+        other = top_stats[limit:]
+        if other:
+            size = sum(stat.size for stat in other)
+            output.write("%s other: %.1f KiB\n" % (len(other), size / 1024))
+        total = sum(stat.size for stat in top_stats)
+        output.write("Total allocated size: %.1f KiB\n" % (total / 1024))
+
+        logger.info(output.getvalue())
+
+    def display_top_stats_diff(self, top_stats, header, limit=50):
+        output = io.StringIO()
+
+        output.write(header)
+        output.write("\n")
+        output.write("Top %s lines\n" % limit)
+        for index, stat in enumerate(top_stats[:limit], 1):
+            frame = stat.traceback[0]
+            # replace "/path/to/module/file.py" with "module/file.py"
+            filename = os.sep.join(frame.filename.split(os.sep)[-2:])
+            output.write("#%s: %s:%s: total=%.1f KiB, new=%.1f KiB, new blocks=%d, total blocks=%d -- "
+                  % (index, filename, frame.lineno, stat.size_diff / 1024, stat.size / 1024, stat.count_diff, stat.count))
+            line = linecache.getline(frame.filename, frame.lineno).strip()
+            if line:
+                output.write("%s\n" % line)
+
+        other = top_stats[limit:]
+        if other:
+            size = sum(stat.size for stat in other)
+            output.write("%s other: %.1f KiB\n" % (len(other), size / 1024))
+        total = sum(stat.size for stat in top_stats)
+        output.write("Total allocated size: %.1f KiB\n" % (total / 1024))
+
+        logger.info(output.getvalue())
+
+
+    def display_top(self, snapshot, key_type='lineno', limit=10):
+        snapshot = snapshot.filter_traces(self.tracemalloc_filters)
+
+        top_stats = snapshot.statistics(key_type)
+        self.display_top_stats(top_stats, ">>> SNAPSHOT STATISTICS <<<")
+
+    def collect_stats(self):
+        snapshot = tracemalloc.take_snapshot()
+        self.display_top(snapshot)
+
+        self.tracemalloc_snapshots.append(snapshot)
+        if len(self.tracemalloc_snapshots) > 1:
+            stats = self.tracemalloc_snapshots[-1].filter_traces(self.tracemalloc_filters).compare_to(self.tracemalloc_snapshots[-2], 'lineno')
+            self.display_top_stats_diff(stats, ">>> SNAPSHOT COMPARED TO PREVIOUS STASTISTICS <<<")
+            self.tracemalloc_snapshots.pop(0)
+
     def daemon(self):
         period = datetime.timedelta(minutes=30)
         protocol = self.protocol_util.get_protocol()        
@@ -211,52 +287,61 @@ class MonitorHandler(object):
         # Create a new identifier on each restart and reset the counter
         heartbeat_id = str(uuid.uuid4()).upper()
         counter = 0
-        while True:
-            if datetime.datetime.utcnow() >= (last_heartbeat + period):
-                last_heartbeat = datetime.datetime.utcnow()
-                incarnation = protocol.get_incarnation()
-                dropped_packets = self.osutil.get_firewall_dropped_packets(
-                                                    protocol.endpoint)
 
-                msg = "{0};{1};{2};{3}".format(
-                    incarnation, counter, heartbeat_id, dropped_packets)
+        logger.info(">>> ENABLE TRACEMALLOC <<<")
+        tracemalloc.start(10)
 
-                add_event(
-                    name=AGENT_NAME,
-                    version=CURRENT_VERSION,
-                    op=WALAEventOperation.HeartBeat,
-                    is_success=True,
-                    message=msg,
-                    log_event=False)
+        try:
+            while True:
+                if datetime.datetime.utcnow() >= (last_heartbeat + period):
+                    last_heartbeat = datetime.datetime.utcnow()
+                    incarnation = protocol.get_incarnation()
+                    dropped_packets = self.osutil.get_firewall_dropped_packets(
+                                                        protocol.endpoint)
 
-                counter += 1
+                    msg = "{0};{1};{2};{3}".format(
+                        incarnation, counter, heartbeat_id, dropped_packets)
 
-                io_errors = IOErrorCounter.get_and_reset()
-                hostplugin_errors = io_errors.get("hostplugin")
-                protocol_errors = io_errors.get("protocol")
-                other_errors = io_errors.get("other")
-
-                if hostplugin_errors > 0 \
-                        or protocol_errors > 0 \
-                        or other_errors > 0:
-
-                    msg = "hostplugin:{0};protocol:{1};other:{2}"\
-                        .format(hostplugin_errors,
-                                protocol_errors,
-                                other_errors)
                     add_event(
                         name=AGENT_NAME,
                         version=CURRENT_VERSION,
-                        op=WALAEventOperation.HttpErrors,
+                        op=WALAEventOperation.HeartBeat,
                         is_success=True,
                         message=msg,
                         log_event=False)
 
-            try:
-                self.collect_and_send_events()
-            except Exception as e:
-                logger.warn("Failed to send events: {0}", e)
-            time.sleep(60)
+                    counter += 1
+
+                    io_errors = IOErrorCounter.get_and_reset()
+                    hostplugin_errors = io_errors.get("hostplugin")
+                    protocol_errors = io_errors.get("protocol")
+                    other_errors = io_errors.get("other")
+
+                    if hostplugin_errors > 0 \
+                            or protocol_errors > 0 \
+                            or other_errors > 0:
+
+                        msg = "hostplugin:{0};protocol:{1};other:{2}"\
+                            .format(hostplugin_errors,
+                                    protocol_errors,
+                                    other_errors)
+                        add_event(
+                            name=AGENT_NAME,
+                            version=CURRENT_VERSION,
+                            op=WALAEventOperation.HttpErrors,
+                            is_success=True,
+                            message=msg,
+                            log_event=False)
+
+                try:
+                    self.collect_and_send_events()
+                except Exception as e:
+                    logger.warn("Failed to send events: {0}", e)
+
+                self.collect_stats()
+                time.sleep(60)
+        except:
+            logger.error(traceback.format_exc())
 
     def add_sysinfo(self, event):
         sysinfo_names = [v.name for v in self.sysinfo]

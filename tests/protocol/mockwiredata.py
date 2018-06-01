@@ -14,7 +14,7 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 #
-
+from azurelinuxagent.common.utils.restutil import HTTPResponseContext
 from tests.tools import *
 from azurelinuxagent.common.exception import HttpError, ResourceGoneError
 from azurelinuxagent.common.future import httpclient
@@ -58,6 +58,7 @@ DATA_FILE_EXT_ROLLINGUPGRADE["ext_conf"] = "wire/ext_conf_upgradeguid.xml"
 DATA_FILE_EXT_SEQUENCING = DATA_FILE.copy()
 DATA_FILE_EXT_SEQUENCING["ext_conf"] = "wire/ext_conf_sequencing.xml"
 
+
 class WireProtocolData(object):
     def __init__(self, data_files=DATA_FILE):
         self.emulate_stale_goal_state = False
@@ -90,7 +91,7 @@ class WireProtocolData(object):
         content = None
 
         resp = MagicMock()
-        resp.status = httpclient.OK
+        resp().__exit__.return_value = None
 
         # wire server versions
         if "comp=versions" in url:
@@ -147,12 +148,17 @@ class WireProtocolData(object):
             elif "ExampleHandlerLinux" in url:
                 content = self.ext
                 self.call_counts["ExampleHandlerLinux"] += 1
-                resp.read = Mock(return_value=content)
+                response_mock = ResponseMock(response=content)
+                resp().__enter__.return_value = response_mock
+                resp.__enter__.return_value = response_mock
                 return resp
             else:
                 raise Exception("Bad url {0}".format(url))
 
-        resp.read = Mock(return_value=content.encode("utf-8"))
+        response_mock = ResponseMock(response=content.encode('utf-8'))
+        resp().__enter__.return_value = response_mock
+        resp.__enter__.return_value = response_mock
+
         return resp
 
     def mock_crypt_util(self, *args, **kw):

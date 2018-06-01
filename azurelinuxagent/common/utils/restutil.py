@@ -116,6 +116,56 @@ class IOErrorCounter(object):
         IOErrorCounter._protocol_endpoint = endpoint
 
 
+class HTTPResponseContext(object):
+    def __init__(self, conn, resp):
+        self._conn = conn
+        self._resp = resp
+
+    @property
+    def status(self):
+        return self._resp.status
+
+    @property
+    def reason(self):
+        return self._resp.reason
+
+    @property
+    def version(self):
+        return self._resp.version
+
+    @property
+    def msg(self):
+        return self._resp.msg
+
+    def read(self):
+        return self._resp.read()
+
+    def getheader(self, name):
+        return self._resp.getheader(name)
+
+    def __enter__(self):
+        return self._resp
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self._conn.close()
+
+
+class HTTPResponseMaterialized(object):
+    def __init__(self, resp):
+        self.status = resp.status
+        self.reason = resp.reason
+        self._content = resp.read()
+
+    def read(self):
+        return self._content
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        pass
+
+
 def _compute_delay(retry_attempt=1, delay=DELAY_IN_SECONDS):
     fib = (1, 1)
     for n in range(retry_attempt):
@@ -206,7 +256,7 @@ def _http_request(method, host, rel_uri, port=None, data=None, secure=False,
                    headers)
 
     conn.request(method=method, url=url, body=data, headers=headers)
-    return conn.getresponse()
+    return HTTPResponseContext(conn, conn.getresponse())
 
 
 def http_request(method,

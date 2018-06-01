@@ -283,18 +283,24 @@ class TestWireProtocol(AgentTestCase):
 
         with patch.object(HostPluginProtocol, "get_artifact_request",
                           return_value = ['dummy_url', {}]) as host_plugin_get_artifact_url_and_headers:
+            storage_service_mock = MagicMock()
+            storage_service_mock().__exit__ = Mock(return_value=None)
+
+            wire_protocol_client.call_storage_service = storage_service_mock
+
+
             #Test when response body is None
-            wire_protocol_client.call_storage_service = Mock(return_value=MockResponse(None, 200))
+            storage_service_mock().__enter__ = Mock(return_value=ResponseMock())
             in_vm_artifacts_profile = wire_protocol_client.get_artifacts_profile()
             self.assertTrue(in_vm_artifacts_profile is None)
 
-            #Test when response body is None
-            wire_protocol_client.call_storage_service = Mock(return_value=MockResponse('   '.encode('utf-8'), 200))
+            #Test when response body is whitespace
+            storage_service_mock().__enter__ = Mock(return_value=ResponseMock(response='   '.encode('utf-8')))
             in_vm_artifacts_profile = wire_protocol_client.get_artifacts_profile()
             self.assertTrue(in_vm_artifacts_profile is None)
 
-            #Test when response body is None
-            wire_protocol_client.call_storage_service = Mock(return_value=MockResponse('{ }'.encode('utf-8'), 200))
+            #Test when response body is empty JSON document
+            storage_service_mock().__enter__ = Mock(return_value=ResponseMock(response='{ }'.encode('utf-8')))
             in_vm_artifacts_profile = wire_protocol_client.get_artifacts_profile()
             self.assertEqual(dict(), in_vm_artifacts_profile.__dict__,
                              'If artifacts_profile_blob has empty json dictionary, in_vm_artifacts_profile '
@@ -310,7 +316,12 @@ class TestWireProtocol(AgentTestCase):
         goal_state = GoalState(WireProtocolData(DATA_FILE).goal_state)
         wire_protocol_client.get_goal_state = Mock(return_value=goal_state)
 
-        wire_protocol_client.call_storage_service = Mock(return_value=MockResponse('{"onHold": "true"}'.encode('utf-8'), 200))
+        storage_service_mock = MagicMock()
+        storage_service_mock().__enter__ = Mock(return_value=ResponseMock(response='{"onHold": "true"}'.encode('utf-8')))
+        storage_service_mock().__exit__ = Mock(return_value=None)
+
+        wire_protocol_client.call_storage_service = storage_service_mock
+
         in_vm_artifacts_profile = wire_protocol_client.get_artifacts_profile()
         self.assertEqual(dict(onHold='true'), in_vm_artifacts_profile.__dict__)
         self.assertTrue(in_vm_artifacts_profile.is_on_hold())
@@ -394,15 +405,6 @@ class TestWireProtocol(AgentTestCase):
             'guestOSInfo' : v1_ga_guest_info
         }
         self.assertEqual(json.dumps(v1_vm_status), actual.to_json())
-
-
-class MockResponse:
-    def __init__(self, body, status_code):
-        self.body = body
-        self.status = status_code
-
-    def read(self):
-        return self.body
 
 
 if __name__ == '__main__':
