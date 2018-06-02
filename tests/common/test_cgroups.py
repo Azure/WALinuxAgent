@@ -64,11 +64,23 @@ class TestCGroups(AgentTestCase):
     def setUpClass(cls):
         CGroups.setup()
 
-    def test_cgroups_telemetry_inplace(self):
+    def setUp(self):
+        CGroups.enable()
+
+    def test_cgroup_utilities(self):
+        cpu_id = CGroups.get_hierarchy_id('cpu')
+        self.assertGreater(int(cpu_id), 0)
+        memory_id = CGroups.get_hierarchy_id('memory')
+        self.assertGreater(int(memory_id), 0)
+        self.assertNotEqual(cpu_id, memory_id)
+
+    def test_telemetry_inplace(self):
         """
         Test raw measures and basic statistics for the cgroup in which this process is currently running.
         """
         cg = make_self_cgroups()
+        self.assertIn('cpu', cg.cgroups)
+        self.assertIn('memory', cg.cgroups)
         ct = CGroupsTelemetry("test", cg)
         cpu = Cpu(ct)
         self.assertGreater(cpu.current_system_cpu, 0)
@@ -83,7 +95,7 @@ class TestCGroups(AgentTestCase):
         percent_used = cpu.get_cpu_percent()
         self.assertGreater(percent_used, 0)
 
-    def test_cgroups_telemetry_in_place_non_root(self):
+    def test_telemetry_in_place_non_root(self):
         """
         Ensure this (non-root) cgroup has distinct metrics from the root cgroup. Does nothing on systems where the
         default cgroup for a randomly-created process (like this test invocation) is the root cgroup.
@@ -100,13 +112,17 @@ class TestCGroups(AgentTestCase):
             cpu.update()
             self.assertLess(cpu.current_cpu_total, cpu.current_system_cpu)
 
-    def test_cgroups_telemetry_instantiation(self):
+    def test_telemetry_instantiation(self):
         pass
 
-    def test_cgroups_telemetry_cpu(self):
+    def test_cpu_telemetry(self):
         cg = make_self_cgroups()
+        self.assertIn('cpu', cg.cgroups)
+        self.assertIn('memory', cg.cgroups)
         ct = CGroupsTelemetry('test', cg)
+        self.assertIs(cg, ct.cgroup)
         cpu = Cpu(ct)
+        self.assertIs(cg, cpu.cgt.cgroup)
         ticks_before = cpu.current_cpu_total
         consume_cpu_time()
         cpu.update()

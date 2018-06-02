@@ -49,8 +49,8 @@ class CGroupsException(Exception):
         self.msg = msg
         if CGroups.enabled():
             pid = os.getpid()
-            logger.verbose("[{0}] Disabling cgroup support: {1}".format(pid, msg))
-            CGroups.disable()
+            # logger.verbose("[{0}] Disabling cgroup support: {1}".format(pid, msg))
+            # CGroups.disable()
 
     def __str__(self):
         return repr(self.msg)
@@ -449,6 +449,10 @@ class CGroups(object):
     @staticmethod
     def disable():
         CGroups._enabled = False
+
+    @staticmethod
+    def enable():
+        CGroups._enabled = True
 
     def set_limits(self):
         """
