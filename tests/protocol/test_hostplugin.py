@@ -472,8 +472,9 @@ class TestHostPlugin(AgentTestCase):
 
         if sys.version_info < (2, 7):
             self.assertRaises(HttpError, host_plugin.put_vm_status, status_blob, sas_url)
-        with self.assertRaises(HttpError):
-            host_plugin.put_vm_status(status_blob=status_blob, sas_url=sas_url)
+        else:
+            with self.assertRaises(HttpError):
+                host_plugin.put_vm_status(status_blob=status_blob, sas_url=sas_url)
 
         self.assertEqual(1, patch_http_get.call_count)
         self.assertEqual(hostplugin_versions_url, patch_http_get.call_args[0][0])
