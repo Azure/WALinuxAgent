@@ -382,7 +382,6 @@ class CGroups(object):
                 logger.info("Creating cgroup directory {0}".format(cgroup_path))
                 CGroups._try_mkdir(cgroup_path)
             self.cgroups[hierarchy] = cgroup_path
-        print("\nCreated group [{0}] has cgroup_paths {1}".format(cgroup_name, self.cgroups))
 
     @staticmethod
     def is_systemd_manager():

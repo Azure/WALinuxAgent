@@ -63,9 +63,7 @@ class TestCGroups(AgentTestCase):
     @classmethod
     def setUpClass(cls):
         CGroups.setup()
-
-    def setUp(self):
-        CGroups.enable()
+        super(AgentTestCase).setUpCls(cls)
 
     def test_cgroup_utilities(self):
         cpu_id = CGroups.get_hierarchy_id('cpu')
