@@ -181,7 +181,7 @@ class CGroupsTelemetry(object):
         "cpu": Cpu,
         "memory": Memory
     }
-    _hierarchies = _metrics.keys()
+    _hierarchies = list(_metrics.keys())
     tracked_names = set()
 
     @staticmethod
@@ -378,10 +378,11 @@ class CGroups(object):
 
             cgroup_name = "" if self.is_wrapper_cgroup else self.name
             cgroup_path = path_maker(hierarchy, cgroup_name)
-            if not os.path.exists(cgroup_path):
+            if not os.path.isdir(cgroup_path):
                 logger.info("Creating cgroup directory {0}".format(cgroup_path))
                 CGroups._try_mkdir(cgroup_path)
             self.cgroups[hierarchy] = cgroup_path
+        print("\nCreated group [{0}] has cgroup_paths {1}".format(cgroup_name, self.cgroups))
 
     @staticmethod
     def is_systemd_manager():
@@ -613,7 +614,8 @@ class CGroups(object):
             except Exception:
                 raise CGroupsException("Could not retrieve cgroup file {0}/{1}".format(hierarchy, file_name))
         else:
-            raise CGroupsException("{0} subsystem not available".format(hierarchy))
+            raise CGroupsException("{0} subsystem not available in cgroup {1}. cgroup paths: {2}".format(
+                hierarchy, self.name, self.cgroups))
 
     def get_parameter(self, hierarchy, parameter_name):
         """
