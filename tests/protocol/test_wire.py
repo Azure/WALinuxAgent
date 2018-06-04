@@ -80,7 +80,8 @@ class TestWireProtocol(AgentTestCase):
         test_data = WireProtocolData(DATA_FILE_EXT_NO_PUBLIC)
         self._test_getters(test_data, *args)
 
-    def test_getters_with_stale_goal_state(self, *args):
+    @patch("azurelinuxagent.common.protocol.healthservice.HealthService.report_host_plugin_extension_artifact")
+    def test_getters_with_stale_goal_state(self, patch_report, *args):
         test_data = WireProtocolData(DATA_FILE)
         test_data.emulate_stale_goal_state = True
 
@@ -93,6 +94,7 @@ class TestWireProtocol(AgentTestCase):
         #    fetched often; however, the dependent documents, such as the
         #    HostingEnvironmentConfig, will be retrieved the expected number
         self.assertEqual(2, test_data.call_counts["hostingenvuri"])
+        self.assertEqual(1, patch_report.call_count)
 
     def test_call_storage_kwargs(self, *args):
         from azurelinuxagent.common.utils import restutil
@@ -219,7 +221,8 @@ class TestWireProtocol(AgentTestCase):
                     patch_http.assert_called_once_with(testurl, wire_protocol_client.status_blob)
                     self.assertFalse(HostPluginProtocol.is_default_channel())
 
-    def test_upload_status_blob_unknown_type_assumes_block(self, *args):
+    @patch("azurelinuxagent.common.protocol.hostplugin.HostPluginProtocol.ensure_initialized")
+    def test_upload_status_blob_unknown_type_assumes_block(self, _, *args):
         vmstatus = VMStatus(message="Ready", status="Ready")
         wire_protocol_client = WireProtocol(wireserver_url).client
         wire_protocol_client.ext_conf = ExtensionsConfig(None)

@@ -101,10 +101,19 @@ class MonitorHandler(object):
 
     def __init__(self):
         self.osutil = get_osutil()
-        self.protocol_util = get_protocol_util()
+        self.protocol = get_protocol_util().get_protocol()
         self.imds_client = get_imds_client()
         self.sysinfo = []
         self.event_thread = None
+        self.last_event_collection = None
+        self.last_telemetry_heartbeat = None
+        self.last_host_plugin_heartbeat = None
+        self.counter = 0
+        self.heartbeat_id = str(uuid.uuid4()).upper()
+        self.host_plugin_errorstate = None
+        self.health_service = None
+        self.health_service = HealthService(self.protocol.endpoint)
+        self.host_plugin_errorstate = ErrorState(min_timedelta=MonitorHandler.HOST_PLUGIN_HEALTH_PERIOD)
 
     def run(self):
         self.init_sysinfo()
@@ -137,8 +146,7 @@ class MonitorHandler(object):
             logger.warn("Failed to get system info: {0}", e)
 
         try:
-            protocol = self.protocol_util.get_protocol()
-            vminfo = protocol.get_vminfo()
+            vminfo = self.protocol.get_vminfo()
             self.sysinfo.append(TelemetryEventParam("VMName",
                                                     vminfo.vmName))
             self.sysinfo.append(TelemetryEventParam("TenantName",
@@ -180,72 +188,54 @@ class MonitorHandler(object):
             msg = "Failed to process {0}, {1}".format(evt_file_name, e)
             raise EventError(msg)
 
-    def collect_and_send_events(self, protocol, last_event_collection):
-        if last_event_collection is None:
-            last_event_collection = datetime.datetime.utcnow() - MonitorHandler.EVENT_COLLECTION_PERIOD
+    def collect_and_send_events(self):
+        if self.last_event_collection is None:
+            self.last_event_collection = datetime.datetime.utcnow() - MonitorHandler.EVENT_COLLECTION_PERIOD
 
-        if datetime.datetime.utcnow() < (last_event_collection + MonitorHandler.EVENT_COLLECTION_PERIOD):
-            return last_event_collection
-
-        try:
-            event_list = TelemetryEventList()
-            event_dir = os.path.join(conf.get_lib_dir(), "events")
-            event_files = os.listdir(event_dir)
-            for event_file in event_files:
-                if not event_file.endswith(".tld"):
-                    continue
-                event_file_path = os.path.join(event_dir, event_file)
-                try:
-                    data_str = self.collect_event(event_file_path)
-                except EventError as e:
-                    logger.error("{0}", e)
-                    continue
-
-                try:
-                    event = parse_event(data_str)
-                    self.add_sysinfo(event)
-                    event_list.events.append(event)
-                except (ValueError, ProtocolError) as e:
-                    logger.warn("Failed to decode event file: {0}", e)
-                    continue
-
-            if len(event_list.events) == 0:
-                return
-
+        if datetime.datetime.utcnow() >= (self.last_event_collection + MonitorHandler.EVENT_COLLECTION_PERIOD):
             try:
-                protocol.report_event(event_list)
-            except ProtocolError as e:
-                logger.error("{0}", e)
-        except Exception as e:
-            logger.warn("Failed to send events: {0}", e)
+                event_list = TelemetryEventList()
+                event_dir = os.path.join(conf.get_lib_dir(), "events")
+                event_files = os.listdir(event_dir)
+                for event_file in event_files:
+                    if not event_file.endswith(".tld"):
+                        continue
+                    event_file_path = os.path.join(event_dir, event_file)
+                    try:
+                        data_str = self.collect_event(event_file_path)
+                    except EventError as e:
+                        logger.error("{0}", e)
+                        continue
 
-        return datetime.datetime.utcnow()
+                    try:
+                        event = parse_event(data_str)
+                        self.add_sysinfo(event)
+                        event_list.events.append(event)
+                    except (ValueError, ProtocolError) as e:
+                        logger.warn("Failed to decode event file: {0}", e)
+                        continue
+
+                if len(event_list.events) == 0:
+                    return
+
+                try:
+                    self.protocol.report_event(event_list)
+                except ProtocolError as e:
+                    logger.error("{0}", e)
+            except Exception as e:
+                logger.warn("Failed to send events: {0}", e)
+
+            self.last_event_collection = datetime.datetime.utcnow()
 
     def daemon(self):
-
-        # Create a new identifier on each restart, reset the counter and all events
-        counter = 0
-        last_event_collection = None
-        last_telemetry_heartbeat = None
-        last_host_plugin_heartbeat = None
-        heartbeat_id = str(uuid.uuid4()).upper()
-        protocol = self.protocol_util.get_protocol()
-        host_plugin_errorstate = ErrorState(min_timedelta=MonitorHandler.HOST_PLUGIN_HEALTH_PERIOD)
-        health_service = HealthService(protocol.endpoint)
-
+        min_delta = min(MonitorHandler.TELEMETRY_HEARTBEAT_PERIOD,
+                        MonitorHandler.EVENT_COLLECTION_PERIOD,
+                        MonitorHandler.HOST_PLUGIN_HEARTBEAT_PERIOD).seconds
         while True:
-            last_telemetry_heartbeat = self.send_telemetry_heartbeat(protocol,
-                                                                     counter,
-                                                                     heartbeat_id,
-                                                                     last_telemetry_heartbeat)
-            last_event_collection = self.collect_and_send_events(protocol,
-                                                                 last_event_collection)
-            last_host_plugin_heartbeat = self.send_host_plugin_heartbeat(protocol,
-                                                                         last_host_plugin_heartbeat,
-                                                                         host_plugin_errorstate,
-                                                                         health_service)
-            # currently the smallest delta is 1 minute
-            time.sleep(60)
+            self.send_telemetry_heartbeat()
+            self.collect_and_send_events()
+            self.send_host_plugin_heartbeat()
+            time.sleep(min_delta)
 
     def add_sysinfo(self, event):
         sysinfo_names = [v.name for v in self.sysinfo]
@@ -257,83 +247,80 @@ class MonitorHandler(object):
                 event.parameters.remove(param)
         event.parameters.extend(self.sysinfo)
 
-    def send_host_plugin_heartbeat(self, protocol, last_host_plugin_heartbeat, host_plugin_errorstate, health_service):
-
+    def send_host_plugin_heartbeat(self):
         """
         Send a health signal every HOST_PLUGIN_HEARTBEAT_PERIOD. The signal is 'Healthy' when we have been able to
         communicate with HostGAPlugin at least once in the last HOST_PLUGIN_HEALTH_PERIOD.
         """
+        if self.last_host_plugin_heartbeat is None:
+            self.last_host_plugin_heartbeat = datetime.datetime.utcnow() - MonitorHandler.HOST_PLUGIN_HEARTBEAT_PERIOD
 
-        if last_host_plugin_heartbeat is None:
-            last_host_plugin_heartbeat = datetime.datetime.utcnow() - MonitorHandler.HOST_PLUGIN_HEARTBEAT_PERIOD
+        if datetime.datetime.utcnow() >= (self.last_host_plugin_heartbeat + MonitorHandler.HOST_PLUGIN_HEARTBEAT_PERIOD):
+            try:
+                host_plugin = self.protocol.client.get_host_plugin()
+                host_plugin.ensure_initialized()
+                is_currently_healthy = host_plugin.get_health()
 
-        if datetime.datetime.utcnow() < (last_host_plugin_heartbeat + MonitorHandler.HOST_PLUGIN_HEARTBEAT_PERIOD):
-            return last_host_plugin_heartbeat
+                if is_currently_healthy:
+                    self.host_plugin_errorstate.reset()
+                else:
+                    self.host_plugin_errorstate.incr()
 
-        try:
-            host_plugin = protocol.client.get_host_plugin()
-            host_plugin.ensure_initialized()
-            is_currently_healthy = host_plugin.get_health()
+                is_healthy = self.host_plugin_errorstate.is_triggered() is False
+                logger.verbose("HostGAPlugin health: {0}", is_healthy)
 
-            if is_currently_healthy:
-                host_plugin_errorstate.reset()
-            else:
-                host_plugin_errorstate.incr()
+                self.health_service.report_host_plugin_heartbeat(is_healthy)
 
-            is_healthy = host_plugin_errorstate.is_triggered() is False
-            logger.verbose("HostGAPlugin health: {0}", is_healthy)
+            except Exception as e:
+                msg = "Exception sending host plugin heartbeat: {0}".format(ustr(e))
+                add_event(
+                    name=AGENT_NAME,
+                    version=CURRENT_VERSION,
+                    op=WALAEventOperation.HostPluginHeartbeat,
+                    is_success=False,
+                    message=msg,
+                    log_event=False)
 
-            health_service.report_host_plugin_heartbeat(is_healthy)
+            self.last_host_plugin_heartbeat = datetime.datetime.utcnow()
 
-        except Exception as e:
-            msg = "Exception sending host plugin heartbeat: {0}".format(ustr(e))
-            add_event(
-                name=AGENT_NAME,
-                version=CURRENT_VERSION,
-                op=WALAEventOperation.HostPluginHeartbeat,
-                is_success=False,
-                message=msg,
-                log_event=False)
+    def send_telemetry_heartbeat(self):
 
-        return datetime.datetime.utcnow()
+        if self.last_telemetry_heartbeat is None:
+            self.last_telemetry_heartbeat = datetime.datetime.utcnow() - MonitorHandler.TELEMETRY_HEARTBEAT_PERIOD
 
-    def send_telemetry_heartbeat(self, protocol, counter, heartbeat_id, last_telemetry_heartbeat):
+        if datetime.datetime.utcnow() >= (self.last_telemetry_heartbeat + MonitorHandler.TELEMETRY_HEARTBEAT_PERIOD):
+            try:
+                incarnation = self.protocol.get_incarnation()
+                dropped_packets = self.osutil.get_firewall_dropped_packets(self.protocol.endpoint)
+                msg = "{0};{1};{2};{3}".format(incarnation, self.counter, self.heartbeat_id, dropped_packets)
 
-        if last_telemetry_heartbeat is None:
-            last_telemetry_heartbeat = datetime.datetime.utcnow() - MonitorHandler.TELEMETRY_HEARTBEAT_PERIOD
+                add_event(
+                    name=AGENT_NAME,
+                    version=CURRENT_VERSION,
+                    op=WALAEventOperation.HeartBeat,
+                    is_success=True,
+                    message=msg,
+                    log_event=False)
 
-        if datetime.datetime.utcnow() < (last_telemetry_heartbeat + MonitorHandler.TELEMETRY_HEARTBEAT_PERIOD):
-            return last_telemetry_heartbeat
+                self.counter += 1
 
-        incarnation = protocol.get_incarnation()
-        dropped_packets = self.osutil.get_firewall_dropped_packets(protocol.endpoint)
-        msg = "{0};{1};{2};{3}".format(incarnation, counter, heartbeat_id, dropped_packets)
+                io_errors = IOErrorCounter.get_and_reset()
+                hostplugin_errors = io_errors.get("hostplugin")
+                protocol_errors = io_errors.get("protocol")
+                other_errors = io_errors.get("other")
 
-        add_event(
-            name=AGENT_NAME,
-            version=CURRENT_VERSION,
-            op=WALAEventOperation.HeartBeat,
-            is_success=True,
-            message=msg,
-            log_event=False)
+                if hostplugin_errors > 0 or protocol_errors > 0 or other_errors > 0:
+                    msg = "hostplugin:{0};protocol:{1};other:{2}".format(hostplugin_errors,
+                                                                         protocol_errors,
+                                                                         other_errors)
+                    add_event(
+                        name=AGENT_NAME,
+                        version=CURRENT_VERSION,
+                        op=WALAEventOperation.HttpErrors,
+                        is_success=True,
+                        message=msg,
+                        log_event=False)
+            except Exception as e:
+                logger.warn("Failed to send heartbeat: {0}", e)
 
-        counter += 1
-
-        io_errors = IOErrorCounter.get_and_reset()
-        hostplugin_errors = io_errors.get("hostplugin")
-        protocol_errors = io_errors.get("protocol")
-        other_errors = io_errors.get("other")
-
-        if hostplugin_errors > 0 or protocol_errors > 0 or other_errors > 0:
-            msg = "hostplugin:{0};protocol:{1};other:{2}".format(hostplugin_errors,
-                                                                 protocol_errors,
-                                                                 other_errors)
-            add_event(
-                name=AGENT_NAME,
-                version=CURRENT_VERSION,
-                op=WALAEventOperation.HttpErrors,
-                is_success=True,
-                message=msg,
-                log_event=False)
-
-        return datetime.datetime.utcnow()
+            self.last_telemetry_heartbeat = datetime.datetime.utcnow()
