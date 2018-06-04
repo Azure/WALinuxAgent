@@ -113,6 +113,7 @@ class MonitorHandler(object):
 
         self.counter = 0
         self.sysinfo = []
+        self.should_run = True
         self.heartbeat_id = str(uuid.uuid4()).upper()
         self.host_plugin_errorstate = ErrorState(min_timedelta=MonitorHandler.HOST_PLUGIN_HEALTH_PERIOD)
 
@@ -237,7 +238,7 @@ class MonitorHandler(object):
         min_delta = min(MonitorHandler.TELEMETRY_HEARTBEAT_PERIOD,
                         MonitorHandler.EVENT_COLLECTION_PERIOD,
                         MonitorHandler.HOST_PLUGIN_HEARTBEAT_PERIOD).seconds
-        while True:
+        while self.should_run:
             self.send_telemetry_heartbeat()
             self.collect_and_send_events()
             self.send_host_plugin_heartbeat()

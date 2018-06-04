@@ -97,6 +97,8 @@ class TestMonitor(AgentTestCase):
         self.assertNotEqual(0, patch_send_events.call_count)
         self.assertNotEqual(0, patch_telemetry_heartbeat.call_count)
 
+        monitor_handler.should_run = False
+
     def test_heartbeat_timings_updates_after_window(self, *args):
         monitor_handler = get_monitor_handler()
 
@@ -125,6 +127,8 @@ class TestMonitor(AgentTestCase):
         self.assertNotEqual(heartbeat_hostplugin, monitor_handler.last_host_plugin_heartbeat)
         self.assertNotEqual(events_collection, monitor_handler.last_event_collection)
         self.assertNotEqual(heartbeat_telemetry, monitor_handler.last_telemetry_heartbeat)
+
+        monitor_handler.should_run = False
 
     def test_heartbeat_timings_no_updates_within_window(self, *args):
         monitor_handler = get_monitor_handler()
@@ -155,6 +159,8 @@ class TestMonitor(AgentTestCase):
         self.assertEqual(events_collection, monitor_handler.last_event_collection)
         self.assertEqual(heartbeat_telemetry, monitor_handler.last_telemetry_heartbeat)
 
+        monitor_handler.should_run = False
+
     @patch("azurelinuxagent.common.protocol.healthservice.HealthService.report_host_plugin_heartbeat")
     def test_heartbeat_creates_signal(self, patch_report_heartbeat, *args):
         monitor_handler = get_monitor_handler()
@@ -162,3 +168,5 @@ class TestMonitor(AgentTestCase):
         monitor_handler.last_host_plugin_heartbeat = datetime.datetime.utcnow() - timedelta(hours=1)
         monitor_handler.send_host_plugin_heartbeat()
         self.assertEqual(1, patch_report_heartbeat.call_count)
+        monitor_handler.should_run = False
+
