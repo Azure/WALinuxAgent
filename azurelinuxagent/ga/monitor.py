@@ -122,6 +122,11 @@ class MonitorHandler(object):
         self.init_protocols()
         self.start()
 
+    def stop(self):
+        self.should_run = False
+        if self.is_alive():
+            self.event_thread.join()
+
     def init_protocols(self):
         self.protocol = self.protocol_util.get_protocol()
         self.health_service = HealthService(self.protocol.endpoint)
