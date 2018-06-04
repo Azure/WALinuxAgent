@@ -88,11 +88,11 @@ class RemoteAccessHandler(object):
                 self.protocol = self.protocol_util.get_protocol()
                 self.protocol.client.update_goal_state(True)
                 self.protocol.client.update_remote_access_conf(self.protocol.client.goal_state)
-                if self.remote_access is None or self.remote_access.incarnation != self.protocol.client.remote_access.incarnation:
+                if self.protocol.client.remote_access is not None \
+                        and (self.remote_access is None or self.remoteaccess.incarnation
+                             != self.protocol.client.remote_access.incarnation):
                     self.remote_access = self.protocol.client.remote_access
                     self.handle_remote_access()
-            else:
-                logger.info("Non JIT enabled client.")
         except Exception as e:
             msg = u"Exception processing remote access handler: {0}".format(
                 ustr(e))

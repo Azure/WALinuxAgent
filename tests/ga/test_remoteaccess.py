@@ -35,7 +35,7 @@ class TestRemoteAccess(AgentTestCase):
     def test_update_remote_access_conf_no_remote_access(self, _):
         protocol = WireProtocol('12.34.56.78')
         goal_state = protocol.client.get_goal_state()
-        self.assertRaises(ProtocolError, protocol.client.update_remote_access_conf, goal_state)
+        protocol.client.update_remote_access_conf(goal_state)
 
     def test_parse_two_remote_access_accounts(self):
         data_str = load_data('wire/remote_access_two_accounts.xml')

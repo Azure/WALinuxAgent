@@ -705,7 +705,8 @@ class WireClient(object):
 
     def update_remote_access_conf(self, goal_state):
         if goal_state.remote_access_uri is None:
-            raise ProtocolError("RemoteAccess uri is empty")
+            # Nothing in accounts data.  Just return, nothing to do.
+            return
         local_file = os.path.join(conf.get_lib_dir(), REMOTE_ACCESS_FILE_NAME)
         xml_text = self.fetch_config(goal_state.remote_access_uri, 
                                      self.get_header_for_cert())
