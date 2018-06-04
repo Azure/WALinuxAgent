@@ -101,23 +101,29 @@ class MonitorHandler(object):
 
     def __init__(self):
         self.osutil = get_osutil()
-        self.protocol = get_protocol_util().get_protocol()
+        self.protocol_util = get_protocol_util()
         self.imds_client = get_imds_client()
-        self.sysinfo = []
+
         self.event_thread = None
         self.last_event_collection = None
         self.last_telemetry_heartbeat = None
         self.last_host_plugin_heartbeat = None
-        self.counter = 0
-        self.heartbeat_id = str(uuid.uuid4()).upper()
-        self.host_plugin_errorstate = None
+        self.protocol = None
         self.health_service = None
-        self.health_service = HealthService(self.protocol.endpoint)
+
+        self.counter = 0
+        self.sysinfo = []
+        self.heartbeat_id = str(uuid.uuid4()).upper()
         self.host_plugin_errorstate = ErrorState(min_timedelta=MonitorHandler.HOST_PLUGIN_HEALTH_PERIOD)
 
     def run(self):
         self.init_sysinfo()
+        self.init_protocols()
         self.start()
+
+    def init_protocols(self):
+        self.protocol = self.protocol_util.get_protocol()
+        self.health_service = HealthService(self.protocol.endpoint)
 
     def is_alive(self):
         return self.event_thread.is_alive()

@@ -158,6 +158,7 @@ class TestMonitor(AgentTestCase):
     @patch("azurelinuxagent.common.protocol.healthservice.HealthService.report_host_plugin_heartbeat")
     def test_heartbeat_creates_signal(self, patch_report_heartbeat, *args):
         monitor_handler = get_monitor_handler()
+        monitor_handler.init_protocols()
         monitor_handler.last_host_plugin_heartbeat = datetime.datetime.utcnow() - timedelta(hours=1)
         monitor_handler.send_host_plugin_heartbeat()
         self.assertEqual(1, patch_report_heartbeat.call_count)

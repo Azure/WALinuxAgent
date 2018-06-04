@@ -12,11 +12,8 @@ import azurelinuxagent.ga.monitor as monitor
 import azurelinuxagent.ga.update as update
 
 
-@patch('azurelinuxagent.common.osutil.get_osutil')
-@patch('azurelinuxagent.common.protocol.get_protocol_util')
-@patch('azurelinuxagent.common.protocol.util.ProtocolUtil.get_protocol')
 class TestImportHandler(AgentTestCase):
-    def test_get_handler(self, *args):
+    def test_get_handler(self):
         osutil.get_osutil()
         protocol.get_protocol_util()
         dhcp.get_dhcp_handler()
