@@ -62,10 +62,13 @@ def make_root_cgroups():
 class TestCGroups(AgentTestCase):
     @classmethod
     def setUpClass(cls):
-        CGroups.setup()
+        CGroups.setup(True)
         super(AgentTestCase, cls).setUpClass()
 
     def test_cgroup_utilities(self):
+        """
+        Test utilities for querying cgroup metadata
+        """
         cpu_id = CGroups.get_hierarchy_id('cpu')
         self.assertGreater(int(cpu_id), 0)
         memory_id = CGroups.get_hierarchy_id('memory')
@@ -94,9 +97,10 @@ class TestCGroups(AgentTestCase):
 
     def test_telemetry_in_place_non_root(self):
         """
-        Ensure this (non-root) cgroup has distinct metrics from the root cgroup. Does nothing on systems where the
-        default cgroup for a randomly-created process (like this test invocation) is the root cgroup.
+        Ensure this (non-root) cgroup has distinct metrics from the root cgroup.
         """
+        # Does nothing on systems where the default cgroup for a randomly-created process (like this test invocation)
+        # is the root cgroup.
         cg = make_self_cgroups()
         root = make_root_cgroups()
         if cg.cgroups['cpu'] != root.cgroups['cpu']:
@@ -110,6 +114,9 @@ class TestCGroups(AgentTestCase):
             self.assertLess(cpu.current_cpu_total, cpu.current_system_cpu)
 
     def test_telemetry_instantiation(self):
+        """
+        Tracking a cgroup for an extension; collect all metrics.
+        """
         # Record initial state
         initial_cgroup = make_self_cgroups()
 
@@ -136,6 +143,9 @@ class TestCGroups(AgentTestCase):
         initial_cgroup.add(os.getpid())
 
     def test_cpu_telemetry(self):
+        """
+        Test Cpu telemetry class
+        """
         cg = make_self_cgroups()
         self.assertIn('cpu', cg.cgroups)
         self.assertIn('memory', cg.cgroups)
@@ -154,6 +164,9 @@ class TestCGroups(AgentTestCase):
         self.assertLess(p2, 100)
 
     def test_format_memory_value(self):
+        """
+        Test formatting of memory amounts into human-readable units
+        """
         self.assertEqual(-1, CGroups._format_memory_value('bytes', None))
         self.assertEqual(2048, CGroups._format_memory_value('kilobytes', 2))
         self.assertEqual(0, CGroups._format_memory_value('kilobytes', 0))

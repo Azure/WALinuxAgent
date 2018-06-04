@@ -383,7 +383,6 @@ class CGroups(object):
                 logger.info("Creating cgroup directory {0}".format(cgroup_path))
                 CGroups._try_mkdir(cgroup_path)
             self.cgroups[hierarchy] = cgroup_path
-        print("Created CGroup({0}), path set {1}".format(self.name, self.cgroups))
 
     @staticmethod
     def is_systemd_manager():
@@ -485,7 +484,7 @@ class CGroups(object):
             CGroups._apply_wrapper_limits(root_dir, hierarchy)
 
     @staticmethod
-    def setup():
+    def setup(suppress_process_add=False):
         """
         Only needs to be called once, and should be called from the -daemon instance of the agent.
             Mount the cgroup fs if necessary
@@ -496,14 +495,15 @@ class CGroups(object):
         cgroups_enabled = False
         try:
             CGroups._osutil.mount_cgroups()
-            CGroups._setup_wrapper_groups()
-            pid = int(os.getpid())
-            if not CGroups.is_systemd_manager():
-                cg = CGroups.for_extension(AGENT_NAME)
-                cg.add(pid)
-                logger.info("Add daemon process pid {0} to {1} cgroup".format(pid, cg.name))
-            else:
-                logger.info("Daemon process pid {0} cgroup managed by systemd".format(pid))
+            if not suppress_process_add:
+                CGroups._setup_wrapper_groups()
+                pid = int(os.getpid())
+                if not CGroups.is_systemd_manager():
+                    cg = CGroups.for_extension(AGENT_NAME)
+                    cg.add(pid)
+                    logger.info("Add daemon process pid {0} to {1} cgroup".format(pid, cg.name))
+                else:
+                    logger.info("Daemon process pid {0} cgroup managed by systemd".format(pid))
             cgroups_enabled = True
             status = "OK"
         except CGroupsException as cge:
