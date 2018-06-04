@@ -132,7 +132,7 @@ class MonitorHandler(object):
         self.health_service = HealthService(self.protocol.endpoint)
 
     def is_alive(self):
-        return self.event_thread.is_alive()
+        return self.event_thread is not None and self.event_thread.is_alive()
 
     def start(self):
         self.event_thread = threading.Thread(target=self.daemon)
