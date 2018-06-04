@@ -118,8 +118,8 @@ class MonitorHandler(object):
         self.host_plugin_errorstate = ErrorState(min_timedelta=MonitorHandler.HOST_PLUGIN_HEALTH_PERIOD)
 
     def run(self):
-        self.init_sysinfo()
         self.init_protocols()
+        self.init_sysinfo()
         self.start()
 
     def stop(self):
