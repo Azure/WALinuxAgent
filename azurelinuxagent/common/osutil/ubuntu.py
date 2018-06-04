@@ -51,29 +51,32 @@ class Ubuntu14OSUtil(DefaultOSUtil):
 
     def mount_cgroups(self):
         try:
-            if os.path.exists('/sys/fs/cgroup/cpu,cpuacct'):
-                # assume cgroups fs mounted
+            if not os.path.exists('/sys/fs/cgroup'):
+                fileutil.mkdir('/sys/fs/cgroup')
+                self.mount(device='cgroup_root',
+                           mount_point='/sys/fs/cgroup',
+                           option="-t tmpfs",
+                           chk_err=False)
+            elif not os.path.isdir('/sys/fs/cgroup'):
+                logger.error("Count not mount cgroups: ordinary file at /sys/fs/cgroup")
                 return
 
-            self.mount(device='cgroup_root',
-                       mount_point='/sys/fs/cgroup',
-                       option="-t tmpfs",
-                       chk_err=False)
-
-            fileutil.mkdir('/sys/fs/cgroup/cpu,cpuacct')
-            self.mount(device='cpu,cpuacct',
-                       mount_point='/sys/fs/cgroup/cpu,cpuacct/',
-                       option="-t cgroup -o cpu,cpuacct",
-                       chk_err=False)
+            if not os.path.exists('/sys/fs/cgroup/cpu,cpuacct'):
+                fileutil.mkdir('/sys/fs/cgroup/cpu,cpuacct')
+                self.mount(device='cpu,cpuacct',
+                           mount_point='/sys/fs/cgroup/cpu,cpuacct/',
+                           option="-t cgroup -o cpu,cpuacct",
+                           chk_err=False)
 
             if not os.path.exists('/sys/fs/cgroup/cpu'):
                 os.symlink('/sys/fs/cgroup/cpu,cpuacct/', '/sys/fs/cgroup/cpu')
 
-            fileutil.mkdir('/sys/fs/cgroup/memory')
-            self.mount(device='memory',
-                       mount_point='/sys/fs/cgroup/memory/',
-                       option="-t cgroup -o memory",
-                       chk_err=False)
+            if not os.path.exists('/sys/fs/cgroup/memory'):
+                fileutil.mkdir('/sys/fs/cgroup/memory')
+                self.mount(device='memory',
+                           mount_point='/sys/fs/cgroup/memory/',
+                           option="-t cgroup -o memory",
+                           chk_err=False)
         except Exception as e:
             logger.error("Could not mount cgroups: {0}", ustr(e))
 

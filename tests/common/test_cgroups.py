@@ -27,7 +27,7 @@ import time
 
 def consume_cpu_time():
     waste = 0
-    for x in range(1, 100000):
+    for x in range(1, 200000):
         waste += random.random()
     return waste
 
@@ -84,7 +84,6 @@ class TestCGroups(AgentTestCase):
         self.assertGreater(cpu.current_system_cpu, 0)
 
         consume_cpu_time()  # Eat some CPU
-        time.sleep(1)       # Generate some idle time
         cpu.update()
 
         self.assertGreater(cpu.current_cpu_total, cpu.previous_cpu_total)
@@ -111,7 +110,28 @@ class TestCGroups(AgentTestCase):
             self.assertLess(cpu.current_cpu_total, cpu.current_system_cpu)
 
     def test_telemetry_instantiation(self):
-        pass
+        # Record initial state
+        initial_cgroup = make_self_cgroups()
+
+        # Put the process into a different cgroup, consume some resources, ensure we see them end-to-end
+        test_cgroup = CGroups.for_extension("agent_unittest")
+        self.assertIn('cpu', test_cgroup.cgroups)
+        self.assertIn('memory', test_cgroup.cgroups)
+        test_cgroup.add(os.getpid())
+        CGroupsTelemetry.track_cgroup(test_cgroup)
+        self.assertTrue(CGroupsTelemetry.is_tracked("agent_unittest"))
+        consume_cpu_time()
+        metrics = CGroupsTelemetry.collect_all_tracked()
+        my_metrics = metrics["agent_unittest"]
+        self.assertEqual(len(my_metrics), 1)
+        metric_family, metric_name, metric_value = my_metrics[0]
+        self.assertEqual(metric_family, "Process")
+        self.assertEqual(metric_name, "% Processor Time")
+        self.assertGreater(metric_value, 0.0)
+
+        # Restore initial state
+        CGroupsTelemetry.stop_tracking("agent_unittest")
+        initial_cgroup.add(os.getpid())
 
     def test_cpu_telemetry(self):
         cg = make_self_cgroups()
@@ -125,10 +145,10 @@ class TestCGroups(AgentTestCase):
         consume_cpu_time()
         cpu.update()
         ticks_after = cpu.current_cpu_total
+        self.assertGreater(ticks_after, ticks_before)
         p2 = cpu.get_cpu_percent()
         self.assertGreater(p2, 0)
         self.assertLess(p2, 100)
-        self.assertGreater(ticks_after, ticks_before)
 
     def test_format_memory_value(self):
         self.assertEqual(-1, CGroups._format_memory_value('bytes', None))

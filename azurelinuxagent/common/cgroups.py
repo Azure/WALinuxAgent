@@ -249,10 +249,6 @@ class CGroupsTelemetry(object):
             del (CGroupsTelemetry._tracked[name])
 
     @staticmethod
-    def set_delete_empty_groups(setting):
-        CGroupsTelemetry.delete_empty_groups = setting
-
-    @staticmethod
     def collect_all_tracked():
         """
         Return a dictionary mapping from the name of a tracked cgroup to the list of collected metrics for that cgroup.
