@@ -61,7 +61,7 @@ OK_CODES = [
     httpclient.ACCEPTED
 ]
 
-UPSTREAM_FAILURE_CODES = [
+HOSTPLUGIN_UPSTREAM_FAILURE_CODES = [
     502
 ]
 
@@ -397,7 +397,7 @@ def request_succeeded(resp, ok_codes=OK_CODES):
     return resp is not None and resp.status in ok_codes
 
 
-def request_failed_at_hostplugin(resp, upstream_failure_codes=UPSTREAM_FAILURE_CODES):
+def request_failed_at_hostplugin(resp, upstream_failure_codes=HOSTPLUGIN_UPSTREAM_FAILURE_CODES):
     """
     Host plugin will return 502 for any upstream issue, so a failure is any 5xx except 502
     """
