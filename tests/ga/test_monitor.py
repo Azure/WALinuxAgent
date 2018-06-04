@@ -16,11 +16,11 @@
 #
 from datetime import timedelta
 
-from azurelinuxagent.common.protocol.wire import WireProtocol
 from tests.tools import *
 from azurelinuxagent.ga.monitor import *
 
 
+@patch('azurelinuxagent.common.event.EventLogger.add_event')
 @patch('azurelinuxagent.common.osutil.get_osutil')
 @patch('azurelinuxagent.common.protocol.get_protocol_util')
 @patch('azurelinuxagent.common.protocol.util.ProtocolUtil.get_protocol')
