@@ -21,12 +21,14 @@ import os
 import platform
 import time
 import threading
+import traceback
 import uuid
 
 import azurelinuxagent.common.conf as conf
-import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.logger as logger
 
+from azurelinuxagent.common.event import report_metric
+from azurelinuxagent.common.cgroups import CGroups, CGroupsTelemetry
 from azurelinuxagent.common.event import add_event, WALAEventOperation
 from azurelinuxagent.common.exception import EventError, ProtocolError, OSUtilError, HttpError
 from azurelinuxagent.common.future import ustr
@@ -40,8 +42,7 @@ from azurelinuxagent.common.protocol.restapi import TelemetryEventParam, \
 from azurelinuxagent.common.utils.restutil import IOErrorCounter
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, getattrib
 from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_VERSION, \
-            DISTRO_CODE_NAME, AGENT_LONG_VERSION, \
-            AGENT_NAME, CURRENT_AGENT, CURRENT_VERSION
+            DISTRO_CODE_NAME, AGENT_NAME, CURRENT_AGENT, CURRENT_VERSION
 
 
 def parse_event(data_str):
@@ -111,12 +112,12 @@ class MonitorHandler(object):
         self.event_thread.start()
 
     def init_sysinfo(self):
-        osversion = "{0}:{1}-{2}-{3}:{4}".format(platform.system(),
-                                                 DISTRO_NAME,
-                                                 DISTRO_VERSION,
-                                                 DISTRO_CODE_NAME,
-                                                 platform.release())
-        self.sysinfo.append(TelemetryEventParam("OSVersion", osversion))
+        os_version = "{0}:{1}-{2}-{3}:{4}".format(platform.system(),
+                                                  DISTRO_NAME,
+                                                  DISTRO_VERSION,
+                                                  DISTRO_CODE_NAME,
+                                                  platform.release())
+        self.sysinfo.append(TelemetryEventParam("OSVersion", os_version))
         self.sysinfo.append(
             TelemetryEventParam("GAVersion", CURRENT_AGENT))
 
@@ -130,32 +131,32 @@ class MonitorHandler(object):
 
         try:
             protocol = self.protocol_util.get_protocol()
-            vminfo = protocol.get_vminfo()
+            vm_info = protocol.get_vminfo()
             self.sysinfo.append(TelemetryEventParam("VMName",
-                                                    vminfo.vmName))
+                                                    vm_info.vmName))
             self.sysinfo.append(TelemetryEventParam("TenantName",
-                                                    vminfo.tenantName))
+                                                    vm_info.tenantName))
             self.sysinfo.append(TelemetryEventParam("RoleName",
-                                                    vminfo.roleName))
+                                                    vm_info.roleName))
             self.sysinfo.append(TelemetryEventParam("RoleInstanceName",
-                                                    vminfo.roleInstanceName))
+                                                    vm_info.roleInstanceName))
             self.sysinfo.append(TelemetryEventParam("ContainerId",
-                                                    vminfo.containerId))
+                                                    vm_info.containerId))
         except ProtocolError as e:
             logger.warn("Failed to get system info: {0}", e)
 
         try:
-            vminfo = self.imds_client.get_compute()
+            vm_info = self.imds_client.get_compute()
             self.sysinfo.append(TelemetryEventParam('Location',
-                                                    vminfo.location))
+                                                    vm_info.location))
             self.sysinfo.append(TelemetryEventParam('SubscriptionId',
-                                                    vminfo.subscriptionId))
+                                                    vm_info.subscriptionId))
             self.sysinfo.append(TelemetryEventParam('ResourceGroupName',
-                                                    vminfo.resourceGroupName))
+                                                    vm_info.resourceGroupName))
             self.sysinfo.append(TelemetryEventParam('VMId',
-                                                    vminfo.vmId))
+                                                    vm_info.vmId))
             self.sysinfo.append(TelemetryEventParam('ImageOrigin',
-                                                    vminfo.image_origin))
+                                                    vm_info.image_origin))
         except (HttpError, ValueError) as e:
             logger.warn("failed to get IMDS info: {0}", e)
 
@@ -204,46 +205,44 @@ class MonitorHandler(object):
             logger.error("{0}", e)
 
     def daemon(self):
+        protocol = self.protocol_util.get_protocol()
+
+        # heartbeat
         period = datetime.timedelta(minutes=30)
-        protocol = self.protocol_util.get_protocol()        
         last_heartbeat = datetime.datetime.utcnow() - period
+
+        # performance counters
+
+        # Track metrics for the roll-up cgroup and for the agent cgroup
+        try:
+            CGroupsTelemetry.track_cgroup(CGroups.for_extension(""))
+            if CGroups.is_systemd_manager():
+                CGroupsTelemetry.track_systemd_service(AGENT_NAME)
+            else:
+                CGroupsTelemetry.track_cgroup(CGroups.for_extension(AGENT_NAME))
+        except Exception as e:
+            logger.warn("monitor: Exception tracking wrapper and agent: {0} [{1}]".format(e, traceback.format_exc()))
+
+        # Deliberately wait to collect data until some time has passed to avoid glitching the first sample.
+        # If the agent is restarted, we "lose" the usage between the last collected sample and the time of restart.
+        collection_period = datetime.timedelta(minutes=5)
+        last_collection = datetime.datetime.utcnow()
 
         # Create a new identifier on each restart and reset the counter
         heartbeat_id = str(uuid.uuid4()).upper()
         counter = 0
         while True:
-            if datetime.datetime.utcnow() >= (last_heartbeat + period):
-                last_heartbeat = datetime.datetime.utcnow()
-                incarnation = protocol.get_incarnation()
-                dropped_packets = self.osutil.get_firewall_dropped_packets(
-                                                    protocol.endpoint)
+            try:
+                # heartbeat
+                if datetime.datetime.utcnow() >= (last_heartbeat + period):
+                    last_heartbeat = datetime.datetime.utcnow()
+                    incarnation = protocol.get_incarnation()
+                    dropped_packets = self.osutil.get_firewall_dropped_packets(
+                                                        protocol.endpoint)
 
-                msg = "{0};{1};{2};{3}".format(
-                    incarnation, counter, heartbeat_id, dropped_packets)
+                    msg = "{0};{1};{2};{3}".format(
+                        incarnation, counter, heartbeat_id, dropped_packets)
 
-                add_event(
-                    name=AGENT_NAME,
-                    version=CURRENT_VERSION,
-                    op=WALAEventOperation.HeartBeat,
-                    is_success=True,
-                    message=msg,
-                    log_event=False)
-
-                counter += 1
-
-                io_errors = IOErrorCounter.get_and_reset()
-                hostplugin_errors = io_errors.get("hostplugin")
-                protocol_errors = io_errors.get("protocol")
-                other_errors = io_errors.get("other")
-
-                if hostplugin_errors > 0 \
-                        or protocol_errors > 0 \
-                        or other_errors > 0:
-
-                    msg = "hostplugin:{0};protocol:{1};other:{2}"\
-                        .format(hostplugin_errors,
-                                protocol_errors,
-                                other_errors)
                     add_event(
                         name=AGENT_NAME,
                         version=CURRENT_VERSION,
@@ -251,6 +250,49 @@ class MonitorHandler(object):
                         is_success=True,
                         message=msg,
                         log_event=False)
+
+                    counter += 1
+
+                    io_errors = IOErrorCounter.get_and_reset()
+                    hostplugin_errors = io_errors.get("hostplugin")
+                    protocol_errors = io_errors.get("protocol")
+                    other_errors = io_errors.get("other")
+
+                    if hostplugin_errors > 0 \
+                            or protocol_errors > 0 \
+                            or other_errors > 0:
+
+                        msg = "hostplugin:{0};protocol:{1};other:{2}"\
+                            .format(hostplugin_errors,
+                                    protocol_errors,
+                                    other_errors)
+                        add_event(
+                            name=AGENT_NAME,
+                            version=CURRENT_VERSION,
+                            op=WALAEventOperation.HttpErrors,
+                            is_success=True,
+                            message=msg,
+                            log_event=False)
+            except Exception as e:
+                logger.warn("Failed to send heartbeat: {0} [{1}]", e, traceback.format_exc())
+
+            try:
+                # performance counters
+                if datetime.datetime.utcnow() >= (last_collection + collection_period):
+                    last_collection = datetime.datetime.utcnow()
+                    for cgroup_name, metrics in CGroupsTelemetry.collect_all_tracked().items():
+                        for metric_group, metric_name, value in metrics:
+                            if value > 0:
+                                report_metric(metric_group, metric_name, cgroup_name, value)
+            except Exception as e:
+                logger.warn("Failed to collect performance metrics: {0} [{1}]", e, traceback.format_exc())
+
+            # Look for extension cgroups we're not already tracking and track them
+            try:
+                ext_handlers_list, incarnation = protocol.get_ext_handlers()
+                CGroupsTelemetry.update_tracked(ext_handlers_list.extHandlers)
+            except Exception as e:
+                logger.warn("Monitor: updating tracked extensions raised {0}: {1}", e, traceback.format_exc())
 
             try:
                 self.collect_and_send_events()

@@ -22,10 +22,8 @@ import os
 import socket
 import time
 import threading
-
-import operator
-
 import datetime
+import traceback
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
@@ -34,8 +32,6 @@ from azurelinuxagent.common.dhcp import get_dhcp_handler
 from azurelinuxagent.common.event import add_periodic, WALAEventOperation
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol import get_protocol_util
-from azurelinuxagent.common.protocol.wire import INCARNATION_FILE_NAME
-from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.archive import StateArchiver
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 
@@ -102,42 +98,47 @@ class EnvHandler(object):
         Purge unnecessary files from disk cache.
         """
         protocol = self.protocol_util.get_protocol()
-        reset_firewall_fules = False
+        reset_firewall_rules = False
+
         while not self.stopped:
-            self.osutil.remove_rules_files()
+            try:
+                self.osutil.remove_rules_files()
 
-            if conf.enable_firewall():
+                if conf.enable_firewall():
 
-                # If the rules ever change we must reset all rules and start over again.
-                #
-                # There was a rule change at 2.2.26, which started dropping non-root traffic
-                # to WireServer.  The previous rules allowed traffic.  Having both rules in
-                # place negated the fix in 2.2.26.
-                if not reset_firewall_fules:
-                    self.osutil.remove_firewall(dst_ip=protocol.endpoint, uid=os.getuid())
-                    reset_firewall_fules = True
+                    # If the rules ever change we must reset all rules and start over again.
+                    #
+                    # There was a rule change at 2.2.26, which started dropping non-root traffic
+                    # to WireServer.  The previous rules allowed traffic.  Having both rules in
+                    # place negated the fix in 2.2.26.
+                    if not reset_firewall_rules:
+                        self.osutil.remove_firewall(dst_ip=protocol.endpoint, uid=os.getuid())
+                        reset_firewall_rules = True
 
-                success = self.osutil.enable_firewall(
-                                dst_ip=protocol.endpoint,
-                                uid=os.getuid())
-                add_periodic(
-                    logger.EVERY_HOUR,
-                    AGENT_NAME,
-                    version=CURRENT_VERSION,
-                    op=WALAEventOperation.Firewall,
-                    is_success=success,
-                    log_event=False)
+                    success = self.osutil.enable_firewall(
+                                    dst_ip=protocol.endpoint,
+                                    uid=os.getuid())
+                    add_periodic(
+                        logger.EVERY_HOUR,
+                        AGENT_NAME,
+                        version=CURRENT_VERSION,
+                        op=WALAEventOperation.Firewall,
+                        is_success=success,
+                        log_event=False)
 
-            timeout = conf.get_root_device_scsi_timeout()
-            if timeout is not None:
-                self.osutil.set_scsi_disks_timeout(timeout)
+                timeout = conf.get_root_device_scsi_timeout()
+                if timeout is not None:
+                    self.osutil.set_scsi_disks_timeout(timeout)
 
-            if conf.get_monitor_hostname():
-                self.handle_hostname_update()
+                if conf.get_monitor_hostname():
+                    self.handle_hostname_update()
 
-            self.handle_dhclient_restart()
+                self.handle_dhclient_restart()
 
-            self.archive_history()
+                self.archive_history()
+
+            except Exception as e:
+                logger.warn("env: Exception: {0} [{1}]".format(e, traceback.format_exc()))
 
             time.sleep(5)
 

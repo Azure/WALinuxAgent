@@ -17,11 +17,14 @@
 #
 
 import time
+import os
 
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.shellutil as shellutil
 
+from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
+from azurelinuxagent.common.utils import fileutil
 
 
 class Ubuntu14OSUtil(DefaultOSUtil):
@@ -46,6 +49,37 @@ class Ubuntu14OSUtil(DefaultOSUtil):
     def get_dhcp_lease_endpoint(self):
         return self.get_endpoint_from_leases_path('/var/lib/dhcp/dhclient.*.leases')
 
+    def mount_cgroups(self):
+        try:
+            if not os.path.exists('/sys/fs/cgroup'):
+                fileutil.mkdir('/sys/fs/cgroup')
+                self.mount(device='cgroup_root',
+                           mount_point='/sys/fs/cgroup',
+                           option="-t tmpfs",
+                           chk_err=False)
+            elif not os.path.isdir('/sys/fs/cgroup'):
+                logger.error("Count not mount cgroups: ordinary file at /sys/fs/cgroup")
+                return
+
+            if not os.path.exists('/sys/fs/cgroup/cpu,cpuacct'):
+                fileutil.mkdir('/sys/fs/cgroup/cpu,cpuacct')
+                self.mount(device='cpu,cpuacct',
+                           mount_point='/sys/fs/cgroup/cpu,cpuacct/',
+                           option="-t cgroup -o cpu,cpuacct",
+                           chk_err=False)
+
+            if not os.path.exists('/sys/fs/cgroup/cpu'):
+                os.symlink('/sys/fs/cgroup/cpu,cpuacct/', '/sys/fs/cgroup/cpu')
+
+            if not os.path.exists('/sys/fs/cgroup/memory'):
+                fileutil.mkdir('/sys/fs/cgroup/memory')
+                self.mount(device='memory',
+                           mount_point='/sys/fs/cgroup/memory/',
+                           option="-t cgroup -o memory",
+                           chk_err=False)
+        except Exception as e:
+            logger.error("Could not mount cgroups: {0}", ustr(e))
+
 
 class Ubuntu12OSUtil(Ubuntu14OSUtil):
     def __init__(self):
@@ -55,6 +89,9 @@ class Ubuntu12OSUtil(Ubuntu14OSUtil):
     def get_dhcp_pid(self):
         ret = shellutil.run_get_output("pidof dhclient3", chk_err=False)
         return ret[1] if ret[0] == 0 else None
+
+    def mount_cgroups(self):
+        pass
 
 
 class Ubuntu16OSUtil(Ubuntu14OSUtil):
@@ -69,6 +106,9 @@ class Ubuntu16OSUtil(Ubuntu14OSUtil):
 
     def unregister_agent_service(self):
         return shellutil.run("systemctl mask walinuxagent", chk_err=False)
+
+    def mount_cgroups(self):
+        pass
 
 
 class Ubuntu18OSUtil(Ubuntu16OSUtil):
@@ -122,8 +162,14 @@ class UbuntuOSUtil(Ubuntu16OSUtil):
             else:
                 logger.warn("exceeded restart retries")
 
+    def mount_cgroups(self):
+        pass
+
 
 class UbuntuSnappyOSUtil(Ubuntu14OSUtil):
     def __init__(self):
         super(UbuntuSnappyOSUtil, self).__init__()
         self.conf_file_path = '/apps/walinuxagent/current/waagent.conf'
+
+    def mount_cgroups(self):
+        pass

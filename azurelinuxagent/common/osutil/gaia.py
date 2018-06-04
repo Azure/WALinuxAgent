@@ -139,16 +139,16 @@ class GaiaOSUtil(DefaultOSUtil):
     def eject_dvd(self, chk_err=True):
         logger.warn('eject is not supported on GAiA')
 
-    def mount(self, dvd, mount_point, option="", chk_err=True):
-        logger.info('mount {0} {1} {2}', dvd, mount_point, option)
+    def mount(self, device, mount_point, option="", chk_err=True):
+        logger.info('mount {0} {1} {2}', device, mount_point, option)
         if 'udf,iso9660' in option:
             ret, out = super(GaiaOSUtil, self).mount(
-                dvd, mount_point, option=option.replace('udf,iso9660', 'udf'),
+                device, mount_point, option=option.replace('udf,iso9660', 'udf'),
                 chk_err=chk_err)
             if not ret:
                 return ret, out
         return super(GaiaOSUtil, self).mount(
-            dvd, mount_point, option=option, chk_err=chk_err)
+            device, mount_point, option=option, chk_err=chk_err)
 
     def allow_dhcp_broadcast(self):
         logger.info('allow_dhcp_broadcast is ignored on GAiA')

@@ -58,13 +58,39 @@ def _do_nothing():
     pass
 
 
+_MAX_LENGTH = 120
+
+
+def safe_repr(obj, short=False):
+    """
+    Copied from Python 3.x
+    """
+    try:
+        result = repr(obj)
+    except Exception:
+        result = object.__repr__(obj)
+    if not short or len(result) < _MAX_LENGTH:
+        return result
+    return result[:_MAX_LENGTH] + ' [truncated]...'
+
+
 class AgentTestCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        # Setup newer unittest assertions missing in prior versions of Python
+
         if not hasattr(cls, "assertRegex"):
             cls.assertRegex = cls.assertRegexpMatches if hasattr(cls, "assertRegexpMatches") else _do_nothing
         if not hasattr(cls, "assertNotRegex"):
             cls.assertNotRegex = cls.assertNotRegexpMatches if hasattr(cls, "assertNotRegexpMatches") else _do_nothing
+        if not hasattr(cls, "assertIn"):
+            cls.assertIn = cls.emulate_assertIn
+        if not hasattr(cls, "assertNotIn"):
+            cls.assertNotIn = cls.emulate_assertNotIn
+        if not hasattr(cls, "assertGreater"):
+            cls.assertGreater = cls.emulate_assertGreater
+        if not hasattr(cls, "assertLess"):
+            cls.assertLess = cls.emulate_assertLess
 
     def setUp(self):
         prefix = "{0}_".format(self.__class__.__name__)
@@ -86,6 +112,26 @@ class AgentTestCase(unittest.TestCase):
     def tearDown(self):
         if not debug and self.tmp_dir is not None:
             shutil.rmtree(self.tmp_dir)
+
+    def emulate_assertIn(self, a, b, msg=None):
+        if a not in b:
+            msg = msg if msg is not None else "{0} not found in {1}".format(safe_repr(a), safe_repr(b))
+            self.fail(msg)
+
+    def emulate_assertNotIn(self, a, b, msg=None):
+        if a in b:
+            msg = msg if msg is not None else "{0} unexpectedly found in {1}".format(safe_repr(a), safe_repr(b))
+            self.fail(msg)
+
+    def emulate_assertGreater(self, a, b, msg=None):
+        if not a > b:
+            msg = msg if msg is not None else '{0} not greater than {1}'.format(safe_repr(a), safe_repr(b))
+            self.fail(msg)
+
+    def emulate_assertLess(self, a, b, msg=None):
+        if not a < b:
+            msg = msg if msg is not None else '{0} not less than {1}'.format(safe_repr(a), safe_repr(b))
+            self.fail(msg)
 
     @staticmethod
     def _create_files(tmp_dir, prefix, suffix, count, with_sleep=0):
