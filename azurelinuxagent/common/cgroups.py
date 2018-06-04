@@ -66,10 +66,15 @@ class Cpu(object):
         :return:
         """
         self.cgt = cgt
-        self.current_cpu_total = 0
+        self.current_cpu_total = self.get_current_cpu_total()
         self.previous_cpu_total = 0
-        self.current_system_cpu = self.get_current_cpu_total()
-        self.previous_system_cpu = Cpu.get_current_system_cpu()
+        self.current_system_cpu = Cpu.get_current_system_cpu()
+        self.previous_system_cpu = 0
+
+    def __str__(self):
+        return "Cgroup: Current {0}, previous {1}; System: Current {2}, previous {3}".format(
+            self.current_cpu_total, self.previous_cpu_total, self.current_system_cpu, self.previous_system_cpu
+        )
 
     def get_current_cpu_total(self):
         """
@@ -378,6 +383,7 @@ class CGroups(object):
                 logger.info("Creating cgroup directory {0}".format(cgroup_path))
                 CGroups._try_mkdir(cgroup_path)
             self.cgroups[hierarchy] = cgroup_path
+        print("Created CGroup({0}), path set {1}".format(self.name, self.cgroups))
 
     @staticmethod
     def is_systemd_manager():

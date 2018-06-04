@@ -118,9 +118,11 @@ class TestCGroups(AgentTestCase):
         self.assertIn('cpu', test_cgroup.cgroups)
         self.assertIn('memory', test_cgroup.cgroups)
         test_cgroup.add(os.getpid())
+        self.assertNotEqual(initial_cgroup.cgroups['cpu'], test_cgroup.cgroups['cpu'])
         CGroupsTelemetry.track_cgroup(test_cgroup)
         self.assertTrue(CGroupsTelemetry.is_tracked("agent_unittest"))
         consume_cpu_time()
+        time.sleep(1)
         metrics = CGroupsTelemetry.collect_all_tracked()
         my_metrics = metrics["agent_unittest"]
         self.assertEqual(len(my_metrics), 1)
@@ -143,6 +145,7 @@ class TestCGroups(AgentTestCase):
         self.assertIs(cg, cpu.cgt.cgroup)
         ticks_before = cpu.current_cpu_total
         consume_cpu_time()
+        time.sleep(1)
         cpu.update()
         ticks_after = cpu.current_cpu_total
         self.assertGreater(ticks_after, ticks_before)
