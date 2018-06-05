@@ -15,6 +15,7 @@
 # Requires Python 2.6+ and Openssl 1.0+
 import json
 
+from azurelinuxagent.common.exception import HttpError
 from azurelinuxagent.common.protocol.healthservice import Observation, HealthService
 from tests.tools import *
 
@@ -164,4 +165,10 @@ class TestHealthService(AgentTestCase):
                                 is_healthy=False,
                                 value='response',
                                 description='')
+        self.assertEqual(0, len(health_service.observations))
+
+        patch_post.side_effect = HttpError()
+        health_service.report_host_plugin_versions(is_healthy=True, response='')
+
+        self.assertEqual(9, patch_post.call_count)
         self.assertEqual(0, len(health_service.observations))
