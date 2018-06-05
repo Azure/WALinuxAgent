@@ -17,10 +17,17 @@ import json
 
 from azurelinuxagent.common.exception import HttpError
 from azurelinuxagent.common.protocol.healthservice import Observation, HealthService
+from azurelinuxagent.common.utils import restutil
+from tests.protocol.test_hostplugin import MockResponse
 from tests.tools import *
 
 
 class TestHealthService(AgentTestCase):
+
+    def assert_status_code(self, status_code, expected_healthy):
+        response = MockResponse('response', status_code)
+        is_healthy = not restutil.request_failed_at_hostplugin(response)
+        self.assertEqual(expected_healthy, is_healthy)
 
     def assert_observation(self, call_args, name, is_healthy, value, description):
         endpoint = call_args[0][0]
@@ -172,3 +179,19 @@ class TestHealthService(AgentTestCase):
 
         self.assertEqual(9, patch_post.call_count)
         self.assertEqual(0, len(health_service.observations))
+
+    def test_status_codes(self):
+        # healthy
+        self.assert_status_code(status_code=200, expected_healthy=True)
+        self.assert_status_code(status_code=201, expected_healthy=True)
+        self.assert_status_code(status_code=302, expected_healthy=True)
+        self.assert_status_code(status_code=416, expected_healthy=True)
+        self.assert_status_code(status_code=419, expected_healthy=True)
+        self.assert_status_code(status_code=429, expected_healthy=True)
+        self.assert_status_code(status_code=502, expected_healthy=True)
+
+        # unhealthy
+        self.assert_status_code(status_code=500, expected_healthy=False)
+        self.assert_status_code(status_code=501, expected_healthy=False)
+        self.assert_status_code(status_code=503, expected_healthy=False)
+        self.assert_status_code(status_code=504, expected_healthy=False)
