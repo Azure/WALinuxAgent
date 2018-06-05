@@ -24,7 +24,7 @@ from azurelinuxagent.ga.monitor import *
 @patch('azurelinuxagent.common.osutil.get_osutil')
 @patch('azurelinuxagent.common.protocol.get_protocol_util')
 @patch('azurelinuxagent.common.protocol.util.ProtocolUtil.get_protocol')
-@patch("azurelinuxagent.common.protocol.healthservice.HealthService.report")
+@patch("azurelinuxagent.common.protocol.healthservice.HealthService._report")
 class TestMonitor(AgentTestCase):
     def test_parse_xml_event(self, *args):
         data_str = load_data('ext/event.xml')
@@ -104,16 +104,16 @@ class TestMonitor(AgentTestCase):
     def test_heartbeat_timings_updates_after_window(self, *args):
         monitor_handler = get_monitor_handler()
 
-        MonitorHandler.TELEMETRY_HEARTBEAT_PERIOD = timedelta(seconds=1)
-        MonitorHandler.EVENT_COLLECTION_PERIOD = timedelta(seconds=1)
-        MonitorHandler.HOST_PLUGIN_HEARTBEAT_PERIOD = timedelta(seconds=1)
+        MonitorHandler.TELEMETRY_HEARTBEAT_PERIOD = timedelta(milliseconds=100)
+        MonitorHandler.EVENT_COLLECTION_PERIOD = timedelta(milliseconds=100)
+        MonitorHandler.HOST_PLUGIN_HEARTBEAT_PERIOD = timedelta(milliseconds=100)
 
         self.assertEqual(None, monitor_handler.last_host_plugin_heartbeat)
         self.assertEqual(None, monitor_handler.last_event_collection)
         self.assertEqual(None, monitor_handler.last_telemetry_heartbeat)
 
         monitor_handler.start()
-        time.sleep(1)
+        time.sleep(0.2)
         self.assertTrue(monitor_handler.is_alive())
 
         self.assertNotEqual(None, monitor_handler.last_host_plugin_heartbeat)
@@ -124,7 +124,7 @@ class TestMonitor(AgentTestCase):
         heartbeat_telemetry = monitor_handler.last_telemetry_heartbeat
         events_collection = monitor_handler.last_event_collection
 
-        time.sleep(2)
+        time.sleep(0.5)
 
         self.assertNotEqual(heartbeat_hostplugin, monitor_handler.last_host_plugin_heartbeat)
         self.assertNotEqual(events_collection, monitor_handler.last_event_collection)
@@ -135,16 +135,16 @@ class TestMonitor(AgentTestCase):
     def test_heartbeat_timings_no_updates_within_window(self, *args):
         monitor_handler = get_monitor_handler()
 
-        MonitorHandler.TELEMETRY_HEARTBEAT_PERIOD = timedelta(seconds=100)
-        MonitorHandler.EVENT_COLLECTION_PERIOD = timedelta(seconds=100)
-        MonitorHandler.HOST_PLUGIN_HEARTBEAT_PERIOD = timedelta(seconds=100)
+        MonitorHandler.TELEMETRY_HEARTBEAT_PERIOD = timedelta(seconds=1)
+        MonitorHandler.EVENT_COLLECTION_PERIOD = timedelta(seconds=1)
+        MonitorHandler.HOST_PLUGIN_HEARTBEAT_PERIOD = timedelta(seconds=1)
 
         self.assertEqual(None, monitor_handler.last_host_plugin_heartbeat)
         self.assertEqual(None, monitor_handler.last_event_collection)
         self.assertEqual(None, monitor_handler.last_telemetry_heartbeat)
 
         monitor_handler.start()
-        time.sleep(1)
+        time.sleep(0.2)
         self.assertTrue(monitor_handler.is_alive())
 
         self.assertNotEqual(None, monitor_handler.last_host_plugin_heartbeat)
@@ -155,7 +155,7 @@ class TestMonitor(AgentTestCase):
         heartbeat_telemetry = monitor_handler.last_telemetry_heartbeat
         events_collection = monitor_handler.last_event_collection
 
-        time.sleep(2)
+        time.sleep(0.5)
 
         self.assertEqual(heartbeat_hostplugin, monitor_handler.last_host_plugin_heartbeat)
         self.assertEqual(events_collection, monitor_handler.last_event_collection)

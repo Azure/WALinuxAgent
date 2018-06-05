@@ -1111,9 +1111,8 @@ class ExtHandlerInstance(object):
                     self.ext_handler.name,
                     self.ext_handler.properties.version))
         except (IOError, ValueError, ProtocolError) as e:
-            fileutil.clean_ioerror(e,
-                paths=[status_file])
-            self.logger.error("Failed to save handler status: {0}", ustr(e))
+            fileutil.clean_ioerror(e, paths=[status_file])
+            self.logger.error("Failed to save handler status: {0}, {1}", ustr(e), traceback.format_exc())
         
     def get_handler_status(self):
         state_dir = self.get_conf_dir()

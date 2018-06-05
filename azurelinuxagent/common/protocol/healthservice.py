@@ -89,7 +89,7 @@ class HealthService(object):
         """
         self.observations.append(Observation(name=HealthService.HOST_PLUGIN_HEARTBEAT_OBSERVATION_NAME,
                                              is_healthy=is_healthy))
-        self.report()
+        self._report()
 
     def report_host_plugin_versions(self, is_healthy, response):
         """
@@ -100,7 +100,7 @@ class HealthService(object):
         self.observations.append(Observation(name=HealthService.HOST_PLUGIN_VERSIONS_OBSERVATION_NAME,
                                              is_healthy=is_healthy,
                                              value=response))
-        self.report()
+        self._report()
 
     def report_host_plugin_extension_artifact(self, is_healthy, source, response):
         """
@@ -114,7 +114,7 @@ class HealthService(object):
                                              is_healthy=is_healthy,
                                              description=source,
                                              value=response))
-        self.report()
+        self._report()
 
     def report_host_plugin_status(self, is_healthy, response):
         """
@@ -126,15 +126,16 @@ class HealthService(object):
         self.observations.append(Observation(name=HealthService.HOST_PLUGIN_STATUS_OBSERVATION_NAME,
                                              is_healthy=is_healthy,
                                              value=response))
-        self.report()
+        self._report()
 
-    def report(self):
+    def _report(self):
         logger.verbose('HealthService: report observations')
         try:
             restutil.http_post(self.endpoint, self.as_json, headers={'Content-Type': 'application/json'})
             logger.verbose('HealthService: Reported observations to {0}: {1}', self.endpoint, self.as_json)
         except HttpError as e:
             logger.warn("HealthService: could not report observations: {0}", ustr(e))
-
-        # these signals are not timestamped, so there is no value in persisting data
-        del self.observations[:]
+        finally:
+            # TODO: add safety boundaries
+            # these signals are not timestamped, so there is no value in persisting data
+            del self.observations[:]

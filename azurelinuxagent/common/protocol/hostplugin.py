@@ -174,8 +174,19 @@ class HostPluginProtocol(object):
 
     @staticmethod
     def should_report(is_healthy, error_state, last_timestamp, period):
+        """
+        Determine whether a health signal should be reported
+        :param is_healthy: whether the current measurement is healthy
+        :param error_state: the error state which is tracking time since failure
+        :param last_timestamp: the last measurement time stamp
+        :param period: the reporting period
+        :return: True if the signal should be reported, False otherwise
+        """
 
         if is_healthy:
+            # we only reset the error state upon success, since we want to keep
+            # reporting the failure; this is different to other uses of error states
+            # which do not have a separate periodicity
             error_state.reset()
         else:
             error_state.incr()

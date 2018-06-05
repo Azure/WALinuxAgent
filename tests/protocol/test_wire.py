@@ -28,7 +28,7 @@ wireserver_url = '168.63.129.16'
 
 @patch("time.sleep")
 @patch("azurelinuxagent.common.protocol.wire.CryptUtil")
-@patch("azurelinuxagent.common.protocol.healthservice.HealthService.report")
+@patch("azurelinuxagent.common.protocol.healthservice.HealthService._report")
 class TestWireProtocol(AgentTestCase):
 
     def setUp(self):
