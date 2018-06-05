@@ -64,6 +64,7 @@ class HealthService(object):
     HOST_PLUGIN_STATUS_OBSERVATION_NAME = 'GuestAgentPluginStatus'
     HOST_PLUGIN_VERSIONS_OBSERVATION_NAME = 'GuestAgentPluginVersions'
     HOST_PLUGIN_ARTIFACT_OBSERVATION_NAME = 'GuestAgentPluginArtifact'
+    MAX_OBSERVATIONS = 10
 
     def __init__(self, endpoint):
         self.endpoint = HealthService.ENDPOINT.format(endpoint)
@@ -87,8 +88,8 @@ class HealthService(object):
         Reports a signal for /health
         :param is_healthy: whether the call succeeded
         """
-        self.observations.append(Observation(name=HealthService.HOST_PLUGIN_HEARTBEAT_OBSERVATION_NAME,
-                                             is_healthy=is_healthy))
+        self._observe(name=HealthService.HOST_PLUGIN_HEARTBEAT_OBSERVATION_NAME,
+                      is_healthy=is_healthy)
         self._report()
 
     def report_host_plugin_versions(self, is_healthy, response):
@@ -97,9 +98,9 @@ class HealthService(object):
         :param is_healthy: whether the api call succeeded
         :param response: debugging information for failures
         """
-        self.observations.append(Observation(name=HealthService.HOST_PLUGIN_VERSIONS_OBSERVATION_NAME,
-                                             is_healthy=is_healthy,
-                                             value=response))
+        self._observe(name=HealthService.HOST_PLUGIN_VERSIONS_OBSERVATION_NAME,
+                      is_healthy=is_healthy,
+                      value=response)
         self._report()
 
     def report_host_plugin_extension_artifact(self, is_healthy, source, response):
@@ -110,10 +111,10 @@ class HealthService(object):
         :param response: debugging information for failures
         :return:
         """
-        self.observations.append(Observation(name=HealthService.HOST_PLUGIN_ARTIFACT_OBSERVATION_NAME,
-                                             is_healthy=is_healthy,
-                                             description=source,
-                                             value=response))
+        self._observe(name=HealthService.HOST_PLUGIN_ARTIFACT_OBSERVATION_NAME,
+                      is_healthy=is_healthy,
+                      description=source,
+                      value=response)
         self._report()
 
     def report_host_plugin_status(self, is_healthy, response):
@@ -123,10 +124,19 @@ class HealthService(object):
         :param response: debugging information for failures
         :return:
         """
-        self.observations.append(Observation(name=HealthService.HOST_PLUGIN_STATUS_OBSERVATION_NAME,
-                                             is_healthy=is_healthy,
-                                             value=response))
+        self._observe(name=HealthService.HOST_PLUGIN_STATUS_OBSERVATION_NAME,
+                      is_healthy=is_healthy,
+                      value=response)
         self._report()
+
+    def _observe(self, name, is_healthy, value='', description=''):
+        # ensure we keep the list size within bounds
+        if len(self.observations) >= HealthService.MAX_OBSERVATIONS:
+            del self.observations[:HealthService.MAX_OBSERVATIONS-1]
+        self.observations.append(Observation(name=name,
+                                             is_healthy=is_healthy,
+                                             value=value,
+                                             description=description))
 
     def _report(self):
         logger.verbose('HealthService: report observations')
@@ -136,6 +146,5 @@ class HealthService(object):
         except HttpError as e:
             logger.warn("HealthService: could not report observations: {0}", ustr(e))
         finally:
-            # TODO: add safety boundaries
             # these signals are not timestamped, so there is no value in persisting data
             del self.observations[:]

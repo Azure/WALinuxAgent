@@ -182,6 +182,20 @@ class TestHealthService(AgentTestCase):
         self.assertEqual(9, patch_post.call_count)
         self.assertEqual(0, len(health_service.observations))
 
+    def test_observation_length(self):
+        health_service = HealthService('endpoint')
+
+        # make 100 observations
+        for i in range(0, 100):
+            health_service._observe(is_healthy=True, name='{0}'.format(i))
+
+        # ensure we keep only 10
+        self.assertEqual(10, len(health_service.observations))
+
+        # ensure we keep the most recent 10
+        self.assertEqual('90', health_service.observations[0].name)
+        self.assertEqual('99', health_service.observations[9].name)
+
     def test_status_codes(self):
         # healthy
         self.assert_status_code(status_code=200, expected_healthy=True)
