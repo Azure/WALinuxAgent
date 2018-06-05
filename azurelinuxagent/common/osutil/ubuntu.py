@@ -27,6 +27,9 @@ from azurelinuxagent.common.osutil.default import DefaultOSUtil
 from azurelinuxagent.common.utils import fileutil
 
 
+def _cgroup_path(tail=""):
+    return os.path.join('/sys/fs/cgroup/', tail).rtrim(os.path.sep)
+
 class Ubuntu14OSUtil(DefaultOSUtil):
     def __init__(self):
         super(Ubuntu14OSUtil, self).__init__()
@@ -51,32 +54,30 @@ class Ubuntu14OSUtil(DefaultOSUtil):
 
     def mount_cgroups(self):
         try:
-            if not os.path.exists('/sys/fs/cgroup'):
-                fileutil.mkdir('/sys/fs/cgroup')
-                self.mount(device='cgroup_root',
-                           mount_point='/sys/fs/cgroup',
-                           option="-t tmpfs",
-                           chk_err=False)
-            elif not os.path.isdir('/sys/fs/cgroup'):
-                logger.error("Count not mount cgroups: ordinary file at /sys/fs/cgroup")
+            if not os.path.exists(_cgroup_path()):
+                fileutil.mkdir(_cgroup_path())
+            elif not os.path.isdir(_cgroup_path()):
+                logger.error("Could not mount cgroups: ordinary file at {0}".format(_cgroup_path()))
                 return
+            self.mount(device='cgroup_root',
+                       mount_point=_cgroup_path(),
+                       option="-t tmpfs",
+                       chk_err=False)
 
-            if not os.path.exists('/sys/fs/cgroup/cpu,cpuacct'):
-                fileutil.mkdir('/sys/fs/cgroup/cpu,cpuacct')
-                self.mount(device='cpu,cpuacct',
-                           mount_point='/sys/fs/cgroup/cpu,cpuacct/',
-                           option="-t cgroup -o cpu,cpuacct",
+            for metric_hierarchy in ['cpu,cpuacct', 'memory']:
+                target_path = _cgroup_path(metric_hierarchy)
+                if not os.path.exists(target_path):
+                    fileutil.mkdir(target_path)
+                self.mount(device=metric_hierarchy,
+                           mount_point=target_path,
+                           option="-t cgroup -o {0}".format(metric_hierarchy),
                            chk_err=False)
 
-            if not os.path.exists('/sys/fs/cgroup/cpu'):
-                os.symlink('/sys/fs/cgroup/cpu,cpuacct/', '/sys/fs/cgroup/cpu')
+            for metric_hierarchy in ['cpu', 'cpuacct']:
+                target_path = _cgroup_path(metric_hierarchy)
+                if not os.path.exists(target_path):
+                    os.symlink(_cgroup_path('cpu,cpuacct'), target_path)
 
-            if not os.path.exists('/sys/fs/cgroup/memory'):
-                fileutil.mkdir('/sys/fs/cgroup/memory')
-                self.mount(device='memory',
-                           mount_point='/sys/fs/cgroup/memory/',
-                           option="-t cgroup -o memory",
-                           chk_err=False)
         except Exception as e:
             logger.error("Could not mount cgroups: {0}", ustr(e))
 
