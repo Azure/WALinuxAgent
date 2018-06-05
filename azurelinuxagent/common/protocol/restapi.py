@@ -333,12 +333,14 @@ class Protocol(DataContract):
         raise NotImplementedError()
 
     def download_ext_handler_pkg(self, uri, headers=None, use_proxy=True):
+        pkg = None
         try:
             resp = restutil.http_get(uri, headers=headers, use_proxy=use_proxy)
             if restutil.request_succeeded(resp):
-                return resp.read()
+                pkg = resp.read()
         except Exception as e:
             logger.warn("Failed to download from: {0}".format(uri), e)
+        return pkg
 
     def report_provision_status(self, provision_status):
         raise NotImplementedError()

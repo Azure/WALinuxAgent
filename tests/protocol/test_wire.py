@@ -28,13 +28,14 @@ wireserver_url = '168.63.129.16'
 
 @patch("time.sleep")
 @patch("azurelinuxagent.common.protocol.wire.CryptUtil")
+@patch("azurelinuxagent.common.protocol.healthservice.HealthService._report")
 class TestWireProtocol(AgentTestCase):
 
     def setUp(self):
         super(TestWireProtocol, self).setUp()
         HostPluginProtocol.set_default_channel(False)
     
-    def _test_getters(self, test_data, MockCryptUtil, _):
+    def _test_getters(self, test_data, __, MockCryptUtil, _):
         MockCryptUtil.side_effect = test_data.mock_crypt_util
 
         with patch.object(restutil, 'http_get', test_data.mock_http_get):
@@ -79,7 +80,8 @@ class TestWireProtocol(AgentTestCase):
         test_data = WireProtocolData(DATA_FILE_EXT_NO_PUBLIC)
         self._test_getters(test_data, *args)
 
-    def test_getters_with_stale_goal_state(self, *args):
+    @patch("azurelinuxagent.common.protocol.healthservice.HealthService.report_host_plugin_extension_artifact")
+    def test_getters_with_stale_goal_state(self, patch_report, *args):
         test_data = WireProtocolData(DATA_FILE)
         test_data.emulate_stale_goal_state = True
 
@@ -92,10 +94,9 @@ class TestWireProtocol(AgentTestCase):
         #    fetched often; however, the dependent documents, such as the
         #    HostingEnvironmentConfig, will be retrieved the expected number
         self.assertEqual(2, test_data.call_counts["hostingenvuri"])
+        self.assertEqual(1, patch_report.call_count)
 
-    def test_call_storage_kwargs(self,
-                                 mock_cryptutil,
-                                 mock_sleep):
+    def test_call_storage_kwargs(self, *args):
         from azurelinuxagent.common.utils import restutil
         with patch.object(restutil, 'http_get') as http_patch:
             http_req = restutil.http_get
@@ -155,29 +156,21 @@ class TestWireProtocol(AgentTestCase):
             self.assertEqual(goal_state.role_config_name, host_plugin.role_config_name)
             self.assertEqual(1, patch_get_goal_state.call_count)
 
-    def test_download_ext_handler_pkg_fallback(self, *args):
+    @patch("azurelinuxagent.common.utils.restutil.http_request", side_effect=IOError)
+    @patch("azurelinuxagent.common.protocol.wire.WireClient.get_host_plugin")
+    @patch("azurelinuxagent.common.protocol.hostplugin.HostPluginProtocol.get_artifact_request")
+    def test_download_ext_handler_pkg_fallback(self, patch_request, patch_get_host, patch_http, *args):
         ext_uri = 'extension_uri'
         host_uri = 'host_uri'
-        mock_host = HostPluginProtocol(host_uri, 'container_id', 'role_config')
-        with patch.object(restutil,
-                          "http_request",
-                          side_effect=IOError) as patch_http:
-            with patch.object(WireClient,
-                              "get_host_plugin",
-                              return_value=mock_host):
-                with patch.object(HostPluginProtocol,
-                                  "get_artifact_request",
-                                  return_value=[host_uri, {}]) as patch_request:
+        patch_get_host.return_value = HostPluginProtocol(host_uri, 'container_id', 'role_config')
+        patch_request.return_value = [host_uri, {}]
 
-                    WireProtocol(wireserver_url).download_ext_handler_pkg(ext_uri)
+        WireProtocol(wireserver_url).download_ext_handler_pkg(ext_uri)
 
-                    self.assertEqual(patch_http.call_count, 2)
-                    self.assertEqual(patch_request.call_count, 1)
-
-                    self.assertEqual(patch_http.call_args_list[0][0][1],
-                                     ext_uri)
-                    self.assertEqual(patch_http.call_args_list[1][0][1],
-                                     host_uri)
+        self.assertEqual(patch_http.call_count, 2)
+        self.assertEqual(patch_request.call_count, 1)
+        self.assertEqual(patch_http.call_args_list[0][0][1], ext_uri)
+        self.assertEqual(patch_http.call_args_list[1][0][1], host_uri)
 
     def test_upload_status_blob_default(self, *args):
         """
@@ -228,7 +221,8 @@ class TestWireProtocol(AgentTestCase):
                     patch_http.assert_called_once_with(testurl, wire_protocol_client.status_blob)
                     self.assertFalse(HostPluginProtocol.is_default_channel())
 
-    def test_upload_status_blob_unknown_type_assumes_block(self, *args):
+    @patch("azurelinuxagent.common.protocol.hostplugin.HostPluginProtocol.ensure_initialized")
+    def test_upload_status_blob_unknown_type_assumes_block(self, _, *args):
         vmstatus = VMStatus(message="Ready", status="Ready")
         wire_protocol_client = WireProtocol(wireserver_url).client
         wire_protocol_client.ext_conf = ExtensionsConfig(None)
@@ -302,7 +296,6 @@ class TestWireProtocol(AgentTestCase):
 
             host_plugin_get_artifact_url_and_headers.assert_called_with(testurl)
 
-
     def test_get_in_vm_artifacts_profile_default(self, *args):
         wire_protocol_client = WireProtocol(wireserver_url).client
         wire_protocol_client.ext_conf = ExtensionsConfig(None)
@@ -315,8 +308,7 @@ class TestWireProtocol(AgentTestCase):
         self.assertEqual(dict(onHold='true'), in_vm_artifacts_profile.__dict__)
         self.assertTrue(in_vm_artifacts_profile.is_on_hold())
 
-    @patch("time.sleep")
-    def test_fetch_manifest_fallback(self, patch_sleep,  *args):
+    def test_fetch_manifest_fallback(self, *args):
         uri1 = ExtHandlerVersionUri()
         uri1.uri = 'ext_uri'
         uris = DataContractList(ExtHandlerVersionUri)

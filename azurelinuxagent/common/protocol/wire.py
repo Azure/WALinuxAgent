@@ -32,7 +32,8 @@ import azurelinuxagent.common.utils.textutil as textutil
 from azurelinuxagent.common.exception import ProtocolNotFoundError, \
                                             ResourceGoneError
 from azurelinuxagent.common.future import httpclient, bytebuffer
-from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
+from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol, URI_FORMAT_GET_EXTENSION_ARTIFACT, \
+    HOST_PLUGIN_PORT
 from azurelinuxagent.common.protocol.restapi import *
 from azurelinuxagent.common.utils.archive import StateFlusher
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
@@ -159,16 +160,15 @@ class WireProtocol(Protocol):
         logger.verbose("Get In-VM Artifacts Profile")
         return self.client.get_artifacts_profile()
 
-    def download_ext_handler_pkg(self, uri, headers=None):
-        package = super(WireProtocol, self).download_ext_handler_pkg(uri)
+    def download_ext_handler_pkg(self, uri, headers=None, use_proxy=True):
+        package = self.client.fetch(uri, headers=headers, use_proxy=use_proxy, decode=False)
 
-        if package is not None:
-            return package
-        else:
+        if package is None:
             logger.verbose("Download did not succeed, falling back to host plugin")
             host = self.client.get_host_plugin()
             uri, headers = host.get_artifact_request(uri, host.manifest_uri)
-            package = super(WireProtocol, self).download_ext_handler_pkg(uri, headers=headers, use_proxy=False)
+            package = self.client.fetch(uri, headers=headers, use_proxy=False, decode=False)
+
         return package
 
     def report_provision_status(self, provision_status):
@@ -252,12 +252,10 @@ def _build_health_report(incarnation, container_id, role_instance_id,
     return xml
 
 
-"""
-Convert VMStatus object to status blob format
-"""
-
-
 def ga_status_to_guest_info(ga_status):
+    """
+    Convert VMStatus object to status blob format
+    """
     v1_ga_guest_info = {
         "computerName" : ga_status.hostname,
         "osName" : ga_status.osname,
@@ -278,6 +276,7 @@ def ga_status_to_v1(ga_status):
         "formattedMessage" : formatted_msg
     }
     return v1_ga_status
+
 
 def ext_substatus_to_v1(sub_status_list):
     status_list = []
@@ -616,7 +615,7 @@ class WireClient(object):
                     logger.verbose("Using host plugin as default channel")
                 else:
                     logger.verbose("Failed to download manifest, "
-                                        "switching to host plugin")
+                                   "switching to host plugin")
 
                 try:
                     host = self.get_host_plugin()
@@ -640,7 +639,8 @@ class WireClient(object):
 
         raise ProtocolError("Failed to fetch manifest from all sources")
 
-    def fetch(self, uri, headers=None, use_proxy=None):
+    def fetch(self, uri, headers=None, use_proxy=None, decode=True):
+        content = None
         logger.verbose("Fetch [{0}] with headers [{1}]", uri, headers)
         try:
             resp = self.call_storage_service(
@@ -650,21 +650,27 @@ class WireClient(object):
                         use_proxy=use_proxy)
 
             if restutil.request_failed(resp):
-                msg = "[Storage Failed] URI {0} ".format(uri)
-                if resp is not None:
-                    msg += restutil.read_response_error(resp)
+                error_response = restutil.read_response_error(resp)
+                msg = "Fetch failed from [{0}]: {1}".format(uri, error_response)
                 logger.warn(msg)
+                if self.host_plugin is not None:
+                    self.host_plugin.report_fetch_health(uri,
+                                                         is_healthy=not restutil.request_failed_at_hostplugin(resp),
+                                                         source='WireClient',
+                                                         response=error_response)
                 raise ProtocolError(msg)
+            else:
+                response_content = resp.read()
+                content = self.decode_config(response_content) if decode else response_content
+                if self.host_plugin is not None:
+                    self.host_plugin.report_fetch_health(uri, source='WireClient')
 
-            return self.decode_config(resp.read())
-
-        except (HttpError, ProtocolError) as e:
+        except (HttpError, ProtocolError, IOError) as e:
             logger.verbose("Fetch failed from [{0}]: {1}", uri, e)
-
             if isinstance(e, ResourceGoneError):
                 raise
 
-        return None
+        return content
 
     def update_hosting_env(self, goal_state):
         if goal_state.hosting_env_uri is None:
@@ -1153,7 +1159,7 @@ class WireClient(object):
                             logger.verbose("Using host plugin as default channel")
                         else:
                             logger.verbose("Failed to download artifacts profile, "
-                                                "switching to host plugin")
+                                           "switching to host plugin")
 
                         host = self.get_host_plugin()
                         uri, headers = host.get_artifact_request(blob)
@@ -1175,6 +1181,7 @@ class WireClient(object):
                         ustr(e)))
 
         return None
+
 
 class VersionInfo(object):
     def __init__(self, xml_text):

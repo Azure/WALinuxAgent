@@ -514,7 +514,8 @@ class TestGuestAgent(UpdateTestCase):
     @patch("azurelinuxagent.ga.update.GuestAgent._ensure_downloaded")
     @patch("azurelinuxagent.ga.update.GuestAgent._ensure_loaded")
     @patch("azurelinuxagent.ga.update.restutil.http_get")
-    def test_download_fallback(self, mock_http_get, mock_loaded, mock_downloaded):
+    @patch("azurelinuxagent.ga.update.restutil.http_post")
+    def test_download_fallback(self, mock_http_post, mock_http_get, mock_loaded, mock_downloaded):
         self.remove_agents()
         self.assertFalse(os.path.isdir(self.agent_path))
 

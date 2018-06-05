@@ -2,6 +2,8 @@ from datetime import datetime, timedelta
 
 ERROR_STATE_DELTA_DEFAULT = timedelta(minutes=15)
 ERROR_STATE_DELTA_INSTALL = timedelta(minutes=5)
+ERROR_STATE_HOST_PLUGIN_FAILURE = timedelta(minutes=5)
+
 
 class ErrorState(object):
     def __init__(self, min_timedelta=ERROR_STATE_DELTA_DEFAULT):

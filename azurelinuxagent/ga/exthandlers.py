@@ -236,10 +236,6 @@ class ExtHandlersHandler(object):
                       message=msg)
             return
 
-    def run_status(self):
-        self.report_ext_handlers_status()
-        return
-
     def get_upgrade_guid(self, name):
         return self.last_upgrade_guids.get(name, (None, False))[0]
 
@@ -721,10 +717,10 @@ class ExtHandlerInstance(object):
     def set_operation(self, op):
         self.operation = op
 
-    def report_event(self, message="", is_success=True, duration=0):
+    def report_event(self, message="", is_success=True, duration=0, log_event=True):
         ext_handler_version = self.ext_handler.properties.version
         add_event(name=self.ext_handler.name, version=ext_handler_version, message=message,
-                  op=self.operation, is_success=is_success, duration=duration)
+                  op=self.operation, is_success=is_success, duration=duration, log_event=log_event)
 
     def download(self):
         begin_utc = datetime.datetime.utcnow()
@@ -1008,7 +1004,7 @@ class ExtHandlerInstance(object):
             raise ExtensionError("Non-zero exit code: {0}, {1}\n{2}".format(ret, cmd, msg))
 
         duration = elapsed_milliseconds(begin_utc)
-        self.report_event(message="{0}\n{1}".format(cmd, msg), duration=duration)
+        self.report_event(message="{0}\n{1}".format(cmd, msg), duration=duration, log_event=False)
 
     def load_manifest(self):
         man_file = self.get_manifest_file()
@@ -1115,9 +1111,8 @@ class ExtHandlerInstance(object):
                     self.ext_handler.name,
                     self.ext_handler.properties.version))
         except (IOError, ValueError, ProtocolError) as e:
-            fileutil.clean_ioerror(e,
-                paths=[status_file])
-            self.logger.error("Failed to save handler status: {0}", traceback.format_exc())
+            fileutil.clean_ioerror(e, paths=[status_file])
+            self.logger.error("Failed to save handler status: {0}, {1}", ustr(e), traceback.format_exc())
         
     def get_handler_status(self):
         state_dir = self.get_conf_dir()

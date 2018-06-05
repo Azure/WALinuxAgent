@@ -54,6 +54,7 @@ def get_protocol_util():
 
 
 class ProtocolUtil(object):
+
     """
     ProtocolUtil handles initialization for protocol instance. 2 protocol types 
     are invoked, wire protocol and metadata protocols.

@@ -11,6 +11,7 @@ import azurelinuxagent.ga.exthandlers as exthandlers
 import azurelinuxagent.ga.monitor as monitor
 import azurelinuxagent.ga.update as update
 
+
 class TestImportHandler(AgentTestCase):
     def test_get_handler(self):
         osutil.get_osutil()
