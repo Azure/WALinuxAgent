@@ -97,7 +97,9 @@ class TestHealthService(AgentTestCase):
                             '"Description": "description", ' \
                             '"IsHealthy": true' \
                         '}]}'
-        self.assertEqual(expected_json, health_service.as_json)
+        expected = sorted(json.loads(expected_json).items())
+        actual = sorted(json.loads(health_service.as_json).items())
+        self.assertEqual(expected, actual)
 
     @patch("azurelinuxagent.common.utils.restutil.http_post")
     def test_reporting(self, patch_post):
