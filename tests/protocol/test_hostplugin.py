@@ -18,10 +18,12 @@
 import base64
 import json
 import sys
+import datetime
 
 import azurelinuxagent.common.protocol.restapi as restapi
 import azurelinuxagent.common.protocol.wire as wire
 import azurelinuxagent.common.protocol.hostplugin as hostplugin
+from azurelinuxagent.common.errorstate import ErrorState
 
 from azurelinuxagent.common.exception import HttpError
 from azurelinuxagent.common.protocol.hostplugin import API_VERSION
@@ -542,6 +544,86 @@ class TestHostPlugin(AgentTestCase):
         self.assertEqual(1, len(obj['Observations']))
         self.assertFalse(obj['Observations'][0]['IsHealthy'])
         self.assertEqual('GuestAgentPluginStatus', obj['Observations'][0]['ObservationName'])
+
+    @patch("azurelinuxagent.common.protocol.hostplugin.HostPluginProtocol.should_report", return_value=True)
+    @patch("azurelinuxagent.common.protocol.healthservice.HealthService.report_host_plugin_extension_artifact")
+    def test_report_fetch_health(self, patch_report_artifact, patch_should_report):
+        host_plugin = self._init_host()
+        host_plugin.report_fetch_health(uri='', is_healthy=True)
+        self.assertEqual(0, patch_should_report.call_count)
+
+        host_plugin.report_fetch_health(uri='http://169.254.169.254/extensionArtifact', is_healthy=True)
+        self.assertEqual(0, patch_should_report.call_count)
+
+        host_plugin.report_fetch_health(uri='http://168.63.129.16:32526/status', is_healthy=True)
+        self.assertEqual(0, patch_should_report.call_count)
+
+        self.assertEqual(None, host_plugin.fetch_last_timestamp)
+        host_plugin.report_fetch_health(uri='http://168.63.129.16:32526/extensionArtifact', is_healthy=True)
+        self.assertNotEqual(None, host_plugin.fetch_last_timestamp)
+        self.assertEqual(1, patch_should_report.call_count)
+        self.assertEqual(1, patch_report_artifact.call_count)
+
+    @patch("azurelinuxagent.common.protocol.hostplugin.HostPluginProtocol.should_report", return_value=True)
+    @patch("azurelinuxagent.common.protocol.healthservice.HealthService.report_host_plugin_status")
+    def test_report_status_health(self, patch_report_status, patch_should_report):
+        host_plugin = self._init_host()
+        self.assertEqual(None, host_plugin.status_last_timestamp)
+        host_plugin.report_status_health(is_healthy=True)
+        self.assertNotEqual(None, host_plugin.status_last_timestamp)
+        self.assertEqual(1, patch_should_report.call_count)
+        self.assertEqual(1, patch_report_status.call_count)
+
+    def test_should_report(self):
+        host_plugin = self._init_host()
+        error_state = ErrorState(min_timedelta=datetime.timedelta(minutes=5))
+        period = datetime.timedelta(minutes=1)
+        last_timestamp = None
+
+        # first measurement at 0s, should report
+        is_healthy = True
+        actual = host_plugin.should_report(is_healthy,
+                                           error_state,
+                                           last_timestamp,
+                                           period)
+        self.assertEqual(True, actual)
+
+        # second measurement at 30s, should not report
+        last_timestamp = datetime.datetime.utcnow() - datetime.timedelta(seconds=30)
+        actual = host_plugin.should_report(is_healthy,
+                                           error_state,
+                                           last_timestamp,
+                                           period)
+        self.assertEqual(False, actual)
+
+        # third measurement at 60s, should report
+        last_timestamp = datetime.datetime.utcnow() - datetime.timedelta(seconds=60)
+        actual = host_plugin.should_report(is_healthy,
+                                           error_state,
+                                           last_timestamp,
+                                           period)
+        self.assertEqual(True, actual)
+
+        # fourth measurement unhealthy, should report and increment counter
+        is_healthy = False
+        self.assertEqual(0, error_state.count)
+        actual = host_plugin.should_report(is_healthy,
+                                           error_state,
+                                           last_timestamp,
+                                           period)
+        self.assertEqual(1, error_state.count)
+        self.assertEqual(True, actual)
+
+        # fifth measurement, should not report and reset counter
+        is_healthy = True
+        last_timestamp = datetime.datetime.utcnow() - datetime.timedelta(seconds=30)
+        self.assertEqual(1, error_state.count)
+        actual = host_plugin.should_report(is_healthy,
+                                           error_state,
+                                           last_timestamp,
+                                           period)
+        self.assertEqual(0, error_state.count)
+        self.assertEqual(False, actual)
 
 
 class MockResponse:
