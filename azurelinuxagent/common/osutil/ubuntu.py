@@ -28,7 +28,8 @@ from azurelinuxagent.common.utils import fileutil
 
 
 def _cgroup_path(tail=""):
-    return os.path.join('/sys/fs/cgroup/', tail).rtrim(os.path.sep)
+    return os.path.join('/sys/fs/cgroup/', tail).rstrip(os.path.sep)
+
 
 class Ubuntu14OSUtil(DefaultOSUtil):
     def __init__(self):
@@ -56,13 +57,13 @@ class Ubuntu14OSUtil(DefaultOSUtil):
         try:
             if not os.path.exists(_cgroup_path()):
                 fileutil.mkdir(_cgroup_path())
+                self.mount(device='cgroup_root',
+                           mount_point=_cgroup_path(),
+                           option="-t tmpfs",
+                           chk_err=False)
             elif not os.path.isdir(_cgroup_path()):
                 logger.error("Could not mount cgroups: ordinary file at {0}".format(_cgroup_path()))
                 return
-            self.mount(device='cgroup_root',
-                       mount_point=_cgroup_path(),
-                       option="-t tmpfs",
-                       chk_err=False)
 
             for metric_hierarchy in ['cpu,cpuacct', 'memory']:
                 target_path = _cgroup_path(metric_hierarchy)
@@ -151,9 +152,9 @@ class UbuntuOSUtil(Ubuntu16OSUtil):
         Restart an interface by bouncing the link. systemd-networkd observes
         this event, and forces a renew of DHCP.
         """
-        retry_limit=retries+1
+        retry_limit = retries+1
         for attempt in range(1, retry_limit):
-            return_code=shellutil.run("ip link set {0} down && ip link set {0} up".format(ifname))
+            return_code = shellutil.run("ip link set {0} down && ip link set {0} up".format(ifname))
             if return_code == 0:
                 return
             logger.warn("failed to restart {0}: return code {1}".format(ifname, return_code))
