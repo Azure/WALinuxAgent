@@ -101,6 +101,7 @@ class TestHealthService(AgentTestCase):
                                 is_healthy=True,
                                 value='response',
                                 description='')
+        self.assertEqual(0, len(health_service.observations))
 
         health_service.report_host_plugin_status(is_healthy=False, response='error')
         self.assertEqual(2, patch_post.call_count)
@@ -109,6 +110,7 @@ class TestHealthService(AgentTestCase):
                                 is_healthy=False,
                                 value='error',
                                 description='')
+        self.assertEqual(0, len(health_service.observations))
 
         health_service.report_host_plugin_extension_artifact(is_healthy=True, source='source', response='response')
         self.assertEqual(3, patch_post.call_count)
@@ -117,6 +119,7 @@ class TestHealthService(AgentTestCase):
                                 is_healthy=True,
                                 value='response',
                                 description='source')
+        self.assertEqual(0, len(health_service.observations))
 
         health_service.report_host_plugin_extension_artifact(is_healthy=False, source='source', response='response')
         self.assertEqual(4, patch_post.call_count)
@@ -125,6 +128,7 @@ class TestHealthService(AgentTestCase):
                                 is_healthy=False,
                                 value='response',
                                 description='source')
+        self.assertEqual(0, len(health_service.observations))
 
         health_service.report_host_plugin_heartbeat(is_healthy=True)
         self.assertEqual(5, patch_post.call_count)
@@ -133,6 +137,7 @@ class TestHealthService(AgentTestCase):
                                 is_healthy=True,
                                 value='',
                                 description='')
+        self.assertEqual(0, len(health_service.observations))
 
         health_service.report_host_plugin_heartbeat(is_healthy=False)
         self.assertEqual(6, patch_post.call_count)
@@ -141,6 +146,7 @@ class TestHealthService(AgentTestCase):
                                 is_healthy=False,
                                 value='',
                                 description='')
+        self.assertEqual(0, len(health_service.observations))
 
         health_service.report_host_plugin_versions(is_healthy=True, response='response')
         self.assertEqual(7, patch_post.call_count)
@@ -149,6 +155,7 @@ class TestHealthService(AgentTestCase):
                                 is_healthy=True,
                                 value='response',
                                 description='')
+        self.assertEqual(0, len(health_service.observations))
 
         health_service.report_host_plugin_versions(is_healthy=False, response='response')
         self.assertEqual(8, patch_post.call_count)
@@ -157,3 +164,4 @@ class TestHealthService(AgentTestCase):
                                 is_healthy=False,
                                 value='response',
                                 description='')
+        self.assertEqual(0, len(health_service.observations))
