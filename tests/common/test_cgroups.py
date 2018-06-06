@@ -59,7 +59,8 @@ def make_root_cgroups():
     return CGroups("root", path_maker)
 
 
-@unittest.skip("CGroups cannot be tested within a docker container")
+@unittest.skipIf("TRAVIS" in os.environ and os.environ["TRAVIS"] == "true",
+                 "CGroups cannot be tested within a docker container")
 class TestCGroups(AgentTestCase):
     @classmethod
     def setUpClass(cls):
