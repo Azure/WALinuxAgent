@@ -1,0 +1,46 @@
+{
+  "compute": {
+    "location": "westus",
+    "name": "health",
+    "offer": "UbuntuServer",
+    "osType": "Linux",
+    "placementGroupId": "",
+    "platformFaultDomain": "0",
+    "platformUpdateDomain": "0",
+    "publisher": "Canonical",
+    "resourceGroupName": "tests",
+    "sku": "16.04-LTS",
+    "subscriptionId": "21b2dc34-bce6-4e63-9449-d2a8d1c2339e",
+    "tags": "",
+    "version": "16.04.201805220",
+    "vmId": "e7fdbfc4-2deb-4a4e-8615-ea6aaf50162e",
+    "vmScaleSetName": "",
+    "vmSize": "Standard_D2_V2",
+    "zone": ""
+  },
+  "network": {
+    "interface": [
+      {
+        "ipv4": {
+          "ipAddress": [
+            {
+              "privateIpAddress": "10.0.1.4",
+              "publicIpAddress": "40.112.128.120"
+            }
+          ],
+          "subnet": [
+            {
+              "address": "10.0.1.0",
+              "prefix": "24"
+            }
+          ]
+        },
+        "ipv6": {
+          "ipAddress": []
+        },
+        "macAddress": "000D3A3382E8"
+      }
+    ]
+  }
+}
+

@@ -96,8 +96,12 @@ class MonitorHandler(object):
 
     EVENT_COLLECTION_PERIOD = datetime.timedelta(minutes=1)
     TELEMETRY_HEARTBEAT_PERIOD = datetime.timedelta(minutes=30)
+    # host plugin
     HOST_PLUGIN_HEARTBEAT_PERIOD = datetime.timedelta(minutes=1)
     HOST_PLUGIN_HEALTH_PERIOD = datetime.timedelta(minutes=5)
+    # imds
+    IMDS_HEARTBEAT_PERIOD = datetime.timedelta(minutes=1)
+    IMDS_HEALTH_PERIOD = datetime.timedelta(minutes=3)
 
     def __init__(self):
         self.osutil = get_osutil()
@@ -108,6 +112,7 @@ class MonitorHandler(object):
         self.last_event_collection = None
         self.last_telemetry_heartbeat = None
         self.last_host_plugin_heartbeat = None
+        self.last_imds_heartbeat = None
         self.protocol = None
         self.health_service = None
 
@@ -116,6 +121,7 @@ class MonitorHandler(object):
         self.should_run = True
         self.heartbeat_id = str(uuid.uuid4()).upper()
         self.host_plugin_errorstate = ErrorState(min_timedelta=MonitorHandler.HOST_PLUGIN_HEALTH_PERIOD)
+        self.imds_errorstate = ErrorState(min_timedelta=MonitorHandler.IMDS_HEALTH_PERIOD)
 
     def run(self):
         self.init_protocols()
@@ -242,11 +248,13 @@ class MonitorHandler(object):
     def daemon(self):
         min_delta = min(MonitorHandler.TELEMETRY_HEARTBEAT_PERIOD,
                         MonitorHandler.EVENT_COLLECTION_PERIOD,
-                        MonitorHandler.HOST_PLUGIN_HEARTBEAT_PERIOD).seconds
+                        MonitorHandler.HOST_PLUGIN_HEARTBEAT_PERIOD,
+                        MonitorHandler.IMDS_HEARTBEAT_PERIOD).seconds
         while self.should_run:
             self.send_telemetry_heartbeat()
             self.collect_and_send_events()
             self.send_host_plugin_heartbeat()
+            self.send_imds_heartbeat()
             time.sleep(min_delta)
 
     def add_sysinfo(self, event):
@@ -258,6 +266,40 @@ class MonitorHandler(object):
                                param.value)
                 event.parameters.remove(param)
         event.parameters.extend(self.sysinfo)
+
+    def send_imds_heartbeat(self):
+        """
+        Send a health signal every IMDS_HEARTBEAT_PERIOD. The signal is 'Healthy' when we have
+        successfully called and validated a response in the last IMDS_HEALTH_PERIOD.
+        """
+        if self.last_imds_heartbeat is None:
+            self.last_imds_heartbeat = datetime.datetime.utcnow() - MonitorHandler.IMDS_HEARTBEAT_PERIOD
+
+        if datetime.datetime.utcnow() >= (self.last_imds_heartbeat + MonitorHandler.IMDS_HEARTBEAT_PERIOD):
+            try:
+                is_currently_healthy, response = self.imds_client.validate()
+
+                if is_currently_healthy:
+                    self.imds_errorstate.reset()
+                else:
+                    self.imds_errorstate.incr()
+
+                is_healthy = self.imds_errorstate.is_triggered() is False
+                logger.verbose("IMDS health: {0} [{1}]", is_healthy, response)
+
+                self.health_service.report_imds_status(is_healthy, response)
+
+            except Exception as e:
+                msg = "Exception sending imds heartbeat: {0}".format(ustr(e))
+                add_event(
+                    name=AGENT_NAME,
+                    version=CURRENT_VERSION,
+                    op=WALAEventOperation.ImdsHeartbeat,
+                    is_success=False,
+                    message=msg,
+                    log_event=False)
+
+            self.last_imds_heartbeat = datetime.datetime.utcnow()
 
     def send_host_plugin_heartbeat(self):
         """

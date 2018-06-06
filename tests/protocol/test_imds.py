@@ -38,7 +38,7 @@ class TestImds(AgentTestCase):
         self.assertEqual(1, mock_http_get.call_count)
         positional_args, kw_args = mock_http_get.call_args
 
-        self.assertEqual('http://169.254.169.254/metadata/instance/compute?api-version=2017-12-01', positional_args[0])
+        self.assertEqual('http://169.254.169.254/metadata/instance/compute?api-version=2018-02-01', positional_args[0])
         self.assertTrue('User-Agent' in kw_args['headers'])
         self.assertTrue('Metadata' in kw_args['headers'])
         self.assertEqual(True, kw_args['headers']['Metadata'])
@@ -175,7 +175,6 @@ class TestImds(AgentTestCase):
 
         self.assertEqual(imds.IMDS_IMAGE_ORIGIN_PLATFORM, self._setup_image_origin_assert("RedHat", "RHEL", "6.6", ""))
 
-
     def test_is_endorsed_SuSE(self):
         self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("SuSE", "SLES", "11-SP4", ""))
         self.assertEqual(imds.IMDS_IMAGE_ORIGIN_ENDORSED, self._setup_image_origin_assert("SuSE", "SLES-BYOS", "11-SP4", ""))
@@ -232,6 +231,70 @@ class TestImds(AgentTestCase):
         set_properties("compute", compute_info, data)
 
         return compute_info.image_origin
+
+    def test_validation(self):
+        # invalid json or empty response
+        self.assert_validation(http_status_code=200,
+                               http_response='',
+                               expected_valid=False,
+                               expected_response='JSON parsing failed')
+
+        self.assert_validation(http_status_code=200,
+                               http_response=None,
+                               expected_valid=False,
+                               expected_response='JSON parsing failed')
+
+        self.assert_validation(http_status_code=200,
+                               http_response='{ bad json ',
+                               expected_valid=False,
+                               expected_response='JSON parsing failed')
+
+        # 500 response
+        self.assert_validation(http_status_code=500,
+                               http_response='error response',
+                               expected_valid=False,
+                               expected_response='[HTTP Failed] [500: reason] error response')
+
+        # 429 response
+        self.assert_validation(http_status_code=429,
+                               http_response='server busy',
+                               expected_valid=False,
+                               expected_response='[HTTP Failed] [429: reason] server busy')
+
+        # valid json
+        self.assert_validation(http_status_code=200,
+                               http_response=self.imds_response('valid'),
+                               expected_valid=True,
+                               expected_response='')
+        # unicode
+        self.assert_validation(http_status_code=200,
+                               http_response=self.imds_response('unicode'),
+                               expected_valid=True,
+                               expected_response='')
+
+    def imds_response(self, file):
+        path = os.path.join(data_dir, "imds", "{0}.json".format(file))
+        with open(path) as fh:
+            return fh.read()
+
+    def assert_validation(self, http_status_code, http_response, expected_valid, expected_response):
+        test_subject = imds.ImdsClient()
+        with patch("azurelinuxagent.common.utils.restutil.http_get") as mock_http_get:
+            mock_http_get.return_value = ResponseMock(status=http_status_code,
+                                                      reason='reason',
+                                                      response=http_response)
+            validate_response = test_subject.validate()
+
+        self.assertEqual(1, mock_http_get.call_count)
+        positional_args, kw_args = mock_http_get.call_args
+
+        self.assertTrue('User-Agent' in kw_args['headers'])
+        self.assertTrue('Metadata' in kw_args['headers'])
+        self.assertEqual(True, kw_args['headers']['Metadata'])
+        self.assertEqual('http://169.254.169.254/metadata/instance/?api-version=2018-02-01',
+                         positional_args[0])
+        self.assertEqual(expected_valid, validate_response[0])
+        self.assertTrue(expected_response in validate_response[1])
 
 
 if __name__ == '__main__':

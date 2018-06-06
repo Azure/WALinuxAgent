@@ -11,7 +11,7 @@ from azurelinuxagent.common.protocol.restapi import DataContract, set_properties
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 
 IMDS_ENDPOINT = '169.254.169.254'
-APIVERSION = '2017-12-01'
+APIVERSION = '2018-02-01'
 BASE_URI = "http://{0}/metadata/instance/{1}?api-version={2}"
 
 IMDS_IMAGE_ORIGIN_UNKNOWN = 0
@@ -244,6 +244,10 @@ class ImdsClient(object):
     def compute_url(self):
         return BASE_URI.format(IMDS_ENDPOINT, 'compute', self._api_version)
 
+    @property
+    def instance_url(self):
+        return BASE_URI.format(IMDS_ENDPOINT, '', self._api_version)
+
     def get_compute(self):
         """
         Fetch compute information.
@@ -264,3 +268,35 @@ class ImdsClient(object):
         set_properties('compute', compute_info, data)
 
         return compute_info
+
+    def validate(self):
+        """
+        Determines whether the metadata instance api returns 200, and the response
+        is valid: compute should contain location, name, subscription id, and vm size
+        and network should contain mac address and private ip address.
+        :return: Tuple<is_healthy:bool, error_response:str>
+            is_healthy: True when validation succeeds, False otherwise
+            error_response: validation failure details to assist with debugging
+        """
+
+        # ensure we get a 200
+        resp = restutil.http_get(self.instance_url, headers=self._headers)
+        if restutil.request_failed(resp):
+            return False, "{0}".format(restutil.read_response_error(resp))
+
+        # ensure the response is valid json
+        data = resp.read()
+        try:
+            json_data = json.loads(ustr(data, encoding="utf-8"))
+        except Exception as e:
+            return False, "JSON parsing failed: {0}".format(ustr(e))
+
+        # TODO: ensure these fields are present and non-empty
+            # compute/location
+            # compute/name
+            # compute/subscriptionId
+            # compute/vmSize
+            # network/interface[0]/macAddress
+            # network/interface[0]/ipv4/ipAddress[0]/privateIpAddress
+
+        return True, ''

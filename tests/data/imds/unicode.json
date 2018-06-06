@@ -1,0 +1,46 @@
+{
+  "compute": {
+    "location": "wéstus",
+    "name": "héalth",
+    "offer": "UbuntuSérvér",
+    "osType": "Linux",
+    "placementGroupId": "",
+    "platformFaultDomain": "0",
+    "platformUpdateDomain": "0",
+    "publisher": "Canonical",
+    "resourceGroupName": "tésts",
+    "sku": "16.04-LTS",
+    "subscriptionId": "21b2dc34-bcé6-4é63-9449-d2a8d1c2339é",
+    "tags": "",
+    "version": "16.04.201805220",
+    "vmId": "é7fdbfc4-2déb-4a4é-8615-éa6aaf50162é",
+    "vmScaleSetName": "",
+    "vmSize": "Standard_D2_V2",
+    "zone": ""
+  },
+  "network": {
+    "interface": [
+      {
+        "ipv4": {
+          "ipAddress": [
+            {
+              "privateIpAddress": "10.0.1.4",
+              "publicIpAddress": "40.112.128.120"
+            }
+          ],
+          "subnet": [
+            {
+              "address": "10.0.1.0",
+              "prefix": "24"
+            }
+          ]
+        },
+        "ipv6": {
+          "ipAddress": []
+        },
+        "macAddress": "000D3A3382E8"
+      }
+    ]
+  }
+}
+
