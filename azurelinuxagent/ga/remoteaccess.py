@@ -79,6 +79,7 @@ class RemoteAccessHandler(object):
         self.os_util = None
         self.cryptUtil = CryptUtil(conf.get_openssl_cmd())
         self.remote_access = None
+        self.incarnation = 0
 
     def run(self):
         try:
@@ -86,13 +87,15 @@ class RemoteAccessHandler(object):
                 self.os_util = get_osutil()
             if self.os_util.jit_enabled:
                 self.protocol = self.protocol_util.get_protocol()
-                self.protocol.client.update_goal_state(True)
-                self.protocol.client.update_remote_access_conf(self.protocol.client.goal_state)
-                if self.protocol.client.remote_access is not None \
-                        and (self.remote_access is None or self.remoteaccess.incarnation
-                             != self.protocol.client.remote_access.incarnation):
+                current_incarnation = self.protocol.get_incarnation()
+                if self.incarnation != current_incarnation:
+                    # something changed. Handle remote access if any.
+                    self.incarnation = current_incarnation
+                    self.protocol.client.update_goal_state(True)
+                    self.protocol.client.update_remote_access_conf(self.protocol.client.goal_state)
                     self.remote_access = self.protocol.client.remote_access
-                    self.handle_remote_access()
+                    if self.remote_access is not None:
+                        self.handle_remote_access()
         except Exception as e:
             msg = u"Exception processing remote access handler: {0}".format(
                 ustr(e))
@@ -102,17 +105,17 @@ class RemoteAccessHandler(object):
                       op=WALAEventOperation.HandleRemoteAccess,
                       is_success=False,
                       message=msg)
-            return     
+            return
 
     def handle_remote_access(self):
-        logger.verbose("Entered handle_remote_access")        
+        logger.verbose("Entered handle_remote_access")
         if self.remote_access is not None:
             # Get JIT user accounts.
             all_users = self.os_util.get_users()
             jit_users = set()
             for usr in all_users:
                 if usr[4] == REMOTE_ACCESS_ACCOUNT_COMMENT:
-                    jit_users.add(usr[0])     
+                    jit_users.add(usr[0])
             for acc in self.remote_access.user_list.users:
                 raw_expiration = acc.expiration
                 account_expiration = datetime.strptime(raw_expiration, REMOTE_USR_EXPIRATION_FORMAT)
@@ -152,4 +155,4 @@ class RemoteAccessHandler(object):
 
     def delete_user(self, username):
         self.os_util.del_account(username)
-        logger.info("[RemoteAccessHandler::delete_user]: User deleted {0}".format(username))        
+        logger.info("[RemoteAccessHandler::delete_user]: User deleted {0}".format(username))

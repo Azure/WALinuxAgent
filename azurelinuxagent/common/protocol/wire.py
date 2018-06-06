@@ -55,7 +55,7 @@ GOAL_STATE_FILE_NAME = "GoalState.{0}.xml"
 HOSTING_ENV_FILE_NAME = "HostingEnvironmentConfig.xml"
 SHARED_CONF_FILE_NAME = "SharedConfig.xml"
 CERTS_FILE_NAME = "Certificates.xml"
-REMOTE_ACCESS_FILE_NAME = "RemoteAccess.xml"
+REMOTE_ACCESS_FILE_NAME = "RemoteAccess.{0}.xml"
 P7M_FILE_NAME = "Certificates.p7m"
 PEM_FILE_NAME = "Certificates.pem"
 EXT_CONF_FILE_NAME = "ExtensionsConfig.{0}.xml"
@@ -707,11 +707,12 @@ class WireClient(object):
         if goal_state.remote_access_uri is None:
             # Nothing in accounts data.  Just return, nothing to do.
             return
-        local_file = os.path.join(conf.get_lib_dir(), REMOTE_ACCESS_FILE_NAME)
         xml_text = self.fetch_config(goal_state.remote_access_uri, 
                                      self.get_header_for_cert())
-        self.save_cache(local_file, xml_text)
         self.remote_access = RemoteAccess(xml_text)
+        local_file = os.path.join(conf.get_lib_dir(), REMOTE_ACCESS_FILE_NAME.format(self.remote_access.incarnation))
+        self.save_cache(local_file, xml_text)
+
         
     def update_ext_conf(self, goal_state):
         if goal_state.ext_uri is None:
