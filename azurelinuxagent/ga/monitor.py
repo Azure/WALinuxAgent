@@ -129,6 +129,7 @@ class MonitorHandler(object):
     def run(self):
         self.init_protocols()
         self.init_sysinfo()
+        self.init_cgroups()
         self.start()
 
     def stop(self):
@@ -384,6 +385,18 @@ class MonitorHandler(object):
                 logger.warn("Failed to send heartbeat: {0}", e)
 
             self.last_telemetry_heartbeat = datetime.datetime.utcnow()
+
+    @staticmethod
+    def init_cgroups():
+        # Track metrics for the roll-up cgroup and for the agent cgroup
+        try:
+            CGroupsTelemetry.track_cgroup(CGroups.for_extension(""))
+            if CGroups.is_systemd_manager():
+                CGroupsTelemetry.track_systemd_service(AGENT_NAME)
+            else:
+                CGroupsTelemetry.track_cgroup(CGroups.for_extension(AGENT_NAME))
+        except Exception as e:
+            logger.error("monitor: Exception tracking wrapper and agent: {0} [{1}]", e, traceback.format_exc())
 
     def send_cgroup_telemetry(self):
         if self.last_cgroup_telemetry is None:
