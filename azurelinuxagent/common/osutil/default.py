@@ -281,6 +281,9 @@ class DefaultOSUtil(object):
         return id_that == id_this or \
             id_that == self._correct_instance_id(id_this)
 
+    def mount_cgroups(self):
+        pass
+
     def get_agent_conf_file_path(self):
         return self.agent_conf_file_path
 
@@ -618,8 +621,8 @@ class DefaultOSUtil(object):
                 time.sleep(1)
         return False
 
-    def mount(self, dvd, mount_point, option="", chk_err=True):
-        cmd = "mount {0} {1} {2}".format(option, dvd, mount_point)
+    def mount(self, device, mount_point, option="", chk_err=True):
+        cmd = "mount {0} {1} {2}".format(option, device, mount_point)
         retcode, err = shellutil.run_get_output(cmd, chk_err)
         if retcode != 0:
             detail = "[{0}] returned {1}: {2}".format(cmd, retcode, err)
@@ -1100,7 +1103,12 @@ class DefaultOSUtil(object):
         return multiprocessing.cpu_count()
 
     def check_pid_alive(self, pid):
-        return pid is not None and os.path.isdir(os.path.join('/proc', pid))
+        try:
+            pid = int(pid)
+            os.kill(pid, 0)
+        except (OSError, ValueError, TypeError):
+            return False
+        return True
 
     @property
     def is_64bit(self):

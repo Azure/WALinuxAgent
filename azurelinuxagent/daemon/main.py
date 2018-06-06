@@ -26,6 +26,7 @@ import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
 
+from azurelinuxagent.common.cgroups import CGroups
 from azurelinuxagent.common.event import add_event, WALAEventOperation
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
@@ -65,6 +66,7 @@ class DaemonHandler(object):
                     PY_VERSION_MICRO)
 
         self.check_pid()
+        CGroups.setup()
 
         # If FIPS is enabled, set the OpenSSL environment variable
         # Note:

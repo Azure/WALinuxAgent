@@ -86,9 +86,11 @@ class TestMonitor(AgentTestCase):
     @patch("azurelinuxagent.ga.monitor.MonitorHandler.send_telemetry_heartbeat")
     @patch("azurelinuxagent.ga.monitor.MonitorHandler.collect_and_send_events")
     @patch("azurelinuxagent.ga.monitor.MonitorHandler.send_host_plugin_heartbeat")
+    @patch("azurelinuxagent.ga.monitor.MonitorHandler.send_cgroup_telemetry")
     @patch("azurelinuxagent.ga.monitor.MonitorHandler.send_imds_heartbeat")
     def test_heartbeats(self,
                         patch_imds_heartbeat,
+                        patch_cgroup_telemetry,
                         patch_hostplugin_heartbeat,
                         patch_send_events,
                         patch_telemetry_heartbeat,
@@ -104,6 +106,7 @@ class TestMonitor(AgentTestCase):
         self.assertEqual(0, patch_send_events.call_count)
         self.assertEqual(0, patch_telemetry_heartbeat.call_count)
         self.assertEqual(0, patch_imds_heartbeat.call_count)
+        self.assertEqual(0, patch_cgroup_telemetry.call_count)
 
         monitor_handler.start()
         time.sleep(1)
@@ -113,6 +116,7 @@ class TestMonitor(AgentTestCase):
         self.assertNotEqual(0, patch_send_events.call_count)
         self.assertNotEqual(0, patch_telemetry_heartbeat.call_count)
         self.assertNotEqual(0, patch_imds_heartbeat.call_count)
+        self.assertNotEqual(0, patch_cgroup_telemetry.call_count)
 
         monitor_handler.stop()
 
