@@ -218,7 +218,8 @@ class TestImds(AgentTestCase):
         self.assertEqual(imds.IMDS_IMAGE_ORIGIN_PLATFORM, self._setup_image_origin_assert("Canonical", "UbuntuServer", "17.10", ""))
         self.assertEqual(imds.IMDS_IMAGE_ORIGIN_PLATFORM, self._setup_image_origin_assert("Canonical", "UbuntuServer", "18.04-DAILY-LTS", ""))
 
-    def _setup_image_origin_assert(self, publisher, offer, sku, version):
+    @staticmethod
+    def _setup_image_origin_assert(publisher, offer, sku, version):
         s = '''{{
             "publisher": "{0}",
             "offer": "{1}",
@@ -226,58 +227,105 @@ class TestImds(AgentTestCase):
             "version": "{3}"
         }}'''.format(publisher, offer, sku, version)
 
-        data =json.loads(s, encoding='utf-8')
+        data = json.loads(s, encoding='utf-8')
         compute_info = imds.ComputeInfo()
         set_properties("compute", compute_info, data)
 
         return compute_info.image_origin
 
-    def test_validation(self):
+    def test_response_validation(self):
         # invalid json or empty response
-        self.assert_validation(http_status_code=200,
-                               http_response='',
-                               expected_valid=False,
-                               expected_response='JSON parsing failed')
+        self._assert_validation(http_status_code=200,
+                                http_response='',
+                                expected_valid=False,
+                                expected_response='JSON parsing failed')
 
-        self.assert_validation(http_status_code=200,
-                               http_response=None,
-                               expected_valid=False,
-                               expected_response='JSON parsing failed')
+        self._assert_validation(http_status_code=200,
+                                http_response=None,
+                                expected_valid=False,
+                                expected_response='JSON parsing failed')
 
-        self.assert_validation(http_status_code=200,
-                               http_response='{ bad json ',
-                               expected_valid=False,
-                               expected_response='JSON parsing failed')
+        self._assert_validation(http_status_code=200,
+                                http_response='{ bad json ',
+                                expected_valid=False,
+                                expected_response='JSON parsing failed')
 
         # 500 response
-        self.assert_validation(http_status_code=500,
-                               http_response='error response',
-                               expected_valid=False,
-                               expected_response='[HTTP Failed] [500: reason] error response')
+        self._assert_validation(http_status_code=500,
+                                http_response='error response',
+                                expected_valid=False,
+                                expected_response='[HTTP Failed] [500: reason] error response')
 
         # 429 response
-        self.assert_validation(http_status_code=429,
-                               http_response='server busy',
-                               expected_valid=False,
-                               expected_response='[HTTP Failed] [429: reason] server busy')
+        self._assert_validation(http_status_code=429,
+                                http_response='server busy',
+                                expected_valid=False,
+                                expected_response='[HTTP Failed] [429: reason] server busy')
 
         # valid json
-        self.assert_validation(http_status_code=200,
-                               http_response=self.imds_response('valid'),
-                               expected_valid=True,
-                               expected_response='')
+        self._assert_validation(http_status_code=200,
+                                http_response=self._imds_response('valid'),
+                                expected_valid=True,
+                                expected_response='')
         # unicode
-        self.assert_validation(http_status_code=200,
-                               http_response=self.imds_response('unicode'),
-                               expected_valid=True,
-                               expected_response='')
+        self._assert_validation(http_status_code=200,
+                                http_response=self._imds_response('unicode'),
+                                expected_valid=True,
+                                expected_response='')
 
-    def imds_response(self, file):
-        path = os.path.join(data_dir, "imds", "{0}.json".format(file))
+    def test_field_validation(self):
+        self._assert_field('compute', 'name')
+        self._assert_field('compute', 'location')
+        self._assert_field('compute', 'vmSize')
+        self._assert_field('compute', 'subscriptionId')
+        self._assert_field('compute')
+
+        self._assert_field('network', 'interface', 'ipv4', 'ipAddress', 'privateIpAddress')
+        self._assert_field('network', 'interface', 'ipv4', 'ipAddress')
+        self._assert_field('network', 'interface', 'ipv4')
+        self._assert_field('network', 'interface', 'macAddress')
+        self._assert_field('network')
+
+    def _assert_field(self, *fields):
+        response = self._imds_response('valid')
+        response_obj = json.loads(response)
+
+        # assert empty value
+        self._update_field(response_obj, fields, '')
+        altered_response = json.dumps(response_obj)
+        self._assert_validation(http_status_code=200,
+                                http_response=altered_response,
+                                expected_valid=False,
+                                expected_response='Empty field: [{0}]'.format(fields[-1]))
+
+        # assert missing value
+        self._update_field(response_obj, fields, None)
+        altered_response = json.dumps(response_obj)
+        self._assert_validation(http_status_code=200,
+                                http_response=altered_response,
+                                expected_valid=False,
+                                expected_response='Missing field: [{0}]'.format(fields[-1]))
+
+    def _update_field(self, obj, fields, val):
+        if isinstance(obj, list):
+            self._update_field(obj[0], fields, val)
+        else:
+            f = fields[0]
+            if len(fields) == 1:
+                if val is None:
+                    del obj[f]
+                else:
+                    obj[f] = val
+            else:
+                self._update_field(obj[f], fields[1:], val)
+
+    @staticmethod
+    def _imds_response(f):
+        path = os.path.join(data_dir, "imds", "{0}.json".format(f))
         with open(path) as fh:
             return fh.read()
 
-    def assert_validation(self, http_status_code, http_response, expected_valid, expected_response):
+    def _assert_validation(self, http_status_code, http_response, expected_valid, expected_response):
         test_subject = imds.ImdsClient()
         with patch("azurelinuxagent.common.utils.restutil.http_get") as mock_http_get:
             mock_http_get.return_value = ResponseMock(status=http_status_code,
@@ -294,7 +342,9 @@ class TestImds(AgentTestCase):
         self.assertEqual('http://169.254.169.254/metadata/instance/?api-version=2018-02-01',
                          positional_args[0])
         self.assertEqual(expected_valid, validate_response[0])
-        self.assertTrue(expected_response in validate_response[1])
+        self.assertTrue(expected_response in validate_response[1],
+                        "Expected: '{0}', Actual: '{1}'"
+                        .format(expected_response, validate_response[1]))
 
 
 if __name__ == '__main__':

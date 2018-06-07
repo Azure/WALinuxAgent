@@ -291,12 +291,29 @@ class ImdsClient(object):
         except Exception as e:
             return False, "JSON parsing failed: {0}".format(ustr(e))
 
-        # TODO: ensure these fields are present and non-empty
-            # compute/location
-            # compute/name
-            # compute/subscriptionId
-            # compute/vmSize
-            # network/interface[0]/macAddress
-            # network/interface[0]/ipv4/ipAddress[0]/privateIpAddress
+        # ensure all expected fields are present and have a value
+        try:
+            self.check_field(json_data, 'compute')
+            self.check_field(json_data['compute'], 'location')
+            self.check_field(json_data['compute'], 'name')
+            self.check_field(json_data['compute'], 'subscriptionId')
+            self.check_field(json_data['compute'], 'vmSize')
+
+            self.check_field(json_data, 'network')
+            self.check_field(json_data['network'], 'interface')
+            self.check_field(json_data['network']['interface'][0], 'macAddress')
+            self.check_field(json_data['network']['interface'][0], 'ipv4')
+            self.check_field(json_data['network']['interface'][0]['ipv4'], 'ipAddress')
+            self.check_field(json_data['network']['interface'][0]['ipv4']['ipAddress'][0], 'privateIpAddress')
+        except ValueError as v:
+            return False, ustr(v)
 
         return True, ''
+
+    @staticmethod
+    def check_field(dict_obj, field):
+        if field not in dict_obj or dict_obj[field] is None:
+            raise ValueError('Missing field: [{0}]'.format(field))
+
+        if len(dict_obj[field]) == 0:
+            raise ValueError('Empty field: [{0}]'.format(field))
