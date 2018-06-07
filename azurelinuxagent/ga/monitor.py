@@ -272,6 +272,7 @@ class MonitorHandler(object):
         Send a health signal every IMDS_HEARTBEAT_PERIOD. The signal is 'Healthy' when we have
         successfully called and validated a response in the last IMDS_HEALTH_PERIOD.
         """
+
         if self.last_imds_heartbeat is None:
             self.last_imds_heartbeat = datetime.datetime.utcnow() - MonitorHandler.IMDS_HEARTBEAT_PERIOD
 
