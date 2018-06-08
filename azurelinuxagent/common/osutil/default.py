@@ -284,6 +284,9 @@ class DefaultOSUtil(object):
         return id_that == id_this or \
             id_that == self._correct_instance_id(id_this)
 
+    def is_cgroups_supported(self):
+        return False
+
     def mount_cgroups(self):
         pass
 

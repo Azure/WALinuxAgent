@@ -47,6 +47,11 @@ class CGroupsException(Exception):
         return repr(self.msg)
 
 
+# The metric classes (Cpu, Memory, etc) can all assume that CGroups is enabled, as the CGroupTelemetry
+# class is very careful not to call them if CGroups isn't enabled. Any tests should be disabled if the osutil
+# is_cgroups_support() method returns false.
+
+
 class Cpu(object):
     def __init__(self, cgt):
         """
@@ -165,7 +170,7 @@ class CGroupsTelemetry(object):
         :param CGroups cgroup: The cgroup to track
         """
         name = cgroup.name
-        if not CGroupsTelemetry.is_tracked(name):
+        if CGroups.enabled() and not CGroupsTelemetry.is_tracked(name):
             tracker = CGroupsTelemetry(name, cgroup=cgroup)
             CGroupsTelemetry._tracked[name] = tracker
 
@@ -177,7 +182,7 @@ class CGroupsTelemetry(object):
         :param str name: Service name (without .service suffix) to be tracked.
         """
         service_name = "{0}.service".format(name)
-        if not CGroupsTelemetry.is_tracked(service_name):
+        if CGroups.enabled() and not CGroupsTelemetry.is_tracked(service_name):
             cgroup = CGroups.for_systemd_service(service_name)
             tracker = CGroupsTelemetry(service_name, cgroup=cgroup)
             CGroupsTelemetry._tracked[service_name] = tracker
@@ -190,6 +195,9 @@ class CGroupsTelemetry(object):
         :param str name: Full name of the extension to be tracked
         :param CGroups cgroup: CGroup for the extension itself. This method will create it if none is supplied.
         """
+        if not CGroups.enabled():
+            return
+
         if not CGroupsTelemetry.is_tracked(name):
             cgroup = CGroups.for_extension(name) if cgroup is None else cgroup
             logger.info("Now tracking cgroup {0}".format(name))
@@ -198,6 +206,21 @@ class CGroupsTelemetry(object):
             if name in related_services:
                 for service_name in related_services[name]:
                     CGroupsTelemetry.track_systemd_service(service_name)
+
+    @staticmethod
+    def track_agent(name):
+        """
+        Create and track the correct cgroup for the agent itself. The actual cgroup depends on whether systemd
+        is in use, but the caller doesn't need to know that.
+
+        :param str name: Name for the agent itself
+        """
+        if not CGroups.enabled():
+            return
+        if CGroups.is_systemd_manager():
+            CGroupsTelemetry.track_systemd_service(name)
+        else:
+            CGroupsTelemetry.track_cgroup(CGroups.for_extension(name))
 
     @staticmethod
     def is_tracked(name):
@@ -237,6 +260,9 @@ class CGroupsTelemetry(object):
 
         :param List(ExtHandler) ext_handlers:
         """
+        if not CGroups.enabled():
+            return
+
         not_enabled_extensions = set()
         for extension in ext_handlers:
             if extension.properties.state == u"enabled":
@@ -272,8 +298,9 @@ class CGroupsTelemetry(object):
         self.previous_wall_time = 0
 
         self.data = {}
-        for hierarchy in CGroupsTelemetry.metrics_hierarchies():
-            self.data[hierarchy] = CGroupsTelemetry._metrics[hierarchy](self)
+        if CGroups.enabled():
+            for hierarchy in CGroupsTelemetry.metrics_hierarchies():
+                self.data[hierarchy] = CGroupsTelemetry._metrics[hierarchy](self)
 
     def collect(self):
         """
@@ -314,6 +341,18 @@ class CGroups(object):
     def for_systemd_service(name):
         return CGroups(name.lower(), CGroups._construct_systemd_path_for_hierarchy)
 
+    @staticmethod
+    def enabled():
+        return CGroups._osutil.is_cgroups_supported() and CGroups._enabled
+
+    @staticmethod
+    def disable():
+        CGroups._enabled = False
+
+    @staticmethod
+    def enable():
+        CGroups._enabled = True
+
     def __init__(self, name, path_maker):
         """
         Construct CGroups object. Create appropriately-named directory for each hierarchy of interest.
@@ -336,6 +375,7 @@ class CGroups(object):
         system_hierarchies = os.listdir(BASE_CGROUPS)
         for hierarchy in CGroups._hierarchies:
             if hierarchy not in system_hierarchies:
+                self.disable()
                 raise CGroupsException("Hierarchy {0} is not mounted".format(hierarchy))
 
             cgroup_name = "" if self.is_wrapper_cgroup else self.name
@@ -356,6 +396,8 @@ class CGroups(object):
         :return: True if systemd is managing system services
         :rtype: Bool
         """
+        if not CGroups.enabled():
+            return False
         if CGroups._use_systemd is None:
             hierarchy = METRIC_HIERARCHIES[0]
             path = CGroups.get_my_cgroup_folder(hierarchy)
@@ -403,18 +445,6 @@ class CGroups(object):
             tasks_file = self._get_cgroup_file(hierarchy, 'cgroup.procs')
             fileutil.append_file(tasks_file, "{0}\n".format(pid))
 
-    @staticmethod
-    def enabled():
-        return CGroups._enabled
-
-    @staticmethod
-    def disable():
-        CGroups._enabled = False
-
-    @staticmethod
-    def enable():
-        CGroups._enabled = True
-
     def set_limits(self):
         """
         Set per-hierarchy limits based on the cgroup name (agent or particular extension)
@@ -453,22 +483,26 @@ class CGroups(object):
             Add this process to the "agent" cgroup, if required
         Actual collection of metrics from cgroups happens in the -run-exthandlers instance
         """
-        cgroups_enabled = False
-        try:
-            CGroups._osutil.mount_cgroups()
-            if not suppress_process_add:
-                CGroups._setup_wrapper_groups()
-                pid = int(os.getpid())
-                if not CGroups.is_systemd_manager():
-                    cg = CGroups.for_extension(AGENT_NAME)
-                    cg.add(pid)
-                    logger.info("Add daemon process pid {0} to {1} cgroup".format(pid, cg.name))
-                else:
-                    logger.info("Daemon process pid {0} cgroup managed by systemd".format(pid))
-            cgroups_enabled = True
-            status = "OK"
-        except CGroupsException as cge:
-            status = cge.msg
+        cgroups_enabled = True
+        if CGroups.enabled():
+            try:
+                CGroups._osutil.mount_cgroups()
+                if not suppress_process_add:
+                    CGroups._setup_wrapper_groups()
+                    pid = int(os.getpid())
+                    if not CGroups.is_systemd_manager():
+                        cg = CGroups.for_extension(AGENT_NAME)
+                        cg.add(pid)
+                        logger.info("Add daemon process pid {0} to {1} cgroup".format(pid, cg.name))
+                    else:
+                        logger.info("Daemon process pid {0} cgroup managed by systemd".format(pid))
+                status = "OK"
+            except CGroupsException as cge:
+                status = cge.msg
+                cgroups_enabled = False
+                CGroups.disable()
+        else:
+            status = "Cgroups not supported by platform"
 
         from azurelinuxagent.common.event import add_event, WALAEventOperation
         add_event(
@@ -604,6 +638,9 @@ class CGroups(object):
 
         :param limit:
         """
+        if not CGroups.enabled():
+            return
+
         if limit is None:
             return
 

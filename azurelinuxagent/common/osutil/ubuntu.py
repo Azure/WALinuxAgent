@@ -53,6 +53,11 @@ class Ubuntu14OSUtil(DefaultOSUtil):
     def get_dhcp_lease_endpoint(self):
         return self.get_endpoint_from_leases_path('/var/lib/dhcp/dhclient.*.leases')
 
+    def is_cgroups_supported(self):
+        if 'TRAVIS' in os.environ and os.environ['TRAVIS'] == 'true':
+            return False
+        return True
+
     def mount_cgroups(self):
         try:
             if not os.path.exists(_cgroup_path()):

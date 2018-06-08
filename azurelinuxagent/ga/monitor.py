@@ -391,10 +391,7 @@ class MonitorHandler(object):
         # Track metrics for the roll-up cgroup and for the agent cgroup
         try:
             CGroupsTelemetry.track_cgroup(CGroups.for_extension(""))
-            if CGroups.is_systemd_manager():
-                CGroupsTelemetry.track_systemd_service(AGENT_NAME)
-            else:
-                CGroupsTelemetry.track_cgroup(CGroups.for_extension(AGENT_NAME))
+            CGroupsTelemetry.track_agent(CGroups.for_extension(AGENT_NAME))
         except Exception as e:
             logger.error("monitor: Exception tracking wrapper and agent: {0} [{1}]", e, traceback.format_exc())
 
