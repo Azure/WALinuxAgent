@@ -25,10 +25,10 @@ from azurelinuxagent.common.osutil.default import DefaultOSUtil
 
 
 class Ubuntu14OSUtil(DefaultOSUtil):
-    jit_enabled = True
 
     def __init__(self):
         super(Ubuntu14OSUtil, self).__init__()
+        self.jit_enabled = True
 
     def start_network(self):
         return shellutil.run("service networking start", chk_err=False)

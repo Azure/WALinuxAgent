@@ -38,10 +38,10 @@ from azurelinuxagent.common.osutil.default import DefaultOSUtil
 
 
 class Redhat6xOSUtil(DefaultOSUtil):
-    jit_enabled = True
 
     def __init__(self):
         super(Redhat6xOSUtil, self).__init__()
+        self.jit_enabled = True
 
     def start_network(self):
         return shellutil.run("/sbin/service networking start", chk_err=False)

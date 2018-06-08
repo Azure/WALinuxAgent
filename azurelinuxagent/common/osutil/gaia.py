@@ -33,7 +33,6 @@ import azurelinuxagent.common.utils.textutil as textutil
 
 
 class GaiaOSUtil(DefaultOSUtil):
-    jit_enabled = False
 
     def __init__(self):
         super(GaiaOSUtil, self).__init__()

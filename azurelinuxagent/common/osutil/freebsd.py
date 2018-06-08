@@ -25,11 +25,11 @@ from azurelinuxagent.common.osutil.default import DefaultOSUtil
 from azurelinuxagent.common.future import ustr
 
 class FreeBSDOSUtil(DefaultOSUtil):
-    jit_enabled = True
 
     def __init__(self):
         super(FreeBSDOSUtil, self).__init__()
         self._scsi_disks_timeout_set = False
+        self.jit_enabled = True
 
     def set_hostname(self, hostname):
         rc_file_path = '/etc/rc.conf'

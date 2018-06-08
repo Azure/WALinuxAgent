@@ -41,7 +41,6 @@ except ImportError:
 
 
 class BigIpOSUtil(DefaultOSUtil):
-    jit_enabled = False
 
     def __init__(self):
         super(BigIpOSUtil, self).__init__()

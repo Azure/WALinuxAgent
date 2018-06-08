@@ -135,7 +135,10 @@ class CryptUtil(object):
         return bytes(byte_array)
 
     def decrypt_secret(self, encrypted_password, private_key):
-        decoded = base64.b64decode(encrypted_password)
+        try:
+            decoded = base64.b64decode(encrypted_password)
+        except Exception as e:
+            raise CryptError("Error decoding secret", e)
         args = DECRYPT_SECRET_CMD.format(self.openssl_cmd, private_key).split(' ')
         p = subprocess.Popen(args, stdout=subprocess.PIPE, stdin=subprocess.PIPE, stderr=subprocess.STDOUT)
         p.stdin.write(decoded)

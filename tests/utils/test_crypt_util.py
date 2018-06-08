@@ -64,12 +64,8 @@ class TestCryptoUtilOperations(AgentTestCase):
         prv_key = os.path.join(self.tmp_dir, "TransportPrivate.pem") 
         with open(prv_key, 'w+') as c:
             c.write(load_data("wire/sample.pem"))
-        encrypted_string = u"abc@123"        
         crypto = CryptUtil(conf.get_openssl_cmd())
-        if PY_VERSION_MAJOR <= 2:
-            self.assertRaises(TypeError, crypto.decrypt_secret, encrypted_string, prv_key)
-        else:
-            self.assertRaises(binascii.Error, crypto.decrypt_secret, encrypted_string, prv_key)
+        self.assertRaises(CryptError, crypto.decrypt_secret, encrypted_string, prv_key)
 
 if __name__ == '__main__':
     unittest.main()
