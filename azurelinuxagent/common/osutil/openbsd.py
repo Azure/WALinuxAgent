@@ -345,3 +345,7 @@ class OpenBSDOSUtil(DefaultOSUtil):
         Return device name attached to ide port 'n'.
         """
         return "wd{0}".format(port_id)
+
+    @staticmethod
+    def get_total_cpu_ticks_since_boot():
+        return 0

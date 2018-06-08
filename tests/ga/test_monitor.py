@@ -31,9 +31,9 @@ class TestMonitor(AgentTestCase):
     def test_parse_xml_event(self, *args):
         data_str = load_data('ext/event.xml')
         event = parse_xml_event(data_str)
-        self.assertNotEquals(None, event)
-        self.assertNotEquals(0, event.parameters)
-        self.assertNotEquals(None, event.parameters[0])
+        self.assertNotEqual(None, event)
+        self.assertNotEqual(0, event.parameters)
+        self.assertNotEqual(None, event.parameters[0])
 
     def test_add_sysinfo(self, *args):
         data_str = load_data('ext/event.xml')
@@ -60,35 +60,37 @@ class TestMonitor(AgentTestCase):
         monitor_handler.sysinfo = sysinfo
         monitor_handler.add_sysinfo(event)
 
-        self.assertNotEquals(None, event)
-        self.assertNotEquals(0, event.parameters)
-        self.assertNotEquals(None, event.parameters[0])
+        self.assertNotEqual(None, event)
+        self.assertNotEqual(0, event.parameters)
+        self.assertNotEqual(None, event.parameters[0])
         counter = 0
         for p in event.parameters:
             if p.name == vm_name_param:
-                self.assertEquals(vm_name, p.value)
+                self.assertEqual(vm_name, p.value)
                 counter += 1
             elif p.name == tenant_name_param:
-                self.assertEquals(tenant_name, p.value)
+                self.assertEqual(tenant_name, p.value)
                 counter += 1
             elif p.name == role_name_param:
-                self.assertEquals(role_name, p.value)
+                self.assertEqual(role_name, p.value)
                 counter += 1
             elif p.name == role_instance_name_param:
-                self.assertEquals(role_instance_name, p.value)
+                self.assertEqual(role_instance_name, p.value)
                 counter += 1
             elif p.name == container_id_param:
-                self.assertEquals(container_id, p.value)
+                self.assertEqual(container_id, p.value)
                 counter += 1
 
-        self.assertEquals(5, counter)
+        self.assertEqual(5, counter)
 
     @patch("azurelinuxagent.ga.monitor.MonitorHandler.send_telemetry_heartbeat")
     @patch("azurelinuxagent.ga.monitor.MonitorHandler.collect_and_send_events")
     @patch("azurelinuxagent.ga.monitor.MonitorHandler.send_host_plugin_heartbeat")
+    @patch("azurelinuxagent.ga.monitor.MonitorHandler.send_cgroup_telemetry")
     @patch("azurelinuxagent.ga.monitor.MonitorHandler.send_imds_heartbeat")
     def test_heartbeats(self,
                         patch_imds_heartbeat,
+                        patch_cgroup_telemetry,
                         patch_hostplugin_heartbeat,
                         patch_send_events,
                         patch_telemetry_heartbeat,
@@ -104,6 +106,7 @@ class TestMonitor(AgentTestCase):
         self.assertEqual(0, patch_send_events.call_count)
         self.assertEqual(0, patch_telemetry_heartbeat.call_count)
         self.assertEqual(0, patch_imds_heartbeat.call_count)
+        self.assertEqual(0, patch_cgroup_telemetry.call_count)
 
         monitor_handler.start()
         time.sleep(1)
@@ -113,9 +116,11 @@ class TestMonitor(AgentTestCase):
         self.assertNotEqual(0, patch_send_events.call_count)
         self.assertNotEqual(0, patch_telemetry_heartbeat.call_count)
         self.assertNotEqual(0, patch_imds_heartbeat.call_count)
+        self.assertNotEqual(0, patch_cgroup_telemetry.call_count)
 
         monitor_handler.stop()
 
+    @patch("azurelinuxagent.ga.monitor.MonitorHandler.send_cgroup_telemetry")
     def test_heartbeat_timings_updates_after_window(self, *args):
         monitor_handler = get_monitor_handler()
 
@@ -152,6 +157,7 @@ class TestMonitor(AgentTestCase):
 
         monitor_handler.stop()
 
+    @patch("azurelinuxagent.ga.monitor.MonitorHandler.send_cgroup_telemetry")
     def test_heartbeat_timings_no_updates_within_window(self, *args):
         monitor_handler = get_monitor_handler()
 

@@ -16,12 +16,19 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
+import os
 import time
 
 import azurelinuxagent.common.logger as logger
+import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.shellutil as shellutil
 
+from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
+
+
+def _cgroup_path(tail=""):
+    return os.path.join('/sys/fs/cgroup/', tail).rstrip(os.path.sep)
 
 
 class Ubuntu14OSUtil(DefaultOSUtil):
@@ -46,6 +53,40 @@ class Ubuntu14OSUtil(DefaultOSUtil):
     def get_dhcp_lease_endpoint(self):
         return self.get_endpoint_from_leases_path('/var/lib/dhcp/dhclient.*.leases')
 
+    def is_cgroups_supported(self):
+        if 'TRAVIS' in os.environ and os.environ['TRAVIS'] == 'true':
+            return False
+        return True
+
+    def mount_cgroups(self):
+        try:
+            if not os.path.exists(_cgroup_path()):
+                fileutil.mkdir(_cgroup_path())
+                self.mount(device='cgroup_root',
+                           mount_point=_cgroup_path(),
+                           option="-t tmpfs",
+                           chk_err=False)
+            elif not os.path.isdir(_cgroup_path()):
+                logger.error("Could not mount cgroups: ordinary file at {0}".format(_cgroup_path()))
+                return
+
+            for metric_hierarchy in ['cpu,cpuacct', 'memory']:
+                target_path = _cgroup_path(metric_hierarchy)
+                if not os.path.exists(target_path):
+                    fileutil.mkdir(target_path)
+                self.mount(device=metric_hierarchy,
+                           mount_point=target_path,
+                           option="-t cgroup -o {0}".format(metric_hierarchy),
+                           chk_err=False)
+
+            for metric_hierarchy in ['cpu', 'cpuacct']:
+                target_path = _cgroup_path(metric_hierarchy)
+                if not os.path.exists(target_path):
+                    os.symlink(_cgroup_path('cpu,cpuacct'), target_path)
+
+        except Exception as e:
+            logger.error("Could not mount cgroups: {0}", ustr(e))
+
 
 class Ubuntu12OSUtil(Ubuntu14OSUtil):
     def __init__(self):
@@ -56,6 +97,8 @@ class Ubuntu12OSUtil(Ubuntu14OSUtil):
         ret = shellutil.run_get_output("pidof dhclient3", chk_err=False)
         return ret[1] if ret[0] == 0 else None
 
+    def mount_cgroups(self):
+        pass
 
 class Ubuntu16OSUtil(Ubuntu14OSUtil):
     """
@@ -69,6 +112,12 @@ class Ubuntu16OSUtil(Ubuntu14OSUtil):
 
     def unregister_agent_service(self):
         return shellutil.run("systemctl mask walinuxagent", chk_err=False)
+
+    def mount_cgroups(self):
+        """
+        Mounted by default in Ubuntu 16.04
+        """
+        pass
 
 
 class Ubuntu18OSUtil(Ubuntu16OSUtil):
@@ -127,3 +176,9 @@ class UbuntuSnappyOSUtil(Ubuntu14OSUtil):
     def __init__(self):
         super(UbuntuSnappyOSUtil, self).__init__()
         self.conf_file_path = '/apps/walinuxagent/current/waagent.conf'
+
+    def mount_cgroups(self):
+        """
+        Already mounted in Snappy
+        """
+        pass

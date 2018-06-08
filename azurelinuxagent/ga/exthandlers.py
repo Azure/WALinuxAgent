@@ -22,7 +22,6 @@ import glob
 import json
 import operator
 import os
-import os.path
 import random
 import re
 import shutil
@@ -36,8 +35,9 @@ import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.version as version
-from azurelinuxagent.common.errorstate import ErrorState, ERROR_STATE_DELTA_DEFAULT, ERROR_STATE_DELTA_INSTALL
 
+from azurelinuxagent.common.cgroups import CGroups, CGroupsTelemetry
+from azurelinuxagent.common.errorstate import ErrorState, ERROR_STATE_DELTA_DEFAULT, ERROR_STATE_DELTA_INSTALL
 from azurelinuxagent.common.event import add_event, WALAEventOperation, elapsed_milliseconds, report_event
 from azurelinuxagent.common.exception import ExtensionError, ProtocolError
 from azurelinuxagent.common.future import ustr
@@ -986,17 +986,29 @@ class ExtHandlerInstance(object):
             # of Python versions we must support we must use .communicate().
             # Some extensions erroneously begin cmd with a slash; don't interpret those
             # as root-relative. (Issue #1170)
-            full_path = os.path.join(base_dir, cmd.lstrip(os.sep))
+            full_path = os.path.join(base_dir, cmd.lstrip(os.path.sep))
+
+            def pre_exec_function():
+                """
+                Change process state before the actual target process is started. Effectively, this runs between
+                the fork() and the exec() of sub-process creation.
+                :return:
+                """
+                os.setsid()
+                CGroups.add_to_extension_cgroup(self.ext_handler.name)
+
             process = subprocess.Popen(full_path,
                                   shell=True,
                                   cwd=base_dir,
                                   stdout=subprocess.PIPE,
                                   stderr=subprocess.PIPE,
                                   env=os.environ,
-                                  preexec_fn=os.setsid)
+                                  preexec_fn=pre_exec_function)
         except OSError as e:
             raise ExtensionError("Failed to launch '{0}': {1}".format(full_path, e.strerror))
 
+        cg = CGroups.for_extension(self.ext_handler.name)
+        CGroupsTelemetry.track_extension(self.ext_handler.name, cg)
         msg = capture_from_process(process, cmd, timeout)
 
         ret = process.poll()

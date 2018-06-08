@@ -21,14 +21,15 @@ import os
 import platform
 import time
 import threading
+import traceback
 import uuid
 
 import azurelinuxagent.common.conf as conf
-import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.errorstate import ErrorState
 
-from azurelinuxagent.common.event import add_event, WALAEventOperation
+from azurelinuxagent.common.cgroups import CGroups, CGroupsTelemetry
+from azurelinuxagent.common.event import add_event, report_metric, WALAEventOperation
 from azurelinuxagent.common.exception import EventError, ProtocolError, OSUtilError, HttpError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
@@ -96,6 +97,7 @@ class MonitorHandler(object):
 
     EVENT_COLLECTION_PERIOD = datetime.timedelta(minutes=1)
     TELEMETRY_HEARTBEAT_PERIOD = datetime.timedelta(minutes=30)
+    CGROUP_TELEMETRY_PERIOD = datetime.timedelta(minutes=5)
     # host plugin
     HOST_PLUGIN_HEARTBEAT_PERIOD = datetime.timedelta(minutes=1)
     HOST_PLUGIN_HEALTH_PERIOD = datetime.timedelta(minutes=5)
@@ -111,6 +113,7 @@ class MonitorHandler(object):
         self.event_thread = None
         self.last_event_collection = None
         self.last_telemetry_heartbeat = None
+        self.last_cgroup_telemetry = None
         self.last_host_plugin_heartbeat = None
         self.last_imds_heartbeat = None
         self.protocol = None
@@ -126,6 +129,7 @@ class MonitorHandler(object):
     def run(self):
         self.init_protocols()
         self.init_sysinfo()
+        self.init_cgroups()
         self.start()
 
     def stop(self):
@@ -247,11 +251,13 @@ class MonitorHandler(object):
 
     def daemon(self):
         min_delta = min(MonitorHandler.TELEMETRY_HEARTBEAT_PERIOD,
+                        MonitorHandler.CGROUP_TELEMETRY_PERIOD,
                         MonitorHandler.EVENT_COLLECTION_PERIOD,
                         MonitorHandler.HOST_PLUGIN_HEARTBEAT_PERIOD,
                         MonitorHandler.IMDS_HEARTBEAT_PERIOD).seconds
         while self.should_run:
             self.send_telemetry_heartbeat()
+            self.send_cgroup_telemetry()
             self.collect_and_send_events()
             self.send_host_plugin_heartbeat()
             self.send_imds_heartbeat()
@@ -379,3 +385,34 @@ class MonitorHandler(object):
                 logger.warn("Failed to send heartbeat: {0}", e)
 
             self.last_telemetry_heartbeat = datetime.datetime.utcnow()
+
+    @staticmethod
+    def init_cgroups():
+        # Track metrics for the roll-up cgroup and for the agent cgroup
+        try:
+            CGroupsTelemetry.track_cgroup(CGroups.for_extension(""))
+            CGroupsTelemetry.track_agent(CGroups.for_extension(AGENT_NAME))
+        except Exception as e:
+            logger.error("monitor: Exception tracking wrapper and agent: {0} [{1}]", e, traceback.format_exc())
+
+    def send_cgroup_telemetry(self):
+        if self.last_cgroup_telemetry is None:
+            self.last_cgroup_telemetry = datetime.datetime.utcnow()
+
+        if datetime.datetime.utcnow() >= (self.last_telemetry_heartbeat + MonitorHandler.CGROUP_TELEMETRY_PERIOD):
+            try:
+                for cgroup_name, metrics in CGroupsTelemetry.collect_all_tracked().items():
+                    for metric_group, metric_name, value in metrics:
+                        if value > 0:
+                            report_metric(metric_group, metric_name, cgroup_name, value)
+            except Exception as e:
+                logger.warn("Failed to collect performance metrics: {0} [{1}]", e, traceback.format_exc())
+
+            # Look for extension cgroups we're not already tracking and track them
+            try:
+                ext_handlers_list, incarnation = self.protocol.get_ext_handlers()
+                CGroupsTelemetry.update_tracked(ext_handlers_list.extHandlers)
+            except Exception as e:
+                logger.warn("Monitor: updating tracked extensions raised {0}: {1}", e, traceback.format_exc())
+
+            self.last_cgroup_telemetry = datetime.datetime.utcnow()
