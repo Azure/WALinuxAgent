@@ -59,7 +59,7 @@ def make_root_cgroups():
     return CGroups("root", path_maker)
 
 
-@unittest.skipIf(not CGroups.enabled(), "CGroups not supported in this environment")
+@skip_if_predicate_false(CGroups.enabled, "CGroups not supported in this environment")
 class TestCGroups(AgentTestCase):
     @classmethod
     def setUpClass(cls):

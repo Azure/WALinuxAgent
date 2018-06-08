@@ -61,7 +61,13 @@ def _do_nothing():
 _MAX_LENGTH = 120
 
 
-def safe_repr(obj, short=False):
+def skip_if_predicate_false(predicate, message):
+    if not predicate():
+        return unittest.skip(message)
+    return lambda func: func
+
+
+def _safe_repr(obj, short=False):
     """
     Copied from Python 3.x
     """
@@ -115,22 +121,22 @@ class AgentTestCase(unittest.TestCase):
 
     def emulate_assertIn(self, a, b, msg=None):
         if a not in b:
-            msg = msg if msg is not None else "{0} not found in {1}".format(safe_repr(a), safe_repr(b))
+            msg = msg if msg is not None else "{0} not found in {1}".format(_safe_repr(a), _safe_repr(b))
             self.fail(msg)
 
     def emulate_assertNotIn(self, a, b, msg=None):
         if a in b:
-            msg = msg if msg is not None else "{0} unexpectedly found in {1}".format(safe_repr(a), safe_repr(b))
+            msg = msg if msg is not None else "{0} unexpectedly found in {1}".format(_safe_repr(a), _safe_repr(b))
             self.fail(msg)
 
     def emulate_assertGreater(self, a, b, msg=None):
         if not a > b:
-            msg = msg if msg is not None else '{0} not greater than {1}'.format(safe_repr(a), safe_repr(b))
+            msg = msg if msg is not None else '{0} not greater than {1}'.format(_safe_repr(a), _safe_repr(b))
             self.fail(msg)
 
     def emulate_assertLess(self, a, b, msg=None):
         if not a < b:
-            msg = msg if msg is not None else '{0} not less than {1}'.format(safe_repr(a), safe_repr(b))
+            msg = msg if msg is not None else '{0} not less than {1}'.format(_safe_repr(a), _safe_repr(b))
             self.fail(msg)
 
     @staticmethod
