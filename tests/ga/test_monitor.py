@@ -195,7 +195,6 @@ class TestMonitor(AgentTestCase):
         monitor_handler.stop()
 
     @patch("azurelinuxagent.common.protocol.healthservice.HealthService.report_host_plugin_heartbeat")
-    @patch("azurelinuxagent.ga.monitor.MonitorHandler.send_cgroup_telemetry")
     def test_heartbeat_creates_signal(self, patch_report_heartbeat, *args):
         monitor_handler = get_monitor_handler()
         monitor_handler.init_protocols()
