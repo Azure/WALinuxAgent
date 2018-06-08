@@ -63,7 +63,9 @@ _MAX_LENGTH = 120
 
 def skip_if_predicate_false(predicate, message):
     if not predicate():
-        return unittest.skip(message)
+        if hasattr(unittest, "skip"):
+            return unittest.skip(message)
+        return lambda func: None
     return lambda func: func
 
 
