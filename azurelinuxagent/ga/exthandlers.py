@@ -236,10 +236,6 @@ class ExtHandlersHandler(object):
                       message=msg)
             return
 
-    def run_status(self):
-        self.report_ext_handlers_status()
-        return
-
     def get_upgrade_guid(self, name):
         return self.last_upgrade_guids.get(name, (None, False))[0]
 

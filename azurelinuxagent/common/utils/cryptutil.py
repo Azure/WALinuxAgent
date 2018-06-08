@@ -30,6 +30,8 @@ import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.shellutil as shellutil
 import azurelinuxagent.common.utils.textutil as textutil
 
+DECRYPT_SECRET_CMD = "{0} cms -decrypt -inform DER -inkey {1} -in /dev/stdin"
+
 class CryptUtil(object):
     def __init__(self, openssl_cmd):
         self.openssl_cmd = openssl_cmd
@@ -134,7 +136,8 @@ class CryptUtil(object):
 
     def decrypt_secret(self, encrypted_password, private_key):
         decoded = base64.b64decode(encrypted_password)
-        p = subprocess.Popen([self.openssl_cmd, 'cms', '-decrypt', '-inform', 'DER', '-inkey', private_key, '-in', '/dev/stdin'], stdout=subprocess.PIPE, stdin=subprocess.PIPE, stderr=subprocess.STDOUT)
+        args = DECRYPT_SECRET_CMD.format(self.openssl_cmd, private_key).split(' ')
+        p = subprocess.Popen(args, stdout=subprocess.PIPE, stdin=subprocess.PIPE, stderr=subprocess.STDOUT)
         p.stdin.write(decoded)
         output = p.communicate()[0]
         retcode = p.poll()

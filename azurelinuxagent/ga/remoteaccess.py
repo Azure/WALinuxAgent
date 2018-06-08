@@ -94,8 +94,7 @@ class RemoteAccessHandler(object):
                     self.protocol.client.update_goal_state(True)
                     self.protocol.client.update_remote_access_conf(self.protocol.client.goal_state)
                     self.remote_access = self.protocol.client.remote_access
-                    if self.remote_access is not None:
-                        self.handle_remote_access()
+                    self.handle_remote_access()
         except Exception as e:
             msg = u"Exception processing remote access handler: {0}".format(
                 ustr(e))
@@ -105,16 +104,14 @@ class RemoteAccessHandler(object):
                       op=WALAEventOperation.HandleRemoteAccess,
                       is_success=False,
                       message=msg)
-            return
 
     def handle_remote_access(self):
-        logger.verbose("Entered handle_remote_access")
         if self.remote_access is not None:
             # Get JIT user accounts.
             all_users = self.os_util.get_users()
             jit_users = set()
             for usr in all_users:
-                if usr[4] == REMOTE_ACCESS_ACCOUNT_COMMENT:
+                if self.validate_jit_user(usr[4]):
                     jit_users.add(usr[0])
             for acc in self.remote_access.user_list.users:
                 raw_expiration = acc.expiration
@@ -123,36 +120,47 @@ class RemoteAccessHandler(object):
                 if acc.name not in jit_users and now < account_expiration:
                     self.add_user(acc.name, acc.encrypted_password, account_expiration)
 
+    def validate_jit_user(self, comment):
+        return comment == REMOTE_ACCESS_ACCOUNT_COMMENT
+
     def add_user(self, username, encrypted_password, account_expiration):
-        created = False
         try:
             expiration_date = (account_expiration + timedelta(days=1)).strftime(DATE_FORMAT)
-            logger.verbose("[RemoteAccessHandler::add_user]: Adding user {0} with expiration date {1}".format(username, expiration_date))
+            logger.verbose("Adding user {0} with expiration date {1}"
+                           .format(username, expiration_date))
             self.os_util.useradd(username, expiration_date, REMOTE_ACCESS_ACCOUNT_COMMENT)
-            created = True
+        except OSError as oe:
+            logger.error("Error adding user {0}. {1}"
+                         .format(username, oe.strerror))
+            return
+        except Exception as e:
+            logger.error("Error adding user {0}. {1}".format(username, ustr(e)))
+            return
+        try:
             prv_key = os.path.join(conf.get_lib_dir(), TRANSPORT_PRIVATE_CERT)
             pwd = self.cryptUtil.decrypt_secret(encrypted_password, prv_key)
             self.os_util.chpasswd(username, pwd, conf.get_password_cryptid(), conf.get_password_crypt_salt_len())
             self.os_util.conf_sudoer(username)
-            logger.info("[RemoteAccessHandler::add_user]: User '{0}' added successfully with expiration in {1}".format(username, expiration_date))
+            logger.info("User '{0}' added successfully with expiration in {1}"
+                        .format(username, expiration_date))
             return
         except OSError as oe:
-            self.handle_failed_create(username, oe.strerror, created)
+            self.handle_failed_create(username, oe.strerror)
         except Exception as e:
-            self.handle_failed_create(username, str(e), created)
-        logger.error("[RemoteAccessHandler::add_user]: Unable to add user {0}'. Will not try again for this incarnation.".format(username))
-        return
+            self.handle_failed_create(username, ustr(e))
 
-    def handle_failed_create(self, username, error_message, created):
-        logger.error("[RemoteAccessHandler::failed_create]: Error adding user {0}. {1}".format(username, error_message))
-        if created:
-            try:
-                self.delete_user(username)
-            except OSError as oe:
-                logger.error("[RemoteAccessHandler::failed_create]: Failed to clean up after account creation for {0}. {1}".format(username, oe.strerror()))
-            except Exception as e:
-                logger.error("[RemoteAccessHandler::failed_create]: Failed to clean up after account creation for {0}. {1}".format(username, str(e)))
+    def handle_failed_create(self, username, error_message):
+        logger.error("Error creating user {0}. {1}"
+                     .format(username, error_message))
+        try:
+            self.delete_user(username)
+        except OSError as oe:
+            logger.error("Failed to clean up after account creation for {0}. {1}"
+                         .format(username, oe.strerror()))
+        except Exception as e:
+            logger.error("Failed to clean up after account creation for {0}. {1}"
+                         .format(username, str(e)))
 
     def delete_user(self, username):
         self.os_util.del_account(username)
-        logger.info("[RemoteAccessHandler::delete_user]: User deleted {0}".format(username))
+        logger.info("User deleted {0}".format(username))

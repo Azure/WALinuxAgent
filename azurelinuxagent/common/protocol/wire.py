@@ -1352,7 +1352,7 @@ class RemoteAccess(object):
         Parse xml document containing user account information
         """
         if xml_text is None or len(xml_text) == 0:
-            return self
+            return None
         self.xml_text = xml_text
         xml_doc = parse_doc(xml_text)
         self.incarnation = findtext(xml_doc, "Incarnation")

@@ -138,7 +138,7 @@ class TestRemoteAccessHandler(AgentTestCase):
         mockOSUtil.all_users[testusr] = (testusr, None, None, None, None, None, None, None)
         rah = RemoteAccessHandler()
         rah.os_util = mockOSUtil
-        rah.handle_failed_create("", "test message", True)
+        rah.handle_failed_create("", "test message")
         self.assertEqual(1, mockOSUtil.all_users.keys().__len__())
         self.assertTrue(testusr in mockOSUtil.all_users, "Expected user {0} missing".format(testusr))
 
@@ -148,7 +148,7 @@ class TestRemoteAccessHandler(AgentTestCase):
         mockOSUtil.all_users[testusr] = (testusr, None, None, None, None, None, None, None)
         rah = RemoteAccessHandler()
         rah.os_util = mockOSUtil
-        rah.handle_failed_create("Carl", "test message", True)
+        rah.handle_failed_create("Carl", "test message")
         self.assertEqual(1, mockOSUtil.all_users.keys().__len__())
         self.assertTrue(testusr in mockOSUtil.all_users, "Expected user {0} missing".format(testusr))
 
@@ -206,6 +206,26 @@ class TestRemoteAccessHandler(AgentTestCase):
         os_util = rah.os_util
         os_util.__class__ = MockOSUtil
         self.assertEqual(0, os_util.all_users.keys().__len__())
+
+    def test_handle_remote_access_validate_jit_user_valid(self):
+        rah = RemoteAccessHandler()
+        result = rah.validate_jit_user("JIT Account")
+        self.assertTrue(result, "JIT account incorrectly identified.")
+
+    def test_handle_remote_access_validate_jit_user_invalid(self):
+        rah = RemoteAccessHandler()
+        result = rah.validate_jit_user("John Doe")
+        self.assertFalse(result, "JIT account incorrectly identified.")
+        
+    def test_handle_remote_access_validate_jit_user_None(self):
+        rah = RemoteAccessHandler()
+        result = rah.validate_jit_user(None)
+        self.assertFalse(result, "JIT account incorrectly identified.")
+
+    def test_handle_remote_access_validate_jit_user_blank(self):
+        rah = RemoteAccessHandler()
+        result = rah.validate_jit_user("")
+        self.assertFalse(result, "JIT account incorrectly identified.")
 
     @patch('azurelinuxagent.common.utils.cryptutil.CryptUtil.decrypt_secret',
     return_value="]aPPEv}uNg1FPnl?")
