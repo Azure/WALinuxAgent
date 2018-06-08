@@ -73,6 +73,8 @@ FIREWALL_DELETE_OWNER_ACCEPT = "iptables {0} -t security -D OUTPUT -d {1} -p tcp
 FIREWALL_DELETE_CONNTRACK_DROP = "iptables {0} -t security -D OUTPUT -d {1} -p tcp -m conntrack --ctstate INVALID,NEW -j DROP"
 
 PACKET_PATTERN = "^\s*(\d+)\s+(\d+)\s+DROP\s+.*{0}[^\d]*$"
+ALL_CPUS_REGEX = re.compile('^cpu .*')
+
 
 _enable_firewall = True
 
@@ -86,6 +88,7 @@ IOCTL_SIOCGIFCONF = 0x8912
 IOCTL_SIOCGIFFLAGS = 0x8913
 IOCTL_SIOCGIFHWADDR = 0x8927
 IFNAMSIZ = 16
+
 
 class DefaultOSUtil(object):
     def __init__(self):
@@ -694,7 +697,6 @@ class DefaultOSUtil(object):
         struct_size = 32 if python_arc == '32bit' else 40
         return struct_size
 
-
     def _get_all_interfaces(self):
         """
         Return a dictionary mapping from interface name to IPv4 address.
@@ -1113,3 +1115,38 @@ class DefaultOSUtil(object):
     @property
     def is_64bit(self):
         return sys.maxsize > 2**32
+
+    @staticmethod
+    def _get_proc_stat():
+        """
+        Get the contents of /proc/stat.
+        # cpu  813599 3940 909253 154538746 874851 0 6589 0 0 0
+        # cpu0 401094 1516 453006 77276738 452939 0 3312 0 0 0
+        # cpu1 412505 2423 456246 77262007 421912 0 3276 0 0 0
+
+        :return: A single string with the contents of /proc/stat
+        :rtype: str
+        """
+        results = None
+        try:
+            results = fileutil.read_file('/proc/stat')
+        except (OSError, IOError) as ex:
+            logger.warn("Couldn't read /proc/stat: {0}".format(ex.strerror))
+
+        return results
+
+    @staticmethod
+    def get_total_cpu_ticks_since_boot():
+        """
+        Compute the number of USER_HZ units of time that have elapsed in all categories, across all cores, since boot.
+
+        :return: int
+        """
+        system_cpu = 0
+        proc_stat = DefaultOSUtil._get_proc_stat()
+        if proc_stat is not None:
+            for line in proc_stat.splitlines():
+                if ALL_CPUS_REGEX.match(line):
+                    system_cpu = sum(int(i) for i in line.split()[1:7])
+                    break
+        return system_cpu

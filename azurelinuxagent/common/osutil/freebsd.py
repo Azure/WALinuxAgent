@@ -247,3 +247,7 @@ class FreeBSDOSUtil(DefaultOSUtil):
                     if not possible.startswith('pass'):
                         return possible
         return None
+
+    @staticmethod
+    def get_total_cpu_ticks_since_boot():
+        return 0

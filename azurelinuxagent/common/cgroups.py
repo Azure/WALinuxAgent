@@ -30,10 +30,6 @@ WRAPPER_CGROUP_NAME = "Agent+Extensions"
 METRIC_HIERARCHIES = ['cpu', 'memory']
 MEMORY_DEFAULT = -1
 
-# cpu  813599 3940 909253 154538746 874851 0 6589 0 0 0
-# cpu0 401094 1516 453006 77276738 452939 0 3312 0 0 0
-# cpu1 412505 2423 456246 77262007 421912 0 3276 0 0 0
-re_all_CPUs = re.compile('^cpu .*')
 re_user_system_times = re.compile('user (\d+)\nsystem (\d+)\n')
 
 related_services = {
@@ -45,12 +41,7 @@ related_services = {
 class CGroupsException(Exception):
 
     def __init__(self, msg):
-
         self.msg = msg
-        if CGroups.enabled():
-            pid = os.getpid()
-            # logger.verbose("[{0}] Disabling cgroup support: {1}".format(pid, msg))
-            # CGroups.disable()
 
     def __str__(self):
         return repr(self.msg)
@@ -66,9 +57,10 @@ class Cpu(object):
         :return:
         """
         self.cgt = cgt
+        self.osutil = get_osutil()
         self.current_cpu_total = self.get_current_cpu_total()
         self.previous_cpu_total = 0
-        self.current_system_cpu = Cpu.get_current_system_cpu()
+        self.current_system_cpu = self.osutil.get_total_cpu_ticks_since_boot()
         self.previous_system_cpu = 0
 
     def __str__(self):
@@ -83,43 +75,12 @@ class Cpu(object):
         :return: int
         """
         cpu_total = 0
-        cpu_stat = self.cgt.cgroup.get_file('cpu', 'cpuacct.stat')
+        cpu_stat = self.cgt.cgroup.get_file_contents('cpu', 'cpuacct.stat')
         if cpu_stat is not None:
             m = re_user_system_times.match(cpu_stat)
             if m:
                 cpu_total = int(m.groups()[0]) + int(m.groups()[1])
         return cpu_total
-
-    @staticmethod
-    def get_proc_stat():
-        """
-        Get the contents of /proc/stat.
-        :return: A single string with the contents of /proc/stat
-        :rtype: str
-        """
-        results = None
-        try:
-            results = fileutil.read_file('/proc/stat')
-        except (OSError, IOError) as ex:
-            logger.warn("Couldn't read /proc/stat: {0}".format(ex.strerror))
-
-        return results
-
-    @staticmethod
-    def get_current_system_cpu():
-        """
-        Compute the number of USER_HZ units of time that have elapsed in all categories, across all cores, since boot.
-
-        :return: int
-        """
-        system_cpu = 0
-        proc_stat = Cpu.get_proc_stat()
-        if proc_stat is not None:
-            for line in proc_stat.splitlines():
-                if re_all_CPUs.match(line):
-                    system_cpu = sum(int(i) for i in line.split()[1:7])
-                    break
-        return system_cpu
 
     def update(self):
         """
@@ -129,7 +90,7 @@ class Cpu(object):
         self.previous_cpu_total = self.current_cpu_total
         self.previous_system_cpu = self.current_system_cpu
         self.current_cpu_total = self.get_current_cpu_total()
-        self.current_system_cpu = Cpu.get_current_system_cpu()
+        self.current_system_cpu = self.osutil.get_total_cpu_ticks_since_boot()
 
     def get_cpu_percent(self):
         """
@@ -285,7 +246,7 @@ class CGroupsTelemetry(object):
 
         names_now_tracked = set(CGroupsTelemetry._tracked.keys())
         if CGroupsTelemetry.tracked_names != names_now_tracked:
-            now_tracking = " ".join("[{0}]".format(name) for name in names_now_tracked)
+            now_tracking = " ".join("[{0}]".format(name) for name in sorted(names_now_tracked))
             if len(now_tracking):
                 logger.info("After updating cgroup telemetry, tracking {0}".format(now_tracking))
             else:
@@ -604,7 +565,7 @@ class CGroups(object):
 
         return limit / 100.0
 
-    def get_file(self, hierarchy, file_name):
+    def get_file_contents(self, hierarchy, file_name):
         """
         Retrieve the value of a parameter from a hierarchy.
 
@@ -630,7 +591,7 @@ class CGroups(object):
         :param parameter_name: str
         :return: str
         """
-        values = self.get_file(hierarchy, parameter_name).splitlines
+        values = self.get_file_contents(hierarchy, parameter_name).splitlines
         return values[0]
 
     def set_cpu_limit(self, limit=None):
