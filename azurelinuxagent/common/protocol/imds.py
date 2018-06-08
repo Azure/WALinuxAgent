@@ -11,7 +11,7 @@ from azurelinuxagent.common.protocol.restapi import DataContract, set_properties
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 
 IMDS_ENDPOINT = '169.254.169.254'
-APIVERSION = '2017-12-01'
+APIVERSION = '2018-02-01'
 BASE_URI = "http://{0}/metadata/instance/{1}?api-version={2}"
 
 IMDS_IMAGE_ORIGIN_UNKNOWN = 0
@@ -238,11 +238,19 @@ class ImdsClient(object):
             'User-Agent': restutil.HTTP_USER_AGENT,
             'Metadata': True,
         }
+        self._health_headers = {
+            'User-Agent': restutil.HTTP_USER_AGENT_HEALTH,
+            'Metadata': True,
+        }
         pass
 
     @property
     def compute_url(self):
         return BASE_URI.format(IMDS_ENDPOINT, 'compute', self._api_version)
+
+    @property
+    def instance_url(self):
+        return BASE_URI.format(IMDS_ENDPOINT, '', self._api_version)
 
     def get_compute(self):
         """
@@ -264,3 +272,52 @@ class ImdsClient(object):
         set_properties('compute', compute_info, data)
 
         return compute_info
+
+    def validate(self):
+        """
+        Determines whether the metadata instance api returns 200, and the response
+        is valid: compute should contain location, name, subscription id, and vm size
+        and network should contain mac address and private ip address.
+        :return: Tuple<is_healthy:bool, error_response:str>
+            is_healthy: True when validation succeeds, False otherwise
+            error_response: validation failure details to assist with debugging
+        """
+
+        # ensure we get a 200
+        resp = restutil.http_get(self.instance_url, headers=self._health_headers)
+        if restutil.request_failed(resp):
+            return False, "{0}".format(restutil.read_response_error(resp))
+
+        # ensure the response is valid json
+        data = resp.read()
+        try:
+            json_data = json.loads(ustr(data, encoding="utf-8"))
+        except Exception as e:
+            return False, "JSON parsing failed: {0}".format(ustr(e))
+
+        # ensure all expected fields are present and have a value
+        try:
+            self.check_field(json_data, 'compute')
+            self.check_field(json_data['compute'], 'location')
+            self.check_field(json_data['compute'], 'name')
+            self.check_field(json_data['compute'], 'subscriptionId')
+            self.check_field(json_data['compute'], 'vmSize')
+
+            self.check_field(json_data, 'network')
+            self.check_field(json_data['network'], 'interface')
+            self.check_field(json_data['network']['interface'][0], 'macAddress')
+            self.check_field(json_data['network']['interface'][0], 'ipv4')
+            self.check_field(json_data['network']['interface'][0]['ipv4'], 'ipAddress')
+            self.check_field(json_data['network']['interface'][0]['ipv4']['ipAddress'][0], 'privateIpAddress')
+        except ValueError as v:
+            return False, ustr(v)
+
+        return True, ''
+
+    @staticmethod
+    def check_field(dict_obj, field):
+        if field not in dict_obj or dict_obj[field] is None:
+            raise ValueError('Missing field: [{0}]'.format(field))
+
+        if len(dict_obj[field]) == 0:
+            raise ValueError('Empty field: [{0}]'.format(field))

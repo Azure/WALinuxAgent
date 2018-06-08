@@ -64,6 +64,7 @@ class HealthService(object):
     HOST_PLUGIN_STATUS_OBSERVATION_NAME = 'GuestAgentPluginStatus'
     HOST_PLUGIN_VERSIONS_OBSERVATION_NAME = 'GuestAgentPluginVersions'
     HOST_PLUGIN_ARTIFACT_OBSERVATION_NAME = 'GuestAgentPluginArtifact'
+    IMDS_OBSERVATION_NAME = 'InstanceMetadataHeartbeat'
     MAX_OBSERVATIONS = 10
 
     def __init__(self, endpoint):
@@ -109,7 +110,6 @@ class HealthService(object):
         :param is_healthy: whether the api call succeeded
         :param source: specifies the api caller for debugging failures
         :param response: debugging information for failures
-        :return:
         """
         self._observe(name=HealthService.HOST_PLUGIN_ARTIFACT_OBSERVATION_NAME,
                       is_healthy=is_healthy,
@@ -122,9 +122,19 @@ class HealthService(object):
         Reports a signal for /status
         :param is_healthy: whether the api call succeeded
         :param response: debugging information for failures
-        :return:
         """
         self._observe(name=HealthService.HOST_PLUGIN_STATUS_OBSERVATION_NAME,
+                      is_healthy=is_healthy,
+                      value=response)
+        self._report()
+
+    def report_imds_status(self, is_healthy, response):
+        """
+        Reports a signal for /metadata/instance
+        :param is_healthy: whether the api call succeeded and returned valid data
+        :param response: debugging information for failures
+        """
+        self._observe(name=HealthService.IMDS_OBSERVATION_NAME,
                       is_healthy=is_healthy,
                       value=response)
         self._report()
