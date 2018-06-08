@@ -5,6 +5,7 @@ import json
 import azurelinuxagent.common.protocol.imds as imds
 
 from azurelinuxagent.common.exception import HttpError
+from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.restapi import set_properties
 from azurelinuxagent.common.utils import restutil
 from tests.ga.test_update import ResponseMock
@@ -288,11 +289,11 @@ class TestImds(AgentTestCase):
 
     def _assert_field(self, *fields):
         response = self._imds_response('valid')
-        response_obj = json.loads(response)
+        response_obj = json.loads(ustr(response, encoding="utf-8"))
 
         # assert empty value
         self._update_field(response_obj, fields, '')
-        altered_response = json.dumps(response_obj)
+        altered_response = json.dumps(response_obj).encode()
         self._assert_validation(http_status_code=200,
                                 http_response=altered_response,
                                 expected_valid=False,
@@ -300,7 +301,7 @@ class TestImds(AgentTestCase):
 
         # assert missing value
         self._update_field(response_obj, fields, None)
-        altered_response = json.dumps(response_obj)
+        altered_response = json.dumps(response_obj).encode()
         self._assert_validation(http_status_code=200,
                                 http_response=altered_response,
                                 expected_valid=False,
@@ -322,7 +323,7 @@ class TestImds(AgentTestCase):
     @staticmethod
     def _imds_response(f):
         path = os.path.join(data_dir, "imds", "{0}.json".format(f))
-        with open(path) as fh:
+        with open(path, "rb") as fh:
             return fh.read()
 
     def _assert_validation(self, http_status_code, http_response, expected_valid, expected_response):
