@@ -19,6 +19,7 @@
 import array
 import base64
 import datetime
+import errno
 import fcntl
 import glob
 import multiprocessing
@@ -1111,7 +1112,11 @@ class DefaultOSUtil(object):
         try:
             pid = int(pid)
             os.kill(pid, 0)
-        except (OSError, ValueError, TypeError):
+        except (ValueError, TypeError):
+            return False
+        except OSError as e:
+            if e.errno == errno.EPERM:
+                return True
             return False
         return True
 
