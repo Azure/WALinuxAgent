@@ -238,6 +238,10 @@ class ImdsClient(object):
             'User-Agent': restutil.HTTP_USER_AGENT,
             'Metadata': True,
         }
+        self._health_headers = {
+            'User-Agent': restutil.HTTP_USER_AGENT_HEALTH,
+            'Metadata': True,
+        }
         pass
 
     @property
@@ -280,7 +284,7 @@ class ImdsClient(object):
         """
 
         # ensure we get a 200
-        resp = restutil.http_get(self.instance_url, headers=self._headers)
+        resp = restutil.http_get(self.instance_url, headers=self._health_headers)
         if restutil.request_failed(resp):
             return False, "{0}".format(restutil.read_response_error(resp))
 
