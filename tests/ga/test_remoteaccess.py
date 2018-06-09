@@ -14,6 +14,7 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 #
+import xml
 
 from tests.tools import *
 from azurelinuxagent.common.protocol.wire import *
@@ -87,3 +88,7 @@ class TestRemoteAccess(AgentTestCase):
         self.assertEquals(1, len(protocol.client.remote_access.user_list.users))
         self.assertEquals('testAccount', protocol.client.remote_access.user_list.users[0].name)
         self.assertEquals('encryptedPasswordString', protocol.client.remote_access.user_list.users[0].encrypted_password)
+
+    def test_parse_bad_remote_access_data(self):
+        data = "foobar"
+        self.assertRaises(xml.parsers.expat.ExpatError, RemoteAccess, data)

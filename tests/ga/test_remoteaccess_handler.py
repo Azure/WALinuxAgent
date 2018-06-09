@@ -331,3 +331,28 @@ class TestRemoteAccessHandler(AgentTestCase):
         self.assertTrue(tstuser not in os_util.all_users)
         rah.handle_remote_access()
         self.assertTrue(tstuser in os_util.all_users, "{0} missing from users".format(tstuser))
+
+    @patch('azurelinuxagent.common.utils.cryptutil.CryptUtil.decrypt_secret',
+    return_value="]aPPEv}uNg1FPnl?")
+    @patch('azurelinuxagent.common.osutil.get_osutil',
+    return_value=MockOSUtil())
+    @patch('azurelinuxagent.common.protocol.util.ProtocolUtil.get_protocol',
+    return_value=WireProtocol("12.34.56.78"))
+    @patch('azurelinuxagent.common.protocol.wire.WireProtocol.get_incarnation',
+    return_value="1")
+    @patch('azurelinuxagent.common.protocol.wire.WireClient.get_remote_access',
+    return_value="asdf")
+    def test_remote_access_handler_run_bad_data(self, _1, _2, _3, _4, _5):
+        rah = RemoteAccessHandler()
+        rah.os_util = MockOSUtil()
+        tstpassword = "]aPPEv}uNg1FPnl?"
+        tstuser = "foobar"
+        expiration_date = datetime.utcnow() + timedelta(days=1)
+        expiration = (expiration_date).strftime("%a, %d %b %Y %H:%M:%S ") + "UTC"
+        pwd = tstpassword
+        rah.add_user(tstuser, pwd, expiration_date)
+        os_util = rah.os_util
+        os_util.__class__ = MockOSUtil
+        self.assertTrue(tstuser in os_util.all_users, "{0} missing from users".format(tstuser))
+        rah.run()
+        self.assertTrue(tstuser in os_util.all_users, "{0} missing from users".format(tstuser))

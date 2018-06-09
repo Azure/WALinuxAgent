@@ -713,6 +713,15 @@ class WireClient(object):
         local_file = os.path.join(conf.get_lib_dir(), REMOTE_ACCESS_FILE_NAME.format(self.remote_access.incarnation))
         self.save_cache(local_file, xml_text)
 
+    def get_remote_access(self):
+        incarnation_file = os.path.join(conf.get_lib_dir(),
+                                        INCARNATION_FILE_NAME)
+        incarnation = self.fetch_cache(incarnation_file)
+        file_name = REMOTE_ACCESS_FILE_NAME.format(incarnation)
+        remote_access_file = os.path.join(conf.get_lib_dir(), file_name)
+        xml_text = self.fetch_cache(remote_access_file)
+        remote_access = RemoteAccess(xml_text)
+        return remote_access
         
     def update_ext_conf(self, goal_state):
         if goal_state.ext_uri is None:
@@ -758,6 +767,7 @@ class WireClient(object):
                 self.update_shared_conf(goal_state)
                 self.update_certs(goal_state)
                 self.update_ext_conf(goal_state)
+                self.update_remote_access_conf(goal_state)
                 self.save_cache(incarnation_file, goal_state.incarnation)
 
                 if self.host_plugin is not None:

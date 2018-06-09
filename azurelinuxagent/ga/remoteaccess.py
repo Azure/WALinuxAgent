@@ -91,9 +91,7 @@ class RemoteAccessHandler(object):
                 if self.incarnation != current_incarnation:
                     # something changed. Handle remote access if any.
                     self.incarnation = current_incarnation
-                    self.protocol.client.update_goal_state(True)
-                    self.protocol.client.update_remote_access_conf(self.protocol.client.goal_state)
-                    self.remote_access = self.protocol.client.remote_access
+                    self.remote_access = self.protocol.client.get_remote_access()
                     self.handle_remote_access()
         except Exception as e:
             msg = u"Exception processing remote access handler: {0}".format(

@@ -21,6 +21,7 @@ class MockOSUtil(DefaultOSUtil):
     def __init__(self):
         self.all_users = {}
         self.sudo_users = set()
+        self.jit_enabled = True
 
     def useradd(self, username, expiration=None, comment=None):
         if username == "":
