@@ -181,7 +181,7 @@ class CGroupsTelemetry(object):
 
         :param str name: Service name (without .service suffix) to be tracked.
         """
-        service_name = "{0}.service".format(name)
+        service_name = "{0}.service".format(name).lower()
         if CGroups.enabled() and not CGroupsTelemetry.is_tracked(service_name):
             cgroup = CGroups.for_systemd_service(service_name)
             tracker = CGroupsTelemetry(service_name, cgroup=cgroup)
@@ -208,19 +208,17 @@ class CGroupsTelemetry(object):
                     CGroupsTelemetry.track_systemd_service(service_name)
 
     @staticmethod
-    def track_agent(name):
+    def track_agent():
         """
         Create and track the correct cgroup for the agent itself. The actual cgroup depends on whether systemd
         is in use, but the caller doesn't need to know that.
-
-        :param str name: Name for the agent itself
         """
         if not CGroups.enabled():
             return
         if CGroups.is_systemd_manager():
-            CGroupsTelemetry.track_systemd_service(name)
+            CGroupsTelemetry.track_systemd_service(AGENT_NAME)
         else:
-            CGroupsTelemetry.track_cgroup(CGroups.for_extension(name))
+            CGroupsTelemetry.track_cgroup(CGroups.for_extension(AGENT_NAME))
 
     @staticmethod
     def is_tracked(name):
