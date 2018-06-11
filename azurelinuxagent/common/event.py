@@ -65,6 +65,7 @@ class WALAEventOperation:
     ProcessGoalState = "ProcessGoalState"
     Provision = "Provision"
     ProvisionGuestAgent = "ProvisionGuestAgent"
+    RemoteAccessHandling = "RemoteAccessHandling"
     ReportStatus = "ReportStatus"
     ReportStatusExtended = "ReportStatusExtended"
     Restart = "Restart"
@@ -74,7 +75,6 @@ class WALAEventOperation:
     Unknown = "Unknown"
     Upgrade = "Upgrade"
     Update = "Update"
-    HandleRemoteAccess = "RemoteAccessHandling"
 
 
 SHOULD_ENCODE_MESSAGE_LEN = 80

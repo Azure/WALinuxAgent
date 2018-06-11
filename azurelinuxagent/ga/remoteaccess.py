@@ -99,7 +99,7 @@ class RemoteAccessHandler(object):
             logger.error(msg)
             add_event(AGENT_NAME,
                       version=CURRENT_VERSION,
-                      op=WALAEventOperation.HandleRemoteAccess,
+                      op=WALAEventOperation.RemoteAccessHandling,
                       is_success=False,
                       message=msg)
 
