@@ -213,23 +213,12 @@ class HostPluginProtocol(object):
             raise ProtocolError("HostGAPlugin: Status blob was not provided")
 
         logger.verbose("HostGAPlugin: Posting VM status")
-        try:
+        blob_type = status_blob.type if status_blob.type else config_blob_type
 
-            blob_type = status_blob.type if status_blob.type else config_blob_type
-
-            if blob_type == "BlockBlob":
-                self._put_block_blob_status(sas_url, status_blob)
-            else:
-                self._put_page_blob_status(sas_url, status_blob)
-
-        except Exception as e:
-            # If the HostPlugin rejects the request,
-            # let the error continue, but set to use the HostPlugin
-            if isinstance(e, ResourceGoneError):
-                logger.verbose("HostGAPlugin: Setting host plugin as default channel")
-                HostPluginProtocol.set_default_channel(True)
-
-            raise
+        if blob_type == "BlockBlob":
+            self._put_block_blob_status(sas_url, status_blob)
+        else:
+            self._put_page_blob_status(sas_url, status_blob)
 
     def _put_block_blob_status(self, sas_url, status_blob):
         url = URI_FORMAT_PUT_VM_STATUS.format(self.endpoint, HOST_PLUGIN_PORT)
