@@ -179,7 +179,9 @@ class TestCGroups(AgentTestCase):
         self.assertGreater(ticks_after, ticks_before)
         p2 = cpu.get_cpu_percent()
         self.assertGreater(p2, 0)
-        self.assertLess(p2, 100)
+        # when running under PyCharm, this is often > 100
+        # on a multi-core machine
+        self.assertLess(p2, 200)
 
     def test_format_memory_value(self):
         """
