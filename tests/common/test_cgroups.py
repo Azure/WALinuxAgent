@@ -59,6 +59,10 @@ def make_root_cgroups():
     return CGroups("root", path_maker)
 
 
+def i_am_root():
+    return os.geteuid() == 0
+
+
 @skip_if_predicate_false(CGroups.enabled, "CGroups not supported in this environment")
 class TestCGroups(AgentTestCase):
     @classmethod
@@ -96,9 +100,9 @@ class TestCGroups(AgentTestCase):
         percent_used = cpu.get_cpu_percent()
         self.assertGreater(percent_used, 0)
 
-    def test_telemetry_in_place_non_root(self):
+    def test_telemetry_in_place_leaf_cgroup(self):
         """
-        Ensure this (non-root) cgroup has distinct metrics from the root cgroup.
+        Ensure this leaf (i.e. not root of cgroup tree) cgroup has distinct metrics from the root cgroup.
         """
         # Does nothing on systems where the default cgroup for a randomly-created process (like this test invocation)
         # is the root cgroup.
@@ -113,10 +117,6 @@ class TestCGroups(AgentTestCase):
             time.sleep(1)       # Generate some idle time
             cpu.update()
             self.assertLess(cpu.current_cpu_total, cpu.current_system_cpu)
-
-    @staticmethod
-    def i_am_root():
-        return os.geteuid() == 0
 
     def exercise_telemetry_instantiation(self, test_cgroup):
         test_extension_name = test_cgroup.name
@@ -134,8 +134,8 @@ class TestCGroups(AgentTestCase):
         self.assertEqual(metric_name, "% Processor Time")
         self.assertGreater(metric_value, 0.0)
 
-    @skip_if_predicate_false(i_am_root(), "Test does not run when non-root")
-    def test_telemetry_instantiation_as_root(self):
+    @skip_if_predicate_false(i_am_root, "Test does not run when non-root")
+    def test_telemetry_instantiation_as_superuser(self):
         """
         Tracking a new cgroup for an extension; collect all metrics.
         """
@@ -153,8 +153,8 @@ class TestCGroups(AgentTestCase):
         CGroupsTelemetry.stop_tracking("agent_unittest")
         initial_cgroup.add(os.getpid())
 
-    @skip_if_predicate_true(i_am_root(), "Test does not run when root")
-    def test_telemetry_instantiation_as_non_root(self):
+    @skip_if_predicate_true(i_am_root, "Test does not run when root")
+    def test_telemetry_instantiation_as_normal_user(self):
         """
         Tracking an existing cgroup for an extension; collect all metrics.
         """
