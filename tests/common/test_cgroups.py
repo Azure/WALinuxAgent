@@ -114,24 +114,12 @@ class TestCGroups(AgentTestCase):
             cpu.update()
             self.assertLess(cpu.current_cpu_total, cpu.current_system_cpu)
 
-    def test_telemetry_instantiation(self):
-        """
-        Tracking a cgroup for an extension; collect all metrics.
-        """
-        # Record initial state
-        initial_cgroup = make_self_cgroups()
-        i_am_root = (os.geteuid() == 0)
+    @staticmethod
+    def i_am_root():
+        return os.geteuid() == 0
 
-        if i_am_root:
-            # Put the process into a different cgroup, consume some resources, ensure we see them end-to-end
-            test_cgroup = CGroups.for_extension("agent_unittest")
-            test_cgroup.add(os.getpid())
-            self.assertNotEqual(initial_cgroup.cgroups['cpu'], test_cgroup.cgroups['cpu'])
-        else:
-            test_cgroup = initial_cgroup
-
+    def exercise_telemetry_instantiation(self, test_cgroup):
         test_extension_name = test_cgroup.name
-        print("\nTesting cgroup {0}; cpu directory {1}".format(test_extension_name, test_cgroup.cgroups['cpu']))
         CGroupsTelemetry.track_cgroup(test_cgroup)
         self.assertIn('cpu', test_cgroup.cgroups)
         self.assertIn('memory', test_cgroup.cgroups)
@@ -146,10 +134,31 @@ class TestCGroups(AgentTestCase):
         self.assertEqual(metric_name, "% Processor Time")
         self.assertGreater(metric_value, 0.0)
 
-        if i_am_root:
-            # Restore initial state
-            CGroupsTelemetry.stop_tracking("agent_unittest")
-            initial_cgroup.add(os.getpid())
+    @skip_if_predicate_false(i_am_root(), "Test does not run when non-root")
+    def test_telemetry_instantiation_as_root(self):
+        """
+        Tracking a new cgroup for an extension; collect all metrics.
+        """
+        # Record initial state
+        initial_cgroup = make_self_cgroups()
+
+        # Put the process into a different cgroup, consume some resources, ensure we see them end-to-end
+        test_cgroup = CGroups.for_extension("agent_unittest")
+        test_cgroup.add(os.getpid())
+        self.assertNotEqual(initial_cgroup.cgroups['cpu'], test_cgroup.cgroups['cpu'])
+
+        self.exercise_telemetry_instantiation(test_cgroup)
+
+        # Restore initial state
+        CGroupsTelemetry.stop_tracking("agent_unittest")
+        initial_cgroup.add(os.getpid())
+
+    @skip_if_predicate_true(i_am_root(), "Test does not run when root")
+    def test_telemetry_instantiation_as_non_root(self):
+        """
+        Tracking an existing cgroup for an extension; collect all metrics.
+        """
+        self.exercise_telemetry_instantiation(make_self_cgroups())
 
     def test_cpu_telemetry(self):
         """
