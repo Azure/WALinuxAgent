@@ -80,11 +80,18 @@ class Cpu(object):
         :return: int
         """
         cpu_total = 0
-        cpu_stat = self.cgt.cgroup.get_file_contents('cpu', 'cpuacct.stat')
-        if cpu_stat is not None:
-            m = re_user_system_times.match(cpu_stat)
-            if m:
-                cpu_total = int(m.groups()[0]) + int(m.groups()[1])
+        try:
+            cpu_stat = self.cgt.cgroup.get_file_contents('cpu', 'cpuacct.stat')
+            if cpu_stat is not None:
+                m = re_user_system_times.match(cpu_stat)
+                if m:
+                    cpu_total = int(m.groups()[0]) + int(m.groups()[1])
+        except CGroupsException:
+            # There are valid reasons for file contents to be unavailable; for example, if an extension
+            # has not yet started (or has stopped) an associated service on a VM using systemd, the cgroup for
+            # the service will not exist ('cause systemd will tear it down). This might be a transient or a
+            # long-lived state, so there's no point in logging it, much less emitting telemetry.
+            pass
         return cpu_total
 
     def update(self):
