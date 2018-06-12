@@ -69,6 +69,14 @@ def skip_if_predicate_false(predicate, message):
     return lambda func: func
 
 
+def skip_if_predicate_true(predicate, message):
+    if predicate():
+        if hasattr(unittest, "skip"):
+            return unittest.skip(message)
+        return lambda func: None
+    return lambda func: func
+
+
 def _safe_repr(obj, short=False):
     """
     Copied from Python 3.x

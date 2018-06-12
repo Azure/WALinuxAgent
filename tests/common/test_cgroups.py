@@ -59,6 +59,10 @@ def make_root_cgroups():
     return CGroups("root", path_maker)
 
 
+def i_am_root():
+    return os.geteuid() == 0
+
+
 @skip_if_predicate_false(CGroups.enabled, "CGroups not supported in this environment")
 class TestCGroups(AgentTestCase):
     @classmethod
@@ -96,9 +100,9 @@ class TestCGroups(AgentTestCase):
         percent_used = cpu.get_cpu_percent()
         self.assertGreater(percent_used, 0)
 
-    def test_telemetry_in_place_non_root(self):
+    def test_telemetry_in_place_leaf_cgroup(self):
         """
-        Ensure this (non-root) cgroup has distinct metrics from the root cgroup.
+        Ensure this leaf (i.e. not root of cgroup tree) cgroup has distinct metrics from the root cgroup.
         """
         # Does nothing on systems where the default cgroup for a randomly-created process (like this test invocation)
         # is the root cgroup.
@@ -114,34 +118,47 @@ class TestCGroups(AgentTestCase):
             cpu.update()
             self.assertLess(cpu.current_cpu_total, cpu.current_system_cpu)
 
-    def test_telemetry_instantiation(self):
-        """
-        Tracking a cgroup for an extension; collect all metrics.
-        """
-        # Record initial state
-        initial_cgroup = make_self_cgroups()
-
-        # Put the process into a different cgroup, consume some resources, ensure we see them end-to-end
-        test_cgroup = CGroups.for_extension("agent_unittest")
+    def exercise_telemetry_instantiation(self, test_cgroup):
+        test_extension_name = test_cgroup.name
+        CGroupsTelemetry.track_cgroup(test_cgroup)
         self.assertIn('cpu', test_cgroup.cgroups)
         self.assertIn('memory', test_cgroup.cgroups)
-        test_cgroup.add(os.getpid())
-        self.assertNotEqual(initial_cgroup.cgroups['cpu'], test_cgroup.cgroups['cpu'])
-        CGroupsTelemetry.track_cgroup(test_cgroup)
-        self.assertTrue(CGroupsTelemetry.is_tracked("agent_unittest"))
+        self.assertTrue(CGroupsTelemetry.is_tracked(test_extension_name))
         consume_cpu_time()
         time.sleep(1)
         metrics = CGroupsTelemetry.collect_all_tracked()
-        my_metrics = metrics["agent_unittest"]
+        my_metrics = metrics[test_extension_name]
         self.assertEqual(len(my_metrics), 1)
         metric_family, metric_name, metric_value = my_metrics[0]
         self.assertEqual(metric_family, "Process")
         self.assertEqual(metric_name, "% Processor Time")
         self.assertGreater(metric_value, 0.0)
 
+    @skip_if_predicate_false(i_am_root, "Test does not run when non-root")
+    def test_telemetry_instantiation_as_superuser(self):
+        """
+        Tracking a new cgroup for an extension; collect all metrics.
+        """
+        # Record initial state
+        initial_cgroup = make_self_cgroups()
+
+        # Put the process into a different cgroup, consume some resources, ensure we see them end-to-end
+        test_cgroup = CGroups.for_extension("agent_unittest")
+        test_cgroup.add(os.getpid())
+        self.assertNotEqual(initial_cgroup.cgroups['cpu'], test_cgroup.cgroups['cpu'])
+
+        self.exercise_telemetry_instantiation(test_cgroup)
+
         # Restore initial state
         CGroupsTelemetry.stop_tracking("agent_unittest")
         initial_cgroup.add(os.getpid())
+
+    @skip_if_predicate_true(i_am_root, "Test does not run when root")
+    def test_telemetry_instantiation_as_normal_user(self):
+        """
+        Tracking an existing cgroup for an extension; collect all metrics.
+        """
+        self.exercise_telemetry_instantiation(make_self_cgroups())
 
     def test_cpu_telemetry(self):
         """
