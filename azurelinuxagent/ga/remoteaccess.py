@@ -65,7 +65,7 @@ from azurelinuxagent.common.osutil import get_osutil
 REMOTE_USR_EXPIRATION_FORMAT = "%a, %d %b %Y %H:%M:%S %Z"
 DATE_FORMAT = "%Y-%m-%d"
 TRANSPORT_PRIVATE_CERT = "TransportPrivate.pem"
-REMOTE_ACCESS_ACCOUNT_COMMENT = "JIT Account"
+REMOTE_ACCESS_ACCOUNT_COMMENT = "JIT_Account"
 MAX_TRY_ATTEMPT = 5
 FAILED_ATTEMPT_THROTTLE = 1
 
@@ -74,17 +74,15 @@ def get_remote_access_handler():
 
 class RemoteAccessHandler(object):
     def __init__(self):
+        self.os_util = get_osutil()
         self.protocol_util = get_protocol_util()
         self.protocol = None
-        self.os_util = None
         self.cryptUtil = CryptUtil(conf.get_openssl_cmd())
         self.remote_access = None
         self.incarnation = 0
 
     def run(self):
         try:
-            if self.os_util is None:
-                self.os_util = get_osutil()
             if self.os_util.jit_enabled:
                 self.protocol = self.protocol_util.get_protocol()
                 current_incarnation = self.protocol.get_incarnation()
@@ -92,10 +90,10 @@ class RemoteAccessHandler(object):
                     # something changed. Handle remote access if any.
                     self.incarnation = current_incarnation
                     self.remote_access = self.protocol.client.get_remote_access()
-                    self.handle_remote_access()
+                    if self.remote_access is not None:
+                        self.handle_remote_access()
         except Exception as e:
-            msg = u"Exception processing remote access handler: {0}".format(
-                ustr(e))
+            msg = u"Exception processing remote access handler: {0} {1}".format(ustr(e), traceback.format_exc())
             logger.error(msg)
             add_event(AGENT_NAME,
                       version=CURRENT_VERSION,

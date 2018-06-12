@@ -719,6 +719,9 @@ class WireClient(object):
         incarnation = self.fetch_cache(incarnation_file)
         file_name = REMOTE_ACCESS_FILE_NAME.format(incarnation)
         remote_access_file = os.path.join(conf.get_lib_dir(), file_name)
+        if not os.path.isfile(remote_access_file):
+            # no remote access data.
+            return None
         xml_text = self.fetch_cache(remote_access_file)
         remote_access = RemoteAccess(xml_text)
         return remote_access
