@@ -23,7 +23,7 @@ from azurelinuxagent.common.utils.processutil \
 from tests.tools import *
 import sys
 
-process_target = "tests/utils/process_target.sh"
+process_target = "{0}/process_target.sh".format(os.path.abspath(os.path.join(__file__, os.pardir)))
 process_cmd_template = "{0} -o '{1}' -e '{2}'"
 
 
