@@ -413,7 +413,7 @@ class CGroups(object):
         if not os.path.isdir(path):
             try:
                 os.makedirs(path, 0o755)
-            except OSError as e:
+            except (OSError, PermissionError) as e:
                 if e.errno == errno.EEXIST:
                     if not os.path.isdir(path):
                         raise CGroupsException(

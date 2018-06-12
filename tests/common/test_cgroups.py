@@ -120,28 +120,36 @@ class TestCGroups(AgentTestCase):
         """
         # Record initial state
         initial_cgroup = make_self_cgroups()
+        i_am_root = (os.geteuid() == 0)
 
-        # Put the process into a different cgroup, consume some resources, ensure we see them end-to-end
-        test_cgroup = CGroups.for_extension("agent_unittest")
+        if i_am_root:
+            # Put the process into a different cgroup, consume some resources, ensure we see them end-to-end
+            test_cgroup = CGroups.for_extension("agent_unittest")
+            test_cgroup.add(os.getpid())
+            self.assertNotEqual(initial_cgroup.cgroups['cpu'], test_cgroup.cgroups['cpu'])
+        else:
+            test_cgroup = initial_cgroup
+
+        test_extension_name = test_cgroup.name
+        print("\nTesting cgroup {0}; cpu directory {1}".format(test_extension_name, test_cgroup.cgroups['cpu']))
+        CGroupsTelemetry.track_cgroup(test_cgroup)
         self.assertIn('cpu', test_cgroup.cgroups)
         self.assertIn('memory', test_cgroup.cgroups)
-        test_cgroup.add(os.getpid())
-        self.assertNotEqual(initial_cgroup.cgroups['cpu'], test_cgroup.cgroups['cpu'])
-        CGroupsTelemetry.track_cgroup(test_cgroup)
-        self.assertTrue(CGroupsTelemetry.is_tracked("agent_unittest"))
+        self.assertTrue(CGroupsTelemetry.is_tracked(test_extension_name))
         consume_cpu_time()
         time.sleep(1)
         metrics = CGroupsTelemetry.collect_all_tracked()
-        my_metrics = metrics["agent_unittest"]
+        my_metrics = metrics[test_extension_name]
         self.assertEqual(len(my_metrics), 1)
         metric_family, metric_name, metric_value = my_metrics[0]
         self.assertEqual(metric_family, "Process")
         self.assertEqual(metric_name, "% Processor Time")
         self.assertGreater(metric_value, 0.0)
 
-        # Restore initial state
-        CGroupsTelemetry.stop_tracking("agent_unittest")
-        initial_cgroup.add(os.getpid())
+        if i_am_root:
+            # Restore initial state
+            CGroupsTelemetry.stop_tracking("agent_unittest")
+            initial_cgroup.add(os.getpid())
 
     def test_cpu_telemetry(self):
         """
