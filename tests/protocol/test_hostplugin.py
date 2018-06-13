@@ -192,7 +192,7 @@ class TestHostPlugin(AgentTestCase):
         # act
         wire_protocol_client.upload_status_blob()
 
-        # assert direct route is not called
+        # assert direct route is called
         self.assertEqual(1, patch_upload.call_count, "Direct channel was not used")
 
         # assert host plugin route is called

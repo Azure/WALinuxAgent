@@ -969,16 +969,17 @@ class WireClient(object):
                                    ext_conf.status_upload_blob,
                                    ext_conf.status_upload_blob_type)
                 return
+            except ResourceGoneError:
+                # do not attempt direct, force goal state update and wait to try again
+                self.update_goal_state(forced=True)
+                return
             except Exception as e:
-                if isinstance(e, ResourceGoneError):
-                    # do not attempt direct, force goal state update and wait to try again
-                    self.update_goal_state(forced=True)
-                    return
+            	# for all other errors, fall back to direct
+		pass
 
-            # for all other errors, fall back to direct
             self.report_status_event("direct")
             if self.status_blob.upload(blob_uri):
-                return
+		return
 
         except Exception as e:
             self.report_status_event("Exception uploading status blob: {0}", ustr(e))
