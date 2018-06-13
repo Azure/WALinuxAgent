@@ -974,12 +974,12 @@ class WireClient(object):
                 self.update_goal_state(forced=True)
                 return
             except Exception as e:
-            	# for all other errors, fall back to direct
-		pass
+                # for all other errors, fall back to direct
+                pass
 
             self.report_status_event("direct")
             if self.status_blob.upload(blob_uri):
-		return
+                return
 
         except Exception as e:
             self.report_status_event("Exception uploading status blob: {0}", ustr(e))
