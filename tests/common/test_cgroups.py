@@ -128,11 +128,17 @@ class TestCGroups(AgentTestCase):
         time.sleep(1)
         metrics = CGroupsTelemetry.collect_all_tracked()
         my_metrics = metrics[test_extension_name]
-        self.assertEqual(len(my_metrics), 1)
-        metric_family, metric_name, metric_value = my_metrics[0]
-        self.assertEqual(metric_family, "Process")
-        self.assertEqual(metric_name, "% Processor Time")
-        self.assertGreater(metric_value, 0.0)
+        self.assertEqual(len(my_metrics), 2)
+        for item in my_metrics:
+            metric_family, metric_name, metric_value = item
+            if metric_family == "Process":
+                self.assertEqual(metric_name, "% Processor Time")
+                self.assertGreater(metric_value, 0.0)
+            elif metric_family == "Memory":
+                self.assertEqual(metric_name, "Total Memory Usage")
+                self.assertGreater(metric_value, 100000)
+            else:
+                self.fail("Unknown metric {0}/{1} value {2}".format(metric_family, metric_name, metric_value))
 
     @skip_if_predicate_false(i_am_root, "Test does not run when non-root")
     def test_telemetry_instantiation_as_superuser(self):
@@ -146,6 +152,7 @@ class TestCGroups(AgentTestCase):
         test_cgroup = CGroups.for_extension("agent_unittest")
         test_cgroup.add(os.getpid())
         self.assertNotEqual(initial_cgroup.cgroups['cpu'], test_cgroup.cgroups['cpu'])
+        self.assertNotEqual(initial_cgroup.cgroups['memory'], test_cgroup.cgroups['memory'])
 
         self.exercise_telemetry_instantiation(test_cgroup)
 
