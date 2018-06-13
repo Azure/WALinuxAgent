@@ -41,6 +41,7 @@ except ImportError:
 
 
 class BigIpOSUtil(DefaultOSUtil):
+
     def __init__(self):
         super(BigIpOSUtil, self).__init__()
 
@@ -132,7 +133,7 @@ class BigIpOSUtil(DefaultOSUtil):
         """
         return None
 
-    def useradd(self, username, expiration=None):
+    def useradd(self, username, expiration=None, comment=None):
         """Create user account using tmsh
 
         Our policy is to create two accounts when booting a BIG-IP instance.
@@ -143,6 +144,7 @@ class BigIpOSUtil(DefaultOSUtil):
         :param username: The username that you want to add to the system
         :param expiration: The expiration date to use. We do not use this
                            value.
+        :param comment: description of the account.  We do not use this value.
         """
         if self.get_userentry(username):
             logger.info("User {0} already exists, skip useradd", username)

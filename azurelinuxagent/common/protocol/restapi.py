@@ -303,6 +303,16 @@ class TelemetryEventList(DataContract):
     def __init__(self):
         self.events = DataContractList(TelemetryEvent)
 
+class RemoteAccessUser(DataContract):
+    def __init__(self, name, encrypted_password, expiration):
+        self.name = name
+        self.encrypted_password = encrypted_password
+        self.expiration = expiration
+
+class RemoteAccessUsersList(DataContract):
+    def __init__(self):
+        self.users = DataContractList(RemoteAccessUser)
+
 
 class Protocol(DataContract):
     def detect(self):

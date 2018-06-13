@@ -33,6 +33,7 @@ import azurelinuxagent.common.utils.textutil as textutil
 
 
 class GaiaOSUtil(DefaultOSUtil):
+
     def __init__(self):
         super(GaiaOSUtil, self).__init__()
 

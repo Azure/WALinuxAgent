@@ -261,6 +261,9 @@ class UpdateHandler(object):
             exthandlers_handler = get_exthandlers_handler()
             migrate_handler_state()
 
+            from azurelinuxagent.ga.remoteaccess import get_remote_access_handler
+            remote_access_handler = get_remote_access_handler()
+
             self._ensure_no_orphans()
             self._emit_restart_event()
             self._ensure_partition_assigned()
@@ -297,6 +300,8 @@ class UpdateHandler(object):
 
                 last_etag = exthandlers_handler.last_etag
                 exthandlers_handler.run()
+
+                remote_access_handler.run()
 
                 if last_etag != exthandlers_handler.last_etag:
                     self._ensure_readonly_files()

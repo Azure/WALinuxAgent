@@ -22,6 +22,7 @@ import json
 import os
 import random
 import re
+import sys
 import time
 import xml.sax.saxutils as saxutils
 
@@ -40,6 +41,7 @@ from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, \
     findtext, getattrib, gettext, remove_bom, get_bytes_from_pem, parse_json
 from azurelinuxagent.common.version import AGENT_NAME
+from azurelinuxagent.common.osutil import get_osutil
 
 VERSION_INFO_URI = "http://{0}/?comp=versions"
 GOAL_STATE_URI = "http://{0}/machine/?comp=goalstate"
@@ -53,6 +55,7 @@ GOAL_STATE_FILE_NAME = "GoalState.{0}.xml"
 HOSTING_ENV_FILE_NAME = "HostingEnvironmentConfig.xml"
 SHARED_CONF_FILE_NAME = "SharedConfig.xml"
 CERTS_FILE_NAME = "Certificates.xml"
+REMOTE_ACCESS_FILE_NAME = "RemoteAccess.{0}.xml"
 P7M_FILE_NAME = "Certificates.p7m"
 PEM_FILE_NAME = "Certificates.pem"
 EXT_CONF_FILE_NAME = "ExtensionsConfig.{0}.xml"
@@ -529,6 +532,7 @@ class WireClient(object):
         self.updated = None
         self.hosting_env = None
         self.shared_conf = None
+        self.remote_access = None
         self.certs = None
         self.ext_conf = None
         self.host_plugin = None
@@ -699,6 +703,29 @@ class WireClient(object):
         self.save_cache(local_file, xml_text)
         self.certs = Certificates(self, xml_text)
 
+    def update_remote_access_conf(self, goal_state):
+        if goal_state.remote_access_uri is None:
+            # Nothing in accounts data.  Just return, nothing to do.
+            return
+        xml_text = self.fetch_config(goal_state.remote_access_uri, 
+                                     self.get_header_for_cert())
+        self.remote_access = RemoteAccess(xml_text)
+        local_file = os.path.join(conf.get_lib_dir(), REMOTE_ACCESS_FILE_NAME.format(self.remote_access.incarnation))
+        self.save_cache(local_file, xml_text)
+
+    def get_remote_access(self):
+        incarnation_file = os.path.join(conf.get_lib_dir(),
+                                        INCARNATION_FILE_NAME)
+        incarnation = self.fetch_cache(incarnation_file)
+        file_name = REMOTE_ACCESS_FILE_NAME.format(incarnation)
+        remote_access_file = os.path.join(conf.get_lib_dir(), file_name)
+        if not os.path.isfile(remote_access_file):
+            # no remote access data.
+            return None
+        xml_text = self.fetch_cache(remote_access_file)
+        remote_access = RemoteAccess(xml_text)
+        return remote_access
+        
     def update_ext_conf(self, goal_state):
         if goal_state.ext_uri is None:
             logger.info("ExtensionsConfig.xml uri is empty")
@@ -732,8 +759,7 @@ class WireClient(object):
                         if last_incarnation is not None and \
                                         last_incarnation == new_incarnation:
                             # Goalstate is not updated.
-                            return
-
+                            return                
                 self.goal_state_flusher.flush(datetime.utcnow())
 
                 self.goal_state = goal_state
@@ -744,6 +770,7 @@ class WireClient(object):
                 self.update_shared_conf(goal_state)
                 self.update_certs(goal_state)
                 self.update_ext_conf(goal_state)
+                self.update_remote_access_conf(goal_state)
                 self.save_cache(incarnation_file, goal_state.incarnation)
 
                 if self.host_plugin is not None:
@@ -817,7 +844,7 @@ class WireClient(object):
                 local_file = os.path.join(conf.get_lib_dir(), local_file)
                 xml_text = self.fetch_cache(local_file)
                 self.ext_conf = ExtensionsConfig(xml_text)
-        return self.ext_conf
+        return self.ext_conf      
 
     def get_ext_manifest(self, ext_handler, goal_state):
         for update_goal_state in [False, True]:
@@ -1207,6 +1234,7 @@ class GoalState(object):
         self.expected_state = None
         self.hosting_env_uri = None
         self.shared_conf_uri = None
+        self.remote_access_uri = None
         self.certs_uri = None
         self.ext_uri = None
         self.role_instance_id = None
@@ -1234,6 +1262,7 @@ class GoalState(object):
         self.role_config_name = findtext(role_config, "ConfigName")
         container = find(xml_doc, "Container")
         self.container_id = findtext(container, "ContainerId")
+        self.remote_access_uri = findtext(container, "RemoteAccessInfo")
         lbprobe_ports = find(xml_doc, "LBProbePorts")
         self.load_balancer_probe_port = findtext(lbprobe_ports, "Port")
         return self
@@ -1285,6 +1314,70 @@ class SharedConfig(object):
         """
         # Not used currently
         return self
+
+
+class RemoteAccess(object):
+    """
+    Object containing information about user accounts
+    """
+    #
+    # <RemoteAccess>
+    #   <Version/>
+    #   <Incarnation/>
+    #    <Users>
+    #       <User>
+    #         <Name/>
+    #         <Password/>
+    #         <Expiration/>
+    #       </User>
+    #     </Users>
+    #   </RemoteAccess>
+    #
+
+    def __init__(self, xml_text):
+        logger.verbose("Load RemoteAccess.xml")
+        self.version = None
+        self.incarnation = None
+        self.user_list = RemoteAccessUsersList()
+
+        self.xml_text = None
+        self.parse(xml_text)
+
+    def parse(self, xml_text):
+        """
+        Parse xml document containing user account information
+        """
+        if xml_text is None or len(xml_text) == 0:
+            return None
+        self.xml_text = xml_text
+        xml_doc = parse_doc(xml_text)
+        self.incarnation = findtext(xml_doc, "Incarnation")
+        self.version = findtext(xml_doc, "Version")
+        user_collection = find(xml_doc, "Users")
+        users = findall(user_collection, "User")
+
+        for user in users:
+            remote_access_user = self.parse_user(user)
+            self.user_list.users.append(remote_access_user)
+        return self
+
+    def parse_user(self, user):
+        name = findtext(user, "Name")
+        encrypted_password = findtext(user, "Password")
+        expiration = findtext(user, "Expiration")
+        remote_access_user = RemoteAccessUser(name, encrypted_password, expiration)
+        return remote_access_user
+
+class UserAccount(object):
+    """
+    Stores information about single user account
+    """
+    def __init__(self):
+        self.Name = None
+        self.EncryptedPassword = None
+        self.Password = None
+        self.Expiration = None
+        self.Groups = []
 
 
 class Certificates(object):

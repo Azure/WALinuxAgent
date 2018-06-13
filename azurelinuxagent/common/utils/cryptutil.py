@@ -19,12 +19,18 @@
 
 import base64
 import struct
+import sys
+import os.path
+import subprocess
 
 from azurelinuxagent.common.future import ustr, bytebuffer
 from azurelinuxagent.common.exception import CryptError
 
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.shellutil as shellutil
+import azurelinuxagent.common.utils.textutil as textutil
+
+DECRYPT_SECRET_CMD = "{0} cms -decrypt -inform DER -inkey {1} -in /dev/stdin"
 
 class CryptUtil(object):
     def __init__(self, openssl_cmd):
@@ -128,3 +134,16 @@ class CryptUtil(object):
                 index = 7
         return bytes(byte_array)
 
+    def decrypt_secret(self, encrypted_password, private_key):
+        try:
+            decoded = base64.b64decode(encrypted_password)
+        except Exception as e:
+            raise CryptError("Error decoding secret", e)
+        args = DECRYPT_SECRET_CMD.format(self.openssl_cmd, private_key).split(' ')
+        p = subprocess.Popen(args, stdout=subprocess.PIPE, stdin=subprocess.PIPE, stderr=subprocess.STDOUT)
+        p.stdin.write(decoded)
+        output = p.communicate()[0]
+        retcode = p.poll()
+        if retcode:
+            raise subprocess.CalledProcessError(retcode, "openssl cms -decrypt", output=output)
+        return output.decode('utf-16')

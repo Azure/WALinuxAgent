@@ -36,8 +36,10 @@ UUID_PATTERN = re.compile(
     re.IGNORECASE)
 
 class OpenBSDOSUtil(DefaultOSUtil):
+
     def __init__(self):
         super(OpenBSDOSUtil, self).__init__()
+        self.jit_enabled = True
         self._scsi_disks_timeout_set = False
 
     def get_instance_id(self):

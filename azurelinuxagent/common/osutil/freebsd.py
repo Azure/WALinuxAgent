@@ -25,9 +25,11 @@ from azurelinuxagent.common.osutil.default import DefaultOSUtil
 from azurelinuxagent.common.future import ustr
 
 class FreeBSDOSUtil(DefaultOSUtil):
+
     def __init__(self):
         super(FreeBSDOSUtil, self).__init__()
         self._scsi_disks_timeout_set = False
+        self.jit_enabled = True
 
     def set_hostname(self, hostname):
         rc_file_path = '/etc/rc.conf'
@@ -39,7 +41,7 @@ class FreeBSDOSUtil(DefaultOSUtil):
     def restart_ssh_service(self):
         return shellutil.run('service sshd restart', chk_err=False)
 
-    def useradd(self, username, expiration=None):
+    def useradd(self, username, expiration=None, comment=None):
         """
         Create user account with 'username'
         """
@@ -47,11 +49,12 @@ class FreeBSDOSUtil(DefaultOSUtil):
         if userentry is not None:
             logger.warn("User {0} already exists, skip useradd", username)
             return
-
         if expiration is not None:
             cmd = "pw useradd {0} -e {1} -m".format(username, expiration)
         else:
             cmd = "pw useradd {0} -m".format(username)
+        if comment is not None:
+            cmd += " -c {0}".format(comment)
         retcode, out = shellutil.run_get_output(cmd)
         if retcode != 0:
             raise OSUtilError(("Failed to create user account:{0}, "

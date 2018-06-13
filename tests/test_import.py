@@ -9,6 +9,7 @@ import azurelinuxagent.daemon.resourcedisk as resourcedisk
 import azurelinuxagent.daemon.scvmm as scvmm
 import azurelinuxagent.ga.exthandlers as exthandlers
 import azurelinuxagent.ga.monitor as monitor
+import azurelinuxagent.ga.remoteaccess as remoteaccess
 import azurelinuxagent.ga.update as update
 
 
@@ -25,3 +26,4 @@ class TestImportHandler(AgentTestCase):
         monitor.get_monitor_handler()
         update.get_update_handler()
         exthandlers.get_exthandlers_handler()
+        remoteaccess.get_remote_access_handler()

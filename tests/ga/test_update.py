@@ -1213,22 +1213,25 @@ class TestUpdate(UpdateTestCase):
         fileutil.write_file(conf.get_agent_pid_file_path(), ustr(42))
 
         with patch('azurelinuxagent.ga.exthandlers.get_exthandlers_handler') as mock_handler:
-            with patch('azurelinuxagent.ga.monitor.get_monitor_handler') as mock_monitor:
-                with patch('azurelinuxagent.ga.env.get_env_handler') as mock_env:
-                    with patch('time.sleep', side_effect=iterator) as mock_sleep:
-                        with patch('sys.exit') as mock_exit:
-                            if isinstance(os.getppid, MagicMock):
-                                self.update_handler.run()
-                            else:
-                                with patch('os.getppid', return_value=42):
+            with patch('azurelinuxagent.ga.remoteaccess.get_remote_access_handler') as mock_ra_handler:
+                with patch('azurelinuxagent.ga.monitor.get_monitor_handler') as mock_monitor:
+                    with patch('azurelinuxagent.ga.env.get_env_handler') as mock_env:
+                        with patch('time.sleep', side_effect=iterator) as mock_sleep:
+                            with patch('sys.exit') as mock_exit:
+                                if isinstance(os.getppid, MagicMock):
                                     self.update_handler.run()
+                                else:
+                                    with patch('os.getppid', return_value=42):
+                                        self.update_handler.run()
 
-                            self.assertEqual(1, mock_handler.call_count)
-                            self.assertEqual(mock_handler.return_value.method_calls, calls)
-                            self.assertEqual(invocations, mock_sleep.call_count)
-                            self.assertEqual(1, mock_monitor.call_count)
-                            self.assertEqual(1, mock_env.call_count)
-                            self.assertEqual(1, mock_exit.call_count)
+                                self.assertEqual(1, mock_handler.call_count)
+                                self.assertEqual(mock_handler.return_value.method_calls, calls)
+                                self.assertEqual(1, mock_ra_handler.call_count)
+                                self.assertEqual(mock_ra_handler.return_value.method_calls, calls)
+                                self.assertEqual(invocations, mock_sleep.call_count)
+                                self.assertEqual(1, mock_monitor.call_count)
+                                self.assertEqual(1, mock_env.call_count)
+                                self.assertEqual(1, mock_exit.call_count)
 
     def test_run(self):
         self._test_run()
@@ -1497,9 +1500,10 @@ class MonitorThreadTest(AgentTestCase):
             with patch.object(UpdateHandler, '_is_orphaned') as mock_is_orphaned:
                 mock_is_orphaned.__get__ = Mock(return_value=False)
                 with patch('azurelinuxagent.ga.exthandlers.get_exthandlers_handler') as mock_handler:
-                    with patch('time.sleep', side_effect=iterator) as mock_sleep:
-                        with patch('sys.exit') as mock_exit:
-                            self.update_handler.run()
+                    with patch('azurelinuxagent.ga.remoteaccess.get_remote_access_handler') as mock_ra_handler:
+                        with patch('time.sleep', side_effect=iterator) as mock_sleep:
+                            with patch('sys.exit') as mock_exit:
+                                self.update_handler.run()
 
     @patch('azurelinuxagent.ga.monitor.get_monitor_handler')
     @patch('azurelinuxagent.ga.env.get_env_handler')
