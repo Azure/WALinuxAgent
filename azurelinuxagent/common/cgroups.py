@@ -109,7 +109,8 @@ class Cpu(object):
         Compute the percent CPU time used by this cgroup over the elapsed time since the last time this instance was
         update()ed.  If the cgroup fully consumed 2 cores on a 4 core system, return 200.
 
-        :return: float
+        :return: CPU usage in percent of a single core
+        :rtype: float
         """
         cpu_delta = self.current_cpu_total - self.previous_cpu_total
         system_delta = max(1, self.current_system_cpu - self.previous_system_cpu)
@@ -120,7 +121,7 @@ class Cpu(object):
         """
         Collect and return a list of all cpu metrics. If no metrics are collected, return an empty list.
 
-        :return: [(str, str, float)]
+        :rtype: [(str, str, float)]
         """
         self.update()
         usage = self.get_cpu_percent()
@@ -132,20 +133,28 @@ class Memory(object):
         """
         Initialize data collection for the Memory hierarchy
 
-        :param cgt: CGroupsTelemetry
+        :param CGroupsTelemetry cgt: The telemetry object for which memory metrics should be collected
         :return:
         """
         self.cgt = cgt
 
-    def update(self):
-        pass
+    def get_memory_usage(self):
+        """
+        Collect memory.usage_in_bytes from the cgroup.
+
+        :return: Memory usage in bytes
+        :rtype: int
+        """
+        return self.cgt.cgroup.get_parameter('memory', 'memory.usage_in_bytes')
 
     def collect(self):
         """
         Collect and return a list of all memory metrics
+
+        :rtype: [(str, str, float)]
         """
-        self.update()
-        return []
+        usage = self.get_memory_usage()
+        return [("Memory", "Total Memory Usage", usage)]
 
 
 class CGroupsTelemetry(object):
@@ -608,9 +617,10 @@ class CGroups(object):
         """
         Retrieve the value of a parameter from a hierarchy.
 
-        :param hierarchy: str
-        :param file_name: str
-        :return: st
+        :param str hierarchy: Name of cgroup metric hierarchy
+        :param str file_name: Name of file within that metric hierarchy
+        :return: Entire contents of the file
+        :rtype: str
         """
         if hierarchy in self.cgroups:
             parameter_file = self._get_cgroup_file(hierarchy, file_name)
@@ -625,13 +635,27 @@ class CGroups(object):
     def get_parameter(self, hierarchy, parameter_name):
         """
         Retrieve the value of a parameter from a hierarchy.
+        Assumes the parameter is the sole line of the file.
 
-        :param hierarchy: str
-        :param parameter_name: str
-        :return: str
+        :param str hierarchy: Name of cgroup metric hierarchy
+        :param str parameter_name: Name of file within that metric hierarchy
+        :return: The first line of the file, without line terminator
+        :rtype: str
         """
-        values = self.get_file_contents(hierarchy, parameter_name).splitlines
-        return values[0]
+        result = ""
+        try:
+            values = self.get_file_contents(hierarchy, parameter_name).splitlines()
+            result = values[0]
+        except IndexError:
+            parameter_filename = self._get_cgroup_file(hierarchy, parameter_name)
+            logger.periodic(logger.EVERY_DAY, "File {0} is empty but should not be".format(parameter_filename))
+        except CGroupsException as e:
+            logger.periodic(logger.EVERY_DAY, "{0}".format(e))
+        except Exception as e:
+            parameter_filename = self._get_cgroup_file(hierarchy, parameter_name)
+            logger.periodic(logger.EVERY_DAY, "Exception while attempting to read {0}: {1}".format(
+                parameter_filename, e))
+        return result
 
     def set_cpu_limit(self, limit=None):
         """
