@@ -172,6 +172,7 @@ class TestWireProtocol(AgentTestCase):
         self.assertEqual(patch_http.call_args_list[0][0][1], ext_uri)
         self.assertEqual(patch_http.call_args_list[1][0][1], host_uri)
 
+    @patch("azurelinuxagent.common.protocol.wire.WireClient.update_goal_state")
     def test_upload_status_blob_default(self, *args):
         """
         Default status blob method is HostPlugin.
@@ -196,6 +197,7 @@ class TestWireProtocol(AgentTestCase):
                     # host plugin uploads the status blob
                     patch_host_ga_plugin_upload.assert_called_once_with(ANY, testurl, 'BlockBlob')
 
+    @patch("azurelinuxagent.common.protocol.wire.WireClient.update_goal_state")
     def test_upload_status_blob_host_ga_plugin(self, *args):
         vmstatus = VMStatus(message="Ready", status="Ready")
         wire_protocol_client = WireProtocol(wireserver_url).client
@@ -221,8 +223,9 @@ class TestWireProtocol(AgentTestCase):
                     patch_http.assert_called_once_with(testurl, wire_protocol_client.status_blob)
                     self.assertFalse(HostPluginProtocol.is_default_channel())
 
+    @patch("azurelinuxagent.common.protocol.wire.WireClient.update_goal_state")
     @patch("azurelinuxagent.common.protocol.hostplugin.HostPluginProtocol.ensure_initialized")
-    def test_upload_status_blob_unknown_type_assumes_block(self, _, *args):
+    def test_upload_status_blob_unknown_type_assumes_block(self, _, __, *args):
         vmstatus = VMStatus(message="Ready", status="Ready")
         wire_protocol_client = WireProtocol(wireserver_url).client
         wire_protocol_client.ext_conf = ExtensionsConfig(None)
@@ -240,6 +243,7 @@ class TestWireProtocol(AgentTestCase):
                     patch_default_upload.assert_called_once_with(testurl)
                     patch_get_goal_state.assert_called_once_with()
 
+    @patch("azurelinuxagent.common.protocol.wire.WireClient.update_goal_state")
     def test_upload_status_blob_reports_prepare_error(self, *args):
         vmstatus = VMStatus(message="Ready", status="Ready")
         wire_protocol_client = WireProtocol(wireserver_url).client
@@ -249,10 +253,9 @@ class TestWireProtocol(AgentTestCase):
         wire_protocol_client.status_blob.vm_status = vmstatus
         goal_state = GoalState(WireProtocolData(DATA_FILE).goal_state)
 
-        with patch.object(StatusBlob, "prepare",
-                    side_effect=Exception) as mock_prepare:
+        with patch.object(StatusBlob, "prepare", side_effect=Exception) as mock_prepare:
             with patch.object(WireClient, "report_status_event") as mock_event:
-                wire_protocol_client.upload_status_blob()
+                self.assertRaises(ProtocolError, wire_protocol_client.upload_status_blob)
 
                 self.assertEqual(1, mock_prepare.call_count)
                 self.assertEqual(1, mock_event.call_count)
