@@ -17,7 +17,7 @@
 
 from __future__ import print_function
 
-from azurelinuxagent.common.cgroups import CGroupsTelemetry, CGroups, CGroupsException, BASE_CGROUPS, Cpu
+from azurelinuxagent.common.cgroups import CGroupsTelemetry, CGroups, CGroupsException, BASE_CGROUPS, Cpu, Memory
 from tests.tools import *
 
 import os
@@ -173,7 +173,6 @@ class TestCGroups(AgentTestCase):
         """
         cg = make_self_cgroups()
         self.assertIn('cpu', cg.cgroups)
-        self.assertIn('memory', cg.cgroups)
         ct = CGroupsTelemetry('test', cg)
         self.assertIs(cg, ct.cgroup)
         cpu = Cpu(ct)
@@ -189,6 +188,21 @@ class TestCGroups(AgentTestCase):
         # when running under PyCharm, this is often > 100
         # on a multi-core machine
         self.assertLess(p2, 200)
+
+    def test_memory_telemetry(self):
+        """
+        Test Memory telemetry class
+        """
+        cg = make_self_cgroups()
+        raw_usage_file_contents = cg.get_file_contents('memory', 'memory.usage_in_bytes')
+        self.assertIsNotNone(raw_usage_file_contents)
+        self.assertGreater(len(raw_usage_file_contents), 0)
+        self.assertIn('memory', cg.cgroups)
+        ct = CGroupsTelemetry('test', cg)
+        self.assertIs(cg, ct.cgroup)
+        memory = Memory(ct)
+        usage_in_bytes = memory.get_memory_usage()
+        self.assertGreater(usage_in_bytes, 100000)
 
     def test_format_memory_value(self):
         """

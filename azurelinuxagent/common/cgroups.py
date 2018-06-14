@@ -145,7 +145,10 @@ class Memory(object):
         :return: Memory usage in bytes
         :rtype: int
         """
-        return int(self.cgt.cgroup.get_parameter('memory', 'memory.usage_in_bytes'))
+        usage = self.cgt.cgroup.get_parameter('memory', 'memory.usage_in_bytes')
+        if not usage:
+            usage = "0"
+        return int(usage)
 
     def collect(self):
         """
