@@ -61,8 +61,8 @@ class CryptUtil(object):
         return pub
 
     def get_thumbprint_from_crt(self, file_name):
-        cmd="{0} x509 -in {1} -fingerprint -noout".format(self.openssl_cmd, 
-                                                          file_name)
+        cmd = "{0} x509 -in {1} -fingerprint -noout".format(self.openssl_cmd,
+                                                            file_name)
         thumbprint = shellutil.run_get_output(cmd)[1]
         thumbprint = thumbprint.rstrip().split('=')[1].replace(':', '').upper()
         return thumbprint

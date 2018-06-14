@@ -76,7 +76,7 @@ def run_get_output(cmd, chk_err=True, log_cmd=True):
     Reports exceptions to Error if chk_err parameter is True
     """
     if log_cmd:
-        logger.verbose(u"Run '{0}'", cmd)
+        logger.verbose(u"Command: [{0}]", cmd)
     try:
         output = subprocess.check_output(cmd,
                                          stderr=subprocess.STDOUT,
@@ -84,22 +84,21 @@ def run_get_output(cmd, chk_err=True, log_cmd=True):
         output = ustr(output,
                       encoding='utf-8',
                       errors="backslashreplace")
+    except subprocess.CalledProcessError as e:
+        output = ustr(e.output,
+                      encoding='utf-8',
+                      errors="backslashreplace")
+        if chk_err:
+            msg = u"Command: [{0}], " \
+                  u"return code: [{1}], " \
+                  u"result: [{2}]".format(cmd, e.returncode, output)
+            logger.error(msg)
+        return e.returncode, output
     except Exception as e:
-        if type(e) is subprocess.CalledProcessError:
-            output = ustr(e.output,
-                        encoding='utf-8',
-                        errors="backslashreplace")
-            if chk_err:
-                if log_cmd:
-                    logger.error(u"Command: '{0}'", e.cmd)
-                logger.error(u"Return code: {0}", e.returncode)
-                logger.error(u"Result: {0}", output)
-            return e.returncode, output
-        else:
-            logger.error(
-                u"'{0}' raised unexpected exception: '{1}'".format(
-                    cmd, ustr(e)))
-            return -1, ustr(e)
+        if chk_err:
+            logger.error(u"Command [{0}] raised unexpected exception: [{1}]"
+                         .format(cmd, ustr(e)))
+        return -1, ustr(e)
     return 0, output
 
 
