@@ -15,16 +15,17 @@
 # limitations under the License.
 #
 # Requires Python 2.6+ and Openssl 1.0+
-
-from datetime import datetime
-
+import datetime
 import json
 import os
 import random
 import re
 import sys
 import time
+import traceback
 import xml.sax.saxutils as saxutils
+
+from datetime import datetime
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.utils.fileutil as fileutil
@@ -586,8 +587,7 @@ class WireClient(object):
         try:
             fileutil.write_file(local_file, data)
         except IOError as e:
-            fileutil.clean_ioerror(e,
-                paths=[local_file])
+            fileutil.clean_ioerror(e, paths=[local_file])
             raise ProtocolError("Failed to write cache: {0}".format(e))
 
     @staticmethod
@@ -779,17 +779,17 @@ class WireClient(object):
 
                 return
 
+            except IOError as e:
+                logger.warn("IOError processing goal state, retrying [{0}]", ustr(e))
+
             except ResourceGoneError:
                 logger.info("GoalState is stale -- re-fetching")
                 goal_state = None
 
             except Exception as e:
-                log_method = logger.info \
-                                if type(e) is ProtocolError \
-                                else logger.warn
-                log_method(
-                    "Exception processing GoalState-related files: {0}".format(
-                        ustr(e)))
+                log_method = logger.verbose if type(e) is ProtocolError else logger.error
+                log_method("Exception processing GoalState-related files: "
+                           "{0} [{1}]".format(ustr(e), traceback.format_exc()))
 
                 if retry < max_retry-1:
                     continue
