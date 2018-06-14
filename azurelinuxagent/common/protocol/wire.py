@@ -784,12 +784,9 @@ class WireClient(object):
                 goal_state = None
 
             except Exception as e:
-                log_method = logger.info \
-                                if type(e) is ProtocolError \
-                                else logger.warn
-                log_method(
-                    "Exception processing GoalState-related files: {0}".format(
-                        ustr(e)))
+                log_method = logger.verbose if type(e) is ProtocolError else logger.warn
+                log_method("Exception processing GoalState-related files: "
+                           "{0}".format(ustr(e)))
 
                 if retry < max_retry-1:
                     continue
