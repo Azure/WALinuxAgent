@@ -779,6 +779,9 @@ class WireClient(object):
 
                 return
 
+            except IOError as e:
+                logger.warn("IOError processing goal state, retrying [{0}]", ustr(e))
+
             except ResourceGoneError:
                 logger.info("GoalState is stale -- re-fetching")
                 goal_state = None
