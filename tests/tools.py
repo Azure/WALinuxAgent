@@ -107,6 +107,10 @@ class AgentTestCase(unittest.TestCase):
             cls.assertGreater = cls.emulate_assertGreater
         if not hasattr(cls, "assertLess"):
             cls.assertLess = cls.emulate_assertLess
+        if not hasattr(cls, "assertIsNone"):
+            cls.assertIsNone = cls.emulate_assertIsNone
+        if not hasattr(cls, "assertIsNotNone"):
+            cls.assertIsNone = cls.emulate_assertIsNotNone
 
     def setUp(self):
         prefix = "{0}_".format(self.__class__.__name__)
@@ -147,6 +151,16 @@ class AgentTestCase(unittest.TestCase):
     def emulate_assertLess(self, a, b, msg=None):
         if not a < b:
             msg = msg if msg is not None else '{0} not less than {1}'.format(_safe_repr(a), _safe_repr(b))
+            self.fail(msg)
+
+    def emulate_assertIsNone(self, x, msg=None):
+        if x is not None:
+            msg = msg if msg is not None else '{0} is not None'.format(_safe_repr(x))
+            self.fail(msg)
+
+    def emulate_assertIsNotNone(self, x, msg=None):
+        if x is None:
+            msg = msg if msg is not None else '{0} is None'.format(_safe_repr(x))
             self.fail(msg)
 
     @staticmethod
