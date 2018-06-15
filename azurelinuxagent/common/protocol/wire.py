@@ -783,17 +783,20 @@ class WireClient(object):
                 logger.warn("IOError processing goal state, retrying [{0}]", ustr(e))
 
             except ResourceGoneError:
-                logger.info("GoalState is stale -- re-fetching")
+                logger.info("Goal state is stale, re-fetching")
                 goal_state = None
 
-            except Exception as e:
-                log_method = logger.verbose if type(e) is ProtocolError else logger.error
-                log_method("Exception processing GoalState-related files: "
-                           "{0} [{1}]".format(ustr(e), traceback.format_exc()))
+            except ProtocolError as e:
+                if retry < max_retry - 1:
+                    logger.verbose("ProtocolError processing goal state, retrying [{0}]", ustr(e))
+                else:
+                    logger.error("ProtocolError processing goal state, giving up [{0}]", ustr(e))
 
+            except Exception as e:
                 if retry < max_retry-1:
-                    continue
-                raise
+                    logger.verbose("Exception processing goal state, retrying: [{0}]", ustr(e))
+                else:
+                    logger.error("Exception processing goal state, giving up: [{0}]", ustr(e))
 
         raise ProtocolError("Exceeded max retry updating goal state")
 
