@@ -308,7 +308,7 @@ class TestWireProtocol(AgentTestCase):
         wire_protocol_client.get_goal_state = Mock(return_value=goal_state)
 
         # response is invalid json
-        wire_protocol_client.call_storage_service = Mock(return_value=MockResponse("invalid json", 200))
+        wire_protocol_client.call_storage_service = Mock(return_value=MockResponse("invalid json".encode('utf-8'), 200))
         in_vm_artifacts_profile = wire_protocol_client.get_artifacts_profile()
 
         # ensure response is empty
