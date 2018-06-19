@@ -299,6 +299,27 @@ class TestWireProtocol(AgentTestCase):
 
             host_plugin_get_artifact_url_and_headers.assert_called_with(testurl)
 
+    @patch("azurelinuxagent.common.event.add_event")
+    def test_artifacts_profile_json_parsing(self, patch_event, *args):
+        wire_protocol_client = WireProtocol(wireserver_url).client
+        wire_protocol_client.ext_conf = ExtensionsConfig(None)
+        wire_protocol_client.ext_conf.artifacts_profile_blob = testurl
+        goal_state = GoalState(WireProtocolData(DATA_FILE).goal_state)
+        wire_protocol_client.get_goal_state = Mock(return_value=goal_state)
+
+        # response is invalid json
+        wire_protocol_client.call_storage_service = Mock(return_value=MockResponse("invalid json".encode('utf-8'), 200))
+        in_vm_artifacts_profile = wire_protocol_client.get_artifacts_profile()
+
+        # ensure response is empty
+        self.assertEqual(None, in_vm_artifacts_profile)
+
+        # ensure event is logged
+        self.assertEqual(1, patch_event.call_count)
+        self.assertFalse(patch_event.call_args[1]['is_success'])
+        self.assertTrue('invalid json' in patch_event.call_args[1]['message'])
+        self.assertEqual('ArtifactsProfileBlob', patch_event.call_args[1]['op'])
+
     def test_get_in_vm_artifacts_profile_default(self, *args):
         wire_protocol_client = WireProtocol(wireserver_url).client
         wire_protocol_client.ext_conf = ExtensionsConfig(None)

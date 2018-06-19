@@ -18,6 +18,7 @@
 #
 
 import base64
+import errno
 import struct
 import sys
 import os.path
@@ -50,47 +51,46 @@ class CryptUtil(object):
 
     def get_pubkey_from_prv(self, file_name):
         if not os.path.exists(file_name):
-            raise IOError("File not found: {0}", file_name)
-
-        cmd = "{0} rsa -in {1} -pubout 2>/dev/null".format(self.openssl_cmd, 
-                                                           file_name)
-        pub = shellutil.run_get_output(cmd)[1]
-        return pub
+            raise IOError(errno.ENOENT, "File not found", file_name)
+        else:
+            cmd = "{0} rsa -in {1} -pubout 2>/dev/null".format(self.openssl_cmd,
+                                                               file_name)
+            pub = shellutil.run_get_output(cmd)[1]
+            return pub
 
     def get_pubkey_from_crt(self, file_name):
         if not os.path.exists(file_name):
-            raise IOError("File not found: {0}", file_name)
-
-        cmd = "{0} x509 -in {1} -pubkey -noout".format(self.openssl_cmd, 
-                                                       file_name)
-        pub = shellutil.run_get_output(cmd)[1]
-        return pub
+            raise IOError(errno.ENOENT, "File not found", file_name)
+        else:
+            cmd = "{0} x509 -in {1} -pubkey -noout".format(self.openssl_cmd,
+                                                           file_name)
+            pub = shellutil.run_get_output(cmd)[1]
+            return pub
 
     def get_thumbprint_from_crt(self, file_name):
         if not os.path.exists(file_name):
-            raise IOError("File not found: {0}", file_name)
-
-        cmd = "{0} x509 -in {1} -fingerprint -noout".format(self.openssl_cmd,
-                                                            file_name)
-        thumbprint = shellutil.run_get_output(cmd)[1]
-        thumbprint = thumbprint.rstrip().split('=')[1].replace(':', '').upper()
-        return thumbprint
+            raise IOError(errno.ENOENT, "File not found", file_name)
+        else:
+            cmd = "{0} x509 -in {1} -fingerprint -noout".format(self.openssl_cmd,
+                                                                file_name)
+            thumbprint = shellutil.run_get_output(cmd)[1]
+            thumbprint = thumbprint.rstrip().split('=')[1].replace(':', '').upper()
+            return thumbprint
 
     def decrypt_p7m(self, p7m_file, trans_prv_file, trans_cert_file, pem_file):
         if not os.path.exists(p7m_file):
-            raise IOError("File not found: {0}", p7m_file)
-
-        if not os.path.exists(trans_prv_file):
-            raise IOError("File not found: {0}", trans_prv_file)
-
-        cmd = ("{0} cms -decrypt -in {1} -inkey {2} -recip {3} "
-               "| {4} pkcs12 -nodes -password pass: -out {5}"
-               "").format(self.openssl_cmd, p7m_file, trans_prv_file, 
-                          trans_cert_file, self.openssl_cmd, pem_file)
-        shellutil.run(cmd)
-        rc = shellutil.run(cmd)
-        if rc != 0:
-            logger.error("Failed to decrypt {0}".format(p7m_file))
+            raise IOError(errno.ENOENT, "File not found", p7m_file)
+        elif not os.path.exists(trans_prv_file):
+            raise IOError(errno.ENOENT, "File not found", trans_prv_file)
+        else:
+            cmd = ("{0} cms -decrypt -in {1} -inkey {2} -recip {3} "
+                   "| {4} pkcs12 -nodes -password pass: -out {5}"
+                   "").format(self.openssl_cmd, p7m_file, trans_prv_file,
+                              trans_cert_file, self.openssl_cmd, pem_file)
+            shellutil.run(cmd)
+            rc = shellutil.run(cmd)
+            if rc != 0:
+                logger.error("Failed to decrypt {0}".format(p7m_file))
 
     def crt_to_ssh(self, input_file, output_file):
         shellutil.run("ssh-keygen -i -m PKCS8 -f {0} >> {1}".format(input_file,
