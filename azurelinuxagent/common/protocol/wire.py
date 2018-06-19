@@ -1112,8 +1112,8 @@ class WireClient(object):
         message = message.format(*args)
         logger.warn(message)
         report_event(op=WALAEventOperation.ReportStatus,
-                    is_success=False,
-                    message=message)
+                     is_success=False,
+                     message=message)
 
     def get_header(self):
         return {
@@ -1180,7 +1180,17 @@ class WireClient(object):
 
                     if not textutil.is_str_none_or_whitespace(profile):
                         logger.verbose("Artifacts profile downloaded")
-                        artifacts_profile = InVMArtifactsProfile(profile)
+                        try:
+                            artifacts_profile = InVMArtifactsProfile(profile)
+                        except Exception:
+                            logger.warn("Could not parse artifacts profile blob")
+                            msg = "Content: [{0}]".format(profile)
+                            logger.verbose(msg)
+
+                            from azurelinuxagent.common.event import report_event, WALAEventOperation
+                            report_event(op=WALAEventOperation.ArtifactsProfileBlob,
+                                         is_success=False,
+                                         message=msg)
 
                 return artifacts_profile
 
@@ -1189,9 +1199,7 @@ class WireClient(object):
                 continue
 
             except Exception as e:
-                logger.warn(
-                    "Exception retrieving artifacts profile: {0}".format(
-                        ustr(e)))
+                logger.warn("Exception retrieving artifacts profile: {0}".format(ustr(e)))
 
         return None
 
