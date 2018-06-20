@@ -807,8 +807,7 @@ class DefaultOSUtil(object):
                 route_list.append(route_obj)
         return route_list
 
-    @staticmethod
-    def get_route_table():
+    def get_route_table(self):
         """
         Construct a list of all network routes known to this system.
 
