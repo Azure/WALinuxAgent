@@ -93,28 +93,40 @@ class TestOSUtil(AgentTestCase):
                         self.assertTrue(msg in ustr(ose))
                         self.assertTrue(patch_run.call_count == 6)
 
-    @patch(actual_get_proc_net_route, return_value=[])
     def test_empty_proc_net_route(self):
-        self.assertEqual(len(osutil.DefaultOSUtil().get_route_table()), 0)
+        routing_table = ""
 
-    @patch(actual_get_proc_net_route, return_value=['Iface\tDestination\tGateway \tFlags\tRefCnt\tUse\tMetric\tMask\t\tMTU\tWindow\tIRTT           '])
+        mo = mock.mock_open(read_data=routing_table)
+        with patch(open_patch(), mo):
+            self.assertEqual(len(osutil.DefaultOSUtil().get_route_table()), 0)
+
     def test_no_routes(self):
-        self.assertEqual(len(osutil.DefaultOSUtil().get_route_table()), 0)
+        routing_table = 'Iface\tDestination\tGateway \tFlags\tRefCnt\tUse\tMetric\tMask\t\tMTU\tWindow\tIRTT        \n'
 
-    @patch(actual_get_proc_net_route, return_value=['Iface\tDestination\tGateway \tFlags\t\tUse\tMetric\t'])
+        mo = mock.mock_open(read_data=routing_table)
+        with patch(open_patch(), mo):
+            self.assertEqual(len(osutil.DefaultOSUtil().get_route_table()), 0)
+
     def test_bogus_proc_net_route(self):
-        self.assertEqual(len(osutil.DefaultOSUtil().get_route_table()), 0)
+        routing_table = 'Iface\tDestination\tGateway \tFlags\t\tUse\tMetric\t\neth0\t00000000\t00000000\t0001\t\t0\t0\n'
 
-    @patch(actual_get_proc_net_route, return_value=[
-        'Iface   Destination     Gateway         Flags   RefCnt  Use     Metric  Mask            MTU     Window  IRTT ',
-        'eth0    00000000        C1BB910A        0003    0       0       0       00000000        0       0       0',
-        'eth0    C0BB910A        00000000        0001    0       0       0       C0FFFFFF        0       0       0',
-        'eth0    10813FA8        C1BB910A        000F    0       0       0       FFFFFFFF        0       0       0',
-        'eth0    FEA9FEA9        C1BB910A        0007    0       0       0       FFFFFFFF        0       0       0',
-        'docker0 002BA8C0        00000000        0001    0       0       10      00FFFFFF        0       0       0'
-    ])
+        mo = mock.mock_open(read_data=routing_table)
+        with patch(open_patch(), mo):
+            self.assertEqual(len(osutil.DefaultOSUtil().get_route_table()), 0)
+
     def test_valid_routes(self):
-        route_list = osutil.DefaultOSUtil().get_route_table()
+        routing_table = \
+            'Iface\tDestination\tGateway \tFlags\tRefCnt\tUse\tMetric\tMask\t\tMTU\tWindow\tIRTT   \n' \
+            'eth0\t00000000\tC1BB910A\t0003\t0\t0\t0\t00000000\t0\t0\t0    \n' \
+            'eth0\tC0BB910A\t00000000\t0001\t0\t0\t0\tC0FFFFFF\t0\t0\t0    \n' \
+            'eth0\t10813FA8\tC1BB910A\t000F\t0\t0\t0\tFFFFFFFF\t0\t0\t0    \n' \
+            'eth0\tFEA9FEA9\tC1BB910A\t0007\t0\t0\t0\tFFFFFFFF\t0\t0\t0    \n' \
+            'docker0\t002BA8C0\t00000000\t0001\t0\t0\t10\t00FFFFFF\t0\t0\t0    \n'
+
+        mo = mock.mock_open(read_data=routing_table)
+        with patch(open_patch(), mo):
+            route_list = osutil.DefaultOSUtil().get_route_table()
+
         self.assertEqual(len(route_list), 5)
         self.assertEqual(route_list[0].gateway_quad(), '10.145.187.193')
         self.assertEqual(route_list[1].gateway_quad(), '0.0.0.0')
