@@ -17,6 +17,7 @@
 #
 
 import os
+import platform
 import time
 
 import azurelinuxagent.common.logger as logger
@@ -56,9 +57,9 @@ class Ubuntu14OSUtil(DefaultOSUtil):
         return self.get_endpoint_from_leases_path('/var/lib/dhcp/dhclient.*.leases')
 
     def is_cgroups_supported(self):
-        if 'TRAVIS' in os.environ and os.environ['TRAVIS'] == 'true':
-            return False
-        return True
+        is_wsl = '-Microsoft-' in platform.platform()
+        is_travis = 'TRAVIS' in os.environ and os.environ['TRAVIS'] == 'true'
+        return not is_wsl and not is_travis
 
     def mount_cgroups(self):
         try:
