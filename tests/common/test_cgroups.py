@@ -23,6 +23,7 @@ from tests.tools import *
 import os
 import random
 import time
+import platform
 
 
 def consume_cpu_time():
@@ -62,7 +63,10 @@ def make_root_cgroups():
 def i_am_root():
     return os.geteuid() == 0
 
+def is_wsl():
+    return '-Microsoft-' in platform.platform()
 
+@skip_if_predicate_true(is_wsl, "CGroups not supported under WSL")
 @skip_if_predicate_false(CGroups.enabled, "CGroups not supported in this environment")
 class TestCGroups(AgentTestCase):
     @classmethod
