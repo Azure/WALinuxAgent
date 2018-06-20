@@ -28,6 +28,8 @@ from azurelinuxagent.common.osutil import get_osutil
 from tests.tools import *
 
 
+actual_get_proc_net_route = 'azurelinuxagent.common.osutil.default.DefaultOSUtil._get_proc_net_route'
+
 def fake_is_loopback(_, iface):
     return iface.startswith('lo')
 
@@ -91,6 +93,40 @@ class TestOSUtil(AgentTestCase):
                         self.assertTrue(msg in ustr(ose))
                         self.assertTrue(patch_run.call_count == 6)
 
+    @patch(actual_get_proc_net_route, return_value=[])
+    def test_empty_proc_net_route(self):
+        self.assertEqual(len(osutil.DefaultOSUtil().get_route_table()), 0)
+
+    @patch(actual_get_proc_net_route, return_value=['Iface\tDestination\tGateway \tFlags\tRefCnt\tUse\tMetric\tMask\t\tMTU\tWindow\tIRTT           '])
+    def test_no_routes(self):
+        self.assertEqual(len(osutil.DefaultOSUtil().get_route_table()), 0)
+
+    @patch(actual_get_proc_net_route, return_value=['Iface\tDestination\tGateway \tFlags\t\tUse\tMetric\t'])
+    def test_bogus_proc_net_route(self):
+        self.assertEqual(len(osutil.DefaultOSUtil().get_route_table()), 0)
+
+    @patch(actual_get_proc_net_route, return_value=[
+        'Iface   Destination     Gateway         Flags   RefCnt  Use     Metric  Mask            MTU     Window  IRTT ',
+        'eth0    00000000        C1BB910A        0003    0       0       0       00000000        0       0       0',
+        'eth0    C0BB910A        00000000        0001    0       0       0       C0FFFFFF        0       0       0',
+        'eth0    10813FA8        C1BB910A        000F    0       0       0       FFFFFFFF        0       0       0',
+        'eth0    FEA9FEA9        C1BB910A        0007    0       0       0       FFFFFFFF        0       0       0',
+        'docker0 002BA8C0        00000000        0001    0       0       10      00FFFFFF        0       0       0'
+    ])
+    def test_valid_routes(self):
+        route_list = osutil.DefaultOSUtil().get_route_table()
+        self.assertEqual(len(route_list), 5)
+        self.assertEqual(route_list[0].gateway_quad(), '10.145.187.193')
+        self.assertEqual(route_list[1].gateway_quad(), '0.0.0.0')
+        self.assertEqual(route_list[1].mask_quad(), '255.255.255.192')
+        self.assertEqual(route_list[2].destination_quad(), '168.63.129.16')
+        self.assertEqual(route_list[1].flags, 1)
+        self.assertEqual(route_list[2].flags, 15)
+        self.assertEqual(route_list[3].flags, 7)
+        self.assertEqual(route_list[3].metric, 0)
+        self.assertEqual(route_list[4].metric, 10)
+        self.assertEqual(route_list[0].interface, 'eth0')
+        self.assertEqual(route_list[4].interface, 'docker0')
 
     @patch('azurelinuxagent.common.osutil.default.DefaultOSUtil.get_primary_interface', return_value='eth0')
     @patch('azurelinuxagent.common.osutil.default.DefaultOSUtil._get_all_interfaces', return_value={'eth0':'10.0.0.1'})

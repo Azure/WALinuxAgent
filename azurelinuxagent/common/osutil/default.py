@@ -36,6 +36,7 @@ import time
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.utils.fileutil as fileutil
+import azurelinuxagent.common.utils.networkutil as networkutil
 import azurelinuxagent.common.utils.shellutil as shellutil
 import azurelinuxagent.common.utils.textutil as textutil
 
@@ -761,6 +762,70 @@ class DefaultOSUtil(object):
 
         return '', ''
 
+    @staticmethod
+    def _get_proc_net_route():
+        try:
+            proc_net_route = fileutil.read_file('/proc/net/route').splitlines()
+        except OSError as e:
+            msg = "get_route_table: {0}".format(e)
+            logger.periodic(logger.EVERY_HALF_DAY, msg)
+            return []
+        return proc_net_route
+
+    @staticmethod
+    def _build_route_list(proc_net_route):
+        """
+        Construct a list of network route entries
+        :param list(str) proc_net_route: List of lines in /proc/net/route, containing at least one route
+        :return: List of network route objects
+        :rtype: list(networkutil.RouteEntry)
+        """
+        idx = 0
+        column_index = {}
+        header_line = proc_net_route[0].strip(" ")
+        for header in filter(lambda h: len(h) > 0, header_line.split("\t")):
+            column_index[header.strip()] = idx
+            idx += 1
+        try:
+            idx_iface = column_index["Iface"]
+            idx_dest = column_index["Destination"]
+            idx_gw = column_index["Gateway"]
+            idx_flags = column_index["Flags"]
+            idx_metric = column_index["Metric"]
+            idx_mask = column_index["Mask"]
+        except KeyError:
+            msg = "/proc/net/route is missing key information; headers are [{0}]".format(header_line)
+            logger.periodic(logger.EVERY_HALF_DAY, msg)
+            return []
+
+        route_list = []
+        for entry in proc_net_route[1:]:
+            route = entry.strip(" ").split("\t")
+            if len(route) > 0:
+                route_obj = networkutil.RouteEntry(route[idx_iface], route[idx_dest], route[idx_gw], route[idx_mask],
+                                                   route[idx_flags], route[idx_metric])
+                route_list.append(route_obj)
+        return route_list
+
+    @staticmethod
+    def get_route_table():
+        """
+        Construct a list of all network routes known to this system.
+
+        :return: a list of network routes
+        :rtype: list(networkutil.RouteEntry)
+        """
+        route_list = []
+        proc_net_route = DefaultOSUtil._get_proc_net_route()
+        count = len(proc_net_route)
+
+        if count < 1:
+            logger.periodic(logger.EVERY_HALF_DAY, "/proc/net/route is missing headers")
+        elif count == 1:
+            logger.periodic(logger.EVERY_HALF_DAY, "/proc/net/route contains no routes")
+        else:
+            route_list = DefaultOSUtil._build_route_list(proc_net_route)
+        return route_list
 
     def get_primary_interface(self):
         """
