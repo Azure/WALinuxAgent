@@ -22,6 +22,7 @@ import datetime
 import errno
 import fcntl
 import glob
+import hashlib
 import multiprocessing
 import os
 import platform
@@ -766,7 +767,7 @@ class DefaultOSUtil(object):
     def _build_route_list(proc_net_route):
         """
         Construct a list of network route entries
-        :param list(str) proc_net_route: List of lines in /proc/net/route, containing at least one route
+        :param list(str) proc_net_route: Route table lines, including headers, containing at least one route
         :return: List of network route objects
         :rtype: list(networkutil.RouteEntry)
         """
@@ -797,29 +798,39 @@ class DefaultOSUtil(object):
                 route_list.append(route_obj)
         return route_list
 
-    def get_route_table(self):
+    def read_route_table(self):
+        """
+        Return a list of strings comprising the route table, including column headers. Each line is stripped of leading
+        or trailing whitespace but is otherwise unmolested.
+
+        :return: Entries in the text route table
+        :rtype: list(str)
+        """
+        try:
+            with open('/proc/net/route') as routing_table:
+                return list(map(str.strip, routing_table.readlines()))
+        except OSError as e:
+            logger.periodic(logger.EVERY_HALF_DAY, "Can't read route table. {0}", e)
+
+        return []
+
+    def get_list_of_routes(self, route_table):
         """
         Construct a list of all network routes known to this system.
 
+        :param list(str) route_table: List of text entries from route table, including headers
         :return: a list of network routes
         :rtype: list(networkutil.RouteEntry)
         """
         route_list = []
-        try:
-            with open('/proc/net/route') as routing_table:
-                proc_net_route = list(map(str.strip, routing_table.readlines()))
-        except OSError as e:
-            logger.periodic(logger.EVERY_HALF_DAY, "Can't read route table. {0}", e)
-            return route_list
-
-        count = len(proc_net_route)
+        count = len(route_table)
 
         if count < 1:
             logger.periodic(logger.EVERY_HALF_DAY, "/proc/net/route is missing headers")
         elif count == 1:
             logger.periodic(logger.EVERY_HALF_DAY, "/proc/net/route contains no routes")
         else:
-            route_list = DefaultOSUtil._build_route_list(proc_net_route)
+            route_list = DefaultOSUtil._build_route_list(route_table)
         return route_list
 
     def get_primary_interface(self):

@@ -18,6 +18,7 @@
 
 import base64
 import crypt
+import hashlib
 import random
 import re
 import string
@@ -365,3 +366,16 @@ def parse_json(json_str):
 
 def is_str_none_or_whitespace(s):
     return s is None or len(s) == 0 or s.isspace()
+
+
+def hash_strings(string_list):
+    """
+    Compute a cryptographic hash of a list of strings
+
+    :param string_list: The strings to be hashed
+    :return: The cryptographic hash (digest) of the strings in the order provided
+    """
+    sha1_hash = hashlib.sha1()
+    for item in string_list:
+        sha1_hash.update(item.encode())
+    return sha1_hash.digest()

@@ -36,8 +36,10 @@ class TestNetworkOperations(AgentTestCase):
         flags = "1"
         metric = "0"
 
-        expected = 'Iface: eth0\tDestination: 10.145.187.192\tGateway: 10.145.187.193\tMask: 255.255.255.192\tFlags: 1\tMetric: 0'
+        expected = 'Iface: eth0\tDestination: 10.145.187.192\tGateway: 10.145.187.193\tMask: 255.255.255.192\tFlags: 0x0001\tMetric: 0'
+        expected_json = '{"Iface": "eth0", "Destination": "10.145.187.192", "Gateway": "10.145.187.193", "Mask": "255.255.255.192", "Flags": "0x0001", "Metric": "0"}'
 
         entry = networkutil.RouteEntry(interface, destination, gateway, mask, flags, metric)
 
         self.assertEqual(str(entry), expected)
+        self.assertEqual(entry.to_json(), expected_json)

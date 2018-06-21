@@ -40,8 +40,9 @@ from azurelinuxagent.common.protocol.restapi import TelemetryEventParam, \
                                                     TelemetryEventList, \
                                                     TelemetryEvent, \
                                                     set_properties
+import azurelinuxagent.common.utils.networkutil as networkutil
 from azurelinuxagent.common.utils.restutil import IOErrorCounter
-from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, getattrib
+from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, getattrib, hash_strings
 from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_VERSION, \
             DISTRO_CODE_NAME, AGENT_LONG_VERSION, \
             AGENT_NAME, CURRENT_AGENT, CURRENT_VERSION
@@ -118,6 +119,7 @@ class MonitorHandler(object):
         self.last_imds_heartbeat = None
         self.protocol = None
         self.health_service = None
+        self.last_route_table_hash = b''
 
         self.counter = 0
         self.sysinfo = []
@@ -261,6 +263,7 @@ class MonitorHandler(object):
             self.collect_and_send_events()
             self.send_host_plugin_heartbeat()
             self.send_imds_heartbeat()
+            self.log_route_table()
             time.sleep(min_delta)
 
     def add_sysinfo(self, event):
@@ -416,3 +419,11 @@ class MonitorHandler(object):
                 logger.warn("Monitor: updating tracked extensions raised {0}: {1}", e, traceback.format_exc())
 
             self.last_cgroup_telemetry = datetime.datetime.utcnow()
+
+    def log_route_table(self):
+        raw_route_list = self.osutil.read_route_table()
+        digest = hash_strings(raw_route_list)
+        if digest != self.last_route_table_hash:
+            self.last_route_table_hash = digest
+            route_list = self.osutil.get_list_of_routes(raw_route_list)
+            logger.info("Route table: [{0}]".format(",".join(map(networkutil.RouteEntry.to_json, route_list))))
