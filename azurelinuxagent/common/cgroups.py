@@ -258,12 +258,15 @@ class CGroupsTelemetry(object):
     def collect_all_tracked():
         """
         Return a dictionary mapping from the name of a tracked cgroup to the list of collected metrics for that cgroup.
+        Collecting metrics is not guaranteed to be a fast operation; it's possible some other thread might add or remove
+        tracking for a cgroup while we're doing it. To avoid "dictionary changed size during iteration" exceptions,
+        work from a shallow copy of the _tracked dictionary.
 
         :returns: Dictionary of list collected metrics (metric class, metric name, value), by cgroup
         :rtype: dict(str: [(str, str, float)])
         """
         results = {}
-        for cgroup_name, collector in CGroupsTelemetry._tracked.items():
+        for cgroup_name, collector in CGroupsTelemetry._tracked.copy().items():
             cgroup_name = cgroup_name if cgroup_name else WRAPPER_CGROUP_NAME
             results[cgroup_name] = collector.collect()
         return results
