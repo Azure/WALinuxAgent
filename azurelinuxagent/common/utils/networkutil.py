@@ -48,11 +48,16 @@ class RouteEntry(object):
     def mask_quad(self):
         return self._net_hex_to_dotted_quad(self.mask)
 
-    def __str__(self):
-        return "Iface: {0}\tDestination: {1}\tGateway: {2}\tMask: {3}\tFlags: {4}\tMetric: {5}" \
-               .format(self.interface, self.destination_quad(), self.gateway_quad(), self.mask_quad(),
+    def to_json(self):
+        f = '{{"Iface": "{0}", "Destination": "{1}", "Gateway": "{2}", "Mask": "{3}", "Flags": "{4:#04x}", "Metric": "{5}"}}'
+        return f.format(self.interface, self.destination_quad(), self.gateway_quad(), self.mask_quad(),
                        self.flags, self.metric)
 
+    def __str__(self):
+        f = "Iface: {0}\tDestination: {1}\tGateway: {2}\tMask: {3}\tFlags: {4:#04x}\tMetric: {5}"
+        return f.format(self.interface, self.destination_quad(), self.gateway_quad(), self.mask_quad(),
+                        self.flags, self.metric)
+
     def __repr__(self):
-        return 'RouteEntry("{0}", "{1}", "{2}", "{3}", "{4}", "{5}")'\
+        return 'RouteEntry("{0}", "{1}", "{2}", "{3}", "{4:#04x}", "{5}")'\
             .format(self.interface, self.destination, self.gateway, self.mask, self.flags, self.metric)
