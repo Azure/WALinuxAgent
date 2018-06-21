@@ -763,16 +763,6 @@ class DefaultOSUtil(object):
         return '', ''
 
     @staticmethod
-    def _get_proc_net_route():
-        try:
-            proc_net_route = fileutil.read_file('/proc/net/route').splitlines()
-        except OSError as e:
-            msg = "get_route_table: {0}".format(e)
-            logger.periodic(logger.EVERY_HALF_DAY, msg)
-            return []
-        return proc_net_route
-
-    @staticmethod
     def _build_route_list(proc_net_route):
         """
         Construct a list of network route entries
@@ -782,7 +772,7 @@ class DefaultOSUtil(object):
         """
         idx = 0
         column_index = {}
-        header_line = proc_net_route[0].strip(" ")
+        header_line = proc_net_route[0]
         for header in filter(lambda h: len(h) > 0, header_line.split("\t")):
             column_index[header.strip()] = idx
             idx += 1
@@ -800,7 +790,7 @@ class DefaultOSUtil(object):
 
         route_list = []
         for entry in proc_net_route[1:]:
-            route = entry.strip(" ").split("\t")
+            route = entry.split("\t")
             if len(route) > 0:
                 route_obj = networkutil.RouteEntry(route[idx_iface], route[idx_dest], route[idx_gw], route[idx_mask],
                                                    route[idx_flags], route[idx_metric])
@@ -815,7 +805,13 @@ class DefaultOSUtil(object):
         :rtype: list(networkutil.RouteEntry)
         """
         route_list = []
-        proc_net_route = DefaultOSUtil._get_proc_net_route()
+        try:
+            with open('/proc/net/route') as routing_table:
+                proc_net_route = list(map(str.strip, routing_table.readlines()))
+        except OSError as e:
+            logger.periodic(logger.EVERY_HALF_DAY, "Can't read route table. {0}", e)
+            return route_list
+
         count = len(proc_net_route)
 
         if count < 1:
