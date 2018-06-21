@@ -22,6 +22,7 @@ import traceback
 
 import azurelinuxagent.common.osutil.default as osutil
 import azurelinuxagent.common.utils.shellutil as shellutil
+import azurelinuxagent.common.utils.textutil as textutil
 from azurelinuxagent.common.exception import OSUtilError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
@@ -98,21 +99,21 @@ class TestOSUtil(AgentTestCase):
 
         mo = mock.mock_open(read_data=routing_table)
         with patch(open_patch(), mo):
-            self.assertEqual(len(osutil.DefaultOSUtil().get_route_table()), 0)
+            self.assertEqual(len(osutil.DefaultOSUtil().read_route_table()), 0)
 
     def test_no_routes(self):
         routing_table = 'Iface\tDestination\tGateway \tFlags\tRefCnt\tUse\tMetric\tMask\t\tMTU\tWindow\tIRTT        \n'
 
         mo = mock.mock_open(read_data=routing_table)
         with patch(open_patch(), mo):
-            self.assertEqual(len(osutil.DefaultOSUtil().get_route_table()), 0)
+            self.assertEqual(len(osutil.DefaultOSUtil().read_route_table()), 0)
 
     def test_bogus_proc_net_route(self):
         routing_table = 'Iface\tDestination\tGateway \tFlags\t\tUse\tMetric\t\neth0\t00000000\t00000000\t0001\t\t0\t0\n'
 
         mo = mock.mock_open(read_data=routing_table)
         with patch(open_patch(), mo):
-            self.assertEqual(len(osutil.DefaultOSUtil().get_route_table()), 0)
+            self.assertEqual(len(osutil.DefaultOSUtil().read_route_table()), 0)
 
     def test_valid_routes(self):
         routing_table = \
@@ -122,10 +123,16 @@ class TestOSUtil(AgentTestCase):
             'eth0\t10813FA8\tC1BB910A\t000F\t0\t0\t0\tFFFFFFFF\t0\t0\t0    \n' \
             'eth0\tFEA9FEA9\tC1BB910A\t0007\t0\t0\t0\tFFFFFFFF\t0\t0\t0    \n' \
             'docker0\t002BA8C0\t00000000\t0001\t0\t0\t10\t00FFFFFF\t0\t0\t0    \n'
+        known_sha1_hash = b'\x05\x01yBl\r\xeb\x8e\x91\xea\xb7\x91A\xd6L\x13;\xd4\xdev'
 
         mo = mock.mock_open(read_data=routing_table)
         with patch(open_patch(), mo):
-            route_list = osutil.DefaultOSUtil().get_route_table()
+            raw_route_list = osutil.DefaultOSUtil().read_route_table()
+
+        self.assertEqual(len(raw_route_list), 6)
+        self.assertEqual(textutil.hash_strings(raw_route_list), known_sha1_hash)
+
+        route_list = osutil.DefaultOSUtil().get_list_of_routes(raw_route_list)
 
         self.assertEqual(len(route_list), 5)
         self.assertEqual(route_list[0].gateway_quad(), '10.145.187.193')
