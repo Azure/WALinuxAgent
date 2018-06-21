@@ -153,7 +153,8 @@ class TestTextUtil(AgentTestCase):
         result_from_list = textutil.hash_strings(test_list)
 
         test_string = "".join(test_list)
-        hash_from_string = hashlib.sha1().update(test_string.encode())
+        hash_from_string = hashlib.sha1()
+        hash_from_string.update(test_string.encode())
 
         self.assertEqual(result_from_list, hash_from_string.digest())
         self.assertEqual(hash_from_string.hexdigest(), '6367c48dd193d56ea7b0baad25b19455e529f5ee')
