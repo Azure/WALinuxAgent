@@ -1248,7 +1248,7 @@ class DefaultOSUtil(object):
         """
         state = {}
 
-        status, output = shellutil.run_get_output("ip -a -d -o link")
+        status, output = shellutil.run_get_output("/sbin/ip -a -d -o link")
         """
         1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN mode DEFAULT group default qlen 1000\    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00 promiscuity 0 addrgenmode eui64
         2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP mode DEFAULT group default qlen 1000\    link/ether 00:0d:3a:30:c3:5a brd ff:ff:ff:ff:ff:ff promiscuity 0 addrgenmode eui64
@@ -1268,14 +1268,14 @@ class DefaultOSUtil(object):
             else:
                 print("Entry '{0}' did not match regex".format(entry))
 
-        self._update_nic_state(state, "ip -4 -a -d -o address", NetworkInterfaceCard.add_ipv4, "an IPv4 address")
+        self._update_nic_state(state, "/sbin/ip -4 -a -d -o address", NetworkInterfaceCard.add_ipv4, "an IPv4 address")
         """
         1: lo    inet 127.0.0.1/8 scope host lo\       valid_lft forever preferred_lft forever
         2: eth0    inet 10.145.187.220/26 brd 10.145.187.255 scope global eth0\       valid_lft forever preferred_lft forever
         3: docker0    inet 192.168.43.1/24 brd 192.168.43.255 scope global docker0\       valid_lft forever preferred_lft forever
         """
 
-        self._update_nic_state(state, "ip -6 -a -d -o address", NetworkInterfaceCard.add_ipv6, "an IPv6 address")
+        self._update_nic_state(state, "/sbin/ip -6 -a -d -o address", NetworkInterfaceCard.add_ipv6, "an IPv6 address")
         """
         1: lo    inet6 ::1/128 scope host \       valid_lft forever preferred_lft forever
         2: eth0    inet6 fe80::20d:3aff:fe30:c35a/64 scope link \       valid_lft forever preferred_lft forever
