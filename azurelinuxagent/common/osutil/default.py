@@ -93,7 +93,7 @@ IOCTL_SIOCGIFFLAGS = 0x8913
 IOCTL_SIOCGIFHWADDR = 0x8927
 IFNAMSIZ = 16
 
-IP_COMMAND_OUTPUT = re.compile('^\d+:\s+(\w+)\s+(.*)$')
+IP_COMMAND_OUTPUT = re.compile('^\d+:\s+(\w+):\s+(.*)$')
 
 class DefaultOSUtil(object):
     def __init__(self):
