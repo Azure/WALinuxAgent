@@ -152,13 +152,13 @@ class CryptUtil(object):
     def decrypt_secret(self, encrypted_password, private_key):
         try:
             decoded = base64.b64decode(encrypted_password)
+            args = DECRYPT_SECRET_CMD.format(self.openssl_cmd, private_key).split(' ')
+            p = subprocess.Popen(args, stdout=subprocess.PIPE, stdin=subprocess.PIPE, stderr=subprocess.STDOUT)
+            p.stdin.write(decoded)
+            output = p.communicate()[0]
+            retcode = p.poll()
+            if retcode:
+                raise subprocess.CalledProcessError(retcode, "openssl cms -decrypt", output=output)
+            return output.decode('utf-16')
         except Exception as e:
             raise CryptError("Error decoding secret", e)
-        args = DECRYPT_SECRET_CMD.format(self.openssl_cmd, private_key).split(' ')
-        p = subprocess.Popen(args, stdout=subprocess.PIPE, stdin=subprocess.PIPE, stderr=subprocess.STDOUT)
-        p.stdin.write(decoded)
-        output = p.communicate()[0]
-        retcode = p.poll()
-        if retcode:
-            raise subprocess.CalledProcessError(retcode, "openssl cms -decrypt", output=output)
-        return output.decode('utf-16')
