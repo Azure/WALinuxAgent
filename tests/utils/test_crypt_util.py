@@ -38,7 +38,7 @@ from subprocess import CalledProcessError
 
 
 def is_python_version_26():
-    return sys.version_info.major == 2 and sys.version_info.minor == 6
+    return sys.version_info[0] == 2 and sys.version_info[1] == 6
 
 
 class TestCryptoUtilOperations(AgentTestCase):
