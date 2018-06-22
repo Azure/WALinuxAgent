@@ -1256,6 +1256,7 @@ class DefaultOSUtil(object):
 
         """
         if status != 0:
+            print("ip link failed: {0}".format(status))
             logger.periodic(logger.EVERY_DAY, "Failed to fetch NIC link info; status {0}".format(status))
             return {}
 
@@ -1264,6 +1265,8 @@ class DefaultOSUtil(object):
             if result:
                 name = result.group(1)
                 state[name] = NetworkInterfaceCard(name, result.group(2))
+            else:
+                print("Entry '{0}' did not match regex".format(entry))
 
         self._update_nic_state(state, "ip -4 -a -d -o address", NetworkInterfaceCard.add_ipv4, "an IPv4 address")
         """
