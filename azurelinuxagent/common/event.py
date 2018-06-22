@@ -256,7 +256,7 @@ class EventLogger(object):
                   is_internal=False,
                   log_event=True):
 
-        if not is_success and log_event:
+        if (not is_success) and log_event:
             _log_event(name, op, message, duration, is_success=is_success)
 
         self._add_event(duration, evt_type, is_internal, is_success, message, name, op, version, eventId=1)

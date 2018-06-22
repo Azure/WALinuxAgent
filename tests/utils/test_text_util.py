@@ -160,12 +160,14 @@ class TestTextUtil(AgentTestCase):
         self.assertEqual(hash_from_string.hexdigest(), '6367c48dd193d56ea7b0baad25b19455e529f5ee')
 
     def test_empty_strings(self):
+        self.assertTrue(textutil.is_str_none_or_whitespace(None))
         self.assertTrue(textutil.is_str_none_or_whitespace(' '))
         self.assertTrue(textutil.is_str_none_or_whitespace('\t'))
         self.assertTrue(textutil.is_str_none_or_whitespace('\n'))
         self.assertTrue(textutil.is_str_none_or_whitespace(' \t'))
         self.assertTrue(textutil.is_str_none_or_whitespace(' \r\n'))
 
+        self.assertTrue(textutil.is_str_empty(None))
         self.assertTrue(textutil.is_str_empty(' '))
         self.assertTrue(textutil.is_str_empty('\t'))
         self.assertTrue(textutil.is_str_empty('\n'))
@@ -180,11 +182,17 @@ class TestTextUtil(AgentTestCase):
         self.assertFalse(textutil.is_str_empty(u'foo'))
         self.assertFalse(textutil.is_str_empty('bar'))
 
-        self.assertFalse(textutil.is_str_none_or_whitespace(u'\x00'))
-        self.assertFalse(textutil.is_str_none_or_whitespace(u' \x00 '))
+        hex_null_1 = u'\x00'
+        hex_null_2 = u' \x00 '
 
-        self.assertTrue(textutil.is_str_empty(u'\x00'))
-        self.assertTrue(textutil.is_str_empty(u' \x00 '))
+        self.assertFalse(textutil.is_str_none_or_whitespace(hex_null_1))
+        self.assertFalse(textutil.is_str_none_or_whitespace(hex_null_2))
+
+        self.assertTrue(textutil.is_str_empty(hex_null_1))
+        self.assertTrue(textutil.is_str_empty(hex_null_2))
+
+        self.assertNotEqual(textutil.is_str_none_or_whitespace(hex_null_1), textutil.is_str_empty(hex_null_1))
+        self.assertNotEqual(textutil.is_str_none_or_whitespace(hex_null_2), textutil.is_str_empty(hex_null_2))
 
 
 if __name__ == '__main__':
