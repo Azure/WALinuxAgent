@@ -120,6 +120,7 @@ class MonitorHandler(object):
         self.protocol = None
         self.health_service = None
         self.last_route_table_hash = b''
+        self.last_nic_state = {}
 
         self.counter = 0
         self.sysinfo = []
@@ -263,7 +264,7 @@ class MonitorHandler(object):
             self.collect_and_send_events()
             self.send_host_plugin_heartbeat()
             self.send_imds_heartbeat()
-            self.log_route_table()
+            self.log_altered_network_configuration()
             time.sleep(min_delta)
 
     def add_sysinfo(self, event):
@@ -420,10 +421,19 @@ class MonitorHandler(object):
 
             self.last_cgroup_telemetry = datetime.datetime.utcnow()
 
-    def log_route_table(self):
+    def log_altered_network_configuration(self):
+        """
+        Check various pieces of network configuration and, if altered since the last check, log the new state.
+        """
         raw_route_list = self.osutil.read_route_table()
         digest = hash_strings(raw_route_list)
         if digest != self.last_route_table_hash:
             self.last_route_table_hash = digest
             route_list = self.osutil.get_list_of_routes(raw_route_list)
             logger.info("Route table: [{0}]".format(",".join(map(networkutil.RouteEntry.to_json, route_list))))
+
+        nic_state = self.osutil.get_NIC_state()
+        if nic_state != self.last_nic_state:
+            description = "Initial" if self.last_nic_state is None else "Updated"
+            logger.info("{0} NIC state: [{1}]".format(description, ", ".join(nic_state.values())))
+            self.last_nic_state = nic_state
