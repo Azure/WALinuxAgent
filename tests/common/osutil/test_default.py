@@ -856,7 +856,7 @@ Chain OUTPUT (policy ACCEPT 104 packets, 43628 bytes)
         self.assertGreater(len(state.keys()), 1)
 
         another_state = osutil.DefaultOSUtil().get_NIC_state()
-        name = another_state.keys()[0]
+        name = list(another_state.keys())[0]
         another_state[name].add_ipv4("xyzzy")
         self.assertNotEqual(state, another_state)
 
