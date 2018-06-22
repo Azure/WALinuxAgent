@@ -357,7 +357,7 @@ def parse_json(json_str):
     """
     # trim null and whitespaces
     result = None
-    if not is_str_none_or_whitespace(json_str):
+    if not is_str_empty(json_str):
         import json
         result = json.loads(json_str.rstrip(' \t\r\n\0'))
 
@@ -366,6 +366,10 @@ def parse_json(json_str):
 
 def is_str_none_or_whitespace(s):
     return s is None or len(s) == 0 or s.isspace()
+
+
+def is_str_empty(s):
+    return is_str_none_or_whitespace(s) or is_str_none_or_whitespace(s.rstrip(' \t\r\n\0'))
 
 
 def hash_strings(string_list):

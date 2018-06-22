@@ -1178,7 +1178,7 @@ class WireClient(object):
                         uri, headers = host.get_artifact_request(blob)
                         profile = self.fetch(uri, headers, use_proxy=False)
 
-                    if not textutil.is_str_none_or_whitespace(profile):
+                    if not textutil.is_str_empty(profile):
                         logger.verbose("Artifacts profile downloaded")
                         try:
                             artifacts_profile = InVMArtifactsProfile(profile)
@@ -1190,7 +1190,8 @@ class WireClient(object):
                             from azurelinuxagent.common.event import report_event, WALAEventOperation
                             report_event(op=WALAEventOperation.ArtifactsProfileBlob,
                                          is_success=False,
-                                         message=msg)
+                                         message=msg,
+                                         log_event=False)
 
                 return artifacts_profile
 
@@ -1669,7 +1670,7 @@ class InVMArtifactsProfile(object):
     * encryptedApplicationProfile (optional)
     """
     def __init__(self, artifacts_profile):
-        if not textutil.is_str_none_or_whitespace(artifacts_profile):
+        if not textutil.is_str_empty(artifacts_profile):
             self.__dict__.update(parse_json(artifacts_profile))
 
     def is_on_hold(self):
