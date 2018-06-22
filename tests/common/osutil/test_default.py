@@ -35,6 +35,10 @@ def fake_is_loopback(_, iface):
     return iface.startswith('lo')
 
 
+def running_under_travis():
+    return 'TRAVIS' in os.environ and os.environ['TRAVIS'] == 'true'
+
+
 class TestOSUtil(AgentTestCase):
     def test_restart(self):
         # setup
@@ -849,6 +853,17 @@ Chain OUTPUT (policy ACCEPT 104 packets, 43628 bytes)
 
         self.assertTrue(mock_run.call_count == 1)
         self.assertTrue(mock_output.call_count == 1)
+
+    @skip_if_predicate_true(running_under_travis, "The ip command isn't available in Travis")
+    def test_get_NIC_state(self):
+        state = osutil.DefaultOSUtil().get_NIC_state()
+        self.assertNotEqual(state, {})
+        self.assertGreater(len(state.keys()), 1)
+
+        another_state = osutil.DefaultOSUtil().get_NIC_state()
+        name = list(another_state.keys())[0]
+        another_state[name].add_ipv4("xyzzy")
+        self.assertNotEqual(state, another_state)
 
 
 if __name__ == '__main__':

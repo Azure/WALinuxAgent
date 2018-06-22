@@ -61,3 +61,35 @@ class RouteEntry(object):
     def __repr__(self):
         return 'RouteEntry("{0}", "{1}", "{2}", "{3}", "{4:#04x}", "{5}")'\
             .format(self.interface, self.destination, self.gateway, self.mask, self.flags, self.metric)
+
+
+class NetworkInterfaceCard:
+    def __init__(self, name, link_info):
+        self.name = name
+        self.ipv4 = set()
+        self.ipv6 = set()
+        self.link = link_info
+
+    def add_ipv4(self, info):
+        self.ipv4.add(info)
+
+    def add_ipv6(self, info):
+        self.ipv6.add(info)
+
+    def __eq__(self, other):
+        return self.link == other.link and \
+               self.ipv4 == other.ipv4 and \
+               self.ipv6 == other.ipv6
+
+    @staticmethod
+    def _json_array(items):
+        return "[{0}]".format(",".join(['"{0}"'.format(x) for x in sorted(items)]))
+
+    def __str__(self):
+        entries = ['"name": "{0}"'.format(self.name),
+                   '"link": "{0}"'.format(self.link)]
+        if len(self.ipv4) > 0:
+            entries.append('"ipv4": {0}'.format(self._json_array(self.ipv4)))
+        if len(self.ipv6) > 0:
+            entries.append('"ipv6": {0}'.format(self._json_array(self.ipv6)))
+        return "{{ {0} }}".format(", ".join(entries))
