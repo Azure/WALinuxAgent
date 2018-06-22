@@ -83,7 +83,7 @@ class NetworkInterfaceCard:
 
     @staticmethod
     def _json_string_or_array(items):
-        quoted_values = ['"{0}"'.format(x) for x in items]
+        quoted_values = ['"{0}"'.format(x) for x in sorted(items)]
         contents = ",".join(quoted_values)
         if len(items) == 1:
             return contents
@@ -92,7 +92,7 @@ class NetworkInterfaceCard:
 
     def __str__(self):
         entries = ['"name": "{0}"'.format(self.name),
-                   '"link": "{1}"'.format(self.link)]
+                   '"link": "{0}"'.format(self.link)]
         if len(self.ipv4) > 0:
             entries.append('"ipv4": {0}'.format(self._json_string_or_array(self.ipv4)))
         if len(self.ipv6) > 0:
