@@ -22,7 +22,6 @@ import datetime
 import errno
 import fcntl
 import glob
-import hashlib
 import multiprocessing
 import os
 import platform
@@ -1303,4 +1302,4 @@ class DefaultOSUtil(object):
                     handler(state[interface_name], result.group(2))
                 else:
                     logger.periodic(logger.EVERY_DAY,
-                                    "Interface {0} has {2} but no link state".format(interface_name, description))
+                                    "Interface {0} has {1} but no link state".format(interface_name, description))

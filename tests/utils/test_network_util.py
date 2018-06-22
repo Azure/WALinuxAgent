@@ -15,15 +15,8 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-import errno
-from socket import htonl
-
-
-import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.networkutil as networkutil
 
-
-from azurelinuxagent.common.future import ustr
 from tests.tools import *
 
 

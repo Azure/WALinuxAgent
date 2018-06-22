@@ -854,5 +854,6 @@ Chain OUTPUT (policy ACCEPT 104 packets, 43628 bytes)
         state = osutil.DefaultOSUtil().get_NIC_state()
         self.assertGreater(len(state.keys()), 1)
 
+
 if __name__ == '__main__':
     unittest.main()
