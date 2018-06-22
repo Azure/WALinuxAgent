@@ -22,6 +22,7 @@ import glob
 import random
 import string
 import subprocess
+import sys
 import tempfile
 import uuid
 import unittest
@@ -34,6 +35,11 @@ from azurelinuxagent.common.exception import CryptError
 from azurelinuxagent.common.version import PY_VERSION_MAJOR
 from tests.tools import *
 from subprocess import CalledProcessError
+
+
+def is_python_version_26():
+    return sys.version_info.major == 2 and sys.version_info.minor == 6
+
 
 class TestCryptoUtilOperations(AgentTestCase):
     def test_decrypt_encrypted_text(self):
@@ -52,7 +58,7 @@ class TestCryptoUtilOperations(AgentTestCase):
         crypto = CryptUtil(conf.get_openssl_cmd())
         self.assertRaises(CryptError, crypto.decrypt_secret, encrypted_string, "abc" + prv_key)
 
-    @unittest.skip("Disabled due to OpenSSLBug")
+    @skip_if_predicate_true(is_python_version_26, "Disabled on Python 2.6")
     def test_decrypt_encrypted_text_wrong_private_key(self):
         encrypted_string = load_data("wire/encrypted.enc")
         prv_key = os.path.join(self.tmp_dir, "wrong.pem")
@@ -68,6 +74,7 @@ class TestCryptoUtilOperations(AgentTestCase):
             c.write(load_data("wire/sample.pem"))
         crypto = CryptUtil(conf.get_openssl_cmd())
         self.assertRaises(CryptError, crypto.decrypt_secret, encrypted_string, prv_key)
+
 
 if __name__ == '__main__':
     unittest.main()
