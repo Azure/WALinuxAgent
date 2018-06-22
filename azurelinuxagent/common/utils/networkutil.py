@@ -82,19 +82,14 @@ class NetworkInterfaceCard:
                self.ipv6 == other.ipv6
 
     @staticmethod
-    def _json_string_or_array(items):
-        quoted_values = ['"{0}"'.format(x) for x in sorted(items)]
-        contents = ",".join(quoted_values)
-        if len(items) == 1:
-            return contents
-        else:
-            return "[{0}]".format(contents)
+    def _json_array(items):
+        return "[{0}]".format(",".join(['"{0}"'.format(x) for x in sorted(items)]))
 
     def __str__(self):
         entries = ['"name": "{0}"'.format(self.name),
                    '"link": "{0}"'.format(self.link)]
         if len(self.ipv4) > 0:
-            entries.append('"ipv4": {0}'.format(self._json_string_or_array(self.ipv4)))
+            entries.append('"ipv4": {0}'.format(self._json_array(self.ipv4)))
         if len(self.ipv6) > 0:
-            entries.append('"ipv6": {0}'.format(self._json_string_or_array(self.ipv6)))
+            entries.append('"ipv6": {0}'.format(self._json_array(self.ipv6)))
         return "{{ {0} }}".format(", ".join(entries))

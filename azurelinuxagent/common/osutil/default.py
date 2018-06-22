@@ -1265,14 +1265,14 @@ class DefaultOSUtil(object):
                 name = result.group(1)
                 state[name] = NetworkInterfaceCard(name, result.group(2))
 
-        self._alter_nic_state(state, "ip -4 -a -d -o address", NetworkInterfaceCard.add_ipv4, "an IPv4 address")
+        self._update_nic_state(state, "ip -4 -a -d -o address", NetworkInterfaceCard.add_ipv4, "an IPv4 address")
         """
         1: lo    inet 127.0.0.1/8 scope host lo\       valid_lft forever preferred_lft forever
         2: eth0    inet 10.145.187.220/26 brd 10.145.187.255 scope global eth0\       valid_lft forever preferred_lft forever
         3: docker0    inet 192.168.43.1/24 brd 192.168.43.255 scope global docker0\       valid_lft forever preferred_lft forever
         """
 
-        self._alter_nic_state(state, "ip -6 -a -d -o address", NetworkInterfaceCard.add_ipv6, "an IPv6 address")
+        self._update_nic_state(state, "ip -6 -a -d -o address", NetworkInterfaceCard.add_ipv6, "an IPv6 address")
         """
         1: lo    inet6 ::1/128 scope host \       valid_lft forever preferred_lft forever
         2: eth0    inet6 fe80::20d:3aff:fe30:c35a/64 scope link \       valid_lft forever preferred_lft forever
@@ -1280,7 +1280,7 @@ class DefaultOSUtil(object):
 
         return state
 
-    def _alter_nic_state(self, state, ip_command, handler, description):
+    def _update_nic_state(self, state, ip_command, handler, description):
         """
         Update the state of NICs based on the output of a specified ip subcommand.
 

@@ -44,14 +44,14 @@ class TestNetworkOperations(AgentTestCase):
     def test_nic_ipv4(self):
         nic = networkutil.NetworkInterfaceCard("test0", "link info")
         nic.add_ipv4("ipv4-1")
-        self.assertEqual(str(nic), '{ "name": "test0", "link": "link info", "ipv4": "ipv4-1" }')
+        self.assertEqual(str(nic), '{ "name": "test0", "link": "link info", "ipv4": ["ipv4-1"] }')
         nic.add_ipv4("ipv4-2")
         self.assertEqual(str(nic), '{ "name": "test0", "link": "link info", "ipv4": ["ipv4-1","ipv4-2"] }')
 
     def test_nic_ipv6(self):
         nic = networkutil.NetworkInterfaceCard("test0", "link info")
         nic.add_ipv6("ipv6-1")
-        self.assertEqual(str(nic), '{ "name": "test0", "link": "link info", "ipv6": "ipv6-1" }')
+        self.assertEqual(str(nic), '{ "name": "test0", "link": "link info", "ipv6": ["ipv6-1"] }')
         nic.add_ipv6("ipv6-2")
         self.assertEqual(str(nic), '{ "name": "test0", "link": "link info", "ipv6": ["ipv6-1","ipv6-2"] }')
 
@@ -59,4 +59,4 @@ class TestNetworkOperations(AgentTestCase):
         nic = networkutil.NetworkInterfaceCard("test0", "link INFO")
         nic.add_ipv6("ipv6-1")
         nic.add_ipv4("ipv4-1")
-        self.assertEqual(str(nic), '{ "name": "test0", "link": "link INFO", "ipv4": "ipv4-1", "ipv6": "ipv6-1" }')
+        self.assertEqual(str(nic), '{ "name": "test0", "link": "link INFO", "ipv4": ["ipv4-1"], "ipv6": ["ipv6-1"] }')
