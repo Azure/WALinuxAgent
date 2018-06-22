@@ -434,6 +434,6 @@ class MonitorHandler(object):
 
         nic_state = self.osutil.get_NIC_state()
         if nic_state != self.last_nic_state:
-            description = "Initial" if self.last_nic_state is {} else "Updated"
+            description = "Initial" if self.last_nic_state == {} else "Updated"
             logger.info("{0} NIC state: [{1}]".format(description, ", ".join(map(str, nic_state.values()))))
             self.last_nic_state = nic_state

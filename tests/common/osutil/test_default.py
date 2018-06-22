@@ -853,7 +853,6 @@ Chain OUTPUT (policy ACCEPT 104 packets, 43628 bytes)
     def test_get_NIC_state(self):
         state = osutil.DefaultOSUtil().get_NIC_state()
         self.assertNotEqual(state, {})
-        self.assertFalse(state is {})
         self.assertGreater(len(state.keys()), 1)
 
         another_state = osutil.DefaultOSUtil().get_NIC_state()
