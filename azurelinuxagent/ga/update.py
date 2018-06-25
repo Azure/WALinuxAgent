@@ -305,21 +305,20 @@ class UpdateHandler(object):
 
                 if last_etag != exthandlers_handler.last_etag:
                     self._ensure_readonly_files()
+                    duration = elapsed_milliseconds(utc_start)
+                    logger.info('ProcessGoalState completed [incarnation {0}; {1} ms]',
+                                exthandlers_handler.last_etag,
+                                duration)
                     add_event(
                         AGENT_NAME,
-                        version=CURRENT_VERSION,
                         op=WALAEventOperation.ProcessGoalState,
-                        is_success=True,
-                        duration=elapsed_milliseconds(utc_start),
-                        message="Incarnation {0}".format(
-                                            exthandlers_handler.last_etag),
-                        log_event=True)
+                        duration=duration,
+                        message="Incarnation {0}".format(exthandlers_handler.last_etag))
 
                 time.sleep(GOAL_STATE_INTERVAL)
 
         except Exception as e:
-            msg = u"Agent {0} failed with exception: {1}".format(
-                CURRENT_AGENT, ustr(e))
+            msg = u"Agent {0} failed with exception: {1}".format(CURRENT_AGENT, ustr(e))
             self._set_sentinel(msg=msg)
             logger.warn(msg)
             logger.warn(traceback.format_exc())
