@@ -22,7 +22,6 @@ import datetime
 import errno
 import fcntl
 import glob
-import hashlib
 import multiprocessing
 import os
 import platform
@@ -37,7 +36,6 @@ import time
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.utils.fileutil as fileutil
-import azurelinuxagent.common.utils.networkutil as networkutil
 import azurelinuxagent.common.utils.shellutil as shellutil
 import azurelinuxagent.common.utils.textutil as textutil
 
@@ -45,6 +43,7 @@ from azurelinuxagent.common.exception import OSUtilError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
+from azurelinuxagent.common.utils.networkutil import RouteEntry, NetworkInterfaceCard
 
 from pwd import getpwall
 
@@ -94,6 +93,7 @@ IOCTL_SIOCGIFFLAGS = 0x8913
 IOCTL_SIOCGIFHWADDR = 0x8927
 IFNAMSIZ = 16
 
+IP_COMMAND_OUTPUT = re.compile('^\d+:\s+(\w+):\s+(.*)$')
 
 class DefaultOSUtil(object):
     def __init__(self):
@@ -769,7 +769,7 @@ class DefaultOSUtil(object):
         Construct a list of network route entries
         :param list(str) proc_net_route: Route table lines, including headers, containing at least one route
         :return: List of network route objects
-        :rtype: list(networkutil.RouteEntry)
+        :rtype: list(RouteEntry)
         """
         idx = 0
         column_index = {}
@@ -793,7 +793,7 @@ class DefaultOSUtil(object):
         for entry in proc_net_route[1:]:
             route = entry.split("\t")
             if len(route) > 0:
-                route_obj = networkutil.RouteEntry(route[idx_iface], route[idx_dest], route[idx_gw], route[idx_mask],
+                route_obj = RouteEntry(route[idx_iface], route[idx_dest], route[idx_gw], route[idx_mask],
                                                    route[idx_flags], route[idx_metric])
                 route_list.append(route_obj)
         return route_list
@@ -820,7 +820,7 @@ class DefaultOSUtil(object):
 
         :param list(str) route_table: List of text entries from route table, including headers
         :return: a list of network routes
-        :rtype: list(networkutil.RouteEntry)
+        :rtype: list(RouteEntry)
         """
         route_list = []
         count = len(route_table)
@@ -1238,3 +1238,68 @@ class DefaultOSUtil(object):
                     system_cpu = sum(int(i) for i in line.split()[1:7])
                     break
         return system_cpu
+
+    def get_NIC_state(self):
+        """
+        Capture NIC state (IPv4 and IPv6 addresses plus link state).
+
+        :return: Dictionary of NIC state objects, with the NIC name as key
+        :rtype: dict(str,NetworkInformationCard)
+        """
+        state = {}
+
+        status, output = shellutil.run_get_output("ip -a -d -o link")
+        """
+        1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN mode DEFAULT group default qlen 1000\    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00 promiscuity 0 addrgenmode eui64
+        2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP mode DEFAULT group default qlen 1000\    link/ether 00:0d:3a:30:c3:5a brd ff:ff:ff:ff:ff:ff promiscuity 0 addrgenmode eui64
+        3: docker0: <NO-CARRIER,BROADCAST,MULTICAST,UP> mtu 1500 qdisc noqueue state DOWN mode DEFAULT group default \    link/ether 02:42:b5:d5:00:1d brd ff:ff:ff:ff:ff:ff promiscuity 0 \    bridge forward_delay 1500 hello_time 200 max_age 2000 ageing_time 30000 stp_state 0 priority 32768 vlan_filtering 0 vlan_protocol 802.1Q addrgenmode eui64
+
+        """
+        if status != 0:
+            logger.periodic(logger.EVERY_DAY, "Failed to fetch NIC link info; status {0}".format(status))
+            return {}
+
+        for entry in output.splitlines():
+            result = IP_COMMAND_OUTPUT.match(entry)
+            if result:
+                name = result.group(1)
+                state[name] = NetworkInterfaceCard(name, result.group(2))
+
+        self._update_nic_state(state, "ip -4 -a -d -o address", NetworkInterfaceCard.add_ipv4, "an IPv4 address")
+        """
+        1: lo    inet 127.0.0.1/8 scope host lo\       valid_lft forever preferred_lft forever
+        2: eth0    inet 10.145.187.220/26 brd 10.145.187.255 scope global eth0\       valid_lft forever preferred_lft forever
+        3: docker0    inet 192.168.43.1/24 brd 192.168.43.255 scope global docker0\       valid_lft forever preferred_lft forever
+        """
+
+        self._update_nic_state(state, "ip -6 -a -d -o address", NetworkInterfaceCard.add_ipv6, "an IPv6 address")
+        """
+        1: lo    inet6 ::1/128 scope host \       valid_lft forever preferred_lft forever
+        2: eth0    inet6 fe80::20d:3aff:fe30:c35a/64 scope link \       valid_lft forever preferred_lft forever
+        """
+
+        return state
+
+    def _update_nic_state(self, state, ip_command, handler, description):
+        """
+        Update the state of NICs based on the output of a specified ip subcommand.
+
+        :param dict(str, NetworkInterfaceCard) state: Dictionary of NIC state objects
+        :param str ip_command: The ip command to run
+        :param handler: A method on the NetworkInterfaceCard class
+        :param str description: Description of the particular information being added to the state
+        """
+        status, output = shellutil.run_get_output(ip_command)
+        if status != 0:
+            logger.periodic(logger.EVERY_DAY, "Command '{0} returned status {1}".format(ip_command, status))
+            return
+
+        for entry in output.splitlines():
+            result = IP_COMMAND_OUTPUT.match(entry)
+            if result:
+                interface_name = result.group(1)
+                if interface_name in state:
+                    handler(state[interface_name], result.group(2))
+                else:
+                    logger.periodic(logger.EVERY_DAY,
+                                    "Interface {0} has {1} but no link state".format(interface_name, description))
