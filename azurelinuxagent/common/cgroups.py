@@ -20,6 +20,7 @@ import re
 import time
 
 from azurelinuxagent.common import logger
+from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
@@ -654,13 +655,12 @@ class CGroups(object):
             result = values[0]
         except IndexError:
             parameter_filename = self._get_cgroup_file(hierarchy, parameter_name)
-            logger.periodic(logger.EVERY_DAY, "File {0} is empty but should not be".format(parameter_filename))
+            logger.error("File {0} is empty but should not be".format(parameter_filename))
         except CGroupsException as e:
-            logger.periodic(logger.EVERY_DAY, "{0}".format(e))
+            logger.error(ustr(e))
         except Exception as e:
             parameter_filename = self._get_cgroup_file(hierarchy, parameter_name)
-            logger.periodic(logger.EVERY_DAY, "Exception while attempting to read {0}: {1}".format(
-                parameter_filename, e))
+            logger.error("Exception while attempting to read {0}: {1}".format(parameter_filename, ustr(e)))
         return result
 
     def set_cpu_limit(self, limit=None):

@@ -7,7 +7,7 @@ try:
     import distro
 except Exception:
     pass
-    
+
 """
 Add alias for python2 and python3 libs and functions.
 """
@@ -45,7 +45,7 @@ def get_linux_distribution(get_full_name, supported_dists):
                 supported_dists=supported
             )
         )
-        if not osinfo or osinfo == ['','','']:
+        if not osinfo or osinfo == ['', '', '']:
             return get_linux_distribution_from_distro(get_full_name)
         full_name = platform.linux_distribution()[0].strip()
         osinfo.append(full_name)
@@ -53,6 +53,7 @@ def get_linux_distribution(get_full_name, supported_dists):
         return get_linux_distribution_from_distro(get_full_name)
 
     return osinfo
+
 
 def get_linux_distribution_from_distro(get_full_name):
     """Get the distribution information from the distro Python module."""
@@ -67,8 +68,3 @@ def get_linux_distribution_from_distro(get_full_name):
     full_name = distro.linux_distribution()[0].strip()
     osinfo.append(full_name)
     return osinfo
-
-
-
-
-    

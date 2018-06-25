@@ -786,7 +786,7 @@ class DefaultOSUtil(object):
             idx_mask = column_index["Mask"]
         except KeyError:
             msg = "/proc/net/route is missing key information; headers are [{0}]".format(header_line)
-            logger.periodic(logger.EVERY_HALF_DAY, msg)
+            logger.error(msg)
             return []
 
         route_list = []
@@ -810,7 +810,7 @@ class DefaultOSUtil(object):
             with open('/proc/net/route') as routing_table:
                 return list(map(str.strip, routing_table.readlines()))
         except OSError as e:
-            logger.periodic(logger.EVERY_HALF_DAY, "Can't read route table. {0}", e)
+            logger.error("Cannot read route table [{0}]", ustr(e))
 
         return []
 
@@ -826,9 +826,9 @@ class DefaultOSUtil(object):
         count = len(route_table)
 
         if count < 1:
-            logger.periodic(logger.EVERY_HALF_DAY, "/proc/net/route is missing headers")
+            logger.error("/proc/net/route is missing headers")
         elif count == 1:
-            logger.periodic(logger.EVERY_HALF_DAY, "/proc/net/route contains no routes")
+            logger.error("/proc/net/route contains no routes")
         else:
             route_list = DefaultOSUtil._build_route_list(route_table)
         return route_list
@@ -1248,7 +1248,7 @@ class DefaultOSUtil(object):
         """
         state = {}
 
-        status, output = shellutil.run_get_output("ip -a -d -o link")
+        status, output = shellutil.run_get_output("ip -a -d -o link", chk_err=False, log_cmd=False)
         """
         1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN mode DEFAULT group default qlen 1000\    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00 promiscuity 0 addrgenmode eui64
         2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP mode DEFAULT group default qlen 1000\    link/ether 00:0d:3a:30:c3:5a brd ff:ff:ff:ff:ff:ff promiscuity 0 addrgenmode eui64
@@ -1256,7 +1256,7 @@ class DefaultOSUtil(object):
 
         """
         if status != 0:
-            logger.periodic(logger.EVERY_DAY, "Failed to fetch NIC link info; status {0}".format(status))
+            logger.verbose("Could not fetch NIC link info; status {0}, {1}".format(status, output))
             return {}
 
         for entry in output.splitlines():
@@ -1289,9 +1289,8 @@ class DefaultOSUtil(object):
         :param handler: A method on the NetworkInterfaceCard class
         :param str description: Description of the particular information being added to the state
         """
-        status, output = shellutil.run_get_output(ip_command)
+        status, output = shellutil.run_get_output(ip_command, chk_err=True)
         if status != 0:
-            logger.periodic(logger.EVERY_DAY, "Command '{0} returned status {1}".format(ip_command, status))
             return
 
         for entry in output.splitlines():
@@ -1301,5 +1300,4 @@ class DefaultOSUtil(object):
                 if interface_name in state:
                     handler(state[interface_name], result.group(2))
                 else:
-                    logger.periodic(logger.EVERY_DAY,
-                                    "Interface {0} has {1} but no link state".format(interface_name, description))
+                    logger.error("Interface {0} has {1} but no link state".format(interface_name, description))
