@@ -1239,7 +1239,7 @@ class DefaultOSUtil(object):
                     break
         return system_cpu
 
-    def get_NIC_state(self):
+    def get_nic_state(self):
         """
         Capture NIC state (IPv4 and IPv6 addresses plus link state).
 

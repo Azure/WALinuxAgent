@@ -432,7 +432,7 @@ class MonitorHandler(object):
             route_list = self.osutil.get_list_of_routes(raw_route_list)
             logger.info("Route table: [{0}]".format(",".join(map(networkutil.RouteEntry.to_json, route_list))))
 
-        nic_state = self.osutil.get_NIC_state()
+        nic_state = self.osutil.get_nic_state()
         if nic_state != self.last_nic_state:
             description = "Initial" if self.last_nic_state == {} else "Updated"
             logger.info("{0} NIC state: [{1}]".format(description, ", ".join(map(str, nic_state.values()))))

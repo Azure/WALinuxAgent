@@ -855,12 +855,12 @@ Chain OUTPUT (policy ACCEPT 104 packets, 43628 bytes)
         self.assertTrue(mock_output.call_count == 1)
 
     @skip_if_predicate_true(running_under_travis, "The ip command isn't available in Travis")
-    def test_get_NIC_state(self):
-        state = osutil.DefaultOSUtil().get_NIC_state()
+    def test_get_nic_state(self):
+        state = osutil.DefaultOSUtil().get_nic_state()
         self.assertNotEqual(state, {})
         self.assertGreater(len(state.keys()), 1)
 
-        another_state = osutil.DefaultOSUtil().get_NIC_state()
+        another_state = osutil.DefaultOSUtil().get_nic_state()
         name = list(another_state.keys())[0]
         another_state[name].add_ipv4("xyzzy")
         self.assertNotEqual(state, another_state)
