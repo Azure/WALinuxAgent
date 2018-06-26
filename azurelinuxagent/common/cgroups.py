@@ -631,6 +631,10 @@ class CGroups(object):
         """
         if hierarchy in self.cgroups:
             parameter_file = self._get_cgroup_file(hierarchy, file_name)
+
+            if not os.path.exists(parameter_file):
+                raise IOError(errno.ENOENT, "File not found", parameter_file)
+
             try:
                 return fileutil.read_file(parameter_file)
             except Exception:
@@ -653,6 +657,9 @@ class CGroups(object):
         try:
             values = self.get_file_contents(hierarchy, parameter_name).splitlines()
             result = values[0]
+        except IOError:
+            # ignore if the file does not exist yet
+            pass
         except IndexError:
             parameter_filename = self._get_cgroup_file(hierarchy, parameter_name)
             logger.error("File {0} is empty but should not be".format(parameter_filename))
