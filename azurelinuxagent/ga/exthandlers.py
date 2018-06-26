@@ -550,10 +550,11 @@ class ExtHandlerInstance(object):
 
         # Note if the selected package is different than that installed
         if installed_pkg is None \
-                or FlexibleVersion(self.pkg.version) != FlexibleVersion(installed_pkg.version):
+                or (self.pkg is not None and FlexibleVersion(self.pkg.version) != FlexibleVersion(installed_pkg.version)):
             self.is_upgrade = True
 
-        self.logger.verbose("Use version: {0}", self.pkg.version)
+        if self.pkg is not None:
+            self.logger.verbose("Use version: {0}", self.pkg.version)
         self.set_logger()
         return self.pkg
 

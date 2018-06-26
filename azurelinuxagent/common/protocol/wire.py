@@ -328,7 +328,8 @@ def ext_handler_status_to_v1(handler_status, ext_statuses, timestamp):
         'handlerVersion': handler_status.version,
         'handlerName': handler_status.name,
         'status': handler_status.status,
-        'code': handler_status.code
+        'code': handler_status.code,
+        'useExactVersion': True
     }
     if handler_status.message is not None:
         v1_handler_status["formattedMessage"] = {
