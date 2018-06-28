@@ -414,8 +414,7 @@ class MonitorHandler(object):
 
             # Look for extension cgroups we're not already tracking and track them
             try:
-                ext_handlers_list = self.protocol.client.get_ext_conf().ext_handlers
-                CGroupsTelemetry.update_tracked(ext_handlers_list.extHandlers)
+                CGroupsTelemetry.update_tracked(self.protocol.client.get_current_handlers())
             except Exception as e:
                 logger.warn("Monitor: updating tracked extensions raised {0}: {1}", e, traceback.format_exc())
 

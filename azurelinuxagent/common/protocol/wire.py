@@ -837,6 +837,22 @@ class WireClient(object):
             return None
         return self.certs
 
+    def get_current_handlers(self):
+        handler_list = list()
+        try:
+            incarnation = self.fetch_cache(os.path.join(conf.get_lib_dir(),
+                                                        INCARNATION_FILE_NAME))
+            ext_conf = ExtensionsConfig(self.fetch_cache(os.path.join(conf.get_lib_dir(),
+                                                                      EXT_CONF_FILE_NAME.format(incarnation))))
+            handler_list = ext_conf.ext_handlers.extHandlers
+        except ProtocolError as pe:
+            # cache file is missing, nothing to do
+            logger.verbose(ustr(pe))
+        except Exception as e:
+            logger.error("Could not obtain current handlers: {0}", ustr(e))
+
+        return handler_list
+
     def get_ext_conf(self):
         if self.ext_conf is None:
             goal_state = self.get_goal_state()
