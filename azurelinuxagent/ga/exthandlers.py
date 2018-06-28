@@ -352,19 +352,24 @@ class ExtHandlersHandler(object):
             else:
                 message = u"Unknown ext handler state:{0}".format(state)
                 raise ExtensionError(message)
+        except ExtensionError as e:
+            self.handle_handle_ext_handler_error(ext_handler_i, e, e.code)
         except Exception as e:
-            msg = ustr(e)
-            ext_handler_i.set_handler_status(message=msg, code=-1)
+            self.handle_handle_ext_handler_error(ext_handler_i, e)
 
-            self.get_artifact_error_state.incr()
-            if self.get_artifact_error_state.is_triggered():
-                report_event(op=WALAEventOperation.GetArtifactExtended,
-                             message="Failed to get artifact for over "
-                                     "{0}: {1}".format(self.get_artifact_error_state.min_timedelta, msg),
-                             is_success=False)
-                self.get_artifact_error_state.reset()
-            else:
-                ext_handler_i.logger.warn(msg)
+    def handle_handle_ext_handler_error(self, ext_handler_i, e, code=-1):
+        msg = ustr(e)
+        ext_handler_i.set_handler_status(message=msg, code=code)
+
+        self.get_artifact_error_state.incr()
+        if self.get_artifact_error_state.is_triggered():
+            report_event(op=WALAEventOperation.GetArtifactExtended,
+                         message="Failed to get artifact for over "
+                                 "{0}: {1}".format(self.get_artifact_error_state.min_timedelta, msg),
+                         is_success=False)
+            self.get_artifact_error_state.reset()
+        else:
+            ext_handler_i.logger.warn(msg)
     
     def handle_enable(self, ext_handler_i):
         self.log_process = True
@@ -719,7 +724,7 @@ class ExtHandlerInstance(object):
         man = self.load_manifest()
         enable_cmd = man.get_enable_command()
         self.logger.info("Enable extension [{0}]".format(enable_cmd))
-        self.launch_command(enable_cmd, timeout=300)
+        self.launch_command(enable_cmd, timeout=300, extension_error_code=1009)
         self.set_handler_state(ExtHandlerState.Enabled)
         self.set_handler_status(status="Ready", message="Plugin enabled")
 
@@ -728,7 +733,8 @@ class ExtHandlerInstance(object):
         man = self.load_manifest()
         disable_cmd = man.get_disable_command()
         self.logger.info("Disable extension [{0}]".format(disable_cmd))
-        self.launch_command(disable_cmd, timeout=900)
+        self.launch_command(disable_cmd, timeout=900,
+                            extension_error_code=1010)
         self.set_handler_state(ExtHandlerState.Installed)
         self.set_handler_status(status="NotReady", message="Plugin disabled")
 
@@ -737,7 +743,7 @@ class ExtHandlerInstance(object):
         install_cmd = man.get_install_command()
         self.logger.info("Install extension [{0}]".format(install_cmd))
         self.set_operation(WALAEventOperation.Install)
-        self.launch_command(install_cmd, timeout=900)
+        self.launch_command(install_cmd, timeout=900, extension_error_code=1007)
         self.set_handler_state(ExtHandlerState.Installed)
 
     def uninstall(self):
@@ -767,7 +773,8 @@ class ExtHandlerInstance(object):
         man = self.load_manifest()
         update_cmd = man.get_update_command()
         self.logger.info("Update extension [{0}]".format(update_cmd))
-        self.launch_command(update_cmd, timeout=900)
+        self.launch_command(update_cmd, timeout=900,
+                            extension_error_code=1008)
     
     def update_with_install(self):
         man = self.load_manifest()
@@ -880,7 +887,7 @@ class ExtHandlerInstance(object):
         last_update = int(time.time() - os.stat(heartbeat_file).st_mtime)
         return last_update <= 600
 
-    def launch_command(self, cmd, timeout=300):
+    def launch_command(self, cmd, timeout=300, extension_error_code=-1):
         begin_utc = datetime.datetime.utcnow()
         self.logger.verbose("Launch command: [{0}]", cmd)
         base_dir = self.get_base_dir()
@@ -909,7 +916,8 @@ class ExtHandlerInstance(object):
                                        env=os.environ,
                                        preexec_fn=pre_exec_function)
         except OSError as e:
-            raise ExtensionError("Failed to launch '{0}': {1}".format(full_path, e.strerror))
+            raise ExtensionError("Failed to launch '{0}': {1}".format(full_path, e.strerror),
+                                 code=extension_error_code)
 
         cg = CGroups.for_extension(self.ext_handler.name)
         CGroupsTelemetry.track_extension(self.ext_handler.name, cg)
@@ -917,9 +925,11 @@ class ExtHandlerInstance(object):
 
         ret = process.poll()
         if ret is None:
-            raise ExtensionError("Process {0} was not terminated: {1}\n{2}".format(process.pid, cmd, msg))
+            raise ExtensionError("Process {0} was not terminated: {1}\n{2}".format(process.pid, cmd, msg),
+                                 code=extension_error_code)
         if ret != 0:
-            raise ExtensionError("Non-zero exit code: {0}, {1}\n{2}".format(ret, cmd, msg))
+            raise ExtensionError("Non-zero exit code: {0}, {1}\n{2}".format(ret, cmd, msg),
+                                 code=extension_error_code)
 
         duration = elapsed_milliseconds(begin_utc)
         self.report_event(message="{0}\n{1}".format(cmd, msg), duration=duration, log_event=False)
