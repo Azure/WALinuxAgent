@@ -1,5 +1,8 @@
 ## Microsoft Azure Linux Agent README
 
+### Build status
+![Travis](https://dcrbadges.blob.core.windows.net/scenarios/Canonical_UbuntuServer_14.04.5-LTS__agent--disks--udev.svg)
+
 ### INTRODUCTION
 
 The Microsoft Azure Linux Agent (waagent) manages Linux & BSD provisioning,
