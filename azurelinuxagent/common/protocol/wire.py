@@ -1021,14 +1021,15 @@ class WireClient(object):
                 return
             except Exception as e:
                 # for all other errors, fall back to direct
-                pass
+                msg = "Falling back to direct upload: {0}".format(ustr(e))
+                self.report_status_event(msg, is_success=True)
 
-            self.report_status_event("direct")
             if self.status_blob.upload(blob_uri):
                 return
 
         except Exception as e:
-            self.report_status_event("Exception uploading status blob: {0}", ustr(e))
+            msg = "Exception uploading status blob: {0}".format(ustr(e))
+            self.report_status_event(msg, is_success=False)
 
         raise ProtocolError("Failed to upload status blob via either channel")
 
@@ -1121,15 +1122,14 @@ class WireClient(object):
             if len(buf[provider_id]) > 0:
                 self.send_event(provider_id, buf[provider_id])
 
-    def report_status_event(self, message, *args):
+    def report_status_event(self, message, is_success):
         from azurelinuxagent.common.event import report_event, \
                 WALAEventOperation
 
-        message = message.format(*args)
-        logger.warn(message)
         report_event(op=WALAEventOperation.ReportStatus,
-                     is_success=False,
-                     message=message)
+                     is_success=is_success,
+                     message=message,
+                     log_event=not is_success)
 
     def get_header(self):
         return {

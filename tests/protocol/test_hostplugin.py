@@ -325,8 +325,8 @@ class TestHostPlugin(AgentTestCase):
                     # The agent never logs telemetry event for direct fallback
                     self.assertEqual(1, patch_add_event.call_count)
                     self.assertEqual('ReportStatus', patch_add_event.call_args[1]['op'])
-                    self.assertEqual('direct', patch_add_event.call_args[1]['message'])
-                    self.assertEqual(False, patch_add_event.call_args[1]['is_success'])
+                    self.assertTrue('Falling back to direct' in patch_add_event.call_args[1]['message'])
+                    self.assertEqual(True, patch_add_event.call_args[1]['is_success'])
 
     def test_validate_http_request(self):
         """Validate correct set of data is sent to HostGAPlugin when reporting VM status"""
