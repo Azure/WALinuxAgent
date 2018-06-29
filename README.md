@@ -4,8 +4,6 @@
 
 Each badge below represents our basic validation tests for an image, which are executed several times each day. These include provisioning, user account, disk, extension and networking scenarios.
 
-<center>
-
 Image | Status |
 ------|--------|
 Canonical UbuntuServer 14.04.5-LTS|![badge](https://dcrbadges.blob.core.windows.net/scenarios/Canonical_UbuntuServer_14.04.5-LTS__agent--bvt.svg)
@@ -23,8 +21,6 @@ OpenLogic CentOS 7.4|![badge](https://dcrbadges.blob.core.windows.net/scenarios/
 RedHat RHEL 6.9|![badge](https://dcrbadges.blob.core.windows.net/scenarios/RedHat_RHEL_6.9__agent--bvt.svg)
 RedHat RHEL 7-RAW|![badge](https://dcrbadges.blob.core.windows.net/scenarios/RedHat_RHEL_7-RAW__agent--bvt.svg)
 SUSE SLES 12-SP2|![badge](https://dcrbadges.blob.core.windows.net/scenarios/SUSE_SLES_12-SP2__agent--bvt.svg)
-
-</center>
 
 ## Introduction
 
