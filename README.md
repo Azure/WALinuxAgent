@@ -24,8 +24,8 @@ SUSE SLES 12-SP2|![badge](https://dcrbadges.blob.core.windows.net/scenarios/SUSE
 
 ## Introduction
 
-The Microsoft Azure Linux Agent (waagent) manages Linux and FreeBSD provisioning and VM interaction with the Azure Fabric Controller. It provides the following
-functionality for Linux and FreeBSD IaaS deployments:
+The Microsoft Azure Linux Agent (waagent) manages Linux provisioning and VM interaction with the Azure Fabric Controller. It provides the following
+functionality for Linux IaaS deployments:
 
 * Image Provisioning
   * Creation of a user account
