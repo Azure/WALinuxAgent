@@ -297,11 +297,7 @@ class ImdsClient(object):
 
         # ensure all expected fields are present and have a value
         try:
-            self.check_field(json_data, 'compute')
-            self.check_field(json_data['compute'], 'location')
-            self.check_field(json_data['compute'], 'name')
-            self.check_field(json_data['compute'], 'subscriptionId')
-            self.check_field(json_data['compute'], 'vmSize')
+            # TODO: compute fields cannot be verified yet since we need to exclude rdfe vms (#1249)
 
             self.check_field(json_data, 'network')
             self.check_field(json_data['network'], 'interface')
