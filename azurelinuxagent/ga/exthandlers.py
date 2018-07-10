@@ -475,20 +475,20 @@ class ExtHandlersHandler(object):
             self.report_status_error_state.incr()
             message = "Failed to report vm agent status: {0}".format(e)
             add_event(AGENT_NAME,
-                version=CURRENT_VERSION,
-                op=WALAEventOperation.ExtensionProcessing,
-                is_success=False,
-                message=message)
+                      version=CURRENT_VERSION,
+                      op=WALAEventOperation.ExtensionProcessing,
+                      is_success=False,
+                      message=message)
 
         if self.report_status_error_state.is_triggered():
             message = "Failed to report vm agent status for more than {0}"\
                 .format(self.report_status_error_state.min_timedelta)
 
             add_event(AGENT_NAME,
-                version=CURRENT_VERSION,
-                op=WALAEventOperation.ReportStatusExtended,
-                is_success=False,
-                message=message)
+                      version=CURRENT_VERSION,
+                      op=WALAEventOperation.ReportStatusExtended,
+                      is_success=False,
+                      message=message)
 
             self.report_status_error_state.reset()
 
