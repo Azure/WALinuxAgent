@@ -254,11 +254,8 @@ class TestWireProtocol(AgentTestCase):
         goal_state = GoalState(WireProtocolData(DATA_FILE).goal_state)
 
         with patch.object(StatusBlob, "prepare", side_effect=Exception) as mock_prepare:
-            with patch.object(WireClient, "report_status_event") as mock_event:
-                self.assertRaises(ProtocolError, wire_protocol_client.upload_status_blob)
-
-                self.assertEqual(1, mock_prepare.call_count)
-                self.assertEqual(1, mock_event.call_count)
+            self.assertRaises(ProtocolError, wire_protocol_client.upload_status_blob)
+            self.assertEqual(1, mock_prepare.call_count)
 
     def test_get_in_vm_artifacts_profile_blob_not_available(self, *args):
         wire_protocol_client = WireProtocol(wireserver_url).client
