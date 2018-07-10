@@ -275,11 +275,7 @@ class TestImds(AgentTestCase):
                                 expected_response='')
 
     def test_field_validation(self):
-        self._assert_field('compute', 'name')
-        self._assert_field('compute', 'location')
-        self._assert_field('compute', 'vmSize')
-        self._assert_field('compute', 'subscriptionId')
-        self._assert_field('compute')
+        # TODO: compute fields (#1249)
 
         self._assert_field('network', 'interface', 'ipv4', 'ipAddress', 'privateIpAddress')
         self._assert_field('network', 'interface', 'ipv4', 'ipAddress')
