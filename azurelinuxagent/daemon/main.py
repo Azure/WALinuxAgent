@@ -66,6 +66,8 @@ class DaemonHandler(object):
                     PY_VERSION_MICRO)
 
         self.check_pid()
+        self.initialize_environment()
+
         CGroups.setup()
 
         # If FIPS is enabled, set the OpenSSL environment variable
@@ -97,6 +99,12 @@ class DaemonHandler(object):
 
         fileutil.write_file(pid_file, ustr(os.getpid()))
 
+    def initialize_environment(self):
+        # Create lib dir
+        if not os.path.isdir(conf.get_lib_dir()):
+            fileutil.mkdir(conf.get_lib_dir(), mode=0o700)
+            os.chdir(conf.get_lib_dir())
+
     def daemon(self, child_args=None):
         logger.info("Run daemon")
 
@@ -106,11 +114,6 @@ class DaemonHandler(object):
         self.rdma_handler = get_rdma_handler()
         self.provision_handler = get_provision_handler()
         self.update_handler = get_update_handler()
-
-        # Create lib dir
-        if not os.path.isdir(conf.get_lib_dir()):
-            fileutil.mkdir(conf.get_lib_dir(), mode=0o700)
-            os.chdir(conf.get_lib_dir())
 
         if conf.get_detect_scvmm_env():
             self.scvmm_handler.run()
