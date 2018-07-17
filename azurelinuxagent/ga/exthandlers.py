@@ -39,7 +39,7 @@ import azurelinuxagent.common.version as version
 from azurelinuxagent.common.cgroups import CGroups, CGroupsTelemetry
 from azurelinuxagent.common.errorstate import ErrorState, ERROR_STATE_DELTA_DEFAULT, ERROR_STATE_DELTA_INSTALL
 from azurelinuxagent.common.event import add_event, WALAEventOperation, elapsed_milliseconds, report_event
-from azurelinuxagent.common.exception import ExtensionError, ProtocolError
+from azurelinuxagent.common.exception import ExtensionError, ProtocolError, ProtocolNotFoundError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.restapi import ExtHandlerStatus, \
                                                     ExtensionStatus, \
@@ -471,6 +471,10 @@ class ExtHandlersHandler(object):
             if self.log_report:
                 logger.verbose("Completed vm agent status report")
             self.report_status_error_state.reset()
+        except ProtocolNotFoundError as e:
+            self.report_status_error_state.incr()
+            message = "Failed to report vm agent status: {0}".format(e)
+            logger.verbose(message)
         except ProtocolError as e:
             self.report_status_error_state.incr()
             message = "Failed to report vm agent status: {0}".format(e)

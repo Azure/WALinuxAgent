@@ -989,7 +989,7 @@ class WireClient(object):
             ext_conf = self.get_ext_conf()
 
         if ext_conf.status_upload_blob is None:
-            raise ProtocolError("Status upload uri is missing")
+            raise ProtocolNotFoundError("Status upload uri is missing")
 
         blob_type = ext_conf.status_upload_blob_type
         if blob_type not in ["BlockBlob", "PageBlob"]:
