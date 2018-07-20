@@ -19,12 +19,66 @@ from __future__ import print_function
 
 import textwrap
 
-import mock
+import mock, platform
 
 from azurelinuxagent.common.version import set_current_agent, \
     AGENT_LONG_VERSION, AGENT_VERSION, AGENT_NAME, AGENT_NAME_PATTERN, \
-    get_f5_platform
+    get_f5_platform, get_distro
 from tests.tools import *
+
+
+def freebsd_system():
+    return ["FreeBSD"]
+
+
+def freebsd_system_release(x, y, z):
+    return "10.0"
+
+
+def openbsd_system():
+    return ["OpenBSD"]
+
+
+def openbsd_system_release(x, y, z):
+    return "20.0"
+
+
+def default_system():
+    return [""]
+
+
+def default_system_no_linux_distro():
+    return '', '', ''
+
+
+class TestAgentVersion(AgentTestCase):
+    def setUp(self):
+        AgentTestCase.setUp(self)
+        return
+
+    @mock.patch('platform.system', side_effect=freebsd_system)
+    @mock.patch('re.sub', side_effect=freebsd_system_release)
+    def test_distro_is_correct_format_when_freebsd(self, platform_system_name, mock_variable):
+        osinfo = get_distro()
+        freebsd_list = ['freebsd', "10.0", '', 'freebsd']
+        self.assertListEqual(freebsd_list, osinfo)
+        return
+
+    @mock.patch('platform.system', side_effect=openbsd_system)
+    @mock.patch('re.sub', side_effect=openbsd_system_release)
+    def test_distro_is_correct_format_when_openbsd(self, platform_system_name, mock_variable):
+        osinfo = get_distro()
+        openbsd_list = ['openbsd', "20.0", '', 'openbsd']
+        self.assertListEqual(openbsd_list, osinfo)
+        return
+
+    @mock.patch('platform.system', side_effect=default_system)
+    @mock.patch('platform.dist', side_effect=default_system_no_linux_distro)
+    def test_distro_is_correct_format_when_default_case(self, platform_system_name, default_system_no_linux):
+        osinfo = get_distro()
+        default_list = ['', '', '', '']
+        self.assertListEqual(default_list, osinfo)
+        return
 
 
 class TestCurrentAgentName(AgentTestCase):
