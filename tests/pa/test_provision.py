@@ -135,7 +135,6 @@ class TestProvision(AgentTestCase):
 
         ph.osutil = mock_osutil
         ph.protocol_util.osutil = mock_osutil
-        ph.protocol_util.get_protocol_by_file = MagicMock()
         ph.protocol_util.get_protocol = MagicMock()
 
         conf.get_dvd_mount_point = Mock(return_value=self.tmp_dir)
@@ -181,7 +180,6 @@ class TestProvision(AgentTestCase):
 
         ph.osutil = mock_osutil
         ph.protocol_util.osutil = mock_osutil
-        ph.protocol_util.get_protocol_by_file = MagicMock()
         ph.protocol_util.get_protocol = MagicMock()
 
         conf.get_dvd_mount_point = Mock(return_value=self.tmp_dir)

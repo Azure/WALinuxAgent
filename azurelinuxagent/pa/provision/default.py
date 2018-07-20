@@ -22,7 +22,9 @@ Provision handler
 import os
 import os.path
 import re
+import threading
 import time
+from multiprocessing.pool import ThreadPool
 
 from datetime import datetime
 
@@ -49,9 +51,12 @@ PROVISIONED_FILE = 'provisioned'
 
 
 class ProvisionHandler(object):
-    def __init__(self):
+    def __init__(self, protocol_util = None):
         self.osutil = get_osutil()
-        self.protocol_util = get_protocol_util()
+        if protocol_util == None:
+            self.protocol_util = get_protocol_util()
+        else:
+            self.protocol_util = protocol_util
 
     def run(self):
         if not conf.get_provision_enabled():
@@ -74,18 +79,26 @@ class ProvisionHandler(object):
                 raise ProvisionError("cloud-init appears to be running, "
                                         "this is not expected, cannot continue")
 
+            thread_pool = ThreadPool(processes = 2)
+
             logger.info("Copying ovf-env.xml")
             ovf_env = self.protocol_util.copy_ovf_env()
 
-            self.protocol_util.get_protocol_by_file()
+            self.protocol_util.get_protocol(by_file = True)
+
             self.report_not_ready("Provisioning", "Starting")
             logger.info("Starting provisioning")
 
-            self.provision(ovf_env)
+            provision_result = thread_pool.apply_async(self.provision, args = (ovf_env,))
 
-            thumbprint = self.reg_ssh_host_key()
-            self.osutil.restart_ssh_service()
+            # do this in parallel with the provision
+            reg_result = thread_pool.apply_async(self.reg_ssh_host_key)
 
+            provision_result.get()
+            thumbprint = reg_result.get()
+
+            thread_pool.apply_async(self.osutil.restart_ssh_service)
+            
             self.write_provisioned()
 
             self.report_event("Provisioning succeeded ({0}s)".format(self._get_uptime_seconds()),
@@ -154,7 +167,8 @@ class ProvisionHandler(object):
                 shellutil.run(keygen_cmd.
                               format(keypair_type,
                                      conf.get_ssh_key_private_path()))
-        return self.get_ssh_host_key_thumbprint()
+        thumbprint = self.get_ssh_host_key_thumbprint()
+        return thumbprint
 
     def get_ssh_host_key_thumbprint(self, chk_err=True):
         cmd = "ssh-keygen -lf {0}".format(conf.get_ssh_key_public_path())

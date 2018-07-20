@@ -17,7 +17,7 @@
 
 from tests.tools import *
 from azurelinuxagent.common.exception import *
-from azurelinuxagent.common.protocol import get_protocol_util, \
+from azurelinuxagent.common.protocol.util import get_protocol_util, \
                                             TAG_FILE_NAME
 
 @patch("time.sleep")
@@ -60,7 +60,7 @@ class TestProtocolUtil(AgentTestCase):
         tag_file = os.path.join(self.tmp_dir, TAG_FILE_NAME)
 
         #Test tag file doesn't exist
-        protocol_util.get_protocol_by_file()
+        protocol_util.get_protocol()
         protocol_util._detect_wire_protocol.assert_any_call()
         protocol_util._detect_metadata_protocol.assert_not_called()
 
@@ -71,7 +71,7 @@ class TestProtocolUtil(AgentTestCase):
         with open(tag_file, "w+") as tag_fd:
             tag_fd.write("")
 
-        protocol_util.get_protocol_by_file()
+        protocol_util.get_protocol(by_file=True)
         protocol_util._detect_metadata_protocol.assert_any_call()
         protocol_util._detect_wire_protocol.assert_not_called()
 

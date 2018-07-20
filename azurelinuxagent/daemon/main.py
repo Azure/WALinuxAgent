@@ -109,10 +109,16 @@ class DaemonHandler(object):
         logger.info("Run daemon")
 
         self.protocol_util = get_protocol_util()
+
+        self.provision_handler = get_provision_handler(protocol_util = self.protocol_util)
+        # start the pre-detect protocol early to save provisioning time.
+        if not self.provision_handler.is_provisioned():
+            self.protocol_util.pre_detect_async()
+
+        self.protocol_util.clear_protocol()
         self.scvmm_handler = get_scvmm_handler()
         self.resourcedisk_handler = get_resourcedisk_handler()
         self.rdma_handler = get_rdma_handler()
-        self.provision_handler = get_provision_handler()
         self.update_handler = get_update_handler()
 
         if conf.get_detect_scvmm_env():
@@ -122,9 +128,7 @@ class DaemonHandler(object):
             self.resourcedisk_handler.run()
 
         # Always redetermine the protocol start (e.g., wireserver vs.
-        # on-premise) since a VHD can move between environments        
-        self.protocol_util.clear_protocol()
-
+        # on-premise) since a VHD can move between environments
         self.provision_handler.run()
 
         # Enable RDMA, continue in errors
