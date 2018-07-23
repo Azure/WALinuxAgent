@@ -16,7 +16,7 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 #
-
+import multiprocessing
 import subprocess
 import sys
 import os
@@ -100,75 +100,57 @@ def _destroy_process(process, signal_to_send=signal.SIGKILL):
         pass    # If the process is already gone, that's fine
 
 
-def capture_from_process_modern(process, cmd, timeout):
-    try:
-        stdout, stderr = process.communicate(timeout=timeout)
-    except subprocess.TimeoutExpired:
-        # Just kill the process. The .communicate method will gather stdout/stderr, close those pipes, and reap
-        # the zombie process. That is, .communicate() does all the other stuff that _destroy_process does.
+def capture_from_process_poll(process, cmd, timeout):
+    """
+    If the process forks, we cannot capture anything we block until the process tree completes
+    """
+    retry = timeout
+    while retry > 0 and process.poll() is None:
+        time.sleep(1)
+        retry -= 1
+
+    # process did not fork, timeout expired
+    if retry == 0:
         os.killpg(os.getpgid(process.pid), signal.SIGKILL)
         stdout, stderr = process.communicate()
         msg = format_stdout_stderr(sanitize(stdout), sanitize(stderr))
         raise ExtensionError("Timeout({0}): {1}\n{2}".format(timeout, cmd, msg))
-    except OSError as e:
-        _destroy_process(process, signal.SIGKILL)
-        raise ExtensionError("Error while running '{0}': {1}".format(cmd, e.strerror))
-    except ValueError:
-        _destroy_process(process, signal.SIGKILL)
-        raise ExtensionError("Invalid timeout ({0}) specified for '{1}'".format(timeout, cmd))
-    except Exception as e:
-        _destroy_process(process, signal.SIGKILL)
-        raise ExtensionError("Exception while running '{0}': {1}".format(cmd, e))
 
-    return stdout, stderr
+    # process completed or forked
+    return_code = process.wait()
+    if return_code != 0:
+        raise ExtensionError("Non-zero exit code: {0}, {1}".format(return_code, cmd))
 
+    stderr = b''
+    stdout = b'cannot collect stdout'
 
-def capture_from_process_pre_33(process, cmd, timeout):
-    """
-    Can't use process.communicate(timeout=), so do it the hard way.
-    """
-    watcher_process_exited = 0
-    watcher_process_timed_out = 1
-
-    def kill_on_timeout(pid, watcher_timeout):
-        """
-        Check for the continued existence of pid once per second. If pid no longer exists, exit with code 0.
-        If timeout (in seconds) elapses, kill pid and exit with code 1.
-        """
-        for iteration in range(watcher_timeout):
-            time.sleep(1)
-            try:
-                os.kill(pid, 0)
-            except OSError as ex:
-                if ESRCH == ex.errno:   # Process no longer exists
-                    exit(watcher_process_exited)
-        os.killpg(os.getpgid(pid), signal.SIGKILL)
-        exit(watcher_process_timed_out)
-
-    watcher = Process(target=kill_on_timeout, args=(process.pid, timeout))
-    watcher.start()
+    # attempt non-blocking process communication to capture output
+    def proc_comm(_process, _return):
+        try:
+            _stdout, _stderr = _process.communicate()
+            _return[0] = _stdout
+            _return[1] = _stderr
+        except Exception:
+            pass
 
     try:
-        # Now, block "forever" waiting on process. If the timeout-limited Event wait in the watcher pops,
-        # it will kill the process and Popen.communicate() will return
-        stdout, stderr = process.communicate()
-    except OSError as e:
-        _destroy_process(process, signal.SIGKILL)
-        raise ExtensionError("Error while running '{0}': {1}".format(cmd, e.strerror))
-    except Exception as e:
-        _destroy_process(process, signal.SIGKILL)
-        raise ExtensionError("Exception while running '{0}': {1}".format(cmd, e))
+        mgr = multiprocessing.Manager()
+        ret_dict = mgr.dict()
 
-    timeout_happened = False
-    watcher.join(1)
-    if watcher.is_alive():
-        watcher.terminate()
-    else:
-        timeout_happened = (watcher.exitcode == watcher_process_timed_out)
+        cproc = Process(target=proc_comm, args=(process, ret_dict))
+        cproc.start()
 
-    if timeout_happened:
-        msg = format_stdout_stderr(sanitize(stdout), sanitize(stderr))
-        raise ExtensionError("Timeout({0}): {1}\n{2}".format(timeout, cmd, msg))
+        # allow 1s to capture output
+        cproc.join(1)
+
+        if cproc.is_alive():
+            cproc.terminate()
+
+        stdout = ret_dict[0]
+        stderr = ret_dict[1]
+
+    except Exception:
+        pass
 
     return stdout, stderr
 
@@ -204,10 +186,7 @@ def capture_from_process_raw(process, cmd, timeout):
             _destroy_process(process, signal.SIGKILL)
             raise ExtensionError("Subprocess was not root of its own process group")
 
-        if sys.version_info < (3, 3):
-            stdout, stderr = capture_from_process_pre_33(process, cmd, timeout)
-        else:
-            stdout, stderr = capture_from_process_modern(process, cmd, timeout)
+        stdout, stderr = capture_from_process_poll(process, cmd, timeout)
 
     return stdout, stderr
 

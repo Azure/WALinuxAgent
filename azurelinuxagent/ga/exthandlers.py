@@ -1002,12 +1002,12 @@ class ExtHandlerInstance(object):
                 CGroups.add_to_extension_cgroup(self.ext_handler.name)
 
             process = subprocess.Popen(full_path,
-                                  shell=True,
-                                  cwd=base_dir,
-                                  stdout=subprocess.PIPE,
-                                  stderr=subprocess.PIPE,
-                                  env=os.environ,
-                                  preexec_fn=pre_exec_function)
+                                       shell=True,
+                                       cwd=base_dir,
+                                       stdout=subprocess.PIPE,
+                                       stderr=subprocess.PIPE,
+                                       env=os.environ,
+                                       preexec_fn=pre_exec_function)
         except OSError as e:
             raise ExtensionError("Failed to launch '{0}': {1}".format(full_path, e.strerror))
 
@@ -1016,7 +1016,9 @@ class ExtHandlerInstance(object):
         msg = capture_from_process(process, cmd, timeout)
 
         ret = process.poll()
-        if ret is None or ret != 0:
+        if ret is None:
+            raise ExtensionError("Process {0} was not terminated: {1}\n{2}".format(process.pid, cmd, msg))
+        if ret != 0:
             raise ExtensionError("Non-zero exit code: {0}, {1}\n{2}".format(ret, cmd, msg))
 
         duration = elapsed_milliseconds(begin_utc)
