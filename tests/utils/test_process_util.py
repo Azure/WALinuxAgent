@@ -18,6 +18,7 @@
 import subprocess
 
 from azurelinuxagent.common.exception import ExtensionError
+from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.utils.processutil \
     import format_stdout_stderr, capture_from_process, capture_from_process_raw
 from tests.tools import *
@@ -143,6 +144,22 @@ class TestProcessUtils(AgentTestCase):
             else:
                 self.assertNotRegexpMatches(body, "Iteration 12")
                 self.assertRegexpMatches(body, "Iteration 8")
+
+    def test_process_timeout_forked(self):
+        cmd = "{0} -t 20 &".format(process_target)
+        process = subprocess.Popen(cmd,
+                                   shell=True,
+                                   stdout=subprocess.PIPE,
+                                   stderr=subprocess.PIPE,
+                                   env=os.environ,
+                                   preexec_fn=os.setsid)
+
+        try:
+            cap = capture_from_process(process, 'sleep 20 &', 3)
+        except Exception as e:
+            self.fail('No exception should be thrown for a long running process which forks: {0}'.format(ustr(e)))
+
+        self.assertEqual('[stdout]\ncannot collect stdout\n\n[stderr]\n', cap)
 
     def test_process_bad_pgid(self):
         """

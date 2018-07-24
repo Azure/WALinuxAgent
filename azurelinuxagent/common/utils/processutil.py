@@ -103,13 +103,24 @@ def _destroy_process(process, signal_to_send=signal.SIGKILL):
 def capture_from_process_modern(process, cmd, timeout):
     try:
         stdout, stderr = process.communicate(timeout=timeout)
+        # process completed
     except subprocess.TimeoutExpired:
-        # Just kill the process. The .communicate method will gather stdout/stderr, close those pipes, and reap
-        # the zombie process. That is, .communicate() does all the other stuff that _destroy_process does.
-        os.killpg(os.getpgid(process.pid), signal.SIGKILL)
-        stdout, stderr = process.communicate()
-        msg = format_stdout_stderr(sanitize(stdout), sanitize(stderr))
-        raise ExtensionError("Timeout({0}): {1}\n{2}".format(timeout, cmd, msg))
+        return_code = process.poll()
+        if return_code is None:
+            # process did not fork and is still running after timeout
+            # we need to kill and clean up
+            os.killpg(os.getpgid(process.pid), signal.SIGKILL)
+            stdout, stderr = process.communicate()
+            msg = format_stdout_stderr(sanitize(stdout), sanitize(stderr))
+            raise ExtensionError("Timeout({0}): {1}\n{2}".format(timeout, cmd, msg))
+        else:
+            # process is forked
+            if return_code != 0:
+                raise ExtensionError("Non-zero exit code: {0}, {1}".format(return_code, cmd))
+
+            stderr = b''
+            stdout = b'cannot collect stdout'
+
     except OSError as e:
         _destroy_process(process, signal.SIGKILL)
         raise ExtensionError("Error while running '{0}': {1}".format(cmd, e.strerror))
@@ -125,50 +136,25 @@ def capture_from_process_modern(process, cmd, timeout):
 
 def capture_from_process_pre_33(process, cmd, timeout):
     """
-    Can't use process.communicate(timeout=), so do it the hard way.
+    If the process forks, we cannot capture anything < 3.3 unless we block until the process tree completes
     """
-    watcher_process_exited = 0
-    watcher_process_timed_out = 1
-
-    def kill_on_timeout(pid, watcher_timeout):
-        """
-        Check for the continued existence of pid once per second. If pid no longer exists, exit with code 0.
-        If timeout (in seconds) elapses, kill pid and exit with code 1.
-        """
-        for iteration in range(watcher_timeout):
-            time.sleep(1)
-            try:
-                os.kill(pid, 0)
-            except OSError as ex:
-                if ESRCH == ex.errno:   # Process no longer exists
-                    exit(watcher_process_exited)
-        os.killpg(os.getpgid(pid), signal.SIGKILL)
-        exit(watcher_process_timed_out)
-
-    watcher = Process(target=kill_on_timeout, args=(process.pid, timeout))
-    watcher.start()
-
-    try:
-        # Now, block "forever" waiting on process. If the timeout-limited Event wait in the watcher pops,
-        # it will kill the process and Popen.communicate() will return
+    retry = timeout
+    while retry > 0 and process.poll() is None:
+        time.sleep(1)
+        retry -= 1
+    if retry == 0:
+        # process did not fork, timeout expired
+        os.killpg(os.getpgid(process.pid), signal.SIGKILL)
         stdout, stderr = process.communicate()
-    except OSError as e:
-        _destroy_process(process, signal.SIGKILL)
-        raise ExtensionError("Error while running '{0}': {1}".format(cmd, e.strerror))
-    except Exception as e:
-        _destroy_process(process, signal.SIGKILL)
-        raise ExtensionError("Exception while running '{0}': {1}".format(cmd, e))
-
-    timeout_happened = False
-    watcher.join(1)
-    if watcher.is_alive():
-        watcher.terminate()
-    else:
-        timeout_happened = (watcher.exitcode == watcher_process_timed_out)
-
-    if timeout_happened:
         msg = format_stdout_stderr(sanitize(stdout), sanitize(stderr))
         raise ExtensionError("Timeout({0}): {1}\n{2}".format(timeout, cmd, msg))
+
+    return_code = process.wait()
+    if return_code != 0:
+        raise ExtensionError("Non-zero exit code: {0}, {1}".format(return_code, cmd))
+
+    stderr = b''
+    stdout = b'cannot collect stdout'
 
     return stdout, stderr
 
