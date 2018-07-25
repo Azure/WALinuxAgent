@@ -19,7 +19,7 @@ from __future__ import print_function
 
 import textwrap
 
-import mock, platform
+import mock
 
 from azurelinuxagent.common.version import set_current_agent, \
     AGENT_LONG_VERSION, AGENT_VERSION, AGENT_NAME, AGENT_NAME_PATTERN, \
