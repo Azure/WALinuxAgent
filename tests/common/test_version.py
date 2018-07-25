@@ -50,6 +50,9 @@ def default_system():
 def default_system_no_linux_distro():
     return '', '', ''
 
+def default_system_exception():
+    raise Exception
+
 
 class TestAgentVersion(AgentTestCase):
     def setUp(self):
@@ -77,6 +80,14 @@ class TestAgentVersion(AgentTestCase):
     def test_distro_is_correct_format_when_default_case(self, platform_system_name, default_system_no_linux):
         osinfo = get_distro()
         default_list = ['', '', '', '']
+        self.assertListEqual(default_list, osinfo)
+        return
+
+    @mock.patch('platform.system', side_effect=default_system)
+    @mock.patch('platform.dist', side_effect=default_system_exception)
+    def test_distro_is_correct_for_exception_case(self, platform_system_name, default_system_no_linux):
+        osinfo = get_distro()
+        default_list = ['unknown', 'FFFF', '', '']
         self.assertListEqual(default_list, osinfo)
         return
 

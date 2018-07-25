@@ -18,8 +18,9 @@
 """
 Define util functions for unit test
 """
-
+import difflib
 import os
+import pprint
 import re
 import shutil
 import tempfile
@@ -279,47 +280,6 @@ class AgentTestCase(unittest.TestCase):
         msg = self._formatMessage(msg, standardMsg)
         self.fail(msg)
 
-
-    # def emulate_assertListEqual(self, list1, list2, msg=None):
-    #     differing = None
-    #     try:
-    #         len1 = len(list1)
-    #     except (TypeError, NotImplementedError):
-    #         differing = 'First list has no length.    Non-sequence?'
-    #
-    #     if differing is None:
-    #         try:
-    #             len2 = len(list2)
-    #         except (TypeError, NotImplementedError):
-    #             differing = 'Second list has no length.    Non-sequence?'
-    #
-    #     if differing is None:
-    #         if list1 == list2:
-    #             return
-    #
-    #         for i in xrange(min(len1, len2)):
-    #             try:
-    #                 item1 = list1[i]
-    #             except (TypeError, IndexError, NotImplementedError):
-    #                 differing += ('\nUnable to index element %d of first %s\n' %
-    #                              (i, 'list'))
-    #                 break
-    #
-    #             try:
-    #                 item2 = list2[i]
-    #             except (TypeError, IndexError, NotImplementedError):
-    #                 differing += ('\nUnable to index element %d of second %s\n' %
-    #                               (i, 'list'))
-    #                 break
-    #
-    #             if item1 != item2:
-    #                 differing += ('\nFirst differing element %d:\n%s\n%s\n' %
-    #                 break
-    #         else:
-    #             if (len1 == len2 and seq_type is None and
-    #                 type(seq1) != type(seq2)):
-    #                 # The sequences are the same, but have differing types.
-    #                 return
 
     @staticmethod
     def _create_files(tmp_dir, prefix, suffix, count, with_sleep=0):
