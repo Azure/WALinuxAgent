@@ -25,10 +25,11 @@ from .cloudinit import CloudInitProvisionHandler
 
 def get_provision_handler(distro_name=DISTRO_NAME, 
                             distro_version=DISTRO_VERSION,
-                            distro_full_name=DISTRO_FULL_NAME):
+                            distro_full_name=DISTRO_FULL_NAME,
+                            protocol_util=None):
 
     if conf.get_provision_cloudinit():
-        return CloudInitProvisionHandler()
+        return CloudInitProvisionHandler(protocol_util)
 
-    return ProvisionHandler()
+    return ProvisionHandler(protocol_util)
 

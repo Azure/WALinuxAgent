@@ -19,7 +19,9 @@
 
 import os
 import os.path
+import threading
 import time
+from multiprocessing.pool import ThreadPool
 
 from datetime import datetime
 
@@ -37,8 +39,8 @@ from azurelinuxagent.pa.provision.default import ProvisionHandler
 
 
 class CloudInitProvisionHandler(ProvisionHandler):
-    def __init__(self):
-        super(CloudInitProvisionHandler, self).__init__()
+    def __init__(self, protocol_util = None):
+        super(CloudInitProvisionHandler, self).__init__(protocol_util)
 
     def run(self):
         # If provision is enabled, run default provision handler
@@ -55,11 +57,17 @@ class CloudInitProvisionHandler(ProvisionHandler):
 
             utc_start = datetime.utcnow()
             logger.info("Running CloudInit provisioning handler")
-            self.wait_for_ovfenv()
+            thread_pool = ThreadPool(processes = 2)
+
+            wait_for_ovfenv_result = thread_pool.apply_async(self.wait_for_ovfenv)
+            wait_for_ssh_host_key_result = thread_pool.apply_async(self.wait_for_ssh_host_key)
+
             self.protocol_util.get_protocol()
+            wait_for_ovfenv_result.get()
+            thumbprint = wait_for_ssh_host_key_result.get()
+
             self.report_not_ready("Provisioning", "Starting")
 
-            thumbprint = self.wait_for_ssh_host_key()
             self.write_provisioned()
             logger.info("Finished provisioning")
 
@@ -74,7 +82,7 @@ class CloudInitProvisionHandler(ProvisionHandler):
             self.report_event(ustr(e))
             return
 
-    def wait_for_ovfenv(self, max_retry=360, sleep_time=5):
+    def wait_for_ovfenv(self, max_retry=1800, sleep_time=1):
         """
         Wait for cloud-init to copy ovf-env.xml file from provision ISO
         """
