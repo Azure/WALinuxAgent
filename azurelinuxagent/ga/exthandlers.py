@@ -66,6 +66,7 @@ HANDLER_NAME_PATTERN = re.compile(HANDLER_PATTERN+"$", re.IGNORECASE)
 HANDLER_PKG_EXT = ".zip"
 HANDLER_PKG_PATTERN = re.compile(HANDLER_PATTERN + r"\.zip$", re.IGNORECASE)
 
+DEFAULT_EXT_TIMEOUT_MINUTES = 90
 
 def validate_has_key(obj, key, fullname):
     if key not in obj:
@@ -120,9 +121,7 @@ def parse_ext_status(ext_status, data):
     ext_status.code = status_data.get('code', 0)
     formatted_message = status_data.get('formattedMessage')
     ext_status.message = parse_formatted_message(formatted_message)
-    substatus_list = status_data.get('substatus')
-    if substatus_list is None:
-        return
+    substatus_list = status_data.get('substatus', [])
     for substatus in substatus_list:
         if substatus is not None:
             ext_status.substatusList.append(parse_ext_substatus(substatus))
@@ -323,11 +322,38 @@ class ExtHandlersHandler(object):
                 logger.info("Extension handling is on hold")
                 return
 
+        dep_level = None
+        deps_wait_until = None
+        handlers_wait_until = datetime.datetime.utcnow()
+
         self.ext_handlers.extHandlers.sort(key=operator.methodcaller('sort_key'))
         for ext_handler in self.ext_handlers.extHandlers:
-            # TODO: handle install in sequence, enable in parallel
+            if dep_level != ext_handler.sort_key():
+                dep_level = ext_handler.sort_key()
+                deps_wait_until = handlers_wait_until
+                handlers_wait_until += datetime.timedelta(seconds=(DEFAULT_EXT_TIMEOUT_MINUTES * 60))
+            self.wait_on_ext_handler_dependencies(ext_handler, deps_wait_until)
             self.handle_ext_handler(ext_handler, etag)
-    
+
+    def wait_on_ext_handler_dependencies(self, ext_handler, wait_until):
+        dependencies = sum([e.dependencies for e in ext_handler.properties.extensions], [])
+        for dependency in dependencies:
+            handler_i = ExtHandlerInstance(dependency.handler, self.protocol)
+            if dependency.timeout is not None and dependency.timeout < DEFAULT_EXT_TIMEOUT_MINUTES:
+                wait_until -= datetime.timedelta(seconds=( (DEFAULT_EXT_TIMEOUT_MINUTES - dependency.timeout) * 60))
+            for ext in dependency.exts:
+                success_status, status = handler_i.is_ext_status_success(ext)
+                while not success_status:
+                    if datetime.datetime.utcnow() > wait_until:
+                        raise ExtensionError("Timeout waiting for success status "
+                                             "from dependency {}/{} for {}"
+                                             "status was: {}".format(
+                                                 dependency.handler.name, ext.name,
+                                                 ext_handler.name, status))
+                    else:
+                        time.sleep(10)
+                    success_status, status = handler_i.is_ext_status_success(ext)
+
     def handle_ext_handler(self, ext_handler, etag):
         ext_handler_i = ExtHandlerInstance(ext_handler, self.protocol)
 
@@ -930,6 +956,17 @@ class ExtHandlerInstance(object):
 
         return ext_status
     
+    def is_ext_status_success(self, ext):
+        status = self.collect_ext_status(ext)
+        if status is None:
+            return (True, status)
+        if status.status != "success":
+            return (False, status)
+        for substatus in status.substatusList:
+            if substatus.status != "success":
+                return (False, status)
+        return (True, status)
+
     def report_ext_status(self):
         active_exts = []
         # TODO Refactor or remove this common code pattern (for each extension subordinate to an ext_handler, do X).

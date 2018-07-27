@@ -18,6 +18,9 @@
 import os.path
 
 from tests.protocol.mockwiredata import *
+
+from azurelinuxagent.common.protocol.wire import Dependency
+from azurelinuxagent.common.protocol.restapi import Extension
 from azurelinuxagent.ga.exthandlers import *
 from azurelinuxagent.common.protocol.wire import WireProtocol
 
@@ -400,8 +403,12 @@ class TestExtension(AgentTestCase):
         self.assertTrue(exthandlers_handler.ext_handlers is not None)
         self.assertTrue(exthandlers_handler.ext_handlers.extHandlers is not None)
         self.assertEqual(len(exthandlers_handler.ext_handlers.extHandlers), 2)
-        self.assertEqual(exthandlers_handler.ext_handlers.extHandlers[0].properties.dependencyLevel, 1)
-        self.assertEqual(exthandlers_handler.ext_handlers.extHandlers[1].properties.dependencyLevel, 2)
+        self.assertEqual(exthandlers_handler.ext_handlers.extHandlers[0].properties.extensions[0].dependencyLevel, 1)
+        self.assertEqual(exthandlers_handler.ext_handlers.extHandlers[1].properties.extensions[0].dependencyLevel, 2)
+        self.assertEqual(exthandlers_handler.ext_handlers.extHandlers[1].properties.extensions[0].dependencies[0].handler,
+                         exthandlers_handler.ext_handlers.extHandlers[0])
+        self.assertEqual(exthandlers_handler.ext_handlers.extHandlers[1].properties.extensions[0].dependencies[0].exts[0],
+                         exthandlers_handler.ext_handlers.extHandlers[0].properties.extensions[0])
 
         #Test goal state not changed
         exthandlers_handler.run()
@@ -413,6 +420,7 @@ class TestExtension(AgentTestCase):
                                                             "<Incarnation>2<")
         test_data.ext_conf = test_data.ext_conf.replace("seqNo=\"0\"",
                                                         "seqNo=\"1\"")
+        # Swap the dependency ordering
         test_data.ext_conf = test_data.ext_conf.replace("dependencyLevel=\"2\"",
                                                         "dependencyLevel=\"3\"")
         test_data.ext_conf = test_data.ext_conf.replace("dependencyLevel=\"1\"",
@@ -422,10 +430,13 @@ class TestExtension(AgentTestCase):
         self._assert_ext_status(protocol.report_ext_status, "success", 1)
 
         self.assertEqual(len(exthandlers_handler.ext_handlers.extHandlers), 2)
-        self.assertEqual(exthandlers_handler.ext_handlers.extHandlers[0].properties.dependencyLevel, 3)
-        self.assertEqual(exthandlers_handler.ext_handlers.extHandlers[1].properties.dependencyLevel, 4)
+        self.assertEqual(exthandlers_handler.ext_handlers.extHandlers[0].properties.extensions[0].dependencyLevel, 3)
+        self.assertEqual(exthandlers_handler.ext_handlers.extHandlers[1].properties.extensions[0].dependencyLevel, 4)
 
         #Test disable
+        # In the case of disable, the last extension to be enabled should be
+        # the first extension disabled. The first extension enabled should be
+        # the last one disabled.
         test_data.goal_state = test_data.goal_state.replace("<Incarnation>2<",
                                                             "<Incarnation>3<")
         test_data.ext_conf = test_data.ext_conf.replace("enabled", "disabled")
@@ -434,13 +445,17 @@ class TestExtension(AgentTestCase):
                                     1, "1.0.0",
                                     expected_handler_name="OSTCExtensions.OtherExampleHandlerLinux")
         self.assertEqual(len(exthandlers_handler.ext_handlers.extHandlers), 2)
-        self.assertEqual(exthandlers_handler.ext_handlers.extHandlers[0].properties.dependencyLevel, 4)
-        self.assertEqual(exthandlers_handler.ext_handlers.extHandlers[1].properties.dependencyLevel, 3)
+        self.assertEqual(exthandlers_handler.ext_handlers.extHandlers[0].properties.extensions[0].dependencyLevel, 4)
+        self.assertEqual(exthandlers_handler.ext_handlers.extHandlers[1].properties.extensions[0].dependencyLevel, 3)
 
         #Test uninstall
+        # In the case of uninstall, the last extension to be installed should be
+        # the first extension uninstalled. The first extension installed
+        # should be the last one uninstalled.
         test_data.goal_state = test_data.goal_state.replace("<Incarnation>3<",
                                                             "<Incarnation>4<")
         test_data.ext_conf = test_data.ext_conf.replace("disabled", "uninstall")
+        # Swap the dependency ordering AGAIN
         test_data.ext_conf = test_data.ext_conf.replace("dependencyLevel=\"3\"",
                                                         "dependencyLevel=\"6\"")
         test_data.ext_conf = test_data.ext_conf.replace("dependencyLevel=\"4\"",
@@ -448,8 +463,8 @@ class TestExtension(AgentTestCase):
         exthandlers_handler.run()
         self._assert_no_handler_status(protocol.report_vm_status)
         self.assertEqual(len(exthandlers_handler.ext_handlers.extHandlers), 2)
-        self.assertEqual(exthandlers_handler.ext_handlers.extHandlers[0].properties.dependencyLevel, 6)
-        self.assertEqual(exthandlers_handler.ext_handlers.extHandlers[1].properties.dependencyLevel, 5)
+        self.assertEqual(exthandlers_handler.ext_handlers.extHandlers[0].properties.extensions[0].dependencyLevel, 6)
+        self.assertEqual(exthandlers_handler.ext_handlers.extHandlers[1].properties.extensions[0].dependencyLevel, 5)
 
     def test_ext_handler_rollingupgrade(self, *args):
         test_data = WireProtocolData(DATA_FILE_EXT_ROLLINGUPGRADE)
@@ -656,6 +671,96 @@ class TestExtension(AgentTestCase):
         exthandlers_handler.run()
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
         self._assert_ext_status(protocol.report_ext_status, "error", 0)
+
+    def test_wait_on_ext_handler_dependencies_empty_exts(self, *args):
+        test_data = WireProtocolData(DATA_FILE)
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+
+        handler_name = "Handler"
+        exthandler = ExtHandler(name=handler_name)
+        extension = Extension(name=handler_name)
+
+        dependency = Dependency(handler=exthandler, exts=[])
+        extension.dependencies.append(dependency)
+        exthandler.properties.extensions.append(extension)
+
+        exthandlers_handler.wait_on_ext_handler_dependencies(exthandler, datetime.datetime.utcnow())
+
+    def test_wait_on_ext_handler_dependencies_two_exts(self, *args):
+        test_data = WireProtocolData(DATA_FILE)
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+
+        handler_name = "Handler"
+        exthandler = ExtHandler(name=handler_name)
+        dependency_exts = [Extension(name=handler_name), Extension(name=handler_name)]
+        extension = Extension(name=handler_name)
+
+        dependency = Dependency(handler=exthandler, exts=dependency_exts)
+        extension.dependencies.append(dependency)
+        exthandler.properties.extensions.append(extension)
+
+        ExtHandlerInstance.collect_ext_status = MagicMock(return_value=None)
+        exthandlers_handler.wait_on_ext_handler_dependencies(exthandler, datetime.datetime.utcnow())
+
+    def _test_wait_on_ext_handler_dependencies(self, exthandlers_handler, timeout=None):
+        handler_name = "Handler"
+        exthandler = ExtHandler(name=handler_name)
+        dependency_ext = Extension(name=handler_name)
+        extension = Extension(name=handler_name)
+        
+        dependency = Dependency(handler=exthandler, exts=[ dependency_ext ], timeout=timeout)
+        extension.dependencies.append(dependency)
+        exthandler.properties.extensions.append(extension)
+
+        fun = exthandlers_handler.wait_on_ext_handler_dependencies
+        if timeout is None:
+            fun(exthandler, datetime.datetime.utcnow())
+        else:
+            expected_msg = "Timeout.*{0}/{1} for {2}".format(handler_name, handler_name, handler_name)
+            try:
+                self.assertRaisesRegexp(ExtensionError, expected_msg, fun, exthandler, datetime.datetime.utcnow())
+            except AttributeError:
+                pass  # Python 2.6 doesn't like assertRaisesRegexp
+                
+    def test_wait_on_ext_handler_dependencies_none(self, *args):
+        test_data = WireProtocolData(DATA_FILE)
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+
+        ExtHandlerInstance.collect_ext_status = MagicMock(return_value=None)
+        self._test_wait_on_ext_handler_dependencies(exthandlers_handler)
+
+    def test_wait_on_ext_handler_dependencies_success_status(self, *args):
+        test_data = WireProtocolData(DATA_FILE)
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+
+        status = ExtensionStatus(seq_no=0)
+        status.status = "success"
+
+        ExtHandlerInstance.collect_ext_status = MagicMock(return_value=status)
+        self._test_wait_on_ext_handler_dependencies(exthandlers_handler)
+
+    def test_wait_on_ext_handler_dependencies_success_status_with_substatus(self, *args):
+        test_data = WireProtocolData(DATA_FILE)
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+
+        status = ExtensionStatus(seq_no=0)
+        status.status = "success"
+        substatus = ExtensionSubStatus()
+        substatus.status = "success"
+        status.substatusList.append(substatus)
+
+        ExtHandlerInstance.collect_ext_status = MagicMock(return_value=status)
+        self._test_wait_on_ext_handler_dependencies(exthandlers_handler)
+
+    def test_wait_on_ext_handler_dependencies_timeout(self, *args):
+        test_data = WireProtocolData(DATA_FILE)
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+
+        status = ExtensionStatus(seq_no=0)
+        status.status = "error"
+
+        ExtHandlerInstance.collect_ext_status = MagicMock(return_value=status)
+        self._test_wait_on_ext_handler_dependencies(exthandlers_handler, timeout=0)
 
     def test_ext_handler_version_decide_autoupgrade_internalversion(self, *args):
         for internal in [False, True]:
