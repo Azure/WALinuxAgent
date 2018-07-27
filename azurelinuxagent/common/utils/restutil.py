@@ -18,6 +18,7 @@
 #
 
 import os
+import re
 import threading
 import time
 import traceback
@@ -37,6 +38,9 @@ DELAY_IN_SECONDS = 1
 
 THROTTLE_RETRIES = 25
 THROTTLE_DELAY_IN_SECONDS = 1
+
+REDACTED_TEXT = "<SAS_SIGNATURE>"
+SAS_TOKEN_RETRIEVAL_REGEX = re.compile(r'^(https?://[a-zA-Z0-9.].*sig=)([a-zA-Z0-9%-]*)(.*)$')
 
 RETRY_CODES = [
     httpclient.RESET_CONTENT,
@@ -170,6 +174,10 @@ def _get_http_proxy(secure=False):
     return host, port
 
 
+def redact_sas_tokens_in_urls(url):
+    return SAS_TOKEN_RETRIEVAL_REGEX.sub(r"\1" + REDACTED_TEXT + r"\3", url)
+
+
 def _http_request(method, host, rel_uri, port=None, data=None, secure=False,
                   headers=None, proxy_host=None, proxy_port=None):
 
@@ -205,7 +213,7 @@ def _http_request(method, host, rel_uri, port=None, data=None, secure=False,
 
     logger.verbose("HTTP connection [{0}] [{1}] [{2}] [{3}]",
                    method,
-                   url,
+                   redact_sas_tokens_in_urls(url),
                    data,
                    headers)
 
@@ -316,7 +324,7 @@ def http_request(method,
 
         except httpclient.HTTPException as e:
             msg = '[HTTP Failed] {0} {1} -- HttpException {2}'.format(
-                method, url, e)
+                method, redact_sas_tokens_in_urls(url), e)
             if _is_retry_exception(e):
                 continue
             break
@@ -324,7 +332,7 @@ def http_request(method,
         except IOError as e:
             IOErrorCounter.increment(host=host, port=port)
             msg = '[HTTP Failed] {0} {1} -- IOError {2}'.format(
-                method, url, e)
+                method, redact_sas_tokens_in_urls(url), e)
             continue
 
     raise HttpError("{0} -- {1} attempts made".format(msg,attempt))
