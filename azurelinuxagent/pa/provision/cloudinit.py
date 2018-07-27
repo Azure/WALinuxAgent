@@ -74,7 +74,7 @@ class CloudInitProvisionHandler(ProvisionHandler):
             self.report_event(ustr(e))
             return
 
-    def wait_for_ovfenv(self, max_retry=360, sleep_time=5):
+    def wait_for_ovfenv(self, max_retry=1800, sleep_time=1):
         """
         Wait for cloud-init to copy ovf-env.xml file from provision ISO
         """

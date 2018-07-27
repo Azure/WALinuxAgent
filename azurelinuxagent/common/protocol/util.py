@@ -21,8 +21,8 @@ import errno
 import os
 import re
 import shutil
-import time
 import threading
+import time
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
@@ -49,6 +49,16 @@ PASSWORD_PATTERN = "<UserPassword>.*?<"
 PASSWORD_REPLACEMENT = "<UserPassword>*<"
 
 
+class _nameset(set):
+    def __getattr__(self, name):
+        if name in self:
+            return name
+        raise AttributeError("%s not a valid value" % name)
+
+
+prots = _nameset(("WireProtocol", "MetadataProtocol"))
+
+
 def get_protocol_util():
     return ProtocolUtil()
 
@@ -56,7 +66,7 @@ def get_protocol_util():
 class ProtocolUtil(object):
 
     """
-    ProtocolUtil handles initialization for protocol instance. 2 protocol types 
+    ProtocolUtil handles initialization for protocol instance. 2 protocol types
     are invoked, wire protocol and metadata protocols.
     """
     def __init__(self):
@@ -74,7 +84,7 @@ class ProtocolUtil(object):
         ovf_file_path_on_dvd = os.path.join(dvd_mount_point, OVF_FILE_NAME)
         tag_file_path_on_dvd = os.path.join(dvd_mount_point, TAG_FILE_NAME)
         ovf_file_path = os.path.join(conf.get_lib_dir(), OVF_FILE_NAME)
-        tag_file_path = os.path.join(conf.get_lib_dir(), TAG_FILE_NAME)
+        tag_file_path = self._get_tag_file_path()
 
         try:
             self.osutil.mount_dvd()
@@ -109,14 +119,16 @@ class ProtocolUtil(object):
                                 "{0} to {1}: {2}".format(tag_file_path,
                                                          tag_file_path,
                                                          ustr(e)))
+        self._cleanup_ovf_dvd()
 
+        return ovfenv
+
+    def _cleanup_ovf_dvd(self):
         try:
             self.osutil.umount_dvd()
             self.osutil.eject_dvd()
         except OSUtilError as e:
             logger.warn(ustr(e))
-
-        return ovfenv
 
     def get_ovf_env(self):
         """
@@ -127,7 +139,18 @@ class ProtocolUtil(object):
             xml_text = fileutil.read_file(ovf_file_path)
             return OvfEnv(xml_text)
         else:
-            raise ProtocolError("ovf-env.xml is missing from {0}".format(ovf_file_path))
+            raise ProtocolError(
+                "ovf-env.xml is missing from {0}".format(ovf_file_path))
+
+    def _get_protocol_file_path(self):
+        return os.path.join(
+            conf.get_lib_dir(),
+            PROTOCOL_FILE_NAME)
+
+    def _get_tag_file_path(self):
+        return os.path.join(
+            conf.get_lib_dir(),
+            TAG_FILE_NAME)
 
     def _get_wireserver_endpoint(self):
         try:
@@ -142,7 +165,7 @@ class ProtocolUtil(object):
             fileutil.write_file(file_path, endpoint)
         except IOError as e:
             raise OSUtilError(ustr(e))
-   
+
     def _detect_wire_protocol(self):
         endpoint = self.dhcp_handler.endpoint
         if endpoint is None:
@@ -152,12 +175,11 @@ class ProtocolUtil(object):
             except DhcpError as e:
                 raise ProtocolError(ustr(e))
             endpoint = self.dhcp_handler.endpoint
-        
+
         try:
             protocol = WireProtocol(endpoint)
             protocol.detect()
             self._set_wireserver_endpoint(endpoint)
-            self.save_protocol("WireProtocol")
             return protocol
         except ProtocolError as e:
             logger.info("WireServer is not responding. Reset endpoint")
@@ -168,9 +190,8 @@ class ProtocolUtil(object):
     def _detect_metadata_protocol(self):
         protocol = MetadataProtocol()
         protocol.detect()
-        self.save_protocol("MetadataProtocol")
         return protocol
-            
+
     def _detect_protocol(self, protocols):
         """
         Probe protocol endpoints in turn.
@@ -181,19 +202,16 @@ class ProtocolUtil(object):
             for protocol_name in protocols:
                 try:
                     protocol = self._detect_wire_protocol() \
-                                if protocol_name == "WireProtocol" \
+                                if protocol_name == prots.WireProtocol \
                                 else self._detect_metadata_protocol()
 
-                    IOErrorCounter.set_protocol_endpoint(
-                        endpoint=protocol.endpoint)
-
-                    return protocol
+                    return (protocol_name, protocol)
 
                 except ProtocolError as e:
-                    logger.info("Protocol endpoint not found: {0}, {1}", 
+                    logger.info("Protocol endpoint not found: {0}, {1}",
                                 protocol_name, e)
 
-            if retry < MAX_RETRY -1:
+            if retry < MAX_RETRY - 1:
                 logger.info("Retry detect protocols: retry={0}", retry)
                 time.sleep(PROBE_INTERVAL)
         raise ProtocolNotFoundError("No protocol found.")
@@ -202,26 +220,25 @@ class ProtocolUtil(object):
         """
         Get protocol instance based on previous detecting result.
         """
-        protocol_file_path = os.path.join(conf.get_lib_dir(), 
-                                          PROTOCOL_FILE_NAME)
+        protocol_file_path = self._get_protocol_file_path()
         if not os.path.isfile(protocol_file_path):
             raise ProtocolNotFoundError("No protocol found")
 
         protocol_name = fileutil.read_file(protocol_file_path)
-        if protocol_name == "WireProtocol":
+        if protocol_name == prots.WireProtocol:
             endpoint = self._get_wireserver_endpoint()
             return WireProtocol(endpoint)
-        elif protocol_name == "MetadataProtocol":
+        elif protocol_name == prots.MetadataProtocol:
             return MetadataProtocol()
         else:
             raise ProtocolNotFoundError(("Unknown protocol: {0}"
                                          "").format(protocol_name))
 
-    def save_protocol(self, protocol_name):
+    def _save_protocol(self, protocol_name):
         """
         Save protocol endpoint
         """
-        protocol_file_path = os.path.join(conf.get_lib_dir(), PROTOCOL_FILE_NAME)
+        protocol_file_path = self._get_protocol_file_path()
         try:
             fileutil.write_file(protocol_file_path, protocol_name)
         except IOError as e:
@@ -233,9 +250,9 @@ class ProtocolUtil(object):
         """
         logger.info("Clean protocol")
         self.protocol = None
-        protocol_file_path = os.path.join(conf.get_lib_dir(), PROTOCOL_FILE_NAME)
+        protocol_file_path = self._get_protocol_file_path()
         if not os.path.isfile(protocol_file_path):
-            return 
+            return
 
         try:
             os.remove(protocol_file_path)
@@ -245,14 +262,14 @@ class ProtocolUtil(object):
                 return
             logger.error("Failed to clear protocol endpoint: {0}", e)
 
-    def get_protocol(self):
+    def get_protocol(self, by_file=False):
         """
-        Detect protocol by endpoints
-
+        Detect protocol by endpoints, if by_file is True,
+        detect MetadataProtocol in priority.
         :returns: protocol instance
         """
         self.lock.acquire()
-        
+
         try:
             if self.protocol is not None:
                 return self.protocol
@@ -262,45 +279,21 @@ class ProtocolUtil(object):
                 return self.protocol
             except ProtocolNotFoundError:
                 pass
-
             logger.info("Detect protocol endpoints")
-            protocols = ["WireProtocol", "MetadataProtocol"]
-            self.protocol = self._detect_protocol(protocols)
+            protocols = [prots.WireProtocol]
 
-            return self.protocol
-
-        finally:
-            self.lock.release()
-
-    def get_protocol_by_file(self):
-        """
-        Detect protocol by tag file. 
-
-        If a file "useMetadataEndpoint.tag" is found on provision iso, 
-        metedata protocol will be used. No need to probe for wire protocol
-
-        :returns: protocol instance
-        """
-        self.lock.acquire()
-        
-        try:
-            if self.protocol is not None:
-                return self.protocol
-
-            try:
-                self.protocol = self._get_protocol()
-                return self.protocol
-            except ProtocolNotFoundError:
-                pass
-
-            logger.info("Detect protocol by file")
-            tag_file_path = os.path.join(conf.get_lib_dir(), TAG_FILE_NAME)
-            protocols = []
-            if os.path.isfile(tag_file_path):
-                protocols.append("MetadataProtocol")
+            if by_file:
+                tag_file_path = self._get_tag_file_path()
+                if os.path.isfile(tag_file_path):
+                    protocols.insert(0, prots.MetadataProtocol)
             else:
-                protocols.append("WireProtocol")
-            self.protocol = self._detect_protocol(protocols)
+                protocols.append(prots.MetadataProtocol)
+            protocol_name, protocol = self._detect_protocol(protocols)
+
+            IOErrorCounter.set_protocol_endpoint(endpoint=protocol.endpoint)
+            self._save_protocol(protocol_name)
+
+            self.protocol = protocol
             return self.protocol
 
         finally:
