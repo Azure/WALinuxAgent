@@ -43,16 +43,16 @@ def log_error(msg_format, *args):
     error_messages.append(msg_format.format(args))
 
 
-def log_error(msg):
-    error_messages.append(msg)
-
-
 def mock_add_event(name, op, is_success, version, message):
     TestRemoteAccessHandler.eventing_data = (name, op, is_success, version, message)
 
 
 def is_python_version_36():
     return sys.version_info[0] == 3 and sys.version_info[1] == 6
+
+
+def is_python_version_27():
+    return sys.version_info[0] == 2 and sys.version_info[1] == 7
 
 
 class TestRemoteAccessHandler(AgentTestCase):
@@ -102,9 +102,11 @@ class TestRemoteAccessHandler(AgentTestCase):
         if is_python_version_36():
             with self.assertRaisesRegex(RemoteAccessError, error):
                 rah.add_user(tstuser, pwd, expiration_date)
-        else:
+        elif is_python_version_27():
             with self.assertRaisesRegexp(RemoteAccessError, error):
                 rah.add_user(tstuser, pwd, expiration_date)
+        else:
+            self.assertRaises(RemoteAccessError, rah.add_user, tstuser, pwd, expiration_date)
         self.assertEqual(0, len(rah.os_util.get_users()))
         self.assertEqual(0, len(error_messages))
         self.assertEqual(0, len(info_messages))
@@ -123,9 +125,11 @@ class TestRemoteAccessHandler(AgentTestCase):
         if is_python_version_36():
             with self.assertRaisesRegex(RemoteAccessError, error):
                 rah.add_user(tstuser, pwd, expiration_date)
-        else:
+        elif is_python_version_27():
             with self.assertRaisesRegexp(RemoteAccessError, error):
                 rah.add_user(tstuser, pwd, expiration_date)
+        else:
+            self.assertRaises(RemoteAccessError, rah.add_user(tstuser, pwd, expiration_date))
         self.assertEqual(0, len(rah.os_util.get_users()))
         self.assertEqual(0, len(error_messages))
         self.assertEqual(1, len(info_messages))
@@ -209,9 +213,11 @@ class TestRemoteAccessHandler(AgentTestCase):
         if is_python_version_36():
             with self.assertRaisesRegex(RemoteAccessError, error):
                 rah.handle_failed_create(testuser)
-        else:
+        elif is_python_version_27():
             with self.assertRaisesRegexp(RemoteAccessError, error):
                 rah.handle_failed_create(testuser)
+        else:
+            self.assertRaises(RemoteAccessError, rah.handle_failed_create(testuser))
         users = get_user_dictionary(rah.os_util.get_users())
         self.assertEqual(1, len(users.keys()))
         self.assertTrue(testusr in users, "Expected user {0} missing".format(testusr))
@@ -264,9 +270,11 @@ class TestRemoteAccessHandler(AgentTestCase):
         if is_python_version_36():
             with self.assertRaisesRegex(RemoteAccessError, error):
                 rah.add_user(tstuser, pwd, expiration)
-        else:
+        elif is_python_version_27():
             with self.assertRaisesRegexp(RemoteAccessError, error):
                 rah.add_user(tstuser, pwd, expiration)
+        else:
+            self.assertRaises(RemoteAccessError, rah.add_user, tstuser, pwd, expiration)
         users = get_user_dictionary(rah.os_util.get_users())
         self.assertEqual(0, len(users))
         self.assertEqual(0, len(error_messages))
@@ -507,9 +515,11 @@ class TestRemoteAccessHandler(AgentTestCase):
         if is_python_version_36():
             with self.assertRaisesRegex(RemoteAccessError, error):
                 rah.remove_user("")
-        else:
+        elif is_python_version_27():
             with self.assertRaisesRegexp(RemoteAccessError, error):
                 rah.remove_user("")
+        else:
+            self.assertRaises(RemoteAccessError, rah.remove_user, "")
 
     def test_remove_user_not_exists(self):
         rah = RemoteAccessHandler()
@@ -520,9 +530,11 @@ class TestRemoteAccessHandler(AgentTestCase):
         if is_python_version_36():
             with self.assertRaisesRegex(RemoteAccessError, error):
                 rah.remove_user(user)
-        else:
+        elif is_python_version_27():
             with self.assertRaisesRegexp(RemoteAccessError, error):
                 rah.remove_user(user)
+        else:
+            self.assertRaises(RemoteAccessError, rah.remove_user, user)
 
     @patch('azurelinuxagent.common.utils.cryptutil.CryptUtil.decrypt_secret',
            return_value="]aPPEv}uNg1FPnl?")
