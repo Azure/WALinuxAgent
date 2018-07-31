@@ -16,6 +16,8 @@
 #
 
 from datetime import timedelta
+
+from azurelinuxagent.common.exception import RemoteAccessError
 from azurelinuxagent.common.protocol.wire import *
 from azurelinuxagent.ga.remoteaccess import RemoteAccessHandler
 from tests.common.osutil.mock_osutil import MockOSUtil
@@ -41,12 +43,27 @@ def log_error(msg_format, *args):
     error_messages.append(msg_format.format(args))
 
 
+def log_error(msg):
+    error_messages.append(msg)
+
+
+def mock_add_event(name, op, is_success, version, message):
+    TestRemoteAccessHandler.eventing_data = (name, op, is_success, version, message)
+
+
+def is_python_version_36():
+    return sys.version_info[0] == 3 and sys.version_info[1] == 6
+
+
 class TestRemoteAccessHandler(AgentTestCase):
+    eventing_data = [()]
 
     def setUp(self):
         super(TestRemoteAccessHandler, self).setUp()
         del info_messages[:]
         del error_messages[:]
+        for data in TestRemoteAccessHandler.eventing_data:
+            del data
 
     # add_user tests
     @patch('azurelinuxagent.common.logger.Logger.info', side_effect=log_info)
@@ -81,12 +98,16 @@ class TestRemoteAccessHandler(AgentTestCase):
         tstuser = ""
         expiration_date = datetime.utcnow() + timedelta(days=1)
         pwd = tstpassword
-        rah.add_user(tstuser, pwd, expiration_date)
-        self.assertEqual(0, len(rah.os_util.get_users()))
-        self.assertEqual(1, len(error_messages))
-        self.assertEqual(0, len(info_messages))
         error = "Error adding user {0}. test exception for bad username".format(tstuser)
-        self.assertEqual(error, error_messages[0])
+        if is_python_version_36():
+            with self.assertRaisesRegex(RemoteAccessError, error):
+                rah.add_user(tstuser, pwd, expiration_date)
+        else:
+            with self.assertRaisesRegexp(RemoteAccessError, error):
+                rah.add_user(tstuser, pwd, expiration_date)
+        self.assertEqual(0, len(rah.os_util.get_users()))
+        self.assertEqual(0, len(error_messages))
+        self.assertEqual(0, len(info_messages))
 
     @patch('azurelinuxagent.common.logger.Logger.info', side_effect=log_info)
     @patch('azurelinuxagent.common.logger.Logger.error', side_effect=log_error)
@@ -98,13 +119,18 @@ class TestRemoteAccessHandler(AgentTestCase):
         tstuser = "foobar"
         expiration_date = datetime.utcnow() + timedelta(days=1)
         pwd = tstpassword
-        rah.add_user(tstuser, pwd, expiration_date)
+        error = "Error adding user {0} cleanup successful\nInner error: test exception for bad password".format(tstuser)
+        if is_python_version_36():
+            with self.assertRaisesRegex(RemoteAccessError, error):
+                rah.add_user(tstuser, pwd, expiration_date)
+        else:
+            with self.assertRaisesRegexp(RemoteAccessError, error):
+                rah.add_user(tstuser, pwd, expiration_date)
         self.assertEqual(0, len(rah.os_util.get_users()))
-        self.assertEqual(1, len(error_messages))
+        self.assertEqual(0, len(error_messages))
         self.assertEqual(1, len(info_messages))
-        error = "Error creating user {0}. test exception for bad password".format(tstuser)
-        self.assertEqual(error, error_messages[0])
         self.assertEqual("User deleted {0}".format(tstuser), info_messages[0])
+
 
     @patch('azurelinuxagent.common.utils.cryptutil.CryptUtil.decrypt_secret',
            return_value="]aPPEv}uNg1FPnl?")
@@ -125,7 +151,7 @@ class TestRemoteAccessHandler(AgentTestCase):
         # this does not test the user add function as that's mocked, it tests processing skips the remaining
         # calls after the initial failure
         new_user_expiration = datetime.utcnow() + timedelta(days=5)
-        rah.add_user(tstuser, pwd, new_user_expiration)
+        self.assertRaises(RemoteAccessError, rah.add_user, tstuser, pwd, new_user_expiration)
         # refresh users
         users = get_user_dictionary(rah.os_util.get_users())
         self.assertTrue(tstuser in users, "{0} missing from users after dup user attempted".format(tstuser))
@@ -164,7 +190,7 @@ class TestRemoteAccessHandler(AgentTestCase):
         mock_os_util.all_users[testusr] = (testusr, None, None, None, None, None, None, None)
         rah = RemoteAccessHandler()
         rah.os_util = mock_os_util
-        rah.handle_failed_create("", "test message")
+        self.assertRaises(RemoteAccessError, rah.handle_failed_create, "")
         users = get_user_dictionary(rah.os_util.get_users())
         self.assertEqual(1, len(users.keys()))
         self.assertTrue(testusr in users, "Expected user {0} missing".format(testusr))
@@ -178,17 +204,19 @@ class TestRemoteAccessHandler(AgentTestCase):
         rah = RemoteAccessHandler()
         rah.os_util = mock_os_util
         testuser = "Carl"
-        test_message = "test message"
-        rah.handle_failed_create(testuser, test_message)
+        error = "Failed to clean up after account creation for {0}.\n" \
+                "Inner error: test exception, user does not exist to delete".format(testuser)
+        if is_python_version_36():
+            with self.assertRaisesRegex(RemoteAccessError, error):
+                rah.handle_failed_create(testuser)
+        else:
+            with self.assertRaisesRegexp(RemoteAccessError, error):
+                rah.handle_failed_create(testuser)
         users = get_user_dictionary(rah.os_util.get_users())
         self.assertEqual(1, len(users.keys()))
         self.assertTrue(testusr in users, "Expected user {0} missing".format(testusr))
-        self.assertEqual(2, len(error_messages))
+        self.assertEqual(0, len(error_messages))
         self.assertEqual(0, len(info_messages))
-        self.assertEqual("Error creating user {0}. {1}".format(testuser, test_message), error_messages[0])
-        msg = "Failed to clean up after account creation for {0}. test exception, user does not exist to delete"\
-            .format(testuser)
-        self.assertEqual(msg, error_messages[1])
 
     @patch('azurelinuxagent.common.utils.cryptutil.CryptUtil.decrypt_secret',
            return_value="]aPPEv}uNg1FPnl?")
@@ -230,14 +258,19 @@ class TestRemoteAccessHandler(AgentTestCase):
         tstuser = "foobar"
         expiration = datetime.utcnow() + timedelta(days=1)
         pwd = "bad password"
-        rah.add_user(tstuser, pwd, expiration)
+        error = "Error adding user foobar cleanup successful\n" \
+                "Inner error: \[CryptError\] Error decoding secret\n" \
+                "Inner error: Incorrect padding".format(tstuser)
+        if is_python_version_36():
+            with self.assertRaisesRegex(RemoteAccessError, error):
+                rah.add_user(tstuser, pwd, expiration)
+        else:
+            with self.assertRaisesRegexp(RemoteAccessError, error):
+                rah.add_user(tstuser, pwd, expiration)
         users = get_user_dictionary(rah.os_util.get_users())
         self.assertEqual(0, len(users))
-        self.assertEqual(1, len(error_messages))
+        self.assertEqual(0, len(error_messages))
         self.assertEqual(1, len(info_messages))
-        error = "Error creating user {0}. [CryptError] Error decoding secret\nInner error: Incorrect padding".\
-            format(tstuser)
-        self.assertEqual(error, error_messages[0])
         self.assertEqual("User deleted {0}".format(tstuser), info_messages[0])
 
     def test_handle_remote_access_no_users(self):
@@ -395,3 +428,138 @@ class TestRemoteAccessHandler(AgentTestCase):
         self.assertTrue(tstuser in users, "{0} missing from users".format(tstuser))
         rah.run()
         self.assertTrue(tstuser in users, "{0} missing from users".format(tstuser))
+
+    @patch('azurelinuxagent.common.utils.cryptutil.CryptUtil.decrypt_secret',
+           return_value="]aPPEv}uNg1FPnl?")
+    def test_handle_remote_access_multiple_users_one_removed(self, _):
+        rah = RemoteAccessHandler()
+        rah.os_util = MockOSUtil()
+        data_str = load_data('wire/remote_access_10_accounts.xml')
+        remote_access = RemoteAccess(data_str)
+        count = 0
+        for user in remote_access.user_list.users:
+            count += 1
+            user.name = "tstuser{0}".format(count)
+            expiration_date = datetime.utcnow() + timedelta(days=count)
+            user.expiration = expiration_date.strftime("%a, %d %b %Y %H:%M:%S ") + "UTC"
+        rah.remote_access = remote_access
+        rah.handle_remote_access()
+        users = rah.os_util.get_users()
+        self.assertEqual(10, len(users))
+        # now remove the user from RemoteAccess
+        deleted_user = rah.remote_access.user_list.users[3]
+        del rah.remote_access.user_list.users[3]
+        rah.handle_remote_access()
+        users = rah.os_util.get_users()
+        self.assertTrue(deleted_user not in users, "{0} still in users".format(deleted_user))
+        self.assertEqual(9, len(users))
+
+    @patch('azurelinuxagent.common.utils.cryptutil.CryptUtil.decrypt_secret',
+           return_value="]aPPEv}uNg1FPnl?")
+    def test_handle_remote_access_multiple_users_null_remote_access(self, _):
+        rah = RemoteAccessHandler()
+        rah.os_util = MockOSUtil()
+        data_str = load_data('wire/remote_access_10_accounts.xml')
+        remote_access = RemoteAccess(data_str)
+        count = 0
+        for user in remote_access.user_list.users:
+            count += 1
+            user.name = "tstuser{0}".format(count)
+            expiration_date = datetime.utcnow() + timedelta(days=count)
+            user.expiration = expiration_date.strftime("%a, %d %b %Y %H:%M:%S ") + "UTC"
+        rah.remote_access = remote_access
+        rah.handle_remote_access()
+        users = rah.os_util.get_users()
+        self.assertEqual(10, len(users))
+        # now remove the user from RemoteAccess
+        rah.remote_access = None
+        rah.handle_remote_access()
+        users = rah.os_util.get_users()
+        self.assertEqual(0, len(users))
+
+    @patch('azurelinuxagent.common.utils.cryptutil.CryptUtil.decrypt_secret',
+           return_value="]aPPEv}uNg1FPnl?")
+    def test_handle_remote_access_multiple_users_error_with_null_remote_access(self, _):
+        rah = RemoteAccessHandler()
+        rah.os_util = MockOSUtil()
+        data_str = load_data('wire/remote_access_10_accounts.xml')
+        remote_access = RemoteAccess(data_str)
+        count = 0
+        for user in remote_access.user_list.users:
+            count += 1
+            user.name = "tstuser{0}".format(count)
+            expiration_date = datetime.utcnow() + timedelta(days=count)
+            user.expiration = expiration_date.strftime("%a, %d %b %Y %H:%M:%S ") + "UTC"
+        rah.remote_access = remote_access
+        rah.handle_remote_access()
+        users = rah.os_util.get_users()
+        self.assertEqual(10, len(users))
+        # now remove the user from RemoteAccess
+        rah.remote_access = None
+        rah.handle_remote_access()
+        users = rah.os_util.get_users()
+        self.assertEqual(0, len(users))
+
+    def test_remove_user_error(self):
+        rah = RemoteAccessHandler()
+        rah.os_util = MockOSUtil()
+        error = "Failed to delete user {0}\nInner error: test exception, bad data".format("")
+        if is_python_version_36():
+            with self.assertRaisesRegex(RemoteAccessError, error):
+                rah.remove_user("")
+        else:
+            with self.assertRaisesRegexp(RemoteAccessError, error):
+                rah.remove_user("")
+
+    def test_remove_user_not_exists(self):
+        rah = RemoteAccessHandler()
+        rah.os_util = MockOSUtil()
+        user = "bob"
+        error = "Failed to delete user {0}\n" \
+                "Inner error: test exception, user does not exist to delete".format(user)
+        if is_python_version_36():
+            with self.assertRaisesRegex(RemoteAccessError, error):
+                rah.remove_user(user)
+        else:
+            with self.assertRaisesRegexp(RemoteAccessError, error):
+                rah.remove_user(user)
+
+    @patch('azurelinuxagent.common.utils.cryptutil.CryptUtil.decrypt_secret',
+           return_value="]aPPEv}uNg1FPnl?")
+    def test_handle_remote_access_remove_and_add(self, _):
+        rah = RemoteAccessHandler()
+        rah.os_util = MockOSUtil()
+        data_str = load_data('wire/remote_access_10_accounts.xml')
+        remote_access = RemoteAccess(data_str)
+        count = 0
+        for user in remote_access.user_list.users:
+            count += 1
+            user.name = "tstuser{0}".format(count)
+            expiration_date = datetime.utcnow() + timedelta(days=count)
+            user.expiration = expiration_date.strftime("%a, %d %b %Y %H:%M:%S ") + "UTC"
+        rah.remote_access = remote_access
+        rah.handle_remote_access()
+        users = rah.os_util.get_users()
+        self.assertEqual(10, len(users))
+        # now remove the user from RemoteAccess
+        new_user = "tstuser11"
+        deleted_user = rah.remote_access.user_list.users[3]
+        rah.remote_access.user_list.users[3].name = new_user
+        rah.handle_remote_access()
+        users = rah.os_util.get_users()
+        self.assertTrue(deleted_user not in users, "{0} still in users".format(deleted_user))
+        self.assertTrue(new_user in [u[0] for u in users], "user {0} not in users".format(new_user))
+        self.assertEqual(10, len(users))
+
+    @patch('azurelinuxagent.ga.remoteaccess.add_event', side_effect=mock_add_event)
+    @patch('azurelinuxagent.common.protocol.util.ProtocolUtil.get_protocol', side_effect=RemoteAccessError("foobar!"))
+    def test_remote_access_handler_run_error(self, _1, _2):
+        rah = RemoteAccessHandler()
+        rah.os_util = MockOSUtil()
+        rah.run()
+        print(TestRemoteAccessHandler.eventing_data)
+        check_message = "foobar!"
+        self.assertTrue(check_message in TestRemoteAccessHandler.eventing_data[4],
+                        "expected message {0} not found in {1}"
+                        .format(check_message, TestRemoteAccessHandler.eventing_data[4]))
+        self.assertEqual(False, TestRemoteAccessHandler.eventing_data[2], "is_success is true")
