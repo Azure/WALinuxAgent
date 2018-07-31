@@ -72,6 +72,7 @@ CHILD_POLL_INTERVAL = 60
 MAX_FAILURE = 3 # Max failure allowed for agent before blacklisted
 
 GOAL_STATE_INTERVAL = 3
+GOAL_STATE_INTERVAL_DISABLED = 5 * 60
 
 ORPHAN_WAIT_INTERVAL = 15 * 60
 
@@ -274,6 +275,10 @@ class UpdateHandler(object):
             self._ensure_partition_assigned()
             self._ensure_readonly_files()
 
+            goal_state_interval = GOAL_STATE_INTERVAL \
+                if conf.get_extensions_enabled() \
+                else GOAL_STATE_INTERVAL_DISABLED
+
             while self.running:
                 if self._is_orphaned:
                     logger.info("Agent {0} is an orphan -- exiting",
@@ -320,7 +325,7 @@ class UpdateHandler(object):
                         duration=duration,
                         message="Incarnation {0}".format(exthandlers_handler.last_etag))
 
-                time.sleep(GOAL_STATE_INTERVAL)
+                time.sleep(goal_state_interval)
 
         except Exception as e:
             msg = u"Agent {0} failed with exception: {1}".format(CURRENT_AGENT, ustr(e))

@@ -30,6 +30,7 @@ DVD.MountPoint = /mnt/cdrom/secure
 DetectScvmmEnv = False
 EnableOverProvisioning = True
 Extension.LogDir = /var/log/azure
+Extensions.Enabled = True
 HttpProxy.Host = None
 HttpProxy.Port = None
 Lib.Dir = /var/lib/waagent

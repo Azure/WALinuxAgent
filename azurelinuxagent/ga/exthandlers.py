@@ -294,6 +294,10 @@ class ExtHandlersHandler(object):
                     logger.warn("Failed to remove extension package {0}: {1}".format(pkg, e.strerror))
    
     def handle_ext_handlers(self, etag=None):
+        if not conf.get_extensions_enabled():
+            logger.verbose("Extension handling is disabled")
+            return
+
         if self.ext_handlers.extHandlers is None or \
                 len(self.ext_handlers.extHandlers) == 0:
             logger.verbose("No extension handler config found")

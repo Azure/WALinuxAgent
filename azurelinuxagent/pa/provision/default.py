@@ -46,6 +46,7 @@ CLOUD_INIT_PATTERN = b".*/bin/cloud-init.*"
 CLOUD_INIT_REGEX = re.compile(CLOUD_INIT_PATTERN)
 
 PROVISIONED_FILE = 'provisioned'
+DISABLE_AGENT_FILE = 'disable_agent'
 
 
 class ProvisionHandler(object):
@@ -92,10 +93,7 @@ class ProvisionHandler(object):
                 is_success=True,
                 duration=elapsed_milliseconds(utc_start))
 
-            self.report_event(message=ovf_env.provision_guest_agent,
-                              is_success=True,
-                              duration=0,
-                              operation=WALAEventOperation.ProvisionGuestAgent)
+            self.handle_provision_guest_agent(ovf_env.provision_guest_agent)
 
             self.report_ready(thumbprint)
             logger.info("Provisioning complete")
@@ -168,6 +166,9 @@ class ProvisionHandler(object):
     def provisioned_file_path(self):
         return os.path.join(conf.get_lib_dir(), PROVISIONED_FILE)
 
+    def disable_agent_file_path(self):
+        return os.path.join(conf.get_lib_dir(), DISABLE_AGENT_FILE)
+
     def is_provisioned(self):
         '''
         A VM is considered provisionend *anytime* the provisioning
@@ -204,6 +205,18 @@ class ProvisionHandler(object):
         fileutil.write_file(
             self.provisioned_file_path(),
             get_osutil().get_instance_id())
+
+    def write_agent_disabled(self):
+        logger.warn("Disabling guest agent")
+        fileutil.write_file(self.disable_agent_file_path(), '')
+
+    def handle_provision_guest_agent(self, provision_guest_agent):
+        self.report_event(message=provision_guest_agent,
+                          is_success=True,
+                          duration=0,
+                          operation=WALAEventOperation.ProvisionGuestAgent)
+        if not provision_guest_agent:
+            self.write_agent_disabled()
 
     def provision(self, ovfenv):
         logger.info("Handle ovf-env.xml.")

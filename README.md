@@ -179,6 +179,7 @@ A configuration file (/etc/waagent.conf) controls the actions of waagent. Blank 
 A sample configuration file is shown below:
 
 ```yml
+Extensions.Enabled=y
 Provisioning.Enabled=y
 Provisioning.UseCloudInit=n
 Provisioning.DeleteRootPassword=n
@@ -212,6 +213,18 @@ configuration options can be specified as "y" or "n". The special keyword "None"
 may be used for some string type configuration entries as detailed below.
 
 ### Configuration File Options
+
+#### __Extensions.Enabled__
+
+_Type: Boolean_  
+_Default: y_
+
+This allows the user to enable or disable the extension handling functionality in the
+agent. Valid values are "y" or "n". If extension handling is disabled, the goal state 
+will still be processed and VM status is still reported, but only every 5 minutes. 
+Extension config within the goal state will be ignored. Note that functionality such
+as password reset, ssh key updates and backups depend on extensions. Only disable this
+if you do not need extensions at all.   
 
 #### __Provisioning.Enabled__
 
