@@ -129,7 +129,7 @@ class TestRemoteAccessHandler(AgentTestCase):
             with self.assertRaisesRegexp(RemoteAccessError, error):
                 rah.add_user(tstuser, pwd, expiration_date)
         else:
-            self.assertRaises(RemoteAccessError, rah.add_user(tstuser, pwd, expiration_date))
+            self.assertRaises(RemoteAccessError, rah.add_user, tstuser, pwd, expiration_date)
         self.assertEqual(0, len(rah.os_util.get_users()))
         self.assertEqual(0, len(error_messages))
         self.assertEqual(1, len(info_messages))
@@ -217,7 +217,7 @@ class TestRemoteAccessHandler(AgentTestCase):
             with self.assertRaisesRegexp(RemoteAccessError, error):
                 rah.handle_failed_create(testuser)
         else:
-            self.assertRaises(RemoteAccessError, rah.handle_failed_create(testuser))
+            self.assertRaises(RemoteAccessError, rah.handle_failed_create, testuser)
         users = get_user_dictionary(rah.os_util.get_users())
         self.assertEqual(1, len(users.keys()))
         self.assertTrue(testusr in users, "Expected user {0} missing".format(testusr))
