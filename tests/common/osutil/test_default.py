@@ -190,8 +190,11 @@ class TestOSUtil(AgentTestCase):
                 self.assertEqual(('', ''), osutil.DefaultOSUtil().get_first_if())
 
     def test_isloopback(self):
-        self.assertTrue(osutil.DefaultOSUtil().is_loopback('lo'))
-        self.assertFalse(osutil.DefaultOSUtil().is_loopback('eth0'))
+        for iface in osutil.DefaultOSUtil()._get_all_interfaces():
+            if iface == 'lo':
+                self.assertTrue(osutil.DefaultOSUtil().is_loopback(iface))
+            else:
+                self.assertFalse(osutil.DefaultOSUtil().is_loopback(iface))
 
     def test_isprimary(self):
         routing_table = "\
