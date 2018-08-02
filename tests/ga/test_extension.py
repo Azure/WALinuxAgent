@@ -326,7 +326,7 @@ class TestExtension(AgentTestCase):
         #Test hotfix
         test_data.goal_state = test_data.goal_state.replace("<Incarnation>2<",
                                                             "<Incarnation>3<")
-        test_data.ext_conf = test_data.ext_conf.replace("1.0.0", "1.1.0")
+        test_data.ext_conf = test_data.ext_conf.replace("1.0.0", "1.1.1")
         test_data.ext_conf = test_data.ext_conf.replace("seqNo=\"1\"", 
                                                         "seqNo=\"2\"")
         exthandlers_handler.run()
@@ -336,7 +336,7 @@ class TestExtension(AgentTestCase):
         #Test upgrade
         test_data.goal_state = test_data.goal_state.replace("<Incarnation>3<",
                                                             "<Incarnation>4<")
-        test_data.ext_conf = test_data.ext_conf.replace("1.1.0", "1.2.0")
+        test_data.ext_conf = test_data.ext_conf.replace("1.1.1", "1.2.0")
         test_data.ext_conf = test_data.ext_conf.replace("seqNo=\"2\"",
                                                         "seqNo=\"3\"")
         exthandlers_handler.run()
@@ -460,84 +460,72 @@ class TestExtension(AgentTestCase):
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
         self._assert_ext_status(protocol.report_ext_status, "success", 0)
 
-        #Test goal state not changed
-        exthandlers_handler.run()
-        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
-
-        #Test goal state changed without new GUID
+        #Test goal state changed
         test_data.goal_state = test_data.goal_state.replace("<Incarnation>1<",
                                                             "<Incarnation>2<")
         exthandlers_handler.run()
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
         self._assert_ext_status(protocol.report_ext_status, "success", 0)
 
-        #Test GUID change without new version available
+        #Test minor version bump
         test_data.goal_state = test_data.goal_state.replace("<Incarnation>2<",
                                                             "<Incarnation>3<")
-        test_data.ext_conf = test_data.ext_conf.replace("FE0987654321", "FE0987654322")
-        exthandlers_handler.run()
-        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
-        self._assert_ext_status(protocol.report_ext_status, "success", 0)
-
-        #Test hotfix available without GUID change
-        test_data.goal_state = test_data.goal_state.replace("<Incarnation>3<",
-                                                            "<Incarnation>4<")
         test_data.ext_conf = test_data.ext_conf.replace("1.0.0", "1.1.0")
         exthandlers_handler.run()
-        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.1.0")
         self._assert_ext_status(protocol.report_ext_status, "success", 0)
 
-        #Test GUID change with hotfix
-        test_data.goal_state = test_data.goal_state.replace("<Incarnation>4<",
-                                                            "<Incarnation>5<")
-        test_data.ext_conf = test_data.ext_conf.replace("FE0987654322", "FE0987654323")
+        #Test hotfix version bump
+        test_data.goal_state = test_data.goal_state.replace("<Incarnation>3<",
+                                                            "<Incarnation>4<")
+        test_data.ext_conf = test_data.ext_conf.replace("1.1.0", "1.1.1")
         exthandlers_handler.run()
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.1.1")
         self._assert_ext_status(protocol.report_ext_status, "success", 0)
 
         #Test disable
-        test_data.goal_state = test_data.goal_state.replace("<Incarnation>5<",
-                                                            "<Incarnation>6<")
+        test_data.goal_state = test_data.goal_state.replace("<Incarnation>4<",
+                                                            "<Incarnation>5<")
         test_data.ext_conf = test_data.ext_conf.replace("enabled", "disabled")
         exthandlers_handler.run()
         self._assert_handler_status(protocol.report_vm_status, "NotReady",
                                     1, "1.1.1")
 
         #Test uninstall
-        test_data.goal_state = test_data.goal_state.replace("<Incarnation>6<",
-                                                            "<Incarnation>7<")
+        test_data.goal_state = test_data.goal_state.replace("<Incarnation>5<",
+                                                            "<Incarnation>6<")
         test_data.ext_conf = test_data.ext_conf.replace("disabled", "uninstall")
         exthandlers_handler.run()
         self._assert_no_handler_status(protocol.report_vm_status)
 
         #Test uninstall again!
-        test_data.goal_state = test_data.goal_state.replace("<Incarnation>7<",
-                                                            "<Incarnation>8<")
+        test_data.goal_state = test_data.goal_state.replace("<Incarnation>6<",
+                                                            "<Incarnation>7<")
         exthandlers_handler.run()
         self._assert_no_handler_status(protocol.report_vm_status)
 
         #Test re-install
-        test_data.goal_state = test_data.goal_state.replace("<Incarnation>8<",
-                                                            "<Incarnation>9<")
+        test_data.goal_state = test_data.goal_state.replace("<Incarnation>7<",
+                                                            "<Incarnation>8<")
         test_data.ext_conf = test_data.ext_conf.replace("uninstall", "enabled")
         exthandlers_handler.run()
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.1.1")
         self._assert_ext_status(protocol.report_ext_status, "success", 0)
 
-        #Test upgrade available without GUID change
-        test_data.goal_state = test_data.goal_state.replace("<Incarnation>9<",
-                                                            "<Incarnation>10<")
-        test_data.ext_conf = test_data.ext_conf.replace("1.1.0", "1.2.0")
-        exthandlers_handler.run()
-        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.1.1")
-        self._assert_ext_status(protocol.report_ext_status, "success", 0)
-
-        #Test GUID change with upgrade available
-        test_data.goal_state = test_data.goal_state.replace("<Incarnation>10<",
-                                                            "<Incarnation>11<")
-        test_data.ext_conf = test_data.ext_conf.replace("FE0987654323", "FE0987654324")
+        #Test version bump post-re-install
+        test_data.goal_state = test_data.goal_state.replace("<Incarnation>8<",
+                                                            "<Incarnation>9<")
+        test_data.ext_conf = test_data.ext_conf.replace("1.1.1", "1.2.0")
         exthandlers_handler.run()
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.2.0")
+        self._assert_ext_status(protocol.report_ext_status, "success", 0)
+
+        #Test rollback
+        test_data.goal_state = test_data.goal_state.replace("<Incarnation>9<",
+                                                            "<Incarnation>10<")
+        test_data.ext_conf = test_data.ext_conf.replace("1.2.0", "1.1.0")
+        exthandlers_handler.run()
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.1.0")
         self._assert_ext_status(protocol.report_ext_status, "success", 0)
 
     @patch('azurelinuxagent.ga.exthandlers.add_event')
@@ -669,12 +657,11 @@ class TestExtension(AgentTestCase):
                         datafile = DATA_FILE_EXT_INTERNALVERSION
                 else:
                     config_version = '1.0.0'
+                    decision_version = '1.0.0'
                     if autoupgrade:
                         datafile = DATA_FILE_EXT_AUTOUPGRADE
-                        decision_version = '1.2.0'
                     else:
                         datafile = DATA_FILE
-                        decision_version = '1.0.0'
 
                 _, protocol = self._create_mock(WireProtocolData(datafile), *args)
                 ext_handlers, _ = protocol.get_ext_handlers()
@@ -695,22 +682,25 @@ class TestExtension(AgentTestCase):
 
         # (installed_version, config_version, exptected_version, autoupgrade_expected_version)
         cases = [
-            (None,  '2.0',     '2.0.0',    '2.2.0'),
-            (None,  '2.0.0',   '2.0.0',    '2.2.0'),
-            ('1.0', '1.0.0',   '1.0.0',    '1.2.0'),
-            (None,  '2.1.0',   '2.1.1',    '2.2.0'),
-            (None,  '2.2.0',   '2.2.0',    '2.2.0'),
-            (None,  '2.3.0',   '2.3.0',    '2.3.0'),
-            (None,  '2.4.0',   '2.4.0',    '2.4.0'),
-            (None,  '3.0',     '3.0',      '3.1'),
-            (None,  '4.0',     '4.0.0.1',  '4.1.0.0'),
+            (None,  '2.0',     '2.0.0'),
+            (None,  '2.0.0',   '2.0.0'),
+            ('1.0', '1.0.0',   '1.0.0'),
+            (None,  '2.1.0',   '2.1.0'),
+            (None,  '2.1.1',   '2.1.1'),
+            (None,  '2.2.0',   '2.2.0'),
+            (None,  '2.3.0',   '2.3.0'),
+            (None,  '2.4.0',   '2.4.0'),
+            (None,  '3.0',     '3.0'),
+            (None,  '3.1',     '3.1'),
+            (None,  '4.0',     '4.0.0.1'),
+            (None,  '4.1',     '4.1.0.0'),
         ]
 
         _, protocol = self._create_mock(WireProtocolData(DATA_FILE), *args)
         version_uri = Mock()
         version_uri.uri = 'http://some/Microsoft.OSTCExtensions_ExampleHandlerLinux_asiaeast_manifest.xml'
 
-        for (installed_version, config_version, expected_version, autoupgrade_expected_version) in cases:
+        for (installed_version, config_version, expected_version) in cases:
             ext_handler = Mock()
             ext_handler.properties = Mock()
             ext_handler.name = 'OSTCExtensions.ExampleHandlerLinux'
@@ -722,15 +712,6 @@ class TestExtension(AgentTestCase):
 
             ext_handler_instance.decide_version()
             self.assertEqual(expected_version, ext_handler.properties.version)
-
-            ext_handler.properties.version = config_version
-            ext_handler.properties.upgradePolicy = 'auto'
-
-            ext_handler_instance = ExtHandlerInstance(ext_handler, protocol)
-            ext_handler_instance.get_installed_version = Mock(return_value=installed_version)
-
-            ext_handler_instance.decide_version()
-            self.assertEqual(autoupgrade_expected_version, ext_handler.properties.version)
 
 
 if __name__ == '__main__':

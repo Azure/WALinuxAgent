@@ -105,6 +105,9 @@ def get_osutil(distro_name=DISTRO_NAME,
     elif distro_name == "gaia":
         return GaiaOSUtil()
 
+    if distro_name == "iosxe":
+        return IosxeOSUtil()
+
     else:
         logger.warn("Unable to load distro implementation for {0}. Using "
                     "default distro implementation instead.",

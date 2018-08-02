@@ -84,6 +84,8 @@ class RDMAHandler(object):
         """Retrieve the firmware version information from the system.
            This depends on information provided by the Linux kernel."""
 
+        kvp_key_size = 512
+        kvp_value_size = 2048
         driver_info_source = '/var/lib/hyperv/.kvp_pool_0'
         base_kernel_err_msg = 'Kernel does not provide the necessary '
         base_kernel_err_msg += 'information or the kvp daemon is not running.'
@@ -93,21 +95,23 @@ class RDMAHandler(object):
             logger.error(error_msg % driver_info_source)
             return
 
-        lines = open(driver_info_source).read()
-        if not lines:
-            error_msg = 'RDMA: Source file "%s" is empty. '
-            error_msg += base_kernel_err_msg
-            logger.error(error_msg % driver_info_source)
-            return
+        f = open(driver_info_source)
+        while True :
+            key = f.read(kvp_key_size)
+            value = f.read(kvp_value_size)
+            if key and value :
+                key_0 = key.split("\x00")[0]
+                value_0 = value.split("\x00")[0]
+                if key_0 == "NdDriverVersion" :
+                    f.close()
+                    return value_0
+            else :
+                break
+        f.close()
 
-        r = re.search("NdDriverVersion\0+(\d\d\d\.\d)", lines)
-        if r:
-            NdDriverVersion = r.groups()[0]
-            return NdDriverVersion
-        else:
-            error_msg = 'RDMA: NdDriverVersion not found in "%s"'
-            logger.error(error_msg % driver_info_source)
-            return
+        error_msg = 'RDMA: NdDriverVersion not found in "%s"'
+        logger.error(error_msg % driver_info_source)
+        return
 
     @staticmethod
     def is_kvp_daemon_running():

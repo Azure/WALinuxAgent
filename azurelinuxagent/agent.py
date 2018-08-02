@@ -37,6 +37,7 @@ from azurelinuxagent.common.version import AGENT_NAME, AGENT_LONG_VERSION, \
                                      PY_VERSION_MAJOR, PY_VERSION_MINOR, \
                                      PY_VERSION_MICRO, GOAL_STATE_AGENT_VERSION
 from azurelinuxagent.common.osutil import get_osutil
+from azurelinuxagent.common.utils import fileutil
 
 class Agent(object):
     def __init__(self, verbose, conf_file_path=None):
@@ -73,7 +74,7 @@ class Agent(object):
             if os.path.isfile(ext_log_dir):
                 raise Exception("{0} is a file".format(ext_log_dir))
             if not os.path.isdir(ext_log_dir):
-                os.makedirs(ext_log_dir)
+                fileutil.mkdir(ext_log_dir, mode=0o755, owner="root")
         except Exception as e:
             logger.error(
                 "Exception occurred while creating extension "
