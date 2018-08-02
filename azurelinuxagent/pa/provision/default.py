@@ -46,7 +46,6 @@ CLOUD_INIT_PATTERN = b".*/bin/cloud-init.*"
 CLOUD_INIT_REGEX = re.compile(CLOUD_INIT_PATTERN)
 
 PROVISIONED_FILE = 'provisioned'
-DISABLE_AGENT_FILE = 'disable_agent'
 
 
 class ProvisionHandler(object):
@@ -166,9 +165,6 @@ class ProvisionHandler(object):
     def provisioned_file_path(self):
         return os.path.join(conf.get_lib_dir(), PROVISIONED_FILE)
 
-    def disable_agent_file_path(self):
-        return os.path.join(conf.get_lib_dir(), DISABLE_AGENT_FILE)
-
     def is_provisioned(self):
         '''
         A VM is considered provisionend *anytime* the provisioning
@@ -206,9 +202,10 @@ class ProvisionHandler(object):
             self.provisioned_file_path(),
             get_osutil().get_instance_id())
 
-    def write_agent_disabled(self):
-        logger.warn("Disabling guest agent")
-        fileutil.write_file(self.disable_agent_file_path(), '')
+    @staticmethod
+    def write_agent_disabled():
+        logger.warn("Disabling guest agent in accordance with ovf-env.xml")
+        fileutil.write_file(conf.get_disable_agent_file_path(), '')
 
     def handle_provision_guest_agent(self, provision_guest_agent):
         self.report_event(message=provision_guest_agent,

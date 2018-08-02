@@ -99,6 +99,17 @@ class DaemonHandler(object):
 
         fileutil.write_file(pid_file, ustr(os.getpid()))
 
+    def sleep_if_disabled(self):
+        agent_disabled_file_path = conf.get_disable_agent_file_path()
+        if os.path.exists(agent_disabled_file_path):
+            import threading
+            logger.warn("Disabling the guest agent by sleeping forever; "
+                        "to re-enable, remove {0} and restart"
+                        .format(agent_disabled_file_path))
+            self.running = False
+            disable_event = threading.Event()
+            disable_event.wait()
+
     def initialize_environment(self):
         # Create lib dir
         if not os.path.isdir(conf.get_lib_dir()):
@@ -148,6 +159,8 @@ class DaemonHandler(object):
                 logger.error("Error setting up rdma device: %s" % e)
         else:
             logger.info("RDMA capabilities are not enabled, skipping")
+
+        self.sleep_if_disabled()
 
         while self.running:
             self.update_handler.run_latest(child_args=child_args)
