@@ -56,8 +56,9 @@ class ExtensionError(AgentError):
     When failed to execute an extension
     """
 
-    def __init__(self, msg=None, inner=None):
+    def __init__(self, msg=None, inner=None, code=-1):
         super(ExtensionError, self).__init__(msg, inner)
+        self.code = code
 
 
 class ProvisionError(AgentError):

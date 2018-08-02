@@ -308,12 +308,12 @@ class DefaultOSUtil(object):
         '''
         if os.path.isfile(PRODUCT_ID_FILE):
             s = fileutil.read_file(PRODUCT_ID_FILE).strip()
-
+            
         else:
             rc, s = shellutil.run_get_output(DMIDECODE_CMD)
             if rc != 0 or UUID_PATTERN.match(s) is None:
                 return ""
-
+              
         return self._correct_instance_id(s.strip())
 
     def get_userentry(self, username):
@@ -1011,6 +1011,9 @@ class DefaultOSUtil(object):
     def remove_route_for_dhcp_broadcast(self, ifname):
         shellutil.run("route del 255.255.255.255 dev {0}".format(ifname),
                       chk_err=False)
+
+    def is_dhcp_available(self):
+        return (True, '')
 
     def is_dhcp_enabled(self):
         return False

@@ -106,6 +106,9 @@ def get_distro():
     if os.path.exists("/etc/cp-release"):
         osinfo = get_checkpoint_platform()
 
+    if os.path.exists("/home/guestshell/azure"):
+        osinfo = ['iosxe', 'csr1000v', '', 'Cisco IOSXE Linux']
+
     # Remove trailing whitespace and quote in distro name
     osinfo[0] = osinfo[0].strip('"').strip(' ').lower()
     return osinfo
