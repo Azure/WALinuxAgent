@@ -85,9 +85,9 @@ def get_distro():
     else:
         try:
             # dist() removed in Python 3.7
-            osinfo = platform.dist()
+            osinfo = list(platform.dist()) + ['']
         except:
-            osinfo = ('UNKNOWN', 'FFFF', '')
+            osinfo = ['UNKNOWN', 'FFFF', '', '']
 
     # The platform.py lib has issue with detecting oracle linux distribution.
     # Merge the following patch provided by oracle as a temporary fix.
