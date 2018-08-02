@@ -151,6 +151,15 @@ class DhcpHandler(object):
 
     def send_dhcp_req(self):
         """
+        Check if DHCP is available
+        """
+        (dhcp_available, endpoint) =  self.osutil.is_dhcp_available()
+        if not dhcp_available:
+            logger.info("send_dhcp_req: DHCP not available")
+            self.endpoint = endpoint
+            return
+
+        """
         Build dhcp request with mac addr
         Configure route to allow dhcp traffic
         Stop dhcp service if necessary
