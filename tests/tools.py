@@ -34,6 +34,7 @@ import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.utils import fileutil
 
 from azurelinuxagent.common.version import PY_VERSION_MAJOR
+from azurelinuxagent.common.version import PY_VERSION_MINOR
 
 # Import mock module for Python2 and Python3
 try:
@@ -111,6 +112,8 @@ class AgentTestCase(unittest.TestCase):
             cls.assertIsNone = cls.emulate_assertIsNone
         if not hasattr(cls, "assertIsNotNone"):
             cls.assertIsNone = cls.emulate_assertIsNotNone
+        if not hasattr(cls, "assertRaisesRegex"):
+            cls.assertRaisesRegex = cls.emulate_raises_regex
 
     def setUp(self):
         prefix = "{0}_".format(self.__class__.__name__)
@@ -162,6 +165,24 @@ class AgentTestCase(unittest.TestCase):
         if x is None:
             msg = msg if msg is not None else '{0} is None'.format(_safe_repr(x))
             self.fail(msg)
+
+    def emulate_raises_regex(self, exception_type, regex, function, *args, **kwargs):
+        if PY_VERSION_MAJOR == 3 and PY_VERSION_MINOR == 6:
+            with self.assertRaisesRegex(exception_type, regex):
+                function(*args)
+        elif PY_VERSION_MAJOR == 3 and PY_VERSION_MINOR == 7:
+            with self.assertRaisesRegexp(exception_type, regex):
+                function(*args)
+        else:
+            try:
+                function(*args)
+            except Exception as e:
+                if re.search(regex, str(e), flags=1) is not None:
+                    return
+                else:
+                    self.fail("Expected exception {0} matching {1}.  Actual: {2}".format(
+                        exception_type, regex, str(e)))
+            self.fail("No exception was thrown.  Expected exception {0} matching {1}".format(exception_type, regex))
 
     @staticmethod
     def _create_files(tmp_dir, prefix, suffix, count, with_sleep=0):

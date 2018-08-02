@@ -47,14 +47,6 @@ def mock_add_event(name, op, is_success, version, message):
     TestRemoteAccessHandler.eventing_data = (name, op, is_success, version, message)
 
 
-def is_python_version_36():
-    return sys.version_info[0] == 3 and sys.version_info[1] == 6
-
-
-def is_python_version_27():
-    return sys.version_info[0] == 2 and sys.version_info[1] == 7
-
-
 class TestRemoteAccessHandler(AgentTestCase):
     eventing_data = [()]
 
@@ -96,17 +88,10 @@ class TestRemoteAccessHandler(AgentTestCase):
         rah.os_util = MockOSUtil()
         tstpassword = "]aPPEv}uNg1FPnl?"
         tstuser = ""
-        expiration_date = datetime.utcnow() + timedelta(days=1)
+        expiration = datetime.utcnow() + timedelta(days=1)
         pwd = tstpassword
         error = "Error adding user {0}. test exception for bad username".format(tstuser)
-        if is_python_version_36():
-            with self.assertRaisesRegex(RemoteAccessError, error):
-                rah.add_user(tstuser, pwd, expiration_date)
-        elif is_python_version_27():
-            with self.assertRaisesRegexp(RemoteAccessError, error):
-                rah.add_user(tstuser, pwd, expiration_date)
-        else:
-            self.assertRaises(RemoteAccessError, rah.add_user, tstuser, pwd, expiration_date)
+        self.assertRaisesRegex(RemoteAccessError, error, rah.add_user, tstuser, pwd, expiration)
         self.assertEqual(0, len(rah.os_util.get_users()))
         self.assertEqual(0, len(error_messages))
         self.assertEqual(0, len(info_messages))
@@ -119,17 +104,10 @@ class TestRemoteAccessHandler(AgentTestCase):
         rah.os_util = MockOSUtil()
         tstpassword = ""
         tstuser = "foobar"
-        expiration_date = datetime.utcnow() + timedelta(days=1)
+        expiration = datetime.utcnow() + timedelta(days=1)
         pwd = tstpassword
         error = "Error adding user {0} cleanup successful\nInner error: test exception for bad password".format(tstuser)
-        if is_python_version_36():
-            with self.assertRaisesRegex(RemoteAccessError, error):
-                rah.add_user(tstuser, pwd, expiration_date)
-        elif is_python_version_27():
-            with self.assertRaisesRegexp(RemoteAccessError, error):
-                rah.add_user(tstuser, pwd, expiration_date)
-        else:
-            self.assertRaises(RemoteAccessError, rah.add_user, tstuser, pwd, expiration_date)
+        self.assertRaisesRegex(RemoteAccessError, error, rah.add_user, tstuser, pwd, expiration)
         self.assertEqual(0, len(rah.os_util.get_users()))
         self.assertEqual(0, len(error_messages))
         self.assertEqual(1, len(info_messages))
@@ -210,14 +188,7 @@ class TestRemoteAccessHandler(AgentTestCase):
         testuser = "Carl"
         error = "Failed to clean up after account creation for {0}.\n" \
                 "Inner error: test exception, user does not exist to delete".format(testuser)
-        if is_python_version_36():
-            with self.assertRaisesRegex(RemoteAccessError, error):
-                rah.handle_failed_create(testuser)
-        elif is_python_version_27():
-            with self.assertRaisesRegexp(RemoteAccessError, error):
-                rah.handle_failed_create(testuser)
-        else:
-            self.assertRaises(RemoteAccessError, rah.handle_failed_create, testuser)
+        self.assertRaisesRegex(RemoteAccessError, error, rah.handle_failed_create, testuser)
         users = get_user_dictionary(rah.os_util.get_users())
         self.assertEqual(1, len(users.keys()))
         self.assertTrue(testusr in users, "Expected user {0} missing".format(testusr))
@@ -267,14 +238,7 @@ class TestRemoteAccessHandler(AgentTestCase):
         error = "Error adding user foobar cleanup successful\n" \
                 "Inner error: \[CryptError\] Error decoding secret\n" \
                 "Inner error: Incorrect padding".format(tstuser)
-        if is_python_version_36():
-            with self.assertRaisesRegex(RemoteAccessError, error):
-                rah.add_user(tstuser, pwd, expiration)
-        elif is_python_version_27():
-            with self.assertRaisesRegexp(RemoteAccessError, error):
-                rah.add_user(tstuser, pwd, expiration)
-        else:
-            self.assertRaises(RemoteAccessError, rah.add_user, tstuser, pwd, expiration)
+        self.assertRaisesRegex(RemoteAccessError, error, rah.add_user, tstuser, pwd, expiration)
         users = get_user_dictionary(rah.os_util.get_users())
         self.assertEqual(0, len(users))
         self.assertEqual(0, len(error_messages))
@@ -512,14 +476,7 @@ class TestRemoteAccessHandler(AgentTestCase):
         rah = RemoteAccessHandler()
         rah.os_util = MockOSUtil()
         error = "Failed to delete user {0}\nInner error: test exception, bad data".format("")
-        if is_python_version_36():
-            with self.assertRaisesRegex(RemoteAccessError, error):
-                rah.remove_user("")
-        elif is_python_version_27():
-            with self.assertRaisesRegexp(RemoteAccessError, error):
-                rah.remove_user("")
-        else:
-            self.assertRaises(RemoteAccessError, rah.remove_user, "")
+        self.assertRaisesRegex(RemoteAccessError, error, rah.remove_user, "")
 
     def test_remove_user_not_exists(self):
         rah = RemoteAccessHandler()
@@ -527,14 +484,7 @@ class TestRemoteAccessHandler(AgentTestCase):
         user = "bob"
         error = "Failed to delete user {0}\n" \
                 "Inner error: test exception, user does not exist to delete".format(user)
-        if is_python_version_36():
-            with self.assertRaisesRegex(RemoteAccessError, error):
-                rah.remove_user(user)
-        elif is_python_version_27():
-            with self.assertRaisesRegexp(RemoteAccessError, error):
-                rah.remove_user(user)
-        else:
-            self.assertRaises(RemoteAccessError, rah.remove_user, user)
+        self.assertRaisesRegex(RemoteAccessError, error, rah.remove_user, user)
 
     @patch('azurelinuxagent.common.utils.cryptutil.CryptUtil.decrypt_secret',
            return_value="]aPPEv}uNg1FPnl?")
