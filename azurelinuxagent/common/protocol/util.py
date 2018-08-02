@@ -169,12 +169,25 @@ class ProtocolUtil(object):
     def _detect_wire_protocol(self):
         endpoint = self.dhcp_handler.endpoint
         if endpoint is None:
-            logger.info("WireServer endpoint is not found. Rerun dhcp handler")
-            try:
-                self.dhcp_handler.run()
-            except DhcpError as e:
-                raise ProtocolError(ustr(e))
-            endpoint = self.dhcp_handler.endpoint
+            '''
+            Check if DHCP can be used to get the wire protocol endpoint
+            '''
+            (dhcp_available, conf_endpoint) =  self.osutil.is_dhcp_available()
+            if dhcp_available:
+                logger.info("WireServer endpoint is not found. Rerun dhcp handler")
+                try:
+                    self.dhcp_handler.run()
+                except DhcpError as e:
+                    raise ProtocolError(ustr(e))
+                endpoint = self.dhcp_handler.endpoint
+            else:
+                logger.info("_detect_wire_protocol: DHCP not available")
+                endpoint = self._get_wireserver_endpoint()
+                if endpoint == None:
+                    endpoint = conf_endpoint
+                    logger.info("Using hardcoded WireServer endpoint {0}", endpoint)
+                else:
+                    logger.info("WireServer endpoint {0} read from file", endpoint)
 
         try:
             protocol = WireProtocol(endpoint)
