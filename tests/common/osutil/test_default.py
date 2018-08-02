@@ -199,7 +199,7 @@ class TestOSUtil(AgentTestCase):
             else:
                 non_loopback_count += 1
 
-        self.assertEqual(loopback_count, 1, 'Only 1 loopback network interface should exist')
+        self.assertEqual(loopback_count, 1, 'Exactly 1 loopback network interface should exist')
         self.assertGreater(loopback_count, 0, 'At least 1 non-loopback network interface should exist')
 
     def test_isloopback(self):
