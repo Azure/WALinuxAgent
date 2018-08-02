@@ -167,15 +167,12 @@ class AgentTestCase(unittest.TestCase):
             self.fail(msg)
 
     def emulate_raises_regex(self, exception_type, regex, function, *args, **kwargs):
-        if PY_VERSION_MAJOR == 3 and PY_VERSION_MINOR == 6:
-            with self.assertRaisesRegex(exception_type, regex):
-                function(*args)
-        elif PY_VERSION_MAJOR == 3 and PY_VERSION_MINOR == 7:
+        if PY_VERSION_MAJOR == 2 and PY_VERSION_MINOR == 7:
             with self.assertRaisesRegexp(exception_type, regex):
-                function(*args)
+                function(*args, **kwargs)
         else:
             try:
-                function(*args)
+                function(*args, **kwargs)
             except Exception as e:
                 if re.search(regex, str(e), flags=1) is not None:
                     return

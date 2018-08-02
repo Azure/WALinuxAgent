@@ -104,9 +104,10 @@ class RemoteAccessHandler(object):
     def handle_remote_access(self):
         # Get JIT user accounts.
         all_users = self.os_util.get_users()
-        existing_jit_users = [u[0] for u in all_users if self.validate_jit_user(u[4])]
+        existing_jit_users = {u[0] for u in all_users if self.validate_jit_user(u[4])}
         self.err_message = ""
         if self.remote_access is not None:
+            goal_state_users = {u.name for u in self.remote_access.user_list.users}
             for acc in self.remote_access.user_list.users:
                 try:
                     raw_expiration = acc.expiration
@@ -123,7 +124,7 @@ class RemoteAccessHandler(object):
                         .format(acc.name, ustr(rae))
             for user in existing_jit_users:
                 try:
-                    if user not in [u.name for u in self.remote_access.user_list.users]:
+                    if user not in goal_state_users:
                         # user explicitly removed
                         logger.info("User {0} removed from remote_access".format(user))
                         self.remove_user(user)
@@ -157,10 +158,12 @@ class RemoteAccessHandler(object):
             self.os_util.conf_sudoer(username)
             logger.info("User '{0}' added successfully with expiration in {1}".format(username, expiration_date))
         except Exception as e:
+            error = "Error adding user {0}. {1} ".format(username, str(e))
             try:
                 self.handle_failed_create(username)
+                error += "cleanup successful"
             except RemoteAccessError as rae:
-                raise RemoteAccessError("Error adding user {0} and error cleaning up {1}".format(username, ustr(e)), rae)
+                error += "and error cleaning up {0}".format(str(rae))
             raise RemoteAccessError("Error adding user {0} cleanup successful".format(username), ustr(e))
 
     def handle_failed_create(self, username):
