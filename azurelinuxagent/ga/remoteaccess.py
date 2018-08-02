@@ -104,10 +104,10 @@ class RemoteAccessHandler(object):
     def handle_remote_access(self):
         # Get JIT user accounts.
         all_users = self.os_util.get_users()
-        existing_jit_users = {u[0] for u in all_users if self.validate_jit_user(u[4])}
+        existing_jit_users = set(u[0] for u in all_users if self.validate_jit_user(u[4]))
         self.err_message = ""
         if self.remote_access is not None:
-            goal_state_users = {u.name for u in self.remote_access.user_list.users}
+            goal_state_users = set(u.name for u in self.remote_access.user_list.users)
             for acc in self.remote_access.user_list.users:
                 try:
                     raw_expiration = acc.expiration
