@@ -189,9 +189,25 @@ class TestOSUtil(AgentTestCase):
             with patch.object(osutil.DefaultOSUtil, '_get_all_interfaces', return_value=fake_ifaces):
                 self.assertEqual(('', ''), osutil.DefaultOSUtil().get_first_if())
 
+    def test_get_all_interfaces(self):
+        loopback_count = 0
+        non_loopback_count = 0
+
+        for iface in osutil.DefaultOSUtil()._get_all_interfaces():
+            if iface == 'lo':
+                loopback_count += 1
+            else:
+                non_loopback_count += 1
+
+        self.assertEqual(loopback_count, 1, 'Exactly 1 loopback network interface should exist')
+        self.assertGreater(loopback_count, 0, 'At least 1 non-loopback network interface should exist')
+
     def test_isloopback(self):
-        self.assertTrue(osutil.DefaultOSUtil().is_loopback('lo'))
-        self.assertFalse(osutil.DefaultOSUtil().is_loopback('eth0'))
+        for iface in osutil.DefaultOSUtil()._get_all_interfaces():
+            if iface == 'lo':
+                self.assertTrue(osutil.DefaultOSUtil().is_loopback(iface))
+            else:
+                self.assertFalse(osutil.DefaultOSUtil().is_loopback(iface))
 
     def test_isprimary(self):
         routing_table = "\
