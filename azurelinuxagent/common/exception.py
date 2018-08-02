@@ -160,3 +160,12 @@ class ResourceGoneError(HttpError):
         if msg is None:
             msg = "Resource is gone"
         super(ResourceGoneError, self).__init__(msg, inner)
+
+
+class RemoteAccessError(AgentError):
+    """
+    Remote Access Error
+    """
+
+    def __init__(self, msg=None, inner=None):
+        super(RemoteAccessError, self).__init__(msg, inner)

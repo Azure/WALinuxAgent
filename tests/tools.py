@@ -123,6 +123,10 @@ class AgentTestCase(unittest.TestCase):
             cls.assertIsNone = cls.emulate_assertIsNone
         if not hasattr(cls, "assertIsNotNone"):
             cls.assertIsNone = cls.emulate_assertIsNotNone
+        if hasattr(cls, "assertRaisesRegexp"):
+            cls.assertRaisesRegex = cls.assertRaisesRegexp
+        if not hasattr(cls, "assertRaisesRegex"):
+            cls.assertRaisesRegex = cls.emulate_raises_regex
         if not hasattr(cls, "assertListEqual"):
             cls.assertListEqual = cls.emulate_assertListEqual
 
@@ -176,6 +180,18 @@ class AgentTestCase(unittest.TestCase):
         if x is None:
             msg = msg if msg is not None else '{0} is None'.format(_safe_repr(x))
             self.fail(msg)
+
+
+    def emulate_raises_regex(self, exception_type, regex, function, *args, **kwargs):
+        try:
+            function(*args, **kwargs)
+        except Exception as e:
+            if re.search(regex, str(e), flags=1) is not None:
+                return
+            else:
+                self.fail("Expected exception {0} matching {1}.  Actual: {2}".format(
+                    exception_type, regex, str(e)))
+        self.fail("No exception was thrown.  Expected exception {0} matching {1}".format(exception_type, regex))
 
     def emulate_assertListEqual(self, seq1, seq2, msg=None, seq_type=None):
         """An equality assertion for ordered sequences (like lists and tuples).
@@ -279,7 +295,6 @@ class AgentTestCase(unittest.TestCase):
         standardMsg = self._truncateMessage(standardMsg, diffMsg)
         msg = self._formatMessage(msg, standardMsg)
         self.fail(msg)
-
 
     @staticmethod
     def _create_files(tmp_dir, prefix, suffix, count, with_sleep=0):
