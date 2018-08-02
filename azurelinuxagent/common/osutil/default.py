@@ -390,12 +390,12 @@ class DefaultOSUtil(object):
         if not remove:
             # for older distros create sudoers.d
             if not os.path.isdir(sudoers_dir):
-                sudoers_file = os.path.join(sudoers_dir, '../sudoers')
                 # create the sudoers.d directory
-                os.mkdir(sudoers_dir)
+                fileutil.mkdir(sudoers_dir)
                 # add the include of sudoers.d to the /etc/sudoers
-                sudoers = '\n#includedir ' + sudoers_dir + '\n'
-                fileutil.append_file(sudoers_file, sudoers)
+                sudoers_file = os.path.join(sudoers_dir, os.pardir, 'sudoers')
+                include_sudoers_dir = "\n#includedir {0}\n".format(sudoers_dir)
+                fileutil.append_file(sudoers_file, include_sudoers_dir)
             sudoer = None
             if nopasswd:
                 sudoer = "{0} ALL=(ALL) NOPASSWD: ALL".format(username)
