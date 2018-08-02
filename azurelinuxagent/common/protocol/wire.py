@@ -328,16 +328,14 @@ def ext_handler_status_to_v1(handler_status, ext_statuses, timestamp):
         'handlerVersion': handler_status.version,
         'handlerName': handler_status.name,
         'status': handler_status.status,
-        'code': handler_status.code
+        'code': handler_status.code,
+        'useExactVersion': True
     }
     if handler_status.message is not None:
         v1_handler_status["formattedMessage"] = {
             "lang": "en-US",
             "message": handler_status.message
         }
-
-    if handler_status.upgradeGuid is not None:
-        v1_handler_status["upgradeGuid"] = handler_status.upgradeGuid
 
     if len(handler_status.extensions) > 0:
         # Currently, no more than one extension per handler
@@ -1568,20 +1566,10 @@ class ExtensionsConfig(object):
         ext_handler.properties.version = getattrib(plugin, "version")
         ext_handler.properties.state = getattrib(plugin, "state")
 
-        ext_handler.properties.upgradeGuid = getattrib(plugin, "upgradeGuid")
-        if not ext_handler.properties.upgradeGuid:
-            ext_handler.properties.upgradeGuid = None
-
         try:
             ext_handler.properties.dependencyLevel = int(getattrib(plugin, "dependencyLevel"))
         except ValueError:
             ext_handler.properties.dependencyLevel = 0
-
-        auto_upgrade = getattrib(plugin, "autoUpgrade")
-        if auto_upgrade is not None and auto_upgrade.lower() == "true":
-            ext_handler.properties.upgradePolicy = "auto"
-        else:
-            ext_handler.properties.upgradePolicy = "manual"
 
         location = getattrib(plugin, "location")
         failover_location = getattrib(plugin, "failoverlocation")
