@@ -33,7 +33,7 @@ from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.restapi import TelemetryEventParam, \
     TelemetryEvent, \
     get_properties
-from azurelinuxagent.common.utils import textutil
+from azurelinuxagent.common.utils import fileutil, textutil
 from azurelinuxagent.common.version import CURRENT_VERSION
 
 _EVENT_MSG = "Event: name={0}, op={1}, message={2}, duration={3}"
@@ -201,9 +201,7 @@ class EventLogger(object):
             logger.warn("Cannot save event -- Event reporter is not initialized.")
             return
 
-        if not os.path.exists(self.event_dir):
-            os.mkdir(self.event_dir)
-            os.chmod(self.event_dir, 0o700)
+        fileutil.mkdir(self.event_dir, mode=0o700)
 
         existing_events = os.listdir(self.event_dir)
         if len(existing_events) >= 1000:

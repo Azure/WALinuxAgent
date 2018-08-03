@@ -328,16 +328,14 @@ def ext_handler_status_to_v1(handler_status, ext_statuses, timestamp):
         'handlerVersion': handler_status.version,
         'handlerName': handler_status.name,
         'status': handler_status.status,
-        'code': handler_status.code
+        'code': handler_status.code,
+        'useExactVersion': True
     }
     if handler_status.message is not None:
         v1_handler_status["formattedMessage"] = {
             "lang": "en-US",
             "message": handler_status.message
         }
-
-    if handler_status.upgradeGuid is not None:
-        v1_handler_status["upgradeGuid"] = handler_status.upgradeGuid
 
     if len(handler_status.extensions) > 0:
         # Currently, no more than one extension per handler
@@ -981,52 +979,53 @@ class WireClient(object):
             raise ProtocolNotFoundError(error)
 
     def upload_status_blob(self):
-        try:
-            self.update_goal_state()
+        self.update_goal_state()
+        ext_conf = self.get_ext_conf()
+
+        if ext_conf.status_upload_blob is None:
+            self.update_goal_state(forced=True)
             ext_conf = self.get_ext_conf()
 
-            blob_uri = ext_conf.status_upload_blob
-            blob_type = ext_conf.status_upload_blob_type
+        if ext_conf.status_upload_blob is None:
+            raise ProtocolNotFoundError("Status upload uri is missing")
 
-            if blob_uri is None:
-                raise ProtocolError("No blob uri found")
+        blob_type = ext_conf.status_upload_blob_type
+        if blob_type not in ["BlockBlob", "PageBlob"]:
+            blob_type = "BlockBlob"
+            logger.verbose("Status Blob type is unspecified, assuming BlockBlob")
 
-            if blob_type not in ["BlockBlob", "PageBlob"]:
-                blob_type = "BlockBlob"
-                logger.verbose("Status Blob type is unspecified, assuming BlockBlob")
+        try:
+            self.status_blob.prepare(blob_type)
+        except Exception as e:
+            raise ProtocolError("Exception creating status blob: {0}", ustr(e))
 
-            try:
-                self.status_blob.prepare(blob_type)
-            except Exception as e:
-                raise ProtocolError("Exception creating status blob: {0}", ustr(e))
+        # Swap the order of use for the HostPlugin vs. the "direct" route.
+        # Prefer the use of HostPlugin. If HostPlugin fails fall back to the
+        # direct route.
+        #
+        # The code previously preferred the "direct" route always, and only fell back
+        # to the HostPlugin *if* there was an error.  We would like to move to
+        # the HostPlugin for all traffic, but this is a big change.  We would like
+        # to see how this behaves at scale, and have a fallback should things go
+        # wrong.  This is why we try HostPlugin then direct.
+        try:
+            host = self.get_host_plugin()
+            host.put_vm_status(self.status_blob,
+                               ext_conf.status_upload_blob,
+                               ext_conf.status_upload_blob_type)
+            return
+        except ResourceGoneError:
+            # do not attempt direct, force goal state update and wait to try again
+            self.update_goal_state(forced=True)
+            return
+        except Exception as e:
+            # for all other errors, fall back to direct
+            msg = "Falling back to direct upload: {0}".format(ustr(e))
+            self.report_status_event(msg, is_success=True)
 
-            # Swap the order of use for the HostPlugin vs. the "direct" route.
-            # Prefer the use of HostPlugin. If HostPlugin fails fall back to the
-            # direct route.
-            #
-            # The code previously preferred the "direct" route always, and only fell back
-            # to the HostPlugin *if* there was an error.  We would like to move to
-            # the HostPlugin for all traffic, but this is a big change.  We would like
-            # to see how this behaves at scale, and have a fallback should things go
-            # wrong.  This is why we try HostPlugin then direct.
-            try:
-                host = self.get_host_plugin()
-                host.put_vm_status(self.status_blob,
-                                   ext_conf.status_upload_blob,
-                                   ext_conf.status_upload_blob_type)
+        try:
+            if self.status_blob.upload(ext_conf.status_upload_blob):
                 return
-            except ResourceGoneError:
-                # do not attempt direct, force goal state update and wait to try again
-                self.update_goal_state(forced=True)
-                return
-            except Exception as e:
-                # for all other errors, fall back to direct
-                msg = "Falling back to direct upload: {0}".format(ustr(e))
-                self.report_status_event(msg, is_success=True)
-
-            if self.status_blob.upload(blob_uri):
-                return
-
         except Exception as e:
             msg = "Exception uploading status blob: {0}".format(ustr(e))
             self.report_status_event(msg, is_success=False)
@@ -1567,20 +1566,10 @@ class ExtensionsConfig(object):
         ext_handler.properties.version = getattrib(plugin, "version")
         ext_handler.properties.state = getattrib(plugin, "state")
 
-        ext_handler.properties.upgradeGuid = getattrib(plugin, "upgradeGuid")
-        if not ext_handler.properties.upgradeGuid:
-            ext_handler.properties.upgradeGuid = None
-
         try:
             ext_handler.properties.dependencyLevel = int(getattrib(plugin, "dependencyLevel"))
         except ValueError:
             ext_handler.properties.dependencyLevel = 0
-
-        auto_upgrade = getattrib(plugin, "autoUpgrade")
-        if auto_upgrade is not None and auto_upgrade.lower() == "true":
-            ext_handler.properties.upgradePolicy = "auto"
-        else:
-            ext_handler.properties.upgradePolicy = "manual"
 
         location = getattrib(plugin, "location")
         failover_location = getattrib(plugin, "failoverlocation")

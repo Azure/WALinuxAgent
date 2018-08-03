@@ -14,12 +14,12 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 #
-
+import datetime
 import subprocess
 
 from azurelinuxagent.common.exception import ExtensionError
 from azurelinuxagent.common.utils.processutil \
-    import format_stdout_stderr, capture_from_process, capture_from_process_raw
+    import format_stdout_stderr, capture_from_process
 from tests.tools import *
 import sys
 
@@ -121,7 +121,14 @@ class TestProcessUtils(AgentTestCase):
         actual = capture_from_process(process, cmd)
         self.assertEqual(expected, actual)
 
-    def test_process_timeout(self):
+    def test_process_timeout_non_forked(self):
+        """
+        non-forked process runs for 20 seconds, timeout is 10 seconds
+        we expect:
+            - test to run in just over 10 seconds
+            - exception should be thrown
+            - output should be collected
+        """
         cmd = "{0} -t 20".format(process_target)
         process = subprocess.Popen(cmd,
                                    shell=True,
@@ -130,19 +137,93 @@ class TestProcessUtils(AgentTestCase):
                                    env=os.environ,
                                    preexec_fn=os.setsid)
 
-        if sys.version_info < (2, 7):
-            self.assertRaises(ExtensionError, capture_from_process_raw, process, cmd, 10)
-        else:
-            with self.assertRaises(ExtensionError) as ee:
-                capture_from_process_raw(process, cmd, 10)
+        try:
+            capture_from_process(process, 'sleep 20', 10)
+            self.fail('Timeout exception was expected')
+        except ExtensionError as e:
+            body = str(e)
+            self.assertTrue('Timeout(10)' in body)
+            self.assertTrue('Iteration 9' in body)
+            self.assertFalse('Iteration 11' in body)
+        except Exception as gen_ex:
+            self.fail('Unexpected exception: {0}'.format(gen_ex))
 
-            body = str(ee.exception)
-            if sys.version_info >= (3, 2):
-                self.assertNotRegex(body, "Iteration 12")
-                self.assertRegex(body, "Iteration 8")
-            else:
-                self.assertNotRegexpMatches(body, "Iteration 12")
-                self.assertRegexpMatches(body, "Iteration 8")
+    def test_process_timeout_forked(self):
+        """
+        forked process runs for 20 seconds, timeout is 10 seconds
+        we expect:
+            - test to run in less than 3 seconds
+            - no exception should be thrown
+            - no output is collected
+        """
+        cmd = "{0} -t 20 &".format(process_target)
+        process = subprocess.Popen(cmd,
+                                   shell=True,
+                                   stdout=subprocess.PIPE,
+                                   stderr=subprocess.PIPE,
+                                   env=os.environ,
+                                   preexec_fn=os.setsid)
+
+        start = datetime.datetime.utcnow()
+        try:
+            cap = capture_from_process(process, 'sleep 20 &', 10)
+        except Exception as e:
+            self.fail('No exception should be thrown for a long running process which forks: {0}'.format(e))
+        duration = datetime.datetime.utcnow() - start
+
+        self.assertTrue(duration < datetime.timedelta(seconds=3))
+        self.assertEqual('[stdout]\ncannot collect stdout\n\n[stderr]\n', cap)
+
+    def test_process_behaved_non_forked(self):
+        """
+        non-forked process runs for 10 seconds, timeout is 20 seconds
+        we expect:
+            - test to run in just over 10 seconds
+            - no exception should be thrown
+            - output should be collected
+        """
+        cmd = "{0} -t 10".format(process_target)
+        process = subprocess.Popen(cmd,
+                                   shell=True,
+                                   stdout=subprocess.PIPE,
+                                   stderr=subprocess.PIPE,
+                                   env=os.environ,
+                                   preexec_fn=os.setsid)
+
+        try:
+            body = capture_from_process(process, 'sleep 10', 20)
+        except Exception as gen_ex:
+            self.fail('Unexpected exception: {0}'.format(gen_ex))
+
+        self.assertFalse('Timeout' in body)
+        self.assertTrue('Iteration 9' in body)
+        self.assertTrue('Iteration 10' in body)
+
+    def test_process_behaved_forked(self):
+        """
+        forked process runs for 10 seconds, timeout is 20 seconds
+        we expect:
+            - test to run in under 3 seconds
+            - no exception should be thrown
+            - output is not collected
+        """
+        cmd = "{0} -t 10 &".format(process_target)
+        process = subprocess.Popen(cmd,
+                                   shell=True,
+                                   stdout=subprocess.PIPE,
+                                   stderr=subprocess.PIPE,
+                                   env=os.environ,
+                                   preexec_fn=os.setsid)
+
+        start = datetime.datetime.utcnow()
+        try:
+            body = capture_from_process(process, 'sleep 10 &', 20)
+        except Exception as e:
+            self.fail('No exception should be thrown for a well behaved process which forks: {0}'.format(e))
+        duration = datetime.datetime.utcnow() - start
+
+        self.assertTrue(duration < datetime.timedelta(seconds=3))
+        self.assertEqual('[stdout]\ncannot collect stdout\n\n[stderr]\n', body)
 
     def test_process_bad_pgid(self):
         """

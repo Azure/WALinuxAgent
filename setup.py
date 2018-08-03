@@ -159,6 +159,15 @@ def get_data_files(name, version, fullname):
         set_conf_files(data_files, src=["config/debian/waagent.conf"])
         set_logrotate_files(data_files)
         set_udev_files(data_files, dest="/lib/udev/rules.d")
+    elif name == 'iosxe':
+        set_bin_files(data_files)
+        set_conf_files(data_files, src=["config/iosxe/waagent.conf"])
+        set_logrotate_files(data_files)
+        set_udev_files(data_files)
+        set_systemd_files(data_files, dest="/usr/lib/systemd/system")
+        if version.startswith("7.1"):
+            # TODO this is a mitigation to systemctl bug on 7.1
+            set_sysv_files(data_files)
     else:
         # Use default setting
         set_bin_files(data_files)
@@ -222,7 +231,7 @@ setuptools.setup(
     platforms='Linux',
     url='https://github.com/Azure/WALinuxAgent',
     license='Apache License Version 2.0',
-    packages=find_packages(exclude=["tests"]),
+    packages=find_packages(exclude=["tests*"]),
     py_modules=["__main__"],
     install_requires=requires,
     cmdclass={

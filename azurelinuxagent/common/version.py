@@ -85,9 +85,9 @@ def get_distro():
     else:
         try:
             # dist() removed in Python 3.7
-            osinfo = platform.dist()
+            osinfo = list(platform.dist()) + ['']
         except:
-            osinfo = ('UNKNOWN', 'FFFF', '')
+            osinfo = ['UNKNOWN', 'FFFF', '', '']
 
     # The platform.py lib has issue with detecting oracle linux distribution.
     # Merge the following patch provided by oracle as a temporary fix.
@@ -106,6 +106,9 @@ def get_distro():
     if os.path.exists("/etc/cp-release"):
         osinfo = get_checkpoint_platform()
 
+    if os.path.exists("/home/guestshell/azure"):
+        osinfo = ['iosxe', 'csr1000v', '', 'Cisco IOSXE Linux']
+
     # Remove trailing whitespace and quote in distro name
     osinfo[0] = osinfo[0].strip('"').strip(' ').lower()
     return osinfo
@@ -113,7 +116,7 @@ def get_distro():
 
 AGENT_NAME = "WALinuxAgent"
 AGENT_LONG_NAME = "Azure Linux Agent"
-AGENT_VERSION = '2.2.27'
+AGENT_VERSION = '2.2.30.1'
 AGENT_LONG_VERSION = "{0}-{1}".format(AGENT_NAME, AGENT_VERSION)
 AGENT_DESCRIPTION = """
 The Azure Linux Agent supports the provisioning and running of Linux

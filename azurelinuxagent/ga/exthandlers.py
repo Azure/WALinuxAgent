@@ -39,7 +39,7 @@ import azurelinuxagent.common.version as version
 from azurelinuxagent.common.cgroups import CGroups, CGroupsTelemetry
 from azurelinuxagent.common.errorstate import ErrorState, ERROR_STATE_DELTA_DEFAULT, ERROR_STATE_DELTA_INSTALL
 from azurelinuxagent.common.event import add_event, WALAEventOperation, elapsed_milliseconds, report_event
-from azurelinuxagent.common.exception import ExtensionError, ProtocolError
+from azurelinuxagent.common.exception import ExtensionError, ProtocolError, ProtocolNotFoundError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.restapi import ExtHandlerStatus, \
                                                     ExtensionStatus, \
@@ -187,7 +187,6 @@ class ExtHandlersHandler(object):
         self.protocol = None
         self.ext_handlers = None
         self.last_etag = None
-        self.last_upgrade_guids = {}
         self.log_report = False
         self.log_etag = True
         self.log_process = False
@@ -238,23 +237,6 @@ class ExtHandlersHandler(object):
                       is_success=False,
                       message=msg)
             return
-
-    def get_upgrade_guid(self, name):
-        return self.last_upgrade_guids.get(name, (None, False))[0]
-
-    def get_log_upgrade_guid(self, ext_handler):
-        return self.last_upgrade_guids.get(ext_handler.name, (None, False))[1]
-
-    def set_log_upgrade_guid(self, ext_handler, log_val):
-        guid = self.get_upgrade_guid(ext_handler.name)
-        if guid is not None:
-            self.last_upgrade_guids[ext_handler.name] = (guid, log_val)
-
-    def is_new_guid(self, ext_handler):
-        last_guid = self.get_upgrade_guid(ext_handler.name)
-        if last_guid is None:
-            return True
-        return last_guid != ext_handler.properties.upgradeGuid
 
     def cleanup_outdated_handlers(self):
         handlers = []
@@ -336,28 +318,22 @@ class ExtHandlersHandler(object):
 
         try:
             state = ext_handler.properties.state
-            # The extension is to be enabled, there is an upgrade GUID
-            # and the GUID is NOT new
-            if state == u"enabled" and \
-                    ext_handler.properties.upgradeGuid is not None and \
-                    not self.is_new_guid(ext_handler):
-                ext_handler_i.ext_handler.properties.version = ext_handler_i.get_installed_version()
-                ext_handler_i.set_logger()
-                if self.last_etag != etag:
-                    self.set_log_upgrade_guid(ext_handler, True)
-
-                msg = "New GUID is the same as the old GUID. Exiting without upgrading."
-                if self.get_log_upgrade_guid(ext_handler):
-                    ext_handler_i.logger.info(msg)
-                    self.set_log_upgrade_guid(ext_handler, False)
-                ext_handler_i.set_handler_state(ExtHandlerState.Enabled)
-                ext_handler_i.set_handler_status(status="Ready", message="No change")
-                ext_handler_i.set_operation(WALAEventOperation.SkipUpdate)
-                ext_handler_i.report_event(message=ustr(msg), is_success=True)
-                return
-
-            self.set_log_upgrade_guid(ext_handler, True)
-            ext_handler_i.decide_version(target_state=state)
+            max_retries = 5
+            retry_count = 0
+            while ext_handler_i.decide_version(target_state=state) is None:
+                if retry_count >= max_retries:
+                    err_msg = "Unable to find manifest for extension {0}".format(ext_handler_i.ext_handler.name)
+                    ext_handler_i.set_operation(WALAEventOperation.Download)
+                    ext_handler_i.set_handler_status(message=ustr(err_msg), code=-1)
+                    ext_handler_i.report_event(message=ustr(err_msg), is_success=False)
+                    return
+                time.sleep(2**retry_count * 10)
+                retry_count += 1
+            if retry_count != 0:
+                ext_handler_i.set_operation(WALAEventOperation.Download)
+                err_msg = "Able to find manifest for extension {0} after {1} failed attempts.".format(
+                    ext_handler_i.ext_handler.name, retry_count)
+                ext_handler_i.report_event(message=ustr(err_msg))
             self.get_artifact_error_state.reset()
             if not ext_handler_i.is_upgrade and self.last_etag == etag:
                 if self.log_etag:
@@ -372,44 +348,35 @@ class ExtHandlersHandler(object):
             ext_handler_i.logger.info("Target handler state: {0}", state)
             if state == u"enabled":
                 self.handle_enable(ext_handler_i)
-                if ext_handler.properties.upgradeGuid is not None:
-                    ext_handler_i.logger.info("New Upgrade GUID: {0}", ext_handler.properties.upgradeGuid)
-                    self.last_upgrade_guids[ext_handler.name] = (ext_handler.properties.upgradeGuid, True)
             elif state == u"disabled":
                 self.handle_disable(ext_handler_i)
-                # Remove the GUID from the dictionary so that it is upgraded upon re-enable
-                self.last_upgrade_guids.pop(ext_handler.name, None)
             elif state == u"uninstall":
                 self.handle_uninstall(ext_handler_i)
-                # Remove the GUID from the dictionary so that it is upgraded upon re-install
-                self.last_upgrade_guids.pop(ext_handler.name, None)
             else:
                 message = u"Unknown ext handler state:{0}".format(state)
                 raise ExtensionError(message)
+        except ExtensionError as e:
+            self.handle_handle_ext_handler_error(ext_handler_i, e, e.code)
         except Exception as e:
-            msg = ustr(e)
-            ext_handler_i.set_handler_status(message=msg, code=-1)
+            self.handle_handle_ext_handler_error(ext_handler_i, e)
 
-            self.get_artifact_error_state.incr()
-            if self.get_artifact_error_state.is_triggered():
-                report_event(op=WALAEventOperation.GetArtifactExtended,
-                             message="Failed to get artifact for over "
-                                     "{0}: {1}".format(self.get_artifact_error_state.min_timedelta, msg),
-                             is_success=False)
-                self.get_artifact_error_state.reset()
-            else:
-                ext_handler_i.logger.warn(msg)
+    def handle_handle_ext_handler_error(self, ext_handler_i, e, code=-1):
+        msg = ustr(e)
+        ext_handler_i.set_handler_status(message=msg, code=code)
+
+        self.get_artifact_error_state.incr()
+        if self.get_artifact_error_state.is_triggered():
+            report_event(op=WALAEventOperation.GetArtifactExtended,
+                         message="Failed to get artifact for over "
+                                 "{0}: {1}".format(self.get_artifact_error_state.min_timedelta, msg),
+                         is_success=False)
+            self.get_artifact_error_state.reset()
+        else:
+            ext_handler_i.logger.warn(msg)
     
     def handle_enable(self, ext_handler_i):
         self.log_process = True
         old_ext_handler_i = ext_handler_i.get_installed_ext_handler()
-        if old_ext_handler_i is not None and \
-           old_ext_handler_i.version_gt(ext_handler_i):
-            msg = "Downgrade is not allowed. Skipping install and enable."
-            ext_handler_i.logger.error(msg)
-            ext_handler_i.set_operation(WALAEventOperation.Downgrade)
-            ext_handler_i.report_event(message=ustr(msg), is_success=True)
-            return
 
         handler_state = ext_handler_i.get_handler_state()
         ext_handler_i.logger.info("[Enable] current handler state is: {0}",
@@ -420,10 +387,13 @@ class ExtHandlersHandler(object):
             ext_handler_i.update_settings()
             if old_ext_handler_i is None:
                 ext_handler_i.install()
-            elif ext_handler_i.version_gt(old_ext_handler_i):
+            elif ext_handler_i.version_ne(old_ext_handler_i):
                 old_ext_handler_i.disable()
                 ext_handler_i.copy_status_files(old_ext_handler_i)
-                ext_handler_i.update()
+                if ext_handler_i.version_gt(old_ext_handler_i):
+                    ext_handler_i.update()
+                else:
+                    old_ext_handler_i.update(version=ext_handler_i.ext_handler.properties.version)
                 old_ext_handler_i.uninstall()
                 old_ext_handler_i.rm_ext_handler_dir()
                 ext_handler_i.update_with_install()
@@ -474,24 +444,28 @@ class ExtHandlersHandler(object):
             if self.log_report:
                 logger.verbose("Completed vm agent status report")
             self.report_status_error_state.reset()
+        except ProtocolNotFoundError as e:
+            self.report_status_error_state.incr()
+            message = "Failed to report vm agent status: {0}".format(e)
+            logger.verbose(message)
         except ProtocolError as e:
             self.report_status_error_state.incr()
             message = "Failed to report vm agent status: {0}".format(e)
             add_event(AGENT_NAME,
-                version=CURRENT_VERSION,
-                op=WALAEventOperation.ExtensionProcessing,
-                is_success=False,
-                message=message)
+                      version=CURRENT_VERSION,
+                      op=WALAEventOperation.ExtensionProcessing,
+                      is_success=False,
+                      message=message)
 
         if self.report_status_error_state.is_triggered():
             message = "Failed to report vm agent status for more than {0}"\
                 .format(self.report_status_error_state.min_timedelta)
 
             add_event(AGENT_NAME,
-                version=CURRENT_VERSION,
-                op=WALAEventOperation.ReportStatusExtended,
-                is_success=False,
-                message=message)
+                      version=CURRENT_VERSION,
+                      op=WALAEventOperation.ReportStatusExtended,
+                      is_success=False,
+                      message=message)
 
             self.report_status_error_state.reset()
         
@@ -507,9 +481,6 @@ class ExtHandlersHandler(object):
         handler_status = ext_handler_i.get_handler_status() 
         if handler_status is None:
             return
-        guid = self.get_upgrade_guid(ext_handler.name)
-        if guid is not None:
-            handler_status.upgradeGuid = guid
 
         handler_state = ext_handler_i.get_handler_state()
         if handler_state != ExtHandlerState.NotInstalled:
@@ -573,74 +544,21 @@ class ExtHandlerInstance(object):
         # - Find the installed package (its version must exactly match)
         # - Find the internal candidate (its version must exactly match)
         # - Separate the public packages
-        internal_pkg = None
+        selected_pkg = None
         installed_pkg = None
-        public_pkgs = []
+        pkg_list.versions.sort(key=lambda p: FlexibleVersion(p.version))
         for pkg in pkg_list.versions:
             pkg_version = FlexibleVersion(pkg.version)
             if pkg_version == installed_version:
                 installed_pkg = pkg
-            if pkg.isinternal and pkg_version == requested_version:
-                internal_pkg = pkg
-            if not pkg.isinternal:
-                public_pkgs.append(pkg)
-
-        internal_version = FlexibleVersion(internal_pkg.version) \
-                            if internal_pkg is not None \
-                            else FlexibleVersion()
-        public_pkgs.sort(key=lambda p: FlexibleVersion(p.version), reverse=True)
-
-        # Determine the preferred version and type of upgrade occurring
-        preferred_version = max(requested_version, installed_version)
-        is_major_upgrade = preferred_version.major > installed_version.major
-        allow_minor_upgrade = self.ext_handler.properties.upgradePolicy == 'auto'
-
-        # Find the first public candidate which
-        # - Matches the preferred major version
-        # - Does not upgrade to a new, disallowed major version
-        # - And only increments the minor version if allowed
-        # Notes:
-        # - The patch / hotfix version is not considered
-        public_pkg = None
-        for pkg in public_pkgs:
-            pkg_version = FlexibleVersion(pkg.version)
-            if pkg_version.major == preferred_version.major \
-                    and (not pkg.disallow_major_upgrade or not is_major_upgrade) \
-                    and (allow_minor_upgrade or pkg_version.minor == preferred_version.minor):
-                public_pkg = pkg
-                break
-
-        # If there are no candidates, locate the highest public version whose
-        # major matches that installed
-        if internal_pkg is None and public_pkg is None:
-            for pkg in public_pkgs:
-                pkg_version = FlexibleVersion(pkg.version)
-                if pkg_version.major == installed_version.major:
-                    public_pkg = pkg
-                    break
-
-        public_version = FlexibleVersion(public_pkg.version) \
-                            if public_pkg is not None \
-                            else FlexibleVersion()
-
-        # Select the candidate
-        # - Use the public candidate if there is no internal candidate or
-        #   the public is more recent (e.g., a hotfix patch)
-        # - Otherwise use the internal candidate
-        if internal_pkg is None or (public_pkg is not None and public_version > internal_version):
-            selected_pkg = public_pkg
-        else:
-            selected_pkg = internal_pkg
-
-        selected_version = FlexibleVersion(selected_pkg.version) \
-                            if selected_pkg is not None \
-                            else FlexibleVersion()
+            if requested_version.matches(pkg_version):
+                selected_pkg = pkg
 
         # Finally, update the version only if not downgrading
         # Note:
         #  - A downgrade, which will be bound to the same major version,
         #    is allowed if the installed version is no longer available
-        if target_state == u"uninstall":
+        if target_state == u"uninstall" or target_state == u"disabled":
             if installed_pkg is None:
                 msg = "Failed to find installed version of {0} " \
                     "to uninstall".format(self.ext_handler.name)
@@ -648,26 +566,20 @@ class ExtHandlerInstance(object):
             self.pkg = installed_pkg
             self.ext_handler.properties.version = str(installed_version) \
                                     if installed_version is not None else None
-        elif selected_pkg is None \
-                or (installed_pkg is not None and selected_version < installed_version):
-            self.pkg = installed_pkg
-            self.ext_handler.properties.version = str(installed_version) \
-                                    if installed_version is not None else None
         else:
             self.pkg = selected_pkg
-            self.ext_handler.properties.version = str(selected_pkg.version)
+            if self.pkg is not None:
+                self.ext_handler.properties.version = str(selected_pkg.version)
 
-        # Note if the selected package is greater than that installed
+        # Note if the selected package is different than that installed
         if installed_pkg is None \
-                or FlexibleVersion(self.pkg.version) > FlexibleVersion(installed_pkg.version):
+                or (self.pkg is not None and FlexibleVersion(self.pkg.version) != FlexibleVersion(installed_pkg.version)):
             self.is_upgrade = True
 
-        if self.pkg is None:
-            raise ExtensionError("Failed to find any valid extension package")
-
-        self.logger.verbose("Use version: {0}", self.pkg.version)
+        if self.pkg is not None:
+            self.logger.verbose("Use version: {0}", self.pkg.version)
         self.set_logger()
-        return
+        return self.pkg
 
     def set_logger(self):
         prefix = "[{0}]".format(self.get_full_name())
@@ -677,6 +589,11 @@ class ExtHandlerInstance(object):
         self_version = self.ext_handler.properties.version
         other_version = other.ext_handler.properties.version
         return FlexibleVersion(self_version) > FlexibleVersion(other_version)
+
+    def version_ne(self, other):
+        self_version = self.ext_handler.properties.version
+        other_version = other.ext_handler.properties.version
+        return FlexibleVersion(self_version) != FlexibleVersion(other_version)
 
     def get_installed_ext_handler(self):
         lastest_version = self.get_installed_version()
@@ -830,7 +747,7 @@ class ExtHandlerInstance(object):
         man = self.load_manifest()
         enable_cmd = man.get_enable_command()
         self.logger.info("Enable extension [{0}]".format(enable_cmd))
-        self.launch_command(enable_cmd, timeout=300)
+        self.launch_command(enable_cmd, timeout=300, extension_error_code=1009)
         self.set_handler_state(ExtHandlerState.Enabled)
         self.set_handler_status(status="Ready", message="Plugin enabled")
 
@@ -839,7 +756,8 @@ class ExtHandlerInstance(object):
         man = self.load_manifest()
         disable_cmd = man.get_disable_command()
         self.logger.info("Disable extension [{0}]".format(disable_cmd))
-        self.launch_command(disable_cmd, timeout=900)
+        self.launch_command(disable_cmd, timeout=900,
+                            extension_error_code=1010)
         self.set_handler_state(ExtHandlerState.Installed)
         self.set_handler_status(status="NotReady", message="Plugin disabled")
 
@@ -848,7 +766,7 @@ class ExtHandlerInstance(object):
         install_cmd = man.get_install_command()
         self.logger.info("Install extension [{0}]".format(install_cmd))
         self.set_operation(WALAEventOperation.Install)
-        self.launch_command(install_cmd, timeout=900)
+        self.launch_command(install_cmd, timeout=900, extension_error_code=1007)
         self.set_handler_state(ExtHandlerState.Installed)
 
     def uninstall(self):
@@ -873,12 +791,18 @@ class ExtHandlerInstance(object):
             self.report_event(message=message, is_success=False)
             self.logger.warn(message)
 
-    def update(self):
+    def update(self, version=None):
+        if version is None:
+            version = self.ext_handler.properties.version
+
         self.set_operation(WALAEventOperation.Update)
         man = self.load_manifest()
         update_cmd = man.get_update_command()
         self.logger.info("Update extension [{0}]".format(update_cmd))
-        self.launch_command(update_cmd, timeout=900)
+        self.launch_command(update_cmd, 
+                            timeout=900,
+                            extension_error_code=1008, 
+                            env={'VERSION': version})
     
     def update_with_install(self):
         man = self.load_manifest()
@@ -993,10 +917,14 @@ class ExtHandlerInstance(object):
         last_update = int(time.time() - os.stat(heartbeat_file).st_mtime)
         return last_update <= 600
 
-    def launch_command(self, cmd, timeout=300):
+    def launch_command(self, cmd, timeout=300, extension_error_code=-1, env=None):
         begin_utc = datetime.datetime.utcnow()
         self.logger.verbose("Launch command: [{0}]", cmd)
         base_dir = self.get_base_dir()
+
+        if env is None:
+            env = {}
+        env.update(os.environ)
 
         try:
             # This should be .run(), but due to the wide variety
@@ -1015,22 +943,27 @@ class ExtHandlerInstance(object):
                 CGroups.add_to_extension_cgroup(self.ext_handler.name)
 
             process = subprocess.Popen(full_path,
-                                  shell=True,
-                                  cwd=base_dir,
-                                  stdout=subprocess.PIPE,
-                                  stderr=subprocess.PIPE,
-                                  env=os.environ,
-                                  preexec_fn=pre_exec_function)
+                                       shell=True,
+                                       cwd=base_dir,
+                                       stdout=subprocess.PIPE,
+                                       stderr=subprocess.PIPE,
+                                       env=env,
+                                       preexec_fn=pre_exec_function)
         except OSError as e:
-            raise ExtensionError("Failed to launch '{0}': {1}".format(full_path, e.strerror))
+            raise ExtensionError("Failed to launch '{0}': {1}".format(full_path, e.strerror),
+                                 code=extension_error_code)
 
         cg = CGroups.for_extension(self.ext_handler.name)
         CGroupsTelemetry.track_extension(self.ext_handler.name, cg)
         msg = capture_from_process(process, cmd, timeout)
 
         ret = process.poll()
-        if ret is None or ret != 0:
-            raise ExtensionError("Non-zero exit code: {0}, {1}\n{2}".format(ret, cmd, msg))
+        if ret is None:
+            raise ExtensionError("Process {0} was not terminated: {1}\n{2}".format(process.pid, cmd, msg),
+                                 code=extension_error_code)
+        if ret != 0:
+            raise ExtensionError("Non-zero exit code: {0}, {1}\n{2}".format(ret, cmd, msg),
+                                 code=extension_error_code)
 
         duration = elapsed_milliseconds(begin_utc)
         self.report_event(message="{0}\n{1}".format(cmd, msg), duration=duration, log_event=False)

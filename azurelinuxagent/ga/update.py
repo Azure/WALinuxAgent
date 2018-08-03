@@ -177,7 +177,11 @@ class UpdateHandler(object):
             start_time = time.time()
             while (time.time() - start_time) < CHILD_HEALTH_INTERVAL:
                 time.sleep(poll_interval)
-                ret = self.child_process.poll()
+                try:
+                    ret = self.child_process.poll()
+                except OSError:
+                    # if child_process has terminated, calling poll could raise an exception
+                    ret = -1
                 if ret is not None:
                     break
 
@@ -227,12 +231,13 @@ class UpdateHandler(object):
                     agent_cmd,
                     ustr(e))
                 logger.warn(msg)
+                detailed_message = '{0} {1}'.format(msg, traceback.format_exc())
                 add_event(
                     AGENT_NAME,
                     version=agent_version,
                     op=WALAEventOperation.Enable,
                     is_success=False,
-                    message=msg)
+                    message=detailed_message)
                 if latest_agent is not None:
                     latest_agent.mark_failure(is_fatal=True)
 
