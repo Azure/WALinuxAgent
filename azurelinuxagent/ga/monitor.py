@@ -105,6 +105,8 @@ class MonitorHandler(object):
     # imds
     IMDS_HEARTBEAT_PERIOD = datetime.timedelta(minutes=1)
     IMDS_HEALTH_PERIOD = datetime.timedelta(minutes=3)
+    # extension health store
+    EXTENSION_HEALTHSTORE_HEARTBEAT_PERIOD = datetime.timedelta(minutes=1)
 
     def __init__(self):
         self.osutil = get_osutil()
@@ -117,6 +119,7 @@ class MonitorHandler(object):
         self.last_cgroup_telemetry = None
         self.last_host_plugin_heartbeat = None
         self.last_imds_heartbeat = None
+        self.last_extension_healthstore_heartbeat = None
         self.protocol = None
         self.health_service = None
         self.last_route_table_hash = b''
@@ -257,7 +260,8 @@ class MonitorHandler(object):
                         MonitorHandler.CGROUP_TELEMETRY_PERIOD,
                         MonitorHandler.EVENT_COLLECTION_PERIOD,
                         MonitorHandler.HOST_PLUGIN_HEARTBEAT_PERIOD,
-                        MonitorHandler.IMDS_HEARTBEAT_PERIOD).seconds
+                        MonitorHandler.IMDS_HEARTBEAT_PERIOD,
+                        MonitorHandler.EXTENSION_HEALTHSTORE_HEARTBEAT_PERIOD).seconds
         while self.should_run:
             self.send_telemetry_heartbeat()
             self.send_cgroup_telemetry()
@@ -265,6 +269,7 @@ class MonitorHandler(object):
             self.send_host_plugin_heartbeat()
             self.send_imds_heartbeat()
             self.log_altered_network_configuration()
+            self.send_extension_healthstore_heartbeat()
             time.sleep(min_delta)
 
     def add_sysinfo(self, event):
@@ -311,6 +316,29 @@ class MonitorHandler(object):
                     log_event=False)
 
             self.last_imds_heartbeat = datetime.datetime.utcnow()
+
+    def send_extension_healthstore_heartbeat(self):
+        """
+        Send health signals for extensions to the health store every EXTENSION_HEALTHSTORE_HEARTBEAT_PERIOD.
+        """
+
+        if self.last_extension_healthstore_heartbeat is None:
+            self.last_extension_healthstore_heartbeat = datetime.datetime.utcnow() - MonitorHandler.EXTENSION_HEALTHSTORE_HEARTBEAT_PERIOD
+
+        if datetime.datetime.utcnow() >= (self.last_extension_healthstore_heartbeat + MonitorHandler.EXTENSION_HEALTHSTORE_HEARTBEAT_PERIOD):
+            try:
+                self.health_service.report_extension_health_observations()
+            except Exception as e:
+                msg = "Exception sending extension healthstore heartbeat: {0}".format(ustr(e))
+                add_event(
+                    name=AGENT_NAME,
+                    version=CURRENT_VERSION,
+                    op=WALAEventOperation.ExtensionHeathstoreHeartbeat,
+                    is_success=False,
+                    message=msg,
+                    log_event=False)
+
+            self.last_extension_healthstore_heartbeat = datetime.datetime.utcnow()
 
     def send_host_plugin_heartbeat(self):
         """

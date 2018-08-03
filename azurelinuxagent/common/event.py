@@ -51,6 +51,7 @@ class WALAEventOperation:
     Downgrade = "Downgrade"
     Download = "Download"
     Enable = "Enable"
+    ExtensionHeathstoreHeartbeat = "ExtensionHealthstoreHeartbeat"
     ExtensionProcessing = "ExtensionProcessing"
     Firewall = "Firewall"
     GetArtifactExtended = "GetArtifactExtended"
