@@ -99,7 +99,7 @@ class ProvisionHandler(object):
 
         except (ProtocolError, ProvisionError) as e:
             self.report_not_ready("ProvisioningFailed", ustr(e))
-            self.report_event(ustr(e))
+            self.report_event(ustr(e), is_success=False)
             logger.error("Provisioning failed: {0}", ustr(e))
             return
 
@@ -212,7 +212,7 @@ class ProvisionHandler(object):
                           is_success=True,
                           duration=0,
                           operation=WALAEventOperation.ProvisionGuestAgent)
-        if not provision_guest_agent:
+        if provision_guest_agent and provision_guest_agent.lower() == 'false':
             self.write_agent_disabled()
 
     def provision(self, ovfenv):

@@ -27,16 +27,17 @@ class MockDaemonCall(object):
 
     def __call__(self, *args, **kw):
         self.count = self.count - 1
-        #Stop daemon after restarting for n times
+        # Stop daemon after restarting for n times
         if self.count <= 0:
             self.daemon_handler.running = False
         raise Exception("Mock unhandled exception")
+
 
 class TestDaemon(AgentTestCase):
     
     @patch("time.sleep")
     def test_daemon_restart(self, mock_sleep):
-        #Mock daemon function
+        # Mock daemon function
         daemon_handler = get_daemon_handler()
         mock_daemon = Mock(side_effect=MockDaemonCall(daemon_handler, 2))
         daemon_handler.daemon = mock_daemon
@@ -51,7 +52,7 @@ class TestDaemon(AgentTestCase):
     @patch("time.sleep")
     @patch("azurelinuxagent.daemon.main.conf")
     @patch("azurelinuxagent.daemon.main.sys.exit")
-    def test_check_pid(self, mock_exit, mock_conf, mock_sleep):
+    def test_check_pid(self, mock_exit, mock_conf, _):
         daemon_handler = get_daemon_handler()
 
         mock_pid_file = os.path.join(self.tmp_dir, "pid")
@@ -65,7 +66,7 @@ class TestDaemon(AgentTestCase):
 
     @patch("azurelinuxagent.daemon.main.DaemonHandler.check_pid")
     @patch("azurelinuxagent.common.conf.get_fips_enabled", return_value=True)
-    def test_set_openssl_fips(self, mock_conf, mock_daemon):
+    def test_set_openssl_fips(self, _, __):
         daemon_handler = get_daemon_handler()
         daemon_handler.running = False
         with patch.dict("os.environ"):
@@ -75,13 +76,14 @@ class TestDaemon(AgentTestCase):
 
     @patch("azurelinuxagent.daemon.main.DaemonHandler.check_pid")
     @patch("azurelinuxagent.common.conf.get_fips_enabled", return_value=False)
-    def test_does_not_set_openssl_fips(self, mock_conf, mock_daemon):
+    def test_does_not_set_openssl_fips(self, _, __):
         daemon_handler = get_daemon_handler()
         daemon_handler.running = False
         with patch.dict("os.environ"):
             daemon_handler.run()
             self.assertFalse(OPENSSL_FIPS_ENVIRONMENT in os.environ)
-   
+
+
 if __name__ == '__main__':
     unittest.main()
 

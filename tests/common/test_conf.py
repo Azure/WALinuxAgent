@@ -119,6 +119,18 @@ class TestConf(AgentTestCase):
         self.assertEqual(get_disable_agent_file_path(self.conf),
                          os.path.join(self.tmp_dir, DISABLE_AGENT_FILE))
 
+    def test_write_agent_disabled(self):
+        """
+        Test writing disable_agent is empty
+        """
+        from azurelinuxagent.pa.provision.default import ProvisionHandler
+
+        disable_file_path = get_disable_agent_file_path(self.conf)
+        self.assertFalse(os.path.exists(disable_file_path))
+        ProvisionHandler.write_agent_disabled()
+        self.assertTrue(os.path.exists(disable_file_path))
+        self.assertEqual('', fileutil.read_file(disable_file_path))
+
     def test_get_extensions_enabled(self):
         self.assertTrue(get_extensions_enabled(self.conf))
 
