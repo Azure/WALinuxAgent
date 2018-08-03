@@ -985,7 +985,10 @@ class DefaultOSUtil(object):
         return endpoint
 
     def is_missing_default_route(self):
-        routes = shellutil.run_get_output("route -n")[1]
+        route_cmd = "route -n"
+        if not shellutil.has_command("route"):
+            route_cmd = "ip route show"
+        routes = shellutil.run_get_output(route_cmd)[1]
         for route in routes.split("\n"):
             if route.startswith("0.0.0.0 ") or route.startswith("default "):
                return False
@@ -1005,11 +1008,18 @@ class DefaultOSUtil(object):
         return self.get_first_if()[1]
 
     def set_route_for_dhcp_broadcast(self, ifname):
-        return shellutil.run("route add 255.255.255.255 dev {0}".format(ifname),
+        route_cmd = "route add"
+        if not shellutil.has_command("route"):
+            route_cmd = "ip route add"
+        return shellutil.run("{0} 255.255.255.255 dev {1}".format(
+            route_cmd, ifname),
                              chk_err=False)
 
     def remove_route_for_dhcp_broadcast(self, ifname):
-        shellutil.run("route del 255.255.255.255 dev {0}".format(ifname),
+        route_cmd = "route del"
+        if not shellutil.has_command("route"):
+            route_cmd = "ip route del"
+        shellutil.run("{0} 255.255.255.255 dev {1}".format(route_cmd, ifname),
                       chk_err=False)
 
     def is_dhcp_available(self):
@@ -1044,10 +1054,12 @@ class DefaultOSUtil(object):
 
     def route_add(self, net, mask, gateway):
         """
-        Add specified route using /sbin/route add -net.
+        Add specified route 
         """
-        cmd = ("/sbin/route add -net "
+        cmd = ("route add -net "
                "{0} netmask {1} gw {2}").format(net, mask, gateway)
+        if not shellutil.has_command("route"):
+            cmd = "ip route add {0} via {1}".format(net, gateway)
         return shellutil.run(cmd, chk_err=False)
 
     def get_dhcp_pid(self):
