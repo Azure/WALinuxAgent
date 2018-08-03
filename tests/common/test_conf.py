@@ -114,3 +114,11 @@ class TestConf(AgentTestCase):
                 TestConf.EXPECTED_CONFIGURATION[k],
                 configuration[k],
                 k)
+
+    def test_get_agent_disabled_file_path(self):
+        self.assertEqual(get_disable_agent_file_path(self.conf),
+                         os.path.join(self.tmp_dir, DISABLE_AGENT_FILE))
+
+    def test_get_extensions_enabled(self):
+        self.assertTrue(get_extensions_enabled(self.conf))
+

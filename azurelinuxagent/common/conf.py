@@ -360,6 +360,5 @@ def get_allow_http(conf=__conf__):
     return conf.get_switch("OS.AllowHTTP", False)
 
 
-@property
 def get_disable_agent_file_path(conf=__conf__):
     return os.path.join(get_lib_dir(conf), DISABLE_AGENT_FILE)

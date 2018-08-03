@@ -713,6 +713,20 @@ class TestExtension(AgentTestCase):
             ext_handler_instance.decide_version()
             self.assertEqual(expected_version, ext_handler.properties.version)
 
+    @patch('azurelinuxagent.common.conf.get_extensions_enabled', return_value=False)
+    def test_extensions_disabled(self, _, *args):
+        # test status is reported for no extensions
+        test_data = WireProtocolData(DATA_FILE_NO_EXT)
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+        exthandlers_handler.run()
+        self._assert_no_handler_status(protocol.report_vm_status)
+
+        # test status is reported, but extensions are not processed
+        test_data = WireProtocolData(DATA_FILE)
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+        exthandlers_handler.run()
+        self._assert_no_handler_status(protocol.report_vm_status)
+
 
 if __name__ == '__main__':
     unittest.main()
