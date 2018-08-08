@@ -27,45 +27,46 @@ class TestConf(AgentTestCase):
     # Note:
     # -- These values *MUST* match those from data/test_waagent.conf
     EXPECTED_CONFIGURATION = {
-        "Provisioning.Enabled" : True,
-        "Provisioning.UseCloudInit" : True,
-        "Provisioning.DeleteRootPassword" : True,
-        "Provisioning.RegenerateSshHostKeyPair" : True,
-        "Provisioning.SshHostKeyPairType" : "rsa",
-        "Provisioning.MonitorHostName" : True,
-        "Provisioning.DecodeCustomData" : False,
-        "Provisioning.ExecuteCustomData" : False,
-        "Provisioning.PasswordCryptId" : '6',
-        "Provisioning.PasswordCryptSaltLength" : 10,
-        "Provisioning.AllowResetSysUser" : False,
-        "ResourceDisk.Format" : True,
-        "ResourceDisk.Filesystem" : "ext4",
-        "ResourceDisk.MountPoint" : "/mnt/resource",
-        "ResourceDisk.EnableSwap" : False,
-        "ResourceDisk.SwapSizeMB" : 0,
-        "ResourceDisk.MountOptions" : None,
-        "Logs.Verbose" : False,
-        "OS.EnableFIPS" : True,
-        "OS.RootDeviceScsiTimeout" : '300',
-        "OS.OpensslPath" : '/usr/bin/openssl',
-        "OS.SshClientAliveInterval" : 42,
-        "OS.SshDir" : "/notareal/path",
-        "HttpProxy.Host" : None,
-        "HttpProxy.Port" : None,
-        "DetectScvmmEnv" : False,
-        "Lib.Dir" : "/var/lib/waagent",
-        "DVD.MountPoint" : "/mnt/cdrom/secure",
-        "Pid.File" : "/var/run/waagent.pid",
-        "Extension.LogDir" : "/var/log/azure",
-        "OS.HomeDir" : "/home",
-        "OS.EnableRDMA" : False,
-        "OS.UpdateRdmaDriver" : False,
-        "OS.CheckRdmaDriver" : False,
-        "AutoUpdate.Enabled" : True,
-        "AutoUpdate.GAFamily" : "Prod",
-        "EnableOverProvisioning" : True,
-        "OS.AllowHTTP" : False,
-        "OS.EnableFirewall" : False
+        "Extensions.Enabled": True,
+        "Provisioning.Enabled": True,
+        "Provisioning.UseCloudInit": True,
+        "Provisioning.DeleteRootPassword": True,
+        "Provisioning.RegenerateSshHostKeyPair": True,
+        "Provisioning.SshHostKeyPairType": "rsa",
+        "Provisioning.MonitorHostName": True,
+        "Provisioning.DecodeCustomData": False,
+        "Provisioning.ExecuteCustomData": False,
+        "Provisioning.PasswordCryptId": '6',
+        "Provisioning.PasswordCryptSaltLength": 10,
+        "Provisioning.AllowResetSysUser": False,
+        "ResourceDisk.Format": True,
+        "ResourceDisk.Filesystem": "ext4",
+        "ResourceDisk.MountPoint": "/mnt/resource",
+        "ResourceDisk.EnableSwap": False,
+        "ResourceDisk.SwapSizeMB": 0,
+        "ResourceDisk.MountOptions": None,
+        "Logs.Verbose": False,
+        "OS.EnableFIPS": True,
+        "OS.RootDeviceScsiTimeout": '300',
+        "OS.OpensslPath": '/usr/bin/openssl',
+        "OS.SshClientAliveInterval": 42,
+        "OS.SshDir": "/notareal/path",
+        "HttpProxy.Host": None,
+        "HttpProxy.Port": None,
+        "DetectScvmmEnv": False,
+        "Lib.Dir": "/var/lib/waagent",
+        "DVD.MountPoint": "/mnt/cdrom/secure",
+        "Pid.File": "/var/run/waagent.pid",
+        "Extension.LogDir": "/var/log/azure",
+        "OS.HomeDir": "/home",
+        "OS.EnableRDMA": False,
+        "OS.UpdateRdmaDriver": False,
+        "OS.CheckRdmaDriver": False,
+        "AutoUpdate.Enabled": True,
+        "AutoUpdate.GAFamily": "Prod",
+        "EnableOverProvisioning": True,
+        "OS.AllowHTTP": False,
+        "OS.EnableFirewall": False
     }
 
     def setUp(self):
@@ -113,3 +114,23 @@ class TestConf(AgentTestCase):
                 TestConf.EXPECTED_CONFIGURATION[k],
                 configuration[k],
                 k)
+
+    def test_get_agent_disabled_file_path(self):
+        self.assertEqual(get_disable_agent_file_path(self.conf),
+                         os.path.join(self.tmp_dir, DISABLE_AGENT_FILE))
+
+    def test_write_agent_disabled(self):
+        """
+        Test writing disable_agent is empty
+        """
+        from azurelinuxagent.pa.provision.default import ProvisionHandler
+
+        disable_file_path = get_disable_agent_file_path(self.conf)
+        self.assertFalse(os.path.exists(disable_file_path))
+        ProvisionHandler.write_agent_disabled()
+        self.assertTrue(os.path.exists(disable_file_path))
+        self.assertEqual('', fileutil.read_file(disable_file_path))
+
+    def test_get_extensions_enabled(self):
+        self.assertTrue(get_extensions_enabled(self.conf))
+
