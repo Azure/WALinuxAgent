@@ -224,7 +224,12 @@ agent. Valid values are "y" or "n". If extension handling is disabled, the goal 
 will still be processed and VM status is still reported, but only every 5 minutes. 
 Extension config within the goal state will be ignored. Note that functionality such
 as password reset, ssh key updates and backups depend on extensions. Only disable this
-if you do not need extensions at all.   
+if you do not need extensions at all.
+
+_Note_: disabling extensions in this manner is not the same as running completely 
+without the agent. In order to do that, the `provisionVMAgent` flag must be set at
+provisioning time, via whichever API is being used. We will provide more details on
+this on our wiki when it is generally available. 
 
 #### __Provisioning.Enabled__
 
