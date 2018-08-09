@@ -938,7 +938,7 @@ class ExtHandlerInstance(object):
 
         cg = CGroups.for_extension(self.ext_handler.name)
         CGroupsTelemetry.track_extension(self.ext_handler.name, cg)
-        msg = capture_from_process(process, cmd, timeout)
+        msg = capture_from_process(process, cmd, timeout, extension_error_code)
 
         ret = process.poll()
         if ret is None:
