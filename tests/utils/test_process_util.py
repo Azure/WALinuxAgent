@@ -26,6 +26,7 @@ import sys
 process_target = "{0}/process_target.sh".format(os.path.abspath(os.path.join(__file__, os.pardir)))
 process_cmd_template = "{0} -o '{1}' -e '{2}'"
 
+EXTENSION_ERROR_CODE = 1000
 
 class TestProcessUtils(AgentTestCase):
     def test_format_stdout_stderr00(self):
@@ -138,13 +139,14 @@ class TestProcessUtils(AgentTestCase):
                                    preexec_fn=os.setsid)
 
         try:
-            capture_from_process(process, 'sleep 20', 10)
+            capture_from_process(process, 'sleep 20', 10, EXTENSION_ERROR_CODE)
             self.fail('Timeout exception was expected')
         except ExtensionError as e:
             body = str(e)
             self.assertTrue('Timeout(10)' in body)
             self.assertTrue('Iteration 9' in body)
             self.assertFalse('Iteration 11' in body)
+            self.assertEqual(EXTENSION_ERROR_CODE, e.code)
         except Exception as gen_ex:
             self.fail('Unexpected exception: {0}'.format(gen_ex))
 
@@ -240,16 +242,18 @@ class TestProcessUtils(AgentTestCase):
                                    env=os.environ)
 
         if sys.version_info < (2, 7):
-            self.assertRaises(ExtensionError, capture_from_process, process, cmd, 10)
+            self.assertRaises(ExtensionError, capture_from_process, process, cmd, 10, EXTENSION_ERROR_CODE)
         else:
             with self.assertRaises(ExtensionError) as ee:
-                capture_from_process(process, cmd, 10)
+                capture_from_process(process, cmd, 10, EXTENSION_ERROR_CODE)
 
             body = str(ee.exception)
             if sys.version_info >= (3, 2):
                 self.assertRegex(body, "process group")
             else:
                 self.assertRegexpMatches(body, "process group")
+
+            self.assertEqual(EXTENSION_ERROR_CODE, ee.exception.code)
 
 
 if __name__ == '__main__':
