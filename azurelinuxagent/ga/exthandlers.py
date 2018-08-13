@@ -483,14 +483,14 @@ class ExtHandlersHandler(object):
                 active_exts = ext_handler_i.report_ext_status()
                 handler_status.extensions.extend(active_exts)
             except ExtensionError as e:
-                ext_handler_i.set_handler_status(message=ustr(e), code=-1)
+                ext_handler_i.set_handler_status(message=ustr(e), code=e.code)
 
             try:
                 heartbeat = ext_handler_i.collect_heartbeat()
                 if heartbeat is not None:
                     handler_status.status = heartbeat.get('status')
             except ExtensionError as e:
-                ext_handler_i.set_handler_status(message=ustr(e), code=-1)
+                ext_handler_i.set_handler_status(message=ustr(e), code=e.code)
 
         vm_status.vmAgent.extensionHandlers.append(handler_status)
 
@@ -664,7 +664,7 @@ class ExtHandlerInstance(object):
                 logger.warn("Error while downloading extension: {0}", e)
         
         if package is None or chosen_uri is None:
-            raise ExtensionError("Failed to download extension")
+            raise ExtensionError("Failed to download extension", code=1001)
 
         self.logger.verbose("Unpack extension package")
         self.pkg_file = os.path.join(conf.get_lib_dir(), os.path.basename(chosen_uri.uri) + ".zip")
@@ -675,7 +675,7 @@ class ExtHandlerInstance(object):
         except IOError as e:
             fileutil.clean_ioerror(e,
                 paths=[self.get_base_dir(), self.pkg_file])
-            raise ExtensionError(u"Failed to write and unzip plugin", e)
+            raise ExtensionError(u"Failed to write and unzip plugin", e, code=1001)
 
         # Add user execute permission to all files under the base dir
         for file in fileutil.get_all_files(self.get_base_dir()):
@@ -847,7 +847,11 @@ class ExtHandlerInstance(object):
             ext_status.message = u"Failed to get status file {0}".format(e)
             ext_status.code = -1
             ext_status.status = "error"
-        except (ExtensionError, ValueError) as e:
+        except ExtensionError as e:
+            ext_status.message = u"Malformed status file {0}".format(e)
+            ext_status.code = e.code
+            ext_status.status = "error"
+        except ValueError as e:
             ext_status.message = u"Malformed status file {0}".format(e)
             ext_status.code = -1
             ext_status.status = "error"
@@ -904,7 +908,7 @@ class ExtHandlerInstance(object):
         last_update = int(time.time() - os.stat(heartbeat_file).st_mtime)
         return last_update <= 600
 
-    def launch_command(self, cmd, timeout=300, extension_error_code=-1, env=None):
+    def launch_command(self, cmd, timeout=300, extension_error_code=1000, env=None):
         begin_utc = datetime.datetime.utcnow()
         self.logger.verbose("Launch command: [{0}]", cmd)
         base_dir = self.get_base_dir()
@@ -942,7 +946,7 @@ class ExtHandlerInstance(object):
 
         cg = CGroups.for_extension(self.ext_handler.name)
         CGroupsTelemetry.track_extension(self.ext_handler.name, cg)
-        msg = capture_from_process(process, cmd, timeout)
+        msg = capture_from_process(process, cmd, timeout, extension_error_code)
 
         ret = process.poll()
         if ret is None:
@@ -960,9 +964,9 @@ class ExtHandlerInstance(object):
         try:
             data = json.loads(fileutil.read_file(man_file))
         except (IOError, OSError) as e:
-            raise ExtensionError('Failed to load manifest file ({0}): {1}'.format(man_file, e.strerror))
+            raise ExtensionError('Failed to load manifest file ({0}): {1}'.format(man_file, e.strerror), code=1002)
         except ValueError:
-            raise ExtensionError('Malformed manifest file ({0}).'.format(man_file))
+            raise ExtensionError('Malformed manifest file ({0}).'.format(man_file), code=1003)
 
         return HandlerManifest(data[0])
 

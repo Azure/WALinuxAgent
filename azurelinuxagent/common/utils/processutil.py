@@ -100,7 +100,7 @@ def _destroy_process(process, signal_to_send=signal.SIGKILL):
         pass    # If the process is already gone, that's fine
 
 
-def capture_from_process_poll(process, cmd, timeout):
+def capture_from_process_poll(process, cmd, timeout, code):
     """
     If the process forks, we cannot capture anything we block until the process tree completes
     """
@@ -114,12 +114,12 @@ def capture_from_process_poll(process, cmd, timeout):
         os.killpg(os.getpgid(process.pid), signal.SIGKILL)
         stdout, stderr = process.communicate()
         msg = format_stdout_stderr(sanitize(stdout), sanitize(stderr))
-        raise ExtensionError("Timeout({0}): {1}\n{2}".format(timeout, cmd, msg))
+        raise ExtensionError("Timeout({0}): {1}\n{2}".format(timeout, cmd, msg), code=code)
 
     # process completed or forked
     return_code = process.wait()
     if return_code != 0:
-        raise ExtensionError("Non-zero exit code: {0}, {1}".format(return_code, cmd))
+        raise ExtensionError("Non-zero exit code: {0}, {1}".format(return_code, cmd), code=code)
 
     stderr = b''
     stdout = b'cannot collect stdout'
@@ -155,20 +155,20 @@ def capture_from_process_poll(process, cmd, timeout):
     return stdout, stderr
 
 
-def capture_from_process_no_timeout(process, cmd):
+def capture_from_process_no_timeout(process, cmd, code):
     try:
         stdout, stderr = process.communicate()
     except OSError as e:
         _destroy_process(process, signal.SIGKILL)
-        raise ExtensionError("Error while running '{0}': {1}".format(cmd, e.strerror))
+        raise ExtensionError("Error while running '{0}': {1}".format(cmd, e.strerror), code=code)
     except Exception as e:
         _destroy_process(process, signal.SIGKILL)
-        raise ExtensionError("Exception while running '{0}': {1}".format(cmd, e))
+        raise ExtensionError("Exception while running '{0}': {1}".format(cmd, e), code=code)
 
     return stdout, stderr
 
 
-def capture_from_process_raw(process, cmd, timeout):
+def capture_from_process_raw(process, cmd, timeout, code):
     """
     Captures stdout and stderr from an already-created process.
 
@@ -180,18 +180,18 @@ def capture_from_process_raw(process, cmd, timeout):
     :raises ExtensionError: if a timeout occurred or if anything was raised by Popen.communicate()
     """
     if not timeout:
-        stdout, stderr = capture_from_process_no_timeout(process, cmd)
+        stdout, stderr = capture_from_process_no_timeout(process, cmd, code)
     else:
         if os.getpgid(process.pid) != process.pid:
             _destroy_process(process, signal.SIGKILL)
-            raise ExtensionError("Subprocess was not root of its own process group")
+            raise ExtensionError("Subprocess was not root of its own process group", code=code)
 
-        stdout, stderr = capture_from_process_poll(process, cmd, timeout)
+        stdout, stderr = capture_from_process_poll(process, cmd, timeout, code)
 
     return stdout, stderr
 
 
-def capture_from_process(process, cmd, timeout=0):
+def capture_from_process(process, cmd, timeout=0, code=-1):
     """
     Captures stdout and stderr from an already-created process. The output is "cooked"
     into a string of reasonable length.
@@ -203,5 +203,5 @@ def capture_from_process(process, cmd, timeout=0):
     :rtype: (str, str)
     :raises ExtensionError: if a timeout occurred or if anything was raised by Popen.communicate()
     """
-    stdout, stderr = capture_from_process_raw(process, cmd, timeout)
+    stdout, stderr = capture_from_process_raw(process, cmd, timeout, code)
     return format_stdout_stderr(sanitize(stdout), sanitize(stderr))
