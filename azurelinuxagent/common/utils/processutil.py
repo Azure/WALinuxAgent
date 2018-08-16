@@ -25,6 +25,7 @@ import signal
 from errno import ESRCH
 from multiprocessing import Process
 
+import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.exception import ExtensionError
 from azurelinuxagent.common.future import ustr
 
@@ -102,7 +103,8 @@ def _destroy_process(process, signal_to_send=signal.SIGKILL):
 
 def capture_from_process_poll(process, cmd, timeout, code):
     """
-    If the process forks, we cannot capture anything we block until the process tree completes
+    Capture output from the process if it does not fork, or forks
+    and completes quickly.
     """
     retry = timeout
     while retry > 0 and process.poll() is None:
@@ -143,11 +145,9 @@ def capture_from_process_poll(process, cmd, timeout, code):
         # allow 1s to capture output
         cproc.join(1)
 
-        if cproc.is_alive():
-            cproc.terminate()
-
-        stdout = ret_dict[0]
-        stderr = ret_dict[1]
+        if len(ret_dict) == 2:
+            stdout = ret_dict[0]
+            stderr = ret_dict[1]
 
     except Exception:
         pass
