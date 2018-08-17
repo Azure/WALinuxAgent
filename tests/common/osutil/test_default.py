@@ -308,12 +308,23 @@ class TestOSUtil(AgentTestCase):
                 self.assertTrue(endpoint is not None)
                 self.assertEqual(endpoint, "168.63.129.16")
 
+    def test_dhcp_lease_custom_dns(self):
+        """
+        Validate that the wireserver address is coming from option 245
+        (on default configurations the address is also available in the domain-name-servers option, but users
+         may set up a custom dns server on their vnet)
+        """
+        with patch.object(glob, "glob", return_value=['/var/lib/dhcp/dhclient.eth0.leases']):
+            with patch(open_patch(), mock.mock_open(read_data=load_data("dhcp.leases.custom.dns"))):
+                endpoint = get_osutil(distro_name='ubuntu', distro_version='14.04').get_dhcp_lease_endpoint()
+                self.assertEqual(endpoint, "168.63.129.16")
+
     def test_dhcp_lease_multi(self):
         with patch.object(glob, "glob", return_value=['/var/lib/dhcp/dhclient.eth0.leases']):
             with patch(open_patch(), mock.mock_open(read_data=load_data("dhcp.leases.multi"))):
                 endpoint = get_osutil(distro_name='ubuntu', distro_version='12.04').get_dhcp_lease_endpoint()
                 self.assertTrue(endpoint is not None)
-                self.assertEqual(endpoint, "second")
+                self.assertEqual(endpoint, "168.63.129.2")
 
     def test_get_total_mem(self):
         """
