@@ -31,3 +31,15 @@ class ErrorState(object):
             return True
 
         return False
+
+    @property
+    def fail_time(self):
+        if self.timestamp is None:
+            return 'unknown'
+
+        delta = round((datetime.utcnow() - self.timestamp).total_seconds() / 60.0, 2)
+        if delta < 60:
+            return '{0} min'.format(delta)
+
+        delta_hr = round(delta / 60.0, 2)
+        return '{0} hr'.format(delta_hr)
