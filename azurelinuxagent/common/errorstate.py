@@ -37,7 +37,7 @@ class ErrorState(object):
         if self.timestamp is None:
             return 'unknown'
 
-        delta = round((datetime.utcnow() - self.timestamp).total_seconds() / 60.0, 2)
+        delta = round((datetime.utcnow() - self.timestamp).seconds / 60.0, 2)
         if delta < 60:
             return '{0} min'.format(delta)
 
