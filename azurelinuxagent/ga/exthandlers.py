@@ -706,7 +706,7 @@ class ExtHandlerInstance(object):
             fileutil.mkdir(status_dir, mode=0o700)
 
             seq_no, status_path = self.get_status_file_path()
-            if seq_no > -1:
+            if status_path is not None:
                 now = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
                 status = {
                     "version": 1.0,
@@ -819,9 +819,16 @@ class ExtHandlerInstance(object):
                     continue
         return seq_no
 
-    def get_status_file_path(self):
-        seq_no = self.get_largest_seq_no()
+    def get_status_file_path(self, extension=None):
         path = None
+        seq_no = self.get_largest_seq_no()
+
+        # Issue 1116: use the sequence number from goal state where possible
+        if extension is not None and extension.sequenceNumber is not None:
+            try:
+                seq_no = int(extension.sequenceNumber)
+            except ValueError:
+                logger.error('Sequence number [{0}] does not appear to be valid'.format(extension.sequenceNumber))
 
         if seq_no > -1:
             path = os.path.join(
@@ -831,10 +838,9 @@ class ExtHandlerInstance(object):
         return seq_no, path
 
     def collect_ext_status(self, ext):
-        # see github issue 1116
         self.logger.verbose("Collect extension status")
 
-        seq_no, ext_status_file = self.get_status_file_path()
+        seq_no, ext_status_file = self.get_status_file_path(ext)
         if seq_no == -1:
             return None
 
