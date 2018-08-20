@@ -259,9 +259,18 @@ class TestHandlerStateMigration(AgentTestCase):
         return
 
 
+class ExtensionTestCase(AgentTestCase):
+    @classmethod
+    def setUpClass(cls):
+        CGroups.disable()
+
+    @classmethod
+    def tearDownClass(cls):
+        CGroups.enable()
+
 @patch("azurelinuxagent.common.protocol.wire.CryptUtil")
 @patch("azurelinuxagent.common.utils.restutil.http_get")
-class TestExtension(AgentTestCase):
+class TestExtension(ExtensionTestCase):
 
     def _assert_handler_status(self, report_vm_status, expected_status, 
                                expected_ext_count, version,
@@ -608,7 +617,6 @@ class TestExtension(AgentTestCase):
             exthandlers_handler.handle_ext_handlers()
             self.assertEqual(0, patch_handle_ext_handler.call_count)
 
-
     def test_handle_ext_handlers_on_hold_false(self, *args):
         test_data = WireProtocolData(DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
@@ -739,6 +747,28 @@ class TestExtension(AgentTestCase):
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
         exthandlers_handler.run()
         self._assert_no_handler_status(protocol.report_vm_status)
+
+    @patch('time.sleep')
+    def test_extensions_deleted(self, _, *args):
+        test_data = WireProtocolData(DATA_FILE_EXT_DELETION)
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+
+        # Ensure initial enable is successful
+        exthandlers_handler.run()
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
+        self._assert_ext_status(protocol.report_ext_status, "success", 0)
+
+        # Update incarnation, simulate new extension version and old one deleted
+        test_data.goal_state = test_data.goal_state.replace("<Incarnation>1<",
+                                                            "<Incarnation>2<")
+        test_data.ext_conf = test_data.ext_conf.replace('version="1.0.0"',
+                                                        'version="1.0.1"')
+        test_data.manifest = test_data.manifest.replace('1.0.0', '1.0.1')
+
+        # Ensure new extension can be enabled
+        exthandlers_handler.run()
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.1")
+        self._assert_ext_status(protocol.report_ext_status, "success", 0)
 
 
 if __name__ == '__main__':
