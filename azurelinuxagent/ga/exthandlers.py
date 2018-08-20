@@ -312,34 +312,70 @@ class ExtHandlersHandler(object):
         dep_level = None
         deps_wait_until = None
         handlers_wait_until = datetime.datetime.utcnow()
+        skipped_handler_names = []
 
         self.ext_handlers.extHandlers.sort(key=operator.methodcaller('sort_key'))
         for ext_handler in self.ext_handlers.extHandlers:
+            # Use updated time limit for each dependency level
             if dep_level != ext_handler.sort_key():
                 dep_level = ext_handler.sort_key()
                 deps_wait_until = handlers_wait_until
-                handlers_wait_until += datetime.timedelta(seconds=(DEFAULT_EXT_TIMEOUT_MINUTES * 60))
-            self.wait_on_ext_handler_dependencies(ext_handler, deps_wait_until)
-            self.handle_ext_handler(ext_handler, etag)
+                handlers_wait_until += datetime.timedelta(minutes=DEFAULT_EXT_TIMEOUT_MINUTES)
 
-    def wait_on_ext_handler_dependencies(self, ext_handler, wait_until):
+            # Make sure the previous level extensions are installed.
+            # If installed successfully, continue with the current handler. Otherwise, skip it.
+            if self.wait_on_ext_handler_dependencies(ext_handler, deps_wait_until, skipped_handler_names):
+                self.handle_ext_handler(ext_handler, etag)
+            else:
+                skipped_handler_names.append(ext_handler.name)
+
+    '''
+    Collect all the dependencies in the given handler.
+    Check the status of the extension in each dependency.
+    Wait until it becomes success or times out.
+    Return True if the dependencies are installed successfully. False if timed out.
+    '''
+    def wait_on_ext_handler_dependencies(self, ext_handler, wait_until, skipped_handler_names=[]):
         dependencies = sum([e.dependencies for e in ext_handler.properties.extensions], [])
+
+        # Check if any of the dependencies are already skipped.
+        # This allows us to fail fast in that case.
         for dependency in dependencies:
+            if dependency.handler.name in skipped_handler_names:
+                logger.info("{0} is skipped since its dependency {1} is already skipped or timedout".format(ext_handler.name,
+                                                                                                            dependency.handler.name))
+                return False
+
+        for dependency in dependencies:
+            if dependency.ext is None:
+                continue
+
             handler_i = ExtHandlerInstance(dependency.handler, self.protocol)
-            if dependency.timeout is not None and dependency.timeout < DEFAULT_EXT_TIMEOUT_MINUTES:
-                wait_until -= datetime.timedelta(seconds=( (DEFAULT_EXT_TIMEOUT_MINUTES - dependency.timeout) * 60))
-            for ext in dependency.exts:
-                success_status, status = handler_i.is_ext_status_success(ext)
-                while not success_status:
-                    if datetime.datetime.utcnow() > wait_until:
-                        raise ExtensionError("Timeout waiting for success status "
-                                             "from dependency {}/{} for {}"
-                                             "status was: {}".format(
-                                                 dependency.handler.name, ext.name,
-                                                 ext_handler.name, status))
-                    else:
-                        time.sleep(10)
-                    success_status, status = handler_i.is_ext_status_success(ext)
+            success_status, status = handler_i.is_ext_status_success(dependency.ext)
+
+            # Keep polling for the extension status until it becomes success or times out
+            while not success_status and datetime.datetime.utcnow() <= wait_until:
+                time.sleep(5)
+                success_status, status = handler_i.is_ext_status_success(dependency.ext)
+
+            # In case of timeout, we log it and return false so that the extension waiting
+            # on this one can be skipped processing
+            if not success_status:
+                msg = "Timeout waiting for success status " \
+                      "from dependency {0}/{1} for {2}" \
+                      "status was: {3}".format(dependency.handler.name,
+                                               dependency.ext.name,
+                                               ext_handler.name,
+                                               status)
+                logger.info(msg)
+                add_event(AGENT_NAME,
+                          version=CURRENT_VERSION,
+                          op=WALAEventOperation.ExtensionProcessing,
+                          is_success=False,
+                          message=msg)
+                return False
+
+        return True
 
     def handle_ext_handler(self, ext_handler, etag):
         ext_handler_i = ExtHandlerInstance(ext_handler, self.protocol)

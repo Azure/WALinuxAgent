@@ -149,15 +149,12 @@ class Dependency(object):
     """
     Represents an extension upon which another extension is dependent
     handler - the ExtHandler of the dependency
-    exts - the Extension(s) of the dependency
-    timeout - the timeout for the extension to get to the Ready state
-              timeout is expressed in minutes.
+    ext - the Extension of the dependency
     """
 
-    def __init__(self, handler=None, exts=None, timeout=None):
+    def __init__(self, handler=None, ext=None):
         self.handler = handler
-        self.exts = [] if exts is None else exts
-        self.timeout = timeout
+        self.ext = ext
 
 
 class Extension(DataContract):
@@ -188,8 +185,7 @@ class Extension(DataContract):
                 resolved_dependencies.append(
                     Dependency(
                         handler = handler,
-                        exts = [ext for ext in handler.properties.extensions
-                                if ext.name == ext_name]
+                        ext = next((ext for ext in handler.properties.extensions if ext.name == ext_name), None)
                     )
                 )
         self.dependencies = resolved_dependencies
