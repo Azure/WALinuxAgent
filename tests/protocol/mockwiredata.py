@@ -58,6 +58,10 @@ DATA_FILE_EXT_ROLLINGUPGRADE["ext_conf"] = "wire/ext_conf_upgradeguid.xml"
 DATA_FILE_EXT_SEQUENCING = DATA_FILE.copy()
 DATA_FILE_EXT_SEQUENCING["ext_conf"] = "wire/ext_conf_sequencing.xml"
 
+DATA_FILE_EXT_DELETION = DATA_FILE.copy()
+DATA_FILE_EXT_DELETION["manifest"] = "wire/manifest_deletion.xml"
+
+
 class WireProtocolData(object):
     def __init__(self, data_files=DATA_FILE):
         self.emulate_stale_goal_state = False

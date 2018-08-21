@@ -319,22 +319,13 @@ class ExtHandlersHandler(object):
 
         try:
             state = ext_handler.properties.state
-            max_retries = 5
-            retry_count = 0
-            while ext_handler_i.decide_version(target_state=state) is None:
-                if retry_count >= max_retries:
-                    err_msg = "Unable to find manifest for extension {0}".format(ext_handler_i.ext_handler.name)
-                    ext_handler_i.set_operation(WALAEventOperation.Download)
-                    ext_handler_i.set_handler_status(message=ustr(err_msg), code=-1)
-                    ext_handler_i.report_event(message=ustr(err_msg), is_success=False)
-                    return
-                time.sleep(2**retry_count * 10)
-                retry_count += 1
-            if retry_count != 0:
+            if ext_handler_i.decide_version(target_state=state) is None:
+                err_msg = "Unable to find manifest for extension {0}".format(ext_handler_i.ext_handler.name)
                 ext_handler_i.set_operation(WALAEventOperation.Download)
-                err_msg = "Able to find manifest for extension {0} after {1} failed attempts.".format(
-                    ext_handler_i.ext_handler.name, retry_count)
-                ext_handler_i.report_event(message=ustr(err_msg))
+                ext_handler_i.set_handler_status(message=ustr(err_msg), code=-1)
+                ext_handler_i.report_event(message=ustr(err_msg), is_success=False)
+                return
+
             self.get_artifact_error_state.reset()
             if not ext_handler_i.is_upgrade and self.last_etag == etag:
                 if self.log_etag:
