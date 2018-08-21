@@ -957,7 +957,9 @@ class ExtHandlerInstance(object):
                                  code=extension_error_code)
 
         duration = elapsed_milliseconds(begin_utc)
-        self.report_event(message="{0}\n{1}".format(cmd, msg), duration=duration, log_event=False)
+        log_msg = "{0}\n{1}".format(cmd, "\n".join([line for line in msg.split('\n') if line != ""]))
+        self.logger.verbose(log_msg)
+        self.report_event(message=log_msg, duration=duration, log_event=False)
 
     def load_manifest(self):
         man_file = self.get_manifest_file()
