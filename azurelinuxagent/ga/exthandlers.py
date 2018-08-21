@@ -320,7 +320,9 @@ class ExtHandlersHandler(object):
         try:
             state = ext_handler.properties.state
             if ext_handler_i.decide_version(target_state=state) is None:
-                err_msg = "Unable to find manifest for extension {0}".format(ext_handler_i.ext_handler.name)
+                version = ext_handler_i.ext_handler.properties.version
+                name = ext_handler_i.ext_handler.name
+                err_msg = "Unable to find version {0} in manifest for extension {1}".format(version, name)
                 ext_handler_i.set_operation(WALAEventOperation.Download)
                 ext_handler_i.set_handler_status(message=ustr(err_msg), code=-1)
                 ext_handler_i.report_event(message=ustr(err_msg), is_success=False)
