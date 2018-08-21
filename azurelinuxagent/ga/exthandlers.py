@@ -1115,8 +1115,7 @@ class ExtHandlerInstance(object):
         return os.path.join(self.get_base_dir(), 'HandlerEnvironment.json')
 
     def get_log_dir(self):
-        return os.path.join(conf.get_ext_log_dir(), self.ext_handler.name,
-                            str(self.ext_handler.properties.version))
+        return os.path.join(conf.get_ext_log_dir(), self.ext_handler.name)
 
 
 class HandlerEnvironment(object):
