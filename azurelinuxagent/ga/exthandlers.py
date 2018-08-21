@@ -826,7 +826,17 @@ class ExtHandlerInstance(object):
         # Issue 1116: use the sequence number from goal state where possible
         if extension is not None and extension.sequenceNumber is not None:
             try:
-                seq_no = int(extension.sequenceNumber)
+                gs_seq_no = int(extension.sequenceNumber)
+
+                if gs_seq_no != seq_no:
+                    add_event(AGENT_NAME,
+                              version=CURRENT_VERSION,
+                              op=WALAEventOperation.SequenceNumberMismatch,
+                              is_success=False,
+                              message="Goal state: {0}, disk: {1}".format(gs_seq_no, seq_no),
+                              log_event=False)
+
+                seq_no = gs_seq_no
             except ValueError:
                 logger.error('Sequence number [{0}] does not appear to be valid'.format(extension.sequenceNumber))
 

@@ -133,6 +133,7 @@ class DeprovisionHandler(object):
             files = glob.glob(os.path.join(ext_base, 'status', '*.status'))
             files += glob.glob(os.path.join(ext_base, 'config', '*.settings'))
             files += glob.glob(os.path.join(ext_base, 'config', 'HandlerStatus'))
+            files += glob.glob(os.path.join(ext_base, 'mrseq'))
 
             if len(files) > 0:
                 actions.append(DeprovisionAction(fileutil.rm_files, files))

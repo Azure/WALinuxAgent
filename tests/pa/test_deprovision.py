@@ -143,6 +143,7 @@ class TestDeprovision(AgentTestCase):
             'Microsoft.Azure.Extensions.CustomScript-2.0.6/config/HandlerStatus',
             'Microsoft.Azure.Extensions.CustomScript-2.0.6/config/HandlerState',
             'Microsoft.Azure.Extensions.CustomScript-2.0.6/status/12.notstatus',
+            'Microsoft.Azure.Extensions.CustomScript-2.0.6/mrseq',
             'WALinuxAgent-2.2.26/config/0.settings'
         ]
 
@@ -166,13 +167,11 @@ class TestDeprovision(AgentTestCase):
         self.assertEqual(fileutil.rm_files, actions[0].func)
         self.assertEqual(fileutil.rm_files, actions[1].func)
         self.assertEqual(11, len(actions[0].args))
-        self.assertEqual(2, len(actions[1].args))
+        self.assertEqual(3, len(actions[1].args))
         for f in actions[0].args:
             self.assertTrue(os.path.basename(f) in files)
         for f in actions[1].args:
-            self.assertTrue(os.path.join('Microsoft.Azure.Extensions.CustomScript-2.0.6',
-                                         'config',
-                                         os.path.basename(f)) in files)
+            self.assertTrue(f[len(tmp)+1:] in files)
 
     @distros("redhat")
     def test_deprovision(self,
