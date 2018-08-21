@@ -201,4 +201,18 @@ class TestMonitor(AgentTestCase):
         monitor_handler.last_host_plugin_heartbeat = datetime.datetime.utcnow() - timedelta(hours=1)
         monitor_handler.send_host_plugin_heartbeat()
         self.assertEqual(1, patch_report_heartbeat.call_count)
+        self.assertEqual(0, args[5].call_count)
+        monitor_handler.stop()
+
+    @patch('azurelinuxagent.common.errorstate.ErrorState.is_triggered', return_value=True)
+    @patch("azurelinuxagent.common.protocol.healthservice.HealthService.report_host_plugin_heartbeat")
+    def test_failed_heartbeat_creates_telemetry(self, patch_report_heartbeat, _, *args):
+        monitor_handler = get_monitor_handler()
+        monitor_handler.init_protocols()
+        monitor_handler.last_host_plugin_heartbeat = datetime.datetime.utcnow() - timedelta(hours=1)
+        monitor_handler.send_host_plugin_heartbeat()
+        self.assertEqual(1, patch_report_heartbeat.call_count)
+        self.assertEqual(1, args[5].call_count)
+        self.assertEqual('HostPluginHeartbeatExtended', args[5].call_args[1]['op'])
+        self.assertEqual(False, args[5].call_args[1]['is_success'])
         monitor_handler.stop()

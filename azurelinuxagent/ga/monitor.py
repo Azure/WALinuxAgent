@@ -336,6 +336,15 @@ class MonitorHandler(object):
 
                 self.health_service.report_host_plugin_heartbeat(is_healthy)
 
+                if not is_healthy:
+                    add_event(
+                        name=AGENT_NAME,
+                        version=CURRENT_VERSION,
+                        op=WALAEventOperation.HostPluginHeartbeatExtended,
+                        is_success=False,
+                        message='{0} since successful heartbeat'.format(self.host_plugin_errorstate.fail_time),
+                        log_event=False)
+
             except Exception as e:
                 msg = "Exception sending host plugin heartbeat: {0}".format(ustr(e))
                 add_event(

@@ -58,6 +58,7 @@ class WALAEventOperation:
     HeartBeat = "HeartBeat"
     HostPlugin = "HostPlugin"
     HostPluginHeartbeat = "HostPluginHeartbeat"
+    HostPluginHeartbeatExtended = "HostPluginHeartbeatExtended"
     HttpErrors = "HttpErrors"
     ImdsHeartbeat = "ImdsHeartbeat"
     Install = "Install"
