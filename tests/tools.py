@@ -122,7 +122,7 @@ class AgentTestCase(unittest.TestCase):
         if not hasattr(cls, "assertIsNone"):
             cls.assertIsNone = cls.emulate_assertIsNone
         if not hasattr(cls, "assertIsNotNone"):
-            cls.assertIsNone = cls.emulate_assertIsNotNone
+            cls.assertIsNotNone = cls.emulate_assertIsNotNone
         if hasattr(cls, "assertRaisesRegexp"):
             cls.assertRaisesRegex = cls.assertRaisesRegexp
         if not hasattr(cls, "assertRaisesRegex"):

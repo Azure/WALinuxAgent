@@ -19,16 +19,20 @@
 
 import glob
 import os.path
+import re
 import signal
 import sys
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.shellutil as shellutil
+from azurelinuxagent.common import version
 
 from azurelinuxagent.common.exception import ProtocolError
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol import get_protocol_util
+from azurelinuxagent.ga.exthandlers import HANDLER_NAME_PATTERN
+
 
 def read_input(message):
     if sys.version_info[0] >= 3:
@@ -118,6 +122,21 @@ class DeprovisionHandler(object):
         actions.append(DeprovisionAction(fileutil.rm_files,
                                          ["/var/lib/NetworkManager/dhclient-*.lease"]))
 
+    def del_ext_handler_files(self, warnings, actions):
+        ext_dirs = [d for d in os.listdir(conf.get_lib_dir())
+                    if os.path.isdir(os.path.join(conf.get_lib_dir(), d))
+                    and re.match(HANDLER_NAME_PATTERN, d) is not None
+                    and not version.is_agent_path(d)]
+
+        for ext_dir in ext_dirs:
+            ext_base = os.path.join(conf.get_lib_dir(), ext_dir)
+            files = glob.glob(os.path.join(ext_base, 'status', '*.status'))
+            files += glob.glob(os.path.join(ext_base, 'config', '*.settings'))
+            files += glob.glob(os.path.join(ext_base, 'config', 'HandlerStatus'))
+            files += glob.glob(os.path.join(ext_base, 'mrseq'))
+
+            if len(files) > 0:
+                actions.append(DeprovisionAction(fileutil.rm_files, files))
 
     def del_lib_dir_files(self, warnings, actions):
         known_files = [
@@ -180,6 +199,7 @@ class DeprovisionHandler(object):
 
         self.del_dhcp_lease(warnings, actions)
         self.del_lib_dir_files(warnings, actions)
+        self.del_ext_handler_files(warnings, actions)
 
         return warnings, actions
 
