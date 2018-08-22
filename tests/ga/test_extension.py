@@ -771,6 +771,9 @@ class TestExtension(ExtensionTestCase):
 
     @patch('subprocess.Popen.poll')
     def test_install_failure(self, patch_poll, *args):
+        """
+        When extension install fails, the operation should not be retried.
+        """
         test_data = WireProtocolData(DATA_FILE_EXT_SINGLE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
 
@@ -791,6 +794,9 @@ class TestExtension(ExtensionTestCase):
 
     @patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_enable_command')
     def test_enable_failure(self, patch_get_enable_command, *args):
+        """
+        When extension enable fails, the operation should not be retried.
+        """
         test_data = WireProtocolData(DATA_FILE_EXT_SINGLE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
 
@@ -809,6 +815,9 @@ class TestExtension(ExtensionTestCase):
 
     @patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_disable_command')
     def test_disable_failure(self, patch_get_disable_command, *args):
+        """
+        When extension disable fails, the operation should not be retried.
+        """
         test_data = WireProtocolData(DATA_FILE_EXT_SINGLE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
 
@@ -840,6 +849,9 @@ class TestExtension(ExtensionTestCase):
 
     @patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_uninstall_command')
     def test_uninstall_failure(self, patch_get_uninstall_command, *args):
+        """
+        When extension uninstall fails, the operation should not be retried.
+        """
         test_data = WireProtocolData(DATA_FILE_EXT_SINGLE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
 
