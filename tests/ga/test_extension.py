@@ -769,6 +769,108 @@ class TestExtension(ExtensionTestCase):
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.1")
         self._assert_ext_status(protocol.report_ext_status, "success", 0)
 
+    @patch('subprocess.Popen.poll')
+    def test_install_failure(self, patch_poll, *args):
+        test_data = WireProtocolData(DATA_FILE_EXT_SINGLE)
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+
+        # Ensure initial install is unsuccessful
+        patch_poll.call_count = 0
+        patch_poll.return_value = 1
+        exthandlers_handler.run()
+
+        # capture process output also calls poll
+        self.assertEqual(2, patch_poll.call_count)
+        self.assertEqual(1, protocol.report_vm_status.call_count)
+        self._assert_handler_status(protocol.report_vm_status, "NotReady", expected_ext_count=0, version="1.0.0")
+
+        # Ensure subsequent no further retries are made
+        exthandlers_handler.run()
+        self.assertEqual(2, patch_poll.call_count)
+        self.assertEqual(2, protocol.report_vm_status.call_count)
+
+    @patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_enable_command')
+    def test_enable_failure(self, patch_get_enable_command, *args):
+        test_data = WireProtocolData(DATA_FILE_EXT_SINGLE)
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+
+        # Ensure initial install is successful, but enable fails
+        patch_get_enable_command.call_count = 0
+        patch_get_enable_command.return_value = "exit 1"
+        exthandlers_handler.run()
+
+        self.assertEqual(1, patch_get_enable_command.call_count)
+        self.assertEqual(1, protocol.report_vm_status.call_count)
+        self._assert_handler_status(protocol.report_vm_status, "NotReady", expected_ext_count=1, version="1.0.0")
+
+        exthandlers_handler.run()
+        self.assertEqual(1, patch_get_enable_command.call_count)
+        self.assertEqual(2, protocol.report_vm_status.call_count)
+
+    @patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_disable_command')
+    def test_disable_failure(self, patch_get_disable_command, *args):
+        test_data = WireProtocolData(DATA_FILE_EXT_SINGLE)
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+
+        # Ensure initial install and enable is successful, but disable fails
+        patch_get_disable_command.call_count = 0
+        patch_get_disable_command.return_value = "exit 1"
+        exthandlers_handler.run()
+
+        self.assertEqual(0, patch_get_disable_command.call_count)
+        self.assertEqual(1, protocol.report_vm_status.call_count)
+        self._assert_handler_status(protocol.report_vm_status, "Ready", expected_ext_count=1, version="1.0.0")
+        self._assert_ext_status(protocol.report_ext_status, "success", 0)
+
+        # Next incarnation, disable extension
+        test_data.goal_state = test_data.goal_state.replace("<Incarnation>1<",
+                                                            "<Incarnation>2<")
+        test_data.ext_conf = test_data.ext_conf.replace("enabled", "disabled")
+
+        exthandlers_handler.run()
+        self.assertEqual(1, patch_get_disable_command.call_count)
+        self.assertEqual(2, protocol.report_vm_status.call_count)
+        self._assert_handler_status(protocol.report_vm_status, "NotReady", expected_ext_count=1, version="1.0.0")
+
+        # Ensure there are no further retries
+        exthandlers_handler.run()
+        self.assertEqual(1, patch_get_disable_command.call_count)
+        self.assertEqual(3, protocol.report_vm_status.call_count)
+        self._assert_handler_status(protocol.report_vm_status, "NotReady", expected_ext_count=1, version="1.0.0")
+
+    @patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_uninstall_command')
+    def test_uninstall_failure(self, patch_get_uninstall_command, *args):
+        test_data = WireProtocolData(DATA_FILE_EXT_SINGLE)
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+
+        # Ensure initial install and enable is successful, but uninstall fails
+        patch_get_uninstall_command.call_count = 0
+        patch_get_uninstall_command.return_value = "exit 1"
+        exthandlers_handler.run()
+
+        self.assertEqual(0, patch_get_uninstall_command.call_count)
+        self.assertEqual(1, protocol.report_vm_status.call_count)
+        self._assert_handler_status(protocol.report_vm_status, "Ready", expected_ext_count=1, version="1.0.0")
+        self._assert_ext_status(protocol.report_ext_status, "success", 0)
+
+        # Next incarnation, disable extension
+        test_data.goal_state = test_data.goal_state.replace("<Incarnation>1<",
+                                                            "<Incarnation>2<")
+        test_data.ext_conf = test_data.ext_conf.replace("enabled", "uninstall")
+
+        exthandlers_handler.run()
+        self.assertEqual(1, patch_get_uninstall_command.call_count)
+        self.assertEqual(2, protocol.report_vm_status.call_count)
+        self.assertEquals("Ready", protocol.report_vm_status.call_args[0][0].vmAgent.status)
+        self._assert_no_handler_status(protocol.report_vm_status)
+
+        # Ensure there are no further retries
+        exthandlers_handler.run()
+        self.assertEqual(1, patch_get_uninstall_command.call_count)
+        self.assertEqual(3, protocol.report_vm_status.call_count)
+        self.assertEquals("Ready", protocol.report_vm_status.call_args[0][0].vmAgent.status)
+        self._assert_no_handler_status(protocol.report_vm_status)
+
 
 if __name__ == '__main__':
     unittest.main()
