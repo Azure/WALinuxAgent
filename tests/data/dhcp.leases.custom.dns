@@ -10,7 +10,7 @@ lease {
   option domain-name-servers invalid;
   option dhcp-renewal-time 4294967295;
   option rfc3442-classless-static-routes 0,10,0,1,1,32,168,63,129,16,10,0,1,1;
-  option unknown-245 a8:3f:81:10;
+  option unknown-245 a8:3f:81:01;
   option dhcp-rebinding-time 4294967295;
   option domain-name "qylsde3bnlhu5dstzf3bav5inc.fx.internal.cloudapp.net";
   renew 0 2152/07/23 23:27:10;
@@ -28,7 +28,7 @@ lease {
   option dhcp-server-identifier 168.63.129.16;
   option domain-name-servers expired;
   option dhcp-renewal-time 4294967295;
-  option unknown-245 a8:3f:81:10;
+  option unknown-245 a8:3f:81:02;
   option dhcp-rebinding-time 4294967295;
   option domain-name "qylsde3bnlhu5dstzf3bav5inc.fx.internal.cloudapp.net";
   renew 4 2015/06/16 16:58:54;
