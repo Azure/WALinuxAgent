@@ -1000,8 +1000,8 @@ class TestUpdate(UpdateTestCase):
         self.assertTrue(2 < len(self.update_handler.agents))
 
         # Purge every other agent
-        kept_agents = self.update_handler.agents[1::2]
-        purged_agents = self.update_handler.agents[::2]
+        kept_agents = self.update_handler.agents[::2]
+        purged_agents = self.update_handler.agents[1::2]
 
         # Reload and assert only the kept agents remain on disk
         self.update_handler.agents = kept_agents
@@ -1194,7 +1194,7 @@ class TestUpdate(UpdateTestCase):
         self._test_run_latest()
         self.assertEqual(0, mock_signal.call_count)
 
-    def _test_run(self, invocations=1, calls=[call.run()], enable_updates=False):
+    def _test_run(self, invocations=1, calls=[call.run()], enable_updates=False, sleep_interval=(3,)):
         conf.get_autoupdate_enabled = Mock(return_value=enable_updates)
 
         # Note:
@@ -1229,6 +1229,8 @@ class TestUpdate(UpdateTestCase):
                                 self.assertEqual(1, mock_ra_handler.call_count)
                                 self.assertEqual(mock_ra_handler.return_value.method_calls, calls)
                                 self.assertEqual(invocations, mock_sleep.call_count)
+                                if invocations > 0:
+                                    self.assertEqual(sleep_interval, mock_sleep.call_args[0])
                                 self.assertEqual(1, mock_monitor.call_count)
                                 self.assertEqual(1, mock_env.call_count)
                                 self.assertEqual(1, mock_exit.call_count)
@@ -1479,6 +1481,24 @@ class TestUpdate(UpdateTestCase):
         self.assertTrue(len(ga_manifest_2.allowed_versions) == 2)
         self.assertTrue(ga_manifest_2.allowed_versions[0] == '2.2.13')
         self.assertTrue(ga_manifest_2.allowed_versions[1] == '2.2.14')
+
+    @patch('azurelinuxagent.common.conf.get_extensions_enabled', return_value=False)
+    def test_update_happens_when_extensions_disabled(self, _):
+        """
+        Although the extension enabled config will not get checked
+        before an update is found, this test attempts to ensure that
+        behavior never changes.
+        """
+        self.update_handler._upgrade_available = Mock(return_value=True)
+        self._test_run(invocations=0, calls=[], enable_updates=True, sleep_interval=(300,))
+
+    @patch('azurelinuxagent.common.conf.get_extensions_enabled', return_value=False)
+    def test_interval_changes_when_extensions_disabled(self, _):
+        """
+        When extension processing is disabled, the goal state interval should be larger.
+        """
+        self.update_handler._upgrade_available = Mock(return_value=False)
+        self._test_run(invocations=15, calls=[call.run()] * 15, sleep_interval=(300,))
 
 
 class MonitorThreadTest(AgentTestCase):

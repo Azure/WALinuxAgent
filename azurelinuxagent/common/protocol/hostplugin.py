@@ -118,6 +118,7 @@ class HostPluginProtocol(object):
             if restutil.request_failed(response):
                 error_response = restutil.read_response_error(response)
                 logger.error("HostGAPlugin: Failed Get API versions: {0}".format(error_response))
+                is_healthy = not restutil.request_failed_at_hostplugin(response)
             else:
                 return_val = ustr(remove_bom(response.read()), encoding='utf-8')
                 is_healthy = True

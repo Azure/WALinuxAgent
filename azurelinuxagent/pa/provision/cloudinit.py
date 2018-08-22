@@ -83,10 +83,7 @@ class CloudInitProvisionHandler(ProvisionHandler):
             if os.path.isfile(ovf_file_path):
                 try:
                     ovf_env = OvfEnv(fileutil.read_file(ovf_file_path))
-                    self.report_event(message=ovf_env.provision_guest_agent,
-                                      is_success=True,
-                                      duration=0,
-                                      operation=WALAEventOperation.ProvisionGuestAgent)
+                    self.handle_provision_guest_agent(ovf_env.provision_guest_agent)
                     return
                 except ProtocolError as pe:
                     raise ProvisionError("OVF xml could not be parsed "

@@ -53,68 +53,6 @@ class TestDeprovision(AgentTestCase):
         dh.run(force=True)
         self.assertEqual(2, dh.do_actions.call_count)
 
-    @patch("azurelinuxagent.pa.deprovision.default.DeprovisionHandler.cloud_init_dirs")
-    @patch("azurelinuxagent.pa.deprovision.default.DeprovisionHandler.cloud_init_files")
-    def test_del_cloud_init_without_once(self,
-                mock_files,
-                mock_dirs):
-        deprovision_handler = get_deprovision_handler("","","")
-        deprovision_handler.del_cloud_init([], [],
-                            include_once=False, deluser=False)
-
-        mock_dirs.assert_called_with(include_once=False)
-        mock_files.assert_called_with(include_once=False, deluser=False)
-
-    @patch("signal.signal")
-    @patch("azurelinuxagent.common.protocol.get_protocol_util")
-    @patch("azurelinuxagent.common.osutil.get_osutil")
-    @patch("azurelinuxagent.pa.deprovision.default.DeprovisionHandler.cloud_init_dirs")
-    @patch("azurelinuxagent.pa.deprovision.default.DeprovisionHandler.cloud_init_files")
-    def test_del_cloud_init(self,
-                mock_files,
-                mock_dirs,
-                mock_osutil,
-                mock_util,
-                mock_signal):
-        try:
-            with tempfile.NamedTemporaryFile() as f:
-                warnings = []
-                actions = []
-
-                dirs = [tempfile.mkdtemp()]
-                mock_dirs.return_value = dirs
-
-                files = [f.name]
-                mock_files.return_value = files
-
-                deprovision_handler = get_deprovision_handler("","","")
-                deprovision_handler.del_cloud_init(warnings, actions,
-                        deluser=True)
-
-                mock_dirs.assert_called_with(include_once=True)
-                mock_files.assert_called_with(include_once=True, deluser=True)
-
-                self.assertEqual(len(warnings), 0)
-                self.assertEqual(len(actions), 2)
-                for da in actions:
-                    if da.func == fileutil.rm_dirs:
-                        self.assertEqual(da.args, dirs)
-                    elif da.func == fileutil.rm_files:
-                        self.assertEqual(da.args, files)
-                    else:
-                        self.assertTrue(False)
-
-                try:
-                    for da in actions:
-                        da.invoke()
-                    self.assertEqual(len([d for d in dirs if os.path.isdir(d)]), 0)
-                    self.assertEqual(len([f for f in files if os.path.isfile(f)]), 0)
-                except Exception as e:
-                    self.assertTrue(False, "Exception {0}".format(e))
-        except OSError:
-            # Ignore the error caused by removing the file within the "with"
-            pass
-    
     @distros("ubuntu")
     @patch('azurelinuxagent.common.conf.get_lib_dir')
     def test_del_lib_dir_files(self,
@@ -122,6 +60,11 @@ class TestDeprovision(AgentTestCase):
                         distro_version,
                         distro_full_name,
                         mock_conf):
+        dirs = [
+            'WALinuxAgent-2.2.26/config',
+            'Microsoft.Azure.Extensions.CustomScript-2.0.6/config',
+            'Microsoft.Azure.Extensions.CustomScript-2.0.6/status'
+        ]
         files = [
             'HostingEnvironmentConfig.xml',
             'Incarnation',
@@ -133,11 +76,19 @@ class TestDeprovision(AgentTestCase):
             'GoalState.1.xml',
             'Extensions.2.xml',
             'ExtensionsConfig.2.xml',
-            'GoalState.2.xml'
+            'GoalState.2.xml',
+            'Microsoft.Azure.Extensions.CustomScript-2.0.6/config/42.settings',
+            'Microsoft.Azure.Extensions.CustomScript-2.0.6/config/HandlerStatus',
+            'Microsoft.Azure.Extensions.CustomScript-2.0.6/config/HandlerState',
+            'Microsoft.Azure.Extensions.CustomScript-2.0.6/status/12.notstatus',
+            'Microsoft.Azure.Extensions.CustomScript-2.0.6/mrseq',
+            'WALinuxAgent-2.2.26/config/0.settings'
         ]
 
         tmp = tempfile.mkdtemp()
         mock_conf.return_value = tmp
+        for d in dirs:
+            fileutil.mkdir(os.path.join(tmp, d))
         for f in files:
             fileutil.write_file(os.path.join(tmp, f), "Value")
 
@@ -147,14 +98,18 @@ class TestDeprovision(AgentTestCase):
         warnings = []
         actions = []
         deprovision_handler.del_lib_dir_files(warnings, actions)
+        deprovision_handler.del_ext_handler_files(warnings, actions)
 
         self.assertTrue(len(warnings) == 0)
-        self.assertTrue(len(actions) == 1)
+        self.assertTrue(len(actions) == 2)
         self.assertEqual(fileutil.rm_files, actions[0].func)
-        self.assertTrue(len(actions[0].args) > 0)
+        self.assertEqual(fileutil.rm_files, actions[1].func)
+        self.assertEqual(11, len(actions[0].args))
+        self.assertEqual(3, len(actions[1].args))
         for f in actions[0].args:
             self.assertTrue(os.path.basename(f) in files)
-
+        for f in actions[1].args:
+            self.assertTrue(f[len(tmp)+1:] in files)
 
     @distros("redhat")
     def test_deprovision(self,
@@ -179,6 +134,7 @@ class TestDeprovision(AgentTestCase):
         with patch("os.path.realpath", return_value="/run/resolvconf/resolv.conf"):
             warnings, actions = deprovision_handler.setup(deluser=False)
             assert any("/etc/resolvconf/resolv.conf.d/tail" in w for w in warnings)
+
 
 if __name__ == '__main__':
     unittest.main()

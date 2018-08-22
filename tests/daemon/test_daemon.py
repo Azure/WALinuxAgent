@@ -14,9 +14,11 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 #
+from multiprocessing import Process
 
 from azurelinuxagent.daemon import *
 from azurelinuxagent.daemon.main import OPENSSL_FIPS_ENVIRONMENT
+from azurelinuxagent.pa.provision.default import ProvisionHandler
 from tests.tools import *
 
 
@@ -27,16 +29,17 @@ class MockDaemonCall(object):
 
     def __call__(self, *args, **kw):
         self.count = self.count - 1
-        #Stop daemon after restarting for n times
+        # Stop daemon after restarting for n times
         if self.count <= 0:
             self.daemon_handler.running = False
         raise Exception("Mock unhandled exception")
+
 
 class TestDaemon(AgentTestCase):
     
     @patch("time.sleep")
     def test_daemon_restart(self, mock_sleep):
-        #Mock daemon function
+        # Mock daemon function
         daemon_handler = get_daemon_handler()
         mock_daemon = Mock(side_effect=MockDaemonCall(daemon_handler, 2))
         daemon_handler.daemon = mock_daemon
@@ -51,7 +54,7 @@ class TestDaemon(AgentTestCase):
     @patch("time.sleep")
     @patch("azurelinuxagent.daemon.main.conf")
     @patch("azurelinuxagent.daemon.main.sys.exit")
-    def test_check_pid(self, mock_exit, mock_conf, mock_sleep):
+    def test_check_pid(self, mock_exit, mock_conf, _):
         daemon_handler = get_daemon_handler()
 
         mock_pid_file = os.path.join(self.tmp_dir, "pid")
@@ -65,7 +68,7 @@ class TestDaemon(AgentTestCase):
 
     @patch("azurelinuxagent.daemon.main.DaemonHandler.check_pid")
     @patch("azurelinuxagent.common.conf.get_fips_enabled", return_value=True)
-    def test_set_openssl_fips(self, mock_conf, mock_daemon):
+    def test_set_openssl_fips(self, _, __):
         daemon_handler = get_daemon_handler()
         daemon_handler.running = False
         with patch.dict("os.environ"):
@@ -75,13 +78,58 @@ class TestDaemon(AgentTestCase):
 
     @patch("azurelinuxagent.daemon.main.DaemonHandler.check_pid")
     @patch("azurelinuxagent.common.conf.get_fips_enabled", return_value=False)
-    def test_does_not_set_openssl_fips(self, mock_conf, mock_daemon):
+    def test_does_not_set_openssl_fips(self, _, __):
         daemon_handler = get_daemon_handler()
         daemon_handler.running = False
         with patch.dict("os.environ"):
             daemon_handler.run()
             self.assertFalse(OPENSSL_FIPS_ENVIRONMENT in os.environ)
-   
+
+    @patch('azurelinuxagent.ga.update.UpdateHandler.run_latest')
+    @patch('azurelinuxagent.pa.provision.default.ProvisionHandler.run')
+    @patch('azurelinuxagent.pa.provision.get_provision_handler', return_value=ProvisionHandler())
+    def test_daemon_agent_enabled(self, _, patch_run_provision, patch_run_latest):
+        """
+        Agent should run normally when no disable_agent is found
+        """
+
+        self.assertFalse(os.path.exists(conf.get_disable_agent_file_path()))
+        daemon_handler = get_daemon_handler()
+
+        def stop_daemon(child_args):
+            daemon_handler.running = False
+
+        patch_run_latest.side_effect = stop_daemon
+        daemon_handler.run()
+
+        self.assertEqual(1, patch_run_provision.call_count)
+        self.assertEqual(1, patch_run_latest.call_count)
+
+    @patch('azurelinuxagent.ga.update.UpdateHandler.run_latest', side_effect=AgentTestCase.fail)
+    @patch('azurelinuxagent.pa.provision.default.ProvisionHandler.run', side_effect=ProvisionHandler.write_agent_disabled)
+    @patch('azurelinuxagent.pa.provision.get_provision_handler', return_value=ProvisionHandler())
+    def test_daemon_agent_disabled(self, _, __, patch_run_latest):
+        """
+        Agent should provision, then sleep forever when disable_agent is found
+        """
+
+        # file is created by provisioning handler
+        self.assertFalse(os.path.exists(conf.get_disable_agent_file_path()))
+        daemon_handler = get_daemon_handler()
+
+        # we need to assert this thread will sleep forever, so fork it
+        daemon = Process(target=daemon_handler.run)
+        daemon.start()
+        daemon.join(timeout=5)
+
+        self.assertTrue(daemon.is_alive())
+        daemon.terminate()
+
+        # disable_agent was written, run_latest was not called
+        self.assertTrue(os.path.exists(conf.get_disable_agent_file_path()))
+        self.assertEqual(0, patch_run_latest.call_count)
+
+
 if __name__ == '__main__':
     unittest.main()
 

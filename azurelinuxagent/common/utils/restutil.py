@@ -86,6 +86,7 @@ HTTP_PROXY_ENV = "http_proxy"
 HTTPS_PROXY_ENV = "https_proxy"
 HTTP_USER_AGENT = "{0}/{1}".format(AGENT_NAME, GOAL_STATE_AGENT_VERSION)
 HTTP_USER_AGENT_HEALTH = "{0}+health".format(HTTP_USER_AGENT)
+INVALID_CONTAINER_CONFIGURATION = "InvalidContainerConfiguration"
 
 DEFAULT_PROTOCOL_ENDPOINT = '168.63.129.16'
 HOST_PLUGIN_PORT = 32526
@@ -130,14 +131,26 @@ def _compute_delay(retry_attempt=1, delay=DELAY_IN_SECONDS):
         fib = (fib[1], fib[0]+fib[1])
     return delay*fib[1]
 
+
 def _is_retry_status(status, retry_codes=RETRY_CODES):
     return status in retry_codes
+
 
 def _is_retry_exception(e):
     return len([x for x in RETRY_EXCEPTIONS if isinstance(e, x)]) > 0
 
+
 def _is_throttle_status(status):
     return status in THROTTLE_CODES
+
+
+def _is_invalid_container_configuration(response):
+    result = False
+    if response is not None and response.status == httpclient.BAD_REQUEST:
+        error_detail = read_response_error(response)
+        result = INVALID_CONTAINER_CONFIGURATION in error_detail
+    return result
+
 
 def _parse_url(url):
     o = urlparse(url)
@@ -318,6 +331,13 @@ def http_request(method,
                     continue
 
             if resp.status in RESOURCE_GONE_CODES:
+                raise ResourceGoneError()
+
+            # Map invalid container configuration errors to resource gone in
+            # order to force a goal state refresh, which in turn updates the
+            # container-id header passed to HostGAPlugin.
+            # See #1294.
+            if _is_invalid_container_configuration(resp):
                 raise ResourceGoneError()
 
             return resp

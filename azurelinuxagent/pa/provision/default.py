@@ -92,17 +92,14 @@ class ProvisionHandler(object):
                 is_success=True,
                 duration=elapsed_milliseconds(utc_start))
 
-            self.report_event(message=ovf_env.provision_guest_agent,
-                              is_success=True,
-                              duration=0,
-                              operation=WALAEventOperation.ProvisionGuestAgent)
+            self.handle_provision_guest_agent(ovf_env.provision_guest_agent)
 
             self.report_ready(thumbprint)
             logger.info("Provisioning complete")
 
         except (ProtocolError, ProvisionError) as e:
             self.report_not_ready("ProvisioningFailed", ustr(e))
-            self.report_event(ustr(e))
+            self.report_event(ustr(e), is_success=False)
             logger.error("Provisioning failed: {0}", ustr(e))
             return
 
@@ -204,6 +201,19 @@ class ProvisionHandler(object):
         fileutil.write_file(
             self.provisioned_file_path(),
             get_osutil().get_instance_id())
+
+    @staticmethod
+    def write_agent_disabled():
+        logger.warn("Disabling guest agent in accordance with ovf-env.xml")
+        fileutil.write_file(conf.get_disable_agent_file_path(), '')
+
+    def handle_provision_guest_agent(self, provision_guest_agent):
+        self.report_event(message=provision_guest_agent,
+                          is_success=True,
+                          duration=0,
+                          operation=WALAEventOperation.ProvisionGuestAgent)
+        if provision_guest_agent and provision_guest_agent.lower() == 'false':
+            self.write_agent_disabled()
 
     def provision(self, ovfenv):
         logger.info("Handle ovf-env.xml.")

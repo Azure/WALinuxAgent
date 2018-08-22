@@ -113,10 +113,77 @@ class TestProvision(AgentTestCase):
         self.assertEqual(1, deprovision_handler.run_changed_unique_id.call_count)
 
     @distros()
+    def test_provision_telemetry_pga_false(self,
+                                           distro_name,
+                                           distro_version,
+                                           distro_full_name):
+        """
+        ProvisionGuestAgent flag is 'false'
+        """
+        self._provision_test(distro_name,
+                             distro_version,
+                             distro_full_name,
+                             OVF_FILE_NAME,
+                             'false',
+                             True)
+
+    @distros()
+    def test_provision_telemetry_pga_true(self,
+                                          distro_name,
+                                          distro_version,
+                                          distro_full_name):
+        """
+        ProvisionGuestAgent flag is 'true'
+        """
+        self._provision_test(distro_name,
+                             distro_version,
+                             distro_full_name,
+                             'ovf-env-2.xml',
+                             'true',
+                             True)
+
+    @distros()
+    def test_provision_telemetry_pga_empty(self,
+                                           distro_name,
+                                           distro_version,
+                                           distro_full_name):
+        """
+        ProvisionGuestAgent flag is ''
+        """
+        self._provision_test(distro_name,
+                             distro_version,
+                             distro_full_name,
+                             'ovf-env-3.xml',
+                             'true',
+                             False)
+
+    @distros()
+    def test_provision_telemetry_pga_bad(self,
+                                         distro_name,
+                                         distro_version,
+                                         distro_full_name):
+        """
+        ProvisionGuestAgent flag is 'bad data'
+        """
+        self._provision_test(distro_name,
+                             distro_version,
+                             distro_full_name,
+                             'ovf-env-4.xml',
+                             'bad data',
+                             True)
+
     @patch('azurelinuxagent.common.osutil.default.DefaultOSUtil.get_instance_id',
-        return_value='B9F3C233-9913-9F42-8EB3-BA656DF32502')
-    def test_provision_telemetry_success(self, mock_util, distro_name, distro_version,
-                       distro_full_name):
+           return_value='B9F3C233-9913-9F42-8EB3-BA656DF32502')
+    @patch('azurelinuxagent.pa.provision.default.ProvisionHandler.write_agent_disabled')
+    def _provision_test(self,
+                        distro_name,
+                        distro_version,
+                        distro_full_name,
+                        ovf_file,
+                        provisionMessage,
+                        expect_success,
+                        patch_write_agent_disabled,
+                        patch_get_instance_id):
         """
         Assert that the agent issues two telemetry messages as part of a
         successful provisioning.
@@ -124,7 +191,8 @@ class TestProvision(AgentTestCase):
          1. Provision
          2. GuestState
         """
-        ph = get_provision_handler(distro_name, distro_version,
+        ph = get_provision_handler(distro_name,
+                                   distro_version,
                                    distro_full_name)
         ph.report_event = MagicMock()
         ph.reg_ssh_host_key = MagicMock(return_value='--thumprint--')
@@ -138,30 +206,43 @@ class TestProvision(AgentTestCase):
 
         conf.get_dvd_mount_point = Mock(return_value=self.tmp_dir)
         ovfenv_file = os.path.join(self.tmp_dir, OVF_FILE_NAME)
-        ovfenv_data = load_data("ovf-env.xml")
+        ovfenv_data = load_data(ovf_file)
         fileutil.write_file(ovfenv_file, ovfenv_data)
 
         ph.run()
 
-        self.assertEqual(2, ph.report_event.call_count)
-        positional_args, kw_args = ph.report_event.call_args_list[0]
-        # [call('Provisioning succeeded (146473.68s)', duration=65, is_success=True)]
-        self.assertTrue(re.match(r'Provisioning succeeded \(\d+\.\d+s\)', positional_args[0]) is not None)
-        self.assertTrue(isinstance(kw_args['duration'], int))
-        self.assertTrue(kw_args['is_success'])
+        if expect_success:
+            self.assertEqual(2, ph.report_event.call_count)
+            positional_args, kw_args = ph.report_event.call_args_list[0]
+            # [call('Provisioning succeeded (146473.68s)', duration=65, is_success=True)]
+            self.assertTrue(re.match(r'Provisioning succeeded \(\d+\.\d+s\)', positional_args[0]) is not None)
+            self.assertTrue(isinstance(kw_args['duration'], int))
+            self.assertTrue(kw_args['is_success'])
 
-        positional_args, kw_args = ph.report_event.call_args_list[1]
-        self.assertTrue(kw_args['operation'] == 'ProvisionGuestAgent')
-        self.assertTrue(kw_args['message'] == 'false')
-        self.assertTrue(kw_args['is_success'])
+            positional_args, kw_args = ph.report_event.call_args_list[1]
+            self.assertTrue(kw_args['operation'] == 'ProvisionGuestAgent')
+            self.assertTrue(kw_args['message'] == provisionMessage)
+            self.assertTrue(kw_args['is_success'])
+
+            expected_disabled = True if provisionMessage == 'false' else False
+            self.assertTrue(patch_write_agent_disabled.call_count == expected_disabled)
+
+        else:
+            self.assertEqual(1, ph.report_event.call_count)
+            positional_args, kw_args = ph.report_event.call_args_list[0]
+            # [call(u'[ProtocolError] Failed to validate OVF: ProvisionGuestAgent not found')]
+            self.assertTrue('Failed to validate OVF: ProvisionGuestAgent not found' in positional_args[0])
+            self.assertFalse(kw_args['is_success'])
 
     @distros()
     @patch(
         'azurelinuxagent.common.osutil.default.DefaultOSUtil.get_instance_id',
         return_value='B9F3C233-9913-9F42-8EB3-BA656DF32502')
-    def test_provision_telemetry_fail(self, mock_util, distro_name,
-                                         distro_version,
-                                         distro_full_name):
+    def test_provision_telemetry_fail(self,
+                                      mock_util,
+                                      distro_name,
+                                      distro_version,
+                                      distro_full_name):
         """
         Assert that the agent issues one telemetry message as part of a
         failed provisioning.
@@ -188,7 +269,48 @@ class TestProvision(AgentTestCase):
 
         ph.run()
         ph.report_event.assert_called_once_with(
-            "[ProvisionError] --unit-test--")
+            '[ProvisionError] --unit-test--', is_success=False)
+
+    @patch('azurelinuxagent.pa.provision.default.ProvisionHandler.write_agent_disabled')
+    @distros()
+    def test_handle_provision_guest_agent(self,
+                                          patch_write_agent_disabled,
+                                          distro_name,
+                                          distro_version,
+                                          distro_full_name):
+        ph = get_provision_handler(distro_name,
+                                   distro_version,
+                                   distro_full_name)
+
+        patch_write_agent_disabled.call_count = 0
+
+        ph.handle_provision_guest_agent(provision_guest_agent='false')
+        self.assertEqual(1, patch_write_agent_disabled.call_count)
+
+        ph.handle_provision_guest_agent(provision_guest_agent='False')
+        self.assertEqual(2, patch_write_agent_disabled.call_count)
+
+        ph.handle_provision_guest_agent(provision_guest_agent='FALSE')
+        self.assertEqual(3, patch_write_agent_disabled.call_count)
+
+        ph.handle_provision_guest_agent(provision_guest_agent='')
+        self.assertEqual(3, patch_write_agent_disabled.call_count)
+
+        ph.handle_provision_guest_agent(provision_guest_agent=' ')
+        self.assertEqual(3, patch_write_agent_disabled.call_count)
+
+        ph.handle_provision_guest_agent(provision_guest_agent=None)
+        self.assertEqual(3, patch_write_agent_disabled.call_count)
+
+        ph.handle_provision_guest_agent(provision_guest_agent='true')
+        self.assertEqual(3, patch_write_agent_disabled.call_count)
+
+        ph.handle_provision_guest_agent(provision_guest_agent='True')
+        self.assertEqual(3, patch_write_agent_disabled.call_count)
+
+        ph.handle_provision_guest_agent(provision_guest_agent='TRUE')
+        self.assertEqual(3, patch_write_agent_disabled.call_count)
+
 
 if __name__ == '__main__':
     unittest.main()

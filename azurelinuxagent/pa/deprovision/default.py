@@ -19,16 +19,20 @@
 
 import glob
 import os.path
+import re
 import signal
 import sys
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.shellutil as shellutil
+from azurelinuxagent.common import version
 
 from azurelinuxagent.common.exception import ProtocolError
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol import get_protocol_util
+from azurelinuxagent.ga.exthandlers import HANDLER_NAME_PATTERN
+
 
 def read_input(message):
     if sys.version_info[0] >= 3:
@@ -118,6 +122,21 @@ class DeprovisionHandler(object):
         actions.append(DeprovisionAction(fileutil.rm_files,
                                          ["/var/lib/NetworkManager/dhclient-*.lease"]))
 
+    def del_ext_handler_files(self, warnings, actions):
+        ext_dirs = [d for d in os.listdir(conf.get_lib_dir())
+                    if os.path.isdir(os.path.join(conf.get_lib_dir(), d))
+                    and re.match(HANDLER_NAME_PATTERN, d) is not None
+                    and not version.is_agent_path(d)]
+
+        for ext_dir in ext_dirs:
+            ext_base = os.path.join(conf.get_lib_dir(), ext_dir)
+            files = glob.glob(os.path.join(ext_base, 'status', '*.status'))
+            files += glob.glob(os.path.join(ext_base, 'config', '*.settings'))
+            files += glob.glob(os.path.join(ext_base, 'config', 'HandlerStatus'))
+            files += glob.glob(os.path.join(ext_base, 'mrseq'))
+
+            if len(files) > 0:
+                actions.append(DeprovisionAction(fileutil.rm_files, files))
 
     def del_lib_dir_files(self, warnings, actions):
         known_files = [
@@ -144,44 +163,6 @@ class DeprovisionHandler(object):
         if len(files) > 0:
             actions.append(DeprovisionAction(fileutil.rm_files, files))
 
-    def cloud_init_dirs(self, include_once=True):
-        dirs = [
-            "/var/lib/cloud/instance",
-            "/var/lib/cloud/instances/",
-            "/var/lib/cloud/data"
-        ]
-        if include_once:
-            dirs += [
-                "/var/lib/cloud/scripts/per-once"
-            ]
-        return dirs
-    
-    def cloud_init_files(self, include_once=True, deluser=False):
-        files = []
-        if deluser:
-            files += [
-                "/etc/sudoers.d/90-cloud-init-users"
-            ]
-        if include_once:
-            files += [
-                "/var/lib/cloud/sem/config_scripts_per_once.once"
-            ]
-        return files
-
-    def del_cloud_init(self, warnings, actions,
-            include_once=True, deluser=False):
-        dirs = [d for d in self.cloud_init_dirs(include_once=include_once) \
-                    if os.path.isdir(d)]
-        if len(dirs) > 0:
-            actions.append(DeprovisionAction(fileutil.rm_dirs, dirs))
-
-        files = [f for f in self.cloud_init_files(
-                                    include_once=include_once,
-                                    deluser=deluser) \
-                    if os.path.isfile(f)]
-        if len(files) > 0:
-            actions.append(DeprovisionAction(fileutil.rm_files, files))
-
     def reset_hostname(self, warnings, actions):
         localhost = ["localhost.localdomain"]
         actions.append(DeprovisionAction(self.osutil.set_hostname, 
@@ -203,7 +184,6 @@ class DeprovisionHandler(object):
         if conf.get_delete_root_password():
             self.del_root_password(warnings, actions)
 
-        self.del_cloud_init(warnings, actions, deluser=deluser)
         self.del_dirs(warnings, actions)
         self.del_files(warnings, actions)
         self.del_resolv(warnings, actions)
@@ -217,10 +197,9 @@ class DeprovisionHandler(object):
         warnings = []
         actions = []
 
-        self.del_cloud_init(warnings, actions,
-                    include_once=False, deluser=False)
         self.del_dhcp_lease(warnings, actions)
         self.del_lib_dir_files(warnings, actions)
+        self.del_ext_handler_files(warnings, actions)
 
         return warnings, actions
 

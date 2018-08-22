@@ -20,7 +20,7 @@ OpenLogic CentOS 6.9|![badge](https://dcrbadges.blob.core.windows.net/scenarios/
 OpenLogic CentOS 7.4|![badge](https://dcrbadges.blob.core.windows.net/scenarios/OpenLogic_CentOS_7.4__agent--bvt.svg)
 RedHat RHEL 6.9|![badge](https://dcrbadges.blob.core.windows.net/scenarios/RedHat_RHEL_6.9__agent--bvt.svg)
 RedHat RHEL 7-RAW|![badge](https://dcrbadges.blob.core.windows.net/scenarios/RedHat_RHEL_7-RAW__agent--bvt.svg)
-SUSE SLES 12-SP2|![badge](https://dcrbadges.blob.core.windows.net/scenarios/SUSE_SLES_12-SP2__agent--bvt.svg)
+SUSE SLES 12-SP3|![badge](https://dcrbadges.blob.core.windows.net/scenarios/SUSE_SLES_12-SP3__agent--bvt.svg)
 
 ## Introduction
 
@@ -179,6 +179,7 @@ A configuration file (/etc/waagent.conf) controls the actions of waagent. Blank 
 A sample configuration file is shown below:
 
 ```yml
+Extensions.Enabled=y
 Provisioning.Enabled=y
 Provisioning.UseCloudInit=n
 Provisioning.DeleteRootPassword=n
@@ -212,6 +213,23 @@ configuration options can be specified as "y" or "n". The special keyword "None"
 may be used for some string type configuration entries as detailed below.
 
 ### Configuration File Options
+
+#### __Extensions.Enabled__
+
+_Type: Boolean_  
+_Default: y_
+
+This allows the user to enable or disable the extension handling functionality in the
+agent. Valid values are "y" or "n". If extension handling is disabled, the goal state 
+will still be processed and VM status is still reported, but only every 5 minutes. 
+Extension config within the goal state will be ignored. Note that functionality such
+as password reset, ssh key updates and backups depend on extensions. Only disable this
+if you do not need extensions at all.
+
+_Note_: disabling extensions in this manner is not the same as running completely 
+without the agent. In order to do that, the `provisionVMAgent` flag must be set at
+provisioning time, via whichever API is being used. We will provide more details on
+this on our wiki when it is generally available. 
 
 #### __Provisioning.Enabled__
 

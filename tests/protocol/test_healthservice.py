@@ -204,6 +204,7 @@ class TestHealthService(AgentTestCase):
         self.assert_status_code(status_code=200, expected_healthy=True)
         self.assert_status_code(status_code=201, expected_healthy=True)
         self.assert_status_code(status_code=302, expected_healthy=True)
+        self.assert_status_code(status_code=400, expected_healthy=True)
         self.assert_status_code(status_code=416, expected_healthy=True)
         self.assert_status_code(status_code=419, expected_healthy=True)
         self.assert_status_code(status_code=429, expected_healthy=True)

@@ -25,6 +25,7 @@ from azurelinuxagent.common.future import httpclient, ustr
 
 from tests.tools import *
 
+
 class TestIOErrorCounter(AgentTestCase):
     def test_increment_hostplugin(self):
         restutil.IOErrorCounter.reset()
@@ -454,6 +455,19 @@ class TestHttpOperations(AgentTestCase):
     def test_http_request_raises_for_resource_gone(self, _http_request, _sleep):
         _http_request.side_effect = [
             Mock(status=httpclient.GONE)
+        ]
+
+        self.assertRaises(ResourceGoneError, restutil.http_get, "https://foo.bar")
+        self.assertEqual(1, _http_request.call_count)
+
+    @patch("time.sleep")
+    @patch("azurelinuxagent.common.utils.restutil._http_request")
+    def test_http_request_raises_for_invalid_container_configuration(self, _http_request, _sleep):
+        def read():
+            return b'{ "errorCode": "InvalidContainerConfiguration", "message": "Invalid request." }'
+
+        _http_request.side_effect = [
+            Mock(status=httpclient.BAD_REQUEST, reason='Bad Request', read=read)
         ]
 
         self.assertRaises(ResourceGoneError, restutil.http_get, "https://foo.bar")
