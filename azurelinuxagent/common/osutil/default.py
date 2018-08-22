@@ -809,7 +809,7 @@ class DefaultOSUtil(object):
         try:
             with open('/proc/net/route') as routing_table:
                 return list(map(str.strip, routing_table.readlines()))
-        except OSError as e:
+        except Exception as e:
             logger.error("Cannot read route table [{0}]", ustr(e))
 
         return []
