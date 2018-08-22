@@ -34,7 +34,8 @@ from azurelinuxagent.common.exception import EventError, ProtocolError, OSUtilEr
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol import get_protocol_util
-from azurelinuxagent.common.protocol.healthservice import HealthService
+from azurelinuxagent.common.protocol.healthservice import HealthService, ExtensionHealthObserver, \
+                                                          get_extension_health_observer
 from azurelinuxagent.common.protocol.imds import get_imds_client
 from azurelinuxagent.common.protocol.restapi import TelemetryEventParam, \
                                                     TelemetryEventList, \
@@ -156,6 +157,7 @@ class MonitorHandler(object):
         self.event_thread.start()
 
     def init_sysinfo(self):
+        health_observer = get_extension_health_observer()
         osversion = "{0}:{1}-{2}-{3}:{4}".format(platform.system(),
                                                  DISTRO_NAME,
                                                  DISTRO_VERSION,
@@ -185,6 +187,7 @@ class MonitorHandler(object):
                                                     vminfo.roleInstanceName))
             self.sysinfo.append(TelemetryEventParam("ContainerId",
                                                     vminfo.containerId))
+            health_observer.add_vminfo_observation("TenantId", vminfo.tenantName)
         except ProtocolError as e:
             logger.warn("Failed to get system info: {0}", e)
 
@@ -200,6 +203,14 @@ class MonitorHandler(object):
                                                     vminfo.vmId))
             self.sysinfo.append(TelemetryEventParam('ImageOrigin',
                                                     vminfo.image_origin))
+            health_observer.add_vminfo_observation("Subscription", vminfo.subscriptionId)
+            health_observer.add_vminfo_observation("ResourceGroup", vminfo.resourceGroupName)
+            health_observer.add_vminfo_observation("ScaleSetName", vminfo.vmScaleSetName)
+            health_observer.add_vminfo_observation("VMName", vminfo.vmId)
+            health_observer.add_vminfo_observation("VMSize", vminfo.vmSize)
+            if vminfo.publisher is not None and vminfo.offer is not None and vminfo.sku is not None and vminfo.version is not None:
+                health_observer.add_vminfo_observation("OS",
+                                                       "{0}_{1}_{2}_{3}".format(vminfo.publisher, vminfo.offer, vminfo.sku, vminfo.version))
         except (HttpError, ValueError) as e:
             logger.warn("failed to get IMDS info: {0}", e)
 

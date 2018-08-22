@@ -28,12 +28,16 @@ from azurelinuxagent.common.utils import restutil
 class ExtensionHealthObserver(object):
     CONTEXT_OBSERVATION = '[Context]'
 
+    AGENT_OBSERVATION_NAME = "WAAgent"
+    AGENT_OBSERVATION_VALUE = "Running"
     HANDLER_UNRESPONSIVE_VALUE = 'Extension handler is unresponsive'
     HANDLER_FAILURE_VALUE = 'Extension handler is in a failed state'
     HANDLER_HEALTHY_VALUE = 'Extension handler is in a healthy state'
+    EXTENSION_HEALTHY_VALUE = 'Extension is in a healthy state'
     EXTENSION_ERROR_VALUE = 'Extension is in a failed state'
     EXTENSION_WARNING_VALUE = 'Extension is in a warning state'
     HANDLER_FAILURE_DESCRIPTION = 'Failure code: '
+    STATUS_SUFFIX = '_Cfg'
     SUBSTATUS_SUFFIX = '_Substatus'
     SUBSTATUS_HEALTHY_VALUE = 'Substatus is in a healthy state'
     SUBSTATUS_UNHEALTHY_VALUE = 'Substatus is in an unhealthy state'
@@ -63,13 +67,14 @@ class ExtensionHealthObserver(object):
         description = ExtensionHealthObserver.HANDLER_HEALTHY_VALUE
         version = handler_status.version
         isHealthy = True
+        statusObservation = None
         substatusObservation = None
 
         # check that the extension handler is healthy
         if (handler_status.status == "NotReady") and (handler_status.code != 0):
             isHealthy = False
             value = ExtensionHealthObserver.HANDLER_FAILURE_VALUE
-            description = ExtensionHealthObserver.HANDLER_FAILURE_DESCRIPTION + handler_status.code
+            description = ExtensionHealthObserver.HANDLER_FAILURE_DESCRIPTION + str(handler_status.code)
         elif handler_status.status == "Unresponsive":
             isHealthy = False
             value = ExtensionHealthObserver.HANDLER_UNRESPONSIVE_VALUE
@@ -77,30 +82,35 @@ class ExtensionHealthObserver(object):
         else:
             # check the state of each extension associated with the handler
             for ext_status in exts_status:
+                if statusObservation is None:
+                    statusObservation = Observation(
+                        name=handler_status.name + ExtensionHealthObserver.STATUS_SUFFIX,
+                        is_healthy=True,
+                        value=ExtensionHealthObserver.EXTENSION_HEALTHY_VALUE)
+
                 if ext_status.status == "Error":
-                    isHealthy = False
-                    value = ExtensionHealthObserver.EXTENSION_ERROR_VALUE
-                    description = ExtensionHealthObserver.HANDLER_FAILURE_DESCRIPTION + ext_status.code
+                    statusObservation.is_healthy = False
+                    statusObservation.value = ExtensionHealthObserver.EXTENSION_ERROR_VALUE
+                    statusObservation.description = ExtensionHealthObserver.HANDLER_FAILURE_DESCRIPTION + str(ext_status.code)
                 elif ext_status.status == "Warning":
-                    isHealthy = False
-                    value = ExtensionHealthObserver.EXTENSION_WARNING_VALUE
-                    description = ExtensionHealthObserver.HANDLER_FAILURE_DESCRIPTION + ext_status.code
+                    statusObservation.is_healthy = False
+                    statusObservation.value = ExtensionHealthObserver.EXTENSION_WARNING_VALUE
+                    statusObservation.description = ExtensionHealthObserver.HANDLER_FAILURE_DESCRIPTION + str(ext_status.code)
                 
                 # if a list of substatuses are present, aggregate them into a single observation
-                if not ext_status.substatusList:
+                if ext_status.substatusList is not None and len(ext_status.substatusList) != 0:
                     if not substatusObservation:
-                        substatusObservation = {
-                            name: handler_status.name + ExtensionHealthObserver.SUBSTATUS_SUFFIX,
-                            is_healthy: True,
-                            value: ExtensionHealthObserver.SUBSTATUS_HEALTHY_VALUE
-                        }
+                        substatusObservation = Observation(
+                            name=handler_status.name + ExtensionHealthObserver.SUBSTATUS_SUFFIX,
+                            is_healthy=True,
+                            value=ExtensionHealthObserver.SUBSTATUS_HEALTHY_VALUE)
                     
                     for substatus in ext_status.substatusList:
                         if substatus is not None:
                             if (substatus.status == "Error") or (substatus.status == "Warning"):
                                 substatusObservation.is_healthy = False
-                                substatusObservation.value = ExtensionHealthObserver.SUBSTATUS_HEALTHY_VALUE
-                                substatusObservation.description = ExtensionHealthObserver.HANDLER_FAILURE_DESCRIPTION + ext_status.code
+                                substatusObservation.value = ExtensionHealthObserver.SUBSTATUS_UNHEALTHY_VALUE
+                                substatusObservation.description = ExtensionHealthObserver.HANDLER_FAILURE_DESCRIPTION + str(ext_status.code)
         
         self._observe(name=ExtensionHealthObserver.CONTEXT_OBSERVATION + name,
                       is_healthy=True,
@@ -112,18 +122,22 @@ class ExtensionHealthObserver(object):
                       value=value,
                       description=description)
         
+        if statusObservation is not None:
+            self._observe(name=statusObservation.name,
+                          is_healthy=statusObservation.is_healthy,
+                          value=statusObservation.value,
+                          description=statusObservation.description)
+
         if substatusObservation is not None:
             self._observe(name=substatusObservation.name,
-                          is_healthy=substatusObservation.isHealthy,
+                          is_healthy=substatusObservation.is_healthy,
                           value=substatusObservation.value,
                           description=substatusObservation.description)
 
     def report_vm_status(self, vm_status):
         """
-        Reports a signal for the following:
-        
-         - VM agent health
-         - VM agent version
+        Commits all of the extension related observations that have been found
+        since the last call to report_vm_status and adds observations for the vm agent.
         """
         self._observe(name=ExtensionHealthObserver.AGENT_OBSERVATION_NAME,
                       is_healthy=True,
@@ -133,16 +147,23 @@ class ExtensionHealthObserver(object):
                       description=ExtensionHealthObserver.CONTEXT_OBSERVATION,
                       value=vm_status.vmAgent.version)
         self._commit_partial_observations()
-        
-        # Name: [Context]Subscription, Value: subId, Description: "[Context]"
-        # Name: [Context]ResourceGroup, Value: rgName, Description: "[Context]"
-        # Name: [Context]ScaleSetName, Value: scaleSetName, Description: "[Context]"
-        # Name: [Context]VMName, Value: vmName, Description: "[Context]"
-        # Name: [Context]TenantId, Value: tenantId, Description: "[Context]"
-        # Name: [Context]OS, Value: publisher_offer_sku_version, Description: "[Context]"
 
     def get_observations(self):
+        """
+        Retrieves the combination of the latest extension observations and the static observations that do not
+        change over the lifetime of the VM.
+        """
         return self.latest_observations + self.static_observations
+    
+    def add_vminfo_observation(self, name, value):
+        """
+        Adds a static observation that will not change over the lifetime of the VM.
+        """
+        if value is not None:
+            self.static_observations.append(Observation(name=ExtensionHealthObserver.CONTEXT_OBSERVATION + name,
+                                                        is_healthy=True,
+                                                        value=value,
+                                                        description=ExtensionHealthObserver.CONTEXT_OBSERVATION))
 
     def _observe(self, name, is_healthy, value='', description=''):
         self.partial_observations.append(Observation(name=name,
