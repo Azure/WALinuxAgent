@@ -937,28 +937,23 @@ class DefaultOSUtil(object):
         endpoint = None
 
         HEADER_LEASE = "lease"
-        HEADER_OPTION = "option unknown-245"
-        HEADER_DNS = "option domain-name-servers"
+        HEADER_OPTION_245 = "option unknown-245"
         HEADER_EXPIRE = "expire"
         FOOTER_LEASE = "}"
         FORMAT_DATETIME = "%Y/%m/%d %H:%M:%S"
+        option_245_re = re.compile(r'\s*option\s+unknown-245\s+([0-9a-fA-F]+):([0-9a-fA-F]+):([0-9a-fA-F]+):([0-9a-fA-F]+);')
 
         logger.info("looking for leases in path [{0}]".format(pathglob))
         for lease_file in glob.glob(pathglob):
             leases = open(lease_file).read()
-            if HEADER_OPTION in leases:
+            if HEADER_OPTION_245 in leases:
                 cached_endpoint = None
-                has_option_245 = False
+                option_245_match = None
                 expired = True  # assume expired
                 for line in leases.splitlines():
                     if line.startswith(HEADER_LEASE):
                         cached_endpoint = None
-                        has_option_245 = False
                         expired = True
-                    elif HEADER_DNS in line:
-                        cached_endpoint = line.replace(HEADER_DNS, '').strip(" ;")
-                    elif HEADER_OPTION in line:
-                        has_option_245 = True
                     elif HEADER_EXPIRE in line:
                         if "never" in line:
                             expired = False
@@ -972,12 +967,20 @@ class DefaultOSUtil(object):
                                 logger.error("could not parse expiry token '{0}'".format(line))
                     elif FOOTER_LEASE in line:
                         logger.info("dhcp entry:{0}, 245:{1}, expired:{2}".format(
-                            cached_endpoint, has_option_245, expired))
-                        if not expired and cached_endpoint is not None and has_option_245:
+                            cached_endpoint, option_245_match is not None, expired))
+                        if not expired and cached_endpoint is not None:
                             endpoint = cached_endpoint
                             logger.info("found endpoint [{0}]".format(endpoint))
                             # we want to return the last valid entry, so
                             # keep searching
+                    else:
+                        option_245_match = option_245_re.match(line)
+                        if option_245_match is not None:
+                            cached_endpoint = '{0}.{1}.{2}.{3}'.format(
+                                int(option_245_match.group(1), 16),
+                                int(option_245_match.group(2), 16),
+                                int(option_245_match.group(3), 16),
+                                int(option_245_match.group(4), 16))
         if endpoint is not None:
             logger.info("cached endpoint found [{0}]".format(endpoint))
         else:
