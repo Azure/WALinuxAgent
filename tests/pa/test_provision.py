@@ -268,8 +268,8 @@ class TestProvision(AgentTestCase):
         fileutil.write_file(ovfenv_file, ovfenv_data)
 
         ph.run()
-        ph.report_event.assert_called_once_with(
-            '[ProvisionError] --unit-test--', is_success=False)
+        positional_args, kw_args = ph.report_event.call_args_list[0]
+        self.assertTrue(re.match(r'Provisioning failed: \[ProvisionError\] --unit-test-- \(\d+\.\d+s\)', positional_args[0]) is not None)
 
     @patch('azurelinuxagent.pa.provision.default.ProvisionHandler.write_agent_disabled')
     @distros()

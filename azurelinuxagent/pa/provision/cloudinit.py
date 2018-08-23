@@ -69,9 +69,10 @@ class CloudInitProvisionHandler(ProvisionHandler):
                 duration=elapsed_milliseconds(utc_start))
 
         except ProvisionError as e:
-            logger.error("Provisioning failed: {0}", ustr(e))
+            msg = "Provisioning with cloud-init failed: {0} ({1}s)".format(ustr(e), self._get_uptime_seconds())
+            logger.error(msg)
             self.report_not_ready("ProvisioningFailed", ustr(e))
-            self.report_event(ustr(e))
+            self.report_event(msg)
             return
 
     def wait_for_ovfenv(self, max_retry=1800, sleep_time=1):
