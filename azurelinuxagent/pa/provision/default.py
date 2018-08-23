@@ -98,9 +98,10 @@ class ProvisionHandler(object):
             logger.info("Provisioning complete")
 
         except (ProtocolError, ProvisionError) as e:
+            msg = "Provisioning failed: {0} ({1}s)".format(ustr(e), self._get_uptime_seconds())
+            logger.error(msg)
             self.report_not_ready("ProvisioningFailed", ustr(e))
-            self.report_event(ustr(e), is_success=False)
-            logger.error("Provisioning failed: {0}", ustr(e))
+            self.report_event(msg, is_success=False)
             return
 
     @staticmethod
