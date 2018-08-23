@@ -162,10 +162,11 @@ class TestWireProtocol(AgentTestCase):
     def test_download_ext_handler_pkg_fallback(self, patch_request, patch_get_host, patch_http, *args):
         ext_uri = 'extension_uri'
         host_uri = 'host_uri'
+        destination = 'destination'
         patch_get_host.return_value = HostPluginProtocol(host_uri, 'container_id', 'role_config')
         patch_request.return_value = [host_uri, {}]
 
-        WireProtocol(wireserver_url).download_ext_handler_pkg(ext_uri)
+        WireProtocol(wireserver_url).download_ext_handler_pkg(ext_uri, destination)
 
         self.assertEqual(patch_http.call_count, 2)
         self.assertEqual(patch_request.call_count, 1)

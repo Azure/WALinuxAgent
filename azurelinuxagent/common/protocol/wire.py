@@ -164,16 +164,16 @@ class WireProtocol(Protocol):
         logger.verbose("Get In-VM Artifacts Profile")
         return self.client.get_artifacts_profile()
 
-    def download_ext_handler_pkg(self, uri, headers=None, use_proxy=True):
-        package = self.client.fetch(uri, headers=headers, use_proxy=use_proxy, decode=False)
+    def download_ext_handler_pkg(self, uri, destination, headers=None, use_proxy=True):
+        success = self.client.stream(uri, destination, headers=headers, use_proxy=use_proxy)
 
-        if package is None:
+        if not success:
             logger.verbose("Download did not succeed, falling back to host plugin")
             host = self.client.get_host_plugin()
             uri, headers = host.get_artifact_request(uri, host.manifest_uri)
-            package = self.client.fetch(uri, headers=headers, use_proxy=False, decode=False)
+            success = self.client.stream(uri, destination, headers=headers, use_proxy=False)
 
-        return package
+        return success
 
     def report_provision_status(self, provision_status):
         validate_param("provision_status", provision_status, ProvisionStatus)
@@ -641,9 +641,37 @@ class WireClient(object):
 
         raise ProtocolError("Failed to fetch manifest from all sources")
 
+    def stream(self, uri, destination, headers=None, use_proxy=None):
+        success = False
+        logger.verbose("Fetch [{0}] with headers [{1}] to file [{2}]", uri, headers, destination)
+
+        response = self._fetch_response(uri, headers, use_proxy)
+        if response is not None:
+            chunk_size = 1024 * 1024  # 1MB buffer
+            try:
+                with open(destination, 'wb', chunk_size) as destination_fh:
+                    complete = False
+                    while not complete:
+                        chunk = response.read(chunk_size)
+                        destination_fh.write(chunk)
+                        complete = len(chunk) < chunk_size
+                success = True
+            except Exception as e:
+                logger.error('Error streaming {0} to {1}: {2}'.format(uri, destination, ustr(e)))
+
+        return success
+
     def fetch(self, uri, headers=None, use_proxy=None, decode=True):
-        content = None
         logger.verbose("Fetch [{0}] with headers [{1}]", uri, headers)
+        content = None
+        response = self._fetch_response(uri, headers, use_proxy)
+        if response is not None:
+            response_content = response.read()
+            content = self.decode_config(response_content) if decode else response_content
+        return content
+
+    def _fetch_response(self, uri, headers=None, use_proxy=None):
+        resp = None
         try:
             resp = self.call_storage_service(
                         restutil.http_get,
@@ -662,8 +690,6 @@ class WireClient(object):
                                                          response=error_response)
                 raise ProtocolError(msg)
             else:
-                response_content = resp.read()
-                content = self.decode_config(response_content) if decode else response_content
                 if self.host_plugin is not None:
                     self.host_plugin.report_fetch_health(uri, source='WireClient')
 
@@ -671,8 +697,7 @@ class WireClient(object):
             logger.verbose("Fetch failed from [{0}]: {1}", uri, e)
             if isinstance(e, ResourceGoneError):
                 raise
-
-        return content
+        return resp
 
     def update_hosting_env(self, goal_state):
         if goal_state.hosting_env_uri is None:

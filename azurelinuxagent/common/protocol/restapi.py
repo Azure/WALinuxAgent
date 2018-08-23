@@ -21,6 +21,7 @@ import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.restutil as restutil
 from azurelinuxagent.common.exception import ProtocolError, HttpError
 from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.version import DISTRO_VERSION, DISTRO_NAME, CURRENT_VERSION
 
 
@@ -299,11 +300,13 @@ class TelemetryEventList(DataContract):
     def __init__(self):
         self.events = DataContractList(TelemetryEvent)
 
+
 class RemoteAccessUser(DataContract):
     def __init__(self, name, encrypted_password, expiration):
         self.name = name
         self.encrypted_password = encrypted_password
         self.expiration = expiration
+
 
 class RemoteAccessUsersList(DataContract):
     def __init__(self):
@@ -338,15 +341,8 @@ class Protocol(DataContract):
     def get_artifacts_profile(self):
         raise NotImplementedError()
 
-    def download_ext_handler_pkg(self, uri, headers=None, use_proxy=True):
-        pkg = None
-        try:
-            resp = restutil.http_get(uri, headers=headers, use_proxy=use_proxy)
-            if restutil.request_succeeded(resp):
-                pkg = resp.read()
-        except Exception as e:
-            logger.warn("Failed to download from: {0}".format(uri), e)
-        return pkg
+    def download_ext_handler_pkg(self, uri, destination, headers=None, use_proxy=True):
+        raise NotImplementedError()
 
     def report_provision_status(self, provision_status):
         raise NotImplementedError()
