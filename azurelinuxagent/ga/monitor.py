@@ -406,7 +406,11 @@ class MonitorHandler(object):
             CGroupsTelemetry.track_cgroup(CGroups.for_extension(""))
             CGroupsTelemetry.track_agent()
         except Exception as e:
-            logger.error("monitor: Exception tracking wrapper and agent: {0} [{1}]", e, traceback.format_exc())
+            # when a hierarchy is not mounted, we raise an exception
+            # and we should therefore only issue a warning, since this
+            # is not unexpected
+            logger.warn("Monitor: cgroups not initialized: {0}", ustr(e))
+            logger.verbose(traceback.format_exc())
 
     def send_cgroup_telemetry(self):
         if self.last_cgroup_telemetry is None:
@@ -419,13 +423,15 @@ class MonitorHandler(object):
                         if value > 0:
                             report_metric(metric_group, metric_name, cgroup_name, value)
             except Exception as e:
-                logger.warn("Failed to collect performance metrics: {0} [{1}]", e, traceback.format_exc())
+                logger.warn("Monitor: failed to collect cgroups performance metrics: {0}", ustr(e))
+                logger.verbose(traceback.format_exc())
 
             # Look for extension cgroups we're not already tracking and track them
             try:
                 CGroupsTelemetry.update_tracked(self.protocol.client.get_current_handlers())
             except Exception as e:
-                logger.warn("Monitor: updating tracked extensions raised {0}: {1}", e, traceback.format_exc())
+                logger.warn("Monitor: failed to update cgroups tracked extensions: {0}", ustr(e))
+                logger.verbose(traceback.format_exc())
 
             self.last_cgroup_telemetry = datetime.datetime.utcnow()
 
