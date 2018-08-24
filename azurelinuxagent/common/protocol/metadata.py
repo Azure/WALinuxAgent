@@ -304,6 +304,17 @@ class MetadataProtocol(Protocol):
                 logger.verbose("Incarnation is out of date. Update goalstate.")
         raise ProtocolError("Exceeded max retry updating goal state")
 
+    def download_ext_handler_pkg(self, uri, destination, headers=None, use_proxy=True):
+        success = False
+        try:
+            resp = restutil.http_get(uri, headers=headers, use_proxy=use_proxy)
+            if restutil.request_succeeded(resp):
+                fileutil.write_file(destination, bytearray(resp.read()), asbin=True)
+                success = True
+        except Exception as e:
+            logger.warn("Failed to download from: {0}".format(uri), e)
+        return success
+
 
 class Certificates(object):
     """

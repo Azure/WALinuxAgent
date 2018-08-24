@@ -52,7 +52,7 @@ RETRY_CODES = [
     httpclient.SERVICE_UNAVAILABLE,
     httpclient.GATEWAY_TIMEOUT,
     httpclient.INSUFFICIENT_STORAGE,
-    429, # Request Rate Limit Exceeded
+    429,  # Request Rate Limit Exceeded
 ]
 
 RESOURCE_GONE_CODES = [
@@ -215,14 +215,14 @@ def _http_request(method, host, rel_uri, port=None, data=None, secure=False,
 
     if secure:
         conn = httpclient.HTTPSConnection(conn_host,
-                                        conn_port,
-                                        timeout=10)
+                                          conn_port,
+                                          timeout=10)
         if use_proxy:
             conn.set_tunnel(host, port)
     else:
         conn = httpclient.HTTPConnection(conn_host,
-                                        conn_port,
-                                        timeout=10)
+                                         conn_port,
+                                         timeout=10)
 
     logger.verbose("HTTP connection [{0}] [{1}] [{2}] [{3}]",
                    method,
@@ -321,8 +321,7 @@ def http_request(method,
 
             if request_failed(resp):
                 if _is_retry_status(resp.status, retry_codes=retry_codes):
-                    msg = '[HTTP Retry] {0} {1} -- Status Code {2}'.format(
-                        method, url, resp.status)
+                    msg = '[HTTP Retry] {0} {1} -- Status Code {2}'.format(method, url, resp.status)
                     # Note if throttled and ensure a safe, minimum number of
                     # retry attempts
                     if _is_throttle_status(resp.status):
@@ -343,25 +342,28 @@ def http_request(method,
             return resp
 
         except httpclient.HTTPException as e:
-            msg = '[HTTP Failed] {0} {1} -- HttpException {2}'.format(
-                method, redact_sas_tokens_in_urls(url), e)
+            clean_url = redact_sas_tokens_in_urls(url)
+            msg = '[HTTP Failed] {0} {1} -- HttpException {2}'.format(method, clean_url, e)
             if _is_retry_exception(e):
                 continue
             break
 
         except IOError as e:
             IOErrorCounter.increment(host=host, port=port)
-            msg = '[HTTP Failed] {0} {1} -- IOError {2}'.format(
-                method, redact_sas_tokens_in_urls(url), e)
+            clean_url = redact_sas_tokens_in_urls(url)
+            msg = '[HTTP Failed] {0} {1} -- IOError {2}'.format(method, clean_url, e)
             continue
 
-    raise HttpError("{0} -- {1} attempts made".format(msg,attempt))
+    raise HttpError("{0} -- {1} attempts made".format(msg, attempt))
 
 
-def http_get(url, headers=None, use_proxy=False,
-                max_retry=DEFAULT_RETRIES,
-                retry_codes=RETRY_CODES,
-                retry_delay=DELAY_IN_SECONDS):
+def http_get(url,
+             headers=None,
+             use_proxy=False,
+             max_retry=DEFAULT_RETRIES,
+             retry_codes=RETRY_CODES,
+             retry_delay=DELAY_IN_SECONDS):
+
     return http_request("GET",
                         url, None, headers=headers,
                         use_proxy=use_proxy,
@@ -370,10 +372,13 @@ def http_get(url, headers=None, use_proxy=False,
                         retry_delay=retry_delay)
 
 
-def http_head(url, headers=None, use_proxy=False,
-                max_retry=DEFAULT_RETRIES,
-                retry_codes=RETRY_CODES,
-                retry_delay=DELAY_IN_SECONDS):
+def http_head(url,
+              headers=None,
+              use_proxy=False,
+              max_retry=DEFAULT_RETRIES,
+              retry_codes=RETRY_CODES,
+              retry_delay=DELAY_IN_SECONDS):
+
     return http_request("HEAD",
                         url, None, headers=headers,
                         use_proxy=use_proxy,
@@ -382,10 +387,14 @@ def http_head(url, headers=None, use_proxy=False,
                         retry_delay=retry_delay)
 
 
-def http_post(url, data, headers=None, use_proxy=False,
-                max_retry=DEFAULT_RETRIES,
-                retry_codes=RETRY_CODES,
-                retry_delay=DELAY_IN_SECONDS):
+def http_post(url,
+              data,
+              headers=None,
+              use_proxy=False,
+              max_retry=DEFAULT_RETRIES,
+              retry_codes=RETRY_CODES,
+              retry_delay=DELAY_IN_SECONDS):
+
     return http_request("POST",
                         url, data, headers=headers,
                         use_proxy=use_proxy,
@@ -394,10 +403,14 @@ def http_post(url, data, headers=None, use_proxy=False,
                         retry_delay=retry_delay)
 
 
-def http_put(url, data, headers=None, use_proxy=False,
-                max_retry=DEFAULT_RETRIES,
-                retry_codes=RETRY_CODES,
-                retry_delay=DELAY_IN_SECONDS):
+def http_put(url,
+             data,
+             headers=None,
+             use_proxy=False,
+             max_retry=DEFAULT_RETRIES,
+             retry_codes=RETRY_CODES,
+             retry_delay=DELAY_IN_SECONDS):
+
     return http_request("PUT",
                         url, data, headers=headers,
                         use_proxy=use_proxy,
@@ -406,10 +419,13 @@ def http_put(url, data, headers=None, use_proxy=False,
                         retry_delay=retry_delay)
 
 
-def http_delete(url, headers=None, use_proxy=False,
+def http_delete(url,
+                headers=None,
+                use_proxy=False,
                 max_retry=DEFAULT_RETRIES,
                 retry_codes=RETRY_CODES,
                 retry_delay=DELAY_IN_SECONDS):
+
     return http_request("DELETE",
                         url, None, headers=headers,
                         use_proxy=use_proxy,

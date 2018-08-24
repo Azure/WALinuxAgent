@@ -640,35 +640,36 @@ class ExtHandlerInstance(object):
         begin_utc = datetime.datetime.utcnow()
         self.logger.verbose("Download extension package")
         self.set_operation(WALAEventOperation.Download)
+
         if self.pkg is None:
             raise ExtensionError("No package uri found")
         
-        package = None
-        chosen_uri = None
         uris_shuffled = self.pkg.uris
         random.shuffle(uris_shuffled)
+        file_downloaded = False
+
         for uri in uris_shuffled:
             try:
-                package = self.protocol.download_ext_handler_pkg(uri.uri)
-                if package is not None:
-                    chosen_uri = uri
+                destination = os.path.join(conf.get_lib_dir(), os.path.basename(uri.uri) + ".zip")
+                file_downloaded = self.protocol.download_ext_handler_pkg(uri.uri, destination)
+
+                if file_downloaded and os.path.exists(destination):
+                    self.pkg_file = destination
                     break
+
             except Exception as e:
-                logger.warn("Error while downloading extension: {0}", e)
+                logger.warn("Error while downloading extension: {0}", ustr(e))
         
-        if package is None or chosen_uri is None:
+        if not file_downloaded:
             raise ExtensionError("Failed to download extension", code=1001)
 
-        self.logger.verbose("Unpack extension package")
-        self.pkg_file = os.path.join(conf.get_lib_dir(), os.path.basename(chosen_uri.uri) + ".zip")
+        self.logger.verbose("Unzip extension package")
         try:
-            fileutil.write_file(self.pkg_file, bytearray(package), asbin=True)
             zipfile.ZipFile(self.pkg_file).extractall(self.get_base_dir())
             os.remove(self.pkg_file)
         except IOError as e:
-            fileutil.clean_ioerror(e,
-                paths=[self.get_base_dir(), self.pkg_file])
-            raise ExtensionError(u"Failed to write and unzip plugin", e, code=1001)
+            fileutil.clean_ioerror(e, paths=[self.get_base_dir(), self.pkg_file])
+            raise ExtensionError(u"Failed to unzip extension package", e, code=1001)
 
         # Add user execute permission to all files under the base dir
         for file in fileutil.get_all_files(self.get_base_dir()):
@@ -679,8 +680,7 @@ class ExtHandlerInstance(object):
 
         self.logger.info("Initialize extension directory")
         # Save HandlerManifest.json
-        man_file = fileutil.search_file(self.get_base_dir(),
-                                        'HandlerManifest.json')
+        man_file = fileutil.search_file(self.get_base_dir(), 'HandlerManifest.json')
 
         if man_file is None:
             raise ExtensionError("HandlerManifest.json not found")
@@ -689,8 +689,7 @@ class ExtHandlerInstance(object):
             man = fileutil.read_file(man_file, remove_bom=True)
             fileutil.write_file(self.get_manifest_file(), man)
         except IOError as e:
-            fileutil.clean_ioerror(e,
-                paths=[self.get_base_dir(), self.pkg_file])
+            fileutil.clean_ioerror(e, paths=[self.get_base_dir(), self.pkg_file])
             raise ExtensionError(u"Failed to save HandlerManifest.json", e)
 
         # Create status and config dir
@@ -717,8 +716,7 @@ class ExtHandlerInstance(object):
             fileutil.mkdir(conf_dir, mode=0o700)
 
         except IOError as e:
-            fileutil.clean_ioerror(e,
-                paths=[self.get_base_dir(), self.pkg_file])
+            fileutil.clean_ioerror(e, paths=[self.get_base_dir(), self.pkg_file])
             raise ExtensionError(u"Failed to create status or config dir", e)
 
         # Save HandlerEnvironment.json
