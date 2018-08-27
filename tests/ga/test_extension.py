@@ -915,6 +915,8 @@ class TestExtension(ExtensionTestCase):
         exthandlers_handler.run()
         self.assertEqual(1, patch_get_update_command.call_count)
 
+        self._assert_handler_status(protocol.report_vm_status, "NotReady", expected_ext_count=1, version="1.0.1")
+
 
 if __name__ == '__main__':
     unittest.main()
