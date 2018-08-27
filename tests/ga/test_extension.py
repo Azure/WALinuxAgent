@@ -883,6 +883,38 @@ class TestExtension(ExtensionTestCase):
         self.assertEquals("Ready", protocol.report_vm_status.call_args[0][0].vmAgent.status)
         self._assert_no_handler_status(protocol.report_vm_status)
 
+    @patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_update_command')
+    def test_upgrade(self, patch_get_update_command, *args):
+        """
+        Extension upgrade failure should not be retried
+        """
+        test_data = WireProtocolData(DATA_FILE_EXT_SINGLE)
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+
+        # Ensure initial install and enable is successful
+        exthandlers_handler.run()
+        self.assertEqual(0, patch_get_update_command.call_count)
+
+        self._assert_handler_status(protocol.report_vm_status, "Ready", expected_ext_count=1, version="1.0.0")
+        self._assert_ext_status(protocol.report_ext_status, "success", 0)
+
+        # Next incarnation, update version
+        test_data.goal_state = test_data.goal_state.replace("<Incarnation>1<",
+                                                            "<Incarnation>2<")
+        test_data.ext_conf = test_data.ext_conf.replace('version="1.0.0"',
+                                                        'version="1.0.1"')
+        test_data.manifest = test_data.manifest.replace('1.0.0',
+                                                        '1.0.1')
+
+        # Update command should fail
+        patch_get_update_command.return_value = "exit 1"
+        exthandlers_handler.run()
+        self.assertEqual(1, patch_get_update_command.call_count)
+
+        # On the next iteration, update should not be retried
+        exthandlers_handler.run()
+        self.assertEqual(1, patch_get_update_command.call_count)
+
 
 if __name__ == '__main__':
     unittest.main()
