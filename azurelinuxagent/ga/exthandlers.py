@@ -173,6 +173,7 @@ class ExtHandlerState(object):
     NotInstalled = "NotInstalled"
     Installed = "Installed"
     Enabled = "Enabled"
+    Failed = "Failed"
 
 
 def get_exthandlers_handler():
@@ -775,14 +776,19 @@ class ExtHandlerInstance(object):
         if version is None:
             version = self.ext_handler.properties.version
 
-        self.set_operation(WALAEventOperation.Update)
-        man = self.load_manifest()
-        update_cmd = man.get_update_command()
-        self.logger.info("Update extension [{0}]".format(update_cmd))
-        self.launch_command(update_cmd, 
-                            timeout=900,
-                            extension_error_code=1008, 
-                            env={'VERSION': version})
+        try:
+            self.set_operation(WALAEventOperation.Update)
+            man = self.load_manifest()
+            update_cmd = man.get_update_command()
+            self.logger.info("Update extension [{0}]".format(update_cmd))
+            self.launch_command(update_cmd,
+                                timeout=900,
+                                extension_error_code=1008,
+                                env={'VERSION': version})
+        except ExtensionError:
+            # prevent the handler update from being retried
+            self.set_handler_state(ExtHandlerState.Failed)
+            raise
     
     def update_with_install(self):
         man = self.load_manifest()
