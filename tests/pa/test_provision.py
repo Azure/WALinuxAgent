@@ -195,7 +195,8 @@ class TestProvision(AgentTestCase):
                                    distro_version,
                                    distro_full_name)
         ph.report_event = MagicMock()
-        ph.reg_ssh_host_key = MagicMock(return_value='--thumprint--')
+        ph.reg_ssh_host_key = MagicMock()
+        ph.get_ssh_host_key_thumbprint = MagicMock(return_value='--thumprint--')
 
         mock_osutil = MagicMock()
         mock_osutil.decode_customdata = Mock(return_value="")
@@ -204,6 +205,7 @@ class TestProvision(AgentTestCase):
         ph.protocol_util.osutil = mock_osutil
         ph.protocol_util.get_protocol = MagicMock()
 
+        conf.get_regenerate_ssh_host_key = Mock(return_value=True)
         conf.get_dvd_mount_point = Mock(return_value=self.tmp_dir)
         ovfenv_file = os.path.join(self.tmp_dir, OVF_FILE_NAME)
         ovfenv_data = load_data(ovf_file)
@@ -262,13 +264,14 @@ class TestProvision(AgentTestCase):
         ph.protocol_util.osutil = mock_osutil
         ph.protocol_util.get_protocol = MagicMock()
 
+        conf.get_regenerate_ssh_host_key = Mock(return_value=True)
         conf.get_dvd_mount_point = Mock(return_value=self.tmp_dir)
         ovfenv_file = os.path.join(self.tmp_dir, OVF_FILE_NAME)
         ovfenv_data = load_data("ovf-env.xml")
         fileutil.write_file(ovfenv_file, ovfenv_data)
 
         ph.run()
-        positional_args, kw_args = ph.report_event.call_args_list[0]
+        positional_args, _ = ph.report_event.call_args_list[0]
         self.assertTrue(re.match(r'Provisioning failed: \[ProvisionError\] --unit-test-- \(\d+\.\d+s\)', positional_args[0]) is not None)
 
     @patch('azurelinuxagent.pa.provision.default.ProvisionHandler.write_agent_disabled')

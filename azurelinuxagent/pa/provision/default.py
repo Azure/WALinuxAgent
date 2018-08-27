@@ -83,9 +83,10 @@ class ProvisionHandler(object):
 
             self.provision(ovf_env)
 
-            thumbprint = self.reg_ssh_host_key()
-            self.osutil.restart_ssh_service()
-
+            if conf.get_regenerate_ssh_host_key():
+                self.reg_ssh_host_key()
+                self.osutil.restart_ssh_service()
+            thumbprint = self.get_ssh_host_key_thumbprint()
             self.write_provisioned()
 
             self.report_event("Provisioning succeeded ({0}s)".format(self._get_uptime_seconds()),
@@ -139,20 +140,18 @@ class ProvisionHandler(object):
 
     def reg_ssh_host_key(self):
         keypair_type = conf.get_ssh_host_keypair_type()
-        if conf.get_regenerate_ssh_host_key():
-            fileutil.rm_files(conf.get_ssh_key_glob())
-            if conf.get_ssh_host_keypair_mode() == "auto":
-                '''
-                The -A option generates all supported key types.
-                This is supported since OpenSSH 5.9 (2011).
-                '''
-                shellutil.run("ssh-keygen -A")
-            else:
-                keygen_cmd = "ssh-keygen -N '' -t {0} -f {1}"
-                shellutil.run(keygen_cmd.
-                              format(keypair_type,
-                                     conf.get_ssh_key_private_path()))
-        return self.get_ssh_host_key_thumbprint()
+        fileutil.rm_files(conf.get_ssh_key_glob())
+        if conf.get_ssh_host_keypair_mode() == "auto":
+            '''
+            The -A option generates all supported key types.
+            This is supported since OpenSSH 5.9 (2011).
+            '''
+            shellutil.run("ssh-keygen -A")
+        else:
+            keygen_cmd = "ssh-keygen -N '' -t {0} -f {1}"
+            shellutil.run(keygen_cmd.
+                            format(keypair_type,
+                                    conf.get_ssh_key_private_path()))
 
     def get_ssh_host_key_thumbprint(self, chk_err=True):
         cmd = "ssh-keygen -lf {0}".format(conf.get_ssh_key_public_path())
