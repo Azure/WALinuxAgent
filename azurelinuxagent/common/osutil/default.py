@@ -95,6 +95,9 @@ IFNAMSIZ = 16
 
 IP_COMMAND_OUTPUT = re.compile('^\d+:\s+(\w+):\s+(.*)$')
 
+BASE_CGROUPS = '/sys/fs/cgroup'
+
+
 class DefaultOSUtil(object):
     def __init__(self):
         self.agent_conf_file_path = '/etc/waagent.conf'
@@ -290,11 +293,54 @@ class DefaultOSUtil(object):
         return id_that == id_this or \
             id_that == self._correct_instance_id(id_this)
 
-    def is_cgroups_supported(self):
-        return False
+    @staticmethod
+    def is_cgroups_supported():
+        """
+        Enabled by default; disabled in WSL/Travis
+        """
+        is_wsl = '-Microsoft-' in platform.platform()
+        is_travis = 'TRAVIS' in os.environ and os.environ['TRAVIS'] == 'true'
+        base_fs_exists = os.path.exists(BASE_CGROUPS)
+        return not is_wsl and not is_travis and base_fs_exists
+
+    @staticmethod
+    def _cgroup_path(tail=""):
+        return os.path.join(BASE_CGROUPS, tail).rstrip(os.path.sep)
 
     def mount_cgroups(self):
-        pass
+        try:
+            path = self._cgroup_path()
+            if not os.path.exists(path):
+                fileutil.mkdir(path)
+                self.mount(device='cgroup_root',
+                           mount_point=path,
+                           option="-t tmpfs",
+                           chk_err=False)
+            elif not os.path.isdir(self._cgroup_path()):
+                logger.error("Could not mount cgroups: ordinary file at {0}".format(path))
+                return
+
+            for metric_hierarchy in ['cpu,cpuacct', 'memory']:
+                target_path = self._cgroup_path(metric_hierarchy)
+                if not os.path.exists(target_path):
+                    fileutil.mkdir(target_path)
+                    self.mount(device=metric_hierarchy,
+                               mount_point=target_path,
+                               option="-t cgroup -o {0}".format(metric_hierarchy),
+                               chk_err=False)
+
+            for metric_hierarchy in ['cpu', 'cpuacct']:
+                target_path = self._cgroup_path(metric_hierarchy)
+                if not os.path.exists(target_path):
+                    os.symlink(self._cgroup_path('cpu,cpuacct'), target_path)
+
+        except OSError as oe:
+            # log a warning for read-only file systems
+            logger.warn("Could not mount cgroups: {0}", ustr(oe))
+            raise
+        except Exception as e:
+            logger.error("Could not mount cgroups: {0}", ustr(e))
+            raise
 
     def get_agent_conf_file_path(self):
         return self.agent_conf_file_path
@@ -658,7 +704,6 @@ class DefaultOSUtil(object):
         shellutil.run("iptables -I INPUT -p udp --dport 68 -j ACCEPT",
                       chk_err=False)
 
-
     def remove_rules_files(self, rules_files=__RULES_FILES__):
         lib_dir = conf.get_lib_dir()
         for src in rules_files:
@@ -743,7 +788,6 @@ class DefaultOSUtil(object):
                 if iface_name not in ifaces:
                     ifaces[iface_name] = socket.inet_ntoa(ifconf_buff[i+20:i+24])
         return ifaces
-
 
     def get_first_if(self):
         """
