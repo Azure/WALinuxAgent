@@ -16,8 +16,11 @@
 import json
 
 from azurelinuxagent.common.exception import HttpError
-from azurelinuxagent.common.protocol.healthservice import Observation, HealthService
+from azurelinuxagent.common.protocol.healthservice import Observation, HealthService, ExtensionHealthObserver
 from azurelinuxagent.common.utils import restutil
+from azurelinuxagent.common.protocol.restapi import ExtHandlerStatus, \
+                                                    ExtensionStatus, \
+                                                    ExtensionSubStatus
 from tests.protocol.test_hostplugin import MockResponse
 from tests.tools import *
 
@@ -212,3 +215,141 @@ class TestHealthService(AgentTestCase):
         self.assert_status_code(status_code=501, expected_healthy=False)
         self.assert_status_code(status_code=503, expected_healthy=False)
         self.assert_status_code(status_code=504, expected_healthy=False)
+
+
+class TestExtensionHealthObserver(AgentTestCase):
+    def test_report_vm_status(self):
+        healthObserver = ExtensionHealthObserver()
+        self.assertEqual(0, len(healthObserver.static_observations))
+        self.assertEqual(0, len(healthObserver.partial_observations))
+        self.assertEqual(0, len(healthObserver.latest_observations))
+
+        vm_agent = Mock(version="1.0")
+        vm_status = Mock(vm_agent=vm_agent)
+        healthObserver.report_vm_status(vm_status)
+
+        self.assertEqual(0, len(healthObserver.static_observations))
+        self.assertEqual(0, len(healthObserver.partial_observations))
+        self.assertEqual(2, len(healthObserver.latest_observations))
+
+        self.assertEqual(ExtensionHealthObserver.AGENT_OBSERVATION_NAME, healthObserver.latest_observations[0].name)
+        self.assertEqual(True, healthObserver.latest_observations[0].is_healthy)
+        self.assertEqual(ExtensionHealthObserver.AGENT_OBSERVATION_VALUE, healthObserver.latest_observations[0].value)
+        
+        self.assertEqual(ExtensionHealthObserver.CONTEXT_OBSERVATION + ExtensionHealthObserver.AGENT_OBSERVATION_NAME, healthObserver.latest_observations[1].name)
+        self.assertEqual(True, healthObserver.latest_observations[1].is_healthy)
+        self.assertEqual(vm_status.vmAgent.version, healthObserver.latest_observations[1].value)
+
+        self.assertEqual(2, len(healthObserver.get_observations()))
+
+        healthObserver.static_observations.append(1)
+        self.assertEqual(3, len(healthObserver.get_observations()))
+
+        # validate that the partial observations are moved to commited after calling report_vm_status
+        healthObserver.partial_observations.append(2)
+        healthObserver.report_vm_status(vm_status)
+
+        self.assertEqual(0, len(healthObserver.partial_observations))
+        self.assertEqual(3, len(healthObserver.latest_observations))
+        self.assertEqual(4, len(healthObserver.get_observations()))
+
+    def test_add_extension_observation(self):
+        handler_status = ExtHandlerStatus()
+        handler_status.name = "Name"
+        handler_status.version = "1.0"
+        handler_status.code = 0
+        handler_status.status = "Unresponsive"
+
+        healthObserver = ExtensionHealthObserver()
+        healthObserver.add_extension_observation(handler_status, [])
+        
+        # validate that 2 observations were made - one for the handler version, and one for the handler being in a failed state
+        self.assertEqual(2, len(healthObserver.partial_observations))
+        self.assertEqual(ExtensionHealthObserver.CONTEXT_OBSERVATION + handler_status.name, healthObserver.partial_observations[0].name)
+        self.assertEqual(handler_status.version, healthObserver.partial_observations[0].value)
+        self.assertEqual(True, healthObserver.partial_observations[0].is_healthy)
+
+        # unhealthy handler
+        self.assertEqual(handler_status.name, healthObserver.partial_observations[1].name)
+        self.assertEqual(False, healthObserver.partial_observations[1].is_healthy)
+        
+        handler_status.status = "Ready"
+        healthObserver = ExtensionHealthObserver()
+        healthObserver.add_extension_observation(handler_status, [])
+        
+        # validate that 2 observations were made - one for the handler version, and one for the handler being in a failed state
+        self.assertEqual(2, len(healthObserver.partial_observations))
+        self.assertEqual(ExtensionHealthObserver.CONTEXT_OBSERVATION + handler_status.name, healthObserver.partial_observations[0].name)
+        self.assertEqual(handler_status.version, healthObserver.partial_observations[0].value)
+        self.assertEqual(True, healthObserver.partial_observations[0].is_healthy)
+
+        # healthy handler
+        self.assertEqual(handler_status.name, healthObserver.partial_observations[1].name)
+        self.assertEqual(True, healthObserver.partial_observations[1].is_healthy)
+
+        # add in an extension status
+        ext_status = ExtensionStatus(seq_no=0)
+        ext_status.status = "Error"
+        ext_status.code = 0
+
+        healthObserver = ExtensionHealthObserver()
+        healthObserver.add_extension_observation(handler_status, [ext_status])
+
+        # validate that 3 observations were made - one for the handler version, and one for the handler being in a success state, and one for
+        # the extension
+        self.assertEqual(3, len(healthObserver.partial_observations))
+
+        # unhealthy extension
+        self.assertEqual(handler_status.name + ExtensionHealthObserver.STATUS_SUFFIX, healthObserver.partial_observations[2].name)
+        self.assertEqual(False, healthObserver.partial_observations[2].is_healthy)
+        
+        ext_status.status = "Succeeded"
+        healthObserver = ExtensionHealthObserver()
+        healthObserver.add_extension_observation(handler_status, [ext_status])
+
+        # validate that 3 observations were made - one for the handler version, and one for the handler being in a success state, and one for
+        # the extension
+        self.assertEqual(3, len(healthObserver.partial_observations))
+
+        # healthy extension
+        self.assertEqual(handler_status.name + ExtensionHealthObserver.STATUS_SUFFIX, healthObserver.partial_observations[2].name)
+        self.assertEqual(True, healthObserver.partial_observations[2].is_healthy)
+
+        substatus = ExtensionSubStatus()
+        substatus.code = 0
+        substatus.status = "Error"
+        ext_status.substatusList.append(substatus)
+
+        healthObserver = ExtensionHealthObserver()
+        healthObserver.add_extension_observation(handler_status, [ext_status])
+
+        # validate that 4 observations were made - one for the handler version, and one for the handler being in a success state, and one for
+        # the extension
+        self.assertEqual(4, len(healthObserver.partial_observations))
+
+        # unhealthy extension substatus
+        self.assertEqual(handler_status.name + ExtensionHealthObserver.SUBSTATUS_SUFFIX, healthObserver.partial_observations[3].name)
+        self.assertEqual(False, healthObserver.partial_observations[3].is_healthy)
+
+        substatus.status = "Succeeded"
+        ext_status.substatusList.append(substatus)
+        
+        healthObserver = ExtensionHealthObserver()
+        healthObserver.add_extension_observation(handler_status, [ext_status])
+
+        # validate that 4 observations were made - one for the handler version, and one for the handler being in a success state, and one for
+        # the extension
+        self.assertEqual(4, len(healthObserver.partial_observations))
+
+        # unhealthy extension substatus
+        self.assertEqual(handler_status.name + ExtensionHealthObserver.SUBSTATUS_SUFFIX, healthObserver.partial_observations[3].name)
+        self.assertEqual(True, healthObserver.partial_observations[3].is_healthy)
+
+
+        
+
+
+
+
+
+        

@@ -34,7 +34,8 @@ from azurelinuxagent.common.exception import EventError, ProtocolError, OSUtilEr
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol import get_protocol_util
-from azurelinuxagent.common.protocol.healthservice import HealthService
+from azurelinuxagent.common.protocol.healthservice import HealthService, ExtensionHealthObserver, \
+                                                          get_extension_health_observer
 from azurelinuxagent.common.protocol.imds import get_imds_client
 from azurelinuxagent.common.protocol.restapi import TelemetryEventParam, \
                                                     TelemetryEventList, \
@@ -105,6 +106,8 @@ class MonitorHandler(object):
     # imds
     IMDS_HEARTBEAT_PERIOD = datetime.timedelta(minutes=1)
     IMDS_HEALTH_PERIOD = datetime.timedelta(minutes=3)
+    # extension health store
+    EXTENSION_HEALTHSTORE_HEARTBEAT_PERIOD = datetime.timedelta(minutes=1)
 
     def __init__(self):
         self.osutil = get_osutil()
@@ -117,6 +120,7 @@ class MonitorHandler(object):
         self.last_cgroup_telemetry = None
         self.last_host_plugin_heartbeat = None
         self.last_imds_heartbeat = None
+        self.last_extension_healthstore_heartbeat = None
         self.protocol = None
         self.health_service = None
         self.last_route_table_hash = b''
@@ -153,6 +157,7 @@ class MonitorHandler(object):
         self.event_thread.start()
 
     def init_sysinfo(self):
+        health_observer = get_extension_health_observer()
         osversion = "{0}:{1}-{2}-{3}:{4}".format(platform.system(),
                                                  DISTRO_NAME,
                                                  DISTRO_VERSION,
@@ -182,6 +187,7 @@ class MonitorHandler(object):
                                                     vminfo.roleInstanceName))
             self.sysinfo.append(TelemetryEventParam("ContainerId",
                                                     vminfo.containerId))
+            health_observer.add_vminfo_observation("TenantId", vminfo.tenantName)
         except ProtocolError as e:
             logger.warn("Failed to get system info: {0}", e)
 
@@ -197,6 +203,14 @@ class MonitorHandler(object):
                                                     vminfo.vmId))
             self.sysinfo.append(TelemetryEventParam('ImageOrigin',
                                                     vminfo.image_origin))
+            health_observer.add_vminfo_observation("Subscription", vminfo.subscriptionId)
+            health_observer.add_vminfo_observation("ResourceGroup", vminfo.resourceGroupName)
+            health_observer.add_vminfo_observation("ScaleSetName", vminfo.vmScaleSetName)
+            health_observer.add_vminfo_observation("VMName", vminfo.vmId)
+            health_observer.add_vminfo_observation("VMSize", vminfo.vmSize)
+            if vminfo.publisher is not None and vminfo.offer is not None and vminfo.sku is not None and vminfo.version is not None:
+                health_observer.add_vminfo_observation("OS",
+                                                       "{0}_{1}_{2}_{3}".format(vminfo.publisher, vminfo.offer, vminfo.sku, vminfo.version))
         except (HttpError, ValueError) as e:
             logger.warn("failed to get IMDS info: {0}", e)
 
@@ -257,7 +271,8 @@ class MonitorHandler(object):
                         MonitorHandler.CGROUP_TELEMETRY_PERIOD,
                         MonitorHandler.EVENT_COLLECTION_PERIOD,
                         MonitorHandler.HOST_PLUGIN_HEARTBEAT_PERIOD,
-                        MonitorHandler.IMDS_HEARTBEAT_PERIOD).seconds
+                        MonitorHandler.IMDS_HEARTBEAT_PERIOD,
+                        MonitorHandler.EXTENSION_HEALTHSTORE_HEARTBEAT_PERIOD).seconds
         while self.should_run:
             self.send_telemetry_heartbeat()
             self.send_cgroup_telemetry()
@@ -265,6 +280,7 @@ class MonitorHandler(object):
             self.send_host_plugin_heartbeat()
             self.send_imds_heartbeat()
             self.log_altered_network_configuration()
+            self.send_extension_healthstore_heartbeat()
             time.sleep(min_delta)
 
     def add_sysinfo(self, event):
@@ -311,6 +327,29 @@ class MonitorHandler(object):
                     log_event=False)
 
             self.last_imds_heartbeat = datetime.datetime.utcnow()
+
+    def send_extension_healthstore_heartbeat(self):
+        """
+        Send health signals for extensions to the health store every EXTENSION_HEALTHSTORE_HEARTBEAT_PERIOD.
+        """
+
+        if self.last_extension_healthstore_heartbeat is None:
+            self.last_extension_healthstore_heartbeat = datetime.datetime.utcnow() - MonitorHandler.EXTENSION_HEALTHSTORE_HEARTBEAT_PERIOD
+
+        if datetime.datetime.utcnow() >= (self.last_extension_healthstore_heartbeat + MonitorHandler.EXTENSION_HEALTHSTORE_HEARTBEAT_PERIOD):
+            try:
+                self.health_service.report_extension_health_observations()
+            except Exception as e:
+                msg = "Exception sending extension healthstore heartbeat: {0}".format(ustr(e))
+                add_event(
+                    name=AGENT_NAME,
+                    version=CURRENT_VERSION,
+                    op=WALAEventOperation.ExtensionHeathstoreHeartbeat,
+                    is_success=False,
+                    message=msg,
+                    log_event=False)
+
+            self.last_extension_healthstore_heartbeat = datetime.datetime.utcnow()
 
     def send_host_plugin_heartbeat(self):
         """

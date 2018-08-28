@@ -50,6 +50,8 @@ from azurelinuxagent.common.protocol.restapi import ExtHandlerStatus, \
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.utils.processutil import capture_from_process
 from azurelinuxagent.common.protocol import get_protocol_util
+from azurelinuxagent.common.protocol.healthservice import ExtensionHealthObserver, \
+                                                          get_extension_health_observer
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 
 
@@ -192,6 +194,7 @@ class ExtHandlersHandler(object):
 
         self.report_status_error_state = ErrorState()
         self.get_artifact_error_state = ErrorState(min_timedelta=ERROR_STATE_DELTA_INSTALL)
+        self.extension_health_observer = get_extension_health_observer()
 
     def run(self):
         self.ext_handlers, etag = None, None
@@ -463,9 +466,15 @@ class ExtHandlersHandler(object):
                       message=message)
 
             self.report_status_error_state.reset()
+        
+        try:
+            self.extension_health_observer.report_vm_status(vm_status)
+        except Exception as e:
+            logger.warn("Exception occurred adding observation for vm agent: {0}", str(e))
 
     def report_ext_handler_status(self, vm_status, ext_handler):
         ext_handler_i = ExtHandlerInstance(ext_handler, self.protocol)
+        exts_status = []
         
         handler_status = ext_handler_i.get_handler_status() 
         if handler_status is None:
@@ -474,8 +483,14 @@ class ExtHandlersHandler(object):
         handler_state = ext_handler_i.get_handler_state()
         if handler_state != ExtHandlerState.NotInstalled:
             try:
-                active_exts = ext_handler_i.report_ext_status()
-                handler_status.extensions.extend(active_exts)
+                active_exts, exts_status = ext_handler_i.report_ext_status()
+                handler_status.extensions.extend(active_exts)        
+                try:
+                    self.extension_health_observer.add_extension_observation(handler_status,
+                                                                                exts_status)
+                except Exception as e:
+                    logger.warn("Exception occurred adding observation for {0}: {1}", ext_handler.name,
+                                                                                      str(e))
             except ExtensionError as e:
                 ext_handler_i.set_handler_status(message=ustr(e), code=e.code)
 
@@ -873,6 +888,7 @@ class ExtHandlerInstance(object):
     
     def report_ext_status(self):
         active_exts = []
+        exts_status = []
         # TODO Refactor or remove this common code pattern (for each extension subordinate to an ext_handler, do X).
         for ext in self.ext_handler.properties.extensions:
             ext_status = self.collect_ext_status(ext)
@@ -882,9 +898,10 @@ class ExtHandlerInstance(object):
                 self.protocol.report_ext_status(self.ext_handler.name, ext.name, 
                                                 ext_status)
                 active_exts.append(ext.name)
+                exts_status.append(ext_status)
             except ProtocolError as e:
                 self.logger.error(u"Failed to report extension status: {0}", e)
-        return active_exts
+        return active_exts, exts_status
    
     def collect_heartbeat(self):
         man = self.load_manifest()
