@@ -22,11 +22,11 @@ import time
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
+from azurelinuxagent.common.osutil.default import BASE_CGROUPS
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 
 
-BASE_CGROUPS = '/sys/fs/cgroup'
 WRAPPER_CGROUP_NAME = "Agent+Extensions"
 METRIC_HIERARCHIES = ['cpu', 'memory']
 MEMORY_DEFAULT = -1
@@ -505,7 +505,6 @@ class CGroups(object):
             Add this process to the "agent" cgroup, if required
         Actual collection of metrics from cgroups happens in the -run-exthandlers instance
         """
-        cgroups_enabled = True
         if CGroups.enabled():
             try:
                 CGroups._osutil.mount_cgroups()
@@ -517,21 +516,26 @@ class CGroups(object):
                         cg.add(pid)
                         logger.info("Add daemon process pid {0} to {1} cgroup".format(pid, cg.name))
                     else:
-                        logger.info("Daemon process pid {0} cgroup managed by systemd".format(pid))
-                status = "OK"
+                        logger.info("Add daemon process pid {0} to systemd cgroup".format(pid))
+                status = "ok"
             except CGroupsException as cge:
                 status = cge.msg
-                cgroups_enabled = False
+                CGroups.disable()
+            except Exception as ge:
+                status = ustr(ge)
                 CGroups.disable()
         else:
-            status = "Cgroups not supported by platform"
+            status = "not supported by platform"
+            CGroups.disable()
+
+        logger.info("CGroups: {0}".format(status))
 
         from azurelinuxagent.common.event import add_event, WALAEventOperation
         add_event(
             AGENT_NAME,
             version=CURRENT_VERSION,
             op=WALAEventOperation.InitializeCGroups,
-            is_success=cgroups_enabled,
+            is_success=CGroups.enabled(),
             message=status,
             log_event=False)
 

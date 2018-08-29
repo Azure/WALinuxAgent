@@ -32,6 +32,7 @@ from .ubuntu import UbuntuOSUtil, Ubuntu12OSUtil, Ubuntu14OSUtil, \
 from .alpine import AlpineOSUtil
 from .bigip import BigIpOSUtil
 from .gaia import GaiaOSUtil
+from .iosxe import IosxeOSUtil
 
 from distutils.version import LooseVersion as Version
 
