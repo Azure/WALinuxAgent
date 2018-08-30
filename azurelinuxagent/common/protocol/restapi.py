@@ -145,18 +145,6 @@ class VMAgentManifestList(DataContract):
         self.vmAgentManifests = DataContractList(VMAgentManifest)
 
 
-class Dependency(object):
-    """
-    Represents an extension upon which another extension is dependent
-    handler - the ExtHandler of the dependency
-    ext - the Extension of the dependency
-    """
-
-    def __init__(self, handler=None, ext=None):
-        self.handler = handler
-        self.ext = ext
-
-
 class Extension(DataContract):
     def __init__(self,
                  name=None,
@@ -164,31 +152,13 @@ class Extension(DataContract):
                  publicSettings=None,
                  protectedSettings=None,
                  certificateThumbprint=None,
-                 dependencyLevel=0,
-                 dependencies=None):
+                 dependencyLevel=0):
         self.name = name
         self.sequenceNumber = sequenceNumber
         self.publicSettings = publicSettings
         self.protectedSettings = protectedSettings
         self.certificateThumbprint = certificateThumbprint
         self.dependencyLevel = dependencyLevel
-        self.dependencies = [] if dependencies is None else dependencies
-
-    def resolve_dependencies(self, ext_handlers):
-        resolved_dependencies = []
-        for (handler_name, ext_name) in self.dependencies:
-            # Gracefully handle garbage cases where handler name does
-            # not exist or is not unique. Same for the extension name.
-            for handler in ext_handlers:
-                if handler_name != handler.name:
-                    continue
-                resolved_dependencies.append(
-                    Dependency(
-                        handler = handler,
-                        ext = next((ext for ext in handler.properties.extensions if ext.name == ext_name), None)
-                    )
-                )
-        self.dependencies = resolved_dependencies
 
 
 class ExtHandlerProperties(DataContract):
