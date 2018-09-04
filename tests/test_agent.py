@@ -26,6 +26,7 @@ EXPECTED_CONFIGURATION = \
 """AutoUpdate.Enabled = True
 AutoUpdate.GAFamily = Prod
 Autoupdate.Frequency = 3600
+CGroups.EnforceLimits = True
 DVD.MountPoint = /mnt/cdrom/secure
 DetectScvmmEnv = False
 EnableOverProvisioning = True

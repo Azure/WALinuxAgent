@@ -109,7 +109,8 @@ __SWITCH_OPTIONS__ = {
     "ResourceDisk.Format": False,
     "ResourceDisk.EnableSwap": False,
     "AutoUpdate.Enabled": True,
-    "EnableOverProvisioning": True
+    "EnableOverProvisioning": True,
+    "CGroups.EnforceLimits": True,
 }
 
 
@@ -362,3 +363,7 @@ def get_allow_http(conf=__conf__):
 
 def get_disable_agent_file_path(conf=__conf__):
     return os.path.join(get_lib_dir(conf), DISABLE_AGENT_FILE)
+
+
+def get_cgroups_enforce_limits(conf=__conf__):
+    return conf.get_switch("CGroups.EnforceLimits", True)

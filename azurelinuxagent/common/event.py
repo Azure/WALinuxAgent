@@ -74,6 +74,7 @@ class WALAEventOperation:
     ReportStatusExtended = "ReportStatusExtended"
     Restart = "Restart"
     SequenceNumberMismatch = "SequenceNumberMismatch"
+    SetCGroupsLimits = "SetCGroupsLimits"
     SkipUpdate = "SkipUpdate"
     UnhandledError = "UnhandledError"
     UnInstall = "UnInstall"

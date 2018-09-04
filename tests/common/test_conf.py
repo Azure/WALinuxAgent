@@ -66,7 +66,8 @@ class TestConf(AgentTestCase):
         "AutoUpdate.GAFamily": "Prod",
         "EnableOverProvisioning": True,
         "OS.AllowHTTP": False,
-        "OS.EnableFirewall": False
+        "OS.EnableFirewall": False,
+        "CGroups.EnforceLimits": True,
     }
 
     def setUp(self):

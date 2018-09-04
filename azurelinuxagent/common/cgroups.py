@@ -17,9 +17,11 @@
 import errno
 import os
 import re
+import traceback
+
 import time
 
-from azurelinuxagent.common import logger
+from azurelinuxagent.common import logger, conf
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.osutil.default import BASE_CGROUPS
@@ -30,6 +32,15 @@ from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 WRAPPER_CGROUP_NAME = "Agent+Extensions"
 METRIC_HIERARCHIES = ['cpu', 'memory']
 MEMORY_DEFAULT = -1
+UNLIMITED_INSTANCES = ['customscript', 'runcommand']
+
+# percentage of a single core
+DEFAULT_CPU_LIMIT_AGENT = 10
+DEFAULT_CPU_LIMIT_EXT = 40
+
+DEFAULT_MEM_LIMIT_MIN_MB = 256  # mb, applies to agent and extensions
+DEFAULT_MEM_LIMIT_MAX_MB = 512  # mb, applies to agent only
+DEFAULT_MEM_LIMIT_PCT = 15  # percent, applies to extensions
 
 re_user_system_times = re.compile('user (\d+)\nsystem (\d+)\n')
 
@@ -222,6 +233,7 @@ class CGroupsTelemetry(object):
         if not CGroupsTelemetry.is_tracked(name):
             cgroup = CGroups.for_extension(name) if cgroup is None else cgroup
             logger.info("Now tracking cgroup {0}".format(name))
+            cgroup.set_limits()
             CGroupsTelemetry.track_cgroup(cgroup)
         if CGroups.is_systemd_manager():
             if name in related_services:
@@ -471,10 +483,47 @@ class CGroups(object):
         """
         Set per-hierarchy limits based on the cgroup name (agent or particular extension)
         """
-        # TODO: set limits, simply record telemetry for now
-        # cg.set_cpu_limit(50)
-        # cg.set_memory_limit(500)
-        pass
+
+        if not conf.get_cgroups_enforce_limits():
+            return
+
+        if self.name is None:
+            return
+
+        for ext in UNLIMITED_INSTANCES:
+            if ext in self.name.lower():
+                logger.info('No cgroups limits for {0}'.format(self.name))
+                return
+
+        # default values
+        cpu_limit = DEFAULT_CPU_LIMIT_EXT
+        mem_limit = max(DEFAULT_MEM_LIMIT_MIN_MB, round(self._osutil.get_total_mem() * DEFAULT_MEM_LIMIT_PCT / 100, 0))
+
+        # agent values
+        if AGENT_NAME.lower() in self.name.lower():
+            cpu_limit = DEFAULT_CPU_LIMIT_AGENT
+            mem_limit = min(DEFAULT_MEM_LIMIT_MAX_MB, mem_limit)
+
+        msg = '{0}: {1}% {2}mb'.format(self.name, cpu_limit, mem_limit)
+        logger.info("Setting cgroups limits for {0}".format(msg))
+        success = False
+
+        try:
+            self.set_cpu_limit(cpu_limit)
+            self.set_memory_limit(mem_limit)
+            success = True
+        except Exception as ge:
+            msg = '[{0}] {1}'.format(msg, ustr(ge))
+            raise
+        finally:
+            from azurelinuxagent.common.event import add_event, WALAEventOperation
+            add_event(
+                AGENT_NAME,
+                version=CURRENT_VERSION,
+                op=WALAEventOperation.SetCGroupsLimits,
+                is_success=success,
+                message=msg,
+                log_event=False)
 
     @staticmethod
     def _apply_wrapper_limits(path, hierarchy):
@@ -513,10 +562,13 @@ class CGroups(object):
                     pid = int(os.getpid())
                     if not CGroups.is_systemd_manager():
                         cg = CGroups.for_extension(AGENT_NAME)
-                        cg.add(pid)
                         logger.info("Add daemon process pid {0} to {1} cgroup".format(pid, cg.name))
+                        cg.add(pid)
+                        cg.set_limits()
                     else:
-                        logger.info("Add daemon process pid {0} to systemd cgroup".format(pid))
+                        cg = CGroups.for_systemd_service(AGENT_NAME)
+                        logger.info("Add daemon process pid {0} to {1} systemd cgroup".format(pid, cg.name))
+                        # systemd sets limits; any limits we write would be overwritten
                 status = "ok"
             except CGroupsException as cge:
                 status = cge.msg
@@ -688,9 +740,9 @@ class CGroups(object):
 
         if 'cpu' in self.cgroups:
             total_units = float(self.get_parameter('cpu', 'cpu.cfs_period_us'))
-            limit_units = self._convert_cpu_limit_to_fraction(limit) * total_units
+            limit_units = int(self._convert_cpu_limit_to_fraction(limit) * total_units)
             cpu_shares_file = self._get_cgroup_file('cpu', 'cpu.cfs_quota_us')
-            fileutil.write_file(cpu_shares_file, "{0}\n".format(limit_units))
+            fileutil.write_file(cpu_shares_file, '{0}\n'.format(limit_units))
         else:
             raise CGroupsException("CPU hierarchy not available in this cgroup")
 

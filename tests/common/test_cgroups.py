@@ -17,7 +17,9 @@
 
 from __future__ import print_function
 
-from azurelinuxagent.common.cgroups import CGroupsTelemetry, CGroups, CGroupsException, BASE_CGROUPS, Cpu, Memory
+from azurelinuxagent.common.cgroups import CGroupsTelemetry, CGroups, CGroupsException, BASE_CGROUPS, Cpu, Memory, \
+    DEFAULT_MEM_LIMIT_MIN_MB
+from azurelinuxagent.common.version import AGENT_NAME
 from tests.tools import *
 
 import os
@@ -215,3 +217,54 @@ class TestCGroups(AgentTestCase):
         self.assertEqual(2048*1024, CGroups._format_memory_value('megabytes', 2))
         self.assertEqual((1024 + 512) * 1024 * 1024, CGroups._format_memory_value('gigabytes', 1.5))
         self.assertRaises(CGroupsException, CGroups._format_memory_value, 'KiloBytes', 1)
+
+    @patch('azurelinuxagent.common.event.add_event')
+    @patch('azurelinuxagent.common.conf.get_cgroups_enforce_limits')
+    @patch('azurelinuxagent.common.cgroups.CGroups.set_memory_limit')
+    @patch('azurelinuxagent.common.cgroups.CGroups.set_cpu_limit')
+    @patch('azurelinuxagent.common.cgroups.CGroups._try_mkdir')
+    def assert_limits(self, _, patch_set_cpu, patch_set_memory_limit, patch_get_enforce, patch_add_event,
+                      ext_name,
+                      expected_cpu_limit,
+                      limits_enforced=True,
+                      exception_raised=False):
+
+        should_limit = expected_cpu_limit > 0
+        patch_get_enforce.return_value = limits_enforced
+
+        if exception_raised:
+            patch_set_memory_limit.side_effect = CGroupsException('set_memory_limit error')
+
+        try:
+            cg = CGroups.for_extension(ext_name)
+            cg.set_limits()
+            if exception_raised:
+                self.fail('exception expected')
+        except CGroupsException:
+            if not exception_raised:
+                self.fail('exception not expected')
+
+        self.assertEqual(should_limit, patch_set_cpu.called)
+        self.assertEqual(should_limit, patch_set_memory_limit.called)
+        self.assertEqual(should_limit, patch_add_event.called)
+
+        if should_limit:
+            actual_cpu_limit = patch_set_cpu.call_args[0][0]
+            actual_memory_limit = patch_set_memory_limit.call_args[0][0]
+            event_kw_args = patch_add_event.call_args[1]
+
+            self.assertEqual(expected_cpu_limit, actual_cpu_limit)
+            self.assertTrue(actual_memory_limit >= DEFAULT_MEM_LIMIT_MIN_MB)
+            self.assertEqual(event_kw_args['op'], 'SetCGroupsLimits')
+            self.assertEqual(event_kw_args['is_success'], not exception_raised)
+            self.assertTrue('{0}%'.format(expected_cpu_limit) in event_kw_args['message'])
+            self.assertTrue(ext_name in event_kw_args['message'])
+            self.assertEqual(exception_raised, 'set_memory_limit error' in event_kw_args['message'])
+
+    def test_limits(self):
+        self.assert_limits(ext_name="normal_extension", expected_cpu_limit=40)
+        self.assert_limits(ext_name="customscript_extension", expected_cpu_limit=-1)
+        self.assert_limits(ext_name=AGENT_NAME, expected_cpu_limit=10)
+        self.assert_limits(ext_name="normal_extension", expected_cpu_limit=-1, limits_enforced=False)
+        self.assert_limits(ext_name=AGENT_NAME, expected_cpu_limit=-1, limits_enforced=False)
+        self.assert_limits(ext_name="normal_extension", expected_cpu_limit=40, exception_raised=True)
