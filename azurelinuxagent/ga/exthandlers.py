@@ -201,6 +201,8 @@ class ExtHandlersHandler(object):
             self.get_artifact_error_state.reset()
         except Exception as e:
             msg = u"Exception retrieving extension handlers: {0}".format(ustr(e))
+            detailed_msg = '{0} {1}'.format(msg, traceback.format_exc())
+
             self.get_artifact_error_state.incr()
 
             if self.get_artifact_error_state.is_triggered():
@@ -213,6 +215,12 @@ class ExtHandlersHandler(object):
                 self.get_artifact_error_state.reset()
             else:
                 logger.warn(msg)
+
+            add_event(AGENT_NAME,
+                      version=CURRENT_VERSION,
+                      op=WALAEventOperation.ExtensionProcessing,
+                      is_success=False,
+                      message=detailed_msg)
             return
 
         try:
