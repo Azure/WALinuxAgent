@@ -205,6 +205,7 @@ OS.SshClientAliveInterval=180
 OS.SshDir=/etc/ssh
 HttpProxy.Host=None
 HttpProxy.Port=None
+CGroups.EnforceLimits=y
 ```
 
 The various configuration options are described in detail below. Configuration
@@ -451,6 +452,14 @@ _Default: None_
 If set, the agent will use this proxy server to access the internet. These values
 *will* override the `http_proxy` or `https_proxy` environment variables. Lastly,
 `HttpProxy.Host` is required (if to be used) and `HttpProxy.Port` is optional.
+
+#### __CGroups.EnforceLimits__
+
+_Type: Boolean_  
+_Default: y_
+
+If set, the agent will attempt to set cgroups limits for cpu and memory for the agent process itself
+as well as extension processes. See the wiki for further details on this.
 
 ### Telemetry
 
