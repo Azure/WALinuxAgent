@@ -452,9 +452,8 @@ class CGroups(object):
             except OSError as e:
                 if e.errno == errno.EEXIST:
                     if not os.path.isdir(path):
-                        raise CGroupsException(
-                            "Create directory for cgroup {0}: normal file already exists with that name".format(path)
-                        )
+                        raise CGroupsException("Create directory for cgroup {0}: "
+                                               "normal file already exists with that name".format(path))
                     else:
                         pass    # There was a race to create the directory, but it's there now, and that's fine
                 elif e.errno == errno.EACCES:
@@ -742,6 +741,7 @@ class CGroups(object):
             total_units = float(self.get_parameter('cpu', 'cpu.cfs_period_us'))
             limit_units = int(self._convert_cpu_limit_to_fraction(limit) * total_units)
             cpu_shares_file = self._get_cgroup_file('cpu', 'cpu.cfs_quota_us')
+            logger.verbose("writing {0} to {1}".format(limit_units, cpu_shares_file))
             fileutil.write_file(cpu_shares_file, '{0}\n'.format(limit_units))
         else:
             raise CGroupsException("CPU hierarchy not available in this cgroup")
@@ -775,7 +775,7 @@ class CGroups(object):
         if 'memory' in self.cgroups:
             value = self._format_memory_value(unit, limit)
             memory_limit_file = self._get_cgroup_file('memory', 'memory.limit_in_bytes')
-            with open(memory_limit_file, 'w+') as f:
-                f.write("{0}\n".format(value))
+            logger.verbose("writing {0} to {1}".format(value, memory_limit_file))
+            fileutil.write_file(memory_limit_file, '{0}\n'.format(value))
         else:
             raise CGroupsException("Memory hierarchy not available in this cgroup")
