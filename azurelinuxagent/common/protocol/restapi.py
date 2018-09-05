@@ -164,7 +164,6 @@ class Extension(DataContract):
 class ExtHandlerProperties(DataContract):
     def __init__(self):
         self.version = None
-        self.dependencyLevel = None
         self.state = None
         self.extensions = DataContractList(Extension)
 

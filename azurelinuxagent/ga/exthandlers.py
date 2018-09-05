@@ -333,12 +333,12 @@ class ExtHandlersHandler(object):
 
             self.handle_ext_handler(ext_handler, etag)
 
-    '''
-    Check the status of the previous extension installed.
-    Wait until it becomes success or times out.
-    Return True if it is installed successfully. False if timed out.
-    '''
     def wait_for_prev_handler_installation(self, prev_handler, cur_handler, wait_until):
+        '''
+        Check the status of the previous extension installed.
+        Wait until it becomes success or times out.
+        Return True if it is installed successfully. False if timed out.
+        '''
         # No need to wait on anything for the very first extension
         if prev_handler == None:
             return True
@@ -356,11 +356,11 @@ class ExtHandlersHandler(object):
             # on this one can be skipped processing
             if not success_status:
                 msg = "Timeout waiting for success status " \
-                      "from dependency {0}/{1} for {2}" \
+                      "from dependency {0}/{1} for {2} " \
                       "status was: {3}".format(prev_handler.name,
                                                ext.name,
                                                cur_handler.name,
-                                               status)
+                                               status.status if status != None else None)
                 logger.info(msg)
                 add_event(AGENT_NAME,
                           version=CURRENT_VERSION,
