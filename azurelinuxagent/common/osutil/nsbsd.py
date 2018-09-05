@@ -24,7 +24,6 @@ from azurelinuxagent.common.future import ustr
 import azurelinuxagent.common.conf as conf
 import os
 import time
-import dns.resolver
 
 class NSBSDOSUtil(FreeBSDOSUtil):
 
@@ -35,6 +34,13 @@ class NSBSDOSUtil(FreeBSDOSUtil):
 
         if self.resolver is None:
             # NSBSD doesn't have a system resolver, configure a python one
+
+            try:
+                import dns.resolver
+            except ImportError:
+                logger.warn("Python DNS resolver not available")
+                return
+
             self.resolver = dns.resolver.Resolver()
             servers = []
             cmd = "getconf /usr/Firewall/ConfigFiles/dns Servers | tail -n +2"
