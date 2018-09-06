@@ -131,7 +131,8 @@ __STRING_OPTIONS__ = {
     "ResourceDisk.MountPoint": "/mnt/resource",
     "ResourceDisk.MountOptions": None,
     "ResourceDisk.Filesystem": "ext3",
-    "AutoUpdate.GAFamily": "Prod"
+    "AutoUpdate.GAFamily": "Prod",
+    "CGroups.Excluded": "customscript,runcommand",
 }
 
 
@@ -367,3 +368,8 @@ def get_disable_agent_file_path(conf=__conf__):
 
 def get_cgroups_enforce_limits(conf=__conf__):
     return conf.get_switch("CGroups.EnforceLimits", True)
+
+
+def get_cgroups_excluded(conf=__conf__):
+    excluded_value = conf.get("CGroups.Excluded", "customscript, runcommand")
+    return [s for s in [i.strip().lower() for i in excluded_value.split(',')] if len(s) > 0] if excluded_value else []

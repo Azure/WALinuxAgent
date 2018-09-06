@@ -17,7 +17,6 @@
 import errno
 import os
 import re
-import traceback
 
 import time
 
@@ -32,7 +31,6 @@ from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 WRAPPER_CGROUP_NAME = "Agent+Extensions"
 METRIC_HIERARCHIES = ['cpu', 'memory']
 MEMORY_DEFAULT = -1
-UNLIMITED_INSTANCES = ['customscript', 'runcommand']
 
 # percentage of a single core
 DEFAULT_CPU_LIMIT_AGENT = 10
@@ -489,7 +487,7 @@ class CGroups(object):
         if self.name is None:
             return
 
-        for ext in UNLIMITED_INSTANCES:
+        for ext in conf.get_cgroups_excluded():
             if ext in self.name.lower():
                 logger.info('No cgroups limits for {0}'.format(self.name))
                 return
