@@ -38,8 +38,7 @@ class NSBSDOSUtil(FreeBSDOSUtil):
             try:
                 import dns.resolver
             except ImportError:
-                logger.warn("Python DNS resolver not available")
-                return
+                raise OSUtilError("Python DNS resolver not available. Cannot proceed!")
 
             self.resolver = dns.resolver.Resolver()
             servers = []
@@ -66,7 +65,16 @@ class NSBSDOSUtil(FreeBSDOSUtil):
         return shellutil.run('/usr/Firewall/sbin/enservice', chk_err=False)
 
     def conf_sshd(self, disable_password):
-        logger.warn("SSHD already configured")
+        option = "0" if disable_password else "1"
+
+        shellutil.run('setconf /usr/Firewall/ConfigFiles/system SSH State 1',
+                      chk_err=False)
+        shellutil.run('setconf /usr/Firewall/ConfigFiles/system SSH Password {}'.format(option),
+                      chk_err=False)
+        shellutil.run('enservice', chk_err=False)
+
+        logger.info("{0} SSH password-based authentication methods."
+                    .format("Disabled" if disable_password else "Enabled"))
 
     def useradd(self, username, expiration=None):
         """
@@ -91,11 +99,16 @@ class NSBSDOSUtil(FreeBSDOSUtil):
         # password set, activate webadmin and ssh access
         shellutil.run('setconf /usr/Firewall/ConfigFiles/webadmin ACL any && ensl',
                       chk_err=False)
-        shellutil.run('setconf /usr/Firewall/ConfigFiles/system SSH State 1',
-                      chk_err=False)
-        shellutil.run('setconf /usr/Firewall/ConfigFiles/system SSH Password 1',
-                      chk_err=False)
-        shellutil.run('enservice', chk_err=False)
+
+    def deploy_ssh_pubkey(self, username, pubkey):
+        """
+        Deploy authorized_key
+        """
+        path, thumbprint, value = pubkey
+
+        #overide parameters
+        super(NSBSDOSUtil, self).deploy_ssh_pubkey('admin',
+            ["/usr/Firewall/.ssh/authorized_keys", thumbprint, value])
 
     def del_root_password(self):
         logger.warn("Root password deletion disabled")
@@ -107,8 +120,12 @@ class NSBSDOSUtil(FreeBSDOSUtil):
         shellutil.run("/usr/Firewall/sbin/nstop dhclient", chk_err=False)
 
     def get_dhcp_pid(self):
-        ret = shellutil.run_get_output("ps ax | grep dhclient | grep -v grep |  cut -f 1 -d ' '", chk_err=False)
-        return ret[1] if ret[0] == 0 else None
+        ret = None
+        pidfile = "/var/run/dhclient.pid"
+
+        if os.path.isfile(pidfile):
+            ret = fileutil.read_file(pidfile, encoding='ascii')
+        return ret
 
     def eject_dvd(self, chk_err=True):
         pass
