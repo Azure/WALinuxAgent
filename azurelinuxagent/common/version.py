@@ -82,6 +82,9 @@ def get_distro():
         osinfo = ['openbsd', release, '', 'openbsd']
     elif 'Linux' in platform.system():
         osinfo = get_linux_distribution(0, 'alpine')
+    elif 'NS-BSD' in platform.system():
+        release = re.sub('\-.*\Z', '', ustr(platform.release()))
+        osinfo = ['nsbsd', release, '', 'nsbsd']
     else:
         try:
             # dist() removed in Python 3.7
