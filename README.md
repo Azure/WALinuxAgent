@@ -206,6 +206,7 @@ OS.SshDir=/etc/ssh
 HttpProxy.Host=None
 HttpProxy.Port=None
 CGroups.EnforceLimits=y
+CGroups.Excluded=customscript,runcommand
 ```
 
 The various configuration options are described in detail below. Configuration
@@ -461,6 +462,13 @@ _Default: y_
 If set, the agent will attempt to set cgroups limits for cpu and memory for the agent process itself
 as well as extension processes. See the wiki for further details on this.
 
+#### __CGroups.Excluded__
+
+_Type: String_  
+_Default: customscript,runcommand_
+
+The list of extensions which will be excluded from cgroups limits. This should be comma separated. 
+
 ### Telemetry
 
 WALinuxAgent collects usage data and sends it to Microsoft to help improve our products and services. The data collected is used to track service health and
@@ -489,7 +497,7 @@ Run once:
 2. Create the pbuilder environment
 
    ```bash
-   sudo pbuilder create --debootstrapopts --variant=buildd`
+   sudo pbuilder create --debootstrapopts --variant=buildd
    ```
 
 3. Obtain `waagent.dsc` from a downstream package repo
@@ -505,7 +513,7 @@ To compile the package, from the top-most directory:
 2. Build the package
 
    ```bash
-   sudo pbuilder build {waagent.dsc}
+   sudo pbuilder build waagent.dsc
    ```
 
 3. Fetch the built package, usually from `/var/cache/pbuilder/result`
