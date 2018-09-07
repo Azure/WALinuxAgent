@@ -57,7 +57,9 @@ from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 HANDLER_ENVIRONMENT_VERSION = 1.0
 
 EXTENSION_STATUS_ERROR = 'error'
+EXTENSION_STATUS_SUCCESS = 'success'
 VALID_EXTENSION_STATUS = ['transitioning', 'error', 'success', 'warning']
+EXTENSION_TERMINAL_STATUSES = ['error', 'success']
 
 VALID_HANDLER_STATUS = ['Ready', 'NotReady', "Installing", "Unresponsive"]
 
@@ -309,35 +311,46 @@ class ExtHandlersHandler(object):
                 logger.info("Extension handling is on hold")
                 return
 
-        dep_level = None
-        deps_wait_until = None
-        handlers_wait_until = datetime.datetime.utcnow()
+        wait_until = datetime.datetime.utcnow() + datetime.timedelta(minutes=DEFAULT_EXT_TIMEOUT_MINUTES)
         prev_handler = None
+        ext_seq_required = self.is_ext_seq_required()
 
         self.ext_handlers.extHandlers.sort(key=operator.methodcaller('sort_key'))
         for ext_handler in self.ext_handlers.extHandlers:
-            # Use updated time limit for each dependency level
-            if dep_level != ext_handler.sort_key():
+            if ext_seq_required:
+                # Make sure that the previous extension is handled.
+                # If handled successfully, proceed with the current handler.
+                # Otherwise, skip the rest of them.
                 dep_level = ext_handler.sort_key()
-                deps_wait_until = handlers_wait_until
-                handlers_wait_until += datetime.timedelta(minutes=DEFAULT_EXT_TIMEOUT_MINUTES)
-
-            # Make sure that the previous extension is installed.
-            # If installed successfully, proceed with installing the current handler.
-            # Otherwise, skip the rest of them.
-            if dep_level >= 0:
-                if self.wait_for_prev_handler_installation(prev_handler, ext_handler, deps_wait_until):
-                    prev_handler = ext_handler
-                else:
-                    break
+                if dep_level >= 0:
+                    if self.wait_for_prev_handler_completion(prev_handler, wait_until):
+                        prev_handler = ext_handler
+                    else:
+                        break
 
             self.handle_ext_handler(ext_handler, etag)
 
-    def wait_for_prev_handler_installation(self, prev_handler, cur_handler, wait_until):
+    def is_ext_seq_required(self):
         '''
-        Check the status of the previous extension installed.
-        Wait until it becomes success or times out.
-        Return True if it is installed successfully. False if timed out.
+        If all the extensions have same dependency level
+        It is considered as extension sequencing is not required
+        '''
+        dep_level = None
+        for ext_handler in self.ext_handlers.extHandlers:
+            if dep_level is None:
+                dep_level = ext_handler.sort_key()
+                continue
+
+            if dep_level != ext_handler.sort_key():
+                return True
+
+        return False
+
+    def wait_for_prev_handler_completion(self, prev_handler, wait_until):
+        '''
+        Check the status of the previous extension handled.
+        Wait until it has a terminal state or times out.
+        Return True if it is handled successfully. False if not.
         '''
         # No need to wait on anything for the very first extension
         if prev_handler == None:
@@ -345,22 +358,17 @@ class ExtHandlersHandler(object):
 
         handler_i = ExtHandlerInstance(prev_handler, self.protocol)
         for ext in prev_handler.properties.extensions:
-            success_status, status = handler_i.is_ext_status_success(ext)
+            ext_completed, status = handler_i.is_ext_handling_complete(ext)
 
             # Keep polling for the extension status until it becomes success or times out
-            while not success_status and datetime.datetime.utcnow() <= wait_until:
+            while not ext_completed and datetime.datetime.utcnow() <= wait_until:
                 time.sleep(5)
-                success_status, status = handler_i.is_ext_status_success(ext)
+                ext_completed, status = handler_i.is_ext_handling_complete(ext)
 
-            # In case of timeout, we log it and return false so that the extensions waiting
-            # on this one can be skipped processing
-            if not success_status:
-                msg = "Timeout waiting for success status " \
-                      "from dependency {0}/{1} for {2} " \
-                      "status was: {3}".format(prev_handler.name,
-                                               ext.name,
-                                               cur_handler.name,
-                                               status.status if status != None else None)
+            # In case of timeout or terminal error state, we log it and return false
+            # so that the extensions waiting on this one can be skipped processing
+            if not ext_completed or status != EXTENSION_STATUS_SUCCESS:
+                msg = "Extension {0} was timedout or status was: {1}".format(ext.name, status)
                 logger.info(msg)
                 add_event(AGENT_NAME,
                           version=CURRENT_VERSION,
@@ -927,16 +935,22 @@ class ExtHandlerInstance(object):
 
         return ext_status
     
-    def is_ext_status_success(self, ext):
-        status = self.collect_ext_status(ext)
+    def is_ext_handling_complete(self, ext):
+        try:
+            status = self.collect_ext_status(ext)
+        except FileNotFoundError as e:
+            return (False, None)
+
+        # when there is no status, the handling is complete and return None status
         if status is None:
-            return (True, status)
-        if status.status != "success":
-            return (False, status)
-        for substatus in status.substatusList:
-            if substatus.status != "success":
-                return (False, status)
-        return (True, status)
+            return (True, None)
+
+        # If not in terminal state, it is incomplete
+        if status.status not in EXTENSION_TERMINAL_STATUSES:
+            return (False, status.status)
+
+        # Extension completed, return its status
+        return (True, status.status)
 
     def report_ext_status(self):
         active_exts = []

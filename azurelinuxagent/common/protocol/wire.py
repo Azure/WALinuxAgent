@@ -1622,12 +1622,14 @@ class ExtensionsConfig(object):
             logger.error("Invalid extension settings")
             return
 
+        depends_on_level = 0
         depends_on_node = find(settings[0], "DependsOn")
-
-        try:
-            depends_on_level = int(getattrib(depends_on_node, "dependencyLevel"))
-        except (ValueError, TypeError):
-            depends_on_level = 0
+        if depends_on_node != None:
+            try:
+                depends_on_level = int(getattrib(depends_on_node, "dependencyLevel"))
+            except (ValueError, TypeError):
+                logger.warn("Could not parse dependencyLevel for handler {0}. Setting it to 0".format(name))
+                depends_on_level = 0
 
         for plugin_settings_list in runtime_settings["runtimeSettings"]:
             handler_settings = plugin_settings_list["handlerSettings"]
