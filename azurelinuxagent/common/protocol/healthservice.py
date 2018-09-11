@@ -20,7 +20,6 @@
 import json
 
 from azurelinuxagent.common import logger
-from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.exception import HttpError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.utils import restutil
@@ -166,7 +165,7 @@ class HealthService(object):
     def _report_failures(self):
         try:
             logger.verbose("HealthService: report failures as telemetry")
-            from azurelinuxagent.common.event import add_event
+            from azurelinuxagent.common.event import add_event, WALAEventOperation
             for o in self.observations:
                 if not o.is_healthy:
                     add_event(AGENT_NAME,

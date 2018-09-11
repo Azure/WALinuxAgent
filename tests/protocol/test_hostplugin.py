@@ -594,6 +594,14 @@ class TestHostPlugin(AgentTestCase):
         result = host_plugin.get_health()
         self.assertFalse(result)
 
+        patch_http_get.side_effect = IOError('client IO error')
+        try:
+            host_plugin.get_health()
+            self.fail('IO error expected to be raised')
+        except IOError:
+            # expected
+            pass
+
     @patch("azurelinuxagent.common.utils.restutil.http_get",
            return_value=MockResponse(status_code=200, body=b''))
     @patch("azurelinuxagent.common.protocol.healthservice.HealthService.report_host_plugin_versions")
