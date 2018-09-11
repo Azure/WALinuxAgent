@@ -40,7 +40,7 @@ def get_deprovision_handler(distro_name=DISTRO_NAME,
             return UbuntuDeprovisionHandler()
     if distro_name == "coreos":
         return CoreOSDeprovisionHandler()
-    if distro_name == "clear linux":
+    if "Clear Linux" in distro_full_name:
         return ClearLinuxDeprovisionHandler()
 
     return DeprovisionHandler()
