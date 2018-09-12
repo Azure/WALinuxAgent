@@ -23,6 +23,7 @@ from azurelinuxagent.common import logger
 from azurelinuxagent.common.exception import HttpError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.utils import restutil
+from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 
 
 class Observation(object):
@@ -156,5 +157,21 @@ class HealthService(object):
         except HttpError as e:
             logger.warn("HealthService: could not report observations: {0}", ustr(e))
         finally:
+            # report any failures via telemetry
+            self._report_failures()
             # these signals are not timestamped, so there is no value in persisting data
             del self.observations[:]
+
+    def _report_failures(self):
+        try:
+            logger.verbose("HealthService: report failures as telemetry")
+            from azurelinuxagent.common.event import add_event, WALAEventOperation
+            for o in self.observations:
+                if not o.is_healthy:
+                    add_event(AGENT_NAME,
+                              version=CURRENT_VERSION,
+                              op=WALAEventOperation.HealthObservation,
+                              is_success=False,
+                              message=json.dumps(o.as_obj))
+        except Exception as e:
+            logger.verbose("HealthService: could not report failures: {0}".format(ustr(e)))

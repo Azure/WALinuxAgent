@@ -55,6 +55,7 @@ class WALAEventOperation:
     Firewall = "Firewall"
     GetArtifactExtended = "GetArtifactExtended"
     HealthCheck = "HealthCheck"
+    HealthObservation = "HealthObservation"
     HeartBeat = "HeartBeat"
     HostPlugin = "HostPlugin"
     HostPluginHeartbeat = "HostPluginHeartbeat"
