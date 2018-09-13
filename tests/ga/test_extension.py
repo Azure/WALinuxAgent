@@ -706,7 +706,7 @@ class TestExtension(ExtensionTestCase):
 
         prev_handler = ExtHandler(name="Previous")
 
-        ExtHandlerInstance.collect_ext_status = MagicMock(return_value=None)
+        ExtHandlerInstance.get_ext_handling_status = MagicMock(return_value=None)
         self.assertTrue(exthandlers_handler.wait_for_prev_handler_completion(None, datetime.datetime.utcnow()))
         self.assertTrue(exthandlers_handler.wait_for_prev_handler_completion(prev_handler, datetime.datetime.utcnow()))
 
@@ -724,7 +724,7 @@ class TestExtension(ExtensionTestCase):
         test_data = WireProtocolData(DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
 
-        ExtHandlerInstance.collect_ext_status = MagicMock(return_value=None)
+        ExtHandlerInstance.get_ext_handling_status = MagicMock(return_value=None)
         self.assertFalse(self._test_wait_for_prev_handler_completion(exthandlers_handler))
 
     def test_wait_for_prev_handler_completion_success_status(self, *args):
@@ -734,7 +734,7 @@ class TestExtension(ExtensionTestCase):
         status = ExtensionStatus(seq_no=0)
         status.status = "success"
 
-        ExtHandlerInstance.collect_ext_status = MagicMock(return_value=status)
+        ExtHandlerInstance.get_ext_handling_status = MagicMock(return_value=status)
         self.assertTrue(self._test_wait_for_prev_handler_completion(exthandlers_handler))
 
     def test_wait_for_prev_handler_completion_success_status_with_substatus(self, *args):
@@ -747,7 +747,7 @@ class TestExtension(ExtensionTestCase):
         substatus.status = "success"
         status.substatusList.append(substatus)
 
-        ExtHandlerInstance.collect_ext_status = MagicMock(return_value=status)
+        ExtHandlerInstance.get_ext_handling_status = MagicMock(return_value=status)
         self.assertTrue(self._test_wait_for_prev_handler_completion(exthandlers_handler))
 
     def test_wait_for_prev_handler_completion_error_status(self, *args):
@@ -757,7 +757,7 @@ class TestExtension(ExtensionTestCase):
         status = ExtensionStatus(seq_no=0)
         status.status = "error"
 
-        ExtHandlerInstance.collect_ext_status = MagicMock(return_value=status)
+        ExtHandlerInstance.get_ext_handling_status = MagicMock(return_value=status)
         self.assertFalse(self._test_wait_for_prev_handler_completion(exthandlers_handler))
 
     def test_wait_for_prev_handler_completion_timeout(self, *args):
@@ -767,9 +767,54 @@ class TestExtension(ExtensionTestCase):
         status = ExtensionStatus(seq_no=0)
         status.status = "warning"
 
-        ExtHandlerInstance.collect_ext_status = MagicMock(return_value=status)
+        ExtHandlerInstance.get_ext_handling_status = MagicMock(return_value=status)
         self.assertFalse(self._test_wait_for_prev_handler_completion(exthandlers_handler))
-        
+
+    def test_get_ext_handling_status(self, *args):
+        test_data = WireProtocolData(DATA_FILE)
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+
+        handler_name = "Handler"
+        exthandler = ExtHandler(name=handler_name)
+        extension = Extension(name=handler_name)
+        exthandler.properties.extensions.append(extension)
+
+        ext_status = ExtensionStatus(seq_no=0)
+        ext_status.code = 1
+        ext_status.message = "Test message"
+        ext_status.status = "success"
+
+        warning_status = ExtensionStatus(seq_no=0, status="warning", code=-1,
+                                         message=u"Failed to get status file for {0}".format(handler_name))
+
+        # list of [seq_no, ext_status_file, is_status_file_exist, expected_result]
+        test_cases = [
+            [-5, None, False, None],
+            [-1, None, False, None],
+            [0, None, False, None],
+            [0, "filename", False, warning_status],
+            [0, "filename", True, ext_status],
+            [5, "filename", False, warning_status],
+            [5, "filename", True, ext_status]
+        ]
+
+        orig_state = os.path.exists
+        for case in test_cases:
+            ext_handler_i = ExtHandlerInstance(exthandler, protocol)
+            ext_handler_i.get_status_file_path = MagicMock(return_value=(case[0], case[1]))
+            os.path.exists = MagicMock(return_value=case[2])
+            if case[2]:
+                ext_handler_i.collect_ext_status= MagicMock(return_value=case[3])
+
+            status = ext_handler_i.get_ext_handling_status(extension)
+            if case[3] is None:
+                self.assertEqual(status, None)
+            else:
+                self.assertEqual(status.code, case[3].code)
+                self.assertEqual(status.message, case[3].message)
+                self.assertEqual(status.status, case[3].status)
+        os.path.exists = orig_state
+
     def test_is_ext_handling_complete(self, *args):
         test_data = WireProtocolData(DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
@@ -783,18 +828,12 @@ class TestExtension(ExtensionTestCase):
         ext_status = ExtensionStatus(seq_no=0)
         
         # Testing no status case
-        ext_handler_i.collect_ext_status = MagicMock(return_value=None)
+        ext_handler_i.get_ext_handling_status = MagicMock(return_value=None)
         completed, status = ext_handler_i.is_ext_handling_complete(ext_status)
         self.assertTrue(completed)
         self.assertEqual(status, None)
 
-        # Testing FileNotFound case
-        ext_handler_i.collect_ext_status = MagicMock(side_effect=FileNotFoundError())
-        completed, status = ext_handler_i.is_ext_handling_complete(ext_status)
-        self.assertFalse(completed)
-        self.assertEqual(status, None)
-
-        ext_handler_i.collect_ext_status = MagicMock(return_value=ext_status)
+        ext_handler_i.get_ext_handling_status = MagicMock(return_value=ext_status)
 
         # Testing different status cases
         expected_results = {
@@ -1116,12 +1155,12 @@ class TestExtensionSequencing(AgentTestCase):
 
     def _run_test(self, extensions_to_be_failed, expected_extensions, exthandlers_handler):
 
-        def collect_ext_status(ext):
+        def get_ext_handling_status(ext):
             status = ExtensionStatus(seq_no=0)
             status.status = "error" if ext.name in extensions_to_be_failed else "success"
             return status
 
-        ExtHandlerInstance.collect_ext_status = MagicMock(side_effect = collect_ext_status)
+        ExtHandlerInstance.get_ext_handling_status = MagicMock(side_effect = get_ext_handling_status)
         exthandlers_handler.handle_ext_handler = MagicMock()
         exthandlers_handler.run()
         self._validate_installed_extensions(expected_extensions, exthandlers_handler)

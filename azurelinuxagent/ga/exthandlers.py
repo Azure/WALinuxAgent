@@ -935,11 +935,25 @@ class ExtHandlerInstance(object):
 
         return ext_status
     
+    def get_ext_handling_status(self, ext):
+        seq_no, ext_status_file = self.get_status_file_path(ext)
+        if seq_no < 0 or ext_status_file is None:
+            return None
+
+        # Missing status file is considered a non-terminal state here
+        # so that extension sequencing can wait until it becomes existing
+        if not os.path.exists(ext_status_file):
+            ext_status = ExtensionStatus(seq_no=seq_no)
+            ext_status.message = u"Failed to get status file for {0}".format(ext.name)
+            ext_status.code = -1
+            ext_status.status = "warning"
+        else:
+            ext_status = self.collect_ext_status(ext)
+
+        return ext_status
+
     def is_ext_handling_complete(self, ext):
-        try:
-            status = self.collect_ext_status(ext)
-        except FileNotFoundError as e:
-            return (False, None)
+        status = self.get_ext_handling_status(ext)
 
         # when there is no status, the handling is complete and return None status
         if status is None:
