@@ -312,52 +312,30 @@ class ExtHandlersHandler(object):
                 return
 
         wait_until = datetime.datetime.utcnow() + datetime.timedelta(minutes=DEFAULT_EXT_TIMEOUT_MINUTES)
-        prev_handler = None
-        ext_seq_required = self.is_ext_seq_required()
+        max_dep_level = max([handler.sort_key() for handler in self.ext_handlers.extHandlers])
 
         self.ext_handlers.extHandlers.sort(key=operator.methodcaller('sort_key'))
         for ext_handler in self.ext_handlers.extHandlers:
-            if ext_seq_required:
-                # Make sure that the previous extension is handled.
-                # If handled successfully, proceed with the current handler.
-                # Otherwise, skip the rest of them.
-                dep_level = ext_handler.sort_key()
-                if dep_level >= 0:
-                    if self.wait_for_prev_handler_completion(prev_handler, wait_until):
-                        prev_handler = ext_handler
-                    else:
-                        break
-
             self.handle_ext_handler(ext_handler, etag)
 
-    def is_ext_seq_required(self):
-        '''
-        If all the extensions have same dependency level
-        It is considered as extension sequencing is not required
-        '''
-        dep_level = None
-        for ext_handler in self.ext_handlers.extHandlers:
-            if dep_level is None:
-                dep_level = ext_handler.sort_key()
-                continue
+            # Wait for the extension installation until it is handled.
+            # This is done for the install and enable. Not for the uninstallation.
+            # If handled successfully, proceed with the current handler.
+            # Otherwise, skip the rest of the extension installation.
+            dep_level = ext_handler.sort_key()
+            if dep_level >= 0 and dep_level < max_dep_level:
+                if not self.wait_for_handler_successful_completion(ext_handler, wait_until):
+                    logger.warn("An extension failed or timed out, will skip processing the rest of the extensions")
+                    break
 
-            if dep_level != ext_handler.sort_key():
-                return True
-
-        return False
-
-    def wait_for_prev_handler_completion(self, prev_handler, wait_until):
+    def wait_for_handler_successful_completion(self, ext_handler, wait_until):
         '''
-        Check the status of the previous extension handled.
+        Check the status of the extension being handled.
         Wait until it has a terminal state or times out.
         Return True if it is handled successfully. False if not.
         '''
-        # No need to wait on anything for the very first extension
-        if prev_handler == None:
-            return True
-
-        handler_i = ExtHandlerInstance(prev_handler, self.protocol)
-        for ext in prev_handler.properties.extensions:
+        handler_i = ExtHandlerInstance(ext_handler, self.protocol)
+        for ext in ext_handler.properties.extensions:
             ext_completed, status = handler_i.is_ext_handling_complete(ext)
 
             # Keep polling for the extension status until it becomes success or times out
@@ -367,9 +345,19 @@ class ExtHandlersHandler(object):
 
             # In case of timeout or terminal error state, we log it and return false
             # so that the extensions waiting on this one can be skipped processing
-            if not ext_completed or status != EXTENSION_STATUS_SUCCESS:
-                msg = "Extension {0} was timedout or status was: {1}".format(ext.name, status)
-                logger.info(msg)
+            if datetime.datetime.utcnow() > wait_until:
+                msg = "Extension {0} did not reach a terminal state within the allowed timeout. Last status was {1}".format(ext.name, status)
+                logger.warn(msg)
+                add_event(AGENT_NAME,
+                          version=CURRENT_VERSION,
+                          op=WALAEventOperation.ExtensionProcessing,
+                          is_success=False,
+                          message=msg)
+                return False
+
+            if status != EXTENSION_STATUS_SUCCESS:
+                msg = "Extension {0} did not succeed. Status was {1}".format(ext.name, status)
+                logger.warn(msg)
                 add_event(AGENT_NAME,
                           version=CURRENT_VERSION,
                           op=WALAEventOperation.ExtensionProcessing,
@@ -943,28 +931,26 @@ class ExtHandlerInstance(object):
         # Missing status file is considered a non-terminal state here
         # so that extension sequencing can wait until it becomes existing
         if not os.path.exists(ext_status_file):
-            ext_status = ExtensionStatus(seq_no=seq_no)
-            ext_status.message = u"Failed to get status file for {0}".format(ext.name)
-            ext_status.code = -1
-            ext_status.status = "warning"
+            status = "warning"
         else:
             ext_status = self.collect_ext_status(ext)
+            status = ext_status.status if ext_status is not None else None
 
-        return ext_status
+        return status
 
     def is_ext_handling_complete(self, ext):
         status = self.get_ext_handling_status(ext)
 
-        # when there is no status, the handling is complete and return None status
+        # when seq < 0 (i.e. no new user settings), the handling is complete and return None status
         if status is None:
             return (True, None)
 
         # If not in terminal state, it is incomplete
-        if status.status not in EXTENSION_TERMINAL_STATUSES:
-            return (False, status.status)
+        if status not in EXTENSION_TERMINAL_STATUSES:
+            return (False, status)
 
         # Extension completed, return its status
-        return (True, status.status)
+        return (True, status)
 
     def report_ext_status(self):
         active_exts = []
