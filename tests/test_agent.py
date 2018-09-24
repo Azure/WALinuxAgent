@@ -63,6 +63,7 @@ Provisioning.RegenerateSshHostKeyPair = True
 Provisioning.SshHostKeyPairType = rsa
 Provisioning.UseCloudInit = True
 ResourceDisk.EnableSwap = False
+ResourceDisk.EnableSwapEncryption = False
 ResourceDisk.Filesystem = ext4
 ResourceDisk.Format = True
 ResourceDisk.MountOptions = None
