@@ -20,6 +20,7 @@ import os
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.shellutil as shellutil
+import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common.exception import ResourceDiskError
 from azurelinuxagent.daemon.resourcedisk.default import ResourceDiskHandler
 
@@ -143,6 +144,20 @@ class FreeBSDResourceDiskHandler(ResourceDiskHandler):
         if not os.path.isfile(swapfile):
             logger.info("Create swap file")
             self.mkfile(swapfile, size_kb * 1024)
-        if shellutil.run("swapon {0}".format(swapfile)):
-            raise ResourceDiskError("{0}".format(swapfile))
-        logger.info("Enabled {0}KB of swap at {1}".format(size_kb, swapfile))
+        
+        mddevice = shellutil.run_get_output("mdconfig -a -t vnode -f {0}".format(swapfile))[0]
+        shellutil.run("chmod 0600 /dev/{0}".format(mddevice))
+        
+        if conf.get_resourcedisk_enable_swap_encryption():
+            shellutil.run("kldload aesni")
+            shellutil.run("kldload cryptodev")
+            shellutil.run("kldload geom_eli")
+            shellutil.run("geli onetime -e AES-XTS -l 256 -d /dev/{0}".format(mddevice))
+            shellutil.run("chmod 0600 /dev/{0}.eli".format(mddevice))
+            if shellutil.run("swapon /dev/{0}.eli".format(mddevice)):
+                raise ResourceDiskError("/dev/{0}.eli".format(mddevice))
+            logger.info("Enabled {0}KB of swap at /dev/{1}.eli ({2})".format(size_kb, mddevice, swapfile))
+        else:
+            if shellutil.run("swapon /dev/{0}".format(mddevice)):
+                raise ResourceDiskError("/dev/{0}".format(mddevice))
+            logger.info("Enabled {0}KB of swap at /dev/{1} ({2})".format(size_kb, mddevice, swapfile))
