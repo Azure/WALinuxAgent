@@ -121,3 +121,27 @@ class FreeBSDResourceDiskHandler(ResourceDiskHandler):
 
         logger.info("Resource disk partition {0} is mounted at {1} with fstype {2}", partition, mount_point, fs)
         return mount_point
+
+    def create_swap_space(self, mount_point, size_mb):
+        size_kb = size_mb * 1024
+        size = size_kb * 1024
+        swapfile = os.path.join(mount_point, 'swapfile')
+        swaplist = shellutil.run_get_output("swapctl -l")[1]
+
+        if swapfile in swaplist \
+                and os.path.isfile(swapfile) \
+                and os.path.getsize(swapfile) == size:
+            logger.info("Swap already enabled")
+            return
+
+        if os.path.isfile(swapfile) and os.path.getsize(swapfile) != size:
+            logger.info("Remove old swap file")
+            shellutil.run("swapoff -a", chk_err=False)
+            os.remove(swapfile)
+
+        if not os.path.isfile(swapfile):
+            logger.info("Create swap file")
+            self.mkfile(swapfile, size_kb * 1024)
+        if shellutil.run("swapon {0}".format(swapfile)):
+            raise ResourceDiskError("{0}".format(swapfile))
+        logger.info("Enabled {0}KB of swap at {1}".format(size_kb, swapfile))
