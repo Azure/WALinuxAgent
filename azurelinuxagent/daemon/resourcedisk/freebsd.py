@@ -145,7 +145,7 @@ class FreeBSDResourceDiskHandler(ResourceDiskHandler):
             logger.info("Create swap file")
             self.mkfile(swapfile, size_kb * 1024)
         
-        mddevice = shellutil.run_get_output("mdconfig -a -t vnode -f {0}".format(swapfile))[1].rstrip()
+        mddevice = shellutil.run_get_output("mdconfig -u 99 -a -t vnode -f {0}".format(swapfile))[1].rstrip()
         shellutil.run("chmod 0600 /dev/{0}".format(mddevice))
         
         if conf.get_resourcedisk_enable_swap_encryption():
