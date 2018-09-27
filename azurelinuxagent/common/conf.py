@@ -110,7 +110,7 @@ __SWITCH_OPTIONS__ = {
     "ResourceDisk.EnableSwap": False,
     "AutoUpdate.Enabled": True,
     "EnableOverProvisioning": True,
-    "CGroups.EnforceLimits": True,
+    "CGroups.EnforceLimits": False,
 }
 
 
@@ -367,7 +367,7 @@ def get_disable_agent_file_path(conf=__conf__):
 
 
 def get_cgroups_enforce_limits(conf=__conf__):
-    return conf.get_switch("CGroups.EnforceLimits", True)
+    return conf.get_switch("CGroups.EnforceLimits", False)
 
 
 def get_cgroups_excluded(conf=__conf__):
