@@ -67,7 +67,7 @@ class TestConf(AgentTestCase):
         "EnableOverProvisioning": True,
         "OS.AllowHTTP": False,
         "OS.EnableFirewall": False,
-        "CGroups.EnforceLimits": True,
+        "CGroups.EnforceLimits": False,
         "CGroups.Excluded": "customscript,runcommand",
     }
 
