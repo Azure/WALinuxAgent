@@ -140,8 +140,8 @@ class DaemonHandler(object):
 
         # Enable RDMA, continue in errors
         if conf.enable_rdma():
-            self.rdma_handler.install_driver()
             nd_version = self.rdma_handler.get_rdma_version()
+            self.rdma_handler.install_driver_if_needed()
 
             logger.info("RDMA capabilities are enabled in configuration")
             try:

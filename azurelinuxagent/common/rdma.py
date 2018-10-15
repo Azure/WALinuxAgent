@@ -152,6 +152,12 @@ class RDMAHandler(object):
         logger.info('RDMA: Loaded the kernel driver successfully.')
         return True
 
+    def install_driver_if_needed(self):
+        if self.nd_version:
+            self.install_driver()
+        else:
+            logger.info('RDMA: skip installing driver when ndversion not present\n')
+
     def install_driver(self):
         """Install the driver. This is distribution specific and must
            be overwritten in the child implementation."""
