@@ -39,7 +39,7 @@ dapl_config_paths = [
     '/usr/local/etc/dat.conf'
 ]
 
-def setup_rdma_device():
+def setup_rdma_device(nd_version):
     logger.verbose("Parsing SharedConfig XML contents for RDMA details")
     xml_doc = parse_doc(
         fileutil.read_file(os.path.join(conf.get_lib_dir(), SHARED_CONF_FILE_NAME)))
@@ -71,18 +71,21 @@ def setup_rdma_device():
         rdma_ipv4_addr, rdma_mac_addr))
 
     # Set up the RDMA device with collected informatino
-    RDMADeviceHandler(rdma_ipv4_addr, rdma_mac_addr).start()
+    RDMADeviceHandler(rdma_ipv4_addr, rdma_mac_addr, nd_version).start()
     logger.info("RDMA: device is set up")
     return
 
 class RDMAHandler(object):
 
     driver_module_name = 'hv_network_direct'
+    nd_version = None
 
-    @staticmethod
-    def get_rdma_version():
+    def get_rdma_version(self):
         """Retrieve the firmware version information from the system.
            This depends on information provided by the Linux kernel."""
+
+        if self.nd_version :
+            return self.nd_version
 
         kvp_key_size = 512
         kvp_value_size = 2048
@@ -104,7 +107,8 @@ class RDMAHandler(object):
                 value_0 = value.split("\x00")[0]
                 if key_0 == "NdDriverVersion" :
                     f.close()
-                    return value_0
+                    self.nd_version = value_0
+                    return self.nd_version
             else :
                 break
         f.close()
@@ -189,10 +193,12 @@ class RDMADeviceHandler(object):
 
     ipv4_addr = None
     mac_adr = None
+    nd_version = None
 
-    def __init__(self, ipv4_addr, mac_addr):
+    def __init__(self, ipv4_addr, mac_addr, nd_version):
         self.ipv4_addr = ipv4_addr
         self.mac_addr = mac_addr
+        self.nd_version = nd_version
 
     def start(self):
         """
