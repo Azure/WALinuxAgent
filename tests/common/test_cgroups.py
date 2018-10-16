@@ -41,6 +41,7 @@ def make_self_cgroups():
     :return: CGroups containing this process
     :rtype: CGroups
     """
+
     def path_maker(hierarchy, __):
         suffix = CGroups.get_my_cgroup_path(CGroups.get_hierarchy_id('cpu'))
         return os.path.join(BASE_CGROUPS, hierarchy, suffix)
@@ -55,6 +56,7 @@ def make_root_cgroups():
     :return: CGroups for most-encompassing cgroup
     :rtype: CGroups
     """
+
     def path_maker(hierarchy, _):
         return os.path.join(BASE_CGROUPS, hierarchy)
 
@@ -116,19 +118,19 @@ class TestCGroups(AgentTestCase):
             self.assertLess(cpu.current_cpu_total, cpu.current_system_cpu)
 
             consume_cpu_time()  # Eat some CPU
-            time.sleep(1)       # Generate some idle time
+            time.sleep(1)  # Generate some idle time
             cpu.update()
             self.assertLess(cpu.current_cpu_total, cpu.current_system_cpu)
 
-    def exercise_telemetry_instantiation(self, test_cgroup):
+    def exercise_telemetry_instantiation(self, test_cgroup, limits=None):
         test_extension_name = test_cgroup.name
-        CGroupsTelemetry.track_cgroup(test_cgroup)
+        CGroupsTelemetry.track_cgroup(test_cgroup, limits)
         self.assertIn('cpu', test_cgroup.cgroups)
         self.assertIn('memory', test_cgroup.cgroups)
         self.assertTrue(CGroupsTelemetry.is_tracked(test_extension_name))
         consume_cpu_time()
         time.sleep(1)
-        metrics = CGroupsTelemetry.collect_all_tracked()
+        metrics, limits = CGroupsTelemetry.collect_all_tracked()
         my_metrics = metrics[test_extension_name]
         self.assertEqual(len(my_metrics), 2)
         for item in my_metrics:
@@ -168,6 +170,22 @@ class TestCGroups(AgentTestCase):
         Tracking an existing cgroup for an extension; collect all metrics.
         """
         self.exercise_telemetry_instantiation(make_self_cgroups())
+
+    @skip_if_predicate_true(i_am_root, "Test does not run when root")
+    @patch("azurelinuxagent.common.conf.get_cgroups_enforce_limits")
+    @patch("azurelinuxagent.common.cgroups.CGroups.set_cpu_limit")
+    @patch("azurelinuxagent.common.cgroups.CGroups.set_memory_limit")
+    def test_telemetry_instantiation_as_normal_user_with_limits(self, mock_get_cgroups_enforce_limits,
+                                                                mock_set_cpu_limit,
+                                                                mock_set_memory_limit):
+        """
+        Tracking an existing cgroup for an extension; collect all metrics.
+        """
+        mock_get_cgroups_enforce_limits.return_value = True
+
+        cg = make_self_cgroups()
+        limits = cg.set_limits()
+        self.exercise_telemetry_instantiation(cg, limits)
 
     def test_cpu_telemetry(self):
         """
@@ -214,7 +232,7 @@ class TestCGroups(AgentTestCase):
         self.assertEqual(2048, CGroups._format_memory_value('kilobytes', 2))
         self.assertEqual(0, CGroups._format_memory_value('kilobytes', 0))
         self.assertEqual(2048000, CGroups._format_memory_value('kilobytes', 2000))
-        self.assertEqual(2048*1024, CGroups._format_memory_value('megabytes', 2))
+        self.assertEqual(2048 * 1024, CGroups._format_memory_value('megabytes', 2))
         self.assertEqual((1024 + 512) * 1024 * 1024, CGroups._format_memory_value('gigabytes', 1.5))
         self.assertRaises(CGroupsException, CGroups._format_memory_value, 'KiloBytes', 1)
 
@@ -237,7 +255,7 @@ class TestCGroups(AgentTestCase):
 
         try:
             cg = CGroups.for_extension(ext_name)
-            cg.set_limits()
+            limits = cg.set_limits()
             if exception_raised:
                 self.fail('exception expected')
         except CGroupsException:

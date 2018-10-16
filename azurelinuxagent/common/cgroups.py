@@ -183,6 +183,8 @@ class CGroupsTelemetry(object):
         "memory": Memory
     }
     _hierarchies = list(_metrics.keys())
+    _limits = {}
+
     tracked_names = set()
 
     @staticmethod
@@ -190,7 +192,7 @@ class CGroupsTelemetry(object):
         return CGroupsTelemetry._hierarchies
 
     @staticmethod
-    def track_cgroup(cgroup):
+    def track_cgroup(cgroup, limits=None):
         """
         Create a CGroupsTelemetry object to track a particular CGroups instance. Typical usage:
         1) Create a CGroups object
@@ -201,8 +203,9 @@ class CGroupsTelemetry(object):
         """
         name = cgroup.name
         if CGroups.enabled() and not CGroupsTelemetry.is_tracked(name):
-            tracker = CGroupsTelemetry(name, cgroup=cgroup)
+            tracker = CGroupsTelemetry(name, cgroup=cgroup, limits=limits)
             CGroupsTelemetry._tracked[name] = tracker
+            CGroupsTelemetry._limits[name] = tracker.limits
 
     @staticmethod
     def track_systemd_service(name):
@@ -231,8 +234,8 @@ class CGroupsTelemetry(object):
         if not CGroupsTelemetry.is_tracked(name):
             cgroup = CGroups.for_extension(name) if cgroup is None else cgroup
             logger.info("Now tracking cgroup {0}".format(name))
-            cgroup.set_limits()
-            CGroupsTelemetry.track_cgroup(cgroup)
+            limits = cgroup.set_limits()
+            CGroupsTelemetry.track_cgroup(cgroup, limits)
         if CGroups.is_systemd_manager():
             if name in related_services:
                 for service_name in related_services[name]:
@@ -278,10 +281,13 @@ class CGroupsTelemetry(object):
         :rtype: dict(str: [(str, str, float)])
         """
         results = {}
+        limits = {}
+        cgroup_limits=CGroupsTelemetry._limits.copy()
         for cgroup_name, collector in CGroupsTelemetry._tracked.copy().items():
             cgroup_name = cgroup_name if cgroup_name else WRAPPER_CGROUP_NAME
             results[cgroup_name] = collector.collect()
-        return results
+            limits[cgroup_name] = cgroup_limits[cgroup_name]
+        return results, limits
 
     @staticmethod
     def update_tracked(ext_handlers):
@@ -311,7 +317,7 @@ class CGroupsTelemetry(object):
                 logger.warn("After updating cgroup telemetry, tracking no cgroups.")
             CGroupsTelemetry.tracked_names = names_now_tracked
 
-    def __init__(self, name, cgroup=None):
+    def __init__(self, name, cgroup=None, limits=None):
         """
         Create the necessary state to collect metrics for the agent, one of its extensions, or the aggregation across
         the agent and all of its extensions. To access aggregated metrics, instantiate this object with an empty string
@@ -330,9 +336,12 @@ class CGroupsTelemetry(object):
         self.previous_wall_time = 0
 
         self.data = {}
+        self.limits = {}
         if CGroups.enabled():
             for hierarchy in CGroupsTelemetry.metrics_hierarchies():
                 self.data[hierarchy] = CGroupsTelemetry._metrics[hierarchy](self)
+                if limits:
+                    self.limits[hierarchy] = limits[hierarchy]
 
     def collect(self):
         """
@@ -476,6 +485,22 @@ class CGroups(object):
             tasks_file = self._get_cgroup_file(hierarchy, 'cgroup.procs')
             fileutil.append_file(tasks_file, "{0}\n".format(pid))
 
+    def get_cpu_limits(self):
+        # default values
+        cpu_limit = DEFAULT_CPU_LIMIT_AGENT if AGENT_NAME.lower() in self.name.lower() else DEFAULT_CPU_LIMIT_EXT
+
+        return cpu_limit
+
+    def get_memory_limits(self):
+        # default values
+        mem_limit = max(DEFAULT_MEM_LIMIT_MIN_MB, round(self._osutil.get_total_mem() * DEFAULT_MEM_LIMIT_PCT / 100, 0))
+
+        # agent values
+        if AGENT_NAME.lower() in self.name.lower():
+            mem_limit = min(DEFAULT_MEM_LIMIT_MAX_MB, mem_limit)
+
+        return mem_limit
+
     def set_limits(self):
         """
         Set per-hierarchy limits based on the cgroup name (agent or particular extension)
@@ -493,13 +518,8 @@ class CGroups(object):
                 return
 
         # default values
-        cpu_limit = DEFAULT_CPU_LIMIT_EXT
-        mem_limit = max(DEFAULT_MEM_LIMIT_MIN_MB, round(self._osutil.get_total_mem() * DEFAULT_MEM_LIMIT_PCT / 100, 0))
-
-        # agent values
-        if AGENT_NAME.lower() in self.name.lower():
-            cpu_limit = DEFAULT_CPU_LIMIT_AGENT
-            mem_limit = min(DEFAULT_MEM_LIMIT_MAX_MB, mem_limit)
+        cpu_limit = self.get_cpu_limits()
+        mem_limit = self.get_memory_limits()
 
         msg = '{0}: {1}% {2}mb'.format(self.name, cpu_limit, mem_limit)
         logger.info("Setting cgroups limits for {0}".format(msg))
@@ -521,6 +541,9 @@ class CGroups(object):
                 is_success=success,
                 message=msg,
                 log_event=False)
+
+        # Returning the limits -
+        return {"cpu": cpu_limit, "memory": mem_limit}
 
     @staticmethod
     def _apply_wrapper_limits(path, hierarchy):
@@ -561,7 +584,7 @@ class CGroups(object):
                         cg = CGroups.for_extension(AGENT_NAME)
                         logger.info("Add daemon process pid {0} to {1} cgroup".format(pid, cg.name))
                         cg.add(pid)
-                        cg.set_limits()
+                        limits = cg.set_limits()
                     else:
                         cg = CGroups.for_systemd_service(AGENT_NAME)
                         logger.info("Add daemon process pid {0} to {1} systemd cgroup".format(pid, cg.name))
