@@ -68,7 +68,7 @@ class Redhat6xOSUtil(DefaultOSUtil):
             ssh_rsa_pubkey = cryptutil.asn1_to_ssh(pubkey)
         except CryptError as e:
             raise OSUtilError(ustr(e))
-        fileutil.write_file(output_file, ssh_rsa_pubkey)
+        fileutil.append_file(output_file, ssh_rsa_pubkey)
 
     # Override
     def get_dhcp_pid(self):
