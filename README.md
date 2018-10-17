@@ -195,6 +195,7 @@ ResourceDisk.Filesystem=ext4
 ResourceDisk.MountPoint=/mnt/resource
 ResourceDisk.MountOptions=None
 ResourceDisk.EnableSwap=n
+ResourceDisk.EnableSwapEncryption=n
 ResourceDisk.SwapSizeMB=0
 Logs.Verbose=n
 OS.AllowHTTP=n
@@ -369,6 +370,13 @@ _Default: n_
 
 If set, a swap file (/swapfile) is created on the resource disk and added to the
 system swap space.
+
+#### __ResourceDisk.EnableSwapEncryption__
+
+_Type: Boolean_  
+_Default: n_
+
+If set, the swap file (/swapfile) is mounted as an encrypted filesystem.
 
 #### __ResourceDisk.SwapSizeMB__
 

@@ -16,9 +16,11 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 #
+import os
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.shellutil as shellutil
+import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common.exception import ResourceDiskError
 from azurelinuxagent.daemon.resourcedisk.default import ResourceDiskHandler
 
@@ -121,3 +123,41 @@ class FreeBSDResourceDiskHandler(ResourceDiskHandler):
 
         logger.info("Resource disk partition {0} is mounted at {1} with fstype {2}", partition, mount_point, fs)
         return mount_point
+
+    def create_swap_space(self, mount_point, size_mb):
+        size_kb = size_mb * 1024
+        size = size_kb * 1024
+        swapfile = os.path.join(mount_point, 'swapfile')
+        swaplist = shellutil.run_get_output("swapctl -l")[1]
+
+        if swapfile in swaplist \
+                and os.path.isfile(swapfile) \
+                and os.path.getsize(swapfile) == size:
+            logger.info("Swap already enabled")
+            return
+
+        if os.path.isfile(swapfile) and os.path.getsize(swapfile) != size:
+            logger.info("Remove old swap file")
+            shellutil.run("swapoff -a", chk_err=False)
+            os.remove(swapfile)
+
+        if not os.path.isfile(swapfile):
+            logger.info("Create swap file")
+            self.mkfile(swapfile, size_kb * 1024)
+        
+        mddevice = shellutil.run_get_output("mdconfig -a -t vnode -f {0}".format(swapfile))[1].rstrip()
+        shellutil.run("chmod 0600 /dev/{0}".format(mddevice))
+        
+        if conf.get_resourcedisk_enable_swap_encryption():
+            shellutil.run("kldload aesni")
+            shellutil.run("kldload cryptodev")
+            shellutil.run("kldload geom_eli")
+            shellutil.run("geli onetime -e AES-XTS -l 256 -d /dev/{0}".format(mddevice))
+            shellutil.run("chmod 0600 /dev/{0}.eli".format(mddevice))
+            if shellutil.run("swapon /dev/{0}.eli".format(mddevice)):
+                raise ResourceDiskError("/dev/{0}.eli".format(mddevice))
+            logger.info("Enabled {0}KB of swap at /dev/{1}.eli ({2})".format(size_kb, mddevice, swapfile))
+        else:
+            if shellutil.run("swapon /dev/{0}".format(mddevice)):
+                raise ResourceDiskError("/dev/{0}".format(mddevice))
+            logger.info("Enabled {0}KB of swap at /dev/{1} ({2})".format(size_kb, mddevice, swapfile))

@@ -43,6 +43,7 @@ class TestConf(AgentTestCase):
         "ResourceDisk.Filesystem": "ext4",
         "ResourceDisk.MountPoint": "/mnt/resource",
         "ResourceDisk.EnableSwap": False,
+        "ResourceDisk.EnableSwapEncryption": False,
         "ResourceDisk.SwapSizeMB": 0,
         "ResourceDisk.MountOptions": None,
         "Logs.Verbose": False,

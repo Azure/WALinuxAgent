@@ -108,6 +108,7 @@ __SWITCH_OPTIONS__ = {
     "DetectScvmmEnv": False,
     "ResourceDisk.Format": False,
     "ResourceDisk.EnableSwap": False,
+    "ResourceDisk.EnableSwapEncryption": False,
     "AutoUpdate.Enabled": True,
     "EnableOverProvisioning": True,
     "CGroups.EnforceLimits": False,
@@ -324,7 +325,9 @@ def get_resourcedisk_format(conf=__conf__):
 
 def get_resourcedisk_enable_swap(conf=__conf__):
     return conf.get_switch("ResourceDisk.EnableSwap", False)
-
+    
+def get_resourcedisk_enable_swap_encryption(conf=__conf__):
+    return conf.get_switch("ResourceDisk.EnableSwapEncryption", False)
 
 def get_resourcedisk_mountpoint(conf=__conf__):
     return conf.get("ResourceDisk.MountPoint", "/mnt/resource")
