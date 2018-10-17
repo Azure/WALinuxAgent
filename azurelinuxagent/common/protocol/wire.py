@@ -1591,11 +1591,6 @@ class ExtensionsConfig(object):
         ext_handler.properties.version = getattrib(plugin, "version")
         ext_handler.properties.state = getattrib(plugin, "state")
 
-        try:
-            ext_handler.properties.dependencyLevel = int(getattrib(plugin, "dependencyLevel"))
-        except ValueError:
-            ext_handler.properties.dependencyLevel = 0
-
         location = getattrib(plugin, "location")
         failover_location = getattrib(plugin, "failoverlocation")
         for uri in [location, failover_location]:
@@ -1627,6 +1622,15 @@ class ExtensionsConfig(object):
             logger.error("Invalid extension settings")
             return
 
+        depends_on_level = 0
+        depends_on_node = find(settings[0], "DependsOn")
+        if depends_on_node != None:
+            try:
+                depends_on_level = int(getattrib(depends_on_node, "dependencyLevel"))
+            except (ValueError, TypeError):
+                logger.warn("Could not parse dependencyLevel for handler {0}. Setting it to 0".format(name))
+                depends_on_level = 0
+
         for plugin_settings_list in runtime_settings["runtimeSettings"]:
             handler_settings = plugin_settings_list["handlerSettings"]
             ext = Extension()
@@ -1636,6 +1640,7 @@ class ExtensionsConfig(object):
             ext.sequenceNumber = seqNo
             ext.publicSettings = handler_settings.get("publicSettings")
             ext.protectedSettings = handler_settings.get("protectedSettings")
+            ext.dependencyLevel = depends_on_level
             thumbprint = handler_settings.get(
                 "protectedSettingsCertThumbprint")
             ext.certificateThumbprint = thumbprint
