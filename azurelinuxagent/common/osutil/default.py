@@ -521,6 +521,8 @@ class DefaultOSUtil(object):
         if value is not None:
             if not value.startswith("ssh-"):
                 raise OSUtilError("Bad public key: {0}".format(value))
+            if not value.endswith("\n"):
+                value += "\n"
             fileutil.write_file(path, value)
         elif thumbprint is not None:
             lib_dir = conf.get_lib_dir()
