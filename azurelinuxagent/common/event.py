@@ -46,6 +46,7 @@ class WALAEventOperation:
     ArtifactsProfileBlob = "ArtifactsProfileBlob"
     AutoUpdate = "AutoUpdate"
     CustomData = "CustomData"
+    CGroupsLimitsCrossed = "CGroupsLimitsCrossed"
     Deploy = "Deploy"
     Disable = "Disable"
     Downgrade = "Downgrade"

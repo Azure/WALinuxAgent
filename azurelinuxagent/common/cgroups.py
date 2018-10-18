@@ -183,6 +183,7 @@ class CGroupsTelemetry(object):
         "memory": Memory
     }
     _hierarchies = list(_metrics.keys())
+
     tracked_names = set()
 
     @staticmethod
@@ -278,10 +279,13 @@ class CGroupsTelemetry(object):
         :rtype: dict(str: [(str, str, float)])
         """
         results = {}
+        limits = {}
+
         for cgroup_name, collector in CGroupsTelemetry._tracked.copy().items():
             cgroup_name = cgroup_name if cgroup_name else WRAPPER_CGROUP_NAME
             results[cgroup_name] = collector.collect()
-        return results
+            limits[cgroup_name] = collector.cgroup.threshold
+        return results, limits
 
     @staticmethod
     def update_tracked(ext_handlers):
@@ -400,6 +404,7 @@ class CGroups(object):
             self.is_wrapper_cgroup = False
 
         self.cgroups = {}
+        self.threshold = None
 
         if not self.enabled():
             return
@@ -476,6 +481,22 @@ class CGroups(object):
             tasks_file = self._get_cgroup_file(hierarchy, 'cgroup.procs')
             fileutil.append_file(tasks_file, "{0}\n".format(pid))
 
+    def get_cpu_limits(self):
+        # default values
+        cpu_limit = DEFAULT_CPU_LIMIT_AGENT if AGENT_NAME.lower() in self.name.lower() else DEFAULT_CPU_LIMIT_EXT
+
+        return cpu_limit
+
+    def get_memory_limits(self):
+        # default values
+        mem_limit = max(DEFAULT_MEM_LIMIT_MIN_MB, round(self._osutil.get_total_mem() * DEFAULT_MEM_LIMIT_PCT / 100, 0))
+
+        # agent values
+        if AGENT_NAME.lower() in self.name.lower():
+            mem_limit = min(DEFAULT_MEM_LIMIT_MAX_MB, mem_limit)
+
+        return mem_limit
+
     def set_limits(self):
         """
         Set per-hierarchy limits based on the cgroup name (agent or particular extension)
@@ -493,13 +514,8 @@ class CGroups(object):
                 return
 
         # default values
-        cpu_limit = DEFAULT_CPU_LIMIT_EXT
-        mem_limit = max(DEFAULT_MEM_LIMIT_MIN_MB, round(self._osutil.get_total_mem() * DEFAULT_MEM_LIMIT_PCT / 100, 0))
-
-        # agent values
-        if AGENT_NAME.lower() in self.name.lower():
-            cpu_limit = DEFAULT_CPU_LIMIT_AGENT
-            mem_limit = min(DEFAULT_MEM_LIMIT_MAX_MB, mem_limit)
+        cpu_limit = self.get_cpu_limits()
+        mem_limit = self.get_memory_limits()
 
         msg = '{0}: {1}% {2}mb'.format(self.name, cpu_limit, mem_limit)
         logger.info("Setting cgroups limits for {0}".format(msg))
@@ -521,6 +537,9 @@ class CGroups(object):
                 is_success=success,
                 message=msg,
                 log_event=False)
+
+        # Returning the limits -
+        self.threshold = {"cpu": cpu_limit, "memory": mem_limit}
 
     @staticmethod
     def _apply_wrapper_limits(path, hierarchy):
