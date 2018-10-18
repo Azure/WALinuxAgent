@@ -427,7 +427,7 @@ class MonitorHandler(object):
                             report_metric(metric_group, metric_name, cgroup_name, value)
 
                         if metric_group == "Memory":
-                            if value > thresholds["memory"]:
+                            if value >= thresholds["memory"]:
                                 msg = "CGroup {0}: Crossed the Memory Threshold. Current Value:{1}, Threshold:{2}.".format(
                                     cgroup_name, value, thresholds["memory"])
                                 add_event(name=AGENT_NAME,
@@ -438,7 +438,7 @@ class MonitorHandler(object):
                                           log_event=True)
 
                         if metric_group == "Process":
-                            if value > thresholds["cpu"]:
+                            if value >= thresholds["cpu"]:
                                 msg = "CGroup {0}: Crossed the Processor Threshold. Current Value:{1}, Threshold:{2}.".format(
                                     cgroup_name, value, thresholds["cpu"])
                                 add_event(name=AGENT_NAME,

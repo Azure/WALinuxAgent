@@ -122,9 +122,9 @@ class TestCGroups(AgentTestCase):
             cpu.update()
             self.assertLess(cpu.current_cpu_total, cpu.current_system_cpu)
 
-    def exercise_telemetry_instantiation(self, test_cgroup, limits=None):
+    def exercise_telemetry_instantiation(self, test_cgroup):
         test_extension_name = test_cgroup.name
-        CGroupsTelemetry.track_cgroup(test_cgroup, limits)
+        CGroupsTelemetry.track_cgroup(test_cgroup)
         self.assertIn('cpu', test_cgroup.cgroups)
         self.assertIn('memory', test_cgroup.cgroups)
         self.assertTrue(CGroupsTelemetry.is_tracked(test_extension_name))
@@ -184,8 +184,8 @@ class TestCGroups(AgentTestCase):
         mock_get_cgroups_enforce_limits.return_value = True
 
         cg = make_self_cgroups()
-        limits = cg.set_limits()
-        self.exercise_telemetry_instantiation(cg, limits)
+        cg.set_limits()
+        self.exercise_telemetry_instantiation(cg)
 
     def test_cpu_telemetry(self):
         """
@@ -255,7 +255,7 @@ class TestCGroups(AgentTestCase):
 
         try:
             cg = CGroups.for_extension(ext_name)
-            limits = cg.set_limits()
+            cg.set_limits()
             if exception_raised:
                 self.fail('exception expected')
         except CGroupsException:

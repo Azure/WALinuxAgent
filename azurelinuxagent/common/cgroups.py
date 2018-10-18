@@ -183,7 +183,6 @@ class CGroupsTelemetry(object):
         "memory": Memory
     }
     _hierarchies = list(_metrics.keys())
-    _limits = {}
 
     tracked_names = set()
 
@@ -192,7 +191,7 @@ class CGroupsTelemetry(object):
         return CGroupsTelemetry._hierarchies
 
     @staticmethod
-    def track_cgroup(cgroup, limits=None):
+    def track_cgroup(cgroup):
         """
         Create a CGroupsTelemetry object to track a particular CGroups instance. Typical usage:
         1) Create a CGroups object
@@ -203,9 +202,8 @@ class CGroupsTelemetry(object):
         """
         name = cgroup.name
         if CGroups.enabled() and not CGroupsTelemetry.is_tracked(name):
-            tracker = CGroupsTelemetry(name, cgroup=cgroup, limits=limits)
+            tracker = CGroupsTelemetry(name, cgroup=cgroup)
             CGroupsTelemetry._tracked[name] = tracker
-            CGroupsTelemetry._limits[name] = tracker.limits
 
     @staticmethod
     def track_systemd_service(name):
@@ -234,8 +232,8 @@ class CGroupsTelemetry(object):
         if not CGroupsTelemetry.is_tracked(name):
             cgroup = CGroups.for_extension(name) if cgroup is None else cgroup
             logger.info("Now tracking cgroup {0}".format(name))
-            limits = cgroup.set_limits()
-            CGroupsTelemetry.track_cgroup(cgroup, limits)
+            cgroup.set_limits()
+            CGroupsTelemetry.track_cgroup(cgroup)
         if CGroups.is_systemd_manager():
             if name in related_services:
                 for service_name in related_services[name]:
@@ -282,11 +280,11 @@ class CGroupsTelemetry(object):
         """
         results = {}
         limits = {}
-        cgroup_limits=CGroupsTelemetry._limits.copy()
+
         for cgroup_name, collector in CGroupsTelemetry._tracked.copy().items():
             cgroup_name = cgroup_name if cgroup_name else WRAPPER_CGROUP_NAME
             results[cgroup_name] = collector.collect()
-            limits[cgroup_name] = cgroup_limits[cgroup_name]
+            limits[cgroup_name] = collector.cgroup.threshold
         return results, limits
 
     @staticmethod
@@ -317,7 +315,7 @@ class CGroupsTelemetry(object):
                 logger.warn("After updating cgroup telemetry, tracking no cgroups.")
             CGroupsTelemetry.tracked_names = names_now_tracked
 
-    def __init__(self, name, cgroup=None, limits=None):
+    def __init__(self, name, cgroup=None):
         """
         Create the necessary state to collect metrics for the agent, one of its extensions, or the aggregation across
         the agent and all of its extensions. To access aggregated metrics, instantiate this object with an empty string
@@ -336,12 +334,9 @@ class CGroupsTelemetry(object):
         self.previous_wall_time = 0
 
         self.data = {}
-        self.limits = {}
         if CGroups.enabled():
             for hierarchy in CGroupsTelemetry.metrics_hierarchies():
                 self.data[hierarchy] = CGroupsTelemetry._metrics[hierarchy](self)
-                if limits:
-                    self.limits[hierarchy] = limits[hierarchy]
 
     def collect(self):
         """
@@ -409,6 +404,7 @@ class CGroups(object):
             self.is_wrapper_cgroup = False
 
         self.cgroups = {}
+        self.threshold = None
 
         if not self.enabled():
             return
@@ -543,7 +539,7 @@ class CGroups(object):
                 log_event=False)
 
         # Returning the limits -
-        return {"cpu": cpu_limit, "memory": mem_limit}
+        self.threshold = {"cpu": cpu_limit, "memory": mem_limit}
 
     @staticmethod
     def _apply_wrapper_limits(path, hierarchy):
@@ -584,7 +580,7 @@ class CGroups(object):
                         cg = CGroups.for_extension(AGENT_NAME)
                         logger.info("Add daemon process pid {0} to {1} cgroup".format(pid, cg.name))
                         cg.add(pid)
-                        limits = cg.set_limits()
+                        cg.set_limits()
                     else:
                         cg = CGroups.for_systemd_service(AGENT_NAME)
                         logger.info("Add daemon process pid {0} to {1} systemd cgroup".format(pid, cg.name))
