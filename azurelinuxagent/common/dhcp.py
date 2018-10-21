@@ -385,7 +385,7 @@ def build_dhcp_request(mac_addr, request_broadcast):
         unpack_big_endian(request, 4, 4)))
 
     if request_broadcast:
-        # set broadcast flag to true to request the dhcp sever
+        # set broadcast flag to true to request the dhcp server
         # to respond to a boradcast address,
         # this is useful when user dhclient fails.
         request[0x0A] = 0x80;
