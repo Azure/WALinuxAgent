@@ -32,7 +32,7 @@ class UbuntuRDMAHandler(RDMAHandler):
     def install_driver(self):
         #Install the appropriate driver package for the RDMA firmware
 
-        nd_version = RDMAHandler.get_rdma_version()
+        nd_version = self.get_rdma_version()
         if not nd_version:
             logger.error("RDMA: Could not determine firmware version. No driver will be installed")
             return
