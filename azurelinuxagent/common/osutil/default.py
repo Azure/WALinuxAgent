@@ -844,7 +844,8 @@ class DefaultOSUtil(object):
                 route_list.append(route_obj)
         return route_list
 
-    def read_route_table(self):
+    @staticmethod
+    def read_route_table():
         """
         Return a list of strings comprising the route table, including column headers. Each line is stripped of leading
         or trailing whitespace but is otherwise unmolested.
@@ -860,7 +861,8 @@ class DefaultOSUtil(object):
 
         return []
 
-    def get_list_of_routes(self, route_table):
+    @staticmethod
+    def get_list_of_routes(route_table):
         """
         Construct a list of all network routes known to this system.
 
@@ -904,26 +906,15 @@ class DefaultOSUtil(object):
 
         if not self.disable_route_warning:
             logger.info("Examine /proc/net/route for primary interface")
-        with open('/proc/net/route') as routing_table:
-            idx = 0
-            for header in filter(lambda h: len(h) > 0, routing_table.readline().strip(" \n").split("\t")):
-                if header == hdr_iface:
-                    idx_iface = idx
-                elif header == hdr_dest:
-                    idx_dest = idx
-                elif header == hdr_flags:
-                    idx_flags = idx
-                elif header == hdr_metric:
-                    idx_metric = idx
-                idx = idx + 1
-            for entry in routing_table.readlines():
-                route = entry.strip(" \n").split("\t")
-                if route[idx_dest] == DEFAULT_DEST and int(route[idx_flags]) & RTF_GATEWAY == RTF_GATEWAY:
-                    metric = int(route[idx_metric])
-                    iface = route[idx_iface]
-                    if primary is None or metric < primary_metric:
-                        primary = iface
-                        primary_metric = metric
+        route_table = DefaultOSUtil.read_route_table()
+        route_list = DefaultOSUtil.get_list_of_routes(route_table)
+        for route in route_list:
+            if route.destination == DEFAULT_DEST and int(route.flags) & RTF_GATEWAY == RTF_GATEWAY:
+                metric = int(route.metric)
+                iface = route.interface
+                if primary is None or metric < primary_metric:
+                    primary = iface
+                    primary_metric = metric
 
         if primary is None:
             primary = ''
