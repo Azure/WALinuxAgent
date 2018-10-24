@@ -914,11 +914,11 @@ class DefaultOSUtil(object):
 
         candidates = filter(is_default, DefaultOSUtil.get_list_of_routes(route_table))
 
-        if len(candidates) > 0:
+        if len(list(candidates)) > 0:
             def get_metric(route):
                 return int(route.metric)
 
-            primary_route = min(candidates)
+            primary_route = min(candidates, key=lambda candidate: candidate.metric)
             primary = primary_route.interface
             primary_metric = get_metric(primary_route)
 
