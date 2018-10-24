@@ -906,15 +906,21 @@ class DefaultOSUtil(object):
 
         if not self.disable_route_warning:
             logger.info("Examine /proc/net/route for primary interface")
+
         route_table = DefaultOSUtil.read_route_table()
-        route_list = DefaultOSUtil.get_list_of_routes(route_table)
-        for route in route_list:
-            if route.destination == DEFAULT_DEST and int(route.flags) & RTF_GATEWAY == RTF_GATEWAY:
-                metric = int(route.metric)
-                iface = route.interface
-                if primary is None or metric < primary_metric:
-                    primary = iface
-                    primary_metric = metric
+
+        def is_default(route):
+            return route.destination == DEFAULT_DEST and int(route.flags) & RTF_GATEWAY == RTF_GATEWAY
+
+        candidates = filter(is_default, DefaultOSUtil.get_list_of_routes(route_table))
+
+        if len(candidates) > 0:
+            def get_metric(route):
+                return int(route.metric)
+
+            primary_route = min(candidates)
+            primary = primary_route.interface
+            primary_metric = get_metric(primary_route)
 
         if primary is None:
             primary = ''
