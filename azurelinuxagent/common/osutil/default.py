@@ -917,7 +917,7 @@ class DefaultOSUtil(object):
         if len(candidates) > 0:
             def get_metric(route):
                 return int(route.metric)
-            primary_route = min(candidates, key=lambda candidate: candidate.metric)
+            primary_route = min(candidates, key=get_metric)
             primary = primary_route.interface
             primary_metric = get_metric(primary_route)
 
