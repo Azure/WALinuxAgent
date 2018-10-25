@@ -892,17 +892,7 @@ class DefaultOSUtil(object):
         RTF_GATEWAY = 0x02
         DEFAULT_DEST = "00000000"
 
-        hdr_iface = "Iface"
-        hdr_dest = "Destination"
-        hdr_flags = "Flags"
-        hdr_metric = "Metric"
-
-        idx_iface = -1
-        idx_dest = -1
-        idx_flags = -1
-        idx_metric = -1
-        primary = None
-        primary_metric = None
+        primary_interface = None
 
         if not self.disable_route_warning:
             logger.info("Examine /proc/net/route for primary interface")
@@ -918,11 +908,10 @@ class DefaultOSUtil(object):
             def get_metric(route):
                 return int(route.metric)
             primary_route = min(candidates, key=get_metric)
-            primary = primary_route.interface
-            primary_metric = get_metric(primary_route)
+            primary_interface = primary_route.interface
 
-        if primary is None:
-            primary = ''
+        if primary_interface is None:
+            primary_interface = ''
             if not self.disable_route_warning:
                 with open('/proc/net/route') as routing_table_fh:
                     routing_table_text = routing_table_fh.read()
@@ -932,9 +921,9 @@ class DefaultOSUtil(object):
                     logger.warn('Primary interface examination will retry silently')
                     self.disable_route_warning = True
         else:
-            logger.info('Primary interface is [{0}]'.format(primary))
+            logger.info('Primary interface is [{0}]'.format(primary_interface))
             self.disable_route_warning = False
-        return primary
+        return primary_interface
 
     def is_primary_interface(self, ifname):
         """
