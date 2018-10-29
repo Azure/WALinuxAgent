@@ -154,7 +154,10 @@ class RDMAHandler(object):
 
     def install_driver_if_needed(self):
         if self.nd_version:
-            self.install_driver()
+            if conf.enable_check_rdma_driver():
+                self.install_driver()
+            else:
+                logger.info('RDMA: check RDMA driver is disabled, skip installing driver')
         else:
             logger.info('RDMA: skip installing driver when ndversion not present\n')
 
