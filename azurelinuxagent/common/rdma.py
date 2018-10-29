@@ -233,6 +233,11 @@ class RDMADeviceHandler(object):
     def provision_network_direct_rdma(self) :
         RDMADeviceHandler.update_dat_conf(dapl_config_paths, self.ipv4_addr)
 
+        if not conf.enable_check_rdma_driver():
+            logger.info("RDMA: skip checking RDMA driver version")
+            RDMADeviceHandler.update_network_interface(self.mac_addr, self.ipv4_addr)
+            return
+
         skip_rdma_device = False
         module_name = "hv_network_direct"
         retcode,out = shellutil.run_get_output("modprobe -R %s" % module_name, chk_err=False)
