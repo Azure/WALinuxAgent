@@ -257,7 +257,8 @@ class DefaultOSUtil(object):
                         "{0}".format(ustr(e)))
             return False
 
-    def _correct_instance_id(self, id):
+    @staticmethod
+    def _correct_instance_id(id):
         '''
         Azure stores the instance ID with an incorrect byte ordering for the
         first parts. For example, the ID returned by the metadata service:
@@ -362,7 +363,8 @@ class DefaultOSUtil(object):
               
         return self._correct_instance_id(s.strip())
 
-    def get_userentry(self, username):
+    @staticmethod
+    def get_userentry(username):
         try:
             return pwd.getpwnam(username)
         except KeyError:
@@ -473,7 +475,8 @@ class DefaultOSUtil(object):
         except IOError as e:
             raise OSUtilError("Failed to delete root password:{0}".format(e))
 
-    def _norm_path(self, filepath):
+    @staticmethod
+    def _norm_path(filepath):
         home = conf.get_home_dir()
         # Expand HOME variable if present in path
         path = os.path.normpath(filepath.replace("$HOME", home))
