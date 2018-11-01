@@ -17,6 +17,7 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 import multiprocessing
+import select
 import subprocess
 import sys
 import os
@@ -123,36 +124,34 @@ def capture_from_process_poll(process, cmd, timeout, code):
     if return_code != 0:
         raise ExtensionError("Non-zero exit code: {0}, {1}".format(return_code, cmd), code=code)
 
-    stderr = b''
-    stdout = b'cannot collect stdout'
+    # at this point the parent process has completed and we need to pickup its output; we use select()
+    # with a short timeout to capture the beginning of the output of any child processes.
+    stdout = bytearray()
+    stderr = bytearray()
 
-    # attempt non-blocking process communication to capture output
-    def proc_comm(_process, _return):
-        try:
-            _stdout, _stderr = _process.communicate()
-            _return[0] = _stdout
-            _return[1] = _stderr
-        except Exception:
-            pass
+    def read_pipe(pipe_instance, buffer):
+        while True:
+            block = os.read(pipe_instance.fileno(), 512)
+            buffer.extend(block)
+            if len(block) < 512:
+                break
 
-    try:
-        mgr = multiprocessing.Manager()
-        ret_dict = mgr.dict()
+    for i in range(2):
+        ready = select.select([process.stdout, process.stderr], [], [], 1)
 
-        cproc = Process(target=proc_comm, args=(process, ret_dict))
-        cproc.start()
+        if len(ready[0]) > 0:
+            for pipe in ready[0]:
+                if pipe == process.stdout:
+                    read_pipe(process.stdout, stdout)
+                else:
+                    read_pipe(process.stderr, stderr)
 
-        # allow 1s to capture output
-        cproc.join(1)
+    def truncate(array):
+        end = len(array)
+        begin = max(0, end - 1024)
+        return array[begin:end]
 
-        if len(ret_dict) == 2:
-            stdout = ret_dict[0]
-            stderr = ret_dict[1]
-
-    except Exception:
-        pass
-
-    return stdout, stderr
+    return bytes(truncate(stdout)), bytes(truncate(stderr))
 
 
 def capture_from_process_no_timeout(process, cmd, code):

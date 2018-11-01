@@ -15,6 +15,7 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 import datetime
+import stat
 import subprocess
 
 from azurelinuxagent.common.exception import ExtensionError
@@ -103,7 +104,46 @@ class TestProcessUtils(AgentTestCase):
         actual = format_stdout_stderr('', '', 1000)
         self.assertEqual(expected, actual)
 
-    def test_process_stdout_stderr(self):
+
+class CaptureFromProcessTestCase(AgentTestCase):
+    """
+    Test cases for capture_from_process
+    """
+    @classmethod
+    def setUpClass(cls):
+        cls.test_directory = tempfile.mkdtemp()
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.test_directory)
+
+    def create_command(self, command_file, contents):
+        """
+        Creates an executable file with the given contents
+        """
+        command_path = os.path.join(self.test_directory, command_file)
+
+        with open(command_path, "w") as file:
+            file.write(contents)
+
+        os.chmod(command_path, stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
+
+        return command_path
+
+    @staticmethod
+    def create_subprocess(cmd):
+        """
+        Wrapper around subprocess.Popen; the subprocess is created as its group leader
+        """
+        return subprocess.Popen(
+            cmd,
+            shell=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=os.environ,
+            preexec_fn=os.setsid)
+
+    def test_it_should_capture_the_output_if_process_is_not_leader_and_timeout_is_not_given(self):
         """
         If the command has no timeout, the process need not be the leader of its own process group.
         """
@@ -122,112 +162,7 @@ class TestProcessUtils(AgentTestCase):
         actual = capture_from_process(process, cmd)
         self.assertEqual(expected, actual)
 
-    def test_process_timeout_non_forked(self):
-        """
-        non-forked process runs for 20 seconds, timeout is 10 seconds
-        we expect:
-            - test to run in just over 10 seconds
-            - exception should be thrown
-            - output should be collected
-        """
-        cmd = "{0} -t 20".format(process_target)
-        process = subprocess.Popen(cmd,
-                                   shell=True,
-                                   stdout=subprocess.PIPE,
-                                   stderr=subprocess.PIPE,
-                                   env=os.environ,
-                                   preexec_fn=os.setsid)
-
-        try:
-            capture_from_process(process, 'sleep 20', 10, EXTENSION_ERROR_CODE)
-            self.fail('Timeout exception was expected')
-        except ExtensionError as e:
-            body = str(e)
-            self.assertTrue('Timeout(10)' in body)
-            self.assertTrue('Iteration 9' in body)
-            self.assertFalse('Iteration 11' in body)
-            self.assertEqual(EXTENSION_ERROR_CODE, e.code)
-        except Exception as gen_ex:
-            self.fail('Unexpected exception: {0}'.format(gen_ex))
-
-    def test_process_timeout_forked(self):
-        """
-        forked process runs for 20 seconds, timeout is 10 seconds
-        we expect:
-            - test to run in less than 3 seconds
-            - no exception should be thrown
-            - no output is collected
-        """
-        cmd = "{0} -t 20 &".format(process_target)
-        process = subprocess.Popen(cmd,
-                                   shell=True,
-                                   stdout=subprocess.PIPE,
-                                   stderr=subprocess.PIPE,
-                                   env=os.environ,
-                                   preexec_fn=os.setsid)
-
-        start = datetime.datetime.utcnow()
-        try:
-            cap = capture_from_process(process, 'sleep 20 &', 10)
-        except Exception as e:
-            self.fail('No exception should be thrown for a long running process which forks: {0}'.format(e))
-        duration = datetime.datetime.utcnow() - start
-
-        self.assertTrue(duration < datetime.timedelta(seconds=3))
-        self.assertEqual('[stdout]\ncannot collect stdout\n\n[stderr]\n', cap)
-
-    def test_process_behaved_non_forked(self):
-        """
-        non-forked process runs for 10 seconds, timeout is 20 seconds
-        we expect:
-            - test to run in just over 10 seconds
-            - no exception should be thrown
-            - output should be collected
-        """
-        cmd = "{0} -t 10".format(process_target)
-        process = subprocess.Popen(cmd,
-                                   shell=True,
-                                   stdout=subprocess.PIPE,
-                                   stderr=subprocess.PIPE,
-                                   env=os.environ,
-                                   preexec_fn=os.setsid)
-
-        try:
-            body = capture_from_process(process, 'sleep 10', 20)
-        except Exception as gen_ex:
-            self.fail('Unexpected exception: {0}'.format(gen_ex))
-
-        self.assertFalse('Timeout' in body)
-        self.assertTrue('Iteration 9' in body)
-        self.assertTrue('Iteration 10' in body)
-
-    def test_process_behaved_forked(self):
-        """
-        forked process runs for 10 seconds, timeout is 20 seconds
-        we expect:
-            - test to run in under 3 seconds
-            - no exception should be thrown
-            - output is not collected
-        """
-        cmd = "{0} -t 10 &".format(process_target)
-        process = subprocess.Popen(cmd,
-                                   shell=True,
-                                   stdout=subprocess.PIPE,
-                                   stderr=subprocess.PIPE,
-                                   env=os.environ,
-                                   preexec_fn=os.setsid)
-
-        start = datetime.datetime.utcnow()
-        try:
-            body = capture_from_process(process, 'sleep 10 &', 20)
-        except Exception as e:
-            self.fail('No exception should be thrown for a well behaved process which forks: {0}'.format(e))
-        duration = datetime.datetime.utcnow() - start
-
-        self.assertTrue(duration < datetime.timedelta(seconds=3))
-        self.assertEqual('[stdout]\ncannot collect stdout\n\n[stderr]\n', body)
-
-    def test_process_bad_pgid(self):
+    def test_it_should_throw_if_process_is_not_leader_and_timeout_is_given(self):
         """
         If a timeout is requested but the process is not the root of the process group, raise an exception.
         """
@@ -255,6 +190,207 @@ class TestProcessUtils(AgentTestCase):
 
             self.assertEqual(EXTENSION_ERROR_CODE, ee.exception.code)
 
+    def test_it_should_capture_the_output_of_timed_out_process(self):
+        """
+        non-forked process runs for 20 seconds, timeout is 10 seconds
+        we expect:
+            - test to run in just over 10 seconds
+            - exception should be thrown
+            - output should be collected
+        """
+        process = CaptureFromProcessTestCase.create_subprocess("{0} -t 20".format(process_target))
 
-if __name__ == '__main__':
-    unittest.main()
+        try:
+            capture_from_process(process, 'sleep 20', 10, EXTENSION_ERROR_CODE)
+            self.fail('Timeout exception was expected')
+        except ExtensionError as e:
+            body = str(e)
+            self.assertTrue('Timeout(10)' in body)
+            self.assertTrue('Iteration 9' in body)
+            self.assertFalse('Iteration 11' in body)
+            self.assertEqual(EXTENSION_ERROR_CODE, e.code)
+        except Exception as gen_ex:
+            self.fail('Unexpected exception: {0}'.format(gen_ex))
+
+    def test_it_should_capture_the_output_of_forked_process(self):
+        """
+        forked process runs for 20 seconds, timeout is 10 seconds
+        we expect:
+            - test to run in less than 3 seconds
+            - no exception should be thrown
+            - collects the beginning of the output of the forked process (up to a second)
+        """
+        process = CaptureFromProcessTestCase.create_subprocess("{0} -t 20 &".format(process_target))
+
+        start = datetime.datetime.utcnow()
+        try:
+            cap = capture_from_process(process, 'sleep 20 &', 10)
+        except Exception as e:
+            self.fail('No exception should be thrown for a long running process which forks: {0}'.format(e))
+        duration = datetime.datetime.utcnow() - start
+
+        self.assertTrue(duration < datetime.timedelta(seconds=3))
+        self.assertEqual('[stdout]\nIteration 1\n\n\n[stderr]\n', cap)
+
+    def test_it_should_capture_the_output_of_process_that_completes_within_timeout(self):
+        """
+        non-forked process runs for 10 seconds, timeout is 20 seconds
+        we expect:
+            - test to run in just over 10 seconds
+            - no exception should be thrown
+            - output should be collected
+        """
+        process = CaptureFromProcessTestCase.create_subprocess("{0} -t 10".format(process_target))
+
+        try:
+            body = capture_from_process(process, 'sleep 10', 20)
+        except Exception as gen_ex:
+            self.fail('Unexpected exception: {0}'.format(gen_ex))
+
+        self.assertFalse('Timeout' in body)
+        self.assertTrue('Iteration 9' in body)
+        self.assertTrue('Iteration 10' in body)
+
+    def test_it_should_capture_the_output_of_forked_process_that_completes_within_timeout(self):
+        """
+        forked process runs for 10 seconds, timeout is 20 seconds
+        we expect:
+            - test to run in under 3 seconds
+            - no exception should be thrown
+            - collects the beginning of the output of the forked process (up to a second)
+        """
+        process = CaptureFromProcessTestCase.create_subprocess("{0} -t 10 &".format(process_target))
+
+        start = datetime.datetime.utcnow()
+        try:
+            body = capture_from_process(process, 'sleep 10 &', 20)
+        except Exception as e:
+            self.fail('No exception should be thrown for a well behaved process which forks: {0}'.format(e))
+        duration = datetime.datetime.utcnow() - start
+
+        self.assertTrue(duration < datetime.timedelta(seconds=3))
+        self.assertIn('[stdout]\nIteration 1\n', body)
+
+    def test_it_should_capture_the_output_of_child_processes(self, *_unused):
+        command = self.create_command("create_output_with_fork.py", '''#!/usr/bin/env python3
+import os
+import sys
+import time
+
+sys.stdout.write("PARENT STDOUT\\n")
+sys.stderr.write("PARENT STDERR\\n")
+
+pid = os.fork()
+if pid == 0:
+    sys.stdout.write("CHILD STDOUT\\n")
+    sys.stderr.write("CHILD STDERR\\n")
+else:
+    sys.stdout.write("MORE PARENT STDOUT\\n")
+    sys.stderr.write("MORE PARENT STDERR\\n")
+''')
+
+        process = CaptureFromProcessTestCase.create_subprocess(command)
+
+        output = capture_from_process(process, command, 60)
+
+        self.assertIn("PARENT STDOUT", output)
+        self.assertIn("PARENT STDERR", output)
+
+        self.assertIn("CHILD STDOUT", output)
+        self.assertIn("CHILD STDERR", output)
+
+        self.assertIn("MORE PARENT STDOUT", output)
+        self.assertIn("MORE PARENT STDERR", output)
+
+    def test_it_should_capture_the_output_of_child_processes_for_1_second(self, *_unused):
+        command = self.create_command("create_output_with_fork.py", '''#!/usr/bin/env python3
+import os
+import sys
+import time
+
+sys.stdout.write("PARENT STDOUT\\n")
+sys.stderr.write("PARENT STDERR\\n")
+
+pid = os.fork()
+if pid == 0:
+    sys.stdout.write("CHILD STDOUT\\n")
+    sys.stderr.write("CHILD STDERR\\n")
+    time.sleep(10)
+    sys.stdout.write("STDOUT NOT CAPTURED\\n")
+    sys.stderr.write("STDERR NOT CAPTURED\\n")
+else:
+    sys.stdout.write("MORE PARENT STDOUT\\n")
+    sys.stderr.write("MORE PARENT STDERR\\n")
+''')
+
+        process = CaptureFromProcessTestCase.create_subprocess(command)
+
+        output = capture_from_process(process, command, 60)
+
+        self.assertIn("PARENT STDOUT", output)
+        self.assertIn("PARENT STDERR", output)
+
+        self.assertIn("CHILD STDOUT", output)
+        self.assertIn("CHILD STDERR", output)
+
+        self.assertNotIn("STDOUT NOT CAPTURED", output)
+        self.assertNotIn("STDERR NOT CAPTURED", output)
+
+        self.assertIn("MORE PARENT STDOUT", output)
+        self.assertIn("MORE PARENT STDERR", output)
+
+    def test_it_should_not_wait_for_child_processes_if_a_timeout_is_given(self, *_unused):
+        command = self.create_command("create_output_after_10_sec.py", '''#!/usr/bin/env python3
+import os
+import sys
+import time
+
+pid = os.fork()
+if pid == 0:
+    time.sleep(10)
+    sys.stdout.write("CHILD STDOUT\\n")
+    sys.stderr.write("CHILD STDERR\\n")
+''')
+        start = datetime.datetime.utcnow()
+
+        process = CaptureFromProcessTestCase.create_subprocess(command)
+
+        output = capture_from_process(process, command, 300)
+
+        duration = datetime.datetime.utcnow() - start
+
+        self.assertTrue(duration < datetime.timedelta(seconds=5))
+        self.assertNotIn("CHILD STDOUT", output)
+        self.assertNotIn("CHILD STDERR", output)
+
+    def test_it_should_handle_processes_with_no_output(self, *_unused):
+        command = self.create_command("sleep_one_second.py", '''#!/usr/bin/env python3
+import time
+
+time.sleep(1)
+''')
+
+        process = CaptureFromProcessTestCase.create_subprocess(command)
+
+        output = capture_from_process(process, command, 300)
+
+        self.assertEqual('[stdout]\n\n\n[stderr]\n', output)
+
+    def test_it_should_capture_the_last_1K_of_output(self, *_unused):
+        command = self.create_command("sleep_one_second.py", '''#!/usr/bin/env python3
+import sys
+
+sys.stdout.write( 'A' * 1024 + 'B' * 512)
+sys.stderr.write( 'C' * 1024 + 'D' * 512)
+''')
+
+        process = CaptureFromProcessTestCase.create_subprocess(command)
+
+        output = capture_from_process(process, command, 300)
+
+        stdout = 'A' * 512 + 'B' * 512
+        stderr = 'C' * 512 + 'D' * 512
+        expected = '[stdout]\n{0}\n\n[stderr]\n{1}'.format(stdout, stderr)
+
+        self.assertEqual(expected, output)
+
