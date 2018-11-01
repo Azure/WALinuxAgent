@@ -35,12 +35,12 @@ import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.version as version
-
 from azurelinuxagent.common.cgroups import CGroups, CGroupsTelemetry
-from azurelinuxagent.common.errorstate import ErrorState, ERROR_STATE_DELTA_DEFAULT, ERROR_STATE_DELTA_INSTALL
+from azurelinuxagent.common.errorstate import ErrorState, ERROR_STATE_DELTA_INSTALL
 from azurelinuxagent.common.event import add_event, WALAEventOperation, elapsed_milliseconds, report_event
 from azurelinuxagent.common.exception import ExtensionError, ProtocolError, ProtocolNotFoundError
 from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.protocol import get_protocol_util
 from azurelinuxagent.common.protocol.restapi import ExtHandlerStatus, \
     ExtensionStatus, \
     ExtensionSubStatus, \
@@ -49,9 +49,8 @@ from azurelinuxagent.common.protocol.restapi import ExtHandlerStatus, \
     set_properties
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.utils.processutil import capture_from_process
-from azurelinuxagent.common.utils.textutil import hash_strings
-from azurelinuxagent.common.protocol import get_protocol_util
-from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION, GOAL_STATE_AGENT_VERSION
+from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION, GOAL_STATE_AGENT_VERSION, \
+    DISTRO_NAME, DISTRO_VERSION, PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO
 
 # HandlerEnvironment.json schema version
 HANDLER_ENVIRONMENT_VERSION = 1.0
@@ -70,7 +69,7 @@ HANDLER_PKG_PATTERN = re.compile(HANDLER_PATTERN + r"\.zip$", re.IGNORECASE)
 
 DEFAULT_EXT_TIMEOUT_MINUTES = 90
 
-AGENT_STATUS_FILE = "WALA_STATUS.json"
+AGENT_STATUS_FILE = "waagent_status.json"
 
 
 def validate_has_key(obj, key, fullname):
@@ -193,8 +192,6 @@ class ExtHandlersHandler(object):
         self.log_report = False
         self.log_etag = True
         self.log_process = False
-
-        self.last_status_file_hash = b''
 
         self.report_status_error_state = ErrorState()
         self.get_artifact_error_state = ErrorState(min_timedelta=ERROR_STATE_DELTA_INSTALL)
@@ -532,14 +529,17 @@ class ExtHandlersHandler(object):
 
         self.write_ext_handlers_status_to_info_file(vm_status)
 
-    def write_ext_handlers_status_to_info_file(self, vm_status):
+    @staticmethod
+    def write_ext_handlers_status_to_info_file(vm_status):
         status_path = os.path.join(conf.get_lib_dir(), AGENT_STATUS_FILE)
 
         agent_details = {
-            "AGENT_NAME": AGENT_NAME,
-            "CURRENT_VERSION": str(CURRENT_VERSION),
-            "GOAL_STATE_AGENT_VERSION": str(GOAL_STATE_AGENT_VERSION),
-            "TIMESTAMP": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+            "agent_name": AGENT_NAME,
+            "current_version": str(CURRENT_VERSION),
+            "goal_state_version": str(GOAL_STATE_AGENT_VERSION),
+            "distro_details": "{0}:{1}".format(DISTRO_NAME, DISTRO_VERSION),
+            "last_successful_status_upload_time": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "python_version": "Python: {0}.{1}.{2}".format(PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO)
         }
 
         # Convert VMStatus class to Dict.
@@ -556,13 +556,10 @@ class ExtHandlersHandler(object):
             except KeyError:
                 pass
 
-        agent_details['HANDLER_STATUS'] = handler_statuses
+        agent_details['extensions_status'] = handler_statuses
         agent_details_json = json.dumps(agent_details)
 
-        digest = hash_strings(agent_details_json)
-        if digest != self.last_status_file_hash:
-            self.last_status_file_hash = digest
-            fileutil.write_file(status_path, agent_details_json)
+        fileutil.write_file(status_path, agent_details_json)
 
 
     def report_ext_handler_status(self, vm_status, ext_handler):
