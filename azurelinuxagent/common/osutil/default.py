@@ -847,7 +847,8 @@ class DefaultOSUtil(object):
                 route_list.append(route_obj)
         return route_list
 
-    def read_route_table(self):
+    @staticmethod
+    def read_route_table():
         """
         Return a list of strings comprising the route table, including column headers. Each line is stripped of leading
         or trailing whitespace but is otherwise unmolested.
@@ -863,7 +864,8 @@ class DefaultOSUtil(object):
 
         return []
 
-    def get_list_of_routes(self, route_table):
+    @staticmethod
+    def get_list_of_routes(route_table):
         """
         Construct a list of all network routes known to this system.
 
@@ -893,43 +895,26 @@ class DefaultOSUtil(object):
         RTF_GATEWAY = 0x02
         DEFAULT_DEST = "00000000"
 
-        hdr_iface = "Iface"
-        hdr_dest = "Destination"
-        hdr_flags = "Flags"
-        hdr_metric = "Metric"
-
-        idx_iface = -1
-        idx_dest = -1
-        idx_flags = -1
-        idx_metric = -1
-        primary = None
-        primary_metric = None
+        primary_interface = None
 
         if not self.disable_route_warning:
             logger.info("Examine /proc/net/route for primary interface")
-        with open('/proc/net/route') as routing_table:
-            idx = 0
-            for header in filter(lambda h: len(h) > 0, routing_table.readline().strip(" \n").split("\t")):
-                if header == hdr_iface:
-                    idx_iface = idx
-                elif header == hdr_dest:
-                    idx_dest = idx
-                elif header == hdr_flags:
-                    idx_flags = idx
-                elif header == hdr_metric:
-                    idx_metric = idx
-                idx = idx + 1
-            for entry in routing_table.readlines():
-                route = entry.strip(" \n").split("\t")
-                if route[idx_dest] == DEFAULT_DEST and int(route[idx_flags]) & RTF_GATEWAY == RTF_GATEWAY:
-                    metric = int(route[idx_metric])
-                    iface = route[idx_iface]
-                    if primary is None or metric < primary_metric:
-                        primary = iface
-                        primary_metric = metric
 
-        if primary is None:
-            primary = ''
+        route_table = DefaultOSUtil.read_route_table()
+
+        def is_default(route):
+            return route.destination == DEFAULT_DEST and int(route.flags) & RTF_GATEWAY == RTF_GATEWAY
+
+        candidates = list(filter(is_default, DefaultOSUtil.get_list_of_routes(route_table)))
+
+        if len(candidates) > 0:
+            def get_metric(route):
+                return int(route.metric)
+            primary_route = min(candidates, key=get_metric)
+            primary_interface = primary_route.interface
+
+        if primary_interface is None:
+            primary_interface = ''
             if not self.disable_route_warning:
                 with open('/proc/net/route') as routing_table_fh:
                     routing_table_text = routing_table_fh.read()
@@ -939,9 +924,9 @@ class DefaultOSUtil(object):
                     logger.warn('Primary interface examination will retry silently')
                     self.disable_route_warning = True
         else:
-            logger.info('Primary interface is [{0}]'.format(primary))
+            logger.info('Primary interface is [{0}]'.format(primary_interface))
             self.disable_route_warning = False
-        return primary
+        return primary_interface
 
     def is_primary_interface(self, ifname):
         """
