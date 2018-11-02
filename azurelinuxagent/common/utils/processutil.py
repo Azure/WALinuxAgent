@@ -16,17 +16,13 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 #
-import multiprocessing
 import select
 import subprocess
-import sys
 import os
 import time
 import signal
 from errno import ESRCH
-from multiprocessing import Process
 
-import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.exception import ExtensionError
 from azurelinuxagent.common.future import ustr
 
@@ -129,10 +125,10 @@ def capture_from_process_poll(process, cmd, timeout, code):
     stdout = bytearray()
     stderr = bytearray()
 
-    def read_pipe(pipe_instance, buffer):
+    def read_pipe(pipe_instance, read_buffer):
         while True:
             block = os.read(pipe_instance.fileno(), 512)
-            buffer.extend(block)
+            read_buffer.extend(block)
             if len(block) < 512:
                 break
 
