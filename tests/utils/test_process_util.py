@@ -111,6 +111,7 @@ class CaptureFromProcessTestCase(AgentTestCase):
     """
     @classmethod
     def setUpClass(cls):
+        AgentTestCase.setUpClass()
         cls.test_directory = tempfile.mkdtemp()
 
     @classmethod
@@ -218,7 +219,7 @@ class CaptureFromProcessTestCase(AgentTestCase):
         we expect:
             - test to run in less than 3 seconds
             - no exception should be thrown
-            - collects the beginning of the output of the forked process (up to a second)
+            - collects the beginning of the output of the forked process
         """
         process = CaptureFromProcessTestCase.create_subprocess("{0} -t 20 &".format(process_target))
 
@@ -230,7 +231,7 @@ class CaptureFromProcessTestCase(AgentTestCase):
         duration = datetime.datetime.utcnow() - start
 
         self.assertTrue(duration < datetime.timedelta(seconds=3))
-        self.assertEqual('[stdout]\nIteration 1\n\n\n[stderr]\n', cap)
+        self.assertIn('[stdout]\nIteration 1\n', cap)
 
     def test_it_should_capture_the_output_of_process_that_completes_within_timeout(self):
         """
@@ -302,43 +303,6 @@ else:
         self.assertIn("MORE PARENT STDOUT", output)
         self.assertIn("MORE PARENT STDERR", output)
 
-    def test_it_should_capture_the_output_of_child_processes_for_1_second(self, *_unused):
-        command = self.create_command("create_output_with_fork.py", '''#!/usr/bin/env python3
-import os
-import sys
-import time
-
-sys.stdout.write("PARENT STDOUT\\n")
-sys.stderr.write("PARENT STDERR\\n")
-
-pid = os.fork()
-if pid == 0:
-    sys.stdout.write("CHILD STDOUT\\n")
-    sys.stderr.write("CHILD STDERR\\n")
-    time.sleep(10)
-    sys.stdout.write("STDOUT NOT CAPTURED\\n")
-    sys.stderr.write("STDERR NOT CAPTURED\\n")
-else:
-    sys.stdout.write("MORE PARENT STDOUT\\n")
-    sys.stderr.write("MORE PARENT STDERR\\n")
-''')
-
-        process = CaptureFromProcessTestCase.create_subprocess(command)
-
-        output = capture_from_process(process, command, 60)
-
-        self.assertIn("PARENT STDOUT", output)
-        self.assertIn("PARENT STDERR", output)
-
-        self.assertIn("CHILD STDOUT", output)
-        self.assertIn("CHILD STDERR", output)
-
-        self.assertNotIn("STDOUT NOT CAPTURED", output)
-        self.assertNotIn("STDERR NOT CAPTURED", output)
-
-        self.assertIn("MORE PARENT STDOUT", output)
-        self.assertIn("MORE PARENT STDERR", output)
-
     def test_it_should_not_wait_for_child_processes_if_a_timeout_is_given(self, *_unused):
         command = self.create_command("create_output_after_10_sec.py", '''#!/usr/bin/env python3
 import os
@@ -355,7 +319,7 @@ if pid == 0:
 
         process = CaptureFromProcessTestCase.create_subprocess(command)
 
-        output = capture_from_process(process, command, 300)
+        output = capture_from_process(process, command, 60)
 
         duration = datetime.datetime.utcnow() - start
 
@@ -372,7 +336,7 @@ time.sleep(1)
 
         process = CaptureFromProcessTestCase.create_subprocess(command)
 
-        output = capture_from_process(process, command, 300)
+        output = capture_from_process(process, command, 60)
 
         self.assertEqual('[stdout]\n\n\n[stderr]\n', output)
 
@@ -386,7 +350,7 @@ sys.stderr.write( 'C' * 1024 + 'D' * 512)
 
         process = CaptureFromProcessTestCase.create_subprocess(command)
 
-        output = capture_from_process(process, command, 300)
+        output = capture_from_process(process, command, 60)
 
         stdout = 'A' * 512 + 'B' * 512
         stderr = 'C' * 512 + 'D' * 512
