@@ -22,7 +22,6 @@ Handle packages and modules to enable RDMA for IB networking
 import os
 import re
 import time
-import threading
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
@@ -210,11 +209,9 @@ class RDMADeviceHandler(object):
         self.nd_version = nd_version
 
     def start(self):
-        """
-        Start a thread in the background to process the RDMA tasks and returns.
-        """
-        logger.info("RDMA: starting device processing in the background.")
-        threading.Thread(target=self.process).start()
+        logger.info("RDMA: starting device processing.")
+        self.process()
+        logger.info("RDMA: completed device processing.")
 
     def process(self):
         try:
