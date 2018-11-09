@@ -358,3 +358,6 @@ class Protocol(DataContract):
 
     def report_event(self, event):
         raise NotImplementedError()
+
+    def supports_overprovisioning(self):
+        return True
