@@ -316,10 +316,13 @@ class ExtHandlersHandler(object):
             return
 
         if conf.get_enable_overprovisioning():
-            artifacts_profile = self.protocol.get_artifacts_profile()
-            if artifacts_profile and artifacts_profile.is_on_hold():
-                logger.info("Extension handling is on hold")
-                return
+            if not self.protocol.supports_overprovisioning():
+                logger.verbose("Overprovisioning is enabled but protocol does not support it.")
+            else:
+                artifacts_profile = self.protocol.get_artifacts_profile()
+                if artifacts_profile and artifacts_profile.is_on_hold():
+                    logger.info("Extension handling is on hold")
+                    return
 
         wait_until = datetime.datetime.utcnow() + datetime.timedelta(minutes=DEFAULT_EXT_TIMEOUT_MINUTES)
         max_dep_level = max([handler.sort_key() for handler in self.ext_handlers.extHandlers])
