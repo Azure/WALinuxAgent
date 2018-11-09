@@ -123,6 +123,10 @@ class MetadataProtocol(Protocol):
         content = fileutil.read_file(trans_crt_file)
         return textutil.get_bytes_from_pem(content)
 
+    def supports_overprovisioning(self):
+        # Metadata protocol does not support overprovisioning
+        return False
+
     def detect(self):
         self.get_vminfo()
         trans_prv_file = os.path.join(conf.get_lib_dir(),
