@@ -766,39 +766,39 @@ class WireClient(object):
                                         INCARNATION_FILE_NAME)
         uri = GOAL_STATE_URI.format(self.endpoint)
 
-        goal_state = None
+        current_goal_state_from_configuration = None
         for retry in range(0, max_retry):
             try:
-                if goal_state is None:
+                if current_goal_state_from_configuration is None:
                     xml_text = self.fetch_config(uri, self.get_header())
-                    goal_state = GoalState(xml_text)
+                    current_goal_state_from_configuration = GoalState(xml_text)
 
                     if not forced:
                         last_incarnation = None
                         if os.path.isfile(incarnation_file):
                             last_incarnation = fileutil.read_file(
                                                     incarnation_file)
-                        new_incarnation = goal_state.incarnation
+                        new_incarnation = current_goal_state_from_configuration.incarnation
                         if last_incarnation is not None and \
                                         last_incarnation == new_incarnation:
                             # Goalstate is not updated.
                             return                
                 self.goal_state_flusher.flush(datetime.utcnow())
 
-                self.goal_state = goal_state
-                file_name = GOAL_STATE_FILE_NAME.format(goal_state.incarnation)
+                self.goal_state = current_goal_state_from_configuration
+                file_name = GOAL_STATE_FILE_NAME.format(current_goal_state_from_configuration.incarnation)
                 goal_state_file = os.path.join(conf.get_lib_dir(), file_name)
                 self.save_cache(goal_state_file, xml_text)
-                self.update_hosting_env(goal_state)
-                self.update_shared_conf(goal_state)
-                self.update_certs(goal_state)
-                self.update_ext_conf(goal_state)
-                self.update_remote_access_conf(goal_state)
-                self.save_cache(incarnation_file, goal_state.incarnation)
+                self.update_hosting_env(current_goal_state_from_configuration)
+                self.update_shared_conf(current_goal_state_from_configuration)
+                self.update_certs(current_goal_state_from_configuration)
+                self.update_ext_conf(current_goal_state_from_configuration)
+                self.update_remote_access_conf(current_goal_state_from_configuration)
+                self.save_cache(incarnation_file, current_goal_state_from_configuration.incarnation)
 
                 if self.host_plugin is not None:
-                    self.host_plugin.container_id = goal_state.container_id
-                    self.host_plugin.role_config_name = goal_state.role_config_name
+                    self.host_plugin.container_id = current_goal_state_from_configuration.container_id
+                    self.host_plugin.role_config_name = current_goal_state_from_configuration.role_config_name
 
                 return
 
@@ -807,7 +807,7 @@ class WireClient(object):
 
             except ResourceGoneError:
                 logger.info("Goal state is stale, re-fetching")
-                goal_state = None
+                current_goal_state_from_configuration = None
 
             except ProtocolError as e:
                 if retry < max_retry - 1:

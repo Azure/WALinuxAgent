@@ -219,6 +219,11 @@ class ExtHandlersHandler(object):
             else:
                 logger.warn(msg)
 
+            # Changing the telemetry event only for this specific error type.
+            if isinstance(e, UnboundLocalError):
+                detailed_msg = '{0} {1}'.format(msg, traceback.print_tb(e.__traceback__))
+                logger.warn(detailed_msg)
+
             add_event(AGENT_NAME,
                       version=CURRENT_VERSION,
                       op=WALAEventOperation.ExtensionProcessing,
