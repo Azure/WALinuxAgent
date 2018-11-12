@@ -204,7 +204,7 @@ class ExtHandlersHandler(object):
             self.get_artifact_error_state.reset()
         except Exception as e:
             msg = u"Exception retrieving extension handlers: {0}".format(ustr(e))
-            detailed_msg = '{0} {1}'.format(msg, traceback.format_exc())
+            detailed_msg = '{0} {1}'.format(msg, traceback.print_tb(e.__traceback__))
 
             self.get_artifact_error_state.incr()
 
@@ -218,11 +218,6 @@ class ExtHandlersHandler(object):
                 self.get_artifact_error_state.reset()
             else:
                 logger.warn(msg)
-
-            # Changing the telemetry event only for this specific error type.
-            if isinstance(e, UnboundLocalError):
-                detailed_msg = '{0} {1}'.format(msg, traceback.print_tb(e.__traceback__))
-                logger.warn(detailed_msg)
 
             add_event(AGENT_NAME,
                       version=CURRENT_VERSION,
