@@ -17,8 +17,8 @@
 
 from __future__ import print_function
 
-from azurelinuxagent.common.cgroups import CGroupsTelemetry, CGroups, CGroupsException, BASE_CGROUPS, Cpu, Memory, \
-    DEFAULT_MEM_LIMIT_MIN_MB
+from azurelinuxagent.common.cgroups import CGroupsTelemetry, CGroups, CGroupsLimits, \
+    CGroupsException, CGroupsLimits, BASE_CGROUPS, Cpu, Memory, DEFAULT_MEM_LIMIT_MIN_MB
 from azurelinuxagent.common.version import AGENT_NAME
 from tests.tools import *
 
@@ -143,6 +143,11 @@ class TestCGroups(AgentTestCase):
                 self.assertGreater(metric_value, 100000)
             else:
                 self.fail("Unknown metric {0}/{1} value {2}".format(metric_family, metric_name, metric_value))
+
+        my_limits = limits[test_extension_name]
+        self.assertIsInstance(my_limits, CGroupsLimits, msg="is not the correct instance")
+        self.assertGreater(my_limits.cpu_limit, 0.0)
+        self.assertGreater(my_limits.memory_limit, 0.0)
 
     @skip_if_predicate_false(i_am_root, "Test does not run when non-root")
     def test_telemetry_instantiation_as_superuser(self):
@@ -286,3 +291,43 @@ class TestCGroups(AgentTestCase):
         self.assert_limits(ext_name="normal_extension", expected_cpu_limit=-1, limits_enforced=False)
         self.assert_limits(ext_name=AGENT_NAME, expected_cpu_limit=-1, limits_enforced=False)
         self.assert_limits(ext_name="normal_extension", expected_cpu_limit=40, exception_raised=True)
+
+
+class TestCGroupsLimits(AgentTestCase):
+    @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_total_mem", return_value=1024)
+    def test_no_limits_passed(self, patched_get_total_mem):
+        cgroup_name = "test_cgroup"
+        limits = CGroupsLimits(cgroup_name)
+        self.assertEqual(limits.cpu_limit, CGroupsLimits.get_default_cpu_limits(cgroup_name ))
+        self.assertEqual(limits.memory_limit, CGroupsLimits.get_default_memory_limits(cgroup_name ))
+
+        limits = CGroupsLimits(None)
+        self.assertEqual(limits.cpu_limit, CGroupsLimits.get_default_cpu_limits(cgroup_name))
+        self.assertEqual(limits.memory_limit, CGroupsLimits.get_default_memory_limits(cgroup_name))
+
+    @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_total_mem", return_value=1024)
+    def test_with_limits_passed(self, patched_get_total_mem):
+        cpu_limit = 50
+        memory_limit = 300
+        cgroup_name = "test_cgroup"
+
+        threshold = {"cpu": cpu_limit}
+        limits = CGroupsLimits(cgroup_name, threshold=threshold)
+        self.assertEqual(limits.cpu_limit, cpu_limit)
+        self.assertEqual(limits.memory_limit, CGroupsLimits.get_default_memory_limits(cgroup_name))
+
+        threshold = {"memory": memory_limit}
+        limits = CGroupsLimits(cgroup_name, threshold=threshold)
+        self.assertEqual(limits.cpu_limit, CGroupsLimits.get_default_cpu_limits(cgroup_name))
+        self.assertEqual(limits.memory_limit, memory_limit)
+
+        threshold = {"cpu": cpu_limit, "memory": memory_limit}
+        limits = CGroupsLimits(cgroup_name, threshold=threshold)
+        self.assertEqual(limits.cpu_limit, cpu_limit)
+        self.assertEqual(limits.memory_limit, memory_limit)
+
+        # Incorrect key
+        threshold = {"cpux": cpu_limit}
+        limits = CGroupsLimits(cgroup_name, threshold=threshold)
+        self.assertEqual(limits.cpu_limit, CGroupsLimits.get_default_cpu_limits(cgroup_name))
+        self.assertEqual(limits.memory_limit, CGroupsLimits.get_default_memory_limits(cgroup_name))
