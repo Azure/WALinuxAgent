@@ -186,6 +186,8 @@ class CGroupsTelemetry(object):
 
     tracked_names = set()
 
+    _osutil = get_osutil()
+
     @staticmethod
     def metrics_hierarchies():
         return CGroupsTelemetry._hierarchies
@@ -268,6 +270,24 @@ class CGroupsTelemetry(object):
             del (CGroupsTelemetry._tracked[name])
 
     @staticmethod
+    def get_cpu_limits(name):
+        # default values
+        cpu_limit = DEFAULT_CPU_LIMIT_AGENT if AGENT_NAME.lower() in name.lower() else DEFAULT_CPU_LIMIT_EXT
+
+        return cpu_limit
+
+    @staticmethod
+    def get_memory_limits(name):
+        # default values
+        mem_limit = max(DEFAULT_MEM_LIMIT_MIN_MB, round(_osutil.get_total_mem() * DEFAULT_MEM_LIMIT_PCT / 100, 0))
+
+        # agent values
+        if AGENT_NAME.lower() in name.lower():
+            mem_limit = min(DEFAULT_MEM_LIMIT_MAX_MB, mem_limit)
+
+        return mem_limit
+
+    @staticmethod
     def collect_all_tracked():
         """
         Return a dictionary mapping from the name of a tracked cgroup to the list of collected metrics for that cgroup.
@@ -284,7 +304,9 @@ class CGroupsTelemetry(object):
         for cgroup_name, collector in CGroupsTelemetry._tracked.copy().items():
             cgroup_name = cgroup_name if cgroup_name else WRAPPER_CGROUP_NAME
             results[cgroup_name] = collector.collect()
-            limits[cgroup_name] = collector.cgroup.threshold
+            limits[cgroup_name] = {"cpu": CGroupsTelemetry.get_cpu_limits(cgroup_name),
+                                   "memory": CGroupsTelemetry.get_memory_limits(cgroup_name)}
+
         return results, limits
 
     @staticmethod
@@ -537,9 +559,6 @@ class CGroups(object):
                 is_success=success,
                 message=msg,
                 log_event=False)
-
-        # Returning the limits -
-        self.threshold = {"cpu": cpu_limit, "memory": mem_limit}
 
     @staticmethod
     def _apply_wrapper_limits(path, hierarchy):
