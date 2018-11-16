@@ -285,6 +285,7 @@ class CGroupsTelemetry(object):
             cgroup_name = cgroup_name if cgroup_name else WRAPPER_CGROUP_NAME
             results[cgroup_name] = collector.collect()
             limits[cgroup_name] = collector.cgroup.threshold
+
         return results, limits
 
     @staticmethod
@@ -370,12 +371,12 @@ class CGroups(object):
         return os.path.join(BASE_CGROUPS, hierarchy, 'system.slice', cgroup_name).rstrip(os.path.sep)
 
     @staticmethod
-    def for_extension(name):
-        return CGroups(name, CGroups._construct_custom_path_for_hierarchy)
+    def for_extension(name, limits=None):
+        return CGroups(name, CGroups._construct_custom_path_for_hierarchy, limits)
 
     @staticmethod
-    def for_systemd_service(name):
-        return CGroups(name.lower(), CGroups._construct_systemd_path_for_hierarchy)
+    def for_systemd_service(name, limits=None):
+        return CGroups(name.lower(), CGroups._construct_systemd_path_for_hierarchy, limits)
 
     @staticmethod
     def enabled():
@@ -389,14 +390,14 @@ class CGroups(object):
     def enable():
         CGroups._enabled = True
 
-    def __init__(self, name, path_maker):
+    def __init__(self, name, path_maker, limits=None):
         """
         Construct CGroups object. Create appropriately-named directory for each hierarchy of interest.
 
         :param str name: Name for the cgroup (usually the full name of the extension)
         :param path_maker: Function which constructs the root path for a given hierarchy where this cgroup lives
         """
-        if name == "":
+        if not name or name == "":
             self.name = "Agents+Extensions"
             self.is_wrapper_cgroup = True
         else:
@@ -404,7 +405,8 @@ class CGroups(object):
             self.is_wrapper_cgroup = False
 
         self.cgroups = {}
-        self.threshold = None
+
+        self.threshold = CGroupsLimits(self.name, limits)
 
         if not self.enabled():
             return
@@ -481,22 +483,6 @@ class CGroups(object):
             tasks_file = self._get_cgroup_file(hierarchy, 'cgroup.procs')
             fileutil.append_file(tasks_file, "{0}\n".format(pid))
 
-    def get_cpu_limits(self):
-        # default values
-        cpu_limit = DEFAULT_CPU_LIMIT_AGENT if AGENT_NAME.lower() in self.name.lower() else DEFAULT_CPU_LIMIT_EXT
-
-        return cpu_limit
-
-    def get_memory_limits(self):
-        # default values
-        mem_limit = max(DEFAULT_MEM_LIMIT_MIN_MB, round(self._osutil.get_total_mem() * DEFAULT_MEM_LIMIT_PCT / 100, 0))
-
-        # agent values
-        if AGENT_NAME.lower() in self.name.lower():
-            mem_limit = min(DEFAULT_MEM_LIMIT_MAX_MB, mem_limit)
-
-        return mem_limit
-
     def set_limits(self):
         """
         Set per-hierarchy limits based on the cgroup name (agent or particular extension)
@@ -513,9 +499,8 @@ class CGroups(object):
                 logger.info('No cgroups limits for {0}'.format(self.name))
                 return
 
-        # default values
-        cpu_limit = self.get_cpu_limits()
-        mem_limit = self.get_memory_limits()
+        cpu_limit = self.threshold.cpu_limit
+        mem_limit = self.threshold.memory_limit
 
         msg = '{0}: {1}% {2}mb'.format(self.name, cpu_limit, mem_limit)
         logger.info("Setting cgroups limits for {0}".format(msg))
@@ -537,9 +522,6 @@ class CGroups(object):
                 is_success=success,
                 message=msg,
                 log_event=False)
-
-        # Returning the limits -
-        self.threshold = {"cpu": cpu_limit, "memory": mem_limit}
 
     @staticmethod
     def _apply_wrapper_limits(path, hierarchy):
@@ -796,3 +778,35 @@ class CGroups(object):
             fileutil.write_file(memory_limit_file, '{0}\n'.format(value))
         else:
             raise CGroupsException("Memory hierarchy not available in this cgroup")
+
+
+class CGroupsLimits(object):
+    @staticmethod
+    def _get_value_or_default(name, threshold, limit, compute_default):
+        return threshold[limit] if threshold and limit in threshold else compute_default(name)
+
+    def __init__(self, cgroup_name, threshold=None):
+        if not cgroup_name or cgroup_name == "":
+            cgroup_name = "Agents+Extensions"
+
+        self.cpu_limit = self._get_value_or_default(cgroup_name, threshold, "cpu", CGroupsLimits.get_default_cpu_limits)
+        self.memory_limit = self._get_value_or_default(cgroup_name, threshold, "memory",
+                                                       CGroupsLimits.get_default_memory_limits)
+
+    @staticmethod
+    def get_default_cpu_limits(cgroup_name):
+        # default values
+        cpu_limit = DEFAULT_CPU_LIMIT_AGENT if AGENT_NAME.lower() in cgroup_name.lower() else DEFAULT_CPU_LIMIT_EXT
+        return cpu_limit
+
+    @staticmethod
+    def get_default_memory_limits(cgroup_name):
+        os_util = get_osutil()
+
+        # default values
+        mem_limit = max(DEFAULT_MEM_LIMIT_MIN_MB, round(os_util.get_total_mem() * DEFAULT_MEM_LIMIT_PCT / 100, 0))
+
+        # agent values
+        if AGENT_NAME.lower() in cgroup_name.lower():
+            mem_limit = min(DEFAULT_MEM_LIMIT_MAX_MB, mem_limit)
+        return mem_limit
