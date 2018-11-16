@@ -427,9 +427,11 @@ class MonitorHandler(object):
                             report_metric(metric_group, metric_name, cgroup_name, value)
 
                         if metric_group == "Memory":
-                            if value >= thresholds["memory"]:
-                                msg = "CGroup {0}: Crossed the Memory Threshold. Current Value:{1}, Threshold:{2}.".format(
-                                    cgroup_name, value, thresholds["memory"])
+                            # Memory is collected in bytes, and limit is set in megabytes.
+                            if value >= CGroups._format_memory_value('megabytes', thresholds.memory_limit):
+                                msg = "CGroup {0}: Crossed the Memory Threshold. " \
+                                      "Current Value:{1} bytes, Threshold:{2} megabytes.".format(cgroup_name, value,
+                                                                                 thresholds.memory_limit)
                                 add_event(name=AGENT_NAME,
                                           version=CURRENT_VERSION,
                                           op=WALAEventOperation.CGroupsLimitsCrossed,
@@ -438,9 +440,9 @@ class MonitorHandler(object):
                                           log_event=True)
 
                         if metric_group == "Process":
-                            if value >= thresholds["cpu"]:
+                            if value >= thresholds.cpu_limit:
                                 msg = "CGroup {0}: Crossed the Processor Threshold. Current Value:{1}, Threshold:{2}.".format(
-                                    cgroup_name, value, thresholds["cpu"])
+                                    cgroup_name, value, thresholds.cpu_limit)
                                 add_event(name=AGENT_NAME,
                                           version=CURRENT_VERSION,
                                           op=WALAEventOperation.CGroupsLimitsCrossed,
