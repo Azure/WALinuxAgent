@@ -161,11 +161,11 @@ class TestEvent(AgentTestCase):
 
     def test_save_event(self):
         add_event('test', message='test event')
-        self.assertTrue(len(os.listdir(self.tmp_dir)) == 1)
+        self.assertTrue(len(os.listdir(self.tmp_dir)) == 2)
 
     def test_save_event_rollover(self):
         add_event('test', message='first event')
-        for i in range(0, 999):
+        for i in range(0, 499):
             add_event('test', message='test event {0}'.format(i))
 
         events = os.listdir(self.tmp_dir)
@@ -209,7 +209,7 @@ class TestEvent(AgentTestCase):
         first_event = os.path.join(self.tmp_dir, events[0])
         with open(first_event) as first_fh:
             first_event_text = first_fh.read()
-            self.assertTrue('test event 1001' in first_event_text)
+            self.assertTrue('test event 1002' in first_event_text)
 
         last_event = os.path.join(self.tmp_dir, events[-1])
         with open(last_event) as last_fh:
