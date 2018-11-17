@@ -61,6 +61,25 @@ class ExtensionError(AgentError):
         self.code = code
 
 
+class ExtensionDownloadError(AgentError):
+    """
+    When failed to execute an extension
+    """
+
+    def __init__(self, msg=None, inner=None):
+        super(ExtensionDownloadError, self).__init__(msg, inner)
+
+
+class ExtensionOperationError(ExtensionError):
+    """
+    When failed to execute an extension
+    """
+
+    def __init__(self, msg=None, inner=None, code=-1):
+        super(ExtensionOperationError, self).__init__(msg, inner)
+        self.code = code
+
+
 class ProvisionError(AgentError):
     """
     When provision failed
