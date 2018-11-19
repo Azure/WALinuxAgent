@@ -30,6 +30,7 @@ import subprocess
 import time
 import traceback
 import zipfile
+import sys
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
@@ -39,7 +40,8 @@ import azurelinuxagent.common.version as version
 from azurelinuxagent.common.cgroups import CGroups, CGroupsTelemetry
 from azurelinuxagent.common.errorstate import ErrorState, ERROR_STATE_DELTA_DEFAULT, ERROR_STATE_DELTA_INSTALL
 from azurelinuxagent.common.event import add_event, WALAEventOperation, elapsed_milliseconds, report_event
-from azurelinuxagent.common.exception import ExtensionError, ProtocolError, ProtocolNotFoundError
+from azurelinuxagent.common.exception import ExtensionError, ProtocolError, ProtocolNotFoundError, \
+    ExtensionDownloadError, ExtensionOperationError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.restapi import ExtHandlerStatus, \
                                                     ExtensionStatus, \
@@ -69,6 +71,16 @@ HANDLER_PKG_EXT = ".zip"
 HANDLER_PKG_PATTERN = re.compile(HANDLER_PATTERN + r"\.zip$", re.IGNORECASE)
 
 DEFAULT_EXT_TIMEOUT_MINUTES = 90
+
+AGENT_STATUS_FILE = "waagent_status.json"
+
+
+def get_traceback(e):
+    if sys.version_info[0] == 3:
+        return e.__traceback__
+    elif sys.version_info[0] == 2:
+        ex_type, ex, tb = sys.exc_info()
+        return tb
 
 def validate_has_key(obj, key, fullname):
     if key not in obj:
@@ -202,7 +214,7 @@ class ExtHandlersHandler(object):
             self.get_artifact_error_state.reset()
         except Exception as e:
             msg = u"Exception retrieving extension handlers: {0}".format(ustr(e))
-            detailed_msg = '{0} {1}'.format(msg, traceback.format_exc())
+            detailed_msg = '{0} {1}'.format(msg, traceback.print_tb(get_traceback(e)))
 
             self.get_artifact_error_state.incr()
 
@@ -410,6 +422,8 @@ class ExtHandlersHandler(object):
             else:
                 message = u"Unknown ext handler state:{0}".format(state)
                 raise ExtensionError(message)
+        except ExtensionOperationError as e:
+            self.handle_handle_ext_handler_error(ext_handler_i, e, e.code)
         except ExtensionError as e:
             self.handle_handle_ext_handler_error(ext_handler_i, e, e.code)
         except Exception as e:
@@ -418,17 +432,8 @@ class ExtHandlersHandler(object):
     def handle_handle_ext_handler_error(self, ext_handler_i, e, code=-1):
         msg = ustr(e)
         ext_handler_i.set_handler_status(message=msg, code=code)
+        ext_handler_i.report_event(message=msg, is_success=False, log_event=True)
 
-        self.get_artifact_error_state.incr()
-        if self.get_artifact_error_state.is_triggered():
-            report_event(op=WALAEventOperation.GetArtifactExtended,
-                         message="Failed to get artifact for over "
-                                 "{0}: {1}".format(self.get_artifact_error_state.min_timedelta, msg),
-                         is_success=False)
-            self.get_artifact_error_state.reset()
-        else:
-            ext_handler_i.logger.warn(msg)
-    
     def handle_enable(self, ext_handler_i):
         self.log_process = True
         old_ext_handler_i = ext_handler_i.get_installed_ext_handler()
@@ -703,8 +708,8 @@ class ExtHandlerInstance(object):
         self.set_operation(WALAEventOperation.Download)
 
         if self.pkg is None:
-            raise ExtensionError("No package uri found")
-        
+            raise ExtensionDownloadError("No package uri found")
+
         uris_shuffled = self.pkg.uris
         random.shuffle(uris_shuffled)
         file_downloaded = False
@@ -722,7 +727,7 @@ class ExtHandlerInstance(object):
                 logger.warn("Error while downloading extension: {0}", ustr(e))
         
         if not file_downloaded:
-            raise ExtensionError("Failed to download extension", code=1001)
+            raise ExtensionDownloadError("Failed to download extension", code=1001)
 
         self.logger.verbose("Unzip extension package")
         try:
@@ -744,14 +749,14 @@ class ExtHandlerInstance(object):
         man_file = fileutil.search_file(self.get_base_dir(), 'HandlerManifest.json')
 
         if man_file is None:
-            raise ExtensionError("HandlerManifest.json not found")
-        
+            raise ExtensionDownloadError("HandlerManifest.json not found")
+
         try:
             man = fileutil.read_file(man_file, remove_bom=True)
             fileutil.write_file(self.get_manifest_file(), man)
         except IOError as e:
             fileutil.clean_ioerror(e, paths=[self.get_base_dir(), self.pkg_file])
-            raise ExtensionError(u"Failed to save HandlerManifest.json", e)
+            raise ExtensionDownloadError(u"Failed to save HandlerManifest.json", e)
 
         # Create status and config dir
         try:
@@ -778,7 +783,7 @@ class ExtHandlerInstance(object):
 
         except IOError as e:
             fileutil.clean_ioerror(e, paths=[self.get_base_dir(), self.pkg_file])
-            raise ExtensionError(u"Failed to create status or config dir", e)
+            raise ExtensionDownloadError(u"Failed to create status or config dir", e)
 
         # Save HandlerEnvironment.json
         self.create_handler_env()
@@ -1043,8 +1048,8 @@ class ExtHandlerInstance(object):
                                        env=env,
                                        preexec_fn=pre_exec_function)
         except OSError as e:
-            raise ExtensionError("Failed to launch '{0}': {1}".format(full_path, e.strerror),
-                                 code=extension_error_code)
+            raise ExtensionOperationError("Failed to launch '{0}': {1}".format(full_path, e.strerror),
+                                          code=extension_error_code)
 
         cg = CGroups.for_extension(self.ext_handler.name)
         CGroupsTelemetry.track_extension(self.ext_handler.name, cg)
@@ -1052,11 +1057,11 @@ class ExtHandlerInstance(object):
 
         ret = process.poll()
         if ret is None:
-            raise ExtensionError("Process {0} was not terminated: {1}\n{2}".format(process.pid, cmd, msg),
-                                 code=extension_error_code)
+            raise ExtensionOperationError("Process {0} was not terminated: {1}\n{2}".format(process.pid, cmd, msg),
+                                          code=extension_error_code)
         if ret != 0:
-            raise ExtensionError("Non-zero exit code: {0}, {1}\n{2}".format(ret, cmd, msg),
-                                 code=extension_error_code)
+            raise ExtensionOperationError("Non-zero exit code: {0}, {1}\n{2}".format(ret, cmd, msg),
+                                          code=extension_error_code)
 
         duration = elapsed_milliseconds(begin_utc)
         log_msg = "{0}\n{1}".format(cmd, "\n".join([line for line in msg.split('\n') if line != ""]))
@@ -1122,8 +1127,8 @@ class ExtHandlerInstance(object):
             fileutil.write_file(self.get_env_file(), json.dumps(env))
         except IOError as e:
             fileutil.clean_ioerror(e,
-                paths=[self.get_base_dir(), self.pkg_file])
-            raise ExtensionError(u"Failed to save handler environment", e)
+                                   paths=[self.get_base_dir(), self.pkg_file])
+            raise ExtensionDownloadError(u"Failed to save handler environment", e)
 
     def set_handler_state(self, handler_state):
         state_dir = self.get_conf_dir()
