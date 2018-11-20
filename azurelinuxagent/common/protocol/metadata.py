@@ -81,6 +81,7 @@ class MetadataProtocol(Protocol):
         self.certs = None
         self.agent_manifests = None
         self.agent_etag = None
+        self.cert_etag = None
 
     def _get_data(self, url, headers=None):
         try:
@@ -157,21 +158,24 @@ class MetadataProtocol(Protocol):
         certificatedata = CertificateData()
         data, etag = self._get_data(self.cert_uri)
 
-        set_properties("certlist", certlist, data)
+        if self.cert_etag is None or self.cert_etag != etag:
+            self.cert_etag = etag
 
-        cert_list = get_properties(certlist)
+            set_properties("certlist", certlist, data)
 
-        headers = {
-            "x-ms-vmagent-public-x509-cert": self._get_trans_cert()
-        }
+            cert_list = get_properties(certlist)
 
-        for cert_i in cert_list["certificates"]:
-            certificate_data_uri = cert_i['certificateDataUri']
-            data, etag = self._get_data(certificate_data_uri, headers=headers)
-            set_properties("certificatedata", certificatedata, data)
-            json_certificate_data = get_properties(certificatedata)
+            headers = {
+                "x-ms-vmagent-public-x509-cert": self._get_trans_cert()
+            }
 
-            self.certs = Certificates(self, json_certificate_data)
+            for cert_i in cert_list["certificates"]:
+                certificate_data_uri = cert_i['certificateDataUri']
+                data, etag = self._get_data(certificate_data_uri, headers=headers)
+                set_properties("certificatedata", certificatedata, data)
+                json_certificate_data = get_properties(certificatedata)
+
+                self.certs = Certificates(self, json_certificate_data)
 
         if self.certs is None:
             return None
