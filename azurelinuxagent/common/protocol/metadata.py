@@ -190,7 +190,7 @@ class MetadataProtocol(Protocol):
         self.update_goal_state()
 
         data, etag = self._get_data(self.vmagent_uri)
-        if self.agent_etag is None or self.agent_etag < etag:
+        if self.agent_etag is None or self.agent_etag != etag:
             self.agent_etag = etag
 
             # Create a list with a single manifest
