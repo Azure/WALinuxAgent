@@ -41,6 +41,8 @@ P7M_FILE_NAME = "Certificates.p7m"
 P7B_FILE_NAME = "Certificates.p7b"
 PEM_FILE_NAME = "Certificates.pem"
 
+IF_NONE_MATCH_HEADER = "If-None-Match"
+
 KEY_AGENT_VERSION_URIS = "versionsManifestUris"
 KEY_URI = "uri"
 
@@ -156,7 +158,8 @@ class MetadataProtocol(Protocol):
     def get_certs(self):
         certlist = CertList()
         certificatedata = CertificateData()
-        data, etag = self._get_data(self.cert_uri)
+        headers = None if self.cert_etag is None else {IF_NONE_MATCH_HEADER: self.cert_etag}
+        data, etag = self._get_data(self.cert_uri, headers=headers)
 
         if self.cert_etag is None or self.cert_etag != etag:
             self.cert_etag = etag
@@ -189,7 +192,9 @@ class MetadataProtocol(Protocol):
     def get_vmagent_manifests(self):
         self.update_goal_state()
 
-        data, etag = self._get_data(self.vmagent_uri)
+        headers = None if self.agent_etag is None else {IF_NONE_MATCH_HEADER: self.agent_etag}
+
+        data, etag = self._get_data(self.vmagent_uri, headers=headers)
         if self.agent_etag is None or self.agent_etag != etag:
             self.agent_etag = etag
 
