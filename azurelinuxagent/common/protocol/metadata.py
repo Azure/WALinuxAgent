@@ -91,7 +91,8 @@ class MetadataProtocol(Protocol):
         except HttpError as e:
             raise ProtocolError(ustr(e))
 
-        if restutil.request_failed(resp):
+        # NOT_MODIFIED (304) response means the call was successful, so allow that to proceed.
+        if restutil.request_failed(resp) and not restutil.request_not_modified(resp):
             raise ProtocolError("{0} - GET: {1}".format(resp.status, url))
 
         data = resp.read()
