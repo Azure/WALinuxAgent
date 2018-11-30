@@ -1436,6 +1436,9 @@ class KaliDistro(debianDistro):
     def __init__(self):
         super(KaliDistro,self).__init__()
 
+    def checkDependencies(self):
+        return 0
+
 ############################################################    
 #	UbuntuDistro
 ############################################################    

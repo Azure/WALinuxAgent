@@ -159,6 +159,16 @@ def get_data_files(name, version, fullname):
         set_conf_files(data_files, src=["config/debian/waagent.conf"])
         set_logrotate_files(data_files)
         set_udev_files(data_files, dest="/lib/udev/rules.d")
+    elif name == 'kali':
+        set_bin_files(data_files)
+        set_conf_files(data_files, src=["config/kali/waagent.conf"])
+        set_logrotate_files(data_files)
+        set_udev_files(data_files, dest="/lib/udev/rules.d")
+        #Kali Linux uses systemd
+        set_systemd_files(data_files,
+                          src=["init/kali/walinuxagent.service",
+                               "init/kali/waagent-apt.service"])
+        set_bin_files(data_files, src=["init/kali/apt-setup"], dest="/usr/share/waagent")
     elif name == 'iosxe':
         set_bin_files(data_files)
         set_conf_files(data_files, src=["config/iosxe/waagent.conf"])

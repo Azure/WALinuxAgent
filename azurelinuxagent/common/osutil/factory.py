@@ -23,6 +23,7 @@ from .arch import ArchUtil
 from .clearlinux import ClearLinuxUtil
 from .coreos import CoreOSUtil
 from .debian import DebianOSUtil
+from .kali import KaliOSUtil
 from .freebsd import FreeBSDOSUtil
 from .openbsd import OpenBSDOSUtil
 from .redhat import RedhatOSUtil, Redhat6xOSUtil
@@ -66,7 +67,7 @@ def get_osutil(distro_name=DISTRO_NAME,
         return AlpineOSUtil()
 
     if distro_name == "kali":
-        return DebianOSUtil()
+        return KaliOSUtil()
 
     if distro_name == "coreos" or distro_code_name == "coreos":
         return CoreOSUtil()
