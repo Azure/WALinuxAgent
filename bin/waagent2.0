@@ -3,6 +3,7 @@
 # Azure Linux Agent
 #
 # Copyright 2015 Microsoft Corporation
+# Copyright 2018 Sonus Networks, Inc. (d.b.a. Ribbon Communications Operating Company)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -2252,6 +2253,13 @@ class OpenWRTDistro(AbstractDistro):
     def registerAgentService(self):
         self.installAgentServiceScriptFiles()
         return Run('/etc/init.d/' + self.agent_service_name + ' enable ')
+
+    def setHostname(self,name):
+        """
+        Shell call to uci.
+        Returns resulting exit code.
+        """
+        return Run("uci set system.@system[0].hostname='{0}' && uci commit system && /etc/init.d/system reload".format(name))
 
     def startAgentService(self):
         """

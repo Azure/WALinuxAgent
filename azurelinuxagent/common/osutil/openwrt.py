@@ -34,7 +34,33 @@ class OpenWRTOSUtil(DefaultOSUtil):
         self.ip_command_output = re.compile('^\d+:\s+(\w+):\s+(.*)$')
         self.jit_enabled = True
         
+    def eject_dvd(self, chk_err=True):
+        logger.warn('eject is not supported on OpenWRT')
+
+    def useradd(self, username, expiration=None, comment=None):
+        """
+        Create user account with 'username'
+        """
+        userentry = self.get_userentry(username)
+        if userentry is not None:
+            logger.info("User {0} already exists, skip useradd", username)
+            return
+
+        if expiration is not None:
+            cmd = "useradd -m {0} -s /bin/ash -e {1}".format(username, expiration)
+        else:
+            cmd = "useradd -m {0} -s /bin/ash".format(username)
         
+        if not os.path.exists("/home"):
+            os.mkdir("/home")
+
+        if comment is not None:
+            cmd += " -c {0}".format(comment)
+        retcode, out = shellutil.run_get_output(cmd)
+        if retcode != 0:
+            raise OSUtilError(("Failed to create user account:{0}, "
+                               "retcode:{1}, "
+                               "output:{2}").format(username, retcode, out))
     def is_dhcp_enabled(self):
         pass
 
@@ -65,3 +91,7 @@ class OpenWRTOSUtil(DefaultOSUtil):
 
     def unregister_agent_service(self):
         return shellutil.run("/etc/init.d/waagent disable", chk_err=True)
+
+    def set_hostname(self, hostname):
+        fileutil.write_file('/etc/hostname', hostname)
+        shellutil.run("uci set system.@system[0].hostname='{0}' && uci commit system && /etc/init.d/system reload".format(hostname), chk_err=False)
