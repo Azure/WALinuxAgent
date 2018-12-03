@@ -61,6 +61,66 @@ class OpenWRTOSUtil(DefaultOSUtil):
             raise OSUtilError(("Failed to create user account:{0}, "
                                "retcode:{1}, "
                                "output:{2}").format(username, retcode, out))
+
+    def get_dhcp_pid(self):
+        cmd = "pidof {0}".format(self.dhclient_name)
+        ret= shellutil.run_get_output(cmd)
+        return ret[1] if ret[0] == 0 else None
+
+    def get_nic_state(self):
+        """
+        Capture NIC state (IPv4 and IPv6 addresses plus link state).
+
+        :return: Dictionary of NIC state objects, with the NIC name as key
+        :rtype: dict(str,NetworkInformationCard)
+        """
+        state = {}
+        status, output = shellutil.run_get_output("ip -o link", chk_err=False, log_cmd=False)
+        """
+        1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN qlen 1000\ link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+        2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP qlen 1000\ link/ether 00:0d:3a:f9:d9:c6 brd ff:ff:ff:ff:ff:ff
+        """
+        if status != 0:
+            logger.verbose("Could not fetch NIC link info; status {0}, {1}".format(status, output))
+            return {}
+
+        for entry in output.splitlines():
+            result = self.ip_command_output.match(entry)
+            if result:
+                name = result.group(1)
+                state[name] = NetworkInterfaceCard(name, result.group(2))
+
+
+        self._update_nic_state(state, "ip -o -f inet address", NetworkInterfaceCard.add_ipv4, "an IPv4 address")
+        self._update_nic_state(state, "ip -o -f inet6 address", NetworkInterfaceCard.add_ipv6, "an IPv6 address")
+        """
+        1: lo    inet6 ::1/128 scope host \       valid_lft forever preferred_lft forever
+        2: eth0    inet6 fe80::20d:3aff:fe30:c35a/64 scope link \       valid_lft forever preferred_lft forever
+        """
+        return state
+
+    def _update_nic_state(self, state, ip_command, handler, description):
+        """
+        Update the state of NICs based on the output of a specified ip subcommand.
+
+        :param dict(str, NetworkInterfaceCard) state: Dictionary of NIC state objects
+        :param str ip_command: The ip command to run
+        :param handler: A method on the NetworkInterfaceCard class
+        :param str description: Description of the particular information being added to the state
+        """
+        status, output = shellutil.run_get_output(ip_command, chk_err=True)
+        if status != 0:
+            return
+
+        for entry in output.splitlines():
+            result = self.ip_command_output.match(entry)
+            if result:
+                interface_name = result.group(1)
+                if interface_name in state:
+                    handler(state[interface_name], result.group(2))
+                else:
+                    logger.error("Interface {0} has {1} but no link state".format(interface_name, description))
+
     def is_dhcp_enabled(self):
         pass
 
