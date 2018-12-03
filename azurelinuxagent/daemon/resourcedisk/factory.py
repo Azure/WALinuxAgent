@@ -21,6 +21,7 @@ from azurelinuxagent.common.version import DISTRO_NAME, \
 from .default import ResourceDiskHandler
 from .freebsd import FreeBSDResourceDiskHandler
 from .openbsd import OpenBSDResourceDiskHandler
+from .openwrt import OpenWRTResourceDiskHandler
 
 from distutils.version import LooseVersion as Version
 
@@ -33,6 +34,9 @@ def get_resourcedisk_handler(distro_name=DISTRO_NAME,
 
     if distro_name == "openbsd":
         return OpenBSDResourceDiskHandler()
+
+    if distro_name == "openwrt":
+        return OpenWRTResourceDiskHandler()
 
     return ResourceDiskHandler()
 
