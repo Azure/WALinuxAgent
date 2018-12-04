@@ -41,6 +41,8 @@ P7M_FILE_NAME = "Certificates.p7m"
 P7B_FILE_NAME = "Certificates.p7b"
 PEM_FILE_NAME = "Certificates.pem"
 
+IF_NONE_MATCH_HEADER = "If-None-Match"
+
 KEY_AGENT_VERSION_URIS = "versionsManifestUris"
 KEY_URI = "uri"
 
@@ -81,6 +83,7 @@ class MetadataProtocol(Protocol):
         self.certs = None
         self.agent_manifests = None
         self.agent_etag = None
+        self.cert_etag = None
 
     def _get_data(self, url, headers=None):
         try:
@@ -88,7 +91,8 @@ class MetadataProtocol(Protocol):
         except HttpError as e:
             raise ProtocolError(ustr(e))
 
-        if restutil.request_failed(resp):
+        # NOT_MODIFIED (304) response means the call was successful, so allow that to proceed.
+        if restutil.request_failed(resp) and not restutil.request_not_modified(resp):
             raise ProtocolError("{0} - GET: {1}".format(resp.status, url))
 
         data = resp.read()
@@ -155,23 +159,27 @@ class MetadataProtocol(Protocol):
     def get_certs(self):
         certlist = CertList()
         certificatedata = CertificateData()
-        data, etag = self._get_data(self.cert_uri)
+        headers = None if self.cert_etag is None else {IF_NONE_MATCH_HEADER: self.cert_etag}
+        data, etag = self._get_data(self.cert_uri, headers=headers)
 
-        set_properties("certlist", certlist, data)
+        if self.cert_etag is None or self.cert_etag != etag:
+            self.cert_etag = etag
 
-        cert_list = get_properties(certlist)
+            set_properties("certlist", certlist, data)
 
-        headers = {
-            "x-ms-vmagent-public-x509-cert": self._get_trans_cert()
-        }
+            cert_list = get_properties(certlist)
 
-        for cert_i in cert_list["certificates"]:
-            certificate_data_uri = cert_i['certificateDataUri']
-            data, etag = self._get_data(certificate_data_uri, headers=headers)
-            set_properties("certificatedata", certificatedata, data)
-            json_certificate_data = get_properties(certificatedata)
+            headers = {
+                "x-ms-vmagent-public-x509-cert": self._get_trans_cert()
+            }
 
-            self.certs = Certificates(self, json_certificate_data)
+            for cert_i in cert_list["certificates"]:
+                certificate_data_uri = cert_i['certificateDataUri']
+                data, etag = self._get_data(certificate_data_uri, headers=headers)
+                set_properties("certificatedata", certificatedata, data)
+                json_certificate_data = get_properties(certificatedata)
+
+                self.certs = Certificates(self, json_certificate_data)
 
         if self.certs is None:
             return None
@@ -185,8 +193,10 @@ class MetadataProtocol(Protocol):
     def get_vmagent_manifests(self):
         self.update_goal_state()
 
-        data, etag = self._get_data(self.vmagent_uri)
-        if self.agent_etag is None or self.agent_etag < etag:
+        headers = None if self.agent_etag is None else {IF_NONE_MATCH_HEADER: self.agent_etag}
+
+        data, etag = self._get_data(self.vmagent_uri, headers=headers)
+        if self.agent_etag is None or self.agent_etag != etag:
             self.agent_etag = etag
 
             # Create a list with a single manifest
