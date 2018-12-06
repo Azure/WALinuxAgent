@@ -1114,7 +1114,9 @@ class WireClient(object):
                        '<Provider id="{0}">{1}'
                        '</Provider>'
                        '</TelemetryData>')
-        data = data_format.format(provider_id, event_str.encode("utf-8"))
+        if event_str:
+            event_str = event_str.encode("utf-8")
+        data = data_format.format(provider_id, event_str)
         try:
             header = self.get_header_for_xml_content()
             resp = self.call_wireserver(restutil.http_post, uri, data, header)

@@ -447,24 +447,17 @@ class TestWireProtocol(AgentTestCase):
     def test_send_event(self, mock_http_request, *args):
         mock_http_request.return_value = MockResponse("", 200)
 
-        event_str = u'ćevapčići'
+        event_str = u'ćevapčići検索システムκόσμε片仮名'
         client = WireProtocol(wireserver_url).client
         client.send_event("foo", event_str)
 
         first_call = mock_http_request.call_args_list[0]
         args, kwargs = first_call
-        method, url, data_received = args
+        method, url, body_received = args
         headers = kwargs['headers']
 
-        data_format = ('<?xml version="1.0"?>'
-                       '<TelemetryData version="1.0">'
-                       '<Provider id="{0}">{1}'
-                       '</Provider>'
-                       '</TelemetryData>')
-        data_encoded = data_format.format("foo", event_str.encode("utf-8"))
-
         self.assertTrue("utf-8" in headers['Content-Type'])
-        self.assertEquals(data_received, data_encoded)
+        self.assertIn(event_str.encode("utf-8"), body_received)
 
 
 class MockResponse:
