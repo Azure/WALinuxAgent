@@ -454,6 +454,54 @@ class TestHttpOperations(AgentTestCase):
             host = "10.0.1.1"
             self.assertEquals(should_use_proxy, use_proxy and not restutil.bypass_proxy(host))
 
+        # When No_proxy is empty
+        with patch.dict(os.environ, {
+            'no_proxy': ""
+        }):
+            host = "10.0.0.1"
+            self.assertTrue(use_proxy and not restutil.bypass_proxy(host))
+
+            host = "foo.com"
+            self.assertTrue(use_proxy and not restutil.bypass_proxy(host))
+
+            host = "www.google.com"
+            self.assertTrue(use_proxy and not restutil.bypass_proxy(host))
+
+            host = "168.63.129.16"
+            self.assertTrue(use_proxy and not restutil.bypass_proxy(host))
+
+            host = "www.bar.com"
+            self.assertTrue(use_proxy and not restutil.bypass_proxy(host))
+
+            host = "10.0.0.1"
+            self.assertTrue(use_proxy and not restutil.bypass_proxy(host))
+
+            host = "10.0.1.1"
+            self.assertTrue(use_proxy and not restutil.bypass_proxy(host))
+
+        # When os.environ is empty - No global variables defined.
+        with patch.dict(os.environ, {}):
+            host = "10.0.0.1"
+            self.assertTrue(use_proxy and not restutil.bypass_proxy(host))
+
+            host = "foo.com"
+            self.assertTrue(use_proxy and not restutil.bypass_proxy(host))
+
+            host = "www.google.com"
+            self.assertTrue(use_proxy and not restutil.bypass_proxy(host))
+
+            host = "168.63.129.16"
+            self.assertTrue(use_proxy and not restutil.bypass_proxy(host))
+
+            host = "www.bar.com"
+            self.assertTrue(use_proxy and not restutil.bypass_proxy(host))
+
+            host = "10.0.0.1"
+            self.assertTrue(use_proxy and not restutil.bypass_proxy(host))
+
+            host = "10.0.1.1"
+            self.assertTrue(use_proxy and not restutil.bypass_proxy(host))
+
     @patch("azurelinuxagent.common.future.httpclient.HTTPSConnection")
     @patch("azurelinuxagent.common.future.httpclient.HTTPConnection")
     def test_http_request_proxy_secure(self, HTTPConnection, HTTPSConnection):
