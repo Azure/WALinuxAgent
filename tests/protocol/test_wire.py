@@ -457,7 +457,7 @@ class TestWireProtocol(AgentTestCase):
         headers = kwargs['headers']
 
         self.assertTrue("utf-8" in headers['Content-Type'])
-        self.assertIn(event_str.encode("utf-8"), body_received)
+        self.assertIn(str(event_str.encode("utf-8")), body_received)
 
 
 class MockResponse:
