@@ -231,6 +231,7 @@ setuptools.setup(
     url='https://github.com/Azure/WALinuxAgent',
     license='Apache License Version 2.0',
     packages=find_packages(exclude=["tests*"]),
+    py_modules=["__main__"],
     install_requires=requires,
     cmdclass={
         'install': install
