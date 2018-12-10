@@ -221,6 +221,11 @@ requires = []
 if float(sys.version[:3]) >= 3.7:
     requires = ['distro']
 
+modules = []
+
+if "bdist_egg" in sys.argv:
+    modules.append("__main__")
+
 setuptools.setup(
     name=AGENT_NAME,
     version=AGENT_VERSION,
@@ -231,7 +236,7 @@ setuptools.setup(
     url='https://github.com/Azure/WALinuxAgent',
     license='Apache License Version 2.0',
     packages=find_packages(exclude=["tests*"]),
-    py_modules=["__main__"],
+    py_modules=modules,
     install_requires=requires,
     cmdclass={
         'install': install
