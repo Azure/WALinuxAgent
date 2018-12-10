@@ -25,7 +25,7 @@ from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, \
 from azurelinuxagent.common.osutil import get_osutil
 import setuptools
 from setuptools import find_packages
-from setuptools.command.install import install as  _install
+from setuptools.command.install import install as _install
 import sys
 
 root_dir = os.path.dirname(os.path.abspath(__file__))
@@ -59,11 +59,13 @@ def set_systemd_files(data_files, dest="/lib/systemd/system",
     data_files.append((dest, src))
 
 
-def set_freebsd_rc_files(data_files, dest="/etc/rc.d/", src=["init/freebsd/waagent"]):
+def set_freebsd_rc_files(data_files, dest="/etc/rc.d/",
+                         src=["init/freebsd/waagent"]):
     data_files.append((dest, src))
 
 
-def set_openbsd_rc_files(data_files, dest="/etc/rc.d/", src=["init/openbsd/waagent"]):
+def set_openbsd_rc_files(data_files, dest="/etc/rc.d/",
+                         src=["init/openbsd/waagent"]):
     data_files.append((dest, src))
 
 
@@ -138,7 +140,7 @@ def get_data_files(name, version, fullname):
         set_udev_files(data_files)
         if fullname == 'SUSE Linux Enterprise Server' and \
                 version.startswith('11') or \
-                                fullname == 'openSUSE' and version.startswith(
+                fullname == 'openSUSE' and version.startswith(
                     '13.1'):
             set_sysv_files(data_files, dest='/etc/init.d',
                            src=["init/suse/waagent"])
@@ -158,6 +160,11 @@ def get_data_files(name, version, fullname):
         set_conf_files(data_files, src=["config/debian/waagent.conf"])
         set_logrotate_files(data_files)
         set_udev_files(data_files, dest="/lib/udev/rules.d")
+        # All Debian versions since Jessie use systemd
+        if (version.startswith('jessie') or
+           version.startswith('stretch') or
+           version.startswith('buster')):
+            set_systemd_files(data_files)
     elif name == 'iosxe':
         set_bin_files(data_files)
         set_conf_files(data_files, src=["config/iosxe/waagent.conf"])
@@ -211,6 +218,7 @@ class install(_install):
             osutil.register_agent_service()
             osutil.stop_agent_service()
             osutil.start_agent_service()
+
 
 # Note to packagers and users from source.
 # In version 3.5 of Python distribution information handling in the platform
