@@ -245,7 +245,7 @@ class UpdateHandler(object):
         self.child_process = None
         return
 
-    def run(self):
+    def run(self, debug=False):
         """
         This is the main loop which watches for agent and extension updates.
         """
@@ -280,7 +280,7 @@ class UpdateHandler(object):
                 else GOAL_STATE_INTERVAL_DISABLED
 
             while self.running:
-                if self._is_orphaned:
+                if not debug and self._is_orphaned:
                     logger.info("Agent {0} is an orphan -- exiting",
                                 CURRENT_AGENT)
                     break
