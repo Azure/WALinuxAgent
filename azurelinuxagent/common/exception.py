@@ -61,9 +61,9 @@ class ExtensionError(AgentError):
         self.code = code
 
 
-class ExtensionDownloadError(AgentError):
+class ExtensionDownloadError(ExtensionError):
     """
-    When failed to execute an extension
+    When failed to download and setup an extension
     """
 
     def __init__(self, msg=None, inner=None):
