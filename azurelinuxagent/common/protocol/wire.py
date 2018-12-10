@@ -1114,6 +1114,8 @@ class WireClient(object):
                        '<Provider id="{0}">{1}'
                        '</Provider>'
                        '</TelemetryData>')
+        if event_str:
+            event_str = event_str.encode("utf-8")
         data = data_format.format(provider_id, event_str)
         try:
             header = self.get_header_for_xml_content()

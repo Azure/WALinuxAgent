@@ -247,23 +247,25 @@ def get_no_proxy():
 def bypass_proxy(host):
     no_proxy = get_no_proxy()
 
-    if is_ipv4_address(host):
-        for proxy_ip in no_proxy:
-            if is_valid_cidr(proxy_ip):
-                if address_in_network(host, proxy_ip):
+    if no_proxy:
+        if is_ipv4_address(host):
+            for proxy_ip in no_proxy:
+                if is_valid_cidr(proxy_ip):
+                    if address_in_network(host, proxy_ip):
+                        return True
+                elif host == proxy_ip:
+                    # If no_proxy ip was defined in plain IP notation instead of cidr notation &
+                    # matches the IP of the index
                     return True
-            elif host == proxy_ip:
-                # If no_proxy ip was defined in plain IP notation instead of cidr notation &
-                # matches the IP of the index
-                return True
-    else:
-        for proxy_domain in no_proxy:
-            if host.lower().endswith(proxy_domain.lower()):
-                # The URL does match something in no_proxy, so we don't want
-                # to apply the proxies on this URL.
-                return True
+        else:
+            for proxy_domain in no_proxy:
+                if host.lower().endswith(proxy_domain.lower()):
+                    # The URL does match something in no_proxy, so we don't want
+                    # to apply the proxies on this URL.
+                    return True
 
     return False
+
 
 def _get_http_proxy(secure=False):
     # Prefer the configuration settings over environment variables
