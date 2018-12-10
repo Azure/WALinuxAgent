@@ -36,6 +36,7 @@ Extensions.Enabled = True
 HttpProxy.Host = None
 HttpProxy.Port = None
 Lib.Dir = /var/lib/waagent
+Logs.Console = True
 Logs.Verbose = False
 OS.AllowHTTP = False
 OS.CheckRdmaDriver = False
