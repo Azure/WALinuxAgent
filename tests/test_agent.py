@@ -75,13 +75,13 @@ class TestAgent(AgentTestCase):
 
     def test_accepts_configuration_path(self):
         conf_path = os.path.join(data_dir, "test_waagent.conf")
-        c, f, v, cfp = parse_args(["-configuration-path:" + conf_path])
+        c, f, v, d, cfp = parse_args(["-configuration-path:" + conf_path])
         self.assertEqual(cfp, conf_path)
 
     @patch("os.path.exists", return_value=True)
     def test_checks_configuration_path(self, mock_exists):
         conf_path = "/foo/bar-baz/something.conf"
-        c, f, v, cfp = parse_args(["-configuration-path:"+conf_path])
+        c, f, v, d, cfp = parse_args(["-configuration-path:"+conf_path])
         self.assertEqual(cfp, conf_path)
         self.assertEqual(mock_exists.call_count, 1)
 
@@ -90,13 +90,13 @@ class TestAgent(AgentTestCase):
     @patch("sys.exit", side_effect=Exception)
     def test_rejects_missing_configuration_path(self, mock_exit, mock_exists, mock_stderr):
         try:
-            c, f, v, cfp = parse_args(["-configuration-path:/foo/bar.conf"])
+            c, f, v, d, cfp = parse_args(["-configuration-path:/foo/bar.conf"])
             self.assertTrue(False)
         except Exception:
             self.assertEqual(mock_exit.call_count, 1)
 
     def test_configuration_path_defaults_to_none(self):
-        c, f, v, cfp = parse_args([])
+        c, f, v, d, cfp = parse_args([])
         self.assertEqual(cfp, None)
 
     def test_agent_accepts_configuration_path(self):
