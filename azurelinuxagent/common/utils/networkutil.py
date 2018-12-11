@@ -36,7 +36,7 @@ class RouteEntry(object):
             raise Exception("String to dotted quad conversion must be 8 characters")
         octets = []
         for idx in range(6, -2, -2):
-            octets.append(str(int(value[idx:idx+2], 16)))
+            octets.append(str(int(value[idx:idx + 2], 16)))
         return ".".join(octets)
 
     def destination_quad(self):

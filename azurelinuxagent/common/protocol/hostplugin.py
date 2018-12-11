@@ -23,9 +23,8 @@ import json
 
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.errorstate import ErrorState, ERROR_STATE_HOST_PLUGIN_FAILURE
-from azurelinuxagent.common.exception import HttpError, ProtocolError, \
-                                            ResourceGoneError
-from azurelinuxagent.common.future import ustr, httpclient
+from azurelinuxagent.common.exception import HttpError, ProtocolError
+from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.healthservice import HealthService
 from azurelinuxagent.common.utils import restutil
 from azurelinuxagent.common.utils import textutil
@@ -307,7 +306,7 @@ class HostPluginProtocol(object):
             'requestUri': sas_url,
             'headers': headers
         }
-        if not content is None:
+        if content is not None:
             data['content'] = self._base64_encode(content)
         return json.dumps(data, sort_keys=True)
     

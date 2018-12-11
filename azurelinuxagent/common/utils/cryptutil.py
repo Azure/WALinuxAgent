@@ -20,7 +20,6 @@
 import base64
 import errno
 import struct
-import sys
 import os.path
 import subprocess
 
@@ -29,7 +28,6 @@ from azurelinuxagent.common.exception import CryptError
 
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.shellutil as shellutil
-import azurelinuxagent.common.utils.textutil as textutil
 
 DECRYPT_SECRET_CMD = "{0} cms -decrypt -inform DER -inkey {1} -in /dev/stdin"
 
@@ -106,8 +104,8 @@ class CryptUtil(object):
             der_encoded = base64.b64decode(base64_encoded)
             der_encoded = der_decoder.decode(der_encoded)[0][1]
             key = der_decoder.decode(self.bits_to_bytes(der_encoded))[0]
-            n=key[0]
-            e=key[1]
+            n = key[0]
+            e = key[1]
             keydata = bytearray()
             keydata.extend(struct.pack('>I', len("ssh-rsa")))
             keydata.extend(b"ssh-rsa")
@@ -117,9 +115,9 @@ class CryptUtil(object):
             keydata.extend(b"\0")
             keydata.extend(self.num_to_bytes(n))
             keydata_base64 = base64.b64encode(bytebuffer(keydata))
-            return ustr(b"ssh-rsa " +  keydata_base64 + b"\n", 
+            return ustr(b"ssh-rsa " + keydata_base64 + b"\n", 
                         encoding='utf-8')
-        except ImportError as e:
+        except ImportError:
             raise CryptError("Failed to load pyasn1.codec.der")
 
     def num_to_bytes(self, num):

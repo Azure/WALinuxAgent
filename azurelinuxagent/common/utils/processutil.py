@@ -17,15 +17,12 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 import multiprocessing
-import subprocess
-import sys
 import os
 import time
 import signal
 from errno import ESRCH
 from multiprocessing import Process
 
-import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.exception import ExtensionError
 from azurelinuxagent.common.future import ustr
 
@@ -69,13 +66,13 @@ def format_stdout_stderr(stdout, stderr, max_len=TELEMETRY_MESSAGE_MAX_LEN):
     elif len(stdout) < max_len_each:
         bonus = max_len_each - len(stdout)
         stderr_len = min(max_len_each + bonus, len(stderr))
-        return to_s(stdout, 0, stderr, -1*stderr_len)
+        return to_s(stdout, 0, stderr, -1 * stderr_len)
     elif len(stderr) < max_len_each:
         bonus = max_len_each - len(stderr)
         stdout_len = min(max_len_each + bonus, len(stdout))
-        return to_s(stdout, -1*stdout_len, stderr, 0)
+        return to_s(stdout, -1 * stdout_len, stderr, 0)
     else:
-        return to_s(stdout, -1*max_len_each, stderr, -1*max_len_each)
+        return to_s(stdout, -1 * max_len_each, stderr, -1 * max_len_each)
 
 
 def _destroy_process(process, signal_to_send=signal.SIGKILL):

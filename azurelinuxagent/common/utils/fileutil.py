@@ -34,14 +34,14 @@ import azurelinuxagent.common.utils.textutil as textutil
 from azurelinuxagent.common.future import ustr
 
 KNOWN_IOERRORS = [
-    errno.EIO,          # I/O error
-    errno.ENOMEM,       # Out of memory
-    errno.ENFILE,       # File table overflow
-    errno.EMFILE,       # Too many open files
-    errno.ENOSPC,       # Out of space
-    errno.ENAMETOOLONG, # Name too long
-    errno.ELOOP,        # Too many symbolic links encountered
-    121                 # Remote I/O error (errno.EREMOTEIO -- not present in all Python 2.7+)
+    errno.EIO,           # I/O error
+    errno.ENOMEM,        # Out of memory
+    errno.ENFILE,        # File table overflow
+    errno.EMFILE,        # Too many open files
+    errno.ENOSPC,        # Out of space
+    errno.ENAMETOOLONG,  # Name too long
+    errno.ELOOP,         # Too many symbolic links encountered
+    121                  # Remote I/O error (errno.EREMOTEIO -- not present in all Python 2.7+)
 ]
 
 
@@ -207,7 +207,7 @@ def findre_in_file(file_path, line_re):
                 match = re.search(pattern, line)
                 if match:
                     return match
-    except:
+    except Exception:
         pass
 
     return None

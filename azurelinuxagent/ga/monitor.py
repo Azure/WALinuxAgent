@@ -44,7 +44,7 @@ import azurelinuxagent.common.utils.networkutil as networkutil
 from azurelinuxagent.common.utils.restutil import IOErrorCounter
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, getattrib, hash_strings
 from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_VERSION, \
-    DISTRO_CODE_NAME, AGENT_LONG_VERSION, \
+    DISTRO_CODE_NAME, \
     AGENT_NAME, CURRENT_AGENT, CURRENT_VERSION
 
 

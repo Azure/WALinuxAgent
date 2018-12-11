@@ -17,9 +17,7 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-import azurelinuxagent.common.utils.fileutil as fileutil
-from azurelinuxagent.pa.deprovision.default import DeprovisionHandler, \
-                                                   DeprovisionAction
+from azurelinuxagent.pa.deprovision.default import DeprovisionHandler
 
 class ClearLinuxDeprovisionHandler(DeprovisionHandler):
     def __init__(self, distro):

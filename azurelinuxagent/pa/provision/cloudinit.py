@@ -26,9 +26,8 @@ from datetime import datetime
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
-import azurelinuxagent.common.utils.shellutil as shellutil
 
-from azurelinuxagent.common.event import elapsed_milliseconds, WALAEventOperation
+from azurelinuxagent.common.event import elapsed_milliseconds
 from azurelinuxagent.common.exception import ProvisionError, ProtocolError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol import OVF_FILE_NAME
@@ -109,7 +108,7 @@ class CloudInitProvisionHandler(ProvisionHandler):
         """
         Wait for cloud-init to generate ssh host key
         """
-        keypair_type = conf.get_ssh_host_keypair_type()
+        # keypair_type = conf.get_ssh_host_keypair_type()
         path = conf.get_ssh_key_public_path()
         for retry in range(0, max_retry):
             if os.path.isfile(path):

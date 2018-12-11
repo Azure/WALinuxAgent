@@ -284,7 +284,7 @@ class OpenBSDOSUtil(DefaultOSUtil):
         if ret:
             raise OSUtilError("Failed to get total memory: {0}".format(output))
         try:
-            return int(output)/1024/1024
+            return int(output) / 1024 / 1024
         except ValueError:
             raise OSUtilError("Failed to get total memory: {0}".format(output))
 

@@ -309,7 +309,7 @@ class ResourceDiskHandler(object):
                     with open(filename, 'w') as f:
                         os.posix_fallocate(f.fileno(), 0, nbytes)
                         return 0
-                except:
+                except Exception:
                     # Not confident with this thing, just keep trying...
                     pass
 

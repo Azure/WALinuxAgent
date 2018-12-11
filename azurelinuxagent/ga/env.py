@@ -23,8 +23,6 @@ import socket
 import time
 import threading
 
-import operator
-
 import datetime
 
 import azurelinuxagent.common.conf as conf
@@ -34,8 +32,6 @@ from azurelinuxagent.common.dhcp import get_dhcp_handler
 from azurelinuxagent.common.event import add_periodic, WALAEventOperation
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol import get_protocol_util
-from azurelinuxagent.common.protocol.wire import INCARNATION_FILE_NAME
-from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.archive import StateArchiver
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 

@@ -65,7 +65,7 @@ def setup_rdma_device(nd_version):
 
     # add colons to the MAC address (e.g. 00155D33FF1D ->
     # 00:15:5D:33:FF:1D)
-    rdma_mac_addr = ':'.join([rdma_mac_addr[i:i+2]
+    rdma_mac_addr = ':'.join([rdma_mac_addr[i:i + 2]
                               for i in range(0, len(rdma_mac_addr), 2)])
     logger.info("Found RDMA details. IPv4={0} MAC={1}".format(
         rdma_ipv4_addr, rdma_mac_addr))
@@ -128,14 +128,13 @@ class RDMAHandler(object):
         exitcode, ps_out  = shellutil.run_get_output("ps -ef")
         if exitcode != 0:
             raise Exception('RDMA: ps -ef failed: %s' % ps_out)
-        for n in  kvp_daemon_names:
+        for n in kvp_daemon_names:
             if n in ps_out:
                 logger.info('RDMA: kvp daemon (%s) is running' % n)
                 return True
             else:
                 logger.verbose('RDMA: kvp daemon (%s) is not running' % n)
         return False
-
 
     def load_driver_module(self):
         """Load the kernel driver, this depends on the proper driver
@@ -232,22 +231,22 @@ class RDMADeviceHandler(object):
 
         skip_rdma_device = False
         module_name = "hv_network_direct"
-        retcode,out = shellutil.run_get_output("modprobe -R %s" % module_name, chk_err=False)
+        retcode, out = shellutil.run_get_output("modprobe -R %s" % module_name, chk_err=False)
         if retcode == 0:
             module_name = out.strip()
         else:
             logger.info("RDMA: failed to resolve module name. Use original name")
-        retcode,out = shellutil.run_get_output("modprobe %s" % module_name)
+        retcode, out = shellutil.run_get_output("modprobe %s" % module_name)
         if retcode != 0:
             logger.error("RDMA: failed to load module %s" % module_name)
             return
-        retcode,out = shellutil.run_get_output("modinfo %s" % module_name)
+        retcode, out = shellutil.run_get_output("modinfo %s" % module_name)
         if retcode == 0:
             version = re.search("version:\s+(\d+)\.(\d+)\.(\d+)\D", out, re.IGNORECASE)
             if version:
                 v1 = int(version.groups(0)[0])
                 v2 = int(version.groups(0)[1])
-                if v1>4 or v1==4 and v2>0:
+                if v1 > 4 or v1 == 4 and v2 > 0:
                     logger.info("Skip setting /dev/hvnd_rdma on 4.1 or later")
                     skip_rdma_device = True
             else:
@@ -272,7 +271,7 @@ class RDMADeviceHandler(object):
     @staticmethod
     def update_iboip_interface(ipv4_addr, timeout_sec, check_interval_sec) :
         logger.info("Wait for ib0 become available")
-        total_retries = timeout_sec/check_interval_sec
+        total_retries = timeout_sec / check_interval_sec
         n = 0
         found_ib0 = None
         while not found_ib0 and n < total_retries:
@@ -342,7 +341,7 @@ class RDMADeviceHandler(object):
     @staticmethod
     def wait_rdma_device(path, timeout_sec, check_interval_sec):
         logger.info("RDMA: waiting for device={0} timeout={1}s".format(path, timeout_sec))
-        total_retries = timeout_sec/check_interval_sec
+        total_retries = timeout_sec / check_interval_sec
         n = 0
         while n < total_retries:
             if os.path.exists(path):
@@ -360,8 +359,8 @@ class RDMADeviceHandler(object):
     def wait_any_rdma_device(dir, timeout_sec, check_interval_sec):
         logger.info(
             "RDMA: waiting for any Infiniband device at directory={0} timeout={1}s".format(
-            dir, timeout_sec))
-        total_retries = timeout_sec/check_interval_sec
+                dir, timeout_sec))
+        total_retries = timeout_sec / check_interval_sec
         n = 0
         while n < total_retries:
             r = os.listdir(dir)
@@ -378,11 +377,11 @@ class RDMADeviceHandler(object):
 
     @staticmethod
     def update_network_interface(mac_addr, ipv4_addr):
-        netmask=16
+        netmask = 16
         
         logger.info("RDMA: will update the network interface with IPv4/MAC")
 
-        if_name=RDMADeviceHandler.get_interface_by_mac(mac_addr)
+        if_name = RDMADeviceHandler.get_interface_by_mac(mac_addr)
         logger.info("RDMA: network interface found: {0}", if_name)
         logger.info("RDMA: bringing network interface up")
         if shellutil.run("ifconfig {0} up".format(if_name)) != 0:

@@ -21,8 +21,7 @@ import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.shellutil as shellutil
 import azurelinuxagent.common.conf as conf
-from azurelinuxagent.common.exception import ResourceDiskError
-from azurelinuxagent.daemon.resourcedisk.default import ResourceDiskHandler
+from azurelinuxagent.common.exception import ResourceDiskError, ResourceDiskHandler
 
 class FreeBSDResourceDiskHandler(ResourceDiskHandler):
     """
@@ -61,8 +60,8 @@ class FreeBSDResourceDiskHandler(ResourceDiskHandler):
         disks = self.parse_gpart_list(output)
 
         device = self.osutil.device_for_ide_port(1)
-        if device is None or not device in disks:
-        # fallback logic to find device
+        if device is None or device not in disks:
+            # fallback logic to find device
             err, output = shellutil.run_get_output('camcontrol periphlist 2:1:0')
             if err:
                 # try again on "3:1:0"

@@ -17,7 +17,6 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-import glob
 import os
 import re
 import time
@@ -50,12 +49,12 @@ class CentOSRDMAHandler(RDMAHandler):
         """
 
         # Check and install the KVP deamon if it not running
-        time.sleep(10) # give some time for the hv_hvp_daemon to start up.
+        time.sleep(10)  # give some time for the hv_hvp_daemon to start up.
         kvpd_running = RDMAHandler.is_kvp_daemon_running()
         logger.info('RDMA: kvp daemon running: %s' % kvpd_running)
         if not kvpd_running:
             self.check_or_install_kvp_daemon()
-        time.sleep(10) # wait for post-install reboot or kvp to come up
+        time.sleep(10)  # wait for post-install reboot or kvp to come up
 
         # Find out RDMA firmware version and see if the existing package needs
         # updating or if the package is missing altogether (and install it)
@@ -234,7 +233,7 @@ class CentOSRDMAHandler(RDMAHandler):
             if installed:
                 raise Exception('RDMA: package %s is installed, but the kvp daemon is not running' % pkg)
 
-        kvp_pkg_to_install=self.hyper_v_package_name
+        kvp_pkg_to_install = self.hyper_v_package_name
         logger.info("RDMA: no kvp drivers installed, will install '%s'" % kvp_pkg_to_install)
         logger.info("RDMA: trying to install kvp package '%s'" % kvp_pkg_to_install)
         if self.install_package(kvp_pkg_to_install) != 0:

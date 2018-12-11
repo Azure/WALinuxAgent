@@ -17,7 +17,7 @@
 
 
 import azurelinuxagent.common.logger as logger
-from azurelinuxagent.common.version import *
+from azurelinuxagent.common.version import DISTRO_CODE_NAME, DISTRO_FULL_NAME, DISTRO_NAME, DISTRO_VERSION
 from .default import DefaultOSUtil
 from .arch import ArchUtil
 from .clearlinux import ClearLinuxUtil

@@ -37,7 +37,6 @@ if not hasattr(subprocess, 'check_output'):
             raise subprocess.CalledProcessError(retcode, cmd, output=output)
         return output
 
-
     # Exception classes used by this module.
     class CalledProcessError(Exception):
         def __init__(self, returncode, cmd, output=None):
@@ -48,7 +47,6 @@ if not hasattr(subprocess, 'check_output'):
         def __str__(self):
             return ("Command '{0}' returned non-zero exit status {1}"
                     "").format(self.cmd, self.returncode)
-
 
     subprocess.check_output = check_output
     subprocess.CalledProcessError = CalledProcessError

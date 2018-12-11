@@ -24,7 +24,7 @@ from azurelinuxagent.common import logger, conf
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.osutil.default import BASE_CGROUPS
-from azurelinuxagent.common.utils import fileutil
+import azurelinuxagent.common.utils.fileutil as fileutil
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 
 
@@ -43,7 +43,7 @@ DEFAULT_MEM_LIMIT_PCT = 15  # percent, applies to extensions
 re_user_system_times = re.compile('user (\d+)\nsystem (\d+)\n')
 
 related_services = {
-    "Microsoft.OSTCExtensions.LinuxDiagnostic":    ["omid", "omsagent-LAD", "mdsd-lde"],
+    "Microsoft.OSTCExtensions.LinuxDiagnostic": ["omid", "omsagent-LAD", "mdsd-lde"],
     "Microsoft.Azure.Diagnostics.LinuxDiagnostic": ["omid", "omsagent-LAD", "mdsd-lde"],
 }
 
@@ -712,7 +712,7 @@ class CGroups(object):
         except IndexError:
             parameter_filename = self._get_cgroup_file(hierarchy, parameter_name)
             logger.error("File {0} is empty but should not be".format(parameter_filename))
-        except CGroupsException as e:
+        except CGroupsException:
             # ignore if the file does not exist yet
             pass
         except Exception as e:
@@ -756,7 +756,7 @@ class CGroups(object):
 
     @staticmethod
     def _format_memory_value(unit, limit=None):
-        units = {'bytes': 1, 'kilobytes': 1024, 'megabytes': 1024*1024, 'gigabytes': 1024*1024*1024}
+        units = {'bytes': 1, 'kilobytes': 1024, 'megabytes': 1024 * 1024, 'gigabytes': 1024 * 1024 * 1024}
         if unit not in units:
             raise CGroupsException("Unit must be one of {0}".format(units.keys()))
         if limit is None:

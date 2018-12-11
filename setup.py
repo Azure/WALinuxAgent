@@ -25,7 +25,7 @@ from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, \
 from azurelinuxagent.common.osutil import get_osutil
 import setuptools
 from setuptools import find_packages
-from setuptools.command.install import install as  _install
+from setuptools.command.install import install as _install
 import sys
 
 root_dir = os.path.dirname(os.path.abspath(__file__))
@@ -212,13 +212,14 @@ class install(_install):
             osutil.stop_agent_service()
             osutil.start_agent_service()
 
+
 # Note to packagers and users from source.
 # In version 3.5 of Python distribution information handling in the platform
 # module was deprecated. Depending on the Linux distribution the
 # implementation may be broken prior to Python 3.7 wher the functionality
 # will be removed from Python 3
 requires = []
-if float(sys.version[:3]) >= 3.7:
+if sys.version_info >= (3, 7):
     requires = ['distro']
 
 setuptools.setup(

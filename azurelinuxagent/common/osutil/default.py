@@ -47,8 +47,8 @@ from azurelinuxagent.common.utils.networkutil import RouteEntry, NetworkInterfac
 
 from pwd import getpwall
 
-__RULES_FILES__ = [ "/lib/udev/rules.d/75-persistent-net-generator.rules",
-                    "/etc/udev/rules.d/70-persistent-net.rules" ]
+__RULES_FILES__ = ["/lib/udev/rules.d/75-persistent-net-generator.rules",
+                   "/etc/udev/rules.d/70-persistent-net.rules"]
 
 """
 Define distro specific behavior. OSUtil class defines default behavior
@@ -283,7 +283,7 @@ class DefaultOSUtil(object):
                 textutil.swap_hexstring(parts[2], width=2),
                 parts[3],
                 parts[4]
-            ])
+        ])
 
     def is_current_instance_id(self, id_that):
         '''
@@ -386,11 +386,11 @@ class DefaultOSUtil(object):
                                                         "/etc/login.defs")
             if uidmin_def is not None:
                 uidmin = int(uidmin_def.split()[1])
-        except IOError as e:
+        except IOError:
             pass
-        if uidmin == None:
+        if uidmin is None:
             uidmin = 100
-        if userentry != None and userentry[2] < uidmin:
+        if userentry is not None and userentry[2] < uidmin:
             return True
         else:
             return False
@@ -550,7 +550,7 @@ class DefaultOSUtil(object):
         """
         Checks and sets self.selinux = True if SELinux is available on system.
         """
-        if self.selinux == None:
+        if self.selinux is None:
             if shellutil.run("which getenforce", chk_err=False) == 0:
                 self.selinux = True
             else:
@@ -747,7 +747,7 @@ class DefaultOSUtil(object):
         sock = socket.socket(socket.AF_INET,
                              socket.SOCK_DGRAM,
                              socket.IPPROTO_UDP)
-        param = struct.pack('256s', (ifname[:15]+('\0'*241)).encode('latin-1'))
+        param = struct.pack('256s', (ifname[:15] + ('\0' * 241)).encode('latin-1'))
         info = fcntl.ioctl(sock.fileno(), IOCTL_SIOCGIFHWADDR, param)
         sock.close()
         return ''.join(['%02X' % textutil.str_to_ord(char) for char in info[18:24]])
@@ -767,7 +767,7 @@ class DefaultOSUtil(object):
         Return a dictionary mapping from interface name to IPv4 address.
         Interfaces without a name are ignored.
         """
-        expected=16 # how many devices should I expect...
+        expected = 16  # how many devices should I expect...
         struct_size = DefaultOSUtil._get_struct_ifconf_size()
         array_size = expected * struct_size
 
@@ -787,11 +787,11 @@ class DefaultOSUtil(object):
 
         ifaces = {}
         for i in range(0, array_size, struct_size):
-            iface = ifconf_buff[i:i+IFNAMSIZ].split(b'\0', 1)[0]
+            iface = ifconf_buff[i:i + IFNAMSIZ].split(b'\0', 1)[0]
             if len(iface) > 0:
                 iface_name = iface.decode('latin-1')
                 if iface_name not in ifaces:
-                    ifaces[iface_name] = socket.inet_ntoa(ifconf_buff[i+20:i+24])
+                    ifaces[iface_name] = socket.inet_ntoa(ifconf_buff[i + 20 : i + 24])
         return ifaces
 
     def get_first_if(self):
@@ -941,7 +941,7 @@ class DefaultOSUtil(object):
         Determine if a named interface is loopback.
         """
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
-        ifname_buff = ifname + ('\0'*256)
+        ifname_buff = ifname + ('\0' * 256)
         result = fcntl.ioctl(s.fileno(), IOCTL_SIOCGIFFLAGS, ifname_buff)
         flags, = struct.unpack('H', result[16:18])
         isloopback = flags & 8 == 8
@@ -997,7 +997,7 @@ class DefaultOSUtil(object):
                                 expire_date = datetime.datetime.strptime(expire_string, FORMAT_DATETIME)
                                 if expire_date > datetime.datetime.utcnow():
                                     expired = False
-                            except:
+                            except Exception:
                                 logger.error("could not parse expiry token '{0}'".format(line))
                     elif FOOTER_LEASE in line:
                         logger.info("dhcp entry:{0}, 245:{1}, expired:{2}".format(
@@ -1026,7 +1026,7 @@ class DefaultOSUtil(object):
         routes = shellutil.run_get_output(route_cmd)[1]
         for route in routes.split("\n"):
             if route.startswith("0.0.0.0 ") or route.startswith("default "):
-               return False
+                return False
         return True
 
     def get_if_name(self):
@@ -1112,9 +1112,9 @@ class DefaultOSUtil(object):
                                       'send host-name "{0}";'.format(hostname))
 
     def restart_if(self, ifname, retries=3, wait=5):
-        retry_limit=retries+1
+        retry_limit = retries + 1
         for attempt in range(1, retry_limit):
-            return_code=shellutil.run("ifdown {0} && ifup {0}".format(ifname))
+            return_code = shellutil.run("ifdown {0} && ifup {0}".format(ifname))
             if return_code == 0:
                 return
             logger.warn("failed to restart {0}: return code {1}".format(ifname, return_code))

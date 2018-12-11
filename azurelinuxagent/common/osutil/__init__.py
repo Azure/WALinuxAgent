@@ -15,4 +15,4 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-from azurelinuxagent.common.osutil.factory import get_osutil
+from azurelinuxagent.common.osutil.factory import get_osutil  # noqa

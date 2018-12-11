@@ -19,14 +19,8 @@
 """
 Copy and parse ovf-env.xml from provisioning ISO and local cache
 """
-import os
-import re
-import shutil
-import xml.dom.minidom as minidom
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.exception import ProtocolError
-from azurelinuxagent.common.future import ustr
-import azurelinuxagent.common.utils.fileutil as fileutil
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, findtext
 
 OVF_VERSION = "1.0"

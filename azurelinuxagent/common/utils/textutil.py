@@ -142,9 +142,9 @@ def is_printable(ch):
     """
     Return True if character is displayable.
     """
-    return (is_in_range(ch, str_to_ord('A'), str_to_ord('Z'))
-            or is_in_range(ch, str_to_ord('a'), str_to_ord('z'))
-            or is_in_range(ch, str_to_ord('0'), str_to_ord('9')))
+    return (is_in_range(ch, str_to_ord('A'), str_to_ord('Z')) or\
+            is_in_range(ch, str_to_ord('a'), str_to_ord('z')) or\
+            is_in_range(ch, str_to_ord('0'), str_to_ord('9')))
 
 
 def hex_dump(buffer, size):
@@ -189,7 +189,7 @@ def str_to_ord(a):
     Allows indexing into a string or an array of integers transparently.
     Generic utility function.
     """
-    if type(a) == type(b'') or type(a) == type(u''):
+    if isinstance(a, type(b'')) or isinstance(a, type(u'')):
         a = ord(a)
     return a
 

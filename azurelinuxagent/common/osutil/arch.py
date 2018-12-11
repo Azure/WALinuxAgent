@@ -16,7 +16,6 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-import os
 import azurelinuxagent.common.utils.shellutil as shellutil
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
 
@@ -51,7 +50,7 @@ class ArchUtil(DefaultOSUtil):
         return shellutil.run("systemctl stop waagent", chk_err=False)
 
     def get_dhcp_pid(self):
-        ret= shellutil.run_get_output("pidof systemd-networkd")
+        ret = shellutil.run_get_output("pidof systemd-networkd")
         return ret[1] if ret[0] == 0 else None
 
     def conf_sshd(self, disable_password):

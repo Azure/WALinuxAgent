@@ -27,7 +27,7 @@ import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common.osutil import get_osutil
 
 VMM_CONF_FILE_NAME = "linuxosconfiguration.xml"
-VMM_STARTUP_SCRIPT_NAME= "install"
+VMM_STARTUP_SCRIPT_NAME = "install"
 
 def get_scvmm_handler():
     return ScvmmHandler()
@@ -38,7 +38,7 @@ class ScvmmHandler(object):
 
     def detect_scvmm_env(self, dev_dir='/dev'):
         logger.info("Detecting Microsoft System Center VMM Environment")
-        found=False
+        found = False
 
         # try to load the ATAPI driver, continue on failure
         self.osutil.try_load_atapiix_mod()

@@ -79,7 +79,7 @@ class DaemonHandler(object):
         while self.running:
             try:
                 self.daemon(child_args)
-            except Exception as e:
+            except Exception:
                 err_msg = traceback.format_exc()
                 add_event(name=AGENT_NAME, is_success=False, message=ustr(err_msg),
                           op=WALAEventOperation.UnhandledError)

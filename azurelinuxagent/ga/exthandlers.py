@@ -38,7 +38,7 @@ import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.version as version
 from azurelinuxagent.common.cgroups import CGroups, CGroupsTelemetry
 from azurelinuxagent.common.errorstate import ErrorState, ERROR_STATE_DELTA_INSTALL
-from azurelinuxagent.common.event import add_event, WALAEventOperation, elapsed_milliseconds, report_event
+from azurelinuxagent.common.event import add_event, WALAEventOperation, elapsed_milliseconds
 from azurelinuxagent.common.exception import ExtensionError, ProtocolError, ProtocolNotFoundError, \
     ExtensionDownloadError, ExtensionOperationError
 from azurelinuxagent.common.future import ustr
@@ -566,7 +566,6 @@ class ExtHandlersHandler(object):
         agent_details_json = json.dumps(agent_details)
 
         fileutil.write_file(status_path, agent_details_json)
-
 
     def report_ext_handler_status(self, vm_status, ext_handler):
         ext_handler_i = ExtHandlerInstance(ext_handler, self.protocol)

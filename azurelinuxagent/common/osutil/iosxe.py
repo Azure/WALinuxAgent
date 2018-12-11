@@ -18,9 +18,12 @@
 #
 
 import azurelinuxagent.common.logger as logger
+import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.shellutil as shellutil
-from azurelinuxagent.common.osutil.default import DefaultOSUtil
-from azurelinuxagent.common.osutil.redhat import Redhat6xOSUtil
+from azurelinuxagent.common.osutil.default import\
+     DefaultOSUtil, PRODUCT_ID_FILE, DMIDECODE_CMD, UUID_PATTERN
+from azurelinuxagent.common.osutil.redhat import RedhatOSUtil
+import os
 
 '''
 The IOSXE distribution is a variant of the Centos distribution, 

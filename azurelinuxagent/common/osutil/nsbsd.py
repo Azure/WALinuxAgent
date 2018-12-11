@@ -16,14 +16,10 @@
 
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.shellutil as shellutil
-import azurelinuxagent.common.utils.textutil as textutil
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.exception import OSUtilError
 from azurelinuxagent.common.osutil.freebsd import FreeBSDOSUtil
-from azurelinuxagent.common.future import ustr
-import azurelinuxagent.common.conf as conf
 import os
-import time
 
 class NSBSDOSUtil(FreeBSDOSUtil):
 
@@ -47,7 +43,7 @@ class NSBSDOSUtil(FreeBSDOSUtil):
             for server in output.split("\n"):
                 if server == '':
                     break
-                server = server[:-1] # remove last '='
+                server = server[:-1]  # remove last '='
                 cmd = "grep '{}' /etc/hosts".format(server) + " | awk '{print $1}'"
                 ret, ip = shellutil.run_get_output(cmd)
                 servers.append(ip)

@@ -12,26 +12,20 @@ except Exception:
 Add alias for python2 and python3 libs and functions.
 """
 
-if sys.version_info[0] == 3:
-    import http.client as httpclient
-    from urllib.parse import urlparse
+if sys.version_info > (3,):
+    import http.client as httpclient  # noqa
+    from urllib.parse import urlparse  # noqa
 
     """Rename Python3 str to ustr"""
-    ustr = str
-
-    bytebuffer = memoryview
-
-elif sys.version_info[0] == 2:
-    import httplib as httpclient
-    from urlparse import urlparse
+    ustr = str  # noqa
+    bytebuffer = memoryview  # noqa
+else:
+    import httplib as httpclient  # noqa
+    from urlparse import urlparse  # noqa
 
     """Rename Python2 unicode to ustr"""
-    ustr = unicode
-
-    bytebuffer = buffer
-
-else:
-    raise ImportError("Unknown python version: {0}".format(sys.version_info))
+    ustr = unicode  # noqa
+    bytebuffer = buffer  # noqa
 
 
 def get_linux_distribution(get_full_name, supported_dists):

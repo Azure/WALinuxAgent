@@ -18,10 +18,8 @@
 #
 import socket
 import azurelinuxagent.common.logger as logger
-import azurelinuxagent.common.utils.restutil as restutil
-from azurelinuxagent.common.exception import ProtocolError, HttpError
+from azurelinuxagent.common.exception import ProtocolError
 from azurelinuxagent.common.future import ustr
-from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.version import DISTRO_VERSION, DISTRO_NAME, CURRENT_VERSION
 
 

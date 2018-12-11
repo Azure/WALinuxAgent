@@ -20,29 +20,22 @@ import json
 import os
 import random
 import re
-import sys
 import time
-import traceback
 import xml.sax.saxutils as saxutils
-
-from datetime import datetime
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.textutil as textutil
 
-from azurelinuxagent.common.exception import ProtocolNotFoundError, \
-                                            ResourceGoneError
+from azurelinuxagent.common.exception import HttpError, ProtocolNotFoundError, \
+                                             ResourceGoneError
 from azurelinuxagent.common.future import httpclient, bytebuffer
-from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol, URI_FORMAT_GET_EXTENSION_ARTIFACT, \
-    HOST_PLUGIN_PORT
+from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.restapi import *
 from azurelinuxagent.common.utils.archive import StateFlusher
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, \
     findtext, getattrib, gettext, remove_bom, get_bytes_from_pem, parse_json
-from azurelinuxagent.common.version import AGENT_NAME
-from azurelinuxagent.common.osutil import get_osutil
 
 VERSION_INFO_URI = "http://{0}/?comp=versions"
 GOAL_STATE_URI = "http://{0}/machine/?comp=goalstate"
@@ -404,7 +397,7 @@ class StatusBlob(object):
 
     def upload(self, url):
         try:
-            if not self.type in ["BlockBlob", "PageBlob"]:
+            if self.type not in ["BlockBlob", "PageBlob"]:
                 raise ProtocolError("Illegal blob type: {0}".format(self.type))
 
             if self.type == "BlockBlob":
@@ -591,7 +584,7 @@ class WireClient(object):
     @staticmethod
     def call_storage_service(http_req, *args, **kwargs):
         # Default to use the configured HTTP proxy
-        if not 'use_proxy' in kwargs or kwargs['use_proxy'] is None:
+        if 'use_proxy' not in kwargs or kwargs['use_proxy'] is None:
             kwargs['use_proxy'] = True
 
         return http_req(*args, **kwargs)
@@ -816,7 +809,7 @@ class WireClient(object):
                     logger.error("ProtocolError processing goal state, giving up [{0}]", ustr(e))
 
             except Exception as e:
-                if retry < max_retry-1:
+                if retry < max_retry - 1:
                     logger.verbose("Exception processing goal state, retrying: [{0}]", ustr(e))
                 else:
                     logger.error("Exception processing goal state, giving up: [{0}]", ustr(e))
@@ -1476,8 +1469,8 @@ class Certificates(object):
 
         # The parsing process use public key to match prv and crt.
         buf = []
-        begin_crt = False
-        begin_prv = False
+        # begin_crt = False
+        # begin_prv = False
         prvs = {}
         thumbprints = {}
         index = 0
@@ -1486,16 +1479,18 @@ class Certificates(object):
             for line in pem.readlines():
                 buf.append(line)
                 if re.match(r'[-]+BEGIN.*KEY[-]+', line):
-                    begin_prv = True
+                    # begin_prv = True
+                    pass
                 elif re.match(r'[-]+BEGIN.*CERTIFICATE[-]+', line):
-                    begin_crt = True
+                    # beigin_crt = True
+                    pass
                 elif re.match(r'[-]+END.*KEY[-]+', line):
                     tmp_file = self.write_to_tmp_file(index, 'prv', buf)
                     pub = cryptutil.get_pubkey_from_prv(tmp_file)
                     prvs[pub] = tmp_file
                     buf = []
                     index += 1
-                    begin_prv = False
+                    # begin_prv = False
                 elif re.match(r'[-]+END.*CERTIFICATE[-]+', line):
                     tmp_file = self.write_to_tmp_file(index, 'crt', buf)
                     pub = cryptutil.get_pubkey_from_crt(tmp_file)
@@ -1510,7 +1505,7 @@ class Certificates(object):
                     os.rename(tmp_file, os.path.join(conf.get_lib_dir(), crt))
                     buf = []
                     index += 1
-                    begin_crt = False
+                    # begin_crt = False
 
         # Rename prv key with thumbprint as the file name
         for pubkey in prvs:
@@ -1607,8 +1602,8 @@ class ExtensionsConfig(object):
 
         name = ext_handler.name
         version = ext_handler.properties.version
-        settings = [x for x in plugin_settings \
-                    if getattrib(x, "name") == name and \
+        settings = [x for x in plugin_settings
+                    if getattrib(x, "name") == name and\
                     getattrib(x, "version") == version]
 
         if settings is None or len(settings) == 0:
@@ -1620,13 +1615,13 @@ class ExtensionsConfig(object):
         runtime_settings_str = gettext(runtime_settings_node)
         try:
             runtime_settings = json.loads(runtime_settings_str)
-        except ValueError as e:
+        except ValueError:
             logger.error("Invalid extension settings")
             return
 
         depends_on_level = 0
         depends_on_node = find(settings[0], "DependsOn")
-        if depends_on_node != None:
+        if depends_on_node is not None:
             try:
                 depends_on_level = int(getattrib(depends_on_node, "dependencyLevel"))
             except (ValueError, TypeError):

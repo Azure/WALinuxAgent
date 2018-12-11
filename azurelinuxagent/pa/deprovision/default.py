@@ -25,7 +25,6 @@ import sys
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.utils.fileutil as fileutil
-import azurelinuxagent.common.utils.shellutil as shellutil
 from azurelinuxagent.common import version
 
 from azurelinuxagent.common.exception import ProtocolError
@@ -35,10 +34,10 @@ from azurelinuxagent.ga.exthandlers import HANDLER_NAME_PATTERN
 
 
 def read_input(message):
-    if sys.version_info[0] >= 3:
+    if sys.version_info > (3,):
         return input(message)
     else:
-        return raw_input(message)
+        return raw_input(message)  # noqa
 
 class DeprovisionAction(object):
     def __init__(self, func, args=[], kwargs={}):
@@ -76,7 +75,6 @@ class DeprovisionHandler(object):
                          "will be deleted.").format(username))
         actions.append(DeprovisionAction(self.osutil.del_account, 
                                          [username]))
-
 
     def regen_ssh_host_key(self, warnings, actions):
         warnings.append("WARNING! All SSH host key pairs will be deleted.")
@@ -124,9 +122,9 @@ class DeprovisionHandler(object):
 
     def del_ext_handler_files(self, warnings, actions):
         ext_dirs = [d for d in os.listdir(conf.get_lib_dir())
-                    if os.path.isdir(os.path.join(conf.get_lib_dir(), d))
-                    and re.match(HANDLER_NAME_PATTERN, d) is not None
-                    and not version.is_agent_path(d)]
+                    if os.path.isdir(os.path.join(conf.get_lib_dir(), d)) and\
+                    re.match(HANDLER_NAME_PATTERN, d) is not None and\
+                    not version.is_agent_path(d)]
 
         for ext_dir in ext_dirs:
             ext_base = os.path.join(conf.get_lib_dir(), ext_dir)
@@ -154,8 +152,8 @@ class DeprovisionHandler(object):
         ]
 
         lib_dir = conf.get_lib_dir()
-        files = [f for f in \
-                    [os.path.join(lib_dir, kf) for kf in known_files] \
+        files = [f for f in
+                    [os.path.join(lib_dir, kf) for kf in known_files]
                         if os.path.isfile(f)]
         for p in known_files_glob:
             files += glob.glob(os.path.join(lib_dir, p))
@@ -247,5 +245,5 @@ class DeprovisionHandler(object):
             print("Deprovision is interrupted.")
             sys.exit(0)
 
-        print ('Deprovisioning may not be interrupted.')
+        print('Deprovisioning may not be interrupted.')
         return

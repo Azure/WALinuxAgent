@@ -16,21 +16,10 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-import os
-import re
-import pwd
-import shutil
-import socket
-import array
-import struct
-import fcntl
-import time
-import base64
 import azurelinuxagent.common.conf as conf
-import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.shellutil as shellutil
-import azurelinuxagent.common.utils.textutil as textutil
+from azurelinuxagent.common.exception import OSUtilError
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
 
 class ClearLinuxUtil(DefaultOSUtil):
@@ -66,7 +55,7 @@ class ClearLinuxUtil(DefaultOSUtil):
         return shellutil.run("systemctl stop waagent", chk_err=False)
 
     def get_dhcp_pid(self):
-        ret= shellutil.run_get_output("pidof systemd-networkd")
+        ret = shellutil.run_get_output("pidof systemd-networkd")
         return ret[1] if ret[0] == 0 else None
 
     def conf_sshd(self, disable_password):
@@ -80,8 +69,9 @@ class ClearLinuxUtil(DefaultOSUtil):
                 passwd_content = fileutil.read_file(passwd_file_path)
                 if not passwd_content:
                     # Empty file is no better than no file
-                    raise FileNotFoundError
-            except FileNotFoundError:
+                    # Do not use FileNotFoundError since it isn't in Python 2
+                    raise LookupError
+            except LookupError:
                 new_passwd = ["root:*LOCK*:14600::::::"]
             else:
                 passwd = passwd_content.split('\n')

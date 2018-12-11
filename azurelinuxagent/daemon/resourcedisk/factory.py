@@ -22,8 +22,6 @@ from .default import ResourceDiskHandler
 from .freebsd import FreeBSDResourceDiskHandler
 from .openbsd import OpenBSDResourceDiskHandler
 
-from distutils.version import LooseVersion as Version
-
 
 def get_resourcedisk_handler(distro_name=DISTRO_NAME, 
                              distro_version=DISTRO_VERSION,

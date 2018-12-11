@@ -143,7 +143,7 @@ class HealthService(object):
     def _observe(self, name, is_healthy, value='', description=''):
         # ensure we keep the list size within bounds
         if len(self.observations) >= HealthService.MAX_OBSERVATIONS:
-            del self.observations[:HealthService.MAX_OBSERVATIONS-1]
+            del self.observations[:HealthService.MAX_OBSERVATIONS - 1]
         self.observations.append(Observation(name=name,
                                              is_healthy=is_healthy,
                                              value=value,

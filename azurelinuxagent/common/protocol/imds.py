@@ -159,7 +159,7 @@ class ImageInfoMatcher(object):
 
             return _is_match_walk(doci[key], keys)
 
-        return _is_match_walk(self.doc, [ publisher, offer, sku, version ])
+        return _is_match_walk(self.doc, [publisher, offer, sku, version])
 
 
 class ComputeInfo(DataContract):
@@ -200,7 +200,6 @@ class ComputeInfo(DataContract):
         self.vmSize = vmSize
         self.vmScaleSetName = vmScaleSetName
         self.zone = zone
-
 
     @property
     def image_info(self):

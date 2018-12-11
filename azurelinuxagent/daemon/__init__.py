@@ -15,4 +15,4 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-from azurelinuxagent.daemon.main import get_daemon_handler
+from azurelinuxagent.daemon.main import get_daemon_handler  # noqa

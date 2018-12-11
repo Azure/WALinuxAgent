@@ -78,7 +78,7 @@ HOSTPLUGIN_UPSTREAM_FAILURE_CODES = [
 THROTTLE_CODES = [
     httpclient.FORBIDDEN,
     httpclient.SERVICE_UNAVAILABLE,
-    429, # Request Rate Limit Exceeded
+    429,  # Request Rate Limit Exceeded
 ]
 
 RETRY_EXCEPTIONS = [
@@ -104,7 +104,7 @@ HOST_PLUGIN_PORT = 32526
 class IOErrorCounter(object):
     _lock = threading.RLock()
     _protocol_endpoint = DEFAULT_PROTOCOL_ENDPOINT
-    _counts = {"hostplugin":0, "protocol":0, "other":0}
+    _counts = {"hostplugin": 0, "protocol": 0, "other": 0}
 
     @staticmethod
     def increment(host=None, port=None):
@@ -127,7 +127,7 @@ class IOErrorCounter(object):
     @staticmethod
     def reset():
         with IOErrorCounter._lock:
-            IOErrorCounter._counts = {"hostplugin":0, "protocol":0, "other":0}
+            IOErrorCounter._counts = {"hostplugin": 0, "protocol": 0, "other": 0}
 
     @staticmethod
     def set_protocol_endpoint(endpoint=DEFAULT_PROTOCOL_ENDPOINT):
@@ -137,8 +137,8 @@ class IOErrorCounter(object):
 def _compute_delay(retry_attempt=1, delay=DELAY_IN_SECONDS):
     fib = (1, 1)
     for n in range(retry_attempt):
-        fib = (fib[1], fib[0]+fib[1])
-    return delay*fib[1]
+        fib = (fib[1], fib[0] + fib[1])
+    return delay * fib[1]
 
 
 def _is_retry_status(status, retry_codes=RETRY_CODES):
@@ -272,7 +272,7 @@ def _get_http_proxy(secure=False):
     host = conf.get_httpproxy_host()
     port = None
 
-    if not host is None:
+    if host is not None:
         port = conf.get_httpproxy_port()
 
     else:
@@ -283,7 +283,7 @@ def _get_http_proxy(secure=False):
                 http_proxy_url = os.environ[v]
                 break
 
-        if not http_proxy_url is None:
+        if http_proxy_url is not None:
             host, port, _, _ = _parse_url(http_proxy_url)
 
     return host, port
@@ -371,7 +371,7 @@ def http_request(method,
     if secure and \
         proxy_host is not None and \
         proxy_port is not None \
-        and not hasattr(httpclient.HTTPSConnection, "set_tunnel"):
+            and not hasattr(httpclient.HTTPSConnection, "set_tunnel"):
 
         if not conf.get_allow_http():
             raise HttpError("HTTPS tunnelling is unavailable and required")
@@ -400,7 +400,7 @@ def http_request(method,
 
             logger.verbose("[HTTP Retry] "
                         "Attempt {0} of {1} will delay {2} seconds: {3}",
-                        attempt+1,
+                        attempt + 1,
                         max_retry,
                         delay,
                         msg)

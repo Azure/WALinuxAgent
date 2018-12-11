@@ -283,7 +283,7 @@ class BigIpOSUtil(DefaultOSUtil):
                              socket.IPPROTO_UDP)
         buff = array.array('B', b'\0' * (expected * struct_size))
         param = struct.pack('iL',
-                            expected*struct_size,
+                            expected * struct_size,
                             buff.buffer_info()[0])
         ret = fcntl.ioctl(sock.fileno(), 0x8912, param)
         retsize = (struct.unpack('iL', ret)[0])
@@ -299,10 +299,10 @@ class BigIpOSUtil(DefaultOSUtil):
                 continue
             else:
                 break
-        return iface.decode('latin-1'), socket.inet_ntoa(sock[i+20:i+24])
+        return iface.decode('latin-1'), socket.inet_ntoa(sock[i + 20 : i + 24])
 
     def _format_single_interface_name(self, sock, offset):
-        return sock[offset:offset+16].split(b'\0', 1)[0]
+        return sock[offset:offset + 16].split(b'\0', 1)[0]
 
     def route_add(self, net, mask, gateway):
         """Add specified route using tmsh.

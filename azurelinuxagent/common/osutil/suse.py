@@ -16,20 +16,8 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-import os
-import re
-import pwd
-import shutil
-import socket
-import array
-import struct
-import fcntl
-import time
-import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.shellutil as shellutil
-import azurelinuxagent.common.utils.textutil as textutil
-from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_VERSION, DISTRO_FULL_NAME
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
 
 class SUSE11OSUtil(DefaultOSUtil):
@@ -37,7 +25,7 @@ class SUSE11OSUtil(DefaultOSUtil):
     def __init__(self):
         super(SUSE11OSUtil, self).__init__()
         self.jit_enabled = True
-        self.dhclient_name='dhcpcd'
+        self.dhclient_name = 'dhcpcd'
 
     def set_hostname(self, hostname):
         fileutil.write_file('/etc/HOSTNAME', hostname)

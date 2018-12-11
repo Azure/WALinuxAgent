@@ -37,7 +37,7 @@ from azurelinuxagent.common.version import AGENT_NAME, AGENT_LONG_VERSION, \
                                      PY_VERSION_MAJOR, PY_VERSION_MINOR, \
                                      PY_VERSION_MICRO, GOAL_STATE_AGENT_VERSION
 from azurelinuxagent.common.osutil import get_osutil
-from azurelinuxagent.common.utils import fileutil
+import azurelinuxagent.common.utils.fileutil as fileutil
 
 class Agent(object):
     def __init__(self, verbose, conf_file_path=None):
@@ -186,7 +186,7 @@ def parse_args(sys_args):
     conf_file_path = None
     for a in sys_args:
         m = re.match("^(?:[-/]*)configuration-path:([\w/\.\-_]+)", a)
-        if not m is None:
+        if m is not None:
             conf_file_path = m.group(1)
             if not os.path.exists(conf_file_path):
                 print("Error: Configuration file {0} does not exist".format(
@@ -257,5 +257,6 @@ def start(conf_file_path=None):
         args.append('-configuration-path:{0}'.format(conf_file_path))
     subprocess.Popen(args, stdout=devnull, stderr=devnull)
 
-if __name__ == '__main__' :
+
+if __name__ == '__main__':
     main()

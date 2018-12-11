@@ -18,46 +18,19 @@
 #
 
 import datetime
-import glob
-import json
-import operator
 import os
 import os.path
-import pwd
-import random
-import re
-import shutil
-import stat
-import subprocess
-import textwrap
-import time
 import traceback
-import zipfile
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
-import azurelinuxagent.common.utils.fileutil as fileutil
-import azurelinuxagent.common.version as version
-import azurelinuxagent.common.protocol.wire
-import azurelinuxagent.common.protocol.metadata as metadata
 
-from datetime import datetime, timedelta
-from pwd import getpwall
-from azurelinuxagent.common.errorstate import ErrorState
+from datetime import timedelta
 
-from azurelinuxagent.common.event import add_event, WALAEventOperation, elapsed_milliseconds
-from azurelinuxagent.common.exception import ExtensionError, ProtocolError, RemoteAccessError
+from azurelinuxagent.common.event import add_event, WALAEventOperation
+from azurelinuxagent.common.exception import RemoteAccessError
 from azurelinuxagent.common.future import ustr
-from azurelinuxagent.common.protocol.restapi import ExtHandlerStatus, \
-                                                    ExtensionStatus, \
-                                                    ExtensionSubStatus, \
-                                                    VMStatus, ExtHandler, \
-                                                    get_properties, \
-                                                    set_properties
-from azurelinuxagent.common.protocol.metadata import MetadataProtocol
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
-from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
-from azurelinuxagent.common.utils.processutil import capture_from_process
 from azurelinuxagent.common.protocol import get_protocol_util
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 from azurelinuxagent.common.osutil import get_osutil
@@ -153,8 +126,8 @@ class RemoteAccessHandler(object):
             raise RemoteAccessError("Error adding user {0}. {1}".format(username, ustr(e)))
         try:
             prv_key = os.path.join(conf.get_lib_dir(), TRANSPORT_PRIVATE_CERT)
-            pwd = self.cryptUtil.decrypt_secret(encrypted_password, prv_key)
-            self.os_util.chpasswd(username, pwd, conf.get_password_cryptid(), conf.get_password_crypt_salt_len())
+            pawd = self.cryptUtil.decrypt_secret(encrypted_password, prv_key)
+            self.os_util.chpasswd(username, pawd, conf.get_password_cryptid(), conf.get_password_crypt_salt_len())
             self.os_util.conf_sudoer(username)
             logger.info("User '{0}' added successfully with expiration in {1}".format(username, expiration_date))
         except Exception as e:

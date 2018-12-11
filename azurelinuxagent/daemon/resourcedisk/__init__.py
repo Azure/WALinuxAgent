@@ -17,4 +17,4 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-from azurelinuxagent.daemon.resourcedisk.factory import get_resourcedisk_handler
+from azurelinuxagent.daemon.resourcedisk.factory import get_resourcedisk_handler  # noqa

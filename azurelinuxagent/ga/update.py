@@ -20,6 +20,7 @@
 import glob
 import json
 import os
+import datetime
 import platform
 import random
 import re
@@ -32,35 +33,31 @@ import time
 import traceback
 import zipfile
 
-from datetime import datetime, timedelta
-
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.restutil as restutil
 import azurelinuxagent.common.utils.textutil as textutil
 
-from azurelinuxagent.common.event import add_event, add_periodic, \
+from azurelinuxagent.common.event import add_event, \
                                     elapsed_milliseconds, \
                                     WALAEventOperation
-from azurelinuxagent.common.exception import ProtocolError, \
-                                            ResourceGoneError, \
-                                            UpdateError
+from azurelinuxagent.common.exception import ResourceGoneError, \
+                                             UpdateError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.protocol import get_protocol_util
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
-from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, AGENT_LONG_VERSION, \
-                                            AGENT_DIR_GLOB, AGENT_PKG_GLOB, \
-                                            AGENT_PATTERN, AGENT_NAME_PATTERN, AGENT_DIR_PATTERN, \
-                                            CURRENT_AGENT, CURRENT_VERSION, \
-                                            is_current_agent_installed
+from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, \
+                                           AGENT_DIR_PATTERN, \
+                                           CURRENT_AGENT, CURRENT_VERSION, \
+                                           is_current_agent_installed
 
 from azurelinuxagent.ga.exthandlers import HandlerManifest
 
-AGENT_ERROR_FILE = "error.json" # File name for agent error record
+AGENT_ERROR_FILE = "error.json"  # File name for agent error record
 AGENT_MANIFEST_FILE = "HandlerManifest.json"
 AGENT_PARTITION_FILE = "partition"
 
@@ -69,7 +66,7 @@ CHILD_LAUNCH_INTERVAL = 5 * 60
 CHILD_LAUNCH_RESTART_MAX = 3
 CHILD_POLL_INTERVAL = 60
 
-MAX_FAILURE = 3 # Max failure allowed for agent before blacklisted
+MAX_FAILURE = 3  # Max failure allowed for agent before blacklisted
 
 GOAL_STATE_INTERVAL = 3
 GOAL_STATE_INTERVAL_DISABLED = 5 * 60
@@ -374,8 +371,8 @@ class UpdateHandler(object):
         
         self._find_agents()
         available_agents = [agent for agent in self.agents
-                            if agent.is_available
-                            and agent.version > FlexibleVersion(AGENT_VERSION)]
+                            if agent.is_available and\
+                            agent.version > FlexibleVersion(AGENT_VERSION)]
 
         return available_agents[0] if len(available_agents) >= 1 else None
 
@@ -466,8 +463,8 @@ class UpdateHandler(object):
 
         self.child_launch_attempts += 1
 
-        if (time.time() - self.child_launch_time) <= CHILD_LAUNCH_INTERVAL \
-            and self.child_launch_attempts >= CHILD_LAUNCH_RESTART_MAX:
+        if (time.time() - self.child_launch_time) <= CHILD_LAUNCH_INTERVAL and\
+           self.child_launch_attempts >= CHILD_LAUNCH_RESTART_MAX:
                 msg = u"Agent {0} restarted more than {1} times in {2} seconds".format(
                     self.child_agent.name,
                     CHILD_LAUNCH_RESTART_MAX,
@@ -492,8 +489,8 @@ class UpdateHandler(object):
     def _get_host_plugin(self, protocol=None):
         return protocol.client.get_host_plugin() \
                                 if protocol and \
-                                    type(protocol) is WireProtocol and \
-                                    protocol.client \
+                                isinstance(protocol, WireProtocol) and \
+                                protocol.client \
                                 else None
 
     def _get_pid_parts(self):
@@ -647,8 +644,8 @@ class UpdateHandler(object):
 
                 manifest_list, etag = protocol.get_vmagent_manifests()
 
-                manifests = [m for m in manifest_list.vmAgentManifests \
-                                if m.family == family and \
+                manifests = [m for m in manifest_list.vmAgentManifests
+                                if m.family == family and\
                                     len(m.versionsManifestUris) > 0]
                 if len(manifests) == 0:
                     logger.verbose(u"Incarnation {0} has no {1} agent updates",
@@ -665,7 +662,7 @@ class UpdateHandler(object):
                 #  so as to preserve the state. Otherwise, those agents could be
                 #  again downloaded and inappropriately retried.
                 host = self._get_host_plugin(protocol=protocol)
-                self._set_agents([GuestAgent(pkg=pkg, host=host) \
+                self._set_agents([GuestAgent(pkg=pkg, host=host)
                                      for pkg in pkg_list.versions])
 
                 self._purge_agents()
@@ -674,8 +671,8 @@ class UpdateHandler(object):
                 # Return True if current agent is no longer available or an
                 # agent with a higher version number is available
                 return not self._is_version_eligible(base_version) \
-                    or (len(self.agents) > 0 \
-                        and self.agents[0].version > base_version)
+                    or (len(self.agents) > 0 and\
+                        self.agents[0].version > base_version)
 
             except Exception as e:
                 if isinstance(e, ResourceGoneError):
@@ -703,7 +700,7 @@ class UpdateHandler(object):
         pid_index = -1 \
                     if previous_pid_file is None \
                     else int(pid_re.match(os.path.basename(previous_pid_file)).group(1))
-        pid_file = os.path.join(pid_dir, "{0}_{1}".format(pid_index+1, pid_name))
+        pid_file = os.path.join(pid_dir, "{0}_{1}".format(pid_index + 1, pid_name))
 
         try:
             fileutil.write_file(pid_file, ustr(os.getpid()))
@@ -726,13 +723,13 @@ class GuestAgent(object):
         version = None
         if path is not None:
             m = AGENT_DIR_PATTERN.match(path)
-            if m == None:
+            if m is None:
                 raise UpdateError(u"Illegal agent directory: {0}".format(path))
             version = m.group(1)
         elif self.pkg is not None:
             version = pkg.version
 
-        if version == None:
+        if version is None:
             raise UpdateError(u"Illegal agent version: {0}".format(version))
         self.version = FlexibleVersion(version)
 
@@ -935,7 +932,7 @@ class GuestAgent(object):
         with open(path, "r") as manifest_file:
             try:
                 manifests = json.load(manifest_file)
-            except Exception as e:
+            except Exception:
                 msg = u"Agent {0} has a malformed {1}".format(self.name, AGENT_MANIFEST_FILE)
                 raise UpdateError(msg)
             if type(manifests) is list:

@@ -15,4 +15,4 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-from azurelinuxagent.pa.provision.factory import get_provision_handler
+from azurelinuxagent.pa.provision.factory import get_provision_handler  # noqa

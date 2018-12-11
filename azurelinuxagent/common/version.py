@@ -89,7 +89,7 @@ def get_distro():
         try:
             # dist() removed in Python 3.7
             osinfo = list(platform.dist()) + ['']
-        except:
+        except Exception:
             osinfo = ['UNKNOWN', 'FFFF', '', '']
 
     # The platform.py lib has issue with detecting oracle linux distribution.
@@ -132,7 +132,7 @@ AGENT_PKG_GLOB = "{0}-*.zip".format(AGENT_NAME)
 
 AGENT_PATTERN = "{0}-(.*)".format(AGENT_NAME)
 AGENT_NAME_PATTERN = re.compile(AGENT_PATTERN)
-AGENT_PKG_PATTERN = re.compile(AGENT_PATTERN+"\.zip")
+AGENT_PKG_PATTERN = re.compile(AGENT_PATTERN + "\.zip")
 AGENT_DIR_PATTERN = re.compile(".*/{0}".format(AGENT_PATTERN))
 
 EXT_HANDLER_PATTERN = b".*/WALinuxAgent-(\d+.\d+.\d+[.\d+]*).*-run-exthandlers"

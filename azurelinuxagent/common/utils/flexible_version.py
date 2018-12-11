@@ -88,7 +88,7 @@ class FlexibleVersion(version.Version):
     def __sub__(self, decrement):
         version = list(self.version)
         if version[-1] <= 0:
-            raise ArithmeticError("Cannot decrement final numeric component of {0} below zero" \
+            raise ArithmeticError("Cannot decrement final numeric component of {0} below zero"
                 .format(self))
         version[-1] -= decrement
         vstring = self._assemble(version, self.sep, self.prerel_sep, self.prerelease)
@@ -205,7 +205,9 @@ class FlexibleVersion(version.Version):
 
         this_version = list(self.version[:])
         that_version = list(that.version[:])
-        while len(this_version) < len(that_version): this_version.append(0)
-        while len(that_version) < len(this_version): that_version.append(0)
+        while len(this_version) < len(that_version):
+            this_version.append(0)
+        while len(that_version) < len(this_version):
+            that_version.append(0)
 
         return this_version, that_version

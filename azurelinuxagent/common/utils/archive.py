@@ -6,9 +6,8 @@ import re
 import shutil
 import zipfile
 
-from azurelinuxagent.common.utils import fileutil
-
 import azurelinuxagent.common.logger as logger
+import azurelinuxagent.common.utils.fileutil as fileutil
 
 
 """
@@ -147,7 +146,7 @@ class State(object):
 
 class StateZip(State):
     def __init__(self, path, timestamp):
-        super(StateZip,self).__init__(path, timestamp)
+        super(StateZip, self).__init__(path, timestamp)
 
     def delete(self):
         os.remove(self._path)

@@ -15,4 +15,4 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-from azurelinuxagent.pa.rdma.factory import get_rdma_handler
+from azurelinuxagent.pa.rdma.factory import get_rdma_handler  # noqa

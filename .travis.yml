@@ -1,14 +1,27 @@
+---
+os: linux
+dist: xenial
 language: python
+sudo: false
+
 python:
-  - "2.6"
-  - "2.7"
-  #- "3.2"
-  #- "3.3"
-  - "3.4"
-# command to install dependencies
+  - 2.6
+  - 2.7
+  - 3.4
+  - 3.5
+  - 3.6
+  - 3.7
+  - pypy
+
 install:
-  #- pip install .
-  #- pip install -r requirements.txt
+  # For production:
   - pip install pyasn1
-# command to run tests
-script: nosetests tests
+  # For running tests:
+  - pip install flake8 # pylint
+
+script:
+  # We are disabling a lot, but all are cosmetic.
+  # Gotta start somewhere...
+  - if [[ $TRAVIS_PYTHON_VERSION != 2.6 ]]; then flake8 --ignore=W291,W293,W391,W605,E126,E127,E128,E203,E221,E265,E302,E501,E502,F403,F405 setup.py makepkg.py azurelinuxagent/; fi
+  # - pylint setup.py makepkg.py azurelinuxagent/
+  - nosetests tests

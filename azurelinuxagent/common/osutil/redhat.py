@@ -16,23 +16,12 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-import os
-import re
-import pwd
-import shutil
-import socket
-import array
-import struct
-import fcntl
-import time
-import base64
 import azurelinuxagent.common.conf as conf
+from azurelinuxagent.common.future import ustr
 import azurelinuxagent.common.logger as logger
-from azurelinuxagent.common.future import ustr, bytebuffer
 from azurelinuxagent.common.exception import OSUtilError, CryptError
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.shellutil as shellutil
-import azurelinuxagent.common.utils.textutil as textutil
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
 

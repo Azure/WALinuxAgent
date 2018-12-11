@@ -16,20 +16,7 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-import os
-import re
-import pwd
-import shutil
-import socket
-import array
-import struct
-import fcntl
-import time
-import base64
-import azurelinuxagent.common.logger as logger
-import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.shellutil as shellutil
-import azurelinuxagent.common.utils.textutil as textutil
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
 
 class DebianOSUtil(DefaultOSUtil):

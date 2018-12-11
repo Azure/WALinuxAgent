@@ -133,7 +133,7 @@ class SUSERDMAHandler(RDMAHandler):
                 if local_package.endswith('.src.rpm'):
                     continue
                 if (
-                        package_name in local_package and
+                        package_name in local_package and\
                         fw_version in local_package
                 ):
                     logger.info("RDMA: Installing: %s" % local_package)
