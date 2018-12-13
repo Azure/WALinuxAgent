@@ -85,7 +85,7 @@ _enable_firewall = True
 DMIDECODE_CMD = 'dmidecode --string system-uuid'
 PRODUCT_ID_FILE = '/sys/class/dmi/id/product_uuid'
 UUID_PATTERN = re.compile(
-    r'^\s*[A-F0-9]{8}(?:\-[A-F0-9]{4}){3}\-[A-F0-9]{12}\s*$',
+    r'^\s*[a-fA-F0-9]{8}(?:\-[a-fA-F0-9]{4}){3}\-[a-fA-F0-9]{12}\s*$',
     re.IGNORECASE)
 
 IOCTL_SIOCGIFCONF = 0x8912
@@ -289,10 +289,13 @@ class DefaultOSUtil(object):
         '''
         Compare two instance IDs for equality, but allow that some IDs
         may have been persisted using the incorrect byte ordering.
+        Ensure conformity with RFC-4122 allowing for case insensitivity.
         '''
         id_this = self.get_instance_id()
-        return id_that == id_this or \
-            id_that == self._correct_instance_id(id_this)
+        logger.verbose("id_this: {0}".format(id_this))
+        logger.verbose("id_that: {0}".format(id_that))
+        return id_that.lower() == id_this.lower() or \
+            id_that.lower() == self._correct_instance_id(id_this).lower()
 
     @staticmethod
     def is_cgroups_supported():
