@@ -18,6 +18,7 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 import os
+import errno as errno
 
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
@@ -34,8 +35,9 @@ class OpenWRTResourceDiskHandler(ResourceDiskHandler):
             self.fs = 'ffs'
 
     def reread_partition_table(self, device):
-        shellutil.run("hdparm -z {0}".format(device),
-                          chk_err=False)
+        ret, output = shellutil.run_get_output("hdparm -z {0}".format(device), chk_err=False)
+        if ret != 0:
+            logger.warn("Failed refresh the partition table.")
 
     def mount_resource_disk(self, mount_point):
         device = self.osutil.device_for_ide_port(1)
@@ -98,22 +100,19 @@ class OpenWRTResourceDiskHandler(ResourceDiskHandler):
         if not os.path.exists(partition):
             raise ResourceDiskError("Partition was not created [{0}]".format(partition))
 
-        logger.info("Mount resource disk [{0}]", mount_string)
-        ret, output = shellutil.run_get_output(mount_string, chk_err=False)
-        # if the exit code is 32, then the resource disk can be already mounted
-        if ret == 32 and output.find("is already mounted") != -1:
-            logger.warn("Could not mount resource disk: {0}", output)
-        elif ret != 0:
+        if os.path.ismount(mount_point):
+            logger.warn("Disk is already mounted on {0}", mount_point)
+        else:
             # Some kernels seem to issue an async partition re-read after a
             # command invocation. This causes mount to fail if the
             # partition re-read is not complete by the time mount is
             # attempted. Seen in CentOS 7.2. Force a sequential re-read of
             # the partition and try mounting.
-            logger.warn("Failed to mount resource disk. "
-                        "Retry mounting after re-reading partition info.")
+            logger.info("Mounting after re-reading partition info.")
 
             self.reread_partition_table(device)
 
+            logger.info("Mount resource disk [{0}]", mount_string)
             ret, output = shellutil.run_get_output(mount_string)
             if ret:
                 logger.warn("Failed to mount resource disk. "

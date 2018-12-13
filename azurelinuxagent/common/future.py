@@ -83,8 +83,8 @@ def get_openwrt_platform():
     the version and product information is contained in the /etc/openwrt_release file.
     """
     result = [None, None, None]
-    openwrt_version = re.compile("^DISTRIB_RELEASE=['\"](\d+\.\d+.\d+)['\"]")
-    openwrt_product = re.compile("^DISTRIB_ID=['\"]([\w-]+)['\"]")
+    openwrt_version = re.compile(r"^DISTRIB_RELEASE=['\"](\d+\.\d+.\d+)['\"]")
+    openwrt_product = re.compile(r"^DISTRIB_ID=['\"]([\w-]+)['\"]")
 
     with open('/etc/openwrt_release', 'r') as fh:
         content = fh.readlines()

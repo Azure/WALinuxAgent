@@ -76,10 +76,7 @@ class OpenWRTOSUtil(DefaultOSUtil):
         """
         state = {}
         status, output = shellutil.run_get_output("ip -o link", chk_err=False, log_cmd=False)
-        """
-        1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN qlen 1000\ link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
-        2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP qlen 1000\ link/ether 00:0d:3a:f9:d9:c6 brd ff:ff:ff:ff:ff:ff
-        """
+
         if status != 0:
             logger.verbose("Could not fetch NIC link info; status {0}, {1}".format(status, output))
             return {}
@@ -93,10 +90,7 @@ class OpenWRTOSUtil(DefaultOSUtil):
 
         self._update_nic_state(state, "ip -o -f inet address", NetworkInterfaceCard.add_ipv4, "an IPv4 address")
         self._update_nic_state(state, "ip -o -f inet6 address", NetworkInterfaceCard.add_ipv6, "an IPv6 address")
-        """
-        1: lo    inet6 ::1/128 scope host \       valid_lft forever preferred_lft forever
-        2: eth0    inet6 fe80::20d:3aff:fe30:c35a/64 scope link \       valid_lft forever preferred_lft forever
-        """
+
         return state
 
     def _update_nic_state(self, state, ip_command, handler, description):
@@ -155,3 +149,6 @@ class OpenWRTOSUtil(DefaultOSUtil):
     def set_hostname(self, hostname):
         fileutil.write_file('/etc/hostname', hostname)
         shellutil.run("uci set system.@system[0].hostname='{0}' && uci commit system && /etc/init.d/system reload".format(hostname), chk_err=False)
+
+    def remove_rules_files(self, rules_files=""):
+        pass
