@@ -224,7 +224,7 @@ class ExtHandlersHandler(object):
                           op=WALAEventOperation.GetArtifactExtended,
                           is_success=False,
                           message="Failed to get extension artifact for over "
-                                  "{0): {1}".format(self.get_artifact_error_state.min_timedelta, msg))
+                                  "{0}: {1}".format(self.get_artifact_error_state.min_timedelta, msg))
                 self.get_artifact_error_state.reset()
             else:
                 logger.warn(msg)
