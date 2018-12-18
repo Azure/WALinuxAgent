@@ -214,7 +214,7 @@ class ExtHandlersHandler(object):
             self.get_artifact_error_state.reset()
         except Exception as e:
             msg = u"Exception retrieving extension handlers: {0}".format(ustr(e))
-            detailed_msg = '{0} {1}'.format(msg, traceback.print_tb(get_traceback(e)))
+            detailed_msg = '{0} {1}'.format(msg, traceback.extract_tb(get_traceback(e)))
 
             self.get_artifact_error_state.incr()
 
@@ -224,7 +224,7 @@ class ExtHandlersHandler(object):
                           op=WALAEventOperation.GetArtifactExtended,
                           is_success=False,
                           message="Failed to get extension artifact for over "
-                                  "{0): {1}".format(self.get_artifact_error_state.min_timedelta, msg))
+                                  "{0}: {1}".format(self.get_artifact_error_state.min_timedelta, msg))
                 self.get_artifact_error_state.reset()
             else:
                 logger.warn(msg)
@@ -247,14 +247,14 @@ class ExtHandlersHandler(object):
             self.report_ext_handlers_status()
             self.cleanup_outdated_handlers()
         except Exception as e:
-            msg = u"Exception processing extension handlers: {0}".format(
-                ustr(e))
+            msg = u"Exception processing extension handlers: {0}".format(ustr(e))
+            detailed_msg = '{0} {1}'.format(msg, traceback.extract_tb(get_traceback(e)))
             logger.warn(msg)
             add_event(AGENT_NAME,
                       version=CURRENT_VERSION,
                       op=WALAEventOperation.ExtensionProcessing,
                       is_success=False,
-                      message=msg)
+                      message=detailed_msg)
             return
 
     def cleanup_outdated_handlers(self):

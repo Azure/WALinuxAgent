@@ -3,9 +3,8 @@
 import json
 
 from azurelinuxagent.common.protocol.restapi import ExtensionStatus, Extension, ExtHandler, ExtHandlerProperties
-from azurelinuxagent.ga.exthandlers import parse_ext_status, ExtHandlerInstance
-from tests.tools import *
-
+from azurelinuxagent.ga.exthandlers import parse_ext_status, ExtHandlerInstance, get_exthandlers_handler
+from azurelinuxagent.common.exception import ProtocolError
 
 class TestExtHandlers(AgentTestCase):
     def test_parse_extension_status00(self):
@@ -132,3 +131,26 @@ class TestExtHandlers(AgentTestCase):
         self.assert_extension_sequence_number(goal_state_sequence_number="-1",
                                               disk_sequence_number=3,
                                               expected_sequence_number=-1)
+
+    @patch("azurelinuxagent.ga.exthandlers.add_event")
+    @patch("azurelinuxagent.common.errorstate.ErrorState.is_triggered")
+    @patch("azurelinuxagent.common.protocol.util.ProtocolUtil.get_protocol")
+    def test_it_should_report_an_error_if_the_wireserver_cannot_be_reached(self, patch_get_protocol, patch_is_triggered, patch_add_event):
+        test_message = "TEST MESSAGE"
+
+        patch_get_protocol.side_effect = ProtocolError(test_message) # get_protocol will throw if the wire server cannot be reached
+        patch_is_triggered.return_value = True # protocol errors are reported only after a delay; force the error to be reported now
+
+        get_exthandlers_handler().run()
+
+        self.assertEquals(patch_add_event.call_count, 2)
+
+        _, first_call_args = patch_add_event.call_args_list[0]
+        self.assertEquals(first_call_args['op'], WALAEventOperation.GetArtifactExtended)
+        self.assertEquals(first_call_args['is_success'], False)
+
+        _, second_call_args = patch_add_event.call_args_list[1]
+        self.assertEquals(second_call_args['op'], WALAEventOperation.ExtensionProcessing)
+        self.assertEquals(second_call_args['is_success'], False)
+        self.assertIn(test_message, second_call_args['message'])
+
