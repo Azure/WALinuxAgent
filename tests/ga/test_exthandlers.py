@@ -5,6 +5,8 @@ import json
 from azurelinuxagent.common.protocol.restapi import ExtensionStatus, Extension, ExtHandler, ExtHandlerProperties
 from azurelinuxagent.ga.exthandlers import parse_ext_status, ExtHandlerInstance, get_exthandlers_handler
 from azurelinuxagent.common.exception import ProtocolError
+from azurelinuxagent.common.event import WALAEventOperation
+from tests.tools import *
 
 class TestExtHandlers(AgentTestCase):
     def test_parse_extension_status00(self):
