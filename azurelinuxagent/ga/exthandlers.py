@@ -567,7 +567,6 @@ class ExtHandlersHandler(object):
 
         fileutil.write_file(status_path, agent_details_json)
 
-
     def report_ext_handler_status(self, vm_status, ext_handler):
         ext_handler_i = ExtHandlerInstance(ext_handler, self.protocol)
 
@@ -757,11 +756,17 @@ class ExtHandlerInstance(object):
         for uri in uris_shuffled:
             try:
                 destination = os.path.join(conf.get_lib_dir(), os.path.basename(uri.uri) + ".zip")
-                file_downloaded = self.protocol.download_ext_handler_pkg(uri.uri, destination)
 
-                if file_downloaded and os.path.exists(destination):
+                if os.path.exists(destination):
+                    file_downloaded = True
                     self.pkg_file = destination
                     break
+                else:
+                    file_downloaded = self.protocol.download_ext_handler_pkg(uri.uri, destination)
+
+                    if file_downloaded and os.path.exists(destination):
+                        self.pkg_file = destination
+                        break
 
             except Exception as e:
                 logger.warn("Error while downloading extension: {0}", ustr(e))
@@ -772,7 +777,6 @@ class ExtHandlerInstance(object):
         self.logger.verbose("Unzip extension package")
         try:
             zipfile.ZipFile(self.pkg_file).extractall(self.get_base_dir())
-            os.remove(self.pkg_file)
         except IOError as e:
             fileutil.clean_ioerror(e, paths=[self.get_base_dir(), self.pkg_file])
             raise ExtensionError(u"Failed to unzip extension package", e, code=1001)
@@ -867,6 +871,12 @@ class ExtHandlerInstance(object):
 
     def rm_ext_handler_dir(self):
         try:
+            zip_filename = "__".join(os.path.basename(self.get_base_dir()).split("-")) + ".zip"
+            destination = os.path.join(conf.get_lib_dir(), zip_filename)
+            if os.path.exists(destination):
+                self.pkg_file = destination
+                os.remove(self.pkg_file)
+
             base_dir = self.get_base_dir()
             if os.path.isdir(base_dir):
                 self.logger.info("Remove extension handler directory: {0}",

@@ -30,6 +30,17 @@ def do_not_run_test():
     return True
 
 
+def raise_system_exception():
+    raise Exception
+
+
+def raise_ioerror(*args):
+    e = IOError()
+    from errno import EIO
+    e.errno = EIO
+    raise e
+
+
 class TestExtensionCleanup(AgentTestCase):
     def setUp(self):
         AgentTestCase.setUp(self)
@@ -1240,6 +1251,119 @@ class TestExtension(ExtensionTestCase):
         self.assertEqual(1, patch_get_update_command.call_count)
 
         self._assert_handler_status(protocol.report_vm_status, "NotReady", expected_ext_count=1, version="1.0.1")
+
+    @patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_disable_command')
+    def test__extension_upgrade_failure_when_prev_version_disable_fails(self, patch_get_disable_command, *args):
+        test_data = WireProtocolData(DATA_FILE_EXT_SINGLE)
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+
+        # Ensure initial install and enable is successful
+        exthandlers_handler.run()
+
+        self.assertEqual(0, patch_get_disable_command.call_count)
+        self._assert_handler_status(protocol.report_vm_status, "Ready", expected_ext_count=1, version="1.0.0")
+        self._assert_ext_status(protocol.report_ext_status, "success", 0)
+
+        # Next incarnation, update version
+        test_data.goal_state = test_data.goal_state.replace("<Incarnation>1<", "<Incarnation>2<")
+        test_data.ext_conf = test_data.ext_conf.replace('version="1.0.0"', 'version="1.0.1"')
+        test_data.manifest = test_data.manifest.replace('1.0.0', '1.0.1')
+
+        # Disable of the old extn fails
+        patch_get_disable_command.return_value = "exit 1"
+        exthandlers_handler.run()  # Download the new update the first time, and then we patch the download method.
+
+        with patch('azurelinuxagent.common.protocol.restapi.Protocol.download_ext_handler_pkg') as patch_download:
+            loop_run = 5
+            for x in range(loop_run):
+                exthandlers_handler.run()
+
+            self.assertEqual(loop_run + 1, patch_get_disable_command.call_count)  # counting the earlier run done to
+            # download the new update
+            self.assertEqual(0, patch_download.call_count)  # The download should never be called.
+
+        # On the next iteration, update should not be retried
+        self._assert_handler_status(protocol.report_vm_status, "NotReady", expected_ext_count=0, version="1.0.1")
+
+    @patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_disable_command')
+    def test__extension_upgrade_failure_when_prev_version_disable_fails_and_recovers(self, patch_get_disable_command,
+                                                                                     *args):
+        test_data = WireProtocolData(DATA_FILE_EXT_SINGLE)
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+
+        # Ensure initial install and enable is successful
+        exthandlers_handler.run()
+
+        self.assertEqual(0, patch_get_disable_command.call_count)
+        self._assert_handler_status(protocol.report_vm_status, "Ready", expected_ext_count=1, version="1.0.0")
+        self._assert_ext_status(protocol.report_ext_status, "success", 0)
+
+        # Next incarnation, update version
+        test_data.goal_state = test_data.goal_state.replace("<Incarnation>1<", "<Incarnation>2<")
+        test_data.ext_conf = test_data.ext_conf.replace('version="1.0.0"', 'version="1.0.1"')
+        test_data.manifest = test_data.manifest.replace('1.0.0', '1.0.1')
+
+        # Disable of the old extn fails
+        patch_get_disable_command.return_value = "exit 1"
+        exthandlers_handler.run()  # Download the new update the first time, and then we patch the download method.
+        self.assertEqual(1, patch_get_disable_command.call_count)
+
+        with patch('azurelinuxagent.ga.exthandlers.ExtHandlerInstance.launch_command') as patch_launch_command:
+            exthandlers_handler.run()
+
+        self.assertEqual(2, patch_get_disable_command.call_count)  # counting the earlier run done.
+
+        with patch('azurelinuxagent.common.protocol.restapi.Protocol.download_ext_handler_pkg') as patch_download:
+            loop_run = 5
+            for x in range(loop_run):
+                exthandlers_handler.run()
+
+            self.assertEqual(0, patch_download.call_count)  # The download should never be called.
+
+        self.assertEqual(2, patch_get_disable_command.call_count)  # Disable is not called again after it recovered
+
+        # The update recovered, and thus should be "Ready" now.
+        self._assert_handler_status(protocol.report_vm_status, "Ready", expected_ext_count=1, version="1.0.1")
+
+    @patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_disable_command')
+    def test__extension_upgrade_failure_when_prev_version_disable_fails_incorrect_zip(self, patch_get_disable_command,
+                                                                                      *args):
+        test_data = WireProtocolData(DATA_FILE_EXT_SINGLE)
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+
+        # Ensure initial install and enable is successful
+        exthandlers_handler.run()
+        self.assertEqual(0, patch_get_disable_command.call_count)
+
+        self._assert_handler_status(protocol.report_vm_status, "Ready", expected_ext_count=1, version="1.0.0")
+        self._assert_ext_status(protocol.report_ext_status, "success", 0)
+
+        # Next incarnation, update version
+        test_data.goal_state = test_data.goal_state.replace("<Incarnation>1<", "<Incarnation>2<")
+        test_data.ext_conf = test_data.ext_conf.replace('version="1.0.0"', 'version="1.0.1"')
+        test_data.manifest = test_data.manifest.replace('1.0.0', '1.0.1')
+
+        # Disable of the old extn fails
+        patch_get_disable_command.return_value = "exit 1"
+        with patch("zipfile.ZipFile.extractall") as patch_zipfile_extractall:
+            patch_zipfile_extractall.side_effect = raise_ioerror
+            exthandlers_handler.run()  # Check if the zipfile was corrupt and re-download again in the next run.
+
+        # Disable of the old extn fails
+        patch_get_disable_command.return_value = "exit 1"
+        exthandlers_handler.run()  # Download the new update the correctly, and then we patch the download method.
+
+        with patch('azurelinuxagent.common.protocol.restapi.Protocol.download_ext_handler_pkg') as patch_download:
+            loop_run = 5
+            for x in range(loop_run):
+                exthandlers_handler.run()
+
+            # failed to download earlier, thus doesn't need to add +1, like in the earlier test case
+            self.assertEqual(loop_run + 1, patch_get_disable_command.call_count)
+            self.assertEqual(0, patch_download.call_count)  # The download should never be called.
+
+        # On the next iteration, update should not be retried
+        self._assert_handler_status(protocol.report_vm_status, "NotReady", expected_ext_count=0, version="1.0.1")
 
     @patch('azurelinuxagent.ga.exthandlers.ExtHandlersHandler.handle_handle_ext_handler_error')
     @patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_update_command')
