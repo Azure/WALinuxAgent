@@ -66,18 +66,16 @@ class ExtensionDownloadError(ExtensionError):
     When failed to download and setup an extension
     """
 
-    def __init__(self, msg=None, inner=None):
-        super(ExtensionDownloadError, self).__init__(msg, inner)
+    def __init__(self, msg=None, inner=None, code=-1):
+        super(ExtensionDownloadError, self).__init__(msg, inner, code)
 
 
 class ExtensionOperationError(ExtensionError):
     """
     When failed to execute an extension
     """
-
     def __init__(self, msg=None, inner=None, code=-1):
-        super(ExtensionOperationError, self).__init__(msg, inner)
-        self.code = code
+        super(ExtensionOperationError, self).__init__(msg, inner, code)
 
 
 class ProvisionError(AgentError):
