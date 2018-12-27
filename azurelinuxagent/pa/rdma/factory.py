@@ -32,7 +32,7 @@ def get_rdma_handler(
     if (
             (distro_full_name == 'SUSE Linux Enterprise Server' or
              distro_full_name == 'SLES') and
-            int(distro_version) > 11
+            float(distro_version) > 11
     ):
         return SUSERDMAHandler()
 
