@@ -1036,8 +1036,9 @@ class TestExtension(ExtensionTestCase):
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.1")
         self._assert_ext_status(protocol.report_ext_status, "success", 0)
 
-    @patch('subprocess.Popen.poll')
-    def test_install_failure(self, patch_poll, *args):
+    @patch('azurelinuxagent.ga.exthandlers.ExtHandlerInstance.install', side_effect=ExtHandlerInstance.install, autospec=True)
+    @patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_install_command')
+    def test_install_failure(self, patch_get_install_command, patch_install, *args):
         """
         When extension install fails, the operation should not be retried.
         """
@@ -1045,36 +1046,31 @@ class TestExtension(ExtensionTestCase):
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
 
         # Ensure initial install is unsuccessful
-        patch_poll.call_count = 0
-        patch_poll.return_value = 1
+        patch_get_install_command.return_value = "exit.sh 1"
         exthandlers_handler.run()
 
-        # capture process output also calls poll
-        self.assertEqual(2, patch_poll.call_count)
+        self.assertEqual(1, patch_install.call_count)
         self.assertEqual(1, protocol.report_vm_status.call_count)
         self._assert_handler_status(protocol.report_vm_status, "NotReady", expected_ext_count=0, version="1.0.0")
 
         # Ensure subsequent no further retries are made
         exthandlers_handler.run()
-        self.assertEqual(2, patch_poll.call_count)
+        self.assertEqual(1, patch_install.call_count)
         self.assertEqual(2, protocol.report_vm_status.call_count)
 
     @patch('azurelinuxagent.ga.exthandlers.ExtHandlersHandler.handle_handle_ext_handler_error')
-    @patch('subprocess.Popen.poll')
-    def test_install_failure_check_exception_handling(self, patch_poll, patch_handle_handle_ext_handler_error, *args):
+    @patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_install_command')
+    def test_install_failure_check_exception_handling(self, patch_get_install_command, patch_handle_handle_ext_handler_error, *args):
         """
         When extension install fails, the operation should be reported to our telemetry service.
         """
         test_data = WireProtocolData(DATA_FILE_EXT_SINGLE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
 
-        # Ensure initial install is unsuccessful
-        patch_poll.call_count = 0
-        patch_poll.return_value = 1
+        # Ensure install is unsuccessful
+        patch_get_install_command.return_value = "exit.sh 1"
         exthandlers_handler.run()
 
-        # capture process output also calls poll
-        self.assertEqual(2, patch_poll.call_count)
         self.assertEqual(1, protocol.report_vm_status.call_count)
         self.assertEqual(1, patch_handle_handle_ext_handler_error.call_count)
 
@@ -1088,7 +1084,7 @@ class TestExtension(ExtensionTestCase):
 
         # Ensure initial install is successful, but enable fails
         patch_get_enable_command.call_count = 0
-        patch_get_enable_command.return_value = "exit 1"
+        patch_get_enable_command.return_value = "exit.sh 1"
         exthandlers_handler.run()
 
         self.assertEqual(1, patch_get_enable_command.call_count)
@@ -1111,7 +1107,7 @@ class TestExtension(ExtensionTestCase):
 
         # Ensure initial install is successful, but enable fails
         patch_get_enable_command.call_count = 0
-        patch_get_enable_command.return_value = "exit 1"
+        patch_get_enable_command.return_value = "exit.sh 1"
         exthandlers_handler.run()
 
         self.assertEqual(1, patch_get_enable_command.call_count)
@@ -1128,7 +1124,7 @@ class TestExtension(ExtensionTestCase):
 
         # Ensure initial install and enable is successful, but disable fails
         patch_get_disable_command.call_count = 0
-        patch_get_disable_command.return_value = "exit 1"
+        patch_get_disable_command.return_value = "exit.sh 1"
         exthandlers_handler.run()
 
         self.assertEqual(0, patch_get_disable_command.call_count)
