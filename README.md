@@ -2,6 +2,9 @@
 
 ## Master branch status
 
+[![Travis CI](https://travis-ci.org/Azure/WALinuxAgent.svg?branch=master)](https://travis-ci.org/Azure/WALinuxAgent/branches)
+[![CodeCov](https://codecov.io/gh/Azure/WALinusAgent/branch/master/graph/badge.svg)](https://codecov.io/gh/Azure/WALinuxAgent/branch/master)
+
 Each badge below represents our basic validation tests for an image, which are executed several times each day. These include provisioning, user account, disk, extension and networking scenarios.
 
 Image | Status |

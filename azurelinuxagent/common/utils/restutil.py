@@ -272,7 +272,7 @@ def _get_http_proxy(secure=False):
     host = conf.get_httpproxy_host()
     port = None
 
-    if not host is None:
+    if host is not None:
         port = conf.get_httpproxy_port()
 
     else:
@@ -283,7 +283,7 @@ def _get_http_proxy(secure=False):
                 http_proxy_url = os.environ[v]
                 break
 
-        if not http_proxy_url is None:
+        if http_proxy_url is not None:
             host, port, _, _ = _parse_url(http_proxy_url)
 
     return host, port
@@ -370,8 +370,8 @@ def http_request(method,
     # fallback to HTTP if allowed
     if secure and \
         proxy_host is not None and \
-        proxy_port is not None \
-        and not hasattr(httpclient.HTTPSConnection, "set_tunnel"):
+        proxy_port is not None and \
+            not hasattr(httpclient.HTTPSConnection, "set_tunnel"):
 
         if not conf.get_allow_http():
             raise HttpError("HTTPS tunnelling is unavailable and required")

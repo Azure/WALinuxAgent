@@ -17,13 +17,11 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-import datetime
 import glob
 import json
 import operator
 import os
 import os.path
-import pwd
 import random
 import re
 import shutil
@@ -42,7 +40,6 @@ import azurelinuxagent.common.protocol.wire
 import azurelinuxagent.common.protocol.metadata as metadata
 
 from datetime import datetime, timedelta
-from pwd import getpwall
 from azurelinuxagent.common.errorstate import ErrorState
 
 from azurelinuxagent.common.event import add_event, WALAEventOperation, elapsed_milliseconds
@@ -152,8 +149,8 @@ class RemoteAccessHandler(object):
             raise RemoteAccessError("Error adding user {0}. {1}".format(username, ustr(e)))
         try:
             prv_key = os.path.join(conf.get_lib_dir(), TRANSPORT_PRIVATE_CERT)
-            pwd = self.cryptUtil.decrypt_secret(encrypted_password, prv_key)
-            self.os_util.chpasswd(username, pwd, conf.get_password_cryptid(), conf.get_password_crypt_salt_len())
+            pawd = self.cryptUtil.decrypt_secret(encrypted_password, prv_key)
+            self.os_util.chpasswd(username, pawd, conf.get_password_cryptid(), conf.get_password_crypt_salt_len())
             self.os_util.conf_sudoer(username)
             logger.info("User '{0}' added successfully with expiration in {1}".format(username, expiration_date))
         except Exception as e:

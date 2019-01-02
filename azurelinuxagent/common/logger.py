@@ -83,7 +83,7 @@ class Logger(object):
         else:
             log_item = u"{0} {1} {2}\n".format(time, level_str, msg)
 
-        log_item = ustr(log_item.encode('ascii', "backslashreplace"), 
+        log_item = ustr(log_item.encode('ascii', "backslashreplace"),
                         encoding="ascii")
 
         for appender in self.appenders:
@@ -219,4 +219,3 @@ def _create_logger_appender(appender_type, level=LogLevel.INFO, path=None):
         return TelemetryAppender(level, path)
     else:
         raise ValueError("Unknown appender type")
-

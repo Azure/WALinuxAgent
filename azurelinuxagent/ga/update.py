@@ -345,7 +345,7 @@ class UpdateHandler(object):
 
         if self.child_process is None:
             return
-        
+
         logger.info(
             u"Agent {0} forwarding signal {1} to {2}",
             CURRENT_AGENT,
@@ -371,7 +371,7 @@ class UpdateHandler(object):
 
         if not conf.get_autoupdate_enabled():
             return None
-        
+
         self._find_agents()
         available_agents = [agent for agent in self.agents
                             if agent.is_available
@@ -412,7 +412,7 @@ class UpdateHandler(object):
                             pid)
                         os.kill(pid, signal.SIGKILL)
                         break
-                    
+
                     logger.info(
                         u"{0} waiting for orphan process {1} to terminate",
                         CURRENT_AGENT,
@@ -467,12 +467,12 @@ class UpdateHandler(object):
         self.child_launch_attempts += 1
 
         if (time.time() - self.child_launch_time) <= CHILD_LAUNCH_INTERVAL \
-            and self.child_launch_attempts >= CHILD_LAUNCH_RESTART_MAX:
-                msg = u"Agent {0} restarted more than {1} times in {2} seconds".format(
-                    self.child_agent.name,
-                    CHILD_LAUNCH_RESTART_MAX,
-                    CHILD_LAUNCH_INTERVAL)
-                raise Exception(msg)
+                and self.child_launch_attempts >= CHILD_LAUNCH_RESTART_MAX:
+            msg = u"Agent {0} restarted more than {1} times in {2} seconds".format(
+                self.child_agent.name,
+                CHILD_LAUNCH_RESTART_MAX,
+                CHILD_LAUNCH_INTERVAL)
+            raise Exception(msg)
         return
 
     def _filter_blacklisted_agents(self):
@@ -492,15 +492,15 @@ class UpdateHandler(object):
     def _get_host_plugin(self, protocol=None):
         return protocol.client.get_host_plugin() \
                                 if protocol and \
-                                    type(protocol) is WireProtocol and \
-                                    protocol.client \
+                                type(protocol) is WireProtocol and \
+                                protocol.client \
                                 else None
 
     def _get_pid_parts(self):
         pid_file = conf.get_agent_pid_file_path()
         pid_dir = os.path.dirname(pid_file)
         pid_name = os.path.basename(pid_file)
-        pid_re = re.compile("(\d+)_{0}".format(re.escape(pid_name)))
+        pid_re = re.compile(r"(\d+)_{0}".format(re.escape(pid_name)))
         return pid_dir, pid_name, pid_re
 
     def _get_pid_files(self):
@@ -726,13 +726,13 @@ class GuestAgent(object):
         version = None
         if path is not None:
             m = AGENT_DIR_PATTERN.match(path)
-            if m == None:
+            if m is None:
                 raise UpdateError(u"Illegal agent directory: {0}".format(path))
             version = m.group(1)
         elif self.pkg is not None:
             version = pkg.version
 
-        if version == None:
+        if version is None:
             raise UpdateError(u"Illegal agent version: {0}".format(version))
         self.version = FlexibleVersion(version)
 
@@ -828,7 +828,7 @@ class GuestAgent(object):
         if self.pkg is None:
             raise UpdateError(u"Agent {0} is missing package and download URIs".format(
                 self.name))
-        
+
         self._download()
         self._unpack()
 
@@ -935,7 +935,7 @@ class GuestAgent(object):
         with open(path, "r") as manifest_file:
             try:
                 manifests = json.load(manifest_file)
-            except Exception as e:
+            except Exception:
                 msg = u"Agent {0} has a malformed {1}".format(self.name, AGENT_MANIFEST_FILE)
                 raise UpdateError(msg)
             if type(manifests) is list:
@@ -1005,7 +1005,7 @@ class GuestAgentError(object):
 
         self.clear()
         return
-   
+
     def mark_failure(self, is_fatal=False):
         self.last_failure = time.time()
         self.failure_count += 1
@@ -1033,7 +1033,7 @@ class GuestAgentError(object):
             with open(self.path, 'w') as f:
                 json.dump(self.to_json(), f)
         return
-    
+
     def from_json(self, data):
         self.last_failure = max(
             self.last_failure,
@@ -1049,7 +1049,7 @@ class GuestAgentError(object):
             u"last_failure": self.last_failure,
             u"failure_count": self.failure_count,
             u"was_fatal" : self.was_fatal
-        }  
+        }
         return data
 
     def __str__(self):

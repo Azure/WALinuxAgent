@@ -33,7 +33,7 @@ import time
 import azurelinuxagent.common.event as event
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
-from azurelinuxagent.common.utils import fileutil
+import azurelinuxagent.common.utils.fileutil as fileutil
 
 from azurelinuxagent.common.version import PY_VERSION_MAJOR
 

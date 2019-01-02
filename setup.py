@@ -25,8 +25,15 @@ from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, \
 from azurelinuxagent.common.osutil import get_osutil
 import setuptools
 from setuptools import find_packages
-from setuptools.command.install import install as  _install
+from setuptools.command.install import install as _install
 import sys
+
+
+with open('requirements.txt') as f:
+    required = f.read().splitlines()
+
+with open('test-requirements.txt') as f:
+    required_for_tests = f.read().splitlines()
 
 root_dir = os.path.dirname(os.path.abspath(__file__))
 os.chdir(root_dir)
@@ -212,14 +219,6 @@ class install(_install):
             osutil.stop_agent_service()
             osutil.start_agent_service()
 
-# Note to packagers and users from source.
-# In version 3.5 of Python distribution information handling in the platform
-# module was deprecated. Depending on the Linux distribution the
-# implementation may be broken prior to Python 3.7 wher the functionality
-# will be removed from Python 3
-requires = []
-if float(sys.version[:3]) >= 3.7:
-    requires = ['distro']
 
 modules = []
 
@@ -234,11 +233,37 @@ setuptools.setup(
     author_email='walinuxagent@microsoft.com',
     platforms='Linux',
     url='https://github.com/Azure/WALinuxAgent',
-    license='Apache License Version 2.0',
+    license='Apache Software License Version 2.0',
     packages=find_packages(exclude=["tests*"]),
     py_modules=modules,
-    install_requires=requires,
     cmdclass={
         'install': install
-    }
+    },
+    classifiers=[
+        'Development Status :: 5 - Production/Stable',
+        'Environment :: No Input/Output (Daemon)',
+        'Intended Audience :: Information Technology',
+        'Intended Audience :: System Administrators',
+        'License :: OSI Approved :: Apache Software License',
+        'Natural Language :: English',
+        'Operating System :: MacOS',
+        'Operating System :: POSIX',
+        'Operating System :: Unix',
+        'Programming Language :: Python :: 2',
+        'Programming Language :: Python :: 2.7',
+        'Programming Language :: Python :: 3',
+        'Programming Language :: Python :: 3.3',
+        'Programming Language :: Python :: 3.4',
+        'Programming Language :: Python :: 3.5',
+        'Programming Language :: Python :: 3.6',
+        'Programming Language :: Python :: 3.7',
+        'Topic :: System :: Installation/Setup',
+        'Topic :: System :: Monitoring',
+        'Topic :: System :: Networking'
+    ],
+    keywords='azure waagent walinuxagent',
+    test_suite='tests',
+    install_requires=required,
+    tests_require=required_for_tests,
+    zip_safe=True
 )

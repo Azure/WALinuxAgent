@@ -260,7 +260,7 @@ class HostPluginProtocol(object):
         else:
             self.report_status_health(is_healthy=True)
             logger.verbose("HostGAPlugin: PageBlob clean-up succeeded")
-        
+
         # Then, upload the blob in pages
         if sas_url.count("?") <= 0:
             sas_url = "{0}?comp=page".format(sas_url)
@@ -294,7 +294,7 @@ class HostPluginProtocol(object):
 
             # Advance to the next page (if any)
             start = end
-        
+
     def _build_status_data(self, sas_url, blob_headers, content=None):
         headers = []
         for name in iter(blob_headers.keys()):
@@ -307,10 +307,10 @@ class HostPluginProtocol(object):
             'requestUri': sas_url,
             'headers': headers
         }
-        if not content is None:
+        if content is not None:
             data['content'] = self._base64_encode(content)
         return json.dumps(data, sort_keys=True)
-    
+
     def _build_status_headers(self):
         return {
             HEADER_VERSION: API_VERSION,
@@ -318,7 +318,7 @@ class HostPluginProtocol(object):
             HEADER_CONTAINER_ID: self.container_id,
             HEADER_HOST_CONFIG_NAME: self.role_config_name
         }
-    
+
     def _base64_encode(self, data):
         s = base64.b64encode(bytes(data))
         if PY_VERSION_MAJOR > 2:

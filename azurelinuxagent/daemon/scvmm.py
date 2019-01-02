@@ -66,7 +66,7 @@ class ScvmmHandler(object):
         devnull = open(os.devnull, 'w')
         subprocess.Popen(["/bin/bash", startup_script, "-p " + mount_point],
                          stdout=devnull, stderr=devnull)
-    
+
     def run(self):
         if self.detect_scvmm_env():
             logger.info("Exiting")

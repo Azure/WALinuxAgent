@@ -236,7 +236,7 @@ class TestRemoteAccessHandler(AgentTestCase):
         expiration = datetime.utcnow() + timedelta(days=1)
         pwd = "bad password"
         error = "Error adding user foobar cleanup successful\n" \
-                "Inner error: \[CryptError\] Error decoding secret\n" \
+                "Inner error: \\[CryptError\\] Error decoding secret\n" \
                 "Inner error: Incorrect padding".format(tstuser)
         self.assertRaisesRegex(RemoteAccessError, error, rah.add_user, tstuser, pwd, expiration)
         users = get_user_dictionary(rah.os_util.get_users())

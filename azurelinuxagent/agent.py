@@ -187,15 +187,15 @@ def parse_args(sys_args):
     debug = False
     conf_file_path = None
     for a in sys_args:
-        m = re.match("^(?:[-/]*)configuration-path:([\w/\.\-_]+)", a)
-        if not m is None:
+        m = re.match(r"^(?:[-/]*)configuration-path:([\w/\.\-_]+)", a)
+        if m is not None:
             conf_file_path = m.group(1)
             if not os.path.exists(conf_file_path):
                 print("Error: Configuration file {0} does not exist".format(
                         conf_file_path), file=sys.stderr)
                 usage()
                 sys.exit(1)
-        
+
         elif re.match("^([-/]*)deprovision\\+user", a):
             cmd = "deprovision+user"
         elif re.match("^([-/]*)deprovision", a):
@@ -263,5 +263,6 @@ def start(conf_file_path=None):
         args.append('-configuration-path:{0}'.format(conf_file_path))
     subprocess.Popen(args, stdout=devnull, stderr=devnull)
 
-if __name__ == '__main__' :
+
+if __name__ == '__main__':
     main()

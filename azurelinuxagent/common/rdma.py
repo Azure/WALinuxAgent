@@ -127,14 +127,13 @@ class RDMAHandler(object):
         exitcode, ps_out  = shellutil.run_get_output("ps -ef")
         if exitcode != 0:
             raise Exception('RDMA: ps -ef failed: %s' % ps_out)
-        for n in  kvp_daemon_names:
+        for n in kvp_daemon_names:
             if n in ps_out:
                 logger.info('RDMA: kvp daemon (%s) is running' % n)
                 return True
             else:
                 logger.verbose('RDMA: kvp daemon (%s) is not running' % n)
         return False
-
 
     def load_driver_module(self):
         """Load the kernel driver, this depends on the proper driver
@@ -248,7 +247,7 @@ class RDMADeviceHandler(object):
             return
         retcode,out = shellutil.run_get_output("modinfo %s" % module_name)
         if retcode == 0:
-            version = re.search("version:\s+(\d+)\.(\d+)\.(\d+)\D", out, re.IGNORECASE)
+            version = re.search(r"version:\s+(\d+)\.(\d+)\.(\d+)\D", out, re.IGNORECASE)
             if version:
                 v1 = int(version.groups(0)[0])
                 v2 = int(version.groups(0)[1])
@@ -325,7 +324,7 @@ class RDMADeviceHandler(object):
 
     @staticmethod
     def replace_dat_conf_contents(cfg, ipv4_addr):
-        old = "ofa-v2-ib0 u2.0 nonthreadsafe default libdaplofa.so.2 dapl.2.0 \"\S+ 0\""
+        old = "ofa-v2-ib0 u2.0 nonthreadsafe default libdaplofa.so.2 dapl.2.0 \"\\S+ 0\""
         new = "ofa-v2-ib0 u2.0 nonthreadsafe default libdaplofa.so.2 dapl.2.0 \"{0} 0\"".format(
             ipv4_addr)
         return re.sub(old, new, cfg)
@@ -365,7 +364,7 @@ class RDMADeviceHandler(object):
     def wait_any_rdma_device(dir, timeout_sec, check_interval_sec):
         logger.info(
             "RDMA: waiting for any Infiniband device at directory={0} timeout={1}s".format(
-            dir, timeout_sec))
+                dir, timeout_sec))
         total_retries = timeout_sec/check_interval_sec
         n = 0
         while n < total_retries:
@@ -384,7 +383,7 @@ class RDMADeviceHandler(object):
     @staticmethod
     def update_network_interface(mac_addr, ipv4_addr):
         netmask=16
-        
+
         logger.info("RDMA: will update the network interface with IPv4/MAC")
 
         if_name=RDMADeviceHandler.get_interface_by_mac(mac_addr)
@@ -405,7 +404,7 @@ class RDMADeviceHandler(object):
         if ret != 0:
             raise Exception("Failed to list network interfaces")
         output = output.replace('\n', '')
-        match = re.search(r"(eth\d).*(HWaddr|ether) {0}".format(mac), 
+        match = re.search(r"(eth\d).*(HWaddr|ether) {0}".format(mac),
                           output, re.IGNORECASE)
         if match is None:
             raise Exception("Failed to get ifname with mac: {0}".format(mac))

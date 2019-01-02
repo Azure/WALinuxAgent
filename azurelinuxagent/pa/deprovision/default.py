@@ -35,10 +35,10 @@ from azurelinuxagent.ga.exthandlers import HANDLER_NAME_PATTERN
 
 
 def read_input(message):
-    if sys.version_info[0] >= 3:
+    if sys.version_info >= (3,):
         return input(message)
     else:
-        return raw_input(message)
+        return raw_input(message)  # noqa (flake8 F821 would say raw_input is an undefined name)
 
 class DeprovisionAction(object):
     def __init__(self, func, args=[], kwargs={}):
@@ -74,9 +74,8 @@ class DeprovisionHandler(object):
         username = ovfenv.username
         warnings.append(("WARNING! {0} account and entire home directory "
                          "will be deleted.").format(username))
-        actions.append(DeprovisionAction(self.osutil.del_account, 
+        actions.append(DeprovisionAction(self.osutil.del_account,
                                          [username]))
-
 
     def regen_ssh_host_key(self, warnings, actions):
         warnings.append("WARNING! All SSH host key pairs will be deleted.")
@@ -165,9 +164,9 @@ class DeprovisionHandler(object):
 
     def reset_hostname(self, warnings, actions):
         localhost = ["localhost.localdomain"]
-        actions.append(DeprovisionAction(self.osutil.set_hostname, 
+        actions.append(DeprovisionAction(self.osutil.set_hostname,
                                          localhost))
-        actions.append(DeprovisionAction(self.osutil.set_dhcp_hostname, 
+        actions.append(DeprovisionAction(self.osutil.set_dhcp_hostname,
                                          localhost))
 
     def setup(self, deluser):
@@ -217,7 +216,7 @@ class DeprovisionHandler(object):
 
         While users *should* manually deprovision a VM, the files removed by
         this routine will help keep the agent from getting confused
-        (since incarnation and extension settings, among other items, will 
+        (since incarnation and extension settings, among other items, will
         no longer be monotonically increasing).
         '''
         warnings, actions = self.setup_changed_unique_id()
@@ -237,7 +236,7 @@ class DeprovisionHandler(object):
 
         confirm = read_input("Do you want to proceed (y/n)")
         return True if confirm.lower().startswith('y') else False
-    
+
     def do_warnings(self, warnings):
         for warning in warnings:
             print(warning)
@@ -246,6 +245,4 @@ class DeprovisionHandler(object):
         if not self.actions_running:
             print("Deprovision is interrupted.")
             sys.exit(0)
-
-        print ('Deprovisioning may not be interrupted.')
-        return
+        print('Deprovisioning may not be interrupted.')

@@ -107,5 +107,3 @@ class SUSEOSUtil(SUSE11OSUtil):
 
     def unregister_agent_service(self):
         return shellutil.run("systemctl disable waagent", chk_err=False)
-
-

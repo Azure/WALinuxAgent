@@ -77,7 +77,7 @@ def load_conf_from_file(conf_file_path, conf=__conf__):
     """
     Load conf file from: conf_file_path
     """
-    if os.path.isfile(conf_file_path) == False:
+    if os.path.isfile(conf_file_path) is False:
         raise AgentConfigError(("Missing configuration in {0}"
                                 "").format(conf_file_path))
     try:
@@ -330,7 +330,7 @@ def get_resourcedisk_format(conf=__conf__):
 
 def get_resourcedisk_enable_swap(conf=__conf__):
     return conf.get_switch("ResourceDisk.EnableSwap", False)
-    
+
 def get_resourcedisk_enable_swap_encryption(conf=__conf__):
     return conf.get_switch("ResourceDisk.EnableSwapEncryption", False)
 

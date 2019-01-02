@@ -21,7 +21,7 @@ class FlexibleVersion(version.Version):
     """
 
     def __init__(self, vstring=None, sep='.', prerel_tags=('alpha', 'beta', 'rc')):
-        version.Version.__init__(self) 
+        version.Version.__init__(self)
 
         if sep is None:
             sep = '.'
@@ -175,7 +175,7 @@ class FlexibleVersion(version.Version):
         if self.prerel_tags:
             tags = '|'.join(re.escape(tag) for tag in self.prerel_tags)
             self.prerel_tags_set = dict(zip(self.prerel_tags, range(len(self.prerel_tags))))
-            release_re = '(?:{prerel_sep}(?P<{tn}>{tags})(?P<{nn}>\d*))?'.format(
+            release_re = r'(?:{prerel_sep}(?P<{tn}>{tags})(?P<{nn}>\d*))?'.format(
                         prerel_sep=self._re_prerel_sep,
                         tags=tags,
                         tn=self._nn_prerel_tag,
@@ -205,7 +205,9 @@ class FlexibleVersion(version.Version):
 
         this_version = list(self.version[:])
         that_version = list(that.version[:])
-        while len(this_version) < len(that_version): this_version.append(0)
-        while len(that_version) < len(this_version): that_version.append(0)
+        while len(this_version) < len(that_version):
+            this_version.append(0)
+        while len(that_version) < len(this_version):
+            that_version.append(0)
 
         return this_version, that_version

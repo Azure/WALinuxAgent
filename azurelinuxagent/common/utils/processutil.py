@@ -66,4 +66,3 @@ def format_stdout_stderr(stdout, stderr, max_len=TELEMETRY_MESSAGE_MAX_LEN):
         return to_s(stdout, -1*stdout_len, stderr, 0)
     else:
         return to_s(stdout, -1*max_len_each, stderr, -1*max_len_each)
-

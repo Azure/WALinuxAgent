@@ -39,15 +39,15 @@ ARCHIVE_DIRECTORY_NAME = 'history'
 MAX_ARCHIVED_STATES = 50
 
 CACHE_PATTERNS = [
-    re.compile("^(.*)\.(\d+)\.(agentsManifest)$", re.IGNORECASE),
-    re.compile("^(.*)\.(\d+)\.(manifest\.xml)$", re.IGNORECASE),
-    re.compile("^(.*)\.(\d+)\.(xml)$", re.IGNORECASE)
+    re.compile(r"^(.*)\.(\d+)\.(agentsManifest)$", re.IGNORECASE),
+    re.compile(r"^(.*)\.(\d+)\.(manifest\.xml)$", re.IGNORECASE),
+    re.compile(r"^(.*)\.(\d+)\.(xml)$", re.IGNORECASE)
 ]
 
 # 2018-04-06T08:21:37.142697
 # 2018-04-06T08:21:37.142697.zip
-ARCHIVE_PATTERNS_DIRECTORY = re.compile('^\d{4}\-\d{2}\-\d{2}T\d{2}:\d{2}:\d{2}\.\d+$')
-ARCHIVE_PATTERNS_ZIP       = re.compile('^\d{4}\-\d{2}\-\d{2}T\d{2}:\d{2}:\d{2}\.\d+\.zip$')
+ARCHIVE_PATTERNS_DIRECTORY = re.compile(r'^\d{4}\-\d{2}\-\d{2}T\d{2}:\d{2}:\d{2}\.\d+$')
+ARCHIVE_PATTERNS_ZIP       = re.compile(r'^\d{4}\-\d{2}\-\d{2}T\d{2}:\d{2}:\d{2}\.\d+\.zip$')
 
 
 class StateFlusher(object):

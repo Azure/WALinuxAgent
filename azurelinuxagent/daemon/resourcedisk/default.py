@@ -129,7 +129,7 @@ class ResourceDiskHandler(object):
         if "gpt" in ret[1]:
             logger.info("GPT detected, finding partitions")
             parts = [x for x in ret[1].split("\n") if
-                     re.match("^\s*[0-9]+", x)]
+                     re.match(r"^\s*[0-9]+", x)]
             logger.info("Found {0} GPT partition(s).", len(parts))
             if len(parts) > 1:
                 logger.info("Removing old GPT partitions")
@@ -309,7 +309,7 @@ class ResourceDiskHandler(object):
                     with open(filename, 'w') as f:
                         os.posix_fallocate(f.fileno(), 0, nbytes)
                         return 0
-                except:
+                except (IOError, OSError):
                     # Not confident with this thing, just keep trying...
                     pass
 

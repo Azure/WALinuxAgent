@@ -31,4 +31,3 @@ class CoreOSDeprovisionHandler(DeprovisionHandler):
         files_to_del = ['/etc/machine-id']
         actions.append(DeprovisionAction(fileutil.rm_files, files_to_del))
         return warnings, actions
-

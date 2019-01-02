@@ -19,6 +19,7 @@
 import base64
 import socket
 import struct
+import sys
 import time
 
 import azurelinuxagent.common.conf as conf
@@ -38,7 +39,7 @@ class GaiaOSUtil(DefaultOSUtil):
         super(GaiaOSUtil, self).__init__()
 
     def _run_clish(self, cmd, log_cmd=True):
-        for i in xrange(10):
+        for i in range(10):
             ret, out = shellutil.run_get_output(
                 "/bin/clish -s -c '" + cmd + "'", log_cmd=log_cmd)
             if not ret:
@@ -111,6 +112,8 @@ class GaiaOSUtil(DefaultOSUtil):
         def text_to_num(buf):
             if len(buf) == 1:
                 return int(buf[0].split()[1])
+            if sys.version_info > (3,):
+                long = int
             return long(''.join(buf[1:]), 16)
 
         n = text_to_num(modulus)

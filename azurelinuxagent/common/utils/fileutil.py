@@ -207,7 +207,7 @@ def findre_in_file(file_path, line_re):
                 match = re.search(pattern, line)
                 if match:
                     return match
-    except:
+    except Exception:
         pass
 
     return None

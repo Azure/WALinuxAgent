@@ -64,7 +64,7 @@ class OvfEnv(object):
         ovfns = OVF_NAME_SPACE
 
         xml_doc = parse_doc(xml_text)
-        
+
         environment = find(xml_doc, "Environment", namespace=ovfns)
         _validate_ovf(environment, "Environment not found")
 
@@ -77,8 +77,8 @@ class OvfEnv(object):
         if version > OVF_VERSION:
             logger.warn("Newer provisioning configuration detected. "
                         "Please consider updating waagent")
-        
-        conf_set = find(section, "LinuxProvisioningConfigurationSet", 
+
+        conf_set = find(section, "LinuxProvisioningConfigurationSet",
                         namespace=wans)
         _validate_ovf(conf_set, "LinuxProvisioningConfigurationSet not found")
 
@@ -87,12 +87,12 @@ class OvfEnv(object):
 
         self.username = findtext(conf_set, "UserName", namespace=wans)
         _validate_ovf(self.username, "UserName not found")
-        
+
         self.user_password = findtext(conf_set, "UserPassword", namespace=wans)
 
         self.customdata = findtext(conf_set, "CustomData", namespace=wans)
-        
-        auth_option = findtext(conf_set, "DisableSshPasswordAuthentication", 
+
+        auth_option = findtext(conf_set, "DisableSshPasswordAuthentication",
                                namespace=wans)
         if auth_option is not None and auth_option.lower() == "true":
             self.disable_ssh_password_auth = True

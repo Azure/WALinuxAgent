@@ -56,7 +56,7 @@ for all distros. Each concrete distro classes could overwrite default behavior
 if needed.
 """
 
-IPTABLES_VERSION_PATTERN = re.compile("^[^\d\.]*([\d\.]+).*$")
+IPTABLES_VERSION_PATTERN = re.compile(r"^[^\d\.]*([\d\.]+).*$")
 IPTABLES_VERSION = "iptables --version"
 IPTABLES_LOCKING_VERSION = FlexibleVersion('1.4.21')
 
@@ -76,7 +76,7 @@ FIREWALL_DELETE_CONNTRACK_ACCEPT = "iptables {0} -t security -D OUTPUT -d {1} -p
 FIREWALL_DELETE_OWNER_ACCEPT = "iptables {0} -t security -D OUTPUT -d {1} -p tcp -m owner --uid-owner {2} -j ACCEPT"
 FIREWALL_DELETE_CONNTRACK_DROP = "iptables {0} -t security -D OUTPUT -d {1} -p tcp -m conntrack --ctstate INVALID,NEW -j DROP"
 
-PACKET_PATTERN = "^\s*(\d+)\s+(\d+)\s+DROP\s+.*{0}[^\d]*$"
+PACKET_PATTERN = r"^\s*(\d+)\s+(\d+)\s+DROP\s+.*{0}[^\d]*$"
 ALL_CPUS_REGEX = re.compile('^cpu .*')
 
 
@@ -93,7 +93,7 @@ IOCTL_SIOCGIFFLAGS = 0x8913
 IOCTL_SIOCGIFHWADDR = 0x8927
 IFNAMSIZ = 16
 
-IP_COMMAND_OUTPUT = re.compile('^\d+:\s+(\w+):\s+(.*)$')
+IP_COMMAND_OUTPUT = re.compile(r'^\d+:\s+(\w+):\s+(.*)$')
 
 BASE_CGROUPS = '/sys/fs/cgroup'
 
@@ -128,7 +128,7 @@ class DefaultOSUtil(object):
                 m = pattern.match(line)
                 if m is not None:
                     return int(m.group(1))
-            
+
             return 0
 
         except Exception as e:
@@ -278,12 +278,12 @@ class DefaultOSUtil(object):
 
         parts = id.split('-')
         return '-'.join([
-                textutil.swap_hexstring(parts[0], width=2),
-                textutil.swap_hexstring(parts[1], width=2),
-                textutil.swap_hexstring(parts[2], width=2),
-                parts[3],
-                parts[4]
-            ])
+            textutil.swap_hexstring(parts[0], width=2),
+            textutil.swap_hexstring(parts[1], width=2),
+            textutil.swap_hexstring(parts[2], width=2),
+            parts[3],
+            parts[4]
+        ])
 
     def is_current_instance_id(self, id_that):
         '''
@@ -355,12 +355,12 @@ class DefaultOSUtil(object):
         '''
         if os.path.isfile(PRODUCT_ID_FILE):
             s = fileutil.read_file(PRODUCT_ID_FILE).strip()
-            
+
         else:
             rc, s = shellutil.run_get_output(DMIDECODE_CMD)
             if rc != 0 or UUID_PATTERN.match(s) is None:
                 return ""
-              
+
         return self._correct_instance_id(s.strip())
 
     @staticmethod
@@ -372,7 +372,7 @@ class DefaultOSUtil(object):
 
     def is_sys_user(self, username):
         """
-        Check whether use is a system user. 
+        Check whether use is a system user.
         If reset sys user is allowed in conf, return False
         Otherwise, check whether UID is less than UID_MIN
         """
@@ -386,11 +386,11 @@ class DefaultOSUtil(object):
                                                         "/etc/login.defs")
             if uidmin_def is not None:
                 uidmin = int(uidmin_def.split()[1])
-        except IOError as e:
+        except IOError:
             pass
-        if uidmin == None:
+        if uidmin is None:
             uidmin = 100
-        if userentry != None and userentry[2] < uidmin:
+        if userentry is not None and userentry[2] < uidmin:
             return True
         else:
             return False
@@ -408,7 +408,7 @@ class DefaultOSUtil(object):
             cmd = "useradd -m {0} -e {1}".format(username, expiration)
         else:
             cmd = "useradd -m {0}".format(username)
-        
+
         if comment is not None:
             cmd += " -c {0}".format(comment)
         retcode, out = shellutil.run_get_output(cmd)
@@ -427,7 +427,7 @@ class DefaultOSUtil(object):
         if ret != 0:
             raise OSUtilError(("Failed to set password for {0}: {1}"
                                "").format(username, output))
-    
+
     def get_users(self):
         return getpwall()
 
@@ -550,7 +550,7 @@ class DefaultOSUtil(object):
         """
         Checks and sets self.selinux = True if SELinux is available on system.
         """
-        if self.selinux == None:
+        if self.selinux is None:
             if shellutil.run("which getenforce", chk_err=False) == 0:
                 self.selinux = True
             else:
@@ -997,7 +997,7 @@ class DefaultOSUtil(object):
                                 expire_date = datetime.datetime.strptime(expire_string, FORMAT_DATETIME)
                                 if expire_date > datetime.datetime.utcnow():
                                     expired = False
-                            except:
+                            except ValueError:
                                 logger.error("could not parse expiry token '{0}'".format(line))
                     elif FOOTER_LEASE in line:
                         logger.info("dhcp entry:{0}, 245:{1}, expired:{2}".format(
@@ -1026,7 +1026,7 @@ class DefaultOSUtil(object):
         routes = shellutil.run_get_output(route_cmd)[1]
         for route in routes.split("\n"):
             if route.startswith("0.0.0.0 ") or route.startswith("default "):
-               return False
+                return False
         return True
 
     def get_if_name(self):
@@ -1085,7 +1085,7 @@ class DefaultOSUtil(object):
 
     def route_add(self, net, mask, gateway):
         """
-        Add specified route 
+        Add specified route.
         """
         cmd = "ip route add {0} via {1}".format(net, gateway)
         return shellutil.run(cmd, chk_err=False)
@@ -1293,9 +1293,9 @@ class DefaultOSUtil(object):
 
         status, output = shellutil.run_get_output("ip -a -o link", chk_err=False, log_cmd=False)
         """
-        1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN mode DEFAULT group default qlen 1000\    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00 promiscuity 0 addrgenmode eui64
-        2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP mode DEFAULT group default qlen 1000\    link/ether 00:0d:3a:30:c3:5a brd ff:ff:ff:ff:ff:ff promiscuity 0 addrgenmode eui64
-        3: docker0: <NO-CARRIER,BROADCAST,MULTICAST,UP> mtu 1500 qdisc noqueue state DOWN mode DEFAULT group default \    link/ether 02:42:b5:d5:00:1d brd ff:ff:ff:ff:ff:ff promiscuity 0 \    bridge forward_delay 1500 hello_time 200 max_age 2000 ageing_time 30000 stp_state 0 priority 32768 vlan_filtering 0 vlan_protocol 802.1Q addrgenmode eui64
+        1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN mode DEFAULT group default qlen 1000\\    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00 promiscuity 0 addrgenmode eui64
+        2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP mode DEFAULT group default qlen 1000\\    link/ether 00:0d:3a:30:c3:5a brd ff:ff:ff:ff:ff:ff promiscuity 0 addrgenmode eui64
+        3: docker0: <NO-CARRIER,BROADCAST,MULTICAST,UP> mtu 1500 qdisc noqueue state DOWN mode DEFAULT group default \\    link/ether 02:42:b5:d5:00:1d brd ff:ff:ff:ff:ff:ff promiscuity 0 \\    bridge forward_delay 1500 hello_time 200 max_age 2000 ageing_time 30000 stp_state 0 priority 32768 vlan_filtering 0 vlan_protocol 802.1Q addrgenmode eui64
 
         """
         if status != 0:
@@ -1310,15 +1310,15 @@ class DefaultOSUtil(object):
 
         self._update_nic_state(state, "ip -4 -a -o address", NetworkInterfaceCard.add_ipv4, "an IPv4 address")
         """
-        1: lo    inet 127.0.0.1/8 scope host lo\       valid_lft forever preferred_lft forever
-        2: eth0    inet 10.145.187.220/26 brd 10.145.187.255 scope global eth0\       valid_lft forever preferred_lft forever
-        3: docker0    inet 192.168.43.1/24 brd 192.168.43.255 scope global docker0\       valid_lft forever preferred_lft forever
+        1: lo    inet 127.0.0.1/8 scope host lo\\       valid_lft forever preferred_lft forever
+        2: eth0    inet 10.145.187.220/26 brd 10.145.187.255 scope global eth0\\       valid_lft forever preferred_lft forever
+        3: docker0    inet 192.168.43.1/24 brd 192.168.43.255 scope global docker0\\       valid_lft forever preferred_lft forever
         """
 
         self._update_nic_state(state, "ip -6 -a -o address", NetworkInterfaceCard.add_ipv6, "an IPv6 address")
         """
-        1: lo    inet6 ::1/128 scope host \       valid_lft forever preferred_lft forever
-        2: eth0    inet6 fe80::20d:3aff:fe30:c35a/64 scope link \       valid_lft forever preferred_lft forever
+        1: lo    inet6 ::1/128 scope host \\       valid_lft forever preferred_lft forever
+        2: eth0    inet6 fe80::20d:3aff:fe30:c35a/64 scope link \\       valid_lft forever preferred_lft forever
         """
 
         return state

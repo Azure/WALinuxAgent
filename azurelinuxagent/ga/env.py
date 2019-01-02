@@ -40,9 +40,9 @@ from azurelinuxagent.common.utils.archive import StateArchiver
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 
 CACHE_PATTERNS = [
-    re.compile("^(.*)\.(\d+)\.(agentsManifest)$", re.IGNORECASE),
-    re.compile("^(.*)\.(\d+)\.(manifest\.xml)$", re.IGNORECASE),
-    re.compile("^(.*)\.(\d+)\.(xml)$", re.IGNORECASE)
+    re.compile(r"^(.*)\.(\d+)\.(agentsManifest)$", re.IGNORECASE),
+    re.compile(r"^(.*)\.(\d+)\.(manifest\.xml)$", re.IGNORECASE),
+    re.compile(r"^(.*)\.(\d+)\.(xml)$", re.IGNORECASE)
 ]
 
 MAXIMUM_CACHED_FILES = 50

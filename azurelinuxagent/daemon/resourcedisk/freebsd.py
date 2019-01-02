@@ -61,8 +61,8 @@ class FreeBSDResourceDiskHandler(ResourceDiskHandler):
         disks = self.parse_gpart_list(output)
 
         device = self.osutil.device_for_ide_port(1)
-        if device is None or not device in disks:
-        # fallback logic to find device
+        if device is None or device not in disks:
+            # fallback logic to find device
             err, output = shellutil.run_get_output('camcontrol periphlist 2:1:0')
             if err:
                 # try again on "3:1:0"
@@ -144,10 +144,10 @@ class FreeBSDResourceDiskHandler(ResourceDiskHandler):
         if not os.path.isfile(swapfile):
             logger.info("Create swap file")
             self.mkfile(swapfile, size_kb * 1024)
-        
+
         mddevice = shellutil.run_get_output("mdconfig -a -t vnode -f {0}".format(swapfile))[1].rstrip()
         shellutil.run("chmod 0600 /dev/{0}".format(mddevice))
-        
+
         if conf.get_resourcedisk_enable_swap_encryption():
             shellutil.run("kldload aesni")
             shellutil.run("kldload cryptodev")
