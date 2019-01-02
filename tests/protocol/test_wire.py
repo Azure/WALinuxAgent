@@ -47,27 +47,33 @@ class TestWireProtocol(AgentTestCase):
             protocol = WireProtocol(wireserver_url)
             protocol.detect()
             protocol.get_vminfo()
-            protocol.get_certs()
+            certlist = protocol.get_certs()
             ext_handlers, etag = protocol.get_ext_handlers()
             for ext_handler in ext_handlers.extHandlers:
                 protocol.get_ext_handler_pkgs(ext_handler)
 
-            crt1 = os.path.join(self.tmp_dir,
-                                '33B0ABCE4673538650971C10F7D7397E71561F35.crt')
-            crt2 = os.path.join(self.tmp_dir,
-                                '4037FBF5F1F3014F99B5D6C7799E9B20E6871CB3.crt')
-            prv2 = os.path.join(self.tmp_dir,
-                                '4037FBF5F1F3014F99B5D6C7799E9B20E6871CB3.prv')
+            if len(certlist.certificates) == 2:
+                crt1 = os.path.join(self.tmp_dir,
+                                    '33B0ABCE4673538650971C10F7D7397E71561F35.crt')
+                crt2 = os.path.join(self.tmp_dir,
+                                    '4037FBF5F1F3014F99B5D6C7799E9B20E6871CB3.crt')
+                prv2 = os.path.join(self.tmp_dir,
+                                    '4037FBF5F1F3014F99B5D6C7799E9B20E6871CB3.prv')
 
-            self.assertTrue(os.path.isfile(crt1))
-            self.assertTrue(os.path.isfile(crt2))
-            self.assertTrue(os.path.isfile(prv2))
+                self.assertTrue(os.path.isfile(crt1))
+                self.assertTrue(os.path.isfile(crt2))
+                self.assertTrue(os.path.isfile(prv2))
 
             self.assertEqual("1", protocol.get_incarnation())
 
     def test_getters(self, *args):
         """Normal case"""
         test_data = WireProtocolData(DATA_FILE)
+        self._test_getters(test_data, *args)
+
+    def test_getters_corrupt_cert(self, *args):
+        """The certificate file is intentionally corrupted."""
+        test_data = WireProtocolData(DATA_FILE_CORRUPT_CERT)
         self._test_getters(test_data, *args)
 
     def test_getters_no_ext(self, *args):

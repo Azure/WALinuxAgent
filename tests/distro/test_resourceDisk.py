@@ -51,7 +51,7 @@ class TestResourceDisk(AgentTestCase):
             # execute
             if sys.version_info >= (3,3):
                 with patch("os.posix_fallocate",
-                           side_effect=Exception('failure')):
+                           side_effect=OSError('failure')):
                     get_resourcedisk_handler().mkfile(test_file, file_size)
             else:
                 get_resourcedisk_handler().mkfile(test_file, file_size)

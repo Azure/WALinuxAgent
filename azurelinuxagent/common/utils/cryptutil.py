@@ -87,10 +87,9 @@ class CryptUtil(object):
                    "| {4} pkcs12 -nodes -password pass: -out {5}"
                    "").format(self.openssl_cmd, p7m_file, trans_prv_file,
                               trans_cert_file, self.openssl_cmd, pem_file)
-            shellutil.run(cmd)
-            rc = shellutil.run(cmd)
+            rc, output = shellutil.run_get_output(cmd)
             if rc != 0:
-                logger.error("Failed to decrypt {0}".format(p7m_file))
+                logger.error("Failed to decrypt {0}:{1}".format(p7m_file, output))
 
     def crt_to_ssh(self, input_file, output_file):
         shellutil.run("ssh-keygen -i -m PKCS8 -f {0} >> {1}".format(input_file,
@@ -117,9 +116,9 @@ class CryptUtil(object):
             keydata.extend(b"\0")
             keydata.extend(self.num_to_bytes(n))
             keydata_base64 = base64.b64encode(bytebuffer(keydata))
-            return ustr(b"ssh-rsa " +  keydata_base64 + b"\n", 
+            return ustr(b"ssh-rsa " + keydata_base64 + b"\n",
                         encoding='utf-8')
-        except ImportError as e:
+        except ImportError:
             raise CryptError("Failed to load pyasn1.codec.der")
 
     def num_to_bytes(self, num):

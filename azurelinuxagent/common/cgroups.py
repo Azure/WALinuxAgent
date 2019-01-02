@@ -40,10 +40,10 @@ DEFAULT_MEM_LIMIT_MIN_MB = 256  # mb, applies to agent and extensions
 DEFAULT_MEM_LIMIT_MAX_MB = 512  # mb, applies to agent only
 DEFAULT_MEM_LIMIT_PCT = 15  # percent, applies to extensions
 
-re_user_system_times = re.compile('user (\d+)\nsystem (\d+)\n')
+re_user_system_times = re.compile(r'user (\d+)\nsystem (\d+)\n')
 
 related_services = {
-    "Microsoft.OSTCExtensions.LinuxDiagnostic":    ["omid", "omsagent-LAD", "mdsd-lde"],
+    "Microsoft.OSTCExtensions.LinuxDiagnostic": ["omid", "omsagent-LAD", "mdsd-lde"],
     "Microsoft.Azure.Diagnostics.LinuxDiagnostic": ["omid", "omsagent-LAD", "mdsd-lde"],
 }
 
@@ -712,7 +712,7 @@ class CGroups(object):
         except IndexError:
             parameter_filename = self._get_cgroup_file(hierarchy, parameter_name)
             logger.error("File {0} is empty but should not be".format(parameter_filename))
-        except CGroupsException as e:
+        except CGroupsException:
             # ignore if the file does not exist yet
             pass
         except Exception as e:

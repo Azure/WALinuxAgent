@@ -33,8 +33,8 @@ def get_f5_platform():
     the version and product information is contained in the /VERSION file.
     """
     result = [None, None, None, None]
-    f5_version = re.compile("^Version: (\d+\.\d+\.\d+)")
-    f5_product = re.compile("^Product: ([\w-]+)")
+    f5_version = re.compile(r"^Version: (\d+\.\d+\.\d+)")
+    f5_product = re.compile(r"^Product: ([\w-]+)")
 
     with open('/VERSION', 'r') as fh:
         content = fh.readlines()
@@ -75,22 +75,26 @@ def get_checkpoint_platform():
 
 def get_distro():
     if 'FreeBSD' in platform.system():
-        release = re.sub('\-.*\Z', '', ustr(platform.release()))
+        release = re.sub(r'\-.*\Z', '', ustr(platform.release()))
         osinfo = ['freebsd', release, '', 'freebsd']
     elif 'OpenBSD' in platform.system():
-        release = re.sub('\-.*\Z', '', ustr(platform.release()))
+        release = re.sub(r'\-.*\Z', '', ustr(platform.release()))
         osinfo = ['openbsd', release, '', 'openbsd']
     elif 'Linux' in platform.system():
         osinfo = get_linux_distribution(0, 'alpine')
     elif 'NS-BSD' in platform.system():
-        release = re.sub('\-.*\Z', '', ustr(platform.release()))
+        release = re.sub(r'\-.*\Z', '', ustr(platform.release()))
         osinfo = ['nsbsd', release, '', 'nsbsd']
     else:
         try:
-            # dist() removed in Python 3.7
+            # dist() is deprecated in Python 3.5 and docs say will be removed in Python 3.8
             osinfo = list(platform.dist()) + ['']
-        except:
-            osinfo = ['UNKNOWN', 'FFFF', '', '']
+        except Exception:
+            try:
+                import distro
+                osinfo = distro.linux_distribution(False) + ['']
+            except Exception:
+                osinfo = ['UNKNOWN', 'FFFF', '', '']
 
     # The platform.py lib has issue with detecting oracle linux distribution.
     # Merge the following patch provided by oracle as a temporary fix.
@@ -132,10 +136,10 @@ AGENT_PKG_GLOB = "{0}-*.zip".format(AGENT_NAME)
 
 AGENT_PATTERN = "{0}-(.*)".format(AGENT_NAME)
 AGENT_NAME_PATTERN = re.compile(AGENT_PATTERN)
-AGENT_PKG_PATTERN = re.compile(AGENT_PATTERN+"\.zip")
+AGENT_PKG_PATTERN = re.compile(AGENT_PATTERN+"\\.zip")
 AGENT_DIR_PATTERN = re.compile(".*/{0}".format(AGENT_PATTERN))
 
-EXT_HANDLER_PATTERN = b".*/WALinuxAgent-(\d+.\d+.\d+[.\d+]*).*-run-exthandlers"
+EXT_HANDLER_PATTERN = r".*/WALinuxAgent-(\d+.\d+.\d+[.\d+]*).*-run-exthandlers"
 EXT_HANDLER_REGEX = re.compile(EXT_HANDLER_PATTERN)
 
 __distro__ = get_distro()
@@ -189,7 +193,7 @@ def set_goal_state_agent():
         pids = []
     for pid in pids:
         try:
-            pname = open(os.path.join('/proc', pid, 'cmdline'), 'rb').read()
+            pname = open(os.path.join('/proc', pid, 'cmdline'), 'r').read()
             match = EXT_HANDLER_REGEX.match(pname)
             if match:
                 agent = match.group(1)

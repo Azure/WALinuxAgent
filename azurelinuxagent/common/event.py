@@ -16,7 +16,6 @@
 #
 
 import atexit
-import datetime
 import json
 import os
 import sys
@@ -145,9 +144,9 @@ class EventStatus(object):
 
 __event_status__ = EventStatus()
 __event_status_operations__ = [
-        WALAEventOperation.AutoUpdate,
-        WALAEventOperation.ReportStatus
-    ]
+    WALAEventOperation.AutoUpdate,
+    WALAEventOperation.ReportStatus
+]
 
 
 def _encode_message(op, message):
@@ -235,12 +234,12 @@ class EventLogger(object):
             (self.periodic_events[h] + delta) <= datetime.now()
 
     def add_periodic(self,
-        delta, name, op=WALAEventOperation.Unknown, is_success=True, duration=0,
-        version=CURRENT_VERSION, message="", evt_type="",
-        is_internal=False, log_event=True, force=False):
+                     delta, name, op=WALAEventOperation.Unknown, is_success=True,
+                     duration=0, version=CURRENT_VERSION, message="", evt_type="",
+                     is_internal=False, log_event=True, force=False):
 
         h = hash(name+op+ustr(is_success)+message)
-        
+
         if force or self.is_period_elapsed(delta, h):
             self.add_event(name,
                 op=op, is_success=is_success, duration=duration,
@@ -413,10 +412,10 @@ def add_log_event(level, message, reporter=__event_logger__):
 
 
 def add_periodic(
-    delta, name, op=WALAEventOperation.Unknown, is_success=True, duration=0,
-    version=CURRENT_VERSION,
-    message="", evt_type="", is_internal=False, log_event=True, force=False,
-    reporter=__event_logger__):
+        delta, name, op=WALAEventOperation.Unknown, is_success=True, duration=0,
+        version=CURRENT_VERSION,
+        message="", evt_type="", is_internal=False, log_event=True, force=False,
+        reporter=__event_logger__):
     if reporter.event_dir is None:
         logger.warn("Cannot add periodic event -- Event reporter is not initialized.")
         _log_event(name, op, message, duration, is_success=is_success)

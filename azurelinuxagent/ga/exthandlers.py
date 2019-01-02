@@ -38,7 +38,7 @@ import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.version as version
 from azurelinuxagent.common.cgroups import CGroups, CGroupsTelemetry
 from azurelinuxagent.common.errorstate import ErrorState, ERROR_STATE_DELTA_INSTALL
-from azurelinuxagent.common.event import add_event, WALAEventOperation, elapsed_milliseconds, report_event
+from azurelinuxagent.common.event import add_event, WALAEventOperation, elapsed_milliseconds
 from azurelinuxagent.common.exception import ExtensionError, ProtocolError, ProtocolNotFoundError, \
     ExtensionDownloadError, ExtensionOperationError
 from azurelinuxagent.common.future import ustr
@@ -64,7 +64,7 @@ EXTENSION_TERMINAL_STATUSES = ['error', 'success']
 
 VALID_HANDLER_STATUS = ['Ready', 'NotReady', "Installing", "Unresponsive"]
 
-HANDLER_PATTERN = "^([^-]+)-(\d+(?:\.\d+)*)"
+HANDLER_PATTERN = r"^([^-]+)-(\d+(?:\.\d+)*)"
 HANDLER_NAME_PATTERN = re.compile(HANDLER_PATTERN + "$", re.IGNORECASE)
 HANDLER_PKG_EXT = ".zip"
 HANDLER_PKG_PATTERN = re.compile(HANDLER_PATTERN + r"\.zip$", re.IGNORECASE)

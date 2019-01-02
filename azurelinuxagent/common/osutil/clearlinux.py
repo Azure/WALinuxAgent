@@ -27,11 +27,12 @@ import fcntl
 import time
 import base64
 import azurelinuxagent.common.conf as conf
+from azurelinuxagent.common.exception import OSUtilError
 import azurelinuxagent.common.logger as logger
+from azurelinuxagent.common.osutil.default import DefaultOSUtil
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.shellutil as shellutil
 import azurelinuxagent.common.utils.textutil as textutil
-from azurelinuxagent.common.osutil.default import DefaultOSUtil
 
 class ClearLinuxUtil(DefaultOSUtil):
 
@@ -80,8 +81,8 @@ class ClearLinuxUtil(DefaultOSUtil):
                 passwd_content = fileutil.read_file(passwd_file_path)
                 if not passwd_content:
                     # Empty file is no better than no file
-                    raise FileNotFoundError
-            except FileNotFoundError:
+                    raise ValueError
+            except ValueError:
                 new_passwd = ["root:*LOCK*:14600::::::"]
             else:
                 passwd = passwd_content.split('\n')

@@ -12,7 +12,7 @@ except Exception:
 Add alias for python2 and python3 libs and functions.
 """
 
-if sys.version_info[0] == 3:
+if sys.version_info > (3,):
     import http.client as httpclient
     from urllib.parse import urlparse
 
@@ -21,17 +21,14 @@ if sys.version_info[0] == 3:
 
     bytebuffer = memoryview
 
-elif sys.version_info[0] == 2:
+else:
     import httplib as httpclient
     from urlparse import urlparse
 
     """Rename Python2 unicode to ustr"""
-    ustr = unicode
+    ustr = unicode  # noqa
 
-    bytebuffer = buffer
-
-else:
-    raise ImportError("Unknown python version: {0}".format(sys.version_info))
+    bytebuffer = buffer  # noqa
 
 
 def get_linux_distribution(get_full_name, supported_dists):

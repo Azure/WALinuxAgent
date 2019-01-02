@@ -204,23 +204,23 @@ class MetadataProtocol(Protocol):
             self.agent_manifests = VMAgentManifestList()
 
             manifest = VMAgentManifest()
-            manifest.family = family=conf.get_autoupdate_gafamily()
-            
-            if not KEY_AGENT_VERSION_URIS in data:
+            manifest.family = conf.get_autoupdate_gafamily()
+
+            if KEY_AGENT_VERSION_URIS not in data:
                 raise ProtocolError(
                     "Agent versions missing '{0}': {1}".format(
                         KEY_AGENT_VERSION_URIS, data))
 
             for version in data[KEY_AGENT_VERSION_URIS]:
-                if not KEY_URI in version:
+                if KEY_URI not in version:
                     raise ProtocolError(
                         "Agent versions missing '{0': {1}".format(
                             KEY_URI, data))
                 manifest_uri = VMAgentManifestUri(uri=version[KEY_URI])
                 manifest.versionsManifestUris.append(manifest_uri)
-        
+
             self.agent_manifests.vmAgentManifests.append(manifest)
-        
+
         return self.agent_manifests, self.agent_etag
 
     def get_vmagent_pkgs(self, vmagent_manifest):
@@ -314,7 +314,7 @@ class MetadataProtocol(Protocol):
             try:
                 self.update_certs()
                 return
-            except:
+            except Exception:
                 logger.verbose("Incarnation is out of date. Update goalstate.")
         raise ProtocolError("Exceeded max retry updating goal state")
 
@@ -354,7 +354,7 @@ class Certificates(object):
 
         # Wrapping the certificate lines.
         # decode and save the result into p7b_file
-        fileutil.write_file(p7b_file, base64.b64decode(data), asbin=True) 
+        fileutil.write_file(p7b_file, base64.b64decode(data), asbin=True)
 
         ssl_cmd = "openssl pkcs7 -text -in {0} -inform der | grep -v '^-----' "
         ret, data = shellutil.run_get_output(ssl_cmd.format(p7b_file))
@@ -380,8 +380,6 @@ class Certificates(object):
 
         # The parsing process use public key to match prv and crt.
         buf = []
-        begin_crt = False
-        begin_prv = False
         prvs = {}
         thumbprints = {}
         index = 0
@@ -389,17 +387,12 @@ class Certificates(object):
         with open(pem_file) as pem:
             for line in pem.readlines():
                 buf.append(line)
-                if re.match(r'[-]+BEGIN.*KEY[-]+', line):
-                    begin_prv = True
-                elif re.match(r'[-]+BEGIN.*CERTIFICATE[-]+', line):
-                    begin_crt = True
-                elif re.match(r'[-]+END.*KEY[-]+', line):
+                if re.match(r'[-]+END.*KEY[-]+', line):
                     tmp_file = self.write_to_tmp_file(index, 'prv', buf)
                     pub = cryptutil.get_pubkey_from_prv(tmp_file)
                     prvs[pub] = tmp_file
                     buf = []
                     index += 1
-                    begin_prv = False
                 elif re.match(r'[-]+END.*CERTIFICATE[-]+', line):
                     tmp_file = self.write_to_tmp_file(index, 'crt', buf)
                     pub = cryptutil.get_pubkey_from_crt(tmp_file)
@@ -414,7 +407,6 @@ class Certificates(object):
                     os.rename(tmp_file, os.path.join(conf.get_lib_dir(), crt))
                     buf = []
                     index += 1
-                    begin_crt = False
 
         # Rename prv key with thumbprint as the file name
         for pubkey in prvs:

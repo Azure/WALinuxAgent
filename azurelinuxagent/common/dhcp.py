@@ -153,7 +153,7 @@ class DhcpHandler(object):
         """
         Check if DHCP is available
         """
-        (dhcp_available, endpoint) =  self.osutil.is_dhcp_available()
+        (dhcp_available, endpoint) = self.osutil.is_dhcp_available()
         if not dhcp_available:
             logger.info("send_dhcp_req: DHCP not available")
             self.endpoint = endpoint
@@ -388,7 +388,7 @@ def build_dhcp_request(mac_addr, request_broadcast):
         # set broadcast flag to true to request the dhcp server
         # to respond to a boradcast address,
         # this is useful when user dhclient fails.
-        request[0x0A] = 0x80;
+        request[0x0A] = 0x80
 
     # fill in ClientHardwareAddress
     for a in range(0, 6):

@@ -134,7 +134,7 @@ class ProvisionHandler(object):
             with open('/proc/uptime') as fh:
                 uptime, _ = fh.readline().split()
                 return uptime
-        except:
+        except IOError:
             return 0
 
     def reg_ssh_host_key(self):

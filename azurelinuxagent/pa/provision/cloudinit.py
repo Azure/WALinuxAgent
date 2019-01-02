@@ -109,7 +109,7 @@ class CloudInitProvisionHandler(ProvisionHandler):
         """
         Wait for cloud-init to generate ssh host key
         """
-        keypair_type = conf.get_ssh_host_keypair_type()
+        # variable never used: keypair_type = conf.get_ssh_host_keypair_type()
         path = conf.get_ssh_key_public_path()
         for retry in range(0, max_retry):
             if os.path.isfile(path):

@@ -44,11 +44,20 @@ class AgentConfigError(AgentError):
 
 class AgentNetworkError(AgentError):
     """
-    When network is not available\.
+    When network is not available.
     """
 
     def __init__(self, msg=None, inner=None):
         super(AgentNetworkError, self).__init__(msg, inner)
+
+
+class CertificateError(AgentError):
+    """
+    When a certificate is invalid.
+    """
+
+    def __init__(self, msg=None, inner=None):
+        super(CertificateError, self).__init__(msg, inner)
 
 
 class ExtensionError(AgentError):

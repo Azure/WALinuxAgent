@@ -17,13 +17,15 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
+import os
 import azurelinuxagent.common.logger as logger
+import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.shellutil as shellutil
-from azurelinuxagent.common.osutil.default import DefaultOSUtil
-from azurelinuxagent.common.osutil.redhat import Redhat6xOSUtil
+from azurelinuxagent.common.osutil.default import DefaultOSUtil, PRODUCT_ID_FILE, DMIDECODE_CMD, UUID_PATTERN
+from azurelinuxagent.common.osutil.redhat import RedhatOSUtil
 
 '''
-The IOSXE distribution is a variant of the Centos distribution, 
+The IOSXE distribution is a variant of the Centos distribution,
 version 7.1.
 The primary difference is that IOSXE makes some assumptions about
 the waagent environment:

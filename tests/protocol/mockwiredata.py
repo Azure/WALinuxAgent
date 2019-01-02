@@ -64,6 +64,9 @@ DATA_FILE_EXT_DELETION["manifest"] = "wire/manifest_deletion.xml"
 DATA_FILE_EXT_SINGLE = DATA_FILE.copy()
 DATA_FILE_EXT_SINGLE["manifest"] = "wire/manifest_deletion.xml"
 
+DATA_FILE_CORRUPT_CERT = DATA_FILE.copy()
+DATA_FILE_CORRUPT_CERT["trans_cert"] = "wire/trans_cert.corrupt"
+
 DATA_FILE_MULTIPLE_EXT = DATA_FILE.copy()
 DATA_FILE_MULTIPLE_EXT["ext_conf"] = "wire/ext_conf_multiple_extensions.xml"
 

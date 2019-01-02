@@ -15,7 +15,7 @@
 # limitations under the License.
 #
 # Requires Python 2.6+ and Openssl 1.0+
-import datetime
+
 import json
 import os
 import random
@@ -32,7 +32,7 @@ import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.textutil as textutil
 
 from azurelinuxagent.common.exception import ProtocolNotFoundError, \
-                                            ResourceGoneError
+                                             ResourceGoneError
 from azurelinuxagent.common.future import httpclient, bytebuffer
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol, URI_FORMAT_GET_EXTENSION_ARTIFACT, \
     HOST_PLUGIN_PORT
@@ -121,6 +121,7 @@ class WireProtocol(Protocol):
         vminfo.containerId = goal_state.container_id
         return vminfo
 
+    # If there is something wrong with a certificate, a CryptError will be raised
     def get_certs(self):
         certificates = self.client.get_certs()
         return certificates.cert_list
@@ -404,7 +405,7 @@ class StatusBlob(object):
 
     def upload(self, url):
         try:
-            if not self.type in ["BlockBlob", "PageBlob"]:
+            if self.type not in ["BlockBlob", "PageBlob"]:
                 raise ProtocolError("Illegal blob type: {0}".format(self.type))
 
             if self.type == "BlockBlob":
@@ -591,7 +592,7 @@ class WireClient(object):
     @staticmethod
     def call_storage_service(http_req, *args, **kwargs):
         # Default to use the configured HTTP proxy
-        if not 'use_proxy' in kwargs or kwargs['use_proxy'] is None:
+        if 'use_proxy' not in kwargs or kwargs['use_proxy'] is None:
             kwargs['use_proxy'] = True
 
         return http_req(*args, **kwargs)
@@ -730,7 +731,7 @@ class WireClient(object):
         if goal_state.remote_access_uri is None:
             # Nothing in accounts data.  Just return, nothing to do.
             return
-        xml_text = self.fetch_config(goal_state.remote_access_uri, 
+        xml_text = self.fetch_config(goal_state.remote_access_uri,
                                      self.get_header_for_cert())
         self.remote_access = RemoteAccess(xml_text)
         local_file = os.path.join(conf.get_lib_dir(), REMOTE_ACCESS_FILE_NAME.format(self.remote_access.incarnation))
@@ -748,7 +749,7 @@ class WireClient(object):
         xml_text = self.fetch_cache(remote_access_file)
         remote_access = RemoteAccess(xml_text)
         return remote_access
-        
+
     def update_ext_conf(self, goal_state):
         if goal_state.ext_uri is None:
             logger.info("ExtensionsConfig.xml uri is empty")
@@ -782,7 +783,7 @@ class WireClient(object):
                         if last_incarnation is not None and \
                                         last_incarnation == new_incarnation:
                             # Goalstate is not updated.
-                            return                
+                            return
                 self.goal_state_flusher.flush(datetime.utcnow())
 
                 self.goal_state = current_goal_state_from_configuration
@@ -886,7 +887,7 @@ class WireClient(object):
                 local_file = os.path.join(conf.get_lib_dir(), local_file)
                 xml_text = self.fetch_cache(local_file)
                 self.ext_conf = ExtensionsConfig(xml_text)
-        return self.ext_conf      
+        return self.ext_conf
 
     def get_ext_manifest(self, ext_handler, goal_state):
         for update_goal_state in [False, True]:
@@ -1476,8 +1477,6 @@ class Certificates(object):
 
         # The parsing process use public key to match prv and crt.
         buf = []
-        begin_crt = False
-        begin_prv = False
         prvs = {}
         thumbprints = {}
         index = 0
@@ -1485,17 +1484,12 @@ class Certificates(object):
         with open(pem_file) as pem:
             for line in pem.readlines():
                 buf.append(line)
-                if re.match(r'[-]+BEGIN.*KEY[-]+', line):
-                    begin_prv = True
-                elif re.match(r'[-]+BEGIN.*CERTIFICATE[-]+', line):
-                    begin_crt = True
-                elif re.match(r'[-]+END.*KEY[-]+', line):
+                if re.match(r'[-]+END.*KEY[-]+', line):
                     tmp_file = self.write_to_tmp_file(index, 'prv', buf)
                     pub = cryptutil.get_pubkey_from_prv(tmp_file)
                     prvs[pub] = tmp_file
                     buf = []
                     index += 1
-                    begin_prv = False
                 elif re.match(r'[-]+END.*CERTIFICATE[-]+', line):
                     tmp_file = self.write_to_tmp_file(index, 'crt', buf)
                     pub = cryptutil.get_pubkey_from_crt(tmp_file)
@@ -1510,7 +1504,6 @@ class Certificates(object):
                     os.rename(tmp_file, os.path.join(conf.get_lib_dir(), crt))
                     buf = []
                     index += 1
-                    begin_crt = False
 
         # Rename prv key with thumbprint as the file name
         for pubkey in prvs:
@@ -1620,13 +1613,13 @@ class ExtensionsConfig(object):
         runtime_settings_str = gettext(runtime_settings_node)
         try:
             runtime_settings = json.loads(runtime_settings_str)
-        except ValueError as e:
+        except ValueError:
             logger.error("Invalid extension settings")
             return
 
         depends_on_level = 0
         depends_on_node = find(settings[0], "DependsOn")
-        if depends_on_node != None:
+        if depends_on_node is not None:
             try:
                 depends_on_level = int(getattrib(depends_on_node, "dependencyLevel"))
             except (ValueError, TypeError):
