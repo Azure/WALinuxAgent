@@ -52,7 +52,7 @@ from azurelinuxagent.common.protocol.restapi import ExtHandlerStatus, \
     get_properties, \
     set_properties
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
-from azurelinuxagent.common.utils.processutil import format_stdout_stderr, destroy_process
+from azurelinuxagent.common.utils.processutil import format_stdout_stderr, TELEMETRY_MESSAGE_MAX_LEN
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION, GOAL_STATE_AGENT_VERSION, \
     DISTRO_NAME, DISTRO_VERSION, PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO
 
@@ -1122,13 +1122,16 @@ class ExtHandlerInstance(object):
             retry -= 1
 
         def read_output():
-            stdout_file.seek(0)
-            stderr_file.seek(0)
+            try:
+                stdout_file.seek(0)
+                stderr_file.seek(0)
 
-            stdout = ustr(stdout_file.read(), encoding='utf-8', errors='backslashreplace')
-            stderr = ustr(stderr_file.read(), encoding='utf-8', errors='backslashreplace')
+                stdout = ustr(stdout_file.read(TELEMETRY_MESSAGE_MAX_LEN), encoding='utf-8', errors='backslashreplace')
+                stderr = ustr(stderr_file.read(TELEMETRY_MESSAGE_MAX_LEN), encoding='utf-8', errors='backslashreplace')
 
-            return format_stdout_stderr(stdout, stderr)
+                return format_stdout_stderr(stdout, stderr)
+            except Exception as e:
+                return format_stdout_stderr("", "Cannot read stdout/stderr: {0}".format(str(e)))
 
         # timeout expired
         if retry == 0:

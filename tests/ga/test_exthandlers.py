@@ -7,9 +7,8 @@ from azurelinuxagent.common.protocol.restapi import ExtensionStatus, Extension, 
 from azurelinuxagent.ga.exthandlers import parse_ext_status, ExtHandlerInstance, get_exthandlers_handler
 from azurelinuxagent.common.exception import ProtocolError, ExtensionError
 from azurelinuxagent.common.event import WALAEventOperation
-from azurelinuxagent.common.utils.processutil import TELEMETRY_MESSAGE_MAX_LEN
+from azurelinuxagent.common.utils.processutil import TELEMETRY_MESSAGE_MAX_LEN, format_stdout_stderr
 from tests.tools import *
-
 
 class TestExtHandlers(AgentTestCase):
     def test_parse_extension_status00(self):
@@ -201,15 +200,19 @@ class LaunchCommandTestCase(AgentTestCase):
 
         AgentTestCase.tearDown(self)
 
-    def _create_python_script(self, file_name, contents):
+    def _create_script(self, file_name, contents):
         """
-        Creates a Python3 executable script with the given contents
+        Creates an executable script with the given contents.
+        If file_name ends with ".py", it creates a Python3 script, otherwise it creates a bash script
         """
         file_path = os.path.join(self.ext_handler_instance.get_base_dir(), file_name)
 
-        with open(file_path, "w") as file:
-            file.write("#!/usr/bin/env python3\n")
-            file.write(contents)
+        with open(file_path, "w") as script:
+            if file_name.endswith(".py"):
+                script.write("#!/usr/bin/env python3\n")
+            else:
+                script.write("#!/usr/bin/env bash\n")
+            script.write(contents)
 
         os.chmod(file_path, stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
 
@@ -235,7 +238,7 @@ class LaunchCommandTestCase(AgentTestCase):
         stdout = "stdout" * 5
         stderr = "stderr" * 5
 
-        command = self._create_python_script("produce_output.py", '''
+        command = self._create_script("produce_output.py", '''
 import sys
 
 sys.stdout.write("{0}")
@@ -266,7 +269,7 @@ sys.stderr.write("{1}")
         signal_file = os.path.join(self.tmp_dir, "signal_file.txt")
 
         # the test command produces some output then goes into an infinite loop
-        command = self._create_python_script("produce_output_then_hang.py", '''
+        command = self._create_script("produce_output_then_hang.py", '''
 import sys
 import time
 
@@ -321,7 +324,7 @@ with open("{2}", "w") as file:
         stderr = "stderr" * 3
         exit_code = 99
 
-        command = self._create_python_script("fail.py", '''
+        command = self._create_script("fail.py", '''
 import sys
 
 sys.stdout.write("{0}")
@@ -343,7 +346,7 @@ exit({2})
         stdout = "stdout"
         stderr = "stderr"
 
-        command = self._create_python_script("start_child_process.py", '''
+        command = self._create_script("start_child_process.py", '''
 import os
 import sys
 import time
@@ -378,7 +381,7 @@ else:
         # the child process uses the signal file to indicate it has produced output
         signal_file = os.path.join(self.tmp_dir, "signal_file.txt")
 
-        command = self._create_python_script("start_child_with_output.py", '''
+        command = self._create_script("start_child_with_output.py", '''
 import os
 import sys
 import time
@@ -419,7 +422,7 @@ else:
         child_stdout = "CHILD STDOUT"
         child_stderr = "CHILD STDERR"
 
-        command = self._create_python_script("start_child_that_fails.py", '''
+        command = self._create_script("start_child_that_fails.py", '''
 import os
 import sys
 import time
@@ -448,7 +451,7 @@ else:
         # file used to verify the command completed successfully
         signal_file = os.path.join(self.tmp_dir, "signal_file.txt")
 
-        command = self._create_python_script("create_file.py", '''
+        command = self._create_script("create_file.py", '''
 open("{0}", "w").close()
 
 '''.format(signal_file))
@@ -458,11 +461,33 @@ open("{0}", "w").close()
         self.assertTrue(os.path.exists(signal_file))
         self.assertRegex(output, LaunchCommandTestCase._output_regex('', ''))
 
+    def test_it_should_not_capture_the_output_of_commands_that_do_their_own_redirection(self):
+        # the test script redirects its output to this file
+        command_output_file = os.path.join(self.tmp_dir, "command_output.txt")
+        stdout = "STDOUT"
+        stderr = "STDERR"
+
+        # the test script mimics the redirection done by the Custom Script extension
+        command = self._create_script("produce_output", '''
+exec &> {0}
+echo {1}
+>&2 echo {2}
+
+'''.format(command_output_file, stdout, stderr))
+
+        output = self.ext_handler_instance.launch_command(command)
+
+        self.assertRegex(output, LaunchCommandTestCase._output_regex('', ''))
+
+        with open(command_output_file, "r") as command_output:
+            output = command_output.read()
+            self.assertEquals(output, "{0}\n{1}\n".format(stdout, stderr))
+
     def test_it_should_truncate_the_command_output(self):
         stdout = "STDOUT"
         stderr = "STDERR"
 
-        command = self._create_python_script("produce_long_output.py", '''
+        command = self._create_script("produce_long_output.py", '''
 import sys
 
 sys.stdout.write( "{0}" * {1})
@@ -474,3 +499,52 @@ sys.stderr.write( "{2}" * {3})
         self.assertLessEqual(len(output), TELEMETRY_MESSAGE_MAX_LEN)
         self.assertIn(stdout, output)
         self.assertIn(stderr, output)
+
+    def test_it_should_read_only_the_head_of_large_outputs(self):
+        command = self._create_script("produce_long_output.py", '''
+import sys
+
+sys.stdout.write("O" * 5 * 1024 * 1024)
+sys.stderr.write("E" * 5 * 1024 * 1024)
+''')
+
+        # Mocking the call to file.read() is difficult, so instead we mock the call to format_stdout_stderr, which takes the
+        # return value of the calls to file.read(). The intention of the test is to verify we never read (and load in memory)
+        # more than a few KB of data from the files used to capture stdout/stderr
+        with patch('azurelinuxagent.ga.exthandlers.format_stdout_stderr', side_effect=format_stdout_stderr) as mock_format:
+            output = self.ext_handler_instance.launch_command(command)
+
+        self.assertGreaterEqual(len(output), 1024)
+        self.assertLessEqual(len(output), TELEMETRY_MESSAGE_MAX_LEN)
+
+        mock_format.assert_called_once()
+
+        args, kwargs = mock_format.call_args
+        stdout, stderr = args
+
+        self.assertGreaterEqual(len(stdout), 1024)
+        self.assertLessEqual(len(stdout), TELEMETRY_MESSAGE_MAX_LEN)
+
+        self.assertGreaterEqual(len(stderr), 1024)
+        self.assertLessEqual(len(stderr), TELEMETRY_MESSAGE_MAX_LEN)
+
+    def test_it_should_handle_errors_while_reading_the_command_output(self):
+        command = self._create_script("produce_output.py", '''
+import sys
+
+sys.stdout.write("STDOUT")
+sys.stderr.write("STDERR")
+''')
+
+        # Mocking the call to file.read() is difficult, so instead we mock the call to _capture_process_output, which will
+        # call file.read() and we force stdout/stderr to be None; this will produce an exception when trying to use these files.
+        original_capture_process_output = ExtHandlerInstance._capture_process_output
+
+        def capture_process_output(process, stdout_file, stderr_file, cmd, timeout, code):
+            return original_capture_process_output(process, None, None, cmd, timeout, code)
+
+        with patch('azurelinuxagent.ga.exthandlers.ExtHandlerInstance._capture_process_output', side_effect=capture_process_output):
+            output = self.ext_handler_instance.launch_command(command)
+
+        self.assertIn("[stderr]\nCannot read stdout/stderr:", output)
+

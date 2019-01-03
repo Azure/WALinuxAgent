@@ -67,26 +67,3 @@ def format_stdout_stderr(stdout, stderr, max_len=TELEMETRY_MESSAGE_MAX_LEN):
     else:
         return to_s(stdout, -1*max_len_each, stderr, -1*max_len_each)
 
-
-def destroy_process(process, signal_to_send=signal.SIGKILL):
-    """
-    Completely destroy the target process. Close the stdout/stderr pipes, kill the process, reap the zombie.
-    If process is the leader of a process group, kill the entire process group.
-
-    :param Popen process: Process to be sent a signal
-    :param int signal_to_send: Signal number to be sent
-    """
-    process.stdout.close()
-    process.stderr.close()
-    try:
-        pid = process.pid
-        if os.getpgid(pid) == pid:
-            os.killpg(pid, signal_to_send)
-        else:
-            os.kill(pid, signal_to_send)
-        process.wait()
-    except OSError as e:
-        if e.errno != ESRCH:
-            raise
-        pass    # If the process is already gone, that's fine
-
