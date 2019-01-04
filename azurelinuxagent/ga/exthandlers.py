@@ -26,8 +26,10 @@ import random
 import re
 import shutil
 import stat
+import signal
 import subprocess
 import time
+import tempfile
 import traceback
 import zipfile
 import sys
@@ -50,7 +52,7 @@ from azurelinuxagent.common.protocol.restapi import ExtHandlerStatus, \
     get_properties, \
     set_properties
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
-from azurelinuxagent.common.utils.processutil import capture_from_process
+from azurelinuxagent.common.utils.processutil import format_stdout_stderr, TELEMETRY_MESSAGE_MAX_LEN
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION, GOAL_STATE_AGENT_VERSION, \
     DISTRO_NAME, DISTRO_VERSION, PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO
 
@@ -1068,55 +1070,82 @@ class ExtHandlerInstance(object):
     def launch_command(self, cmd, timeout=300, extension_error_code=1000, env=None):
         begin_utc = datetime.datetime.utcnow()
         self.logger.verbose("Launch command: [{0}]", cmd)
+
         base_dir = self.get_base_dir()
 
-        if env is None:
-            env = {}
-        env.update(os.environ)
+        with tempfile.TemporaryFile(dir=base_dir, mode="w+b") as stdout:
+            with tempfile.TemporaryFile(dir=base_dir, mode="w+b") as stderr:
+                if env is None:
+                    env = {}
+                env.update(os.environ)
 
-        try:
-            # This should be .run(), but due to the wide variety
-            # of Python versions we must support we must use .communicate().
-            # Some extensions erroneously begin cmd with a slash; don't interpret those
-            # as root-relative. (Issue #1170)
-            full_path = os.path.join(base_dir, cmd.lstrip(os.path.sep))
+                try:
+                    # Some extensions erroneously begin cmd with a slash; don't interpret those
+                    # as root-relative. (Issue #1170)
+                    full_path = os.path.join(base_dir, cmd.lstrip(os.path.sep))
 
-            def pre_exec_function():
-                """
-                Change process state before the actual target process is started. Effectively, this runs between
-                the fork() and the exec() of sub-process creation.
-                :return:
-                """
-                os.setsid()
-                CGroups.add_to_extension_cgroup(self.ext_handler.name)
+                    def pre_exec_function():
+                        """
+                        Change process state before the actual target process is started. Effectively, this runs between
+                        the fork() and the exec() of sub-process creation.
+                        """
+                        os.setsid()
+                        CGroups.add_to_extension_cgroup(self.ext_handler.name)
 
-            process = subprocess.Popen(full_path,
-                                       shell=True,
-                                       cwd=base_dir,
-                                       stdout=subprocess.PIPE,
-                                       stderr=subprocess.PIPE,
-                                       env=env,
-                                       preexec_fn=pre_exec_function)
-        except OSError as e:
-            raise ExtensionOperationError("Failed to launch '{0}': {1}".format(full_path, e.strerror),
-                                          code=extension_error_code)
+                    process = subprocess.Popen(full_path,
+                                               shell=True,
+                                               cwd=base_dir,
+                                               stdout=stdout,
+                                               stderr=stderr,
+                                               env=env,
+                                               preexec_fn=pre_exec_function)
+                except OSError as e:
+                    raise ExtensionOperationError("Failed to launch '{0}': {1}".format(full_path, e.strerror),
+                                                  code=extension_error_code)
 
-        cg = CGroups.for_extension(self.ext_handler.name)
-        CGroupsTelemetry.track_extension(self.ext_handler.name, cg)
-        msg = capture_from_process(process, cmd, timeout, extension_error_code)
+                cg = CGroups.for_extension(self.ext_handler.name)
+                CGroupsTelemetry.track_extension(self.ext_handler.name, cg)
+                msg = ExtHandlerInstance._capture_process_output(process, stdout, stderr, cmd, timeout, extension_error_code)
 
-        ret = process.poll()
-        if ret is None:
-            raise ExtensionOperationError("Process {0} was not terminated: {1}\n{2}".format(process.pid, cmd, msg),
-                                          code=extension_error_code)
-        if ret != 0:
-            raise ExtensionOperationError("Non-zero exit code: {0}, {1}\n{2}".format(ret, cmd, msg),
-                                          code=extension_error_code)
+                duration = elapsed_milliseconds(begin_utc)
+                log_msg = "{0}\n{1}".format(cmd, "\n".join([line for line in msg.split('\n') if line != ""]))
+                self.logger.verbose(log_msg)
+                self.report_event(message=log_msg, duration=duration, log_event=False)
 
-        duration = elapsed_milliseconds(begin_utc)
-        log_msg = "{0}\n{1}".format(cmd, "\n".join([line for line in msg.split('\n') if line != ""]))
-        self.logger.verbose(log_msg)
-        self.report_event(message=log_msg, duration=duration, log_event=False)
+                return msg
+
+    @staticmethod
+    def _capture_process_output(process, stdout_file, stderr_file, cmd, timeout, code=-1):
+        retry = timeout
+        while retry > 0 and process.poll() is None:
+            time.sleep(1)
+            retry -= 1
+
+        def read_output():
+            try:
+                stdout_file.seek(0)
+                stderr_file.seek(0)
+
+                stdout = ustr(stdout_file.read(TELEMETRY_MESSAGE_MAX_LEN), encoding='utf-8', errors='backslashreplace')
+                stderr = ustr(stderr_file.read(TELEMETRY_MESSAGE_MAX_LEN), encoding='utf-8', errors='backslashreplace')
+
+                return format_stdout_stderr(stdout, stderr)
+            except Exception as e:
+                return format_stdout_stderr("", "Cannot read stdout/stderr: {0}".format(str(e)))
+
+        # timeout expired
+        if retry == 0:
+            os.killpg(os.getpgid(process.pid), signal.SIGKILL)
+            raise ExtensionError("Timeout({0}): {1}\n{2}".format(timeout, cmd, read_output()), code=code)
+
+        # process completed or forked; sleep 1 sec to give the child process (if any) a chance to start
+        time.sleep(1)
+
+        return_code = process.wait()
+        if return_code != 0:
+            raise ExtensionError("Non-zero exit code: {0}, {1}\n{2}".format(return_code, cmd, read_output()), code=code)
+
+        return read_output()
 
     def load_manifest(self):
         man_file = self.get_manifest_file()

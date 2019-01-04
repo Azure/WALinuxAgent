@@ -57,7 +57,6 @@ from azurelinuxagent.common.protocol.restapi import ExtHandlerStatus, \
 from azurelinuxagent.common.protocol.metadata import MetadataProtocol
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
-from azurelinuxagent.common.utils.processutil import capture_from_process
 from azurelinuxagent.common.protocol import get_protocol_util
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 from azurelinuxagent.common.osutil import get_osutil
