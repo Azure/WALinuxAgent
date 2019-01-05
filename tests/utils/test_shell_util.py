@@ -47,7 +47,7 @@ class TestrunCmd(AgentTestCase):
         with patch("azurelinuxagent.common.utils.shellutil.logger", autospec=True) as mock_logger:
             shellutil.run_get_output(command, log_cmd=False)
 
-        mock_logger.error.assert_called_once()
+        self.assertEquals(mock_logger.error.call_count, 1)
 
         args, kwargs = mock_logger.error.call_args
         message = args[0]  # message is similar to "Command: [exit 99], return code: [99], result: []"
@@ -65,7 +65,7 @@ class TestrunCmd(AgentTestCase):
         with patch("azurelinuxagent.common.utils.shellutil.logger", autospec=True) as mock_logger:
             shellutil.run_get_output(command, log_cmd=False, expected_errors=[return_code])
 
-        mock_logger.info.assert_called_once()
+        self.assertEquals(mock_logger.info.call_count, 1)
 
         args, kwargs = mock_logger.info.call_args
         message = args[0]  # message is similar to "Command: [exit 99], return code: [99], result: []"
@@ -83,7 +83,7 @@ class TestrunCmd(AgentTestCase):
         with patch("azurelinuxagent.common.utils.shellutil.logger", autospec=True) as mock_logger:
             shellutil.run_get_output(command, log_cmd=False, expected_errors=[return_code + 1])
 
-        mock_logger.error.assert_called_once()
+        self.assertEquals(mock_logger.error.call_count, 1)
 
         args, kwargs = mock_logger.error.call_args
         message = args[0]  # message is similar to "Command: [exit 99], return code: [99], result: []"
