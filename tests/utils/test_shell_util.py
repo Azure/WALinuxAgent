@@ -44,43 +44,55 @@ class TestrunCmd(AgentTestCase):
         return_code = 99
         command = "exit {0}".format(return_code)
 
-        with patch("azurelinuxagent.common.utils.shellutil.logger.error") as mock_error:
-            shellutil.run_get_output(command)
+        with patch("azurelinuxagent.common.utils.shellutil.logger", autospec=True) as mock_logger:
+            shellutil.run_get_output(command, log_cmd=False)
 
-        mock_error.assert_called_once()
+        mock_logger.error.assert_called_once()
 
-        args, kwargs = mock_error.call_args
+        args, kwargs = mock_logger.error.call_args
         message = args[0]  # message is similar to "Command: [exit 99], return code: [99], result: []"
         self.assertIn("[{0}]".format(command), message)
         self.assertIn("[{0}]".format(return_code), message)
+
+        mock_logger.verbose.assert_not_called()
+        mock_logger.info.assert_not_called()
+        mock_logger.warn.assert_not_called()
 
     def test_it_should_log_expected_errors_as_info(self):
         return_code = 99
         command = "exit {0}".format(return_code)
 
-        with patch("azurelinuxagent.common.utils.shellutil.logger.info") as mock_info:
-            shellutil.run_get_output(command, expected_errors=[return_code])
+        with patch("azurelinuxagent.common.utils.shellutil.logger", autospec=True) as mock_logger:
+            shellutil.run_get_output(command, log_cmd=False, expected_errors=[return_code])
 
-        mock_info.assert_called_once()
+        mock_logger.info.assert_called_once()
 
-        args, kwargs = mock_info.call_args
+        args, kwargs = mock_logger.info.call_args
         message = args[0]  # message is similar to "Command: [exit 99], return code: [99], result: []"
         self.assertIn("[{0}]".format(command), message)
         self.assertIn("[{0}]".format(return_code), message)
+
+        mock_logger.verbose.assert_not_called()
+        mock_logger.warn.assert_not_called()
+        mock_logger.error.assert_not_called()
 
     def test_it_should_log_unexpected_errors_as_errors(self):
         return_code = 99
         command = "exit {0}".format(return_code)
 
-        with patch("azurelinuxagent.common.utils.shellutil.logger.error") as mock_error:
-            shellutil.run_get_output(command, expected_errors=[return_code + 1])
+        with patch("azurelinuxagent.common.utils.shellutil.logger", autospec=True) as mock_logger:
+            shellutil.run_get_output(command, log_cmd=False, expected_errors=[return_code + 1])
 
-        mock_error.assert_called_once()
+        mock_logger.error.assert_called_once()
 
-        args, kwargs = mock_error.call_args
+        args, kwargs = mock_logger.error.call_args
         message = args[0]  # message is similar to "Command: [exit 99], return code: [99], result: []"
         self.assertIn("[{0}]".format(command), message)
         self.assertIn("[{0}]".format(return_code), message)
+
+        mock_logger.info.assert_not_called()
+        mock_logger.verbose.assert_not_called()
+        mock_logger.warn.assert_not_called()
 
 
 if __name__ == '__main__':
