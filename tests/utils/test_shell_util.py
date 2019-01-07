@@ -54,9 +54,9 @@ class TestrunCmd(AgentTestCase):
         self.assertIn("[{0}]".format(command), message)
         self.assertIn("[{0}]".format(return_code), message)
 
-        mock_logger.verbose.assert_not_called()
-        mock_logger.info.assert_not_called()
-        mock_logger.warn.assert_not_called()
+        self.assertEquals(mock_logger.verbose.call_count, 0)
+        self.assertEquals(mock_logger.info.call_count, 0)
+        self.assertEquals(mock_logger.warn.call_count, 0)
 
     def test_it_should_log_expected_errors_as_info(self):
         return_code = 99
@@ -72,9 +72,9 @@ class TestrunCmd(AgentTestCase):
         self.assertIn("[{0}]".format(command), message)
         self.assertIn("[{0}]".format(return_code), message)
 
-        mock_logger.verbose.assert_not_called()
-        mock_logger.warn.assert_not_called()
-        mock_logger.error.assert_not_called()
+        self.assertEquals(mock_logger.verbose.call_count, 0)
+        self.assertEquals(mock_logger.warn.call_count, 0)
+        self.assertEquals(mock_logger.error.call_count, 0)
 
     def test_it_should_log_unexpected_errors_as_errors(self):
         return_code = 99
@@ -90,9 +90,9 @@ class TestrunCmd(AgentTestCase):
         self.assertIn("[{0}]".format(command), message)
         self.assertIn("[{0}]".format(return_code), message)
 
-        mock_logger.info.assert_not_called()
-        mock_logger.verbose.assert_not_called()
-        mock_logger.warn.assert_not_called()
+        self.assertEquals(mock_logger.info.call_count, 0)
+        self.assertEquals(mock_logger.verbose.call_count, 0)
+        self.assertEquals(mock_logger.warn.call_count, 0)
 
 
 if __name__ == '__main__':
