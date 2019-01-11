@@ -21,6 +21,7 @@ import json
 import os
 import shutil
 import re
+import sys
 import traceback
 
 import azurelinuxagent.common.conf as conf
@@ -101,13 +102,20 @@ class MetadataProtocol(Protocol):
             raise ProtocolError(ustr(e))
 
         # NOT_MODIFIED (304) response means the call was successful, so allow that to proceed.
-        if restutil.request_failed(resp) and not restutil.request_not_modified(resp):
+        is_not_modified = restutil.request_not_modified(resp)
+        if restutil.request_failed(resp) and not is_not_modified:
             raise ProtocolError("{0} - GET: {1}".format(resp.status, url))
 
         data = resp.read()
         etag = resp.getheader('ETag')
+
+        # If the response was 304, then explicilty set data to None
+        if is_not_modified:
+            data = None
+
         if data is not None:
             data = json.loads(ustr(data, encoding="utf-8"))
+
         return data, etag
 
     def _put_data(self, url, data, headers=None):
@@ -259,7 +267,7 @@ class MetadataProtocol(Protocol):
         }
         ext_list = ExtHandlerList()
         data, etag = self._get_data(self.ext_uri, headers=headers)
-        if last_etag is None or last_etag < etag:
+        if last_etag is None or last_etag != etag:
             set_properties("extensionHandlers", ext_list.extHandlers, data)
         return ext_list, etag
 
