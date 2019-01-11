@@ -21,6 +21,7 @@ import json
 import os
 import shutil
 import re
+import traceback
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.utils.fileutil as fileutil
@@ -49,6 +50,14 @@ KEY_URI = "uri"
 # TODO remote workaround for azure stack
 MAX_PING = 30
 RETRY_PING_INTERVAL = 10
+
+
+def get_traceback(e):
+    if sys.version_info[0] == 3:
+        return e.__traceback__
+    elif sys.version_info[0] == 2:
+        ex_type, ex, tb = sys.exc_info()
+        return tb
 
 
 def _add_content_type(headers):
@@ -314,8 +323,10 @@ class MetadataProtocol(Protocol):
             try:
                 self.update_certs()
                 return
-            except:
+            except Exception as e:
                 logger.verbose("Incarnation is out of date. Update goalstate.")
+                msg = u"Exception updating certs: {0}".format(ustr(e))
+                detailed_msg = '{0} {1}'.format(msg, traceback.extract_tb(get_traceback(e)))
         raise ProtocolError("Exceeded max retry updating goal state")
 
     def download_ext_handler_pkg(self, uri, destination, headers=None, use_proxy=True):
