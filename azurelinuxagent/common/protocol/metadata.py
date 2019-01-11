@@ -326,7 +326,9 @@ class MetadataProtocol(Protocol):
             except Exception as e:
                 logger.verbose("Incarnation is out of date. Update goalstate.")
                 msg = u"Exception updating certs: {0}".format(ustr(e))
+                logger.warn(msg)
                 detailed_msg = '{0} {1}'.format(msg, traceback.extract_tb(get_traceback(e)))
+                logger.verbose(detailed_msg)
         raise ProtocolError("Exceeded max retry updating goal state")
 
     def download_ext_handler_pkg(self, uri, destination, headers=None, use_proxy=True):
