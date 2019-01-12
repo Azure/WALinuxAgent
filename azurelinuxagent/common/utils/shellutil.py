@@ -73,7 +73,7 @@ def run(cmd, chk_err=True):
     return retcode
 
 
-def run_get_output(cmd, chk_err=True, log_cmd=True):
+def run_get_output(cmd, chk_err=True, log_cmd=True, expected_errors=[]):
     """
     Wrapper for subprocess.check_output.
     Execute 'cmd'.  Returns return code and STDOUT, trapping expected
@@ -97,7 +97,10 @@ def run_get_output(cmd, chk_err=True, log_cmd=True):
             msg = u"Command: [{0}], " \
                   u"return code: [{1}], " \
                   u"result: [{2}]".format(cmd, e.returncode, output)
-            logger.error(msg)
+            if e.returncode in expected_errors:
+                logger.info(msg)
+            else:
+                logger.error(msg)
         return e.returncode, output
     except Exception as e:
         if chk_err:
