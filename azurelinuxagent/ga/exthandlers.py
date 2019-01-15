@@ -25,22 +25,22 @@ import os
 import random
 import re
 import shutil
-import stat
 import signal
+import stat
 import subprocess
-import time
+import sys
 import tempfile
+import time
 import traceback
 import zipfile
-import sys
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.version as version
-from azurelinuxagent.common.cgroups import CGroups, CGroupsTelemetry
+from azurelinuxagent.common.cgroups.cgroups import CGroups, CGroupsTelemetry
 from azurelinuxagent.common.errorstate import ErrorState, ERROR_STATE_DELTA_INSTALL
-from azurelinuxagent.common.event import add_event, WALAEventOperation, elapsed_milliseconds, report_event
+from azurelinuxagent.common.event import add_event, WALAEventOperation, elapsed_milliseconds
 from azurelinuxagent.common.exception import ExtensionError, ProtocolError, ProtocolNotFoundError, \
     ExtensionDownloadError, ExtensionOperationError, ExtensionErrorCodes
 from azurelinuxagent.common.future import ustr
@@ -76,6 +76,8 @@ DEFAULT_EXT_TIMEOUT_MINUTES = 90
 AGENT_STATUS_FILE = "waagent_status.json"
 
 NUMBER_OF_DOWNLOAD_RETRIES = 5
+
+DEFAULT_CORES_COUNT = -1
 
 def get_traceback(e):
     if sys.version_info[0] == 3:
@@ -873,41 +875,95 @@ class ExtHandlerInstance(object):
     def enable(self):
         self.set_operation(WALAEventOperation.Enable)
         man = self.load_manifest()
+        handler_configuration = None
+        try:
+            handler_configuration = self.load_handler_configuration()
+        except ExtensionError as e:
+            self.logger.debug('Failed to load resource manifest file: {0}'.format(ustr(e)))
+
         enable_cmd = man.get_enable_command()
         self.logger.info("Enable extension [{0}]".format(enable_cmd))
         self.launch_command(enable_cmd, timeout=300,
-                            extension_error_code=ExtensionErrorCodes.PluginEnableProcessingFailed)
+                            extension_error_code=ExtensionErrorCodes.PluginEnableProcessingFailed,
+                            handler_configuration=handler_configuration)
         self.set_handler_state(ExtHandlerState.Enabled)
         self.set_handler_status(status="Ready", message="Plugin enabled")
 
     def disable(self):
         self.set_operation(WALAEventOperation.Disable)
         man = self.load_manifest()
+        handler_configuration = None
+        try:
+            handler_configuration = self.load_handler_configuration()
+        except ExtensionError as e:
+            self.logger.debug('Failed to load resource manifest file: {0}'.format(ustr(e)))
+
         disable_cmd = man.get_disable_command()
         self.logger.info("Disable extension [{0}]".format(disable_cmd))
         self.launch_command(disable_cmd, timeout=900,
-                            extension_error_code=ExtensionErrorCodes.PluginDisableProcessingFailed)
+                            extension_error_code=ExtensionErrorCodes.PluginDisableProcessingFailed,
+                            handler_configuration=handler_configuration)
         self.set_handler_state(ExtHandlerState.Installed)
         self.set_handler_status(status="NotReady", message="Plugin disabled")
 
     def install(self):
+        self.set_operation(WALAEventOperation.Install)
         man = self.load_manifest()
+        handler_configuration = None
+        try:
+            handler_configuration = self.load_handler_configuration()
+        except ExtensionError as e:
+            self.logger.debug('Failed to load resource manifest file: {0}'.format(ustr(e)))
+
         install_cmd = man.get_install_command()
         self.logger.info("Install extension [{0}]".format(install_cmd))
         self.set_operation(WALAEventOperation.Install)
         self.launch_command(install_cmd, timeout=900,
-                            extension_error_code=ExtensionErrorCodes.PluginInstallProcessingFailed)
+                            extension_error_code=ExtensionErrorCodes.PluginInstallProcessingFailed,
+                            handler_configuration=handler_configuration)
         self.set_handler_state(ExtHandlerState.Installed)
 
     def uninstall(self):
         try:
             self.set_operation(WALAEventOperation.UnInstall)
             man = self.load_manifest()
+            handler_configuration = None
+            try:
+                handler_configuration = self.load_handler_configuration()
+            except ExtensionError as e:
+                self.logger.debug('Failed to load resource manifest file: {0}'.format(ustr(e)))
+
             uninstall_cmd = man.get_uninstall_command()
             self.logger.info("Uninstall extension [{0}]".format(uninstall_cmd))
-            self.launch_command(uninstall_cmd)
+            self.launch_command(uninstall_cmd,
+                                handler_configuration=handler_configuration)
         except ExtensionError as e:
             self.report_event(message=ustr(e), is_success=False)
+
+    def update(self, version=None):
+        if version is None:
+            version = self.ext_handler.properties.version
+
+        try:
+            self.set_operation(WALAEventOperation.Update)
+            man = self.load_manifest()
+            handler_configuration = None
+            try:
+                handler_configuration = self.load_handler_configuration()
+            except ExtensionError as e:
+                self.logger.debug('Failed to load resource manifest file: {0}'.format(ustr(e)))
+
+            update_cmd = man.get_update_command()
+            self.logger.info("Update extension [{0}]".format(update_cmd))
+            self.launch_command(update_cmd,
+                                timeout=900,
+                                extension_error_code=1008,
+                                env={'VERSION': version},
+                                handler_configuration=handler_configuration)
+        except ExtensionError:
+            # prevent the handler update from being retried
+            self.set_handler_state(ExtHandlerState.Failed)
+            raise
 
     def rm_ext_handler_dir(self):
         try:
@@ -1105,7 +1161,7 @@ class ExtHandlerInstance(object):
         last_update = int(time.time() - os.stat(heartbeat_file).st_mtime)
         return last_update <= 600
 
-    def launch_command(self, cmd, timeout=300, extension_error_code=ExtensionErrorCodes.PluginProcessingError, env=None):
+    def launch_command(self, cmd, timeout=300, extension_error_code=ExtensionErrorCodes.PluginProcessingError, env=None, handler_configuration=None):
         begin_utc = datetime.datetime.utcnow()
         self.logger.verbose("Launch command: [{0}]", cmd)
 
@@ -1142,11 +1198,13 @@ class ExtHandlerInstance(object):
                                                   code=extension_error_code)
 
                 try:
-                    cg = CGroups.for_extension(self.ext_handler.name)
+                    cg = CGroups.for_extension(self.ext_handler.name, handler_configuration)
                     CGroupsTelemetry.track_extension(self.ext_handler.name, cg)
                 except Exception as e:
                     self.logger.warn("Unable to setup cgroup {0}: {1}".format(self.ext_handler.name, e))
 
+                cg = CGroups.for_extension(self.ext_handler.name, handler_configuration)
+                CGroupsTelemetry.track_extension(self.ext_handler.name, cg)
                 msg = ExtHandlerInstance._capture_process_output(process, stdout, stderr, cmd, timeout, extension_error_code)
 
                 duration = elapsed_milliseconds(begin_utc)
@@ -1190,6 +1248,17 @@ class ExtHandlerInstance(object):
             raise ExtensionError("Non-zero exit code: {0}, {1}\n{2}".format(return_code, cmd, read_output()), code=code)
 
         return read_output()
+
+    def load_handler_configuration(self):
+        config_file = self.get_handler_configuration_file()
+        try:
+            data = json.loads(fileutil.read_file(config_file))
+        except (IOError, OSError) as e:
+            raise ExtensionError('Failed to load resource manifest file ({0}): {1}'.format(config_file, e.strerror))
+        except ValueError:
+            raise ExtensionError('Malformed resource manifest file ({0}).'.format(config_file))
+
+        return HandlerConfiguration(data)
 
     def load_manifest(self):
         man_file = self.get_manifest_file()
@@ -1334,6 +1403,9 @@ class ExtHandlerInstance(object):
     def get_manifest_file(self):
         return os.path.join(self.get_base_dir(), 'HandlerManifest.json')
 
+    def get_handler_configuration_file(self):
+        return os.path.join(self.get_base_dir(), 'HandlerConfiguration.json')
+
     def get_env_file(self):
         return os.path.join(self.get_base_dir(), 'HandlerEnvironment.json')
 
@@ -1366,6 +1438,7 @@ class HandlerManifest(object):
         if data is None or data['handlerManifest'] is None:
             raise ExtensionError('Malformed manifest file.')
         self.data = data
+        self.contains_resource_limits = 'resourceRequirements' in data
 
     def get_name(self):
         return self.data["name"]
@@ -1396,3 +1469,107 @@ class HandlerManifest(object):
         if update_mode is None:
             return True
         return update_mode.lower() == "updatewithinstall"
+
+
+class HandlerConfiguration(object):
+    def __init__(self, data):
+        if data is None:
+            raise ExtensionError('Malformed handler configuration file.')
+        if "handlerConfiguration" not in data:
+            raise ExtensionError('Malformed handler configuration file.')
+        if "linux" not in data['handlerConfiguration']:
+            raise ExtensionError('No linux configurations present in HandlerConfiguration')
+
+        self.data = data
+
+    def get_name(self):
+        return self.data["name"]
+
+    def get_version(self):
+        return self.data["version"]
+
+    def get_linux_configurations(self):
+        return self.data['handlerConfiguration']['linux']
+
+    def get_resource_configurations(self):
+        if "resources" in self.get_linux_configurations() and \
+                "cpu" in self.get_linux_configurations()["resources"] or \
+                "memory" in self.get_linux_configurations()["resources"]:
+            return self.get_linux_configurations()["resources"]
+        return None
+
+    def get_cpu_limits_by_extension(self):
+        resource_config = self.get_resource_configurations()
+
+        if resource_config and "cpu" in resource_config:
+            cpu_limits_object = CpuLimits(resource_config["cpu"])
+            return cpu_limits_object
+        else:
+            return None
+
+    def get_memory_limits_by_extension(self):
+        resource_config = self.get_resource_configurations()
+
+        if resource_config and "memory" in resource_config:
+            return MemoryLimit(resource_config["memory"])
+        else:
+            return None
+
+
+class CpuLimits(object):
+    def __init__(self, cpu_node):
+        self.cpu_limits = []
+        self.cores = []
+
+        for i in cpu_node:
+            if "cores" not in i or "limit_percentage" not in i:
+                raise ExtensionError("Malformed CPU limit node in HandlerConfiguration")
+            self.cpu_limits.append(CpuLimit(i["cores"], i["limit_percentage"]))
+            self.cores.append(i["cores"])
+
+        if DEFAULT_CORES_COUNT not in self.cores:
+            raise ExtensionError("Default CPU limit not set."
+                                 " Core configuration for {0} not present".format(DEFAULT_CORES_COUNT))
+
+        self.cpu_limits = sorted(self.cpu_limits)
+
+    def __str__(self):
+        return self.cpu_limits.__str__()
+
+
+class CpuLimit(object):
+    def __init__(self, cores, limit_percentage):
+        self.cores = cores
+        self.limit_percentage = limit_percentage
+
+    def __eq__(self, other):
+        return self.cores == other.cores
+
+    def __lt__(self, other):
+        return self.cores < other.cores
+
+    def __gt__(self, other):
+        return self.cores > other.cores
+
+    def __str__(self):
+        return {"cores": self.cores, "limit_percentage": self.limit_percentage}.__str__()
+
+    def __repr__(self):
+        return {"cores": self.cores, "limit_percentage": self.limit_percentage}.__str__()
+
+
+class MemoryLimit(object):
+    def __init__(self, memory_node):
+        set_for_memory_oom_kill = ["enabled", "disabled"]
+
+        self.max_limit_percentage = memory_node[
+            "max_limit_percentage"] if "max_limit_percentage" in memory_node else None
+        self.max_limit_MBs = memory_node["max_limit_MBs"] if "max_limit_MBs" in memory_node else None
+        self.memory_pressure_warning = memory_node["memory_pressure_warning"] if "memory_pressure_warning" in memory_node else None
+
+        self.memory_oom_kill = "disabled"  # default
+        if "memory_oom_kill" in memory_node:
+            if memory_node["memory_oom_kill"].lower() in set_for_memory_oom_kill:
+                self.memory_oom_kill = memory_node["memory_oom_kill"].lower()
+            else:
+                raise ExtensionError("Malformed memory_oom_kill flag in HandlerConfiguration")
