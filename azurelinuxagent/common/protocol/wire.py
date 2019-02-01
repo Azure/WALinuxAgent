@@ -1114,11 +1114,11 @@ class WireClient(object):
                        '<Provider id="{0}">{1}'
                        '</Provider>'
                        '</TelemetryData>')
-        if event_str:
-            event_str = event_str.encode("utf-8")
         data = data_format.format(provider_id, event_str)
         try:
             header = self.get_header_for_xml_content()
+            # NOTE: The call to wireserver requests utf-8 encoding in the headers, but the body should not
+            #       be encoded: some nodes in the telemetry pipeline do not support utf-8 encoding.
             resp = self.call_wireserver(restutil.http_post, uri, data, header)
         except HttpError as e:
             raise ProtocolError("Failed to send events:{0}".format(e))
