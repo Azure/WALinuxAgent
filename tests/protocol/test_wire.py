@@ -447,7 +447,7 @@ class TestWireProtocol(AgentTestCase):
     def test_send_event(self, mock_http_request, *args):
         mock_http_request.return_value = MockResponse("", 200)
 
-        event_str = u'ćevapčići検索システムκόσμε片仮名'
+        event_str = u'a test string'
         client = WireProtocol(wireserver_url).client
         client.send_event("foo", event_str)
 
@@ -458,7 +458,7 @@ class TestWireProtocol(AgentTestCase):
 
         # the headers should include utf-8 encoding...
         self.assertTrue("utf-8" in headers['Content-Type'])
-        # ... but the body should not be encoded
+        # the body is not encoded, just check for equality
         self.assertIn(event_str, body_received)
 
 
