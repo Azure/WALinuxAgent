@@ -779,7 +779,7 @@ class ExtHandlerInstance(object):
         self.logger.verbose("Unzip extension package")
         try:
             zipfile.ZipFile(self.pkg_file).extractall(self.get_base_dir())
-        except IOError as e:
+        except Exception as e:
             fileutil.clean_ioerror(e, paths=[self.get_base_dir(), self.pkg_file])
             raise ExtensionError(u"Failed to unzip extension package", e, code=1001)
 
