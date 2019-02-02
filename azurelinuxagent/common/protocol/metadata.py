@@ -21,6 +21,8 @@ import json
 import os
 import shutil
 import re
+import sys
+import traceback
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.utils.fileutil as fileutil
@@ -49,6 +51,14 @@ KEY_URI = "uri"
 # TODO remote workaround for azure stack
 MAX_PING = 30
 RETRY_PING_INTERVAL = 10
+
+
+def get_traceback(e):
+    if sys.version_info[0] == 3:
+        return e.__traceback__
+    elif sys.version_info[0] == 2:
+        ex_type, ex, tb = sys.exc_info()
+        return tb
 
 
 def _add_content_type(headers):
@@ -92,13 +102,20 @@ class MetadataProtocol(Protocol):
             raise ProtocolError(ustr(e))
 
         # NOT_MODIFIED (304) response means the call was successful, so allow that to proceed.
-        if restutil.request_failed(resp) and not restutil.request_not_modified(resp):
+        is_not_modified = restutil.request_not_modified(resp)
+        if restutil.request_failed(resp) and not is_not_modified:
             raise ProtocolError("{0} - GET: {1}".format(resp.status, url))
 
         data = resp.read()
         etag = resp.getheader('ETag')
+
+        # If the response was 304, then explicilty set data to None
+        if is_not_modified:
+            data = None
+
         if data is not None:
             data = json.loads(ustr(data, encoding="utf-8"))
+
         return data, etag
 
     def _put_data(self, url, data, headers=None):
@@ -250,7 +267,7 @@ class MetadataProtocol(Protocol):
         }
         ext_list = ExtHandlerList()
         data, etag = self._get_data(self.ext_uri, headers=headers)
-        if last_etag is None or last_etag < etag:
+        if last_etag is None or last_etag != etag:
             set_properties("extensionHandlers", ext_list.extHandlers, data)
         return ext_list, etag
 
@@ -314,8 +331,12 @@ class MetadataProtocol(Protocol):
             try:
                 self.update_certs()
                 return
-            except:
+            except Exception as e:
                 logger.verbose("Incarnation is out of date. Update goalstate.")
+                msg = u"Exception updating certs: {0}".format(ustr(e))
+                logger.warn(msg)
+                detailed_msg = '{0} {1}'.format(msg, traceback.extract_tb(get_traceback(e)))
+                logger.verbose(detailed_msg)
         raise ProtocolError("Exceeded max retry updating goal state")
 
     def download_ext_handler_pkg(self, uri, destination, headers=None, use_proxy=True):
