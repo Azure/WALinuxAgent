@@ -3246,6 +3246,10 @@ class Certificates(object):
             if not dom.getElementsByTagName(a):
                 Error("Certificates.Parse: Missing " + a)
                 return None
+        certificateFormat = GetNodeTextData(dom.getElementsByTagName("Format")[0])
+        if certificateFormat and certificateFormat != "Pkcs7BlobWithPfxContents":
+            Log("The Format is not Pkcs7BlobWithPfxContents. Format is " + certificateFormat)
+            return None
         node = dom.childNodes[0]
         if node.localName != "CertificateFile":
             Error("Certificates.Parse: root not CertificateFile")
