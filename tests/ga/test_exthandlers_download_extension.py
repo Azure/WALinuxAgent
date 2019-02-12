@@ -72,11 +72,16 @@ class DownloadExtensionTestCase(AgentTestCase):
 
     @staticmethod
     def _create_zip_file(filename):
-        with zipfile.ZipFile(filename, "w") as file:
+        file = None
+        try:
+            file = zipfile.ZipFile(filename, "w")
             info = zipfile.ZipInfo(DownloadExtensionTestCase._extension_command)
             info.date_time = time.localtime(time.time())[:6]
             info.compress_type = zipfile.ZIP_DEFLATED
             file.writestr(info, "#!/bin/sh\necho 'RunCommandLinux executed successfully'\n")
+        finally:
+            if file is not None:
+                file.close()
 
     @staticmethod
     def _create_invalid_zip_file(filename):
@@ -92,7 +97,6 @@ class DownloadExtensionTestCase(AgentTestCase):
     def _assert_download_and_expand_succeeded(self):
         self.assertTrue(os.path.exists(self._get_extension_package_file()), "The extension package was not downloaded to the expected location")
         self.assertTrue(os.path.exists(self._get_extension_command_file()), "The extension package was not expanded to the expected location")
-
 
     def test_it_should_download_and_expand_extension_package(self):
         def download_ext_handler_pkg(_uri, destination):

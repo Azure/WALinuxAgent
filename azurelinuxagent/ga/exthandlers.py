@@ -746,12 +746,12 @@ class ExtHandlerInstance(object):
                   op=self.operation, is_success=is_success, duration=duration, log_event=log_event)
 
     def _download_extension_package(self, source_uri, target_file):
-        logger.info("Downloading extension package:", source_uri)
+        self.logger.info("Downloading extension package:", source_uri)
         try:
             if not self.protocol.download_ext_handler_pkg(source_uri, target_file):
                 raise Exception("Failed to download extension package - no error information is available")
         except Exception as exception:
-            logger.info("Error downloading extension package: {0}", ustr(exception))
+            self.logger.info("Error downloading extension package: {0}", ustr(exception))
             if os.path.exists(target_file):
                 os.remove(target_file)
             return False
@@ -771,7 +771,7 @@ class ExtHandlerInstance(object):
 
     def download(self):
         begin_utc = datetime.datetime.utcnow()
-        self.logger.verbose("Downloading extension package")
+        self.logger.info("Downloading extension package")
         self.set_operation(WALAEventOperation.Download)
 
         if self.pkg is None or self.pkg.uris is None or len(self.pkg.uris) == 0:
@@ -781,11 +781,11 @@ class ExtHandlerInstance(object):
 
         package_exists = False
         if os.path.exists(destination):
-            logger.info("Using existing extension package: {0}", destination)
+            self.logger.info("Using existing extension package: {0}", destination)
             if self._unzip_extension_package(destination, self.get_base_dir()):
                 package_exists = True
             else:
-                logger.info("The existing extension package is invalid, will ignore it.")
+                self.logger.info("The existing extension package is invalid, will ignore it.")
 
         if not package_exists:
             downloaded = False
@@ -805,7 +805,7 @@ class ExtHandlerInstance(object):
                 if downloaded:
                     break
 
-                logger.info("Failed to download the extension package from all uris, will retry after a minute")
+                self.logger.info("Failed to download the extension package from all uris, will retry after a minute")
                 time.sleep(60)
                 i += 1
 
