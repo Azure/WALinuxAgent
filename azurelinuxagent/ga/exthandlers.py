@@ -746,7 +746,7 @@ class ExtHandlerInstance(object):
                   op=self.operation, is_success=is_success, duration=duration, log_event=log_event)
 
     def _download_extension_package(self, source_uri, target_file):
-        self.logger.info("Downloading extension package:", source_uri)
+        self.logger.info("Downloading extension package: {0}", source_uri)
         try:
             if not self.protocol.download_ext_handler_pkg(source_uri, target_file):
                 raise Exception("Failed to download extension package - no error information is available")
@@ -771,7 +771,6 @@ class ExtHandlerInstance(object):
 
     def download(self):
         begin_utc = datetime.datetime.utcnow()
-        self.logger.info("Downloading extension package")
         self.set_operation(WALAEventOperation.Download)
 
         if self.pkg is None or self.pkg.uris is None or len(self.pkg.uris) == 0:
