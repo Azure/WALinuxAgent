@@ -139,6 +139,7 @@ class DownloadExtensionTestCase(AgentTestCase):
         self.download_failures = 0
 
         def download_ext_handler_pkg(_uri, destination):
+            # fail a few times, then succeed
             if self.download_failures < 3:
                 self.download_failures += 1
                 return False
@@ -156,6 +157,7 @@ class DownloadExtensionTestCase(AgentTestCase):
         self.download_failures = 0
 
         def download_ext_handler_pkg(_uri, destination):
+            # fail a few times, then succeed
             if self.download_failures < 3:
                 self.download_failures += 1
                 raise Exception("Download failed")
@@ -173,6 +175,7 @@ class DownloadExtensionTestCase(AgentTestCase):
         self.download_failures = 0
 
         def download_ext_handler_pkg(_uri, destination):
+            # fail a few times, then succeed
             if self.download_failures < 3:
                 self.download_failures += 1
                 DownloadExtensionTestCase._create_invalid_zip_file(destination)
@@ -188,8 +191,9 @@ class DownloadExtensionTestCase(AgentTestCase):
         self._assert_download_and_expand_succeeded()
 
     def test_it_should_raise_an_exception_when_all_downloads_fail(self):
-        def download_ext_handler_pkg(_uri, destination):
-            return False
+        def download_ext_handler_pkg(_uri, _destination):
+            DownloadExtensionTestCase._create_invalid_zip_file(self._get_extension_package_file())
+            return True
 
         with patch("time.sleep", lambda *_: None):
             with patch("azurelinuxagent.common.protocol.wire.WireProtocol.download_ext_handler_pkg", side_effect=download_ext_handler_pkg) as mock_download_ext_handler_pkg:
@@ -200,4 +204,7 @@ class DownloadExtensionTestCase(AgentTestCase):
 
         self.assertRegex(str(context_manager.exception), "Failed to download extension")
         self.assertEquals(context_manager.exception.code, 1001)
+
+        self.assertFalse(os.path.exists(self.extension_dir), "The extension directory was not removed")
+        self.assertFalse(os.path.exists(self._get_extension_package_file()), "The extension package was not removed")
 
