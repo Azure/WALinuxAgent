@@ -75,6 +75,7 @@ DEFAULT_EXT_TIMEOUT_MINUTES = 90
 
 AGENT_STATUS_FILE = "waagent_status.json"
 
+NUMBER_OF_DOWNLOAD_RETRIES = 5
 
 def get_traceback(e):
     if sys.version_info[0] == 3:
@@ -450,6 +451,7 @@ class ExtHandlersHandler(object):
         if handler_state == ExtHandlerState.NotInstalled:
             ext_handler_i.set_handler_state(ExtHandlerState.NotInstalled)
             ext_handler_i.download()
+            ext_handler_i.initialize()
             ext_handler_i.update_settings()
             if old_ext_handler_i is None:
                 ext_handler_i.install()
@@ -743,54 +745,84 @@ class ExtHandlerInstance(object):
         add_event(name=self.ext_handler.name, version=ext_handler_version, message=message,
                   op=self.operation, is_success=is_success, duration=duration, log_event=log_event)
 
+    def _download_extension_package(self, source_uri, target_file):
+        self.logger.info("Downloading extension package: {0}", source_uri)
+        try:
+            if not self.protocol.download_ext_handler_pkg(source_uri, target_file):
+                raise Exception("Failed to download extension package - no error information is available")
+        except Exception as exception:
+            self.logger.info("Error downloading extension package: {0}", ustr(exception))
+            if os.path.exists(target_file):
+                os.remove(target_file)
+            return False
+        return True
+
+    def _unzip_extension_package(self, source_file, target_directory):
+        self.logger.info("Unzipping extension package: {0}", source_file)
+        try:
+            zipfile.ZipFile(source_file).extractall(target_directory)
+        except Exception as exception:
+            logger.info("Error while unzipping extension package: {0}", ustr(exception))
+            os.remove(source_file)
+            if os.path.exists(target_directory):
+                shutil.rmtree(target_directory)
+            return False
+        return True
+
     def download(self):
         begin_utc = datetime.datetime.utcnow()
-        self.logger.verbose("Download extension package")
         self.set_operation(WALAEventOperation.Download)
 
-        if self.pkg is None:
+        if self.pkg is None or self.pkg.uris is None or len(self.pkg.uris) == 0:
             raise ExtensionDownloadError("No package uri found")
 
-        uris_shuffled = self.pkg.uris
-        random.shuffle(uris_shuffled)
-        file_downloaded = False
+        destination = os.path.join(conf.get_lib_dir(), os.path.basename(self.pkg.uris[0].uri) + ".zip")
 
-        for uri in uris_shuffled:
-            try:
-                destination = os.path.join(conf.get_lib_dir(), os.path.basename(uri.uri) + ".zip")
+        package_exists = False
+        if os.path.exists(destination):
+            self.logger.info("Using existing extension package: {0}", destination)
+            if self._unzip_extension_package(destination, self.get_base_dir()):
+                package_exists = True
+            else:
+                self.logger.info("The existing extension package is invalid, will ignore it.")
 
-                if os.path.exists(destination):
-                    file_downloaded = True
-                    self.pkg_file = destination
-                    break
-                else:
-                    file_downloaded = self.protocol.download_ext_handler_pkg(uri.uri, destination)
+        if not package_exists:
+            downloaded = False
+            i = 0
+            while i < NUMBER_OF_DOWNLOAD_RETRIES:
+                uris_shuffled = self.pkg.uris
+                random.shuffle(uris_shuffled)
 
-                    if file_downloaded and os.path.exists(destination):
-                        self.pkg_file = destination
+                for uri in uris_shuffled:
+                    if not self._download_extension_package(uri.uri, destination):
+                        continue
+
+                    if self._unzip_extension_package(destination, self.get_base_dir()):
+                        downloaded = True
                         break
 
-            except Exception as e:
-                logger.warn("Error while downloading extension: {0}", ustr(e))
+                if downloaded:
+                    break
 
-        if not file_downloaded:
-            raise ExtensionDownloadError("Failed to download extension", code=1001)
+                self.logger.info("Failed to download the extension package from all uris, will retry after a minute")
+                time.sleep(60)
+                i += 1
 
-        self.logger.verbose("Unzip extension package")
-        try:
-            zipfile.ZipFile(self.pkg_file).extractall(self.get_base_dir())
-        except IOError as e:
-            fileutil.clean_ioerror(e, paths=[self.get_base_dir(), self.pkg_file])
-            raise ExtensionError(u"Failed to unzip extension package", e, code=1001)
+            if not downloaded:
+                raise ExtensionDownloadError("Failed to download extension", code=1001)
+
+        self.pkg_file = destination
+
+        duration = elapsed_milliseconds(begin_utc)
+        self.report_event(message="Download succeeded", duration=duration)
+
+    def initialize(self):
+        self.logger.info("Initialize extension directory")
 
         # Add user execute permission to all files under the base dir
         for file in fileutil.get_all_files(self.get_base_dir()):
             fileutil.chmod(file, os.stat(file).st_mode | stat.S_IXUSR)
 
-        duration = elapsed_milliseconds(begin_utc)
-        self.report_event(message="Download succeeded", duration=duration)
-
-        self.logger.info("Initialize extension directory")
         # Save HandlerManifest.json
         man_file = fileutil.search_file(self.get_base_dir(), 'HandlerManifest.json')
 
