@@ -6,7 +6,7 @@ import zipfile, time
 from azurelinuxagent.common.protocol.restapi import ExtHandler, ExtHandlerProperties, ExtHandlerPackage, ExtHandlerVersionUri
 from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.ga.exthandlers import ExtHandlerInstance, NUMBER_OF_DOWNLOAD_RETRIES
-from azurelinuxagent.common.exception import ExtensionDownloadError
+from azurelinuxagent.common.exception import ExtensionDownloadError, ExtensionErrorCodes
 from tests.tools import *
 
 class DownloadExtensionTestCase(AgentTestCase):
@@ -203,7 +203,7 @@ class DownloadExtensionTestCase(AgentTestCase):
         self.assertEquals(mock_download_ext_handler_pkg.call_count, NUMBER_OF_DOWNLOAD_RETRIES * len(self.pkg.uris))
 
         self.assertRegex(str(context_manager.exception), "Failed to download extension")
-        self.assertEquals(context_manager.exception.code, 1001)
+        self.assertEquals(context_manager.exception.code, ExtensionErrorCodes.PluginManifestDownloadError)
 
         self.assertFalse(os.path.exists(self.extension_dir), "The extension directory was not removed")
         self.assertFalse(os.path.exists(self._get_extension_package_file()), "The extension package was not removed")
