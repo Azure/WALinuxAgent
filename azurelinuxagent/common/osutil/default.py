@@ -291,8 +291,10 @@ class DefaultOSUtil(object):
         may have been persisted using the incorrect byte ordering.
         '''
         id_this = self.get_instance_id()
-        return id_that == id_this or \
-            id_that == self._correct_instance_id(id_this)
+        logger.verbose("current instance id: {0}".format(id_this))
+        logger.verbose(" former instance id: {0}".format(id_that))
+        return id_this.lower() == id_that.lower() or \
+            id_this.lower() == self._correct_instance_id(id_that).lower()
 
     @staticmethod
     def is_cgroups_supported():
