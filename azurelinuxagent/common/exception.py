@@ -186,3 +186,26 @@ class RemoteAccessError(AgentError):
 
     def __init__(self, msg=None, inner=None):
         super(RemoteAccessError, self).__init__(msg, inner)
+
+
+class ExtensionErrorCodes(object):
+    def __init__(self):
+        pass
+
+    PluginUnknownFailure = -1
+    PluginSuccess = 0
+    PluginProcessingError = 1000
+    PluginManifestDownloadError = 1001
+    PluginHandlerManifestNotFound = 1002
+    PluginHandlerManifestDeserializationError = 1003
+    PluginPackageDownloadFailed = 1004
+    PluginPackageExtractionFailed = 1005
+    PluginHandlerFileCreateFailed = 1006
+    PluginInstallProcessingFailed = 1007
+    PluginUpdateProcessingFailed = 1008
+    PluginEnableProcessingFailed = 1009
+    PluginDisableProcessingFailed = 1010
+    PluginHandlerScriptTimedout = 1011
+    PluginSettingsStatusInvalid = 1012
+    PluginDisableNotRequired = 1013
+    PluginResetStateProcessingFailed = 1014

@@ -42,7 +42,7 @@ from azurelinuxagent.common.cgroups import CGroups, CGroupsTelemetry
 from azurelinuxagent.common.errorstate import ErrorState, ERROR_STATE_DELTA_INSTALL
 from azurelinuxagent.common.event import add_event, WALAEventOperation, elapsed_milliseconds, report_event
 from azurelinuxagent.common.exception import ExtensionError, ProtocolError, ProtocolNotFoundError, \
-    ExtensionDownloadError, ExtensionOperationError
+    ExtensionDownloadError, ExtensionOperationError, ExtensionErrorCodes
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol import get_protocol_util
 from azurelinuxagent.common.protocol.restapi import ExtHandlerStatus, \
@@ -774,14 +774,16 @@ class ExtHandlerInstance(object):
                 logger.warn("Error while downloading extension: {0}", ustr(e))
 
         if not file_downloaded:
-            raise ExtensionDownloadError("Failed to download extension", code=1001)
+            raise ExtensionDownloadError("Failed to download extension",
+                                         code=ExtensionErrorCodes.PluginPackageDownloadFailed)
 
         self.logger.verbose("Unzip extension package")
         try:
             zipfile.ZipFile(self.pkg_file).extractall(self.get_base_dir())
         except IOError as e:
             fileutil.clean_ioerror(e, paths=[self.get_base_dir(), self.pkg_file])
-            raise ExtensionError(u"Failed to unzip extension package", e, code=1001)
+            raise ExtensionError(u"Failed to unzip extension package", e,
+                                 code=ExtensionErrorCodes.PluginManifestDownloadError)
 
         # Add user execute permission to all files under the base dir
         for file in fileutil.get_all_files(self.get_base_dir()):
@@ -839,7 +841,8 @@ class ExtHandlerInstance(object):
         man = self.load_manifest()
         enable_cmd = man.get_enable_command()
         self.logger.info("Enable extension [{0}]".format(enable_cmd))
-        self.launch_command(enable_cmd, timeout=300, extension_error_code=1009)
+        self.launch_command(enable_cmd, timeout=300,
+                            extension_error_code=ExtensionErrorCodes.PluginEnableProcessingFailed)
         self.set_handler_state(ExtHandlerState.Enabled)
         self.set_handler_status(status="Ready", message="Plugin enabled")
 
@@ -849,7 +852,7 @@ class ExtHandlerInstance(object):
         disable_cmd = man.get_disable_command()
         self.logger.info("Disable extension [{0}]".format(disable_cmd))
         self.launch_command(disable_cmd, timeout=900,
-                            extension_error_code=1010)
+                            extension_error_code=ExtensionErrorCodes.PluginDisableProcessingFailed)
         self.set_handler_state(ExtHandlerState.Installed)
         self.set_handler_status(status="NotReady", message="Plugin disabled")
 
@@ -858,7 +861,8 @@ class ExtHandlerInstance(object):
         install_cmd = man.get_install_command()
         self.logger.info("Install extension [{0}]".format(install_cmd))
         self.set_operation(WALAEventOperation.Install)
-        self.launch_command(install_cmd, timeout=900, extension_error_code=1007)
+        self.launch_command(install_cmd, timeout=900,
+                            extension_error_code=ExtensionErrorCodes.PluginInstallProcessingFailed)
         self.set_handler_state(ExtHandlerState.Installed)
 
     def uninstall(self):
@@ -900,7 +904,7 @@ class ExtHandlerInstance(object):
             self.logger.info("Update extension [{0}]".format(update_cmd))
             self.launch_command(update_cmd,
                                 timeout=900,
-                                extension_error_code=1008,
+                                extension_error_code=ExtensionErrorCodes.PluginUpdateProcessingFailed,
                                 env={'VERSION': version})
         except ExtensionError:
             # prevent the handler update from being retried
@@ -1067,7 +1071,7 @@ class ExtHandlerInstance(object):
         last_update = int(time.time() - os.stat(heartbeat_file).st_mtime)
         return last_update <= 600
 
-    def launch_command(self, cmd, timeout=300, extension_error_code=1000, env=None):
+    def launch_command(self, cmd, timeout=300, extension_error_code=ExtensionErrorCodes.PluginProcessingError, env=None):
         begin_utc = datetime.datetime.utcnow()
         self.logger.verbose("Launch command: [{0}]", cmd)
 
@@ -1115,7 +1119,8 @@ class ExtHandlerInstance(object):
                 return msg
 
     @staticmethod
-    def _capture_process_output(process, stdout_file, stderr_file, cmd, timeout, code=-1):
+    def _capture_process_output(process, stdout_file, stderr_file, cmd, timeout,
+                                code=ExtensionErrorCodes.PluginUnknownFailure):
         retry = timeout
         while retry > 0 and process.poll() is None:
             time.sleep(1)
@@ -1152,9 +1157,11 @@ class ExtHandlerInstance(object):
         try:
             data = json.loads(fileutil.read_file(man_file))
         except (IOError, OSError) as e:
-            raise ExtensionError('Failed to load manifest file ({0}): {1}'.format(man_file, e.strerror), code=1002)
+            raise ExtensionError('Failed to load manifest file ({0}): {1}'.format(man_file, e.strerror),
+                                 code=ExtensionErrorCodes.PluginHandlerManifestNotFound)
         except ValueError:
-            raise ExtensionError('Malformed manifest file ({0}).'.format(man_file), code=1003)
+            raise ExtensionError('Malformed manifest file ({0}).'.format(man_file),
+                                 code=ExtensionErrorCodes.PluginHandlerManifestDeserializationError)
 
         return HandlerManifest(data[0])
 
