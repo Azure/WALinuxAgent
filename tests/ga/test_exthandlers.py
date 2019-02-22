@@ -76,6 +76,57 @@ class TestExtHandlers(AgentTestCase):
         self.assertEqual(0, ext_status.sequenceNumber)
         self.assertEqual(0, len(ext_status.substatusList))
 
+    def test_parse_ext_status_should_parse_missing_substatus_as_empty(self):
+        status = '''[{
+            "status": {
+              "status": "success",
+              "formattedMessage": {
+                "lang": "en-US",
+                "message": "Command is finished."
+              },
+              "operation": "Enable",
+              "code": "0",
+              "name": "Microsoft.OSTCExtensions.CustomScriptForLinux"
+            },
+            
+            "version": "1.0",
+            "timestampUTC": "2018-04-20T21:20:24Z"
+          }
+        ]'''
+
+        extension_status = ExtensionStatus(seq_no=0)
+
+        parse_ext_status(extension_status, json.loads(status))
+
+        self.assertTrue(isinstance(extension_status.substatusList, list), 'substatus was not parsed correctly')
+        self.assertEqual(0, len(extension_status.substatusList))
+
+    def test_parse_ext_status_should_parse_null_substatus_as_empty(self):
+        status = '''[{
+            "status": {
+              "status": "success",
+              "formattedMessage": {
+                "lang": "en-US",
+                "message": "Command is finished."
+              },
+              "operation": "Enable",
+              "code": "0",
+              "name": "Microsoft.OSTCExtensions.CustomScriptForLinux",
+              "substatus": null
+            },
+
+            "version": "1.0",
+            "timestampUTC": "2018-04-20T21:20:24Z"
+          }
+        ]'''
+
+        extension_status = ExtensionStatus(seq_no=0)
+
+        parse_ext_status(extension_status, json.loads(status))
+
+        self.assertTrue(isinstance(extension_status.substatusList, list), 'substatus was not parsed correctly')
+        self.assertEqual(0, len(extension_status.substatusList))
+
     @patch('azurelinuxagent.common.event.EventLogger.add_event')
     @patch('azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_largest_seq_no')
     def assert_extension_sequence_number(self,
