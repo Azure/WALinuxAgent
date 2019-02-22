@@ -1713,5 +1713,5 @@ class InVMArtifactsProfile(object):
     def is_on_hold(self):
         # hasattr() is not available in Python 2.6
         if 'onHold' in self.__dict__:
-            return self.onHold.lower() == 'true'
+            return str(self.onHold).lower() == 'true'
         return False
