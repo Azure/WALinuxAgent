@@ -1,5 +1,7 @@
 import platform
 import sys
+import os
+import re
 
 # Note broken dependency handling to avoid potential backward
 # compatibility issues on different distributions
@@ -45,6 +47,12 @@ def get_linux_distribution(get_full_name, supported_dists):
                 supported_dists=supported
             )
         )
+
+        # The platform.linux_distribution() lib has issue with detecting OpenWRT linux distribution.
+        # Merge the following patch provided by OpenWRT as a temporary fix.
+        if os.path.exists("/etc/openwrt_release"):
+            osinfo = get_openwrt_platform()
+
         if not osinfo or osinfo == ['', '', '']:
             return get_linux_distribution_from_distro(get_full_name)
         full_name = platform.linux_distribution()[0].strip()
@@ -68,3 +76,24 @@ def get_linux_distribution_from_distro(get_full_name):
     full_name = distro.linux_distribution()[0].strip()
     osinfo.append(full_name)
     return osinfo
+
+def get_openwrt_platform():
+    """
+    Add this workaround for detecting OpenWRT products because
+    the version and product information is contained in the /etc/openwrt_release file.
+    """
+    result = [None, None, None]
+    openwrt_version = re.compile(r"^DISTRIB_RELEASE=['\"](\d+\.\d+.\d+)['\"]")
+    openwrt_product = re.compile(r"^DISTRIB_ID=['\"]([\w-]+)['\"]")
+
+    with open('/etc/openwrt_release', 'r') as fh:
+        content = fh.readlines()
+        for line in content:
+            version_matches = openwrt_version.match(line)
+            product_matches = openwrt_product.match(line)
+            if version_matches:
+                result[1] = version_matches.group(1)
+            elif product_matches:
+                if product_matches.group(1) == "OpenWrt":
+                    result[0] = "openwrt"
+    return result
