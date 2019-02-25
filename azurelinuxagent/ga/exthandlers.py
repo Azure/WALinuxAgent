@@ -138,6 +138,9 @@ def parse_ext_status(ext_status, data):
     formatted_message = status_data.get('formattedMessage')
     ext_status.message = parse_formatted_message(formatted_message)
     substatus_list = status_data.get('substatus', [])
+    # some extensions incorrectly report an empty substatus with a null value
+    if substatus_list is None:
+        substatus_list = []
     for substatus in substatus_list:
         if substatus is not None:
             ext_status.substatusList.append(parse_ext_substatus(substatus))
