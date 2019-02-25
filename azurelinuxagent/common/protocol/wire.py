@@ -1453,6 +1453,12 @@ class Certificates(object):
         data = findtext(xml_doc, "Data")
         if data is None:
             return
+    
+        # if the certificates format is not Pkcs7BlobWithPfxContents do not parse it
+        certificateFormat = findtext(xml_doc, "Format")
+        if certificateFormat and certificateFormat != "Pkcs7BlobWithPfxContents":
+            logger.verbose("The Format is not Pkcs7BlobWithPfxContents. Format is " + certificateFormat)
+            return
 
         cryptutil = CryptUtil(conf.get_openssl_cmd())
         p7m_file = os.path.join(conf.get_lib_dir(), P7M_FILE_NAME)

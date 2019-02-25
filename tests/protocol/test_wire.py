@@ -40,7 +40,7 @@ class TestWireProtocol(AgentTestCase):
         super(TestWireProtocol, self).setUp()
         HostPluginProtocol.set_default_channel(False)
     
-    def _test_getters(self, test_data, __, MockCryptUtil, _):
+    def _test_getters(self, test_data, certsMustBePresent, __, MockCryptUtil, _):
         MockCryptUtil.side_effect = test_data.mock_crypt_util
 
         with patch.object(restutil, 'http_get', test_data.mock_http_get):
@@ -58,39 +58,52 @@ class TestWireProtocol(AgentTestCase):
                                 '4037FBF5F1F3014F99B5D6C7799E9B20E6871CB3.crt')
             prv2 = os.path.join(self.tmp_dir,
                                 '4037FBF5F1F3014F99B5D6C7799E9B20E6871CB3.prv')
-
-            self.assertTrue(os.path.isfile(crt1))
-            self.assertTrue(os.path.isfile(crt2))
-            self.assertTrue(os.path.isfile(prv2))
-
+            if certsMustBePresent:
+                self.assertTrue(os.path.isfile(crt1))
+                self.assertTrue(os.path.isfile(crt2))
+                self.assertTrue(os.path.isfile(prv2))
+            else:
+                self.assertFalse(os.path.isfile(crt1))
+                self.assertFalse(os.path.isfile(crt2))
+                self.assertFalse(os.path.isfile(prv2))
             self.assertEqual("1", protocol.get_incarnation())
 
     def test_getters(self, *args):
         """Normal case"""
         test_data = WireProtocolData(DATA_FILE)
-        self._test_getters(test_data, *args)
+        self._test_getters(test_data, True, *args)
 
     def test_getters_no_ext(self, *args):
         """Provision with agent is not checked"""
         test_data = WireProtocolData(DATA_FILE_NO_EXT)
-        self._test_getters(test_data, *args)
+        self._test_getters(test_data, True, *args)
 
     def test_getters_ext_no_settings(self, *args):
         """Extensions without any settings"""
         test_data = WireProtocolData(DATA_FILE_EXT_NO_SETTINGS)
-        self._test_getters(test_data, *args)
+        self._test_getters(test_data, True, *args)
 
     def test_getters_ext_no_public(self, *args):
         """Extensions without any public settings"""
         test_data = WireProtocolData(DATA_FILE_EXT_NO_PUBLIC)
-        self._test_getters(test_data, *args)
+        self._test_getters(test_data, True, *args)
+
+    def test_getters_ext_no_cert_format(self, *args):
+        """Certificate format not specified"""
+        test_data = WireProtocolData(DATA_FILE_NO_CERT_FORMAT)
+        self._test_getters(test_data, True, *args)
+
+    def test_getters_ext_cert_format_not_pfx(self, *args):
+        """Certificate format is not Pkcs7BlobWithPfxContents specified"""
+        test_data = WireProtocolData(DATA_FILE_CERT_FORMAT_NOT_PFX)
+        self._test_getters(test_data, False, *args)
 
     @patch("azurelinuxagent.common.protocol.healthservice.HealthService.report_host_plugin_extension_artifact")
     def test_getters_with_stale_goal_state(self, patch_report, *args):
         test_data = WireProtocolData(DATA_FILE)
         test_data.emulate_stale_goal_state = True
 
-        self._test_getters(test_data, *args)
+        self._test_getters(test_data, True, *args)
         # Ensure HostPlugin was invoked
         self.assertEqual(1, test_data.call_counts["/versions"])
         self.assertEqual(2, test_data.call_counts["extensionArtifact"])
