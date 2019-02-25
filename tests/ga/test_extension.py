@@ -23,7 +23,7 @@ from tests.protocol.mockwiredata import *
 
 from azurelinuxagent.common.protocol.restapi import Extension
 from azurelinuxagent.ga.exthandlers import *
-from azurelinuxagent.common.protocol.wire import WireProtocol
+from azurelinuxagent.common.protocol.wire import WireProtocol, InVMArtifactsProfile
 
 
 def do_not_run_test():
@@ -1567,6 +1567,31 @@ class TestExtensionSequencing(AgentTestCase):
 
         extensions_to_be_failed = ["G"]
         self._run_test(extensions_to_be_failed, expected_sequence, exthandlers_handler)
+
+
+class TestInVMArtifactsProfile(AgentTestCase):
+    def test_it_should_parse_boolean_values(self):
+        profile_json = '{ "onHold": true }'
+        profile = InVMArtifactsProfile(profile_json)
+        self.assertTrue(profile.is_on_hold(), "Failed to parse '{0}'".format(profile_json))
+
+        profile_json = '{ "onHold": false }'
+        profile = InVMArtifactsProfile(profile_json)
+        self.assertFalse(profile.is_on_hold(), "Failed to parse '{0}'".format(profile_json))
+
+    def test_it_should_parse_boolean_values_encoded_as_strings(self):
+        profile_json = '{ "onHold": "true" }'
+        profile = InVMArtifactsProfile(profile_json)
+        self.assertTrue(profile.is_on_hold(), "Failed to parse '{0}'".format(profile_json))
+
+        profile_json = '{ "onHold": "false" }'
+        profile = InVMArtifactsProfile(profile_json)
+        self.assertFalse(profile.is_on_hold(), "Failed to parse '{0}'".format(profile_json))
+
+        profile_json = '{ "onHold": "TRUE" }'
+        profile = InVMArtifactsProfile(profile_json)
+        self.assertTrue(profile.is_on_hold(), "Failed to parse '{0}'".format(profile_json))
+
 
 
 if __name__ == '__main__':
