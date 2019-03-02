@@ -34,6 +34,7 @@ from .bigip import BigIpOSUtil
 from .gaia import GaiaOSUtil
 from .iosxe import IosxeOSUtil
 from .nsbsd import NSBSDOSUtil
+from .openwrt import OpenWRTOSUtil
 
 from distutils.version import LooseVersion as Version
 
@@ -111,6 +112,9 @@ def get_osutil(distro_name=DISTRO_NAME,
 
     elif distro_name == "nsbsd":
         return NSBSDOSUtil()
+
+    elif distro_name == "openwrt":
+        return OpenWRTOSUtil()
 
     else:
         logger.warn("Unable to load distro implementation for {0}. Using "

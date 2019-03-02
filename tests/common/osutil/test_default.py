@@ -506,6 +506,9 @@ Match host 192.168.1.2\n\
         self.assertEqual(
             "D0DF4C54-4ECB-4A4B-9954-5BDF3ED5C3B8",
             util._correct_instance_id("544CDFD0-CB4E-4B4A-9954-5BDF3ED5C3B8"))
+        self.assertEqual(
+            "d0df4c54-4ecb-4a4b-9954-5bdf3ed5c3b8",
+            util._correct_instance_id("544cdfd0-cb4e-4b4a-9954-5bdf3ed5c3b8"))
 
     @patch('os.path.isfile', return_value=True)
     @patch('azurelinuxagent.common.utils.fileutil.read_file',
@@ -562,11 +565,23 @@ Match host 192.168.1.2\n\
     def test_is_current_instance_id_from_file(self, mock_read, mock_isfile):
         util = osutil.DefaultOSUtil()
 
+        mock_read.return_value = "11111111-2222-3333-4444-556677889900"
+        self.assertFalse(util.is_current_instance_id(
+            "B9F3C233-9913-9F42-8EB3-BA656DF32502"))
+
         mock_read.return_value = "B9F3C233-9913-9F42-8EB3-BA656DF32502"
         self.assertTrue(util.is_current_instance_id(
             "B9F3C233-9913-9F42-8EB3-BA656DF32502"))
 
         mock_read.return_value = "33C2F3B9-1399-429F-8EB3-BA656DF32502"
+        self.assertTrue(util.is_current_instance_id(
+            "B9F3C233-9913-9F42-8EB3-BA656DF32502"))
+
+        mock_read.return_value = "b9f3c233-9913-9f42-8eb3-ba656df32502"
+        self.assertTrue(util.is_current_instance_id(
+            "B9F3C233-9913-9F42-8EB3-BA656DF32502"))
+
+        mock_read.return_value = "33c2f3b9-1399-429f-8eb3-ba656df32502"
         self.assertTrue(util.is_current_instance_id(
             "B9F3C233-9913-9F42-8EB3-BA656DF32502"))
 

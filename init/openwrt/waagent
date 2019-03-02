@@ -1,0 +1,60 @@
+#!/bin/sh /etc/rc.common
+# Init file for AzureLinuxAgent.
+#
+# Copyright 2018 Microsoft Corporation
+# Copyright 2018 Sonus Networks, Inc. (d.b.a. Ribbon Communications Operating Company)
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# Requires Python 2.6+ and Openssl 1.0+
+#
+# description: AzureLinuxAgent
+#
+
+START=60
+STOP=80
+
+
+RETVAL=0
+FriendlyName="AzureLinuxAgent"
+WAZD_BIN=/usr/sbin/waagent
+WAZD_CONF=/etc/waagent.conf
+WAZD_PIDFILE=/var/run/waagent.pid
+
+test -x "$WAZD_BIN" || { echo "$WAZD_BIN not installed"; exit 5; }
+test -e "$WAZD_CONF" || { echo "$WAZD_CONF not found"; exit 6; }
+
+start()
+{
+    echo -n "Starting $FriendlyName: "
+    $WAZD_BIN -start
+    RETVAL=$?
+    echo
+    return $RETVAL
+}
+
+stop()
+{
+    echo -n "Stopping $FriendlyName: "
+    if [ -f "$WAZD_PIDFILE" ]
+    then
+        kill -9 `cat ${WAZD_PIDFILE}`
+        rm ${WAZD_PIDFILE}
+        RETVAL=$?
+        echo
+        return $RETVAL
+    else
+        echo "$FriendlyName already stopped."
+    fi
+}
+
