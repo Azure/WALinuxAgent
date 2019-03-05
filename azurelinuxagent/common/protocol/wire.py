@@ -1457,7 +1457,7 @@ class Certificates(object):
         # if the certificates format is not Pkcs7BlobWithPfxContents do not parse it
         certificateFormat = findtext(xml_doc, "Format")
         if certificateFormat and certificateFormat != "Pkcs7BlobWithPfxContents":
-            logger.verbose("The Format is not Pkcs7BlobWithPfxContents. Format is " + certificateFormat)
+            logger.warn("The Format is not Pkcs7BlobWithPfxContents. Format is " + certificateFormat)
             return
 
         cryptutil = CryptUtil(conf.get_openssl_cmd())
