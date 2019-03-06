@@ -1,14 +1,46 @@
+---
+os: linux
+dist: xenial
 language: python
-python:
-  - "2.6"
-  - "2.7"
-  #- "3.2"
-  #- "3.3"
-  - "3.4"
-# command to install dependencies
+env:
+  - NOSEOPTS="--no-skip" SETUPOPTS=""
+  # Add SETUPOPTS="check flake8" to enable flake8 checks
+
+matrix:
+  allow_failures:
+    - python: nightly
+
+  # exclude the default "python" build - we're being specific here...
+  exclude:
+    - python:
+      env:
+        - NOSEOPTS="--no-skip" SETUPOPTS="check flake8"
+
+  include:
+    - python: 2.6
+      dist: trusty
+      env:
+        - NOSEOPTS="--no-skip" SETUPOPTS=""
+    - python: 2.7
+    - python: 3.4
+    - python: 3.6
+    - python: 3.7
+      env:
+        - >-
+          NOSEOPTS="--no-skip --with-coverage --cover-inclusive
+          --cover-min-percentage=60 --cover-branches
+          --cover-package=azurelinuxagent --cover-xml"
+          SETUPOPTS=""
+    - python: nightly
+
 install:
-  #- pip install .
-  #- pip install -r requirements.txt
-  - pip install pyasn1
-# command to run tests
-script: nosetests tests
+  - pip install -r requirements.txt
+  - pip install -r test-requirements.txt
+
+script:
+  # future: - pylint setup.py makepkg.py azurelinuxagent/
+  - nosetests $NOSEOPTS tests
+  - if [ ! -z "$SETUPOPTS" ]; then /usr/bin/env python setup.py $SETUPOPTS; fi
+
+after_success:
+  - if [[ $TRAVIS_PYTHON_VERSION == 3.7 ]]; then codecov; fi
