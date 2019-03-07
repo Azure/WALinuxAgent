@@ -74,6 +74,7 @@ class ExtensionOperationError(ExtensionError):
     """
     When failed to execute an extension
     """
+
     def __init__(self, msg=None, inner=None, code=-1):
         super(ExtensionOperationError, self).__init__(msg, inner, code)
 
@@ -189,6 +190,10 @@ class RemoteAccessError(AgentError):
 
 
 class ExtensionErrorCodes(object):
+    """
+    Common Error codes used across by Compute RP for better understanding
+    the cause and clarify common occurring errors
+    """
 
     # Unknown Failures
     PluginUnknownFailure = -1
