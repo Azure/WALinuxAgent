@@ -1128,7 +1128,7 @@ class ExtHandlerInstance(object):
                         the fork() and the exec() of sub-process creation.
                         """
                         os.setsid()
-                        CGroups.add_to_extension_cgroup(self.ext_handler.name)
+                        CGroups.add_to_extension_cgroup(self.ext_handler.name, os.getpid())
 
                     process = subprocess.Popen(full_path,
                                                shell=True,

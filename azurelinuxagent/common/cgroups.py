@@ -28,7 +28,9 @@ from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 
 
-WRAPPER_CGROUP_NAME = "Agent+Extensions"
+WRAPPER_CGROUP_TRACKED_NAME = "Agent+Extensions"
+WRAPPER_CGROUP_NAME = "WALinuxAgent"
+AGENT_CGROUP_NAME = "WALinuxAgent"
 METRIC_HIERARCHIES = ['cpu', 'memory']
 MEMORY_DEFAULT = -1
 
@@ -212,9 +214,12 @@ class CGroupsTelemetry(object):
 
         :param str name: Service name (without .service suffix) to be tracked.
         """
+        # In systemd distros (e.g., Ubuntu 1604 and 1804), this would already exist
+        # so we wouldn't actually create the dir, just track it
         service_name = "{0}.service".format(name).lower()
         if CGroups.enabled() and not CGroupsTelemetry.is_tracked(service_name):
             cgroup = CGroups.for_systemd_service(service_name)
+            logger.info("Now tracking cgroup {0}".format(service_name))
             tracker = CGroupsTelemetry(service_name, cgroup=cgroup)
             CGroupsTelemetry._tracked[service_name] = tracker
 
@@ -248,9 +253,12 @@ class CGroupsTelemetry(object):
         if not CGroups.enabled():
             return
         if CGroups.is_systemd_manager():
-            CGroupsTelemetry.track_systemd_service(AGENT_NAME)
+            logger.info("Creating systemd cgroup for {0}".format(AGENT_CGROUP_NAME))
+            CGroupsTelemetry.track_systemd_service(AGENT_CGROUP_NAME)
         else:
-            CGroupsTelemetry.track_cgroup(CGroups.for_extension(AGENT_NAME))
+            logger.info("Creating wrapper cgroup for {0}".format(AGENT_CGROUP_NAME))
+            # This creates /sys/fs/cgroup/memory/WALinuxAgent/WALinuxAgent
+            CGroupsTelemetry.track_cgroup(CGroups.for_extension(AGENT_CGROUP_NAME))
 
     @staticmethod
     def is_tracked(name):
@@ -282,7 +290,7 @@ class CGroupsTelemetry(object):
         limits = {}
 
         for cgroup_name, collector in CGroupsTelemetry._tracked.copy().items():
-            cgroup_name = cgroup_name if cgroup_name else WRAPPER_CGROUP_NAME
+            cgroup_name = cgroup_name if cgroup_name else WRAPPER_CGROUP_TRACKED_NAME
             results[cgroup_name] = collector.collect()
             limits[cgroup_name] = collector.cgroup.threshold
 
@@ -364,10 +372,12 @@ class CGroups(object):
 
     @staticmethod
     def _construct_custom_path_for_hierarchy(hierarchy, cgroup_name):
-        return os.path.join(BASE_CGROUPS, hierarchy, AGENT_NAME, cgroup_name).rstrip(os.path.sep)
+        # This creates /sys/fs/cgroup/memory/WALinuxAgent/cgroup_name
+        return os.path.join(BASE_CGROUPS, hierarchy, WRAPPER_CGROUP_NAME, cgroup_name).rstrip(os.path.sep)
 
     @staticmethod
     def _construct_systemd_path_for_hierarchy(hierarchy, cgroup_name):
+        # This creates /sys/fs/cgroup/memory/system.slice/cgroup_name
         return os.path.join(BASE_CGROUPS, hierarchy, 'system.slice', cgroup_name).rstrip(os.path.sep)
 
     @staticmethod
@@ -420,8 +430,9 @@ class CGroups(object):
             cgroup_name = "" if self.is_wrapper_cgroup else self.name
             cgroup_path = path_maker(hierarchy, cgroup_name)
             if not os.path.isdir(cgroup_path):
-                logger.info("Creating cgroup directory {0}".format(cgroup_path))
                 CGroups._try_mkdir(cgroup_path)
+                logger.info("Created cgroup {0}".format(cgroup_path))
+
             self.cgroups[hierarchy] = cgroup_path
 
     @staticmethod
@@ -539,6 +550,7 @@ class CGroups(object):
         For each hierarchy, construct the wrapper cgroup and apply the appropriate limits
         """
         for hierarchy in METRIC_HIERARCHIES:
+            # This creates /sys/fs/cgroup/memory/WALinuxAgent
             root_dir = CGroups._construct_custom_path_for_hierarchy(hierarchy, "")
             CGroups._try_mkdir(root_dir)
             CGroups._apply_wrapper_limits(root_dir, hierarchy)
@@ -556,15 +568,19 @@ class CGroups(object):
             try:
                 CGroups._osutil.mount_cgroups()
                 if not suppress_process_add:
+                    # Creates /sys/fs/cgroup/memory/WALinuxAgent wrapper cgroup
                     CGroups._setup_wrapper_groups()
                     pid = int(os.getpid())
                     if not CGroups.is_systemd_manager():
-                        cg = CGroups.for_extension(AGENT_NAME)
+                        # Creates /sys/fs/cgroup/memory/WALinuxAgent/WALinuxAgent cgroup
+                        cg = CGroups.for_extension(AGENT_CGROUP_NAME)
                         logger.info("Add daemon process pid {0} to {1} cgroup".format(pid, cg.name))
                         cg.add(pid)
                         cg.set_limits()
                     else:
-                        cg = CGroups.for_systemd_service(AGENT_NAME)
+                        # The daemon running as a service is always called walinuxagent.service,
+                        # it's actually created and tracked by systemd
+                        cg = CGroups.for_systemd_service(AGENT_CGROUP_NAME.lower() + ".service")
                         logger.info("Add daemon process pid {0} to {1} systemd cgroup".format(pid, cg.name))
                         # systemd sets limits; any limits we write would be overwritten
                 status = "ok"
@@ -590,7 +606,7 @@ class CGroups(object):
             log_event=False)
 
     @staticmethod
-    def add_to_extension_cgroup(name, pid=int(os.getpid())):
+    def add_to_extension_cgroup(name, pid):
         """
         Create cgroup directories for this extension in each of the hierarchies and add this process to the new cgroup.
         Should only be called when creating sub-processes and invoked inside the fork/exec window. As a result,
@@ -602,15 +618,16 @@ class CGroups(object):
         """
         if not CGroups.enabled():
             return
-        if name == AGENT_NAME:
-            logger.warn('Extension cgroup name cannot match agent cgroup name ({0})'.format(AGENT_NAME))
+        if name == AGENT_CGROUP_NAME:
+            logger.warn('Extension cgroup name cannot match extension handler cgroup name ({0})' \
+                        .format(AGENT_CGROUP_NAME))
             return
 
         try:
-            logger.info("Move process {0} into cgroups for extension {1}".format(pid, name))
+            logger.info("Move process {0} into cgroup for extension {1}".format(pid, name))
             CGroups.for_extension(name).add(pid)
         except Exception as ex:
-            logger.warn("Unable to move process {0} into cgroups for extension {1}: {2}".format(pid, name, ex))
+            logger.warn("Unable to move process {0} into cgroup for extension {1}: {2}".format(pid, name, ex))
 
     @staticmethod
     def get_my_cgroup_path(hierarchy_id):
@@ -796,7 +813,9 @@ class CGroupsLimits(object):
     @staticmethod
     def get_default_cpu_limits(cgroup_name):
         # default values
-        cpu_limit = DEFAULT_CPU_LIMIT_AGENT if AGENT_NAME.lower() in cgroup_name.lower() else DEFAULT_CPU_LIMIT_EXT
+        cpu_limit = DEFAULT_CPU_LIMIT_EXT
+        if AGENT_CGROUP_NAME.lower() in cgroup_name.lower():
+            cpu_limit = DEFAULT_CPU_LIMIT_AGENT
         return cpu_limit
 
     @staticmethod
@@ -807,6 +826,6 @@ class CGroupsLimits(object):
         mem_limit = max(DEFAULT_MEM_LIMIT_MIN_MB, round(os_util.get_total_mem() * DEFAULT_MEM_LIMIT_PCT / 100, 0))
 
         # agent values
-        if AGENT_NAME.lower() in cgroup_name.lower():
+        if AGENT_CGROUP_NAME.lower() in cgroup_name.lower():
             mem_limit = min(DEFAULT_MEM_LIMIT_MAX_MB, mem_limit)
         return mem_limit
