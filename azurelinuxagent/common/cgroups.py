@@ -214,8 +214,6 @@ class CGroupsTelemetry(object):
 
         :param str name: Service name (without .service suffix) to be tracked.
         """
-        # In systemd distros (e.g., Ubuntu 1604 and 1804), this would already exist
-        # so we wouldn't actually create the dir, just track it
         service_name = "{0}.service".format(name).lower()
         if CGroups.enabled() and not CGroupsTelemetry.is_tracked(service_name):
             cgroup = CGroups.for_systemd_service(service_name)
@@ -253,10 +251,10 @@ class CGroupsTelemetry(object):
         if not CGroups.enabled():
             return
         if CGroups.is_systemd_manager():
-            logger.info("Creating systemd cgroup for {0}".format(AGENT_CGROUP_NAME))
+            logger.info("Tracking systemd cgroup for {0}".format(AGENT_CGROUP_NAME))
             CGroupsTelemetry.track_systemd_service(AGENT_CGROUP_NAME)
         else:
-            logger.info("Creating wrapper cgroup for {0}".format(AGENT_CGROUP_NAME))
+            logger.info("Tracking wrapper cgroup for {0}".format(AGENT_CGROUP_NAME))
             # This creates /sys/fs/cgroup/memory/WALinuxAgent/WALinuxAgent
             CGroupsTelemetry.track_cgroup(CGroups.for_extension(AGENT_CGROUP_NAME))
 
@@ -574,14 +572,15 @@ class CGroups(object):
                     if not CGroups.is_systemd_manager():
                         # Creates /sys/fs/cgroup/memory/WALinuxAgent/WALinuxAgent cgroup
                         cg = CGroups.for_extension(AGENT_CGROUP_NAME)
-                        logger.info("Add daemon process pid {0} to {1} cgroup".format(pid, cg.name))
+                        logger.info("Daemon process id {0} is tracked in cgroup {1}".format(pid, cg.name))
                         cg.add(pid)
                         cg.set_limits()
                     else:
-                        # The daemon running as a service is always called walinuxagent.service,
-                        # it's actually created and tracked by systemd
+                        # When daemon is running as a service, it's called walinuxagent.service
+                        # and is created and tracked by systemd, so we don't explicitly add the PID ourselves,
+                        # just track it for our reporting purposes
                         cg = CGroups.for_systemd_service(AGENT_CGROUP_NAME.lower() + ".service")
-                        logger.info("Add daemon process pid {0} to {1} systemd cgroup".format(pid, cg.name))
+                        logger.info("Daemon process id {0} is tracked in systemd cgroup {1}".format(pid, cg.name))
                         # systemd sets limits; any limits we write would be overwritten
                 status = "ok"
             except CGroupsException as cge:

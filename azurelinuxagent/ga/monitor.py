@@ -408,7 +408,7 @@ class MonitorHandler(object):
             CGroupsTelemetry.track_cgroup(CGroups.for_extension(""))
             # This creates the agent's cgroup (for the daemon and extension handler)
             # /sys/fs/cgroup/memory/WALinuxAgent/WALinuxAgent
-            # If the system is using systemd, it would have already been set up as system.slice/walinuxagent.service
+            # If the system is using systemd, it would have already been set up under /system.slice
             CGroupsTelemetry.track_agent()
         except Exception as e:
             # when a hierarchy is not mounted, we raise an exception
