@@ -9,6 +9,7 @@ from azurelinuxagent.ga.exthandlers import parse_ext_status, ExtHandlerInstance,
 from azurelinuxagent.common.exception import ProtocolError, ExtensionError, ExtensionErrorCodes
 from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.utils.processutil import TELEMETRY_MESSAGE_MAX_LEN, format_stdout_stderr
+from azurelinuxagent.common.cgroups import CGroups
 from tests.tools import *
 
 
@@ -596,6 +597,7 @@ sys.stderr.write("STDERR")
 
         self.assertIn("[stderr]\nCannot read stdout/stderr:", output)
 
+<<<<<<< HEAD
     def test_it_should_handle_exceptions_from_cgroups_and_run_command(self):
         # file used to verify the command completed successfully
         signal_file = os.path.join(self.tmp_dir, "signal_file.txt")
@@ -610,6 +612,9 @@ open("{0}", "w").close()
 
         self.assertTrue(os.path.exists(signal_file))
 
+=======
+    @skip_if_predicate_false(CGroups.enabled, "CGroups not supported in this environment")
+>>>>>>> disable cgroups test if not supported by environment
     def test_it_should_add_the_child_process_to_its_own_cgroup(self):
         # We are checking for the parent PID here since the PID getting written to the corresponding cgroup
         # would be from the shell process started before launch_command invokes the actual command.
