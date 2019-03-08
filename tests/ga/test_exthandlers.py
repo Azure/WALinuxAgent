@@ -10,6 +10,7 @@ from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.utils.processutil import TELEMETRY_MESSAGE_MAX_LEN, format_stdout_stderr
 from tests.tools import *
 
+
 class TestExtHandlers(AgentTestCase):
     def test_parse_extension_status00(self):
         """
@@ -209,25 +210,11 @@ class TestExtHandlers(AgentTestCase):
         self.assertEquals(second_call_args['is_success'], False)
         self.assertIn(test_message, second_call_args['message'])
 
+
 class LaunchCommandTestCase(AgentTestCase):
     """
     Test cases for launch_command
     """
-    @classmethod
-    def setUpClass(cls):
-        AgentTestCase.setUpClass()
-        cls.mock_cgroups = patch("azurelinuxagent.ga.exthandlers.CGroups")
-        cls.mock_cgroups.start()
-
-        cls.mock_cgroups_telemetry = patch("azurelinuxagent.ga.exthandlers.CGroupsTelemetry")
-        cls.mock_cgroups_telemetry.start()
-
-    @classmethod
-    def tearDownClass(cls):
-        cls.mock_cgroups_telemetry.stop()
-        cls.mock_cgroups.stop()
-
-        AgentTestCase.tearDownClass()
 
     def setUp(self):
         AgentTestCase.setUp(self)
@@ -599,3 +586,16 @@ sys.stderr.write("STDERR")
 
         self.assertIn("[stderr]\nCannot read stdout/stderr:", output)
 
+    def test_it_should_handle_exceptions_from_cgroups_and_run_command(self):
+        # file used to verify the command completed successfully
+        signal_file = os.path.join(self.tmp_dir, "signal_file.txt")
+
+        command = self._create_script("create_file.py", '''
+open("{0}", "w").close()
+
+'''.format(signal_file))
+
+        with patch('azurelinuxagent.common.cgroups.CGroups.for_extension', side_effect=Exception):
+            self.ext_handler_instance.launch_command(command)
+
+        self.assertTrue(os.path.exists(signal_file))
