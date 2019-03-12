@@ -1141,8 +1141,12 @@ class ExtHandlerInstance(object):
                     raise ExtensionOperationError("Failed to launch '{0}': {1}".format(full_path, e.strerror),
                                                   code=extension_error_code)
 
-                cg = CGroups.for_extension(self.ext_handler.name)
-                CGroupsTelemetry.track_extension(self.ext_handler.name, cg)
+                try:
+                    cg = CGroups.for_extension(self.ext_handler.name)
+                    CGroupsTelemetry.track_extension(self.ext_handler.name, cg)
+                except Exception as e:
+                    self.logger.warn("Unable to setup cgroup {0}: {1}".format(self.ext_handler.name, e))
+
                 msg = ExtHandlerInstance._capture_process_output(process, stdout, stderr, cmd, timeout, extension_error_code)
 
                 duration = elapsed_milliseconds(begin_utc)
