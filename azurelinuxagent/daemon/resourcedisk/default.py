@@ -16,8 +16,8 @@
 #
 
 import os
-import stat
 import re
+import stat
 import sys
 import threading
 from time import sleep

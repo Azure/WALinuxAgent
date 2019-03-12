@@ -18,9 +18,9 @@
 # http://msdn.microsoft.com/en-us/library/cc227282%28PROT.10%29.aspx
 # http://msdn.microsoft.com/en-us/library/cc227259%28PROT.13%29.aspx
 
-import sys
 import os
 import stat
+import sys
 from azurelinuxagent.common.utils import shellutil
 from azurelinuxagent.daemon.resourcedisk import get_resourcedisk_handler
 from tests.tools import *
@@ -120,7 +120,7 @@ class TestResourceDisk(AgentTestCase):
             os.remove(test_file)
 
         with open(test_file, "wb") as file:
-            file.write(bytes(file_size))
+            file.write(bytearray(file_size))
 
         os.chmod(test_file, stat.S_ISUID | stat.S_ISGID | stat.S_IRUSR |
                  stat.S_IWUSR | stat.S_IRWXG | stat.S_IRWXO)  # 0o6677
