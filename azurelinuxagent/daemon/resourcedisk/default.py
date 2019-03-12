@@ -17,6 +17,7 @@
 
 import os
 import re
+import stat
 import sys
 import threading
 from time import sleep
@@ -124,12 +125,13 @@ class ResourceDiskHandler(object):
         force_option = 'F'
         if self.fs == 'xfs':
             force_option = 'f'
-        mkfs_string = "mkfs.{0} -{2} {1}".format(self.fs, partition, force_option)
+        mkfs_string = "mkfs.{0} -{2} {1}".format(
+            self.fs, partition, force_option)
 
         if "gpt" in ret[1]:
             logger.info("GPT detected, finding partitions")
             parts = [x for x in ret[1].split("\n") if
-                     re.match("^\s*[0-9]+", x)]
+                     re.match(r"^\s*[0-9]+", x)]
             logger.info("Found {0} GPT partition(s).", len(parts))
             if len(parts) > 1:
                 logger.info("Removing old GPT partitions")
@@ -138,18 +140,23 @@ class ResourceDiskHandler(object):
                     shellutil.run("parted {0} rm {1}".format(device, i))
 
                 logger.info("Creating new GPT partition")
-                shellutil.run("parted {0} mkpart primary 0% 100%".format(device))
+                shellutil.run(
+                    "parted {0} mkpart primary 0% 100%".format(device))
 
                 logger.info("Format partition [{0}]", mkfs_string)
                 shellutil.run(mkfs_string)
         else:
             logger.info("GPT not detected, determining filesystem")
-            ret = self.change_partition_type(suppress_message=True, option_str="{0} 1 -n".format(device))
+            ret = self.change_partition_type(
+                suppress_message=True,
+                option_str="{0} 1 -n".format(device))
             ptype = ret[1].strip()
             if ptype == "7" and self.fs != "ntfs":
                 logger.info("The partition is formatted with ntfs, updating "
                             "partition type to 83")
-                self.change_partition_type(suppress_message=False, option_str="{0} 1 83".format(device))
+                self.change_partition_type(
+                    suppress_message=False,
+                    option_str="{0} 1 83".format(device))
                 self.reread_partition_table(device)
                 logger.info("Format partition [{0}]", mkfs_string)
                 shellutil.run(mkfs_string)
@@ -169,7 +176,8 @@ class ResourceDiskHandler(object):
             attempts -= 1
 
         if not os.path.exists(partition):
-            raise ResourceDiskError("Partition was not created [{0}]".format(partition))
+            raise ResourceDiskError(
+                "Partition was not created [{0}]".format(partition))
 
         logger.info("Mount resource disk [{0}]", mount_string)
         ret, output = shellutil.run_get_output(mount_string, chk_err=False)
@@ -215,14 +223,19 @@ class ResourceDiskHandler(object):
         """
 
         command_to_use = '--part-type'
-        input = "sfdisk {0} {1} {2}".format(command_to_use, '-f' if suppress_message else '', option_str)
-        err_code, output = shellutil.run_get_output(input, chk_err=False, log_cmd=True)
+        input = "sfdisk {0} {1} {2}".format(
+            command_to_use, '-f' if suppress_message else '', option_str)
+        err_code, output = shellutil.run_get_output(
+            input, chk_err=False, log_cmd=True)
 
         # fall back to -c
         if err_code != 0:
-            logger.info("sfdisk with --part-type failed [{0}], retrying with -c", err_code)
+            logger.info(
+                "sfdisk with --part-type failed [{0}], retrying with -c",
+                err_code)
             command_to_use = '-c'
-            input = "sfdisk {0} {1} {2}".format(command_to_use, '-f' if suppress_message else '', option_str)
+            input = "sfdisk {0} {1} {2}".format(
+                command_to_use, '-f' if suppress_message else '', option_str)
             err_code, output = shellutil.run_get_output(input, log_cmd=True)
 
         if err_code == 0:
@@ -245,16 +258,30 @@ class ResourceDiskHandler(object):
         else:
             return 'mount {0} {1}'.format(partition, mount_point)
 
+    @staticmethod
+    def check_existing_swap_file(swapfile, swaplist, size):
+        if swapfile in swaplist and os.path.isfile(
+                swapfile) and os.path.getsize(swapfile) == size:
+            logger.info("Swap already enabled")
+            # restrict access to owner (remove all access from group, others)
+            swapfile_mode = os.stat(swapfile).st_mode
+            if swapfile_mode & (stat.S_IRWXG | stat.S_IRWXO):
+                swapfile_mode = swapfile_mode & ~(stat.S_IRWXG | stat.S_IRWXO)
+                logger.info(
+                    "Changing mode of {0} to {1:o}".format(
+                        swapfile, swapfile_mode))
+                os.chmod(swapfile, swapfile_mode)
+            return True
+
+        return False
+
     def create_swap_space(self, mount_point, size_mb):
         size_kb = size_mb * 1024
         size = size_kb * 1024
         swapfile = os.path.join(mount_point, 'swapfile')
         swaplist = shellutil.run_get_output("swapon -s")[1]
 
-        if swapfile in swaplist \
-                and os.path.isfile(swapfile) \
-                and os.path.getsize(swapfile) == size:
-            logger.info("Swap already enabled")
+        if self.check_existing_swap_file(swapfile, swaplist, size):
             return
 
         if os.path.isfile(swapfile) and os.path.getsize(swapfile) != size:
@@ -296,7 +323,8 @@ class ResourceDiskHandler(object):
             os.remove(filename)
 
         # If file system is xfs, use dd right away as we have been reported that
-        # swap enabling fails in xfs fs when disk space is allocated with fallocate
+        # swap enabling fails in xfs fs when disk space is allocated with
+        # fallocate
         ret = 0
         fn_sh = shellutil.quote((filename,))
         if self.fs != 'xfs':
@@ -305,13 +333,21 @@ class ResourceDiskHandler(object):
                 # Probable errors:
                 #  - OSError: Seen on Cygwin, libc notimpl?
                 #  - AttributeError: What if someone runs this under...
+                fd = None
+
                 try:
-                    with open(filename, 'w') as f:
-                        os.posix_fallocate(f.fileno(), 0, nbytes)
-                        return 0
-                except:
+                    fd = os.open(
+                        filename,
+                        os.O_CREAT | os.O_WRONLY | os.O_EXCL,
+                        stat.S_IRUSR | stat.S_IWUSR)
+                    os.posix_fallocate(fd, 0, nbytes)
+                    return 0
+                except BaseException:
                     # Not confident with this thing, just keep trying...
                     pass
+                finally:
+                    if fd is not None:
+                        os.close(fd)
 
             # fallocate command
             ret = shellutil.run(
