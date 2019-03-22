@@ -437,7 +437,7 @@ class MonitorHandler(object):
                             # Memory is collected in bytes, and limit is set in megabytes.
                             if value >= CGroups._format_memory_value('megabytes', thresholds.memory_limit):
                                 msg = "CGroup {0}: Crossed the Memory Threshold. " \
-                                      "Current Value:{1} bytes, Threshold:{2} megabytes." \
+                                      "Current Value: {1} bytes, Threshold: {2} megabytes." \
                                        .format(cgroup_name, value, thresholds.memory_limit)
 
                                 logger.warn(msg)
@@ -451,7 +451,7 @@ class MonitorHandler(object):
                         if metric_group == "Process":
                             if value >= thresholds.cpu_limit:
                                 msg = "CGroup {0}: Crossed the Processor Threshold. " \
-                                      "Current Value:{1}, Threshold:{2}." \
+                                      "Current Value: {1}, Threshold: {2}." \
                                        .format(cgroup_name, value, thresholds.cpu_limit)
 
                                 logger.warn(msg)
