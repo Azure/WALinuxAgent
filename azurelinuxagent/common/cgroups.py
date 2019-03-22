@@ -28,7 +28,6 @@ from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 
 
-WRAPPER_CGROUP_TRACKED_NAME = "Agent+Extensions"
 WRAPPER_CGROUP_NAME = "WALinuxAgent"
 AGENT_CGROUP_NAME = "WALinuxAgent"
 METRIC_HIERARCHIES = ['cpu', 'memory']
@@ -255,7 +254,7 @@ class CGroupsTelemetry(object):
             CGroupsTelemetry.track_systemd_service(AGENT_CGROUP_NAME)
         else:
             logger.info("Tracking wrapper cgroup for {0}".format(AGENT_CGROUP_NAME))
-            # This creates /sys/fs/cgroup/memory/WALinuxAgent/WALinuxAgent
+            # This creates /sys/fs/cgroup/{cpu,memory}/WALinuxAgent/WALinuxAgent
             CGroupsTelemetry.track_cgroup(CGroups.for_extension(AGENT_CGROUP_NAME))
 
     @staticmethod
@@ -288,7 +287,6 @@ class CGroupsTelemetry(object):
         limits = {}
 
         for cgroup_name, collector in CGroupsTelemetry._tracked.copy().items():
-            cgroup_name = cgroup_name if cgroup_name else WRAPPER_CGROUP_TRACKED_NAME
             results[cgroup_name] = collector.collect()
             limits[cgroup_name] = collector.cgroup.threshold
 
@@ -370,12 +368,12 @@ class CGroups(object):
 
     @staticmethod
     def _construct_custom_path_for_hierarchy(hierarchy, cgroup_name):
-        # This creates /sys/fs/cgroup/memory/WALinuxAgent/cgroup_name
+        # This creates /sys/fs/cgroup/{cpu,memory}/WALinuxAgent/cgroup_name
         return os.path.join(BASE_CGROUPS, hierarchy, WRAPPER_CGROUP_NAME, cgroup_name).rstrip(os.path.sep)
 
     @staticmethod
     def _construct_systemd_path_for_hierarchy(hierarchy, cgroup_name):
-        # This creates /sys/fs/cgroup/memory/system.slice/cgroup_name
+        # This creates /sys/fs/cgroup/{cpu,memory}/system.slice/cgroup_name
         return os.path.join(BASE_CGROUPS, hierarchy, 'system.slice', cgroup_name).rstrip(os.path.sep)
 
     @staticmethod
@@ -548,7 +546,7 @@ class CGroups(object):
         For each hierarchy, construct the wrapper cgroup and apply the appropriate limits
         """
         for hierarchy in METRIC_HIERARCHIES:
-            # This creates /sys/fs/cgroup/memory/WALinuxAgent
+            # This creates /sys/fs/cgroup/{cpu,memory}/WALinuxAgent
             root_dir = CGroups._construct_custom_path_for_hierarchy(hierarchy, "")
             CGroups._try_mkdir(root_dir)
             CGroups._apply_wrapper_limits(root_dir, hierarchy)
@@ -566,11 +564,11 @@ class CGroups(object):
             try:
                 CGroups._osutil.mount_cgroups()
                 if not suppress_process_add:
-                    # Creates /sys/fs/cgroup/memory/WALinuxAgent wrapper cgroup
+                    # Creates /sys/fs/cgroup/{cpu,memory}/WALinuxAgent wrapper cgroup
                     CGroups._setup_wrapper_groups()
                     pid = int(os.getpid())
                     if not CGroups.is_systemd_manager():
-                        # Creates /sys/fs/cgroup/memory/WALinuxAgent/WALinuxAgent cgroup
+                        # Creates /sys/fs/cgroup/{cpu,memory}/WALinuxAgent/WALinuxAgent cgroup
                         cg = CGroups.for_extension(AGENT_CGROUP_NAME)
                         logger.info("Daemon process id {0} is tracked in cgroup {1}".format(pid, cg.name))
                         cg.add(pid)
@@ -618,8 +616,8 @@ class CGroups(object):
         if not CGroups.enabled():
             return
         if name == AGENT_CGROUP_NAME:
-            logger.warn('Extension cgroup name cannot match extension handler cgroup name ({0})' \
-                        .format(AGENT_CGROUP_NAME))
+            logger.warn('Extension cgroup name cannot match extension handler cgroup name ({0}). ' \
+                        'Will not track extension.'.format(AGENT_CGROUP_NAME))
             return
 
         try:

@@ -404,10 +404,12 @@ class MonitorHandler(object):
         # Track metrics for the wrapper cgroup and for the agent cgroup
         try:
             # This creates the wrapper cgroup for everything under agent,
-            # /sys/fs/cgroup/memory/WALinuxAgent/
-            CGroupsTelemetry.track_cgroup(CGroups.for_extension(""))
+            # /sys/fs/cgroup/{cpu,memory}/WALinuxAgent/
+            # There is no need in tracking this cgroup, as it only serves
+            # as an umbrella for the agent and extensions cgroups
+            CGroups.for_extension("")
             # This creates the agent's cgroup (for the daemon and extension handler)
-            # /sys/fs/cgroup/memory/WALinuxAgent/WALinuxAgent
+            # /sys/fs/cgroup/{cpu,memory}/WALinuxAgent/WALinuxAgent
             # If the system is using systemd, it would have already been set up under /system.slice
             CGroupsTelemetry.track_agent()
         except Exception as e:
