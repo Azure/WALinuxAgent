@@ -253,7 +253,7 @@ class CGroupsTelemetry(object):
             logger.info("Tracking systemd cgroup for {0}".format(AGENT_CGROUP_NAME))
             CGroupsTelemetry.track_systemd_service(AGENT_CGROUP_NAME)
         else:
-            logger.info("Tracking wrapper cgroup for {0}".format(AGENT_CGROUP_NAME))
+            logger.info("Tracking cgroup for {0}".format(AGENT_CGROUP_NAME))
             # This creates /sys/fs/cgroup/{cpu,memory}/WALinuxAgent/WALinuxAgent
             CGroupsTelemetry.track_cgroup(CGroups.for_extension(AGENT_CGROUP_NAME))
 
@@ -567,20 +567,21 @@ class CGroups(object):
                     # Creates /sys/fs/cgroup/{cpu,memory}/WALinuxAgent wrapper cgroup
                     CGroups._setup_wrapper_groups()
                     pid = int(os.getpid())
-                    if not CGroups.is_systemd_manager():
-                        # Creates /sys/fs/cgroup/{cpu,memory}/WALinuxAgent/WALinuxAgent cgroup
-                        cg = CGroups.for_extension(AGENT_CGROUP_NAME)
-                        logger.info("Daemon process id {0} is tracked in cgroup {1}".format(pid, cg.name))
-                        cg.add(pid)
-                        cg.set_limits()
-                    else:
+                    if CGroups.is_systemd_manager():
                         # When daemon is running as a service, it's called walinuxagent.service
                         # and is created and tracked by systemd, so we don't explicitly add the PID ourselves,
                         # just track it for our reporting purposes
                         cg = CGroups.for_systemd_service(AGENT_CGROUP_NAME.lower() + ".service")
                         logger.info("Daemon process id {0} is tracked in systemd cgroup {1}".format(pid, cg.name))
                         # systemd sets limits; any limits we write would be overwritten
-                status = "ok"
+                    else:
+                        # Creates /sys/fs/cgroup/{cpu,memory}/WALinuxAgent/WALinuxAgent cgroup
+                        cg = CGroups.for_extension(AGENT_CGROUP_NAME)
+                        logger.info("Daemon process id {0} is tracked in cgroup {1}".format(pid, cg.name))
+                        cg.add(pid)
+                        cg.set_limits()
+
+                status = "successfully set up agent cgroup"
             except CGroupsException as cge:
                 status = cge.msg
                 CGroups.disable()
