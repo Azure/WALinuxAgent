@@ -401,9 +401,16 @@ class MonitorHandler(object):
 
     @staticmethod
     def init_cgroups():
-        # Track metrics for the roll-up cgroup and for the agent cgroup
+        # Track metrics for the wrapper cgroup and for the agent cgroup
         try:
-            CGroupsTelemetry.track_cgroup(CGroups.for_extension(""))
+            # This creates the wrapper cgroup for everything under agent,
+            # /sys/fs/cgroup/{cpu,memory}/WALinuxAgent/
+            # There is no need in tracking this cgroup, as it only serves
+            # as an umbrella for the agent and extensions cgroups
+            CGroups.for_extension("")
+            # This creates the agent's cgroup (for the daemon and extension handler)
+            # /sys/fs/cgroup/{cpu,memory}/WALinuxAgent/WALinuxAgent
+            # If the system is using systemd, it would have already been set up under /system.slice
             CGroupsTelemetry.track_agent()
         except Exception as e:
             # when a hierarchy is not mounted, we raise an exception
@@ -430,8 +437,10 @@ class MonitorHandler(object):
                             # Memory is collected in bytes, and limit is set in megabytes.
                             if value >= CGroups._format_memory_value('megabytes', thresholds.memory_limit):
                                 msg = "CGroup {0}: Crossed the Memory Threshold. " \
-                                      "Current Value:{1} bytes, Threshold:{2} megabytes.".format(cgroup_name, value,
-                                                                                 thresholds.memory_limit)
+                                      "Current Value: {1} bytes, Threshold: {2} megabytes." \
+                                       .format(cgroup_name, value, thresholds.memory_limit)
+
+                                logger.warn(msg)
                                 add_event(name=AGENT_NAME,
                                           version=CURRENT_VERSION,
                                           op=WALAEventOperation.CGroupsLimitsCrossed,
@@ -441,8 +450,11 @@ class MonitorHandler(object):
 
                         if metric_group == "Process":
                             if value >= thresholds.cpu_limit:
-                                msg = "CGroup {0}: Crossed the Processor Threshold. Current Value:{1}, Threshold:{2}.".format(
-                                    cgroup_name, value, thresholds.cpu_limit)
+                                msg = "CGroup {0}: Crossed the Processor Threshold. " \
+                                      "Current Value: {1}, Threshold: {2}." \
+                                       .format(cgroup_name, value, thresholds.cpu_limit)
+
+                                logger.warn(msg)
                                 add_event(name=AGENT_NAME,
                                           version=CURRENT_VERSION,
                                           op=WALAEventOperation.CGroupsLimitsCrossed,

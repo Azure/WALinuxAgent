@@ -1,6 +1,7 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the Apache License.
 import json
+import re
 import stat
 
 from azurelinuxagent.common.protocol.restapi import ExtensionStatus, Extension, ExtHandler, ExtHandlerProperties
@@ -8,6 +9,7 @@ from azurelinuxagent.ga.exthandlers import parse_ext_status, ExtHandlerInstance,
 from azurelinuxagent.common.exception import ProtocolError, ExtensionError, ExtensionErrorCodes
 from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.utils.processutil import TELEMETRY_MESSAGE_MAX_LEN, format_stdout_stderr
+from azurelinuxagent.common.cgroups import CGroups
 from tests.tools import *
 
 
@@ -221,9 +223,17 @@ class LaunchCommandTestCase(AgentTestCase):
 
         ext_handler_properties = ExtHandlerProperties()
         ext_handler_properties.version = "1.2.3"
-        ext_handler = ExtHandler(name='foo')
-        ext_handler.properties = ext_handler_properties
-        self.ext_handler_instance = ExtHandlerInstance(ext_handler=ext_handler, protocol=None)
+        self.ext_handler = ExtHandler(name='foo')
+        self.ext_handler.properties = ext_handler_properties
+        self.ext_handler_instance = ExtHandlerInstance(ext_handler=self.ext_handler, protocol=None)
+
+        self.base_cgroups = os.path.join(self.tmp_dir, "cgroup")
+        os.mkdir(self.base_cgroups)
+        os.mkdir(os.path.join(self.base_cgroups, "cpu"))
+        os.mkdir(os.path.join(self.base_cgroups, "memory"))
+
+        self.mock__base_cgroups = patch("azurelinuxagent.common.cgroups.BASE_CGROUPS", self.base_cgroups)
+        self.mock__base_cgroups.start()
 
         self.mock_get_base_dir = patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_base_dir", lambda *_: self.tmp_dir)
         self.mock_get_base_dir.start()
@@ -235,6 +245,7 @@ class LaunchCommandTestCase(AgentTestCase):
     def tearDown(self):
         self.mock_get_log_dir.stop()
         self.mock_get_base_dir.stop()
+        self.mock__base_cgroups.stop()
 
         AgentTestCase.tearDown(self)
 
@@ -599,3 +610,35 @@ open("{0}", "w").close()
             self.ext_handler_instance.launch_command(command)
 
         self.assertTrue(os.path.exists(signal_file))
+
+    @skip_if_predicate_false(CGroups.enabled, "CGroups not supported in this environment")
+    def test_it_should_add_the_child_process_to_its_own_cgroup(self):
+        # We are checking for the parent PID here since the PID getting written to the corresponding cgroup
+        # would be from the shell process started before launch_command invokes the actual command.
+        # In a non-mocked scenario, the kernel would actually also write all the children's PIDs to the procs
+        # file as well, but here we are mocking the base cgroup path, so it is not taken care for us.
+        command = self._create_script("output_parent_pid.py", '''
+import os
+
+print(os.getppid())
+
+''')
+
+        output = self.ext_handler_instance.launch_command(command)
+
+        match = re.match(LaunchCommandTestCase._output_regex('(\d+)', '.*'), output)
+        if match is None or match.group(1) is None:
+            raise Exception("Could not extract the PID of the child command from its output")
+
+        expected_pid = int(match.group(1))
+
+        controllers = os.listdir(self.base_cgroups)
+        for c in controllers:
+            procs = os.path.join(self.base_cgroups, c, "WALinuxAgent", self.ext_handler.name, "cgroup.procs")
+            with open(procs, "r") as f:
+                contents = f.read()
+                pid = int(contents)
+
+                self.assertNotEqual(os.getpid(), pid, "The PID {0} added to {1} was of the launch command caller, not the command itself.".format(pid, procs))
+                self.assertEquals(pid, expected_pid, "The PID of the command was not added to {0}. Expected: {1}, got: {2}".format(procs, expected_pid, pid))
+
