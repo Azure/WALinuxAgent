@@ -17,7 +17,6 @@
 import errno
 import os
 import re
-
 import time
 
 from azurelinuxagent.common import logger, conf
@@ -26,7 +25,6 @@ from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.osutil.default import BASE_CGROUPS
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
-
 
 WRAPPER_CGROUP_NAME = "WALinuxAgent"
 AGENT_CGROUP_NAME = "WALinuxAgent"
@@ -221,7 +219,7 @@ class CGroupsTelemetry(object):
             CGroupsTelemetry._tracked[service_name] = tracker
 
     @staticmethod
-    def track_extension(name, cgroup=None, limits=None):
+    def track_extension(name, cgroup=None, handler_configuration=None):
         """
         Create all required CGroups to track all metrics for an extension and its associated services.
 
@@ -232,7 +230,8 @@ class CGroupsTelemetry(object):
             return
 
         if not CGroupsTelemetry.is_tracked(name):
-            cgroup = CGroups.for_extension(name, limits=limits) if cgroup is None else cgroup
+            cgroup = CGroups.for_extension(name,
+                                           handler_configuration=handler_configuration) if cgroup is None else cgroup
             logger.info("Now tracking cgroup {0}".format(name))
             cgroup.set_limits()
             CGroupsTelemetry.track_cgroup(cgroup)
@@ -829,13 +828,3 @@ class CGroupsLimits(object):
         if AGENT_CGROUP_NAME.lower() in cgroup_name.lower():
             mem_limit = min(DEFAULT_MEM_LIMIT_MAX_MB, mem_limit)
         return mem_limit
-
-
-class CGroupsUtils(object):
-    def __init__(self):
-        pass
-
-
-class CGroupsEventListener(object):
-    def __init__(self):
-        pass

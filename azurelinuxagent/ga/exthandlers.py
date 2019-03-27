@@ -875,11 +875,7 @@ class ExtHandlerInstance(object):
     def enable(self):
         self.set_operation(WALAEventOperation.Enable)
         man = self.load_manifest()
-        handler_configuration = None
-        try:
-            handler_configuration = self.load_handler_configuration()
-        except ExtensionError as e:
-            self.logger.debug('Failed to load resource manifest file: {0}'.format(ustr(e)))
+        handler_configuration = self.load_handler_configuration() #azurelinuxagent.ga.exthandlers.ExtHandlerInstance#load_handler_configuration
 
         enable_cmd = man.get_enable_command()
         self.logger.info("Enable extension [{0}]".format(enable_cmd))
@@ -892,11 +888,7 @@ class ExtHandlerInstance(object):
     def disable(self):
         self.set_operation(WALAEventOperation.Disable)
         man = self.load_manifest()
-        handler_configuration = None
-        try:
-            handler_configuration = self.load_handler_configuration()
-        except ExtensionError as e:
-            self.logger.debug('Failed to load resource manifest file: {0}'.format(ustr(e)))
+        handler_configuration = self.load_handler_configuration()
 
         disable_cmd = man.get_disable_command()
         self.logger.info("Disable extension [{0}]".format(disable_cmd))
@@ -909,11 +901,7 @@ class ExtHandlerInstance(object):
     def install(self):
         self.set_operation(WALAEventOperation.Install)
         man = self.load_manifest()
-        handler_configuration = None
-        try:
-            handler_configuration = self.load_handler_configuration()
-        except ExtensionError as e:
-            self.logger.debug('Failed to load resource manifest file: {0}'.format(ustr(e)))
+        handler_configuration = self.load_handler_configuration()
 
         install_cmd = man.get_install_command()
         self.logger.info("Install extension [{0}]".format(install_cmd))
@@ -927,12 +915,7 @@ class ExtHandlerInstance(object):
         try:
             self.set_operation(WALAEventOperation.UnInstall)
             man = self.load_manifest()
-            handler_configuration = None
-            try:
-                handler_configuration = self.load_handler_configuration()
-            except ExtensionError as e:
-                self.logger.debug('Failed to load resource manifest file: {0}'.format(ustr(e)))
-
+            handler_configuration = self.load_handler_configuration()
             uninstall_cmd = man.get_uninstall_command()
             self.logger.info("Uninstall extension [{0}]".format(uninstall_cmd))
             self.launch_command(uninstall_cmd,
@@ -947,11 +930,7 @@ class ExtHandlerInstance(object):
         try:
             self.set_operation(WALAEventOperation.Update)
             man = self.load_manifest()
-            handler_configuration = None
-            try:
-                handler_configuration = self.load_handler_configuration()
-            except ExtensionError as e:
-                self.logger.debug('Failed to load resource manifest file: {0}'.format(ustr(e)))
+            handler_configuration = self.load_handler_configuration()
 
             update_cmd = man.get_update_command()
             self.logger.info("Update extension [{0}]".format(update_cmd))
@@ -982,24 +961,6 @@ class ExtHandlerInstance(object):
             message = "Failed to remove extension handler directory: {0}".format(e)
             self.report_event(message=message, is_success=False)
             self.logger.warn(message)
-
-    def update(self, version=None):
-        if version is None:
-            version = self.ext_handler.properties.version
-
-        try:
-            self.set_operation(WALAEventOperation.Update)
-            man = self.load_manifest()
-            update_cmd = man.get_update_command()
-            self.logger.info("Update extension [{0}]".format(update_cmd))
-            self.launch_command(update_cmd,
-                                timeout=900,
-                                extension_error_code=ExtensionErrorCodes.PluginUpdateProcessingFailed,
-                                env={'VERSION': version})
-        except ExtensionError:
-            # prevent the handler update from being retried
-            self.set_handler_state(ExtHandlerState.Failed)
-            raise
 
     def update_with_install(self):
         man = self.load_manifest()
@@ -1161,7 +1122,8 @@ class ExtHandlerInstance(object):
         last_update = int(time.time() - os.stat(heartbeat_file).st_mtime)
         return last_update <= 600
 
-    def launch_command(self, cmd, timeout=300, extension_error_code=ExtensionErrorCodes.PluginProcessingError, env=None, handler_configuration=None):
+    def launch_command(self, cmd, timeout=300, extension_error_code=ExtensionErrorCodes.PluginProcessingError, env=None,
+                       handler_configuration=None):
         begin_utc = datetime.datetime.utcnow()
         self.logger.verbose("Launch command: [{0}]", cmd)
 
@@ -1199,13 +1161,12 @@ class ExtHandlerInstance(object):
 
                 try:
                     cg = CGroups.for_extension(self.ext_handler.name, handler_configuration)
-                    CGroupsTelemetry.track_extension(self.ext_handler.name, cg)
+                    CGroupsTelemetry.track_extension(self.ext_handler.name, cg, handler_configuration)
                 except Exception as e:
                     self.logger.warn("Unable to setup cgroup {0}: {1}".format(self.ext_handler.name, e))
 
-                cg = CGroups.for_extension(self.ext_handler.name, handler_configuration)
-                CGroupsTelemetry.track_extension(self.ext_handler.name, cg)
-                msg = ExtHandlerInstance._capture_process_output(process, stdout, stderr, cmd, timeout, extension_error_code)
+                msg = ExtHandlerInstance._capture_process_output(process, stdout, stderr, cmd, timeout,
+                                                                 extension_error_code)
 
                 duration = elapsed_milliseconds(begin_utc)
                 log_msg = "{0}\n{1}".format(cmd, "\n".join([line for line in msg.split('\n') if line != ""]))
@@ -1250,15 +1211,22 @@ class ExtHandlerInstance(object):
         return read_output()
 
     def load_handler_configuration(self):
+        handler_config = None
+        data = None
         config_file = self.get_handler_configuration_file()
         try:
             data = json.loads(fileutil.read_file(config_file))
         except (IOError, OSError) as e:
-            raise ExtensionError('Failed to load resource manifest file ({0}): {1}'.format(config_file, e.strerror))
+            self.logger.warn('Failed to load resource manifest file ({0}): {1}'.format(config_file, e.strerror))
         except ValueError:
-            raise ExtensionError('Malformed resource manifest file ({0}).'.format(config_file))
+            self.logger.warn('Malformed resource manifest file ({0}).'.format(config_file))
 
-        return HandlerConfiguration(data)
+        try:
+            handler_config = HandlerConfiguration(data)
+        except ExtensionError as e:
+            self.logger.warn('Failed to load resource manifest file: {0}'.format(ustr(e)))
+
+        return handler_config
 
     def load_manifest(self):
         man_file = self.get_manifest_file()
@@ -1498,7 +1466,7 @@ class HandlerConfiguration(object):
             return self.get_linux_configurations()["resources"]
         return None
 
-    def get_cpu_limits_by_extension(self):
+    def get_cpu_limits_for_extension(self):
         resource_config = self.get_resource_configurations()
 
         if resource_config and "cpu" in resource_config:
@@ -1507,7 +1475,7 @@ class HandlerConfiguration(object):
         else:
             return None
 
-    def get_memory_limits_by_extension(self):
+    def get_memory_limits_for_extension(self):
         resource_config = self.get_resource_configurations()
 
         if resource_config and "memory" in resource_config:

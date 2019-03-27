@@ -178,8 +178,8 @@ class TestCGroups(AgentTestCase):
 
     @skip_if_predicate_true(i_am_root, "Test does not run when root")
     @patch("azurelinuxagent.common.conf.get_cgroups_enforce_limits")
-    @patch("azurelinuxagent.common.cgroups.CGroups.set_cpu_limit")
-    @patch("azurelinuxagent.common.cgroups.CGroups.set_memory_limit")
+    @patch("azurelinuxagent.common.cgroups.cgroups.CGroups.set_cpu_limit")
+    @patch("azurelinuxagent.common.cgroups.cgroups.CGroups.set_memory_limit")
     def test_telemetry_instantiation_as_normal_user_with_limits(self, mock_get_cgroups_enforce_limits,
                                                                 mock_set_cpu_limit,
                                                                 mock_set_memory_limit):
@@ -243,9 +243,9 @@ class TestCGroups(AgentTestCase):
 
     @patch('azurelinuxagent.common.event.add_event')
     @patch('azurelinuxagent.common.conf.get_cgroups_enforce_limits')
-    @patch('azurelinuxagent.common.cgroups.CGroups.set_memory_limit')
-    @patch('azurelinuxagent.common.cgroups.CGroups.set_cpu_limit')
-    @patch('azurelinuxagent.common.cgroups.CGroups._try_mkdir')
+    @patch('azurelinuxagent.common.cgroups.cgroups.CGroups.set_memory_limit')
+    @patch('azurelinuxagent.common.cgroups.cgroups.CGroups.set_cpu_limit')
+    @patch('azurelinuxagent.common.cgroups.cgroups.CGroups._try_mkdir')
     def assert_limits(self, _, patch_set_cpu, patch_set_memory_limit, patch_get_enforce, patch_add_event,
                       ext_name,
                       expected_cpu_limit,
