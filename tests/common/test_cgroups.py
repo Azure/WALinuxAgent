@@ -17,7 +17,7 @@
 
 from __future__ import print_function
 
-from azurelinuxagent.common.cgroups import CGroupsTelemetry, CGroups, CGroupsLimits, \
+from azurelinuxagent.common.cgroups.cgroups import CGroupsTelemetry, CGroups, CGroupsLimits, \
     CGroupsException, CGroupsLimits, BASE_CGROUPS, Cpu, Memory, DEFAULT_MEM_LIMIT_MIN_MB
 from azurelinuxagent.common.version import AGENT_NAME
 from tests.tools import *

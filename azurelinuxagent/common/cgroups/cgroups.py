@@ -221,7 +221,7 @@ class CGroupsTelemetry(object):
             CGroupsTelemetry._tracked[service_name] = tracker
 
     @staticmethod
-    def track_extension(name, cgroup=None):
+    def track_extension(name, cgroup=None, limits=None):
         """
         Create all required CGroups to track all metrics for an extension and its associated services.
 
@@ -232,7 +232,7 @@ class CGroupsTelemetry(object):
             return
 
         if not CGroupsTelemetry.is_tracked(name):
-            cgroup = CGroups.for_extension(name) if cgroup is None else cgroup
+            cgroup = CGroups.for_extension(name, limits=limits) if cgroup is None else cgroup
             logger.info("Now tracking cgroup {0}".format(name))
             cgroup.set_limits()
             CGroupsTelemetry.track_cgroup(cgroup)
@@ -377,12 +377,12 @@ class CGroups(object):
         return os.path.join(BASE_CGROUPS, hierarchy, 'system.slice', cgroup_name).rstrip(os.path.sep)
 
     @staticmethod
-    def for_extension(name, limits=None):
-        return CGroups(name, CGroups._construct_custom_path_for_hierarchy, limits)
+    def for_extension(name, handler_configuration=None):
+        return CGroups(name, CGroups._construct_custom_path_for_hierarchy, handler_configuration)
 
     @staticmethod
-    def for_systemd_service(name, limits=None):
-        return CGroups(name.lower(), CGroups._construct_systemd_path_for_hierarchy, limits)
+    def for_systemd_service(name, handler_configuration=None):
+        return CGroups(name.lower(), CGroups._construct_systemd_path_for_hierarchy, handler_configuration)
 
     @staticmethod
     def enabled():
@@ -396,7 +396,7 @@ class CGroups(object):
     def enable():
         CGroups._enabled = True
 
-    def __init__(self, name, path_maker, limits=None):
+    def __init__(self, name, path_maker, handler_configuration=None):
         """
         Construct CGroups object. Create appropriately-named directory for each hierarchy of interest.
 
@@ -412,7 +412,7 @@ class CGroups(object):
 
         self.cgroups = {}
 
-        self.threshold = CGroupsLimits(self.name, limits)
+        self.threshold = CGroupsLimits(self.name, handler_configuration)
 
         if not self.enabled():
             return
@@ -604,7 +604,7 @@ class CGroups(object):
             log_event=False)
 
     @staticmethod
-    def add_to_extension_cgroup(name, pid):
+    def add_to_extension_cgroup(name, pid, handler_configuration=None):
         """
         Create cgroup directories for this extension in each of the hierarchies and add this process to the new cgroup.
         Should only be called when creating sub-processes and invoked inside the fork/exec window. As a result,
@@ -613,6 +613,7 @@ class CGroups(object):
 
         :param str name: Short name of extension, suitable for naming directories in the filesystem
         :param int pid: Process id of extension to be added to the cgroup
+        :param handler_configuration: CGroups resource limits for the extension.
         """
         if not CGroups.enabled():
             return
@@ -622,8 +623,9 @@ class CGroups(object):
             return
 
         try:
+            
             logger.info("Move process {0} into cgroup for extension {1}".format(pid, name))
-            CGroups.for_extension(name).add(pid)
+            CGroups.for_extension(name, handler_configuration=handler_configuration).add(pid)
         except Exception as ex:
             logger.warn("Unable to move process {0} into cgroup for extension {1}: {2}".format(pid, name, ex))
 
@@ -827,3 +829,13 @@ class CGroupsLimits(object):
         if AGENT_CGROUP_NAME.lower() in cgroup_name.lower():
             mem_limit = min(DEFAULT_MEM_LIMIT_MAX_MB, mem_limit)
         return mem_limit
+
+
+class CGroupsUtils(object):
+    def __init__(self):
+        pass
+
+
+class CGroupsEventListener(object):
+    def __init__(self):
+        pass
