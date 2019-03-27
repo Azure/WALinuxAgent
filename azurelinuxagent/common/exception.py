@@ -27,7 +27,7 @@ class AgentError(Exception):
     """
 
     def __init__(self, msg, inner=None):
-        self.msg = u"[{0}] {1}".format(type(self).__name__, msg)
+        msg = u"[{0}] {1}".format(type(self).__name__, msg)
         if inner is not None:
             msg = u"{0}\nInner error: {1}".format(msg, inner)
         super(AgentError, self).__init__(msg)

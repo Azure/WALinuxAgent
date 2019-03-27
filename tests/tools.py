@@ -374,6 +374,11 @@ def load_data(name):
         return data_file.read()
 
 
+def load_data_path(name):
+    """Load test data"""
+    return os.path.join(data_dir, name)
+
+
 def load_bin_data(name):
     """Load test bin data"""
     path = os.path.join(data_dir, name)

@@ -9,7 +9,7 @@ from azurelinuxagent.ga.exthandlers import parse_ext_status, ExtHandlerInstance,
 from azurelinuxagent.common.exception import ProtocolError, ExtensionError, ExtensionErrorCodes
 from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.utils.processutil import TELEMETRY_MESSAGE_MAX_LEN, format_stdout_stderr
-from azurelinuxagent.common.cgroups import CGroups
+from azurelinuxagent.common.cgroups.cgroups import CGroups
 from tests.tools import *
 
 
@@ -606,7 +606,7 @@ open("{0}", "w").close()
 
 '''.format(signal_file))
 
-        with patch('azurelinuxagent.common.cgroups.CGroups.for_extension', side_effect=Exception):
+        with patch('azurelinuxagent.common.cgroups.cgroups.CGroups.for_extension', side_effect=Exception):
             self.ext_handler_instance.launch_command(command)
 
         self.assertTrue(os.path.exists(signal_file))
