@@ -1116,7 +1116,7 @@ class DefaultOSUtil(object):
     def restart_if(self, ifname, retries=3, wait=5):
         retry_limit=retries+1
         for attempt in range(1, retry_limit):
-            return_code=shellutil.run("ifdown {0} && ifup {0}".format(ifname))
+            return_code=shellutil.run("ifdown {0} && ifup {0}".format(ifname), expected_errors=[1] if attempt < retries else [])
             if return_code == 0:
                 return
             logger.warn("failed to restart {0}: return code {1}".format(ifname, return_code))
