@@ -302,9 +302,9 @@ class DefaultOSUtil(object):
         Enabled by default; disabled in WSL/Travis
         """
         is_wsl = '-Microsoft-' in platform.platform()
-        is_travis = 'TRAVIS' in os.environ and os.environ['TRAVIS'] == 'true'
+        # is_travis = 'TRAVIS' in os.environ and os.environ['TRAVIS'] == 'true'
         base_fs_exists = os.path.exists(BASE_CGROUPS)
-        return not is_wsl and not is_travis and base_fs_exists
+        return not is_wsl and base_fs_exists
 
     @staticmethod
     def _cgroup_path(tail=""):
