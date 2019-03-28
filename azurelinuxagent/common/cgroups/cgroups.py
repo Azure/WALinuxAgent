@@ -617,7 +617,7 @@ class CGroups(object):
         if not CGroups.enabled():
             return
 
-        if limit is None:
+        if not limit:
             return
 
         if 'cpu' in self.cgroups:

@@ -1,0 +1,31 @@
+{
+  "name": "ExampleHandlerLinux",
+  "version": 1.0,
+  "handlerConfiguration": {
+    "linux": {
+      "resources": {
+        "cpu": [
+          {
+            "cores": 2,
+            "limit_percentage": 25
+          },
+          {
+            "cores": 8,
+            "limit_percentage": 20
+          },
+          {
+            "cores": -1,
+            "limit_percentage": 15
+          }
+        ],
+        "memory": {
+          "max_limit_percentage": 20,
+          "max_limit_MBs": 1000,
+          "memory_pressure_warning": "low",
+          "memory_oom_kill": "enabled"
+        }
+      }
+    },
+    "windows": {}
+  }
+}

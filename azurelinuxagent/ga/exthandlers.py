@@ -936,7 +936,7 @@ class ExtHandlerInstance(object):
             self.logger.info("Update extension [{0}]".format(update_cmd))
             self.launch_command(update_cmd,
                                 timeout=900,
-                                extension_error_code=1008,
+                                extension_error_code=ExtensionErrorCodes.PluginUpdateProcessingFailed,
                                 env={'VERSION': version},
                                 handler_configuration=handler_configuration)
         except ExtensionError:
@@ -1440,6 +1440,11 @@ class HandlerManifest(object):
 
 
 class HandlerConfiguration(object):
+    @staticmethod
+    def send_handler_configuration_event(name=AGENT_NAME, message="", operation=WALAEventOperation.Unknown,
+                                         is_success=True, log_event=True):
+        add_event(name=name, message=message, op=operation, is_success=is_success, log_event=log_event)
+
     def __init__(self, data):
         if data is None:
             raise ExtensionError('Malformed handler configuration file.')
@@ -1469,19 +1474,27 @@ class HandlerConfiguration(object):
     def get_cpu_limits_for_extension(self):
         resource_config = self.get_resource_configurations()
 
-        if resource_config and "cpu" in resource_config:
-            cpu_limits_object = CpuLimits(resource_config["cpu"])
-            return cpu_limits_object
-        else:
-            return None
+        try:
+            if resource_config and "cpu" in resource_config:
+                return CpuLimits(resource_config["cpu"])
+        except ExtensionError as e:
+            logger.warn(str(e))
+            HandlerConfiguration.send_handler_configuration_event(message=ustr(e), is_success=False, log_event=False,
+                                                                  operation=WALAEventOperation.HandlerConfiguration)
+        return None
 
     def get_memory_limits_for_extension(self):
         resource_config = self.get_resource_configurations()
 
-        if resource_config and "memory" in resource_config:
-            return MemoryLimit(resource_config["memory"])
-        else:
-            return None
+        try:
+            if resource_config and "memory" in resource_config:
+                return MemoryLimits(resource_config["memory"])
+        except ExtensionError as e:
+            logger.warn(e)
+            HandlerConfiguration.send_handler_configuration_event(message=ustr(e), is_success=False, log_event=False,
+                                                                  operation=WALAEventOperation.HandlerConfiguration)
+
+        return None
 
 
 class CpuLimits(object):
@@ -1492,7 +1505,7 @@ class CpuLimits(object):
         for i in cpu_node:
             if "cores" not in i or "limit_percentage" not in i:
                 raise ExtensionError("Malformed CPU limit node in HandlerConfiguration")
-            self.cpu_limits.append(CpuLimit(i["cores"], i["limit_percentage"]))
+            self.cpu_limits.append(CpuLimitInstance(i["cores"], i["limit_percentage"]))
             self.cores.append(i["cores"])
 
         if DEFAULT_CORES_COUNT not in self.cores:
@@ -1505,7 +1518,7 @@ class CpuLimits(object):
         return self.cpu_limits.__str__()
 
 
-class CpuLimit(object):
+class CpuLimitInstance(object):
     def __init__(self, cores, limit_percentage):
         self.cores = cores
         self.limit_percentage = limit_percentage
@@ -1526,18 +1539,17 @@ class CpuLimit(object):
         return {"cores": self.cores, "limit_percentage": self.limit_percentage}.__str__()
 
 
-class MemoryLimit(object):
+class MemoryLimits(object):
     def __init__(self, memory_node):
-        set_for_memory_oom_kill = ["enabled", "disabled"]
+        memory_oom_kill_options = ["enabled", "disabled"]
 
-        self.max_limit_percentage = memory_node[
-            "max_limit_percentage"] if "max_limit_percentage" in memory_node else None
-        self.max_limit_MBs = memory_node["max_limit_MBs"] if "max_limit_MBs" in memory_node else None
-        self.memory_pressure_warning = memory_node["memory_pressure_warning"] if "memory_pressure_warning" in memory_node else None
-
+        self.max_limit_percentage = memory_node.get("max_limit_percentage", None)
+        self.max_limit_MBs = memory_node.get("max_limit_MBs", None)
+        self.memory_pressure_warning = memory_node.get("memory_pressure_warning", None)
         self.memory_oom_kill = "disabled"  # default
+
         if "memory_oom_kill" in memory_node:
-            if memory_node["memory_oom_kill"].lower() in set_for_memory_oom_kill:
+            if memory_node["memory_oom_kill"].lower() in memory_oom_kill_options:
                 self.memory_oom_kill = memory_node["memory_oom_kill"].lower()
             else:
                 raise ExtensionError("Malformed memory_oom_kill flag in HandlerConfiguration")

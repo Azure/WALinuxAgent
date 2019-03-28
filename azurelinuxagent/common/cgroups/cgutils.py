@@ -16,7 +16,6 @@
 import re
 
 from azurelinuxagent.common.osutil import get_osutil
-from azurelinuxagent.common.osutil.default import BASE_CGROUPS
 
 WRAPPER_CGROUP_NAME = "WALinuxAgent"
 AGENT_CGROUP_NAME = "WALinuxAgent"
@@ -153,17 +152,49 @@ class Memory(object):
 
 
 class CGroupsLimits(object):
-    @staticmethod
-    def _get_value_or_default(name, threshold, limit, compute_default):
-        return threshold[limit] if threshold and limit in threshold else compute_default(name)
+    def __init__(self, cgroup_name, handler_configuration=None):
+        self.osutil = get_osutil()
 
-    def __init__(self, cgroup_name, threshold=None):
         if not cgroup_name or cgroup_name == "":
             cgroup_name = "Agents+Extensions"
 
-        self.cpu_limit = self._get_value_or_default(cgroup_name, threshold, "cpu", CGroupsLimits.get_default_cpu_limits)
-        self.memory_limit = self._get_value_or_default(cgroup_name, threshold, "memory",
-                                                       CGroupsLimits.get_default_memory_limits)
+        self.cpu_limit = self.get_cpu_limits(cgroup_name, handler_configuration,
+                                             CGroupsLimits.get_default_cpu_limits)
+        self.memory_limit = self.get_memory_limits(cgroup_name, handler_configuration,
+                                                   CGroupsLimits.get_default_memory_limits)
+
+    def get_cpu_limits(self, name, handler_configuration, compute_default):
+        limit_requested = None
+
+        cpu_limits_requested_by_extn = handler_configuration.get_cpu_limits_for_extension() if handler_configuration \
+            else None
+
+        if cpu_limits_requested_by_extn:
+            cores_count = self.osutil.get_processor_cores()
+            # sorted by cores. -1 is the default entry - and the first entry.
+            default_limits = cpu_limits_requested_by_extn.cpu_limits[0]
+            if len(cpu_limits_requested_by_extn.cpu_limits) > 1:
+                for i in cpu_limits_requested_by_extn.cpu_limits[1:]:
+                    if cores_count <= i.cores:
+                        limit_requested = i.limit_percentage
+
+            if not limit_requested:
+                limit_requested = default_limits.limit_percentage
+
+        return limit_requested if limit_requested else compute_default(name)
+
+    def get_memory_limits(self, name, handler_configuration, compute_default):
+        limit_requested = None
+
+        memory_limits_requested_by_extn = handler_configuration.get_memory_limits_for_extension() if \
+            handler_configuration else None
+
+        if memory_limits_requested_by_extn:
+            total_memory = self.osutil.get_total_mem()
+            limit_requested = min((memory_limits_requested_by_extn.max_limit_percentage/100.0) * total_memory,
+                                  memory_limits_requested_by_extn.max_limit_MBs)
+
+        return limit_requested if limit_requested else compute_default(name)
 
     @staticmethod
     def get_default_cpu_limits(cgroup_name):

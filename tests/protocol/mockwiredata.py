@@ -74,7 +74,10 @@ DATA_FILE_CERT_FORMAT_NOT_PFX = DATA_FILE.copy()
 DATA_FILE_CERT_FORMAT_NOT_PFX["certs"] = "wire/certs_format_not_pfx.xml"
 
 DATA_FILE_CGROUP_LIMITS_SET = DATA_FILE.copy()
-DATA_FILE_CGROUP_LIMITS_SET["test_ext"] = "ext/sample_ext_with_limits-1.4.0.zip"
+DATA_FILE_CGROUP_LIMITS_SET["test_ext"] = "ext/sample_ext_with_limits-1.0.0.zip"
+
+DATA_FILE_INVALID_CGROUP_LIMITS_SET = DATA_FILE.copy()
+DATA_FILE_INVALID_CGROUP_LIMITS_SET["test_ext"] = "ext/sample_ext_with_invalid_limits-1.0.0.zip"
 
 class WireProtocolData(object):
     def __init__(self, data_files=DATA_FILE):
