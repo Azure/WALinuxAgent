@@ -75,8 +75,8 @@ def i_am_root():
 class TestCGroups(AgentTestCase):
     @classmethod
     def setUpClass(cls):
+        AgentTestCase.setUpClass()
         CGroups.setup(True)
-        super(AgentTestCase, cls).setUpClass()
 
     def test_cgroup_utilities(self):
         """
