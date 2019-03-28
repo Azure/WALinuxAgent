@@ -1502,11 +1502,11 @@ class CpuLimits(object):
         self.cpu_limits = []
         self.cores = []
 
-        for i in cpu_node:
-            if "cores" not in i or "limit_percentage" not in i:
+        for property in cpu_node:
+            if "cores" not in property or "limit_percentage" not in property:
                 raise ExtensionError("Malformed CPU limit node in HandlerConfiguration")
-            self.cpu_limits.append(CpuLimitInstance(i["cores"], i["limit_percentage"]))
-            self.cores.append(i["cores"])
+            self.cpu_limits.append(CpuLimitInstance(property["cores"], property["limit_percentage"]))
+            self.cores.append(property["cores"])
 
         if DEFAULT_CORES_COUNT not in self.cores:
             raise ExtensionError("Default CPU limit not set."

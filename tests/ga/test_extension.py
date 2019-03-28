@@ -656,7 +656,7 @@ class TestExtension(ExtensionTestCase):
     }
 '''
         handler_config = HandlerConfiguration(json.loads(data))
-        self.assertIsNone(handler_config.get_memory_limits_for_extension())
+        self.assertEqual(handler_config.get_memory_limits_for_extension(), None)
 
         cpu_limits = handler_config.get_cpu_limits_for_extension().cpu_limits
         print(cpu_limits)
@@ -680,7 +680,7 @@ class TestExtension(ExtensionTestCase):
             }
 '''
         handler_config = HandlerConfiguration(json.loads(data))
-        self.assertIsNone(handler_config.get_memory_limits_for_extension())
+        self.assertEquals(handler_config.get_memory_limits_for_extension(), None)
 
         cpu_limits = handler_config.get_cpu_limits_for_extension().cpu_limits
         self.assertEquals(1, len(cpu_limits))  # 3 configurations sent
@@ -760,7 +760,7 @@ class TestExtension(ExtensionTestCase):
     }
     '''
         handler_config = HandlerConfiguration(json.loads(data))
-        self.assertIsNone(handler_config.get_cpu_limits_for_extension())
+        self.assertEquals(handler_config.get_cpu_limits_for_extension(), None)
 
         memory_limits = handler_config.get_memory_limits_for_extension()
         self.assertEqual(memory_limits.max_limit_percentage, 20)
@@ -810,7 +810,7 @@ class TestExtension(ExtensionTestCase):
         memory_limits = handler_config.get_memory_limits_for_extension()
         self.assertEqual(memory_limits.max_limit_percentage, 20)
         self.assertEqual(memory_limits.max_limit_MBs, 1000)
-        self.assertIsNone(memory_limits.memory_pressure_warning)
+        self.assertEquals(memory_limits.memory_pressure_warning, None)
         self.assertEqual(memory_limits.memory_oom_kill, "disabled")
 
     def test_handler_configuration_incorrect_memory_configuration(self, *args):
@@ -832,7 +832,7 @@ class TestExtension(ExtensionTestCase):
     }
 '''
         handlerConfig = HandlerConfiguration(json.loads(data))
-        self.assertIsNone(handlerConfig.get_cpu_limits_for_extension())
+        self.assertEquals(handlerConfig.get_cpu_limits_for_extension(), None)
         with self.assertRaises(ExtensionError) as context:
             handlerConfig.get_memory_limits_for_extension()
 
@@ -851,7 +851,7 @@ class TestExtension(ExtensionTestCase):
     }
     '''
         handler_resource_reqs = HandlerConfiguration(json.loads(data)).get_resource_configurations()
-        self.assertIsNone(handler_resource_reqs)
+        self.assertEquals(handler_resource_reqs, None)
 
         data = '''{
               "name": "ExampleHandlerLinux",
@@ -894,14 +894,14 @@ class TestExtension(ExtensionTestCase):
                 patch_get_handler_configuration_file:
             patch_get_handler_configuration_file.return_value = load_data_path("ext/NotPresent.json")
             handler_config = ext_handler_i.load_handler_configuration()
-            self.assertIsNone(handler_config)
+            self.assertEquals(handler_config, None)
 
         with patch(
                 "azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_handler_configuration_file") as \
                 patch_get_handler_configuration_file:
             patch_get_handler_configuration_file.return_value = load_data_path("ext/SampleMalformedHandlerConfiguration.json")
             handler_config = ext_handler_i.load_handler_configuration()
-            self.assertIsNone(handler_config)
+            self.assertEquals(handler_config, None)
 
     def test_ext_handler_rollingupgrade(self, *args):
         test_data = WireProtocolData(DATA_FILE_EXT_ROLLINGUPGRADE)
