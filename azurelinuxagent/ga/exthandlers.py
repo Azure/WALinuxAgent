@@ -42,7 +42,7 @@ from azurelinuxagent.common.cgroups.cgroups import CGroups, CGroupsTelemetry
 from azurelinuxagent.common.errorstate import ErrorState, ERROR_STATE_DELTA_INSTALL
 from azurelinuxagent.common.event import add_event, WALAEventOperation, elapsed_milliseconds
 from azurelinuxagent.common.exception import ExtensionError, ProtocolError, ProtocolNotFoundError, \
-    ExtensionDownloadError, ExtensionOperationError, ExtensionErrorCodes
+    ExtensionDownloadError, ExtensionOperationError, ExtensionErrorCodes, ExtensionConfigurationError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol import get_protocol_util
 from azurelinuxagent.common.protocol.restapi import ExtHandlerStatus, \
@@ -1447,11 +1447,11 @@ class HandlerConfiguration(object):
 
     def __init__(self, data):
         if data is None:
-            raise ExtensionError('Malformed handler configuration file.')
+            raise ExtensionConfigurationError('Malformed handler configuration file.')
         if "handlerConfiguration" not in data:
-            raise ExtensionError('Malformed handler configuration file.')
+            raise ExtensionConfigurationError('Malformed handler configuration file.')
         if "linux" not in data['handlerConfiguration']:
-            raise ExtensionError('No linux configurations present in HandlerConfiguration')
+            raise ExtensionConfigurationError('No linux configurations present in HandlerConfiguration')
 
         self.data = data
 
@@ -1477,7 +1477,7 @@ class HandlerConfiguration(object):
         try:
             if resource_config and "cpu" in resource_config:
                 return CpuLimits(resource_config["cpu"])
-        except ExtensionError as e:
+        except ExtensionConfigurationError as e:
             logger.warn(str(e))
             HandlerConfiguration.send_handler_configuration_event(message=ustr(e), is_success=False, log_event=False,
                                                                   operation=WALAEventOperation.HandlerConfiguration)
@@ -1489,9 +1489,9 @@ class HandlerConfiguration(object):
         try:
             if resource_config and "memory" in resource_config:
                 return MemoryLimits(resource_config["memory"])
-        except ExtensionError as e:
-            logger.warn(e)
-            HandlerConfiguration.send_handler_configuration_event(message=ustr(e), is_success=False, log_event=False,
+        except ExtensionConfigurationError as e:
+            logger.warn(ustr(e))
+            HandlerConfiguration.send_handler_configuration_event(message="{0}".format(ustr(e)), is_success=False, log_event=False,
                                                                   operation=WALAEventOperation.HandlerConfiguration)
 
         return None
@@ -1504,12 +1504,12 @@ class CpuLimits(object):
 
         for property in cpu_node:
             if "cores" not in property or "limit_percentage" not in property:
-                raise ExtensionError("Malformed CPU limit node in HandlerConfiguration")
+                raise ExtensionConfigurationError("Malformed CPU limit node in HandlerConfiguration")
             self.cpu_limits.append(CpuLimitInstance(property["cores"], property["limit_percentage"]))
             self.cores.append(property["cores"])
 
         if DEFAULT_CORES_COUNT not in self.cores:
-            raise ExtensionError("Default CPU limit not set."
+            raise ExtensionConfigurationError("Default CPU limit not set."
                                  " Core configuration for {0} not present".format(DEFAULT_CORES_COUNT))
 
         self.cpu_limits = sorted(self.cpu_limits)
@@ -1552,4 +1552,4 @@ class MemoryLimits(object):
             if memory_node["memory_oom_kill"].lower() in memory_oom_kill_options:
                 self.memory_oom_kill = memory_node["memory_oom_kill"].lower()
             else:
-                raise ExtensionError("Malformed memory_oom_kill flag in HandlerConfiguration")
+                raise ExtensionConfigurationError("Malformed memory_oom_kill flag in HandlerConfiguration")

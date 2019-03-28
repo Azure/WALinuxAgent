@@ -79,6 +79,15 @@ class ExtensionOperationError(ExtensionError):
         super(ExtensionOperationError, self).__init__(msg, inner, code)
 
 
+class ExtensionConfigurationError(ExtensionError):
+    """
+    When failed to configure an extension
+    """
+
+    def __init__(self, msg=None, inner=None, code=-1):
+        super(ExtensionConfigurationError, self).__init__(msg, inner, code)
+
+
 class ProvisionError(AgentError):
     """
     When provision failed

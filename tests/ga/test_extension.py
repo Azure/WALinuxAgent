@@ -710,10 +710,7 @@ class TestExtension(ExtensionTestCase):
     }
 '''
         handler_config = HandlerConfiguration(json.loads(data))
-        try:
-            handler_config.get_cpu_limits_for_extension().cpu_limits
-        except ExtensionError as e:
-            self.assertEqual(type(e), ExtensionError)
+        self.assertEqual(handler_config.get_cpu_limits_for_extension(), None)
 
         data = '''{
                   "name": "ExampleHandlerLinux",
@@ -736,10 +733,7 @@ class TestExtension(ExtensionTestCase):
                 }
             '''
         handler_config = HandlerConfiguration(json.loads(data))
-        try:
-            handler_config.get_cpu_limits_for_extension().cpu_limits
-        except ExtensionError as e:
-            self.assertEqual(type(e), ExtensionError)
+        self.assertEqual(handler_config.get_cpu_limits_for_extension(), None)
 
     def test_handler_configuration_only_memory_configuration(self, *args):
         data = '''{
@@ -833,10 +827,7 @@ class TestExtension(ExtensionTestCase):
 '''
         handlerConfig = HandlerConfiguration(json.loads(data))
         self.assertEquals(handlerConfig.get_cpu_limits_for_extension(), None)
-        with self.assertRaises(ExtensionError) as context:
-            handlerConfig.get_memory_limits_for_extension()
-
-        self.assertTrue("Malformed memory_oom_kill flag in HandlerConfiguration" in str(context.exception))
+        self.assertEquals(handlerConfig.get_memory_limits_for_extension(), None)
 
     def test_handler_configuration_incorrect_configuration(self, *args):
         data = '''{

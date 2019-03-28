@@ -16,6 +16,7 @@
 import re
 
 from azurelinuxagent.common.osutil import get_osutil
+from azurelinuxagent.common.osutil.default import BASE_CGROUPS
 
 WRAPPER_CGROUP_NAME = "WALinuxAgent"
 AGENT_CGROUP_NAME = "WALinuxAgent"
