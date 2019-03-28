@@ -850,7 +850,7 @@ class TestExtension(ExtensionTestCase):
               "handlerConfiguration": {}
             }
             '''
-        with self.assertRaises(ExtensionError) as context:
+        with self.assertRaises(ExtensionConfigurationError) as context:
             HandlerConfiguration(json.loads(data))
 
         self.assertTrue("No linux configurations present in HandlerConfiguration" in str(context.exception))
@@ -860,7 +860,7 @@ class TestExtension(ExtensionTestCase):
 "version": 1.0
 }
 '''
-        with self.assertRaises(ExtensionError) as context:
+        with self.assertRaises(ExtensionConfigurationError) as context:
             HandlerConfiguration(json.loads(data))
 
         self.assertTrue("Malformed handler configuration file" in str(context.exception))

@@ -179,6 +179,7 @@ class CGroupsLimits(object):
                 for i in cpu_limits_requested_by_extn.cpu_limits[1:]:
                     if cores_count <= i.cores:
                         limit_requested = i.limit_percentage
+                        break
 
             if not limit_requested:
                 limit_requested = default_limits.limit_percentage

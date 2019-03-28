@@ -1491,7 +1491,8 @@ class HandlerConfiguration(object):
                 return MemoryLimits(resource_config["memory"])
         except ExtensionConfigurationError as e:
             logger.warn(ustr(e))
-            HandlerConfiguration.send_handler_configuration_event(message="{0}".format(ustr(e)), is_success=False, log_event=False,
+            HandlerConfiguration.send_handler_configuration_event(message="{0}".format(ustr(e)), is_success=False,
+                                                                  log_event=False,
                                                                   operation=WALAEventOperation.HandlerConfiguration)
 
         return None
@@ -1510,7 +1511,7 @@ class CpuLimits(object):
 
         if DEFAULT_CORES_COUNT not in self.cores:
             raise ExtensionConfigurationError("Default CPU limit not set."
-                                 " Core configuration for {0} not present".format(DEFAULT_CORES_COUNT))
+                                              " Core configuration for {0} not present".format(DEFAULT_CORES_COUNT))
 
         self.cpu_limits = sorted(self.cpu_limits)
 
@@ -1543,8 +1544,14 @@ class MemoryLimits(object):
     def __init__(self, memory_node):
         memory_oom_kill_options = ["enabled", "disabled"]
 
-        self.max_limit_percentage = memory_node.get("max_limit_percentage", None)
-        self.max_limit_MBs = memory_node.get("max_limit_MBs", None)
+        if "max_limit_MBs" in memory_node and "max_limit_percentage" in memory_node:
+            self.max_limit_percentage = memory_node.get("max_limit_percentage", None)
+            self.max_limit_MBs = memory_node.get("max_limit_MBs", None)
+        else:
+            raise ExtensionConfigurationError(
+                "Default max memory limit not set. max_limit_MBs: {0}, max_limit_percentage: {1}".format(
+                    memory_node.get("max_limit_MBs", None), memory_node.get("max_limit_percentage", None)))
+
         self.memory_pressure_warning = memory_node.get("memory_pressure_warning", None)
         self.memory_oom_kill = "disabled"  # default
 
