@@ -63,13 +63,13 @@ def has_command(cmd):
     """
     return not run(cmd, False)
 
-def run(cmd, chk_err=True):
+def run(cmd, chk_err=True, expected_errors=[]):
     """
     Calls run_get_output on 'cmd', returning only the return code.
     If chk_err=True then errors will be reported in the log.
     If chk_err=False then errors will be suppressed from the log.
     """
-    retcode, out = run_get_output(cmd, chk_err)
+    retcode, out = run_get_output(cmd, chk_err=chk_err, expected_errors=expected_errors)
     return retcode
 
 
