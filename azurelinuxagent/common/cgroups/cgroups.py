@@ -16,30 +16,16 @@
 
 import errno
 import os
-import re
 import time
 
 from azurelinuxagent.common import logger, conf
+from azurelinuxagent.common.cgroups.cgutils import CGroupsException, Cpu, Memory, CGroupsLimits, WRAPPER_CGROUP_NAME, \
+    AGENT_CGROUP_NAME, METRIC_HIERARCHIES, MEMORY_DEFAULT
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.osutil.default import BASE_CGROUPS
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
-
-WRAPPER_CGROUP_NAME = "WALinuxAgent"
-AGENT_CGROUP_NAME = "WALinuxAgent"
-METRIC_HIERARCHIES = ['cpu', 'memory']
-MEMORY_DEFAULT = -1
-
-# percentage of a single core
-DEFAULT_CPU_LIMIT_AGENT = 10
-DEFAULT_CPU_LIMIT_EXT = 40
-
-DEFAULT_MEM_LIMIT_MIN_MB = 256  # mb, applies to agent and extensions
-DEFAULT_MEM_LIMIT_MAX_MB = 512  # mb, applies to agent only
-DEFAULT_MEM_LIMIT_PCT = 15  # percent, applies to extensions
-
-re_user_system_times = re.compile('user (\d+)\nsystem (\d+)\n')
 
 related_services = {
     "Microsoft.OSTCExtensions.LinuxDiagnostic":    ["omid", "omsagent-LAD", "mdsd-lde"],
@@ -47,127 +33,9 @@ related_services = {
 }
 
 
-class CGroupsException(Exception):
-
-    def __init__(self, msg):
-        self.msg = msg
-
-    def __str__(self):
-        return repr(self.msg)
-
-
 # The metric classes (Cpu, Memory, etc) can all assume that CGroups is enabled, as the CGroupTelemetry
 # class is very careful not to call them if CGroups isn't enabled. Any tests should be disabled if the osutil
 # is_cgroups_support() method returns false.
-
-
-class Cpu(object):
-    def __init__(self, cgt):
-        """
-        Initialize data collection for the Cpu hierarchy. User must call update() before attempting to get
-        any useful metrics.
-
-        :param cgt: CGroupsTelemetry
-        :return:
-        """
-        self.cgt = cgt
-        self.osutil = get_osutil()
-        self.current_cpu_total = self.get_current_cpu_total()
-        self.previous_cpu_total = 0
-        self.current_system_cpu = self.osutil.get_total_cpu_ticks_since_boot()
-        self.previous_system_cpu = 0
-
-    def __str__(self):
-        return "Cgroup: Current {0}, previous {1}; System: Current {2}, previous {3}".format(
-            self.current_cpu_total, self.previous_cpu_total, self.current_system_cpu, self.previous_system_cpu
-        )
-
-    def get_current_cpu_total(self):
-        """
-        Compute the number of USER_HZ of CPU time (user and system) consumed by this cgroup since boot.
-
-        :return: int
-        """
-        cpu_total = 0
-        try:
-            cpu_stat = self.cgt.cgroup.\
-                get_file_contents('cpu', 'cpuacct.stat')
-            if cpu_stat is not None:
-                m = re_user_system_times.match(cpu_stat)
-                if m:
-                    cpu_total = int(m.groups()[0]) + int(m.groups()[1])
-        except CGroupsException:
-            # There are valid reasons for file contents to be unavailable; for example, if an extension
-            # has not yet started (or has stopped) an associated service on a VM using systemd, the cgroup for
-            # the service will not exist ('cause systemd will tear it down). This might be a transient or a
-            # long-lived state, so there's no point in logging it, much less emitting telemetry.
-            pass
-        return cpu_total
-
-    def update(self):
-        """
-        Update all raw data required to compute metrics of interest. The intent is to call update() once, then
-        call the various get_*() methods which use this data, which we've collected exactly once.
-        """
-        self.previous_cpu_total = self.current_cpu_total
-        self.previous_system_cpu = self.current_system_cpu
-        self.current_cpu_total = self.get_current_cpu_total()
-        self.current_system_cpu = self.osutil.get_total_cpu_ticks_since_boot()
-
-    def get_cpu_percent(self):
-        """
-        Compute the percent CPU time used by this cgroup over the elapsed time since the last time this instance was
-        update()ed.  If the cgroup fully consumed 2 cores on a 4 core system, return 200.
-
-        :return: CPU usage in percent of a single core
-        :rtype: float
-        """
-        cpu_delta = self.current_cpu_total - self.previous_cpu_total
-        system_delta = max(1, self.current_system_cpu - self.previous_system_cpu)
-
-        return round(float(cpu_delta * self.cgt.cpu_count * 100) / float(system_delta), 3)
-
-    def collect(self):
-        """
-        Collect and return a list of all cpu metrics. If no metrics are collected, return an empty list.
-
-        :rtype: [(str, str, float)]
-        """
-        self.update()
-        usage = self.get_cpu_percent()
-        return [("Process", "% Processor Time", usage)]
-
-
-class Memory(object):
-    def __init__(self, cgt):
-        """
-        Initialize data collection for the Memory hierarchy
-
-        :param CGroupsTelemetry cgt: The telemetry object for which memory metrics should be collected
-        :return:
-        """
-        self.cgt = cgt
-
-    def get_memory_usage(self):
-        """
-        Collect memory.usage_in_bytes from the cgroup.
-
-        :return: Memory usage in bytes
-        :rtype: int
-        """
-        usage = self.cgt.cgroup.get_parameter('memory', 'memory.usage_in_bytes')
-        if not usage:
-            usage = "0"
-        return int(usage)
-
-    def collect(self):
-        """
-        Collect and return a list of all memory metrics
-
-        :rtype: [(str, str, float)]
-        """
-        usage = self.get_memory_usage()
-        return [("Memory", "Total Memory Usage", usage)]
 
 
 class CGroupsTelemetry(object):
@@ -794,37 +662,3 @@ class CGroups(object):
             fileutil.write_file(memory_limit_file, '{0}\n'.format(value))
         else:
             raise CGroupsException("Memory hierarchy not available in this cgroup")
-
-
-class CGroupsLimits(object):
-    @staticmethod
-    def _get_value_or_default(name, threshold, limit, compute_default):
-        return threshold[limit] if threshold and limit in threshold else compute_default(name)
-
-    def __init__(self, cgroup_name, threshold=None):
-        if not cgroup_name or cgroup_name == "":
-            cgroup_name = "Agents+Extensions"
-
-        self.cpu_limit = self._get_value_or_default(cgroup_name, threshold, "cpu", CGroupsLimits.get_default_cpu_limits)
-        self.memory_limit = self._get_value_or_default(cgroup_name, threshold, "memory",
-                                                       CGroupsLimits.get_default_memory_limits)
-
-    @staticmethod
-    def get_default_cpu_limits(cgroup_name):
-        # default values
-        cpu_limit = DEFAULT_CPU_LIMIT_EXT
-        if AGENT_CGROUP_NAME.lower() in cgroup_name.lower():
-            cpu_limit = DEFAULT_CPU_LIMIT_AGENT
-        return cpu_limit
-
-    @staticmethod
-    def get_default_memory_limits(cgroup_name):
-        os_util = get_osutil()
-
-        # default values
-        mem_limit = max(DEFAULT_MEM_LIMIT_MIN_MB, round(os_util.get_total_mem() * DEFAULT_MEM_LIMIT_PCT / 100, 0))
-
-        # agent values
-        if AGENT_CGROUP_NAME.lower() in cgroup_name.lower():
-            mem_limit = min(DEFAULT_MEM_LIMIT_MAX_MB, mem_limit)
-        return mem_limit

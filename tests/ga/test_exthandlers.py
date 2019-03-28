@@ -232,7 +232,7 @@ class LaunchCommandTestCase(AgentTestCase):
         os.mkdir(os.path.join(self.base_cgroups, "cpu"))
         os.mkdir(os.path.join(self.base_cgroups, "memory"))
 
-        self.mock__base_cgroups = patch("azurelinuxagent.common.cgroups.BASE_CGROUPS", self.base_cgroups)
+        self.mock__base_cgroups = patch("azurelinuxagent.common.cgroups.cgroups.BASE_CGROUPS", self.base_cgroups)
         self.mock__base_cgroups.start()
 
         self.mock_get_base_dir = patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_base_dir", lambda *_: self.tmp_dir)

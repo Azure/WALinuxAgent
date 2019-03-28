@@ -669,7 +669,7 @@ class TestExtension(ExtensionTestCase):
                 }
               }
             }
-        '''
+'''
         handler_config = HandlerConfiguration(json.loads(data))
         self.assertIsNone(handler_config.get_memory_limits_for_extension())
 
@@ -821,15 +821,13 @@ class TestExtension(ExtensionTestCase):
         }
       }
     }
-    '''
+'''
         handlerConfig = HandlerConfiguration(json.loads(data))
         self.assertIsNone(handlerConfig.get_cpu_limits_for_extension())
-
-        try:
+        with self.assertRaises(ExtensionError) as context:
             handlerConfig.get_memory_limits_for_extension()
-        except Exception as e:
-            self.assertEqual(type(e), ExtensionError)
-            self.assertEqual(e.__str__(), "Malformed memory_oom_kill flag in HandlerConfiguration")
+
+        self.assertTrue("Malformed memory_oom_kill flag in HandlerConfiguration" in str(context.exception))
 
     def test_handler_configuration_incorrect_configuration(self, *args):
         data = '''{
@@ -852,20 +850,20 @@ class TestExtension(ExtensionTestCase):
               "handlerConfiguration": {}
             }
             '''
-        try:
+        with self.assertRaises(ExtensionError) as context:
             HandlerConfiguration(json.loads(data))
-        except Exception as e:
-            self.assertEqual(type(e), ExtensionError)
+
+        self.assertTrue("No linux configurations present in HandlerConfiguration" in str(context.exception))
 
         data = '''{
 "name": "ExampleHandlerLinux",
 "version": 1.0
 }
 '''
-        try:
+        with self.assertRaises(ExtensionError) as context:
             HandlerConfiguration(json.loads(data))
-        except Exception as e:
-            self.assertEqual(type(e), ExtensionError)
+
+        self.assertTrue("Malformed handler configuration file" in str(context.exception))
 
     def test_load_handler_configuration(self, *args):
         handler_name = "Not.A.Real.Extension"
