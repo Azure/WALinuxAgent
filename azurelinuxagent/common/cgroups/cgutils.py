@@ -13,6 +13,7 @@
 # limitations under the License.
 #
 # Requires Python 2.6+ and Openssl 1.0+
+
 import re
 
 from azurelinuxagent.common.osutil import get_osutil
@@ -192,7 +193,7 @@ class CGroupsLimits(object):
 
         if memory_limits_requested_by_extn:
             total_memory = self.osutil.get_total_mem()
-            limit_requested = min((memory_limits_requested_by_extn.max_limit_percentage/100.0) * total_memory,
+            limit_requested = min((memory_limits_requested_by_extn.max_limit_percentage / 100.0) * total_memory,
                                   memory_limits_requested_by_extn.max_limit_MBs)
 
         return limit_requested if limit_requested else compute_default(name)

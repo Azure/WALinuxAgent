@@ -878,7 +878,7 @@ class TestExtension(ExtensionTestCase):
                 patch_get_handler_configuration_file:
             patch_get_handler_configuration_file.return_value = load_data_path("ext/SampleHandlerConfiguration.json")
             handler_config = ext_handler_i.load_handler_configuration()
-            self.assertIsNotNone(handler_config)
+            self.assertNotEqual(handler_config, None)
 
         with patch(
                 "azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_handler_configuration_file") as \
