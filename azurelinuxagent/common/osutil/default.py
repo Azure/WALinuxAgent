@@ -44,6 +44,7 @@ from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.utils.networkutil import RouteEntry, NetworkInterfaceCard
+from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_VERSION
 
 from pwd import getpwall
 
@@ -299,12 +300,15 @@ class DefaultOSUtil(object):
     @staticmethod
     def is_cgroups_supported():
         """
-        Enabled by default; disabled in WSL/Travis
+        Enabled by default; disabled in WSL/Travis (Disabled on Trusty only)
         """
         is_wsl = '-Microsoft-' in platform.platform()
-        # is_travis = 'TRAVIS' in os.environ and os.environ['TRAVIS'] == 'true'
+        is_travis = 'TRAVIS' in os.environ and os.environ['TRAVIS'] == 'true'
+        if is_travis and DISTRO_NAME == "ubuntu" and "14" in DISTRO_VERSION:
+            is_travis = False
+
         base_fs_exists = os.path.exists(BASE_CGROUPS)
-        return not is_wsl and base_fs_exists
+        return not is_wsl and base_fs_exists and is_travis
 
     @staticmethod
     def _cgroup_path(tail=""):
