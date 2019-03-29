@@ -23,7 +23,8 @@ import sys
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.utils.fileutil as fileutil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
-from azurelinuxagent.common.future import ustr, get_linux_distribution
+from azurelinuxagent.common.future import ustr, get_linux_distribution, \
+    get_linux_distribution_from_distro
 
 
 def get_f5_platform():
@@ -87,8 +88,11 @@ def get_distro():
         osinfo = ['nsbsd', release, '', 'nsbsd']
     else:
         try:
-            # dist() removed in Python 3.7
-            osinfo = list(platform.dist()) + ['']
+            try:
+                # dist() removed in Python 3.7
+                osinfo = list(platform.dist()) + ['']
+            except Exception:
+                osinfo = list(get_linux_distribution_from_distro(False))
         except:
             osinfo = ['UNKNOWN', 'FFFF', '', '']
 

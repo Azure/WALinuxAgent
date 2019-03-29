@@ -44,7 +44,7 @@ from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.utils.networkutil import RouteEntry, NetworkInterfaceCard
-from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_VERSION
+from azurelinuxagent.common.version import PY_VERSION_MAJOR, PY_VERSION_MINOR
 
 from pwd import getpwall
 
@@ -304,7 +304,9 @@ class DefaultOSUtil(object):
         """
         is_wsl = '-Microsoft-' in platform.platform()
         is_travis = 'TRAVIS' in os.environ and os.environ['TRAVIS'] == 'true'
-        if is_travis and DISTRO_NAME == "ubuntu" and "14" in DISTRO_VERSION:
+
+        # Travis with python 2.6 fails (on Trusty based systems)
+        if is_travis and PY_VERSION_MAJOR == 2 and PY_VERSION_MINOR == 6:
             is_travis = False
 
         base_fs_exists = os.path.exists(BASE_CGROUPS)

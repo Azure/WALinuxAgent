@@ -23,7 +23,7 @@ import mock
 
 from azurelinuxagent.common.version import set_current_agent, \
     AGENT_LONG_VERSION, AGENT_VERSION, AGENT_NAME, AGENT_NAME_PATTERN, \
-    get_f5_platform, get_distro
+    get_f5_platform, get_distro, get_linux_distribution_from_distro
 from tests.tools import *
 
 
@@ -48,9 +48,12 @@ def default_system():
 
 
 def default_system_no_linux_distro():
+    print("default_system_no_linux_distro got called")
     return '', '', ''
 
+
 def default_system_exception():
+    print("default_system_exception got called")
     raise Exception
 
 
@@ -76,19 +79,36 @@ class TestAgentVersion(AgentTestCase):
         return
 
     @mock.patch('platform.system', side_effect=default_system)
-    @mock.patch('platform.dist', side_effect=default_system_no_linux_distro)
-    def test_distro_is_correct_format_when_default_case(self, platform_system_name, default_system_no_linux):
-        osinfo = get_distro()
-        default_list = ['', '', '', '']
-        self.assertListEqual(default_list, osinfo)
+    def test_distro_is_correct_format_when_default_case(self, platform_system_name):
+        if sys.version_info >= (3, 8):
+            with patch('distro.linux_distribution') as patch_get_linux_distribution_from_distro:
+                patch_get_linux_distribution_from_distro.return_value = '', '', ''
+
+                osinfo = get_distro()
+                default_list = [''] * 4
+                self.assertListEqual(default_list, osinfo)
+        else:
+            with patch('platform.dist') as patch_platform_dist:
+                patch_platform_dist.return_value = '', '', ''
+
+                osinfo = get_distro()
+                default_list = [''] * 4
+                self.assertListEqual(default_list, osinfo)
         return
 
-    @mock.patch('platform.system', side_effect=default_system)
-    @mock.patch('platform.dist', side_effect=default_system_exception)
-    def test_distro_is_correct_for_exception_case(self, platform_system_name, default_system_no_linux):
-        osinfo = get_distro()
-        default_list = ['unknown', 'FFFF', '', '']
-        self.assertListEqual(default_list, osinfo)
+    @patch('platform.system', side_effect=default_system)
+    @patch("azurelinuxagent.common.future.get_linux_distribution_from_distro", side_effect=Exception)
+    def test_distro_is_correct_for_exception_case(self, patch_get_linux_distribution_from_distro, platform_system_name):
+        if sys.version_info >= (3, 8):
+            with patch('distro.linux_distribution', side_effect=Exception):
+                osinfo = get_distro()
+                default_list = ['unknown', 'FFFF', '', '']
+                self.assertListEqual(default_list, osinfo)
+        else:
+            with patch('platform.dist', side_effect=Exception):
+                osinfo = get_distro()
+                default_list = ['unknown', 'FFFF', '', '']
+                self.assertListEqual(default_list, osinfo)
         return
 
 
