@@ -359,6 +359,7 @@ class TestCGroupsLimits(AgentTestCase):
                     expected_cpu_limit = 20
                     expected_memory_limit = total_ram * 0.2  # 20 %
 
+                    cgroup_name = AGENT_CGROUP_NAME
                     limits = CGroupsLimits(cgroup_name, handler_configuration=handlerConfig)
 
                     self.assertEqual(limits.cpu_limit, expected_cpu_limit)
