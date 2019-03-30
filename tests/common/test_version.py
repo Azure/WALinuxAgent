@@ -97,7 +97,7 @@ class TestAgentVersion(AgentTestCase):
         return
 
     @patch('platform.system', side_effect=default_system)
-    @patch("azurelinuxagent.common.future.get_linux_distribution_from_distro", side_effect=Exception)
+    @patch('azurelinuxagent.common.future.get_linux_distribution_from_distro', side_effect=Exception)
     def test_distro_is_correct_for_exception_case(self, patch_get_linux_distribution_from_distro, platform_system_name):
         if sys.version_info >= (3, 8):
             with patch('distro.linux_distribution', side_effect=Exception):

@@ -81,7 +81,8 @@ class ExtensionOperationError(ExtensionError):
 
 class ExtensionConfigurationError(ExtensionError):
     """
-    When failed to configure an extension
+    When failed to configure an extension, either reading the HandlerConfiguration, or configuring the extension
+    requirements for capabilities or cgroups.
     """
 
     def __init__(self, msg=None, inner=None, code=-1):

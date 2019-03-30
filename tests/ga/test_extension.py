@@ -1699,15 +1699,16 @@ class TestHandlerConfiguration(ExtensionTestCase):
       }
     }
     '''
-        handlerConfig = HandlerConfiguration(json.loads(data))
+        handler_config = HandlerConfiguration(json.loads(data))
+        resource_config = handler_config.get_resource_configurations()
 
-        self.assertEqual(handlerConfig.get_name(), "ExampleHandlerLinux")
-        self.assertEqual(handlerConfig.get_version(), 1.0)
+        self.assertEqual(handler_config.get_name(), "ExampleHandlerLinux")
+        self.assertEqual(handler_config.get_version(), 1.0)
 
-        cpu_limits = handlerConfig.get_cpu_limits_for_extension().cpu_limits
+        cpu_limits = resource_config.get_cpu_limits_for_extension().cpu_limits
         self.assertEqual(3, len(cpu_limits))  # 3 configurations sent
 
-        memory_limits = handlerConfig.get_memory_limits_for_extension()
+        memory_limits = resource_config.get_memory_limits_for_extension()
         self.assertEqual(memory_limits.max_limit_percentage, 20)
         self.assertEqual(memory_limits.max_limit_MBs, 1000)
         self.assertEqual(memory_limits.memory_pressure_warning, "low")
@@ -1740,9 +1741,11 @@ class TestHandlerConfiguration(ExtensionTestCase):
     }
     '''
         handler_config = HandlerConfiguration(json.loads(data))
-        self.assertEqual(handler_config.get_memory_limits_for_extension(), None)
+        resource_config = handler_config.get_resource_configurations()
 
-        cpu_limits = handler_config.get_cpu_limits_for_extension().cpu_limits
+        self.assertEqual(resource_config.get_memory_limits_for_extension(), None)
+
+        cpu_limits = resource_config.get_cpu_limits_for_extension().cpu_limits
         self.assertEqual(3, len(cpu_limits))  # 3 configurations sent
 
         data = '''{
@@ -1763,9 +1766,11 @@ class TestHandlerConfiguration(ExtensionTestCase):
     }
     '''
         handler_config = HandlerConfiguration(json.loads(data))
-        self.assertEqual(handler_config.get_memory_limits_for_extension(), None)
+        resource_config = handler_config.get_resource_configurations()
 
-        cpu_limits = handler_config.get_cpu_limits_for_extension().cpu_limits
+        self.assertEqual(resource_config.get_memory_limits_for_extension(), None)
+
+        cpu_limits = resource_config.get_cpu_limits_for_extension().cpu_limits
         self.assertEqual(1, len(cpu_limits))  # 3 configurations sent
         self.assertEqual(-1, cpu_limits[0].cores)
         self.assertEqual(15, cpu_limits[0].limit_percentage)
@@ -1793,7 +1798,9 @@ class TestHandlerConfiguration(ExtensionTestCase):
     }
     '''
         handler_config = HandlerConfiguration(json.loads(data))
-        self.assertEqual(handler_config.get_cpu_limits_for_extension(), None)
+        resource_config = handler_config.get_resource_configurations()
+
+        self.assertEqual(resource_config.get_cpu_limits_for_extension(), None)
 
         data = '''{
       "name": "ExampleHandlerLinux",
@@ -1816,7 +1823,9 @@ class TestHandlerConfiguration(ExtensionTestCase):
     }
     '''
         handler_config = HandlerConfiguration(json.loads(data))
-        self.assertEqual(handler_config.get_cpu_limits_for_extension(), None)
+        resource_config = handler_config.get_resource_configurations()
+
+        self.assertEqual(resource_config.get_cpu_limits_for_extension(), None)
 
         data = '''{
       "name": "ExampleHandlerLinux",
@@ -1840,7 +1849,9 @@ class TestHandlerConfiguration(ExtensionTestCase):
     }
     '''
         handler_config = HandlerConfiguration(json.loads(data))
-        self.assertEqual(handler_config.get_cpu_limits_for_extension(), None)
+        resource_config = handler_config.get_resource_configurations()
+
+        self.assertEqual(resource_config.get_cpu_limits_for_extension(), None)
 
         data = '''{
       "name": "ExampleHandlerLinux",
@@ -1868,8 +1879,10 @@ class TestHandlerConfiguration(ExtensionTestCase):
     }
             '''
         handler_config = HandlerConfiguration(json.loads(data))
-        self.assertEqual(handler_config.get_memory_limits_for_extension(), None)
-        self.assertEqual(handler_config.get_cpu_limits_for_extension(), None)
+        resource_config = handler_config.get_resource_configurations()
+
+        self.assertEqual(resource_config.get_memory_limits_for_extension(), None)
+        self.assertEqual(resource_config.get_cpu_limits_for_extension(), None)
 
         data = '''{
       "name": "ExampleHandlerLinux",
@@ -1897,8 +1910,10 @@ class TestHandlerConfiguration(ExtensionTestCase):
     }
     '''
         handler_config = HandlerConfiguration(json.loads(data))
-        self.assertEqual(handler_config.get_memory_limits_for_extension(), None)
-        self.assertEqual(handler_config.get_cpu_limits_for_extension(), None)
+        resource_config = handler_config.get_resource_configurations()
+
+        self.assertEqual(resource_config.get_memory_limits_for_extension(), None)
+        self.assertEqual(resource_config.get_cpu_limits_for_extension(), None)
 
         data = '''{
       "name": "ExampleHandlerLinux",
@@ -1926,8 +1941,10 @@ class TestHandlerConfiguration(ExtensionTestCase):
     }
     '''
         handler_config = HandlerConfiguration(json.loads(data))
-        self.assertEqual(handler_config.get_memory_limits_for_extension(), None)
-        self.assertEqual(handler_config.get_cpu_limits_for_extension(), None)
+        resource_config = handler_config.get_resource_configurations()
+
+        self.assertEqual(resource_config.get_memory_limits_for_extension(), None)
+        self.assertEqual(resource_config.get_cpu_limits_for_extension(), None)
 
     def test_handler_configuration_only_memory_configuration(self, *args):
         data = '''{
@@ -1947,10 +1964,12 @@ class TestHandlerConfiguration(ExtensionTestCase):
           }
         }
         '''
-        handler_config = HandlerConfiguration(json.loads(data))
-        self.assertEqual(handler_config.get_cpu_limits_for_extension(), None)
+        resource_config = HandlerConfiguration(json.loads(data))
+        resource_config = resource_config.get_resource_configurations()
 
-        memory_limits = handler_config.get_memory_limits_for_extension()
+        self.assertEqual(resource_config.get_cpu_limits_for_extension(), None)
+
+        memory_limits = resource_config .get_memory_limits_for_extension()
         self.assertEqual(memory_limits.max_limit_percentage, 20)
         self.assertEqual(memory_limits.max_limit_MBs, 1000)
         self.assertEqual(memory_limits.memory_pressure_warning, "low")
@@ -1973,7 +1992,9 @@ class TestHandlerConfiguration(ExtensionTestCase):
                 }
                 '''
         handler_config = HandlerConfiguration(json.loads(data))
-        memory_limits = handler_config.get_memory_limits_for_extension()
+        resource_config = handler_config.get_resource_configurations()
+
+        memory_limits = resource_config.get_memory_limits_for_extension()
         self.assertEqual(memory_limits.max_limit_percentage, 20)
         self.assertEqual(memory_limits.max_limit_MBs, 1000)
         self.assertEqual(memory_limits.memory_pressure_warning, "low")
@@ -1995,7 +2016,9 @@ class TestHandlerConfiguration(ExtensionTestCase):
                         }
                         '''
         handler_config = HandlerConfiguration(json.loads(data))
-        memory_limits = handler_config.get_memory_limits_for_extension()
+        resource_config = handler_config.get_resource_configurations()
+
+        memory_limits = resource_config.get_memory_limits_for_extension()
         self.assertEqual(memory_limits.max_limit_percentage, 20)
         self.assertEqual(memory_limits.max_limit_MBs, 1000)
         self.assertEqual(memory_limits.memory_pressure_warning, None)
@@ -2019,9 +2042,11 @@ class TestHandlerConfiguration(ExtensionTestCase):
       }
     }
     '''
-        handlerConfig = HandlerConfiguration(json.loads(data))
-        self.assertEqual(handlerConfig.get_cpu_limits_for_extension(), None)
-        self.assertEqual(handlerConfig.get_memory_limits_for_extension(), None)
+        handler_config = HandlerConfiguration(json.loads(data))
+        resource_config = handler_config.get_resource_configurations()
+
+        self.assertEqual(resource_config.get_cpu_limits_for_extension(), None)
+        self.assertEqual(resource_config.get_memory_limits_for_extension(), None)
 
         data = '''{
       "name": "ExampleHandlerLinux",
@@ -2038,9 +2063,11 @@ class TestHandlerConfiguration(ExtensionTestCase):
       }
     }
     '''
-        handlerConfig = HandlerConfiguration(json.loads(data))
-        self.assertEqual(handlerConfig.get_cpu_limits_for_extension(), None)
-        self.assertEqual(handlerConfig.get_memory_limits_for_extension(), None)
+        handler_config = HandlerConfiguration(json.loads(data))
+        resource_config = handler_config.get_resource_configurations()
+
+        self.assertEqual(resource_config.get_cpu_limits_for_extension(), None)
+        self.assertEqual(resource_config.get_memory_limits_for_extension(), None)
 
         data = '''{
       "name": "ExampleHandlerLinux",
@@ -2057,9 +2084,11 @@ class TestHandlerConfiguration(ExtensionTestCase):
       }
     }
     '''
-        handlerConfig = HandlerConfiguration(json.loads(data))
-        self.assertEqual(handlerConfig.get_cpu_limits_for_extension(), None)
-        self.assertEqual(handlerConfig.get_memory_limits_for_extension(), None)
+        handler_config = HandlerConfiguration(json.loads(data))
+        resource_config = handler_config.get_resource_configurations()
+
+        self.assertEqual(resource_config.get_cpu_limits_for_extension(), None)
+        self.assertEqual(resource_config.get_memory_limits_for_extension(), None)
 
         data = '''{
       "name": "ExampleHandlerLinux",
@@ -2076,9 +2105,11 @@ class TestHandlerConfiguration(ExtensionTestCase):
       }
     }
     '''
-        handlerConfig = HandlerConfiguration(json.loads(data))
-        self.assertEqual(handlerConfig.get_cpu_limits_for_extension(), None)
-        self.assertEqual(handlerConfig.get_memory_limits_for_extension(), None)
+        handler_config = HandlerConfiguration(json.loads(data))
+        resource_config = handler_config.get_resource_configurations()
+
+        self.assertEqual(resource_config.get_cpu_limits_for_extension(), None)
+        self.assertEqual(resource_config.get_memory_limits_for_extension(), None)
 
     def test_handler_configuration_incorrect_configuration(self, *args):
         data = '''{
@@ -2092,8 +2123,10 @@ class TestHandlerConfiguration(ExtensionTestCase):
           }
         }
         '''
-        handler_resource_reqs = HandlerConfiguration(json.loads(data)).get_resource_configurations()
-        self.assertEqual(handler_resource_reqs, None)
+        with self.assertRaises(ExtensionConfigurationError) as context:
+            HandlerConfiguration(json.loads(data)).get_resource_configurations()
+
+        self.assertTrue("Incorrect resource configuration provided" in str(context.exception))
 
         data = '''{
                   "name": "ExampleHandlerLinux",

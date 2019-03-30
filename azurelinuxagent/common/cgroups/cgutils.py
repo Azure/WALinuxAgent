@@ -56,13 +56,13 @@ class Cpu(object):
         self.cgt = cgt
         self.osutil = get_osutil()
         self.current_cpu_total = self.get_current_cpu_total()
-        self.previous_cpu_total = 0
+        self._previous_cpu_total = 0
         self.current_system_cpu = self.osutil.get_total_cpu_ticks_since_boot()
-        self.previous_system_cpu = 0
+        self._previous_system_cpu = 0
 
     def __str__(self):
         return "Cgroup: Current {0}, previous {1}; System: Current {2}, previous {3}".format(
-            self.current_cpu_total, self.previous_cpu_total, self.current_system_cpu, self.previous_system_cpu
+            self.current_cpu_total, self._previous_cpu_total, self.current_system_cpu, self._previous_system_cpu
         )
 
     def get_current_cpu_total(self):
@@ -92,8 +92,8 @@ class Cpu(object):
         Update all raw data required to compute metrics of interest. The intent is to call update() once, then
         call the various get_*() methods which use this data, which we've collected exactly once.
         """
-        self.previous_cpu_total = self.current_cpu_total
-        self.previous_system_cpu = self.current_system_cpu
+        self._previous_cpu_total = self.current_cpu_total
+        self._previous_system_cpu = self.current_system_cpu
         self.current_cpu_total = self.get_current_cpu_total()
         self.current_system_cpu = self.osutil.get_total_cpu_ticks_since_boot()
 
@@ -105,8 +105,8 @@ class Cpu(object):
         :return: CPU usage in percent of a single core
         :rtype: float
         """
-        cpu_delta = self.current_cpu_total - self.previous_cpu_total
-        system_delta = max(1, self.current_system_cpu - self.previous_system_cpu)
+        cpu_delta = self.current_cpu_total - self._previous_cpu_total
+        system_delta = max(1, self.current_system_cpu - self._previous_system_cpu)
 
         return round(float(cpu_delta * self.cgt.cpu_count * 100) / float(system_delta), 3)
 
@@ -115,6 +115,7 @@ class Cpu(object):
         Collect and return a list of all cpu metrics. If no metrics are collected, return an empty list.
 
         :rtype: [(str, str, float)]
+        [("Process", "% Processor Time", usage)]
         """
         self.update()
         usage = self.get_cpu_percent()
@@ -154,26 +155,28 @@ class Memory(object):
 
 
 class CGroupsLimits(object):
-    def __init__(self, cgroup_name, handler_configuration=None):
+    def __init__(self, cgroup_name, resource_configuration=None):
         self.osutil = get_osutil()
 
         if not cgroup_name or cgroup_name == "":
             cgroup_name = "Agents+Extensions"
 
-        self.cpu_limit = self.get_cpu_limits(cgroup_name, handler_configuration,
+        self.cpu_limit = self.get_cpu_limits(cgroup_name, resource_configuration,
                                              CGroupsLimits.get_default_cpu_limits)
-        self.memory_limit = self.get_memory_limits(cgroup_name, handler_configuration,
+        self.memory_limit = self.get_memory_limits(cgroup_name, resource_configuration,
                                                    CGroupsLimits.get_default_memory_limits)
 
-    def get_cpu_limits(self, name, handler_configuration, compute_default):
+    def get_cpu_limits(self, name, resource_configuration, compute_default):
         limit_requested = None
 
-        cpu_limits_requested_by_extn = handler_configuration.get_cpu_limits_for_extension() if handler_configuration \
+        cpu_limits_requested_by_extn = resource_configuration.get_cpu_limits_for_extension() if resource_configuration \
             else None
 
         if cpu_limits_requested_by_extn:
             cores_count = self.osutil.get_processor_cores()
-            # sorted by cores. -1 is the default entry - and the first entry.
+            # Sorted by cores. -1 is the default entry - and the first entry.
+            # Sorted inside azurelinuxagent.ga.exthandlers.CpuLimits
+
             default_limits = cpu_limits_requested_by_extn.cpu_limits[0]
             if len(cpu_limits_requested_by_extn.cpu_limits) > 1:
                 for i in cpu_limits_requested_by_extn.cpu_limits[1:]:
@@ -186,11 +189,11 @@ class CGroupsLimits(object):
 
         return limit_requested if limit_requested else compute_default(name)
 
-    def get_memory_limits(self, name, handler_configuration, compute_default):
+    def get_memory_limits(self, name, resource_configuration, compute_default):
         limit_requested = None
 
-        memory_limits_requested_by_extn = handler_configuration.get_memory_limits_for_extension() if \
-            handler_configuration else None
+        memory_limits_requested_by_extn = resource_configuration.get_memory_limits_for_extension() if \
+            resource_configuration else None
 
         if memory_limits_requested_by_extn:
             total_memory = self.osutil.get_total_mem()

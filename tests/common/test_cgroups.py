@@ -21,6 +21,7 @@ from azurelinuxagent.common.cgroups.cgroups import CGroupsTelemetry, CGroups
 
 from azurelinuxagent.common.cgroups.cgutils import CGroupsException, Cpu, Memory, CGroupsLimits, \
     BASE_CGROUPS, DEFAULT_MEM_LIMIT_MIN_MB, AGENT_CGROUP_NAME
+from azurelinuxagent.common.exception import ExtensionConfigurationError
 from azurelinuxagent.ga.exthandlers import HandlerConfiguration
 from azurelinuxagent.common.version import AGENT_NAME
 from tests.tools import *
@@ -102,8 +103,8 @@ class TestCGroups(AgentTestCase):
         consume_cpu_time()  # Eat some CPU
         cpu.update()
 
-        self.assertGreater(cpu.current_cpu_total, cpu.previous_cpu_total)
-        self.assertGreater(cpu.current_system_cpu, cpu.previous_system_cpu)
+        self.assertGreater(cpu.current_cpu_total, cpu._previous_cpu_total)
+        self.assertGreater(cpu.current_system_cpu, cpu._previous_system_cpu)
 
         percent_used = cpu.get_cpu_percent()
         self.assertGreater(percent_used, 0)
@@ -348,7 +349,8 @@ class TestCGroupsLimits(AgentTestCase):
                   }
                 }
                 '''
-        handlerConfig = HandlerConfiguration(json.loads(data))
+        handler_config = HandlerConfiguration(json.loads(data))
+        resource_config = handler_config.get_resource_configurations()
 
         with patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_processor_cores") as patch_get_processor_cores:
             with patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_total_mem") as patch_get_total_mem:
@@ -360,7 +362,7 @@ class TestCGroupsLimits(AgentTestCase):
                     expected_memory_limit = total_ram * 0.2  # 20 %
 
                     cgroup_name = AGENT_CGROUP_NAME
-                    limits = CGroupsLimits(cgroup_name, handler_configuration=handlerConfig)
+                    limits = CGroupsLimits(cgroup_name, resource_configuration=resource_config)
 
                     self.assertEqual(limits.cpu_limit, expected_cpu_limit)
                     self.assertEqual(limits.memory_limit, expected_memory_limit)
@@ -398,7 +400,8 @@ class TestCGroupsLimits(AgentTestCase):
           }
         }
         '''
-        handlerConfig = HandlerConfiguration(json.loads(data))
+        handler_config = HandlerConfiguration(json.loads(data))
+        resource_config = handler_config.get_resource_configurations()
         cgroup_name = "test_cgroup"
 
         with patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_processor_cores") as patch_get_processor_cores:
@@ -413,7 +416,7 @@ class TestCGroupsLimits(AgentTestCase):
                 expected_cpu_limit = 20
                 expected_memory_limit = total_ram * 0.2 #20 %
 
-                limits = CGroupsLimits(cgroup_name, handler_configuration=handlerConfig)
+                limits = CGroupsLimits(cgroup_name, resource_configuration=resource_config)
                 self.assertEqual(limits.cpu_limit, expected_cpu_limit)
                 self.assertEqual(limits.memory_limit, expected_memory_limit)
 
@@ -427,7 +430,7 @@ class TestCGroupsLimits(AgentTestCase):
                 expected_cpu_limit = 25
                 expected_memory_limit = total_ram * 0.2 #20 %
 
-                limits = CGroupsLimits(cgroup_name, handler_configuration=handlerConfig)
+                limits = CGroupsLimits(cgroup_name, resource_configuration=resource_config)
                 self.assertEqual(limits.cpu_limit, expected_cpu_limit)
                 self.assertEqual(limits.memory_limit, expected_memory_limit)
 
@@ -441,7 +444,7 @@ class TestCGroupsLimits(AgentTestCase):
                 expected_cpu_limit = 25
                 expected_memory_limit = total_ram * 0.2  # 20 %
 
-                limits = CGroupsLimits(cgroup_name, handler_configuration=handlerConfig)
+                limits = CGroupsLimits(cgroup_name, resource_configuration=resource_config)
                 self.assertEqual(limits.cpu_limit, expected_cpu_limit)
                 self.assertEqual(limits.memory_limit, expected_memory_limit)
 
@@ -455,7 +458,7 @@ class TestCGroupsLimits(AgentTestCase):
                 expected_cpu_limit = 15
                 expected_memory_limit = total_ram * 0.2  # 20 %
 
-                limits = CGroupsLimits(cgroup_name, handler_configuration=handlerConfig)
+                limits = CGroupsLimits(cgroup_name, resource_configuration=resource_config)
                 self.assertEqual(limits.cpu_limit, expected_cpu_limit)
                 self.assertEqual(limits.memory_limit, expected_memory_limit)
 
@@ -469,7 +472,7 @@ class TestCGroupsLimits(AgentTestCase):
                 expected_cpu_limit = 15
                 expected_memory_limit = 1000  # 20 %
 
-                limits = CGroupsLimits(cgroup_name, handler_configuration=handlerConfig)
+                limits = CGroupsLimits(cgroup_name, resource_configuration=resource_config)
                 self.assertEqual(limits.cpu_limit, expected_cpu_limit)
                 self.assertEqual(limits.memory_limit, expected_memory_limit)
 
@@ -500,7 +503,9 @@ class TestCGroupsLimits(AgentTestCase):
           }
         }
         '''
-        handlerConfig = HandlerConfiguration(json.loads(data))
+        handler_config = HandlerConfiguration(json.loads(data))
+        resource_config = handler_config.get_resource_configurations()
+
         cgroup_name = "test_cgroup"
 
         with patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_processor_cores") as patch_get_processor_cores:
@@ -516,7 +521,7 @@ class TestCGroupsLimits(AgentTestCase):
                 expected_cpu_limit = 20
                 expected_memory_limit = CGroupsLimits.get_default_memory_limits(cgroup_name)
 
-                limits = CGroupsLimits(cgroup_name, handler_configuration=handlerConfig)
+                limits = CGroupsLimits(cgroup_name, resource_configuration=resource_config)
                 self.assertEqual(limits.cpu_limit, expected_cpu_limit)
                 self.assertEqual(limits.memory_limit, expected_memory_limit)
 
@@ -530,7 +535,7 @@ class TestCGroupsLimits(AgentTestCase):
                 expected_cpu_limit = 25
                 expected_memory_limit = CGroupsLimits.get_default_memory_limits(cgroup_name)
 
-                limits = CGroupsLimits(cgroup_name, handler_configuration=handlerConfig)
+                limits = CGroupsLimits(cgroup_name, resource_configuration=resource_config)
                 self.assertEqual(limits.cpu_limit, expected_cpu_limit)
                 self.assertEqual(limits.memory_limit, expected_memory_limit)
 
@@ -544,7 +549,7 @@ class TestCGroupsLimits(AgentTestCase):
                 expected_cpu_limit = 25
                 expected_memory_limit = CGroupsLimits.get_default_memory_limits(cgroup_name)
 
-                limits = CGroupsLimits(cgroup_name, handler_configuration=handlerConfig)
+                limits = CGroupsLimits(cgroup_name, resource_configuration=resource_config)
                 self.assertEqual(limits.cpu_limit, expected_cpu_limit)
                 self.assertEqual(limits.memory_limit, expected_memory_limit)
 
@@ -558,7 +563,7 @@ class TestCGroupsLimits(AgentTestCase):
                 expected_cpu_limit = 15
                 expected_memory_limit = CGroupsLimits.get_default_memory_limits(cgroup_name)
 
-                limits = CGroupsLimits(cgroup_name, handler_configuration=handlerConfig)
+                limits = CGroupsLimits(cgroup_name, resource_configuration=resource_config)
                 self.assertEqual(limits.cpu_limit, expected_cpu_limit)
                 self.assertEqual(limits.memory_limit, expected_memory_limit)
 
@@ -572,7 +577,7 @@ class TestCGroupsLimits(AgentTestCase):
                 expected_cpu_limit = 15
                 expected_memory_limit = CGroupsLimits.get_default_memory_limits(cgroup_name)
 
-                limits = CGroupsLimits(cgroup_name, handler_configuration=handlerConfig)
+                limits = CGroupsLimits(cgroup_name, resource_configuration=resource_config)
                 self.assertEqual(limits.cpu_limit, expected_cpu_limit)
                 self.assertEqual(limits.memory_limit, expected_memory_limit)
 
@@ -595,7 +600,8 @@ class TestCGroupsLimits(AgentTestCase):
           }
         }
         '''
-        handlerConfig = HandlerConfiguration(json.loads(data))
+        handler_config = HandlerConfiguration(json.loads(data))
+        resource_config = handler_config.get_resource_configurations()
         cgroup_name = "test_cgroup"
 
         with patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_processor_cores") as patch_get_processor_cores:
@@ -610,7 +616,7 @@ class TestCGroupsLimits(AgentTestCase):
                 expected_cpu_limit = CGroupsLimits.get_default_cpu_limits(cgroup_name)
                 expected_memory_limit = total_ram * 0.2  # 20 %
 
-                limits = CGroupsLimits(cgroup_name, handler_configuration=handlerConfig)
+                limits = CGroupsLimits(cgroup_name, resource_configuration=resource_config)
                 self.assertEqual(limits.cpu_limit, expected_cpu_limit)
                 self.assertEqual(limits.memory_limit, expected_memory_limit)
 
@@ -624,7 +630,7 @@ class TestCGroupsLimits(AgentTestCase):
                 expected_cpu_limit = CGroupsLimits.get_default_cpu_limits(cgroup_name)
                 expected_memory_limit = total_ram * 0.2  # 20 %
 
-                limits = CGroupsLimits(cgroup_name, handler_configuration=handlerConfig)
+                limits = CGroupsLimits(cgroup_name, resource_configuration=resource_config)
                 self.assertEqual(limits.cpu_limit, expected_cpu_limit)
                 self.assertEqual(limits.memory_limit, expected_memory_limit)
 
@@ -638,7 +644,7 @@ class TestCGroupsLimits(AgentTestCase):
                 expected_cpu_limit = CGroupsLimits.get_default_cpu_limits(cgroup_name)
                 expected_memory_limit = total_ram * 0.2  # 20 %
 
-                limits = CGroupsLimits(cgroup_name, handler_configuration=handlerConfig)
+                limits = CGroupsLimits(cgroup_name, resource_configuration=resource_config)
                 self.assertEqual(limits.cpu_limit, expected_cpu_limit)
                 self.assertEqual(limits.memory_limit, expected_memory_limit)
 
@@ -652,7 +658,7 @@ class TestCGroupsLimits(AgentTestCase):
                 expected_cpu_limit = CGroupsLimits.get_default_cpu_limits(cgroup_name)
                 expected_memory_limit = total_ram * 0.2  # 20 %
 
-                limits = CGroupsLimits(cgroup_name, handler_configuration=handlerConfig)
+                limits = CGroupsLimits(cgroup_name, resource_configuration=resource_config)
                 self.assertEqual(limits.cpu_limit, expected_cpu_limit)
                 self.assertEqual(limits.memory_limit, expected_memory_limit)
 
@@ -666,7 +672,7 @@ class TestCGroupsLimits(AgentTestCase):
                 expected_cpu_limit = CGroupsLimits.get_default_cpu_limits(cgroup_name)
                 expected_memory_limit = 1000  # 20 %
 
-                limits = CGroupsLimits(cgroup_name, handler_configuration=handlerConfig)
+                limits = CGroupsLimits(cgroup_name, resource_configuration=resource_config)
                 self.assertEqual(limits.cpu_limit, expected_cpu_limit)
                 self.assertEqual(limits.memory_limit, expected_memory_limit)
 
@@ -698,7 +704,8 @@ class TestCGroupsLimits(AgentTestCase):
           }
         }
         '''
-        handlerConfig = HandlerConfiguration(json.loads(data))
+        handler_config = HandlerConfiguration(json.loads(data))
+        resource_config = handler_config.get_resource_configurations()
         cgroup_name = "test_cgroup"
 
         with patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_processor_cores") as patch_get_processor_cores:
@@ -713,7 +720,7 @@ class TestCGroupsLimits(AgentTestCase):
                 expected_cpu_limit = CGroupsLimits.get_default_cpu_limits(cgroup_name)
                 expected_memory_limit = CGroupsLimits.get_default_memory_limits(cgroup_name)
 
-                limits = CGroupsLimits(cgroup_name, handler_configuration=handlerConfig)
+                limits = CGroupsLimits(cgroup_name, resource_configuration=resource_config)
                 self.assertEqual(limits.cpu_limit, expected_cpu_limit)
                 self.assertEqual(limits.memory_limit, expected_memory_limit)
 
@@ -727,7 +734,7 @@ class TestCGroupsLimits(AgentTestCase):
                 expected_cpu_limit = CGroupsLimits.get_default_cpu_limits(cgroup_name)
                 expected_memory_limit = CGroupsLimits.get_default_memory_limits(cgroup_name)
 
-                limits = CGroupsLimits(cgroup_name, handler_configuration=handlerConfig)
+                limits = CGroupsLimits(cgroup_name, resource_configuration=resource_config)
                 self.assertEqual(limits.cpu_limit, expected_cpu_limit)
                 self.assertEqual(limits.memory_limit, expected_memory_limit)
 
@@ -741,7 +748,7 @@ class TestCGroupsLimits(AgentTestCase):
                 expected_cpu_limit = CGroupsLimits.get_default_cpu_limits(cgroup_name)
                 expected_memory_limit = CGroupsLimits.get_default_memory_limits(cgroup_name)
 
-                limits = CGroupsLimits(cgroup_name, handler_configuration=handlerConfig)
+                limits = CGroupsLimits(cgroup_name, resource_configuration=resource_config)
                 self.assertEqual(limits.cpu_limit, expected_cpu_limit)
                 self.assertEqual(limits.memory_limit, expected_memory_limit)
 
@@ -755,7 +762,7 @@ class TestCGroupsLimits(AgentTestCase):
                 expected_cpu_limit = CGroupsLimits.get_default_cpu_limits(cgroup_name)
                 expected_memory_limit = CGroupsLimits.get_default_memory_limits(cgroup_name)
 
-                limits = CGroupsLimits(cgroup_name, handler_configuration=handlerConfig)
+                limits = CGroupsLimits(cgroup_name, resource_configuration=resource_config)
                 self.assertEqual(limits.cpu_limit, expected_cpu_limit)
                 self.assertEqual(limits.memory_limit, expected_memory_limit)
 
@@ -769,7 +776,7 @@ class TestCGroupsLimits(AgentTestCase):
                 expected_cpu_limit = CGroupsLimits.get_default_cpu_limits(cgroup_name)
                 expected_memory_limit = CGroupsLimits.get_default_memory_limits(cgroup_name)
 
-                limits = CGroupsLimits(cgroup_name, handler_configuration=handlerConfig)
+                limits = CGroupsLimits(cgroup_name, resource_configuration=resource_config)
                 self.assertEqual(limits.cpu_limit, expected_cpu_limit)
                 self.assertEqual(limits.memory_limit, expected_memory_limit)
 
@@ -786,7 +793,13 @@ class TestCGroupsLimits(AgentTestCase):
           }
         }
         '''
-        handlerConfig = HandlerConfiguration(json.loads(data))
+        handler_config = HandlerConfiguration(json.loads(data))
+        with self.assertRaises(ExtensionConfigurationError) as context:
+            handler_config.get_resource_configurations()
+
+        self.assertTrue("Incorrect resource configuration provided" in str(context.exception))
+
+        resource_config = None
         cgroup_name = "test_cgroup"
 
         with patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_processor_cores") as patch_get_processor_cores:
@@ -801,7 +814,7 @@ class TestCGroupsLimits(AgentTestCase):
                 expected_cpu_limit = CGroupsLimits.get_default_cpu_limits(cgroup_name)
                 expected_memory_limit = CGroupsLimits.get_default_memory_limits(cgroup_name)
 
-                limits = CGroupsLimits(cgroup_name, handler_configuration=handlerConfig)
+                limits = CGroupsLimits(cgroup_name, resource_configuration=resource_config)
                 self.assertEqual(limits.cpu_limit, expected_cpu_limit)
                 self.assertEqual(limits.memory_limit, expected_memory_limit)
 
@@ -815,7 +828,7 @@ class TestCGroupsLimits(AgentTestCase):
                 expected_cpu_limit = CGroupsLimits.get_default_cpu_limits(cgroup_name)
                 expected_memory_limit = CGroupsLimits.get_default_memory_limits(cgroup_name)
 
-                limits = CGroupsLimits(cgroup_name, handler_configuration=handlerConfig)
+                limits = CGroupsLimits(cgroup_name, resource_configuration=resource_config)
                 self.assertEqual(limits.cpu_limit, expected_cpu_limit)
                 self.assertEqual(limits.memory_limit, expected_memory_limit)
 
@@ -829,7 +842,7 @@ class TestCGroupsLimits(AgentTestCase):
                 expected_cpu_limit = CGroupsLimits.get_default_cpu_limits(cgroup_name)
                 expected_memory_limit = CGroupsLimits.get_default_memory_limits(cgroup_name)
 
-                limits = CGroupsLimits(cgroup_name, handler_configuration=handlerConfig)
+                limits = CGroupsLimits(cgroup_name, resource_configuration=resource_config)
                 self.assertEqual(limits.cpu_limit, expected_cpu_limit)
                 self.assertEqual(limits.memory_limit, expected_memory_limit)
 
@@ -843,7 +856,7 @@ class TestCGroupsLimits(AgentTestCase):
                 expected_cpu_limit = CGroupsLimits.get_default_cpu_limits(cgroup_name)
                 expected_memory_limit = CGroupsLimits.get_default_memory_limits(cgroup_name)
 
-                limits = CGroupsLimits(cgroup_name, handler_configuration=handlerConfig)
+                limits = CGroupsLimits(cgroup_name, resource_configuration=resource_config)
                 self.assertEqual(limits.cpu_limit, expected_cpu_limit)
                 self.assertEqual(limits.memory_limit, expected_memory_limit)
 
@@ -857,6 +870,6 @@ class TestCGroupsLimits(AgentTestCase):
                 expected_cpu_limit = CGroupsLimits.get_default_cpu_limits(cgroup_name)
                 expected_memory_limit = CGroupsLimits.get_default_memory_limits(cgroup_name)
 
-                limits = CGroupsLimits(cgroup_name, handler_configuration=handlerConfig)
+                limits = CGroupsLimits(cgroup_name, resource_configuration=resource_config)
                 self.assertEqual(limits.cpu_limit, expected_cpu_limit)
                 self.assertEqual(limits.memory_limit, expected_memory_limit)

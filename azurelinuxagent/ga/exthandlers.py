@@ -1160,8 +1160,10 @@ class ExtHandlerInstance(object):
                                                   code=extension_error_code)
 
                 try:
-                    cg = CGroups.for_extension(self.ext_handler.name, handler_configuration)
-                    CGroupsTelemetry.track_extension(self.ext_handler.name, cg, handler_configuration)
+                    cg = CGroups.for_extension(self.ext_handler.name,
+                                               handler_configuration.get_resource_configurations())
+                    CGroupsTelemetry.track_extension(self.ext_handler.name, cg,
+                                                     handler_configuration.get_resource_configurations())
                 except Exception as e:
                     self.logger.warn("Unable to setup cgroup {0}: {1}".format(self.ext_handler.name, e))
 
@@ -1224,7 +1226,10 @@ class ExtHandlerInstance(object):
         try:
             handler_config = HandlerConfiguration(data)
         except ExtensionError as e:
-            self.logger.warn('Failed to load resource manifest file: {0}'.format(ustr(e)))
+            msg = 'Failed to load resource manifest file: {0}'.format(ustr(e))
+            self.logger.warn(msg)
+            HandlerConfiguration.send_handler_configuration_event(message=msg, is_success=False, log_event=False,
+                                                                  operation=WALAEventOperation.HandlerConfiguration)
 
         return handler_config
 
@@ -1468,15 +1473,19 @@ class HandlerConfiguration(object):
         if "resources" in self.get_linux_configurations() and (
                 "cpu" in self.get_linux_configurations()["resources"] or
                 "memory" in self.get_linux_configurations()["resources"]):
-            return self.get_linux_configurations()["resources"]
-        return None
+            return ExtensionResourcesConfiguration(self.get_linux_configurations()["resources"])
+        else:
+            raise ExtensionConfigurationError("Incorrect resource configuration provided")
+
+
+class ExtensionResourcesConfiguration(HandlerConfiguration):
+    def __init__(self, resource_configuration):
+        self.data = resource_configuration
 
     def get_cpu_limits_for_extension(self):
-        resource_config = self.get_resource_configurations()
-
         try:
-            if resource_config and "cpu" in resource_config:
-                return CpuLimits(resource_config["cpu"])
+            if "cpu" in self.data:
+                return CpuLimits(self.data["cpu"])
         except ExtensionConfigurationError as e:
             logger.warn(ustr(e))
             HandlerConfiguration.send_handler_configuration_event(message=ustr(e), is_success=False, log_event=False,
@@ -1484,17 +1493,14 @@ class HandlerConfiguration(object):
         return None
 
     def get_memory_limits_for_extension(self):
-        resource_config = self.get_resource_configurations()
-
         try:
-            if resource_config and "memory" in resource_config:
-                return MemoryLimits(resource_config["memory"])
+            if "memory" in self.data:
+                return MemoryLimits(self.data["memory"])
         except ExtensionConfigurationError as e:
             logger.warn(ustr(e))
             HandlerConfiguration.send_handler_configuration_event(message="{0}".format(ustr(e)), is_success=False,
                                                                   log_event=False,
                                                                   operation=WALAEventOperation.HandlerConfiguration)
-
         return None
 
 
@@ -1524,7 +1530,8 @@ class CpuLimitInstance(object):
     def __init__(self, cores, limit_percentage):
         if type(cores) is not int:
             raise ExtensionConfigurationError(
-                "Incorrect types for CPU values | field - {0}/ value - {1}/ type - {2}".format("cores", cores, type(cores)))
+                "Incorrect types for CPU values | field - {0}/ value - {1}/ type - {2}".format("cores", cores,
+                                                                                               type(cores)))
 
         if type(limit_percentage) is not float and type(limit_percentage) is not int:
             raise ExtensionConfigurationError(
@@ -1533,7 +1540,9 @@ class CpuLimitInstance(object):
                                                                                                type(limit_percentage)))
 
         if (cores != DEFAULT_CORES_COUNT and cores < 1) or limit_percentage > 100 or limit_percentage < 1:
-            raise ExtensionConfigurationError("CPU values out of range | field - {0}, {1}/ value - {2}, {3}".format("cores","limit_percentage",cores,limit_percentage))
+            raise ExtensionConfigurationError(
+                "CPU values out of range | field - {0}, {1}/ value - {2}, {3}".format("cores", "limit_percentage",
+                                                                                      cores, limit_percentage))
 
         self.cores = int(cores)
         self.limit_percentage = float(limit_percentage)
@@ -1564,21 +1573,22 @@ class MemoryLimits(object):
 
             if type(self.max_limit_percentage) is not float and type(self.max_limit_percentage) is not int:
                 raise ExtensionConfigurationError(
-                    "Incorrect types for Memory values | field - {0}/ value - {1}/ type - {2}".format("max_limit_percentage",
-                                                                                                   self.max_limit_percentage,
-                                                                                                   type(self.max_limit_percentage)))
+                    "Incorrect types for Memory values | field - {0}/ value - {1}/ type - {2}".format(
+                        "max_limit_percentage",
+                        self.max_limit_percentage,
+                        type(self.max_limit_percentage)))
 
             if type(self.max_limit_MBs) is not float and type(self.max_limit_MBs) is not int:
                 raise ExtensionConfigurationError(
-                    "Incorrect types for Memory values | field - {0}/ value - {1}/ type - {2}".format("max_limit_MBs",
-                                                                                                   self.max_limit_MBs,
-                                                                                                   type(self.max_limit_MBs)))
+                    "Incorrect types for Memory values "
+                    "| field - {0}/ value - {1}/ type - {2}".format(
+                        "max_limit_MBs", self.max_limit_MBs, type(self.max_limit_MBs)))
 
             if self.max_limit_percentage > 100 or self.max_limit_percentage < 1:
                 raise ExtensionConfigurationError(
-                    "Incorrect types for Memory values | field - {0}/ value - {1}/ type - {2}".format("max_limit_MBs",
-                                                                                                   self.max_limit_MBs,
-                                                                                                   type(self.max_limit_MBs)))
+                    "Incorrect types for Memory values "
+                    "| field - {0}/ value - {1}/ type - {2}".format(
+                        "max_limit_MBs", self.max_limit_MBs, type(self.max_limit_MBs)))
         else:
             raise ExtensionConfigurationError(
                 "Default max memory limit not set. max_limit_MBs: {0}, max_limit_percentage: {1}".format(
