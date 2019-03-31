@@ -28,9 +28,9 @@ MEMORY_DEFAULT = -1
 DEFAULT_CPU_LIMIT_AGENT = 10
 DEFAULT_CPU_LIMIT_EXT = 40
 
-DEFAULT_MEM_LIMIT_MIN_MB = 256  # mb, applies to agent and extensions
-DEFAULT_MEM_LIMIT_MAX_MB = 512  # mb, applies to agent only
-DEFAULT_MEM_LIMIT_PCT = 15  # percent, applies to extensions
+DEFAULT_MEM_LIMIT_MIN_MB_FOR_EXTN = 256  # mb, applies to agent and extensions
+DEFAULT_MEM_LIMIT_MAX_MB_FOR_AGENT = 512  # mb, applies to agent only
+DEFAULT_MEM_LIMIT_PCT_FOR_EXTN = 15  # percent, applies to extensions
 
 re_user_system_times = re.compile('user (\d+)\nsystem (\d+)\n')
 
@@ -165,6 +165,8 @@ class CGroupsLimits(object):
                                              CGroupsLimits.get_default_cpu_limits)
         self.memory_limit = self.get_memory_limits(cgroup_name, resource_configuration,
                                                    CGroupsLimits.get_default_memory_limits)
+        self.memory_flags = self.get_memory_flags(cgroup_name, resource_configuration,
+                                                  CGroupsLimits.get_default_memory_flags)
 
     def get_cpu_limits(self, name, resource_configuration, compute_default):
         limit_requested = None
@@ -197,10 +199,31 @@ class CGroupsLimits(object):
 
         if memory_limits_requested_by_extn:
             total_memory = self.osutil.get_total_mem()
-            limit_requested = min((memory_limits_requested_by_extn.max_limit_percentage / 100.0) * total_memory,
-                                  memory_limits_requested_by_extn.max_limit_MBs)
+            limit_requested = max(DEFAULT_MEM_LIMIT_MIN_MB_FOR_EXTN,
+                                  min((memory_limits_requested_by_extn.max_limit_percentage / 100.0) * total_memory,
+                                       memory_limits_requested_by_extn.max_limit_MBs)
+                                  )
 
         return limit_requested if limit_requested else compute_default(name)
+
+    def get_memory_flags(self, cgroup_name, resource_configuration, get_default_memory_flags):
+        flags_requested = {}
+
+        memory_limits_requested_by_extn = resource_configuration.get_memory_limits_for_extension() if \
+            resource_configuration else None
+
+        if memory_limits_requested_by_extn:
+            if memory_limits_requested_by_extn.memory_pressure_warning:
+                flags_requested["memory_pressure_warning"] = memory_limits_requested_by_extn.memory_pressure_warning
+            else:
+                flags_requested["memory_pressure_warning"] = get_default_memory_flags()["memory_pressure_warning"]
+
+            if memory_limits_requested_by_extn.memory_oom_kill:
+                flags_requested["memory_oom_kill"] = memory_limits_requested_by_extn.memory_oom_kill
+            else:
+                flags_requested["memory_oom_kill"] = get_default_memory_flags()["memory_oom_kill"]
+
+        return flags_requested
 
     @staticmethod
     def get_default_cpu_limits(cgroup_name):
@@ -215,9 +238,14 @@ class CGroupsLimits(object):
         os_util = get_osutil()
 
         # default values
-        mem_limit = max(DEFAULT_MEM_LIMIT_MIN_MB, round(os_util.get_total_mem() * DEFAULT_MEM_LIMIT_PCT / 100, 0))
+        mem_limit = max(DEFAULT_MEM_LIMIT_MIN_MB_FOR_EXTN, round(os_util.get_total_mem() * DEFAULT_MEM_LIMIT_PCT_FOR_EXTN / 100, 0))
 
         # agent values
         if AGENT_CGROUP_NAME.lower() in cgroup_name.lower():
-            mem_limit = min(DEFAULT_MEM_LIMIT_MAX_MB, mem_limit)
+            mem_limit = min(DEFAULT_MEM_LIMIT_MAX_MB_FOR_AGENT, mem_limit)
         return mem_limit
+
+    @staticmethod
+    def get_default_memory_flags():
+        default_memory_flags = {"memory_pressure_warning": None, "memory_oom_kill": "disabled"}
+        return default_memory_flags

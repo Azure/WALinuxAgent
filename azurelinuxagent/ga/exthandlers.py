@@ -1596,7 +1596,7 @@ class MemoryLimits(object):
                     memory_node.get("max_limit_MBs", None), memory_node.get("max_limit_percentage", None)))
 
         self.memory_pressure_warning = memory_node.get("memory_pressure_warning", None)
-        self.memory_oom_kill = "disabled"  # default
+        self.memory_oom_kill = None  # default will be set in compute_default for memory flags.
 
         if "memory_oom_kill" in memory_node:
             if memory_node["memory_oom_kill"].lower() in memory_oom_kill_options:
