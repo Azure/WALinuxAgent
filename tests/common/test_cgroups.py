@@ -254,8 +254,10 @@ class TestCGroups(AgentTestCase):
     def assert_limits(self, _, patch_set_cpu, patch_set_memory_limit, patch_get_enforce, patch_add_event,
                       ext_name,
                       expected_cpu_limit,
+                      expectd_memory_limit=None,
                       limits_enforced=True,
-                      exception_raised=False):
+                      exception_raised=False,
+                      resource_configuration=None):
 
         should_limit = expected_cpu_limit > 0
         patch_get_enforce.return_value = limits_enforced
@@ -264,7 +266,7 @@ class TestCGroups(AgentTestCase):
             patch_set_memory_limit.side_effect = CGroupsException('set_memory_limit error')
 
         try:
-            cg = CGroups.for_extension(ext_name)
+            cg = CGroups.for_extension(ext_name, resource_configuration)
             cg.set_limits()
             if exception_raised:
                 self.fail('exception expected')
@@ -296,6 +298,79 @@ class TestCGroups(AgentTestCase):
         self.assert_limits(ext_name="normal_extension", expected_cpu_limit=-1, limits_enforced=False)
         self.assert_limits(ext_name=AGENT_NAME, expected_cpu_limit=-1, limits_enforced=False)
         self.assert_limits(ext_name="normal_extension", expected_cpu_limit=40, exception_raised=True)
+
+    def test_limits_with_resource_configuration(self):
+        handler_config_json = '''{
+  "name": "ExampleHandlerLinux",
+  "version": 1.0,
+  "handlerConfiguration": {
+    "linux": {
+      "resources": {
+        "cpu": [
+          {
+            "cores": 2,
+            "limit_percentage": 25
+          },
+          {
+            "cores": 8,
+            "limit_percentage": 20
+          },
+          {
+            "cores": -1,
+            "limit_percentage": 15
+          }
+        ],
+        "memory": {
+          "max_limit_percentage": 20,
+          "max_limit_MBs": 1000,
+          "memory_pressure_warning": "low",
+          "memory_oom_kill": "enabled"
+        }
+      }
+    },
+    "windows": {}
+  }
+}'''
+        handler_configuration = HandlerConfiguration(json.loads(handler_config_json))
+        not_expected_to_set_limits = -1
+
+        with patch(
+                "azurelinuxagent.common.osutil.default.DefaultOSUtil.get_processor_cores") as patch_get_processor_cores:
+            patch_get_processor_cores.return_value = 0
+            self.assert_limits(ext_name="normal_extension", expected_cpu_limit=float(25),
+                               resource_configuration=handler_configuration.get_resource_configurations())
+
+        with patch(
+                "azurelinuxagent.common.osutil.default.DefaultOSUtil.get_processor_cores") as patch_get_processor_cores:
+            patch_get_processor_cores.return_value = 1
+            self.assert_limits(ext_name="customscript_extension", expected_cpu_limit=not_expected_to_set_limits,
+                               resource_configuration=handler_configuration.get_resource_configurations())
+
+        with patch(
+                "azurelinuxagent.common.osutil.default.DefaultOSUtil.get_processor_cores") as patch_get_processor_cores:
+            patch_get_processor_cores.return_value = 2
+            self.assert_limits(ext_name=AGENT_NAME, expected_cpu_limit=float(25),
+                               resource_configuration=handler_configuration.get_resource_configurations())
+
+        with patch(
+                "azurelinuxagent.common.osutil.default.DefaultOSUtil.get_processor_cores") as patch_get_processor_cores:
+            patch_get_processor_cores.return_value = 3
+            self.assert_limits(ext_name="normal_extension", expected_cpu_limit=not_expected_to_set_limits,
+                               limits_enforced=False,
+                               resource_configuration=handler_configuration.get_resource_configurations())
+
+        with patch(
+                "azurelinuxagent.common.osutil.default.DefaultOSUtil.get_processor_cores") as patch_get_processor_cores:
+            patch_get_processor_cores.return_value = 8
+            self.assert_limits(ext_name=AGENT_NAME, expected_cpu_limit=not_expected_to_set_limits,
+                               limits_enforced=False,
+                               resource_configuration=handler_configuration.get_resource_configurations())
+
+        with patch(
+                "azurelinuxagent.common.osutil.default.DefaultOSUtil.get_processor_cores") as patch_get_processor_cores:
+            patch_get_processor_cores.return_value = 10
+            self.assert_limits(ext_name="normal_extension", expected_cpu_limit=float(15), exception_raised=True,
+                               resource_configuration=handler_configuration.get_resource_configurations())
 
 
 class TestCGroupsLimits(AgentTestCase):
@@ -676,6 +751,57 @@ class TestCGroupsLimits(AgentTestCase):
                 self.assertEqual(limits.cpu_limit, expected_cpu_limit)
                 self.assertEqual(limits.memory_limit, expected_memory_limit)
 
+        data = '''{
+                  "name": "ExampleHandlerLinux",
+                  "version": 1.0,
+                  "handlerConfiguration": {
+                    "linux": {
+                      "resources": {
+                        "memory": {
+                          "max_limit_percentage": 100,
+                          "max_limit_MBs": 512
+                        }
+                      }
+                    },
+                    "windows": {}
+                  }
+                }
+                '''
+        handler_config = HandlerConfiguration(json.loads(data))
+        resource_config = handler_config.get_resource_configurations()
+        cgroup_name = "test_cgroup"
+
+        with patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_processor_cores") as \
+                patch_get_processor_cores:
+            with patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_total_mem") as patch_get_total_mem:
+                # Configuration
+                # RAM - 512 MB
+                # # of cores - 8
+                total_ram = 256
+                patch_get_processor_cores.return_value = 8
+                patch_get_total_mem.return_value = total_ram
+
+                expected_cpu_limit = CGroupsLimits.get_default_cpu_limits(cgroup_name)
+                expected_memory_limit = total_ram * 1  # min of %age of totalram vs max gives total ram edge here.
+
+                limits = CGroupsLimits(cgroup_name, resource_configuration=resource_config)
+                self.assertEqual(limits.cpu_limit, expected_cpu_limit)
+                self.assertEqual(limits.memory_limit, expected_memory_limit)
+
+                # Configuration
+                # RAM - 1024 MB
+                # # of cores - 8
+                total_ram = 1024
+                patch_get_processor_cores.return_value = 8
+                patch_get_total_mem.return_value = total_ram
+
+                expected_cpu_limit = CGroupsLimits.get_default_cpu_limits(cgroup_name)
+                expected_memory_limit = 512  # Even if asked 100%, capped by max
+
+                limits = CGroupsLimits(cgroup_name, resource_configuration=resource_config)
+                self.assertEqual(limits.cpu_limit, expected_cpu_limit)
+                self.assertEqual(limits.memory_limit, expected_memory_limit)
+
     def test_with_invalid_cpu_memory_limits_passed(self):
         data = '''{
           "name": "ExampleHandlerLinux",
@@ -714,6 +840,20 @@ class TestCGroupsLimits(AgentTestCase):
                 ### RAM - 1024 MB
                 ### # of cores - 8
                 total_ram = 1024
+                patch_get_processor_cores.return_value = 0  # misconfigured get_processor_cores case.
+                patch_get_total_mem.return_value = total_ram
+
+                expected_cpu_limit = 40 # Default Value of 40 %
+                expected_memory_limit = CGroupsLimits.get_default_memory_limits(cgroup_name)
+
+                limits = CGroupsLimits(cgroup_name, resource_configuration=resource_config)
+                self.assertEqual(limits.cpu_limit, expected_cpu_limit)
+                self.assertEqual(limits.memory_limit, expected_memory_limit)
+
+                ### Configuration
+                ### RAM - 2048 MB
+                ### # of cores - 8
+                total_ram = 2048
                 patch_get_processor_cores.return_value = 8
                 patch_get_total_mem.return_value = total_ram
 

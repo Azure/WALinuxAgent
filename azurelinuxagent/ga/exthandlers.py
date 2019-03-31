@@ -1224,7 +1224,8 @@ class ExtHandlerInstance(object):
             self.logger.warn('Malformed resource manifest file ({0}).'.format(ustr(e)))
 
         try:
-            handler_config = HandlerConfiguration(data)
+            if data:
+                handler_config = HandlerConfiguration(data)
         except ExtensionError as e:
             msg = 'Failed to load resource manifest file: {0}'.format(ustr(e))
             self.logger.warn(msg)
