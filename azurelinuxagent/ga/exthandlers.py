@@ -1540,11 +1540,18 @@ class CpuLimitInstance(object):
                                                                                                limit_percentage,
                                                                                                type(limit_percentage)))
 
-        if (cores != DEFAULT_CORES_COUNT and cores < 1) or limit_percentage > 100 or limit_percentage < 1:
+        if cores != DEFAULT_CORES_COUNT and cores < 1:
             raise ExtensionConfigurationError(
-                "CPU values out of range | field - {0}, {1}/ value - {2}, {3}".format("cores", "limit_percentage",
-                                                                                      cores, limit_percentage))
+                "CPU cores value incorrect | field - {0}, {1}/ value - {2}, {3}".format("cores", "limit_percentage",
+                                                                                        cores, limit_percentage))
 
+        if limit_percentage > 100 or limit_percentage < 1:
+            raise ExtensionConfigurationError(
+                "CPU cores limit_percentage out of range | "
+                "field - {0}, {1}/ value - {2}, {3}".format("cores",
+                                                            "limit_percentage",
+                                                            cores,
+                                                            limit_percentage))
         self.cores = int(cores)
         self.limit_percentage = float(limit_percentage)
 

@@ -174,14 +174,14 @@ class TestCGroups(AgentTestCase):
         CGroupsTelemetry.stop_tracking("agent_unittest")
         initial_cgroup.add(os.getpid())
 
-    @skip_if_predicate_true(i_am_root, "Test does not run when root")
+    @skip_if_predicate_true(i_am_root, "Test does not run when non-root")
     def test_telemetry_instantiation_as_normal_user(self):
         """
         Tracking an existing cgroup for an extension; collect all metrics.
         """
         self.exercise_telemetry_instantiation(make_self_cgroups())
 
-    @skip_if_predicate_true(i_am_root, "Test does not run when root")
+    @skip_if_predicate_true(i_am_root, "Test does not run when non-root")
     @patch("azurelinuxagent.common.conf.get_cgroups_enforce_limits")
     @patch("azurelinuxagent.common.cgroups.cgroups.CGroups.set_cpu_limit")
     @patch("azurelinuxagent.common.cgroups.cgroups.CGroups.set_memory_limit")
