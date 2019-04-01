@@ -17,10 +17,10 @@
 
 import os.path
 
+from azurelinuxagent.common.cgroups.cgutils import METRIC_HIERARCHIES, CGroupsLimits
 from azurelinuxagent.common.protocol.restapi import Extension
-from azurelinuxagent.common.protocol.wire import WireProtocol, InVMArtifactsProfile
+from azurelinuxagent.common.protocol.wire import WireProtocol, InVMArtifactsProfile, ExtensionsConfig
 from azurelinuxagent.ga.exthandlers import *
-from tests.common import test_cgroups
 from tests.common.test_cgroups import i_am_root
 from tests.protocol.mockwiredata import *
 
@@ -1410,9 +1410,15 @@ class TestExtension(ExtensionTestCase):
 
 @skip_if_predicate_false(i_am_root, "Test does not run when non-root")
 @skip_if_predicate_false(CGroups.enabled, "CGroups not supported in this environment")
+@patch("azurelinuxagent.common.conf.get_cgroups_enforce_limits", return_value=True)
 @patch("azurelinuxagent.common.protocol.wire.CryptUtil")
 @patch("azurelinuxagent.common.utils.restutil.http_get")
 class TestExtensionWithCGroupsEnabled(AgentTestCase):
+    @staticmethod
+    def _cleanup_cgroups(cgroup):
+        cgroup.remove_cgroup()
+        CGroupsTelemetry.stop_tracking(cgroup.name)
+
     def _assert_handler_status(self, report_vm_status, expected_status,
                                expected_ext_count, version,
                                expected_handler_name="OSTCExtensions.ExampleHandlerLinux"):
@@ -1423,7 +1429,7 @@ class TestExtensionWithCGroupsEnabled(AgentTestCase):
         handler_status = vm_status.vmAgent.extensionHandlers[0]
         self.assertEqual(expected_status, handler_status.status)
         self.assertEqual(expected_handler_name,
-                          handler_status.name)
+                         handler_status.name)
         self.assertEqual(version, handler_status.version)
         self.assertEqual(expected_ext_count, len(handler_status.extensions))
         return
@@ -1436,7 +1442,7 @@ class TestExtensionWithCGroupsEnabled(AgentTestCase):
         self.assertEqual(expected_status, ext_status.status)
         self.assertEqual(expected_seq_no, ext_status.sequenceNumber)
 
-    def _create_mock(self, test_data, mock_http_get, MockCryptUtil):
+    def _create_mock(self, test_data, mock_http_get, MockCryptUtil, *args):
         """Test enable/disable/uninstall of an extension"""
         handler = get_exthandlers_handler()
 
@@ -1452,12 +1458,55 @@ class TestExtensionWithCGroupsEnabled(AgentTestCase):
         handler.protocol_util.get_protocol = Mock(return_value=protocol)
         return handler, protocol
 
-    @patch("azurelinuxagent.common.conf.get_cgroups_enforce_limits")
-    @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_processor_cores")
-    @patch("azurelinuxagent.common.conf.get_cgroups_enforce_limits")
-    def test_ext_handler_with_cgroup_limits_low_RAM_low_CPU(self, mock_get_cgroups_enforce_limits, patch_get_processor_cores, patch_get_total_mem, *args):
-        mock_get_cgroups_enforce_limits.return_value = True
+    def _assert_cgroup_limits(self, exthandlers_handler, protocol):
+        limit_in_bytes = "memory.limit_in_bytes"
+        period = "cpu.cfs_period_us"
+        quota = "cpu.cfs_quota_us"
 
+        # validating the actual limits set in the CGroup files.
+        for i in exthandlers_handler.ext_handlers.extHandlers:
+            ehi = ExtHandlerInstance(i, protocol)
+            test_cgroup = CGroups.for_extension(i.name)
+
+            cgroup_limits_expected = CGroupsLimits(i.name,
+                                                   ehi.load_handler_configuration().get_resource_configurations())
+            memory_limit_expected = CGroups._format_memory_value(unit='megabytes',
+                                                                 limit=cgroup_limits_expected.memory_limit)
+            cpu_period_cfs_set = float(test_cgroup.get_file_contents('cpu', period))
+            fraction_of_cpu = CGroups._convert_cpu_limit_to_fraction(cgroup_limits_expected.cpu_limit)
+            cpu_limit_expected = fraction_of_cpu * cpu_period_cfs_set
+
+            cpu_cgroup = CGroups._construct_custom_path_for_hierarchy("cpu", i.name)
+            memory_cgroup = CGroups._construct_custom_path_for_hierarchy("memory", i.name)
+
+            memory_limit_filepath = os.path.join(memory_cgroup, limit_in_bytes)
+            cpu_quota_cfs_filepath = os.path.join(cpu_cgroup, quota)
+            cpu_period_cfs_filepath = os.path.join(cpu_cgroup, period)
+
+            memory_limit_set = int(test_cgroup.get_file_contents('memory', limit_in_bytes))
+            cpu_limit_set = float(test_cgroup.get_file_contents('cpu', quota))
+
+            # Assertions
+            try:
+                self.assertTrue(os.path.isdir(cpu_cgroup))
+                self.assertEqual(test_cgroup.cgroups["cpu"], cpu_cgroup)
+                self.assertTrue(os.path.isfile(cpu_quota_cfs_filepath))
+                self.assertTrue(os.path.isfile(cpu_period_cfs_filepath))
+
+                self.assertTrue(os.path.isdir(memory_cgroup))
+                self.assertEqual(test_cgroup.cgroups["memory"], memory_cgroup)
+                self.assertTrue(os.path.isfile(memory_limit_filepath))
+
+                self.assertEqual(memory_limit_set, memory_limit_expected)
+                self.assertEqual(cpu_limit_set, cpu_limit_expected)
+            finally:
+                self._cleanup_cgroups(test_cgroup)
+
+    @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_total_mem")
+    @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_processor_cores")
+    def test_ext_handler_with_cgroup_limits_low_RAM_low_CPU(self,
+                                                            patch_get_processor_cores,
+                                                            patch_get_total_mem, *args):
         ### Configuration
         ### RAM - 1024 MB
         ### # of cores - 8
@@ -1472,14 +1521,13 @@ class TestExtensionWithCGroupsEnabled(AgentTestCase):
         exthandlers_handler.run()
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
         self._assert_ext_status(protocol.report_ext_status, "success", 0)
+        self._assert_cgroup_limits(exthandlers_handler, protocol)
 
-    @patch("azurelinuxagent.common.conf.get_cgroups_enforce_limits")
+    @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_total_mem")
     @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_processor_cores")
-    @patch("azurelinuxagent.common.conf.get_cgroups_enforce_limits")
-    def test_ext_handler_with_cgroup_limits_high_RAM_low_CPU(self, mock_get_cgroups_enforce_limits, patch_get_processor_cores,
-                                                   patch_get_total_mem, *args):
-        mock_get_cgroups_enforce_limits.return_value = True
-
+    def test_ext_handler_with_cgroup_limits_high_RAM_low_CPU(self,
+                                                             patch_get_processor_cores,
+                                                             patch_get_total_mem, *args):
         total_ram = 30517
         patch_get_processor_cores.return_value = 16
         patch_get_total_mem.return_value = total_ram
@@ -1491,13 +1539,13 @@ class TestExtensionWithCGroupsEnabled(AgentTestCase):
         exthandlers_handler.run()
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
         self._assert_ext_status(protocol.report_ext_status, "success", 0)
+        self._assert_cgroup_limits(exthandlers_handler, protocol)
 
-    @patch("azurelinuxagent.common.conf.get_cgroups_enforce_limits")
-    @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_processor_cores")
     @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_total_mem")
-    def test_ext_handler_with_cgroup_invalid_limits_passed(self, mock_get_cgroups_enforce_limits, patch_get_processor_cores, patch_get_total_mem, *args):
-        mock_get_cgroups_enforce_limits.return_value = True
-
+    @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_processor_cores")
+    def test_ext_handler_with_cgroup_invalid_limits_passed(self,
+                                                           patch_get_processor_cores,
+                                                           patch_get_total_mem, *args):
         ### Configuration
         ### RAM - 1024 MB
         ### # of cores - 8
@@ -1512,7 +1560,11 @@ class TestExtensionWithCGroupsEnabled(AgentTestCase):
         exthandlers_handler.run()
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
         self._assert_ext_status(protocol.report_ext_status, "success", 0)
+        self._assert_cgroup_limits(exthandlers_handler, protocol)
 
+    @classmethod
+    def tearDownClass(cls):
+        AgentTestCase.tearDownClass()
 
 @patch("azurelinuxagent.common.protocol.wire.CryptUtil")
 @patch("azurelinuxagent.common.utils.restutil.http_get")

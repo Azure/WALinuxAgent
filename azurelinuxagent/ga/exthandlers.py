@@ -1610,3 +1610,15 @@ class MemoryLimits(object):
                 self.memory_oom_kill = memory_node["memory_oom_kill"].lower()
             else:
                 raise ExtensionConfigurationError("Malformed memory_oom_kill flag in HandlerConfiguration")
+
+    def __str__(self):
+        return {"max_limit_MBs": self.max_limit_MBs,
+                "max_limit_percentage": self.max_limit_percentage,
+                "memory_oom_kill": self.memory_oom_kill,
+                "memory_pressure_warning": self.memory_pressure_warning}.__str__()
+
+    def __repr__(self):
+        return {"max_limit_MBs": self.max_limit_MBs,
+                "max_limit_percentage": self.max_limit_percentage,
+                "memory_oom_kill": self.memory_oom_kill,
+                "memory_pressure_warning": self.memory_pressure_warning}.__str__()

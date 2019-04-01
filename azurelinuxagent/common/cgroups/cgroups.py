@@ -361,7 +361,6 @@ class CGroups(object):
         """
         Set per-hierarchy limits based on the cgroup name (agent or particular extension)
         """
-
         if not conf.get_cgroups_enforce_limits():
             return
 
@@ -662,3 +661,7 @@ class CGroups(object):
             fileutil.write_file(memory_limit_file, '{0}\n'.format(value))
         else:
             raise CGroupsException("Memory hierarchy not available in this cgroup")
+
+    def remove_cgroup(self):
+        for cgroup_heirarchy in self.cgroups.items():
+            os.rmdir(cgroup_heirarchy[1])

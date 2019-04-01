@@ -249,3 +249,13 @@ class CGroupsLimits(object):
     def get_default_memory_flags():
         default_memory_flags = {"memory_pressure_warning": None, "memory_oom_kill": "disabled"}
         return default_memory_flags
+
+    def __str__(self):
+        return {"cpu_limit": self.cpu_limit,
+                "memory_limit": self.memory_limit,
+                "memory_flags": self.memory_flags}.__str__()
+
+    def __repr__(self):
+        return {"cpu_limit": self.cpu_limit,
+                "memory_limit": self.memory_limit,
+                "memory_flags": self.memory_flags}.__str__()
