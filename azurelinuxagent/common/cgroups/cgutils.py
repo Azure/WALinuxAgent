@@ -223,7 +223,7 @@ class CGroupsLimits(object):
             else:
                 flags_requested["memory_oom_kill"] = get_default_memory_flags()["memory_oom_kill"]
 
-        return flags_requested
+        return flags_requested if bool(flags_requested) else get_default_memory_flags()
 
     @staticmethod
     def get_default_cpu_limits(cgroup_name):

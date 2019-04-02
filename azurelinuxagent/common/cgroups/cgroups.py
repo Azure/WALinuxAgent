@@ -96,7 +96,6 @@ class CGroupsTelemetry(object):
         """
         if not CGroups.enabled():
             return
-
         if not CGroupsTelemetry.is_tracked(name):
             cgroup = CGroups.for_extension(name,
                                            resource_configuration=resource_configuration) if cgroup is None else cgroup
@@ -341,6 +340,30 @@ class CGroups(object):
                 else:
                     raise
 
+    @staticmethod
+    def _try_rmdir(path):
+        """
+        Try to create a directory, recursively. If it already exists as such, do nothing. Raise the appropriate
+        exception should an error occur.
+
+        :param path: str
+        """
+        if not os.path.isdir(path):
+            try:
+                os.rmdir(path)
+            except (IOError, OSError) as e:
+                if e.errno == errno.ENOENT:
+                    if os.path.isdir(path):
+                        raise CGroupsException("Cannot delete the directory for cgroup {0}: "
+                                               "It could still be tracking some processes".format(path))
+                    else:
+                        pass  # There was a race to delete the directory, but it's there now, and that's fine
+                elif e.errno == errno.EACCES:
+                    # This is unexpected, as the agent runs as root
+                    raise CGroupsException("Remove directory for cgroup {0}: permission denied".format(path))
+                else:
+                    raise
+
     def add(self, pid):
         """
         Add a process to the cgroups for this agent/extension.
@@ -374,6 +397,7 @@ class CGroups(object):
 
         cpu_limit = self.threshold.cpu_limit
         mem_limit = self.threshold.memory_limit
+        mem_flags = self.threshold.memory_flags
 
         msg = '{0}: {1}% {2}mb'.format(self.name, cpu_limit, mem_limit)
         logger.info("Setting cgroups limits for {0}".format(msg))
@@ -382,6 +406,7 @@ class CGroups(object):
         try:
             self.set_cpu_limit(cpu_limit)
             self.set_memory_limit(mem_limit)
+            self.set_memory_oom_flag(mem_flags)
             success = True
         except Exception as ge:
             msg = '[{0}] {1}'.format(msg, ustr(ge))
@@ -662,6 +687,30 @@ class CGroups(object):
         else:
             raise CGroupsException("Memory hierarchy not available in this cgroup")
 
+    def set_memory_oom_flag(self, memory_flags):
+
+        # expected_memory_flags = {"memory_pressure_warning": "low", "memory_oom_kill": "enabled"}
+        if 'memory' in self.cgroups:
+            from azurelinuxagent.ga.exthandlers import MEMORY_OOM_KILL_OPTIONS
+            if memory_flags["memory_oom_kill"] in MEMORY_OOM_KILL_OPTIONS:
+
+                memory_oom_control = self._get_cgroup_file('memory', 'memory.oom_control')
+
+                if memory_flags["memory_oom_kill"] == "disabled":
+                    fileutil.write_file(memory_oom_control, '{0}\n'.format(1))
+                elif memory_flags["memory_oom_kill"] == "enabled":
+                    fileutil.write_file(memory_oom_control, '{0}\n'.format(0))
+
+            else:
+                raise CGroupsException("Malformed memory_oom_kill flag in HandlerConfiguration")
+
+            # value = self._format_memory_value(unit, limit)
+            # memory_limit_file = self._get_cgroup_file('memory', 'memory.limit_in_bytes')
+            # logger.verbose("writing {0} to {1}".format(value, memory_limit_file))
+            # fileutil.write_file(memory_limit_file, '{0}\n'.format(value))
+        else:
+            raise CGroupsException("Memory hierarchy not available in this cgroup")
+
     def remove_cgroup(self):
-        for cgroup_heirarchy in self.cgroups.items():
-            os.rmdir(cgroup_heirarchy[1])
+        for cgroup_hierarchy in self.cgroups.items():
+            self._try_rmdir(cgroup_hierarchy[1])

@@ -17,7 +17,7 @@
 
 import os.path
 
-from azurelinuxagent.common.cgroups.cgutils import METRIC_HIERARCHIES, CGroupsLimits
+from azurelinuxagent.common.cgroups.cgutils import METRIC_HIERARCHIES, CGroupsLimits, CGroupsException
 from azurelinuxagent.common.protocol.restapi import Extension
 from azurelinuxagent.common.protocol.wire import WireProtocol, InVMArtifactsProfile, ExtensionsConfig
 from azurelinuxagent.ga.exthandlers import *
@@ -38,6 +38,7 @@ def raise_ioerror(*args):
     from errno import EIO
     e.errno = EIO
     raise e
+
 
 class TestExtensionCleanup(AgentTestCase):
     def setUp(self):
@@ -1416,8 +1417,19 @@ class TestExtension(ExtensionTestCase):
 class TestExtensionWithCGroupsEnabled(AgentTestCase):
     @staticmethod
     def _cleanup_cgroups(cgroup):
-        cgroup.remove_cgroup()
+        try:
+            cgroup.remove_cgroup()
+        except CGroupsException:
+            pass
+
         CGroupsTelemetry.stop_tracking(cgroup.name)
+
+    @staticmethod
+    def _cgroup_translate_into_oom_flags(memory_flags_dict):
+        if memory_flags_dict["memory_oom_kill"] == "enabled":
+            return "oom_kill_disable 0\n"
+        elif memory_flags_dict["memory_oom_kill"] == "disabled":
+            return "oom_kill_disable 1\n"
 
     def _assert_handler_status(self, report_vm_status, expected_status,
                                expected_ext_count, version,
@@ -1462,6 +1474,7 @@ class TestExtensionWithCGroupsEnabled(AgentTestCase):
         limit_in_bytes = "memory.limit_in_bytes"
         period = "cpu.cfs_period_us"
         quota = "cpu.cfs_quota_us"
+        memory_oom_control = "memory.oom_control"
 
         # validating the actual limits set in the CGroup files.
         for i in exthandlers_handler.ext_handlers.extHandlers:
@@ -1472,13 +1485,17 @@ class TestExtensionWithCGroupsEnabled(AgentTestCase):
             if ehi.load_handler_configuration():
                 resource_config = ehi.load_handler_configuration().get_resource_configurations()
 
+            # Getting expected values ready
             cgroup_limits_expected = CGroupsLimits(i.name, resource_config)
             memory_limit_expected = CGroups._format_memory_value(unit='megabytes',
                                                                  limit=cgroup_limits_expected.memory_limit)
+            oom_flags_expected = self._cgroup_translate_into_oom_flags(cgroup_limits_expected.memory_flags)
+
             cpu_period_cfs_set = float(test_cgroup.get_file_contents('cpu', period))
             fraction_of_cpu = CGroups._convert_cpu_limit_to_fraction(cgroup_limits_expected.cpu_limit)
             cpu_limit_expected = fraction_of_cpu * cpu_period_cfs_set
 
+            # Getting actual values ready
             cpu_cgroup = CGroups._construct_custom_path_for_hierarchy("cpu", i.name)
             memory_cgroup = CGroups._construct_custom_path_for_hierarchy("memory", i.name)
 
@@ -1488,6 +1505,7 @@ class TestExtensionWithCGroupsEnabled(AgentTestCase):
 
             memory_limit_set = int(test_cgroup.get_file_contents('memory', limit_in_bytes))
             cpu_limit_set = float(test_cgroup.get_file_contents('cpu', quota))
+            oom_flags_set = test_cgroup.get_file_contents('memory', memory_oom_control)
 
             # Assertions
             try:
@@ -1502,6 +1520,10 @@ class TestExtensionWithCGroupsEnabled(AgentTestCase):
 
                 self.assertEqual(memory_limit_set, memory_limit_expected)
                 self.assertEqual(cpu_limit_set, cpu_limit_expected)
+                print("oom_flags_set: ", oom_flags_set)
+                print("oom_flags_expected: ", oom_flags_expected)
+                self.assertIn(oom_flags_expected, oom_flags_set, msg="Yo")
+
             finally:
                 self._cleanup_cgroups(test_cgroup)
 
@@ -1606,6 +1628,7 @@ class TestExtensionWithCGroupsEnabled(AgentTestCase):
     @classmethod
     def tearDownClass(cls):
         AgentTestCase.tearDownClass()
+
 
 @patch("azurelinuxagent.common.protocol.wire.CryptUtil")
 @patch("azurelinuxagent.common.utils.restutil.http_get")

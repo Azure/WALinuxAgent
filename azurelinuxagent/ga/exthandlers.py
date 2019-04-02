@@ -63,6 +63,7 @@ EXTENSION_STATUS_ERROR = 'error'
 EXTENSION_STATUS_SUCCESS = 'success'
 VALID_EXTENSION_STATUS = ['transitioning', 'error', 'success', 'warning']
 EXTENSION_TERMINAL_STATUSES = ['error', 'success']
+MEMORY_OOM_KILL_OPTIONS = ["enabled", "disabled"]
 
 VALID_HANDLER_STATUS = ['Ready', 'NotReady', "Installing", "Unresponsive"]
 
@@ -1163,11 +1164,9 @@ class ExtHandlerInstance(object):
                     resource_config = None
                     if handler_configuration:
                         resource_config = handler_configuration.get_resource_configurations()
-
                     cg = CGroups.for_extension(self.ext_handler.name, resource_config)
                     CGroupsTelemetry.track_extension(self.ext_handler.name, cg, resource_config)
                 except Exception as e:
-                    print("Unable to setup cgroup {0}: {1}".format(self.ext_handler.name, e))
                     self.logger.warn("Unable to setup cgroup {0}: {1}".format(self.ext_handler.name, e))
 
                 msg = ExtHandlerInstance._capture_process_output(process, stdout, stderr, cmd, timeout,
@@ -1585,8 +1584,6 @@ class CpuLimitInstance(object):
 
 class MemoryLimits(object):
     def __init__(self, memory_node):
-        memory_oom_kill_options = ["enabled", "disabled"]
-
         if "max_limit_MBs" in memory_node and "max_limit_percentage" in memory_node:
             self.max_limit_percentage = memory_node.get("max_limit_percentage", None)
             self.max_limit_MBs = memory_node.get("max_limit_MBs", None)
@@ -1618,7 +1615,7 @@ class MemoryLimits(object):
         self.memory_oom_kill = None  # default will be set in compute_default for memory flags.
 
         if "memory_oom_kill" in memory_node:
-            if memory_node["memory_oom_kill"].lower() in memory_oom_kill_options:
+            if memory_node["memory_oom_kill"].lower() in MEMORY_OOM_KILL_OPTIONS:
                 self.memory_oom_kill = memory_node["memory_oom_kill"].lower()
             else:
                 raise ExtensionConfigurationError("Malformed memory_oom_kill flag in HandlerConfiguration")
