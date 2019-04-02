@@ -1160,11 +1160,14 @@ class ExtHandlerInstance(object):
                                                   code=extension_error_code)
 
                 try:
-                    cg = CGroups.for_extension(self.ext_handler.name,
-                                               handler_configuration.get_resource_configurations())
-                    CGroupsTelemetry.track_extension(self.ext_handler.name, cg,
-                                                     handler_configuration.get_resource_configurations())
+                    resource_config = None
+                    if handler_configuration:
+                        resource_config = handler_configuration.get_resource_configurations()
+
+                    cg = CGroups.for_extension(self.ext_handler.name, resource_config)
+                    CGroupsTelemetry.track_extension(self.ext_handler.name, cg, resource_config)
                 except Exception as e:
+                    print("Unable to setup cgroup {0}: {1}".format(self.ext_handler.name, e))
                     self.logger.warn("Unable to setup cgroup {0}: {1}".format(self.ext_handler.name, e))
 
                 msg = ExtHandlerInstance._capture_process_output(process, stdout, stderr, cmd, timeout,
@@ -1460,6 +1463,13 @@ class HandlerConfiguration(object):
             raise ExtensionConfigurationError('No linux configurations present in HandlerConfiguration')
 
         self.data = data
+        self.resource_config = None
+        try:
+            self.resource_config = self.get_resource_configurations()
+        except ExtensionConfigurationError as e:
+            logger.warn(ustr(e))
+            HandlerConfiguration.send_handler_configuration_event(message=ustr(e), is_success=False, log_event=False,
+                                                                  operation=WALAEventOperation.HandlerConfiguration)
 
     def get_name(self):
         return self.data["name"]
@@ -1482,6 +1492,8 @@ class HandlerConfiguration(object):
 class ExtensionResourcesConfiguration(HandlerConfiguration):
     def __init__(self, resource_configuration):
         self.data = resource_configuration
+        self.cpu_limits_for_extension = self.get_cpu_limits_for_extension()
+        self.memory_limits_for_extension = self.get_memory_limits_for_extension()
 
     def get_cpu_limits_for_extension(self):
         try:

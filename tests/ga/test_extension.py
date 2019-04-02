@@ -1468,8 +1468,11 @@ class TestExtensionWithCGroupsEnabled(AgentTestCase):
             ehi = ExtHandlerInstance(i, protocol)
             test_cgroup = CGroups.for_extension(i.name)
 
-            cgroup_limits_expected = CGroupsLimits(i.name,
-                                                   ehi.load_handler_configuration().get_resource_configurations())
+            resource_config = None
+            if ehi.load_handler_configuration():
+                resource_config = ehi.load_handler_configuration().get_resource_configurations()
+
+            cgroup_limits_expected = CGroupsLimits(i.name, resource_config)
             memory_limit_expected = CGroups._format_memory_value(unit='megabytes',
                                                                  limit=cgroup_limits_expected.memory_limit)
             cpu_period_cfs_set = float(test_cgroup.get_file_contents('cpu', period))
@@ -1554,6 +1557,44 @@ class TestExtensionWithCGroupsEnabled(AgentTestCase):
         patch_get_total_mem.return_value = total_ram
 
         test_data = WireProtocolData(DATA_FILE_INVALID_CGROUP_LIMITS_SET)
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+
+        # Test enable scenario.
+        exthandlers_handler.run()
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
+        self._assert_ext_status(protocol.report_ext_status, "success", 0)
+        self._assert_cgroup_limits(exthandlers_handler, protocol)
+
+    @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_total_mem")
+    @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_processor_cores")
+    def test_ext_handler_with_no_limits_passed(self, patch_get_processor_cores, patch_get_total_mem, *args):
+        ### Configuration
+        ### RAM - 1024 MB
+        ### # of cores - 8
+        total_ram = 1024
+        patch_get_processor_cores.return_value = 2
+        patch_get_total_mem.return_value = total_ram
+
+        test_data = WireProtocolData(DATA_FILE)
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+
+        # Test enable scenario.
+        exthandlers_handler.run()
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
+        self._assert_ext_status(protocol.report_ext_status, "success", 0)
+        self._assert_cgroup_limits(exthandlers_handler, protocol)
+
+    @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_total_mem")
+    @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_processor_cores")
+    def test_ext_handler_with_no_limits_passed_high_ram(self, patch_get_processor_cores, patch_get_total_mem, *args):
+        ### Configuration
+        ### RAM - 1024 MB
+        ### # of cores - 8
+        total_ram = 32000
+        patch_get_processor_cores.return_value = 16
+        patch_get_total_mem.return_value = total_ram
+
+        test_data = WireProtocolData(DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
 
         # Test enable scenario.
