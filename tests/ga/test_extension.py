@@ -2318,7 +2318,8 @@ class TestHandlerConfiguration(ExtensionTestCase):
 
         self.assertTrue("Malformed handler configuration file" in str(context.exception))
 
-    def test_load_handler_configuration(self, *args):
+    @patch("azurelinuxagent.ga.exthandlers.HandlerConfiguration.send_handler_configuration_event")
+    def test_load_handler_configuration(self, patch_send_handler_configuration_event, *args):
         handler_name = "Not.A.Real.Extension"
         handler_version = "1.2.3"
 
@@ -2332,6 +2333,7 @@ class TestHandlerConfiguration(ExtensionTestCase):
             patch_get_handler_configuration_file.return_value = load_data_path("ext/SampleHandlerConfiguration.json")
             handler_config = ext_handler_i.load_handler_configuration()
             self.assertNotEqual(handler_config, None)
+            self.assertEqual(patch_send_handler_configuration_event.call_count, 0)
 
         with patch(
                 "azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_handler_configuration_file") as \
@@ -2339,6 +2341,7 @@ class TestHandlerConfiguration(ExtensionTestCase):
             patch_get_handler_configuration_file.return_value = load_data_path("ext/NotPresent.json")
             handler_config = ext_handler_i.load_handler_configuration()
             self.assertEqual(handler_config, None)
+            self.assertEqual(patch_send_handler_configuration_event.call_count, 0)
 
         with patch(
                 "azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_handler_configuration_file") as \
@@ -2347,6 +2350,16 @@ class TestHandlerConfiguration(ExtensionTestCase):
                 "ext/SampleMalformedHandlerConfiguration.json")
             handler_config = ext_handler_i.load_handler_configuration()
             self.assertEqual(handler_config, None)
+            self.assertEqual(patch_send_handler_configuration_event.call_count, 0)
+
+        with patch(
+                "azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_handler_configuration_file") as \
+                patch_get_handler_configuration_file:
+            patch_get_handler_configuration_file.return_value = load_data_path(
+                "ext/SampleInvalidButCorrectJsonHandlerConfiguration.json")
+            handler_config = ext_handler_i.load_handler_configuration()
+            self.assertNotEqual(handler_config, None)
+            self.assertEqual(patch_send_handler_configuration_event.call_count, 1)
 
 
 if __name__ == '__main__':

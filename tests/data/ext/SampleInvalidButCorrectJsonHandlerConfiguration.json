@@ -14,7 +14,7 @@
             "limit_percentage": 20
           },
           {
-            "cores": -1,
+            "cores": 0,
             "limit_percentage": 15
           }
         ],
