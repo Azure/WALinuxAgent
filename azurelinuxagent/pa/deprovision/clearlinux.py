@@ -22,8 +22,8 @@ from azurelinuxagent.pa.deprovision.default import DeprovisionHandler, \
                                                    DeprovisionAction
 
 class ClearLinuxDeprovisionHandler(DeprovisionHandler):
-    def __init__(self, distro):
-        self.distro = distro
+    def __init__(self):
+        super(ClearLinuxDeprovisionHandler, self).__init__()
 
     def setup(self, deluser):
         warnings, actions = super(ClearLinuxDeprovisionHandler, self).setup(deluser)
