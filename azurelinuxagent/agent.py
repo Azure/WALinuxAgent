@@ -187,7 +187,7 @@ def parse_args(sys_args):
     debug = False
     conf_file_path = None
     for a in sys_args:
-        m = re.match("^(?:[-/]*)configuration-path:([\w/\.\-_]+)", a)
+        m = re.match(r"^(?:[-/]*)configuration-path:([\w/\.\-_]+)", a)
         if not m is None:
             conf_file_path = m.group(1)
             if not os.path.exists(conf_file_path):

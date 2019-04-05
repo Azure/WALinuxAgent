@@ -19,6 +19,7 @@
 #
 import os
 import re
+import azurelinuxagent.common.exception as exception
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.shellutil as shellutil
 import azurelinuxagent.common.utils.fileutil as fileutil
@@ -31,7 +32,7 @@ class OpenWRTOSUtil(DefaultOSUtil):
         super(OpenWRTOSUtil, self).__init__()
         self.agent_conf_file_path = '/etc/waagent.conf'
         self.dhclient_name = 'udhcpc'
-        self.ip_command_output = re.compile('^\d+:\s+(\w+):\s+(.*)$')
+        self.ip_command_output = re.compile(r'^\d+:\s+(\w+):\s+(.*)$')
         self.jit_enabled = True
         
     def eject_dvd(self, chk_err=True):
@@ -58,7 +59,7 @@ class OpenWRTOSUtil(DefaultOSUtil):
             cmd += " -c {0}".format(comment)
         retcode, out = shellutil.run_get_output(cmd)
         if retcode != 0:
-            raise OSUtilError(("Failed to create user account:{0}, "
+            raise exception.OSUtilError(("Failed to create user account:{0}, "
                                "retcode:{1}, "
                                "output:{2}").format(username, retcode, out))
 
@@ -130,7 +131,7 @@ class OpenWRTOSUtil(DefaultOSUtil):
         if os.path.exists("/etc/init.d/sshd"):
             return shellutil.run("/etc/init.d/sshd restart", chk_err=True)
         else:
-            logger.warn("sshd service does not exists", username)
+            logger.warn("sshd service does not exists")
 
     def stop_agent_service(self):
         return shellutil.run("/etc/init.d/{0} stop".format(self.service_name), chk_err=True)

@@ -56,7 +56,7 @@ for all distros. Each concrete distro classes could overwrite default behavior
 if needed.
 """
 
-IPTABLES_VERSION_PATTERN = re.compile("^[^\d\.]*([\d\.]+).*$")
+IPTABLES_VERSION_PATTERN = re.compile(r"^[^\d\.]*([\d\.]+).*$")
 IPTABLES_VERSION = "iptables --version"
 IPTABLES_LOCKING_VERSION = FlexibleVersion('1.4.21')
 
@@ -76,7 +76,7 @@ FIREWALL_DELETE_CONNTRACK_ACCEPT = "iptables {0} -t security -D OUTPUT -d {1} -p
 FIREWALL_DELETE_OWNER_ACCEPT = "iptables {0} -t security -D OUTPUT -d {1} -p tcp -m owner --uid-owner {2} -j ACCEPT"
 FIREWALL_DELETE_CONNTRACK_DROP = "iptables {0} -t security -D OUTPUT -d {1} -p tcp -m conntrack --ctstate INVALID,NEW -j DROP"
 
-PACKET_PATTERN = "^\s*(\d+)\s+(\d+)\s+DROP\s+.*{0}[^\d]*$"
+PACKET_PATTERN = r"^\s*(\d+)\s+(\d+)\s+DROP\s+.*{0}[^\d]*$"
 ALL_CPUS_REGEX = re.compile('^cpu .*')
 
 
@@ -93,7 +93,7 @@ IOCTL_SIOCGIFFLAGS = 0x8913
 IOCTL_SIOCGIFHWADDR = 0x8927
 IFNAMSIZ = 16
 
-IP_COMMAND_OUTPUT = re.compile('^\d+:\s+(\w+):\s+(.*)$')
+IP_COMMAND_OUTPUT = re.compile(r'^\d+:\s+(\w+):\s+(.*)$')
 
 BASE_CGROUPS = '/sys/fs/cgroup'
 
@@ -1319,7 +1319,7 @@ class DefaultOSUtil(object):
         state = {}
 
         status, output = shellutil.run_get_output("ip -a -o link", chk_err=False, log_cmd=False)
-        """
+        r"""
         1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN mode DEFAULT group default qlen 1000\    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00 promiscuity 0 addrgenmode eui64
         2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP mode DEFAULT group default qlen 1000\    link/ether 00:0d:3a:30:c3:5a brd ff:ff:ff:ff:ff:ff promiscuity 0 addrgenmode eui64
         3: docker0: <NO-CARRIER,BROADCAST,MULTICAST,UP> mtu 1500 qdisc noqueue state DOWN mode DEFAULT group default \    link/ether 02:42:b5:d5:00:1d brd ff:ff:ff:ff:ff:ff promiscuity 0 \    bridge forward_delay 1500 hello_time 200 max_age 2000 ageing_time 30000 stp_state 0 priority 32768 vlan_filtering 0 vlan_protocol 802.1Q addrgenmode eui64
@@ -1336,14 +1336,14 @@ class DefaultOSUtil(object):
                 state[name] = NetworkInterfaceCard(name, result.group(2))
 
         self._update_nic_state(state, "ip -4 -a -o address", NetworkInterfaceCard.add_ipv4, "an IPv4 address")
-        """
+        r"""
         1: lo    inet 127.0.0.1/8 scope host lo\       valid_lft forever preferred_lft forever
         2: eth0    inet 10.145.187.220/26 brd 10.145.187.255 scope global eth0\       valid_lft forever preferred_lft forever
         3: docker0    inet 192.168.43.1/24 brd 192.168.43.255 scope global docker0\       valid_lft forever preferred_lft forever
         """
 
         self._update_nic_state(state, "ip -6 -a -o address", NetworkInterfaceCard.add_ipv6, "an IPv6 address")
-        """
+        r"""
         1: lo    inet6 ::1/128 scope host \       valid_lft forever preferred_lft forever
         2: eth0    inet6 fe80::20d:3aff:fe30:c35a/64 scope link \       valid_lft forever preferred_lft forever
         """
