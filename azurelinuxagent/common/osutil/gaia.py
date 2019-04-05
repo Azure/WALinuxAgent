@@ -38,7 +38,7 @@ class GaiaOSUtil(DefaultOSUtil):
         super(GaiaOSUtil, self).__init__()
 
     def _run_clish(self, cmd, log_cmd=True):
-        for i in xrange(10):
+        for _ in xrange(10):
             ret, out = shellutil.run_get_output(
                 "/bin/clish -s -c '" + cmd + "'", log_cmd=log_cmd)
             if not ret:
@@ -66,7 +66,7 @@ class GaiaOSUtil(DefaultOSUtil):
 
     def del_root_password(self):
         logger.info('del_root_password')
-        ret, out = self._run_clish('set user admin password-hash *LOCK*')
+        ret, _ = self._run_clish('set user admin password-hash *LOCK*')
         if ret != 0:
             raise OSUtilError("Failed to delete root password")
 
@@ -178,7 +178,7 @@ class GaiaOSUtil(DefaultOSUtil):
             cidr = self._address_to_string(net) + '/' + self._get_prefix(
                 self._address_to_string(mask))
 
-        ret, out = self._run_clish(
+        ret, _ = self._run_clish(
             'set static-route ' + cidr +
             ' nexthop gateway address ' +
             self._address_to_string(gateway) + ' on')

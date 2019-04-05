@@ -119,7 +119,7 @@ class TestDeprovision(AgentTestCase):
         deprovision_handler = get_deprovision_handler(distro_name,
                                                       distro_version,
                                                       distro_full_name)
-        warnings, actions = deprovision_handler.setup(deluser=False)
+        warnings, _ = deprovision_handler.setup(deluser=False)
         assert any("/etc/resolv.conf" in w for w in warnings)
 
     @distros("ubuntu")
@@ -132,7 +132,7 @@ class TestDeprovision(AgentTestCase):
                                                       distro_full_name)
 
         with patch("os.path.realpath", return_value="/run/resolvconf/resolv.conf"):
-            warnings, actions = deprovision_handler.setup(deluser=False)
+            warnings, _ = deprovision_handler.setup(deluser=False)
             assert any("/etc/resolvconf/resolv.conf.d/tail" in w for w in warnings)
 
 

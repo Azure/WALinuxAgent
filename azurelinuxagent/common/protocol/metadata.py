@@ -57,7 +57,7 @@ def get_traceback(e):
     if sys.version_info[0] == 3:
         return e.__traceback__
     elif sys.version_info[0] == 2:
-        ex_type, ex, tb = sys.exc_info()
+        _, _, tb = sys.exc_info()
         return tb
 
 
@@ -169,7 +169,7 @@ class MetadataProtocol(Protocol):
 
     def get_vminfo(self):
         vminfo = VMInfo()
-        data, etag = self._get_data(self.identity_uri)
+        data, _ = self._get_data(self.identity_uri)
         set_properties("vminfo", vminfo, data)
         return vminfo
 
@@ -221,7 +221,7 @@ class MetadataProtocol(Protocol):
             self.agent_manifests = VMAgentManifestList()
 
             manifest = VMAgentManifest()
-            manifest.family = family=conf.get_autoupdate_gafamily()
+            manifest.family = conf.get_autoupdate_gafamily()
             
             if not KEY_AGENT_VERSION_URIS in data:
                 raise ProtocolError(
@@ -231,7 +231,7 @@ class MetadataProtocol(Protocol):
             for version in data[KEY_AGENT_VERSION_URIS]:
                 if not KEY_URI in version:
                     raise ProtocolError(
-                        "Agent versions missing '{0': {1}".format(
+                        "Agent versions missing '{0}': {1}".format(
                             KEY_URI, data))
                 manifest_uri = VMAgentManifestUri(uri=version[KEY_URI])
                 manifest.versionsManifestUris.append(manifest_uri)
@@ -242,10 +242,9 @@ class MetadataProtocol(Protocol):
 
     def get_vmagent_pkgs(self, vmagent_manifest):
         data = None
-        etag = None
         for manifest_uri in vmagent_manifest.versionsManifestUris:
             try:
-                data, etag = self._get_data(manifest_uri.uri)
+                data, _ = self._get_data(manifest_uri.uri)
                 break
             except ProtocolError as e:
                 logger.verbose(
@@ -278,7 +277,7 @@ class MetadataProtocol(Protocol):
         manifest = None
         for version_uri in ext_handler.versionUris:
             try:
-                manifest, etag = self._get_data(version_uri.uri)
+                manifest, _ = self._get_data(version_uri.uri)
                 logger.verbose("Successfully downloaded manifest")
                 break
             except ProtocolError as e:
@@ -378,7 +377,7 @@ class Certificates(object):
         fileutil.write_file(p7b_file, base64.b64decode(data), asbin=True) 
 
         ssl_cmd = "openssl pkcs7 -text -in {0} -inform der | grep -v '^-----' "
-        ret, data = shellutil.run_get_output(ssl_cmd.format(p7b_file))
+        _, data = shellutil.run_get_output(ssl_cmd.format(p7b_file))
 
         p7m_file = os.path.join(conf.get_lib_dir(), P7M_FILE_NAME)
         p7m = ("MIME-Version:1.0\n"

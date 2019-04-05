@@ -43,7 +43,7 @@ class SUSERDMAHandler(RDMAHandler):
         package_name = 'dummy'
         # Figure out the kernel that is running to find the proper kmp
         cmd = 'uname -r'
-        status, kernel_release = shellutil.run_get_output(cmd)
+        _, kernel_release = shellutil.run_get_output(cmd)
         if 'default' in kernel_release:
             package_name = 'msft-rdma-kmp-default'
             info_msg = 'RDMA: Detected kernel-default'
@@ -58,7 +58,7 @@ class SUSERDMAHandler(RDMAHandler):
             logger.error(error_msg % kernel_release)
             return
         cmd = zypper_search % package_name
-        status, repo_package_info = shellutil.run_get_output(cmd)
+        _, repo_package_info = shellutil.run_get_output(cmd)
         driver_package_versions = []
         driver_package_installed = False
         for entry in repo_package_info.split('\n'):

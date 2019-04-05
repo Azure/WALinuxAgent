@@ -166,7 +166,7 @@ class DefaultOSUtil(object):
         Continually execute the delete operation until the return
         code is non-zero or the limit has been reached.
         """
-        for i in range(1, 100):
+        for _ in range(1, 100):
             rc = shellutil.run(rule, chk_err=False)
             if rc == 1:
                 return
@@ -402,7 +402,7 @@ class DefaultOSUtil(object):
                                                         "/etc/login.defs")
             if uidmin_def is not None:
                 uidmin = int(uidmin_def.split()[1])
-        except IOError as e:
+        except IOError as _:
             pass
         if uidmin == None:
             uidmin = 100
@@ -690,7 +690,7 @@ class DefaultOSUtil(object):
         if not os.path.isfile(mod_path):
             raise Exception("Can't find module file:{0}".format(mod_path))
 
-        ret, output = shellutil.run_get_output("insmod " + mod_path)
+        ret, _ = shellutil.run_get_output("insmod " + mod_path)
         if ret != 0:
             raise Exception("Error calling insmod for ATAPI CD-ROM driver")
         if not self.is_atapiix_mod_loaded(max_retry=3):
@@ -1209,7 +1209,7 @@ class DefaultOSUtil(object):
                     deviceid = fileutil.read_file(os.path.join(path, vmbus, "device_id"))
                     guid = deviceid.lstrip('{').split('-')
                     if guid[0] == g0 and guid[1] == "000" + ustr(port_id):
-                        for root, dirs, files in os.walk(path + vmbus):
+                        for root, dirs, _ in os.walk(path + vmbus):
                             if root.endswith("/block"):
                                 device = dirs[0]
                                 break

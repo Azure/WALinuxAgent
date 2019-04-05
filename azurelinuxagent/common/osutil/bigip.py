@@ -324,7 +324,7 @@ class BigIpOSUtil(DefaultOSUtil):
         :param port_id:
         :return:
         """
-        for retries in range(1, 100):
+        for _ in range(1, 100):
             # Retry until devices are ready
             if os.path.exists("/sys/bus/vmbus/devices/"):
                 break

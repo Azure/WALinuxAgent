@@ -39,7 +39,7 @@ class NSBSDOSUtil(FreeBSDOSUtil):
             self.resolver = dns.resolver.Resolver()
             servers = []
             cmd = "getconf /usr/Firewall/ConfigFiles/dns Servers | tail -n +2"
-            ret, output = shellutil.run_get_output(cmd)
+            _, output = shellutil.run_get_output(cmd)
             for server in output.split("\n"):
                 if server == '':
                     break
@@ -100,7 +100,7 @@ class NSBSDOSUtil(FreeBSDOSUtil):
         """
         Deploy authorized_key
         """
-        path, thumbprint, value = pubkey
+        _, thumbprint, value = pubkey
 
         #overide parameters
         super(NSBSDOSUtil, self).deploy_ssh_pubkey('admin',
