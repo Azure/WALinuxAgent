@@ -19,8 +19,9 @@ import os
 import time
 
 from azurelinuxagent.common import logger, conf
-from azurelinuxagent.common.cgroups.cgutils import CGroupsException, Cpu, Memory, CGroupsLimits, WRAPPER_CGROUP_NAME, \
-    AGENT_CGROUP_NAME, METRIC_HIERARCHIES, MEMORY_DEFAULT
+from azurelinuxagent.common.cgroups.cgutils import CGroupsException, Cpu, Memory, WRAPPER_CGROUP_NAME, \
+    METRIC_HIERARCHIES, MEMORY_DEFAULT
+from azurelinuxagent.ga.utils.exthandler_utils import AGENT_CGROUP_NAME, CGroupsLimits
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.osutil.default import BASE_CGROUPS
@@ -262,7 +263,7 @@ class CGroups(object):
     def enable():
         CGroups._enabled = True
 
-    def __init__(self, name, path_maker, resource_configuration=None):
+    def __init__(self, name, path_maker, resource_limits=None):
         """
         Construct CGroups object. Create appropriately-named directory for each hierarchy of interest.
 
@@ -278,7 +279,7 @@ class CGroups(object):
 
         self.cgroups = {}
 
-        self.threshold = CGroupsLimits(self.name, resource_configuration)
+        self.threshold = resource_limits
 
         if not self.enabled():
             return
@@ -343,12 +344,12 @@ class CGroups(object):
     @staticmethod
     def _try_rmdir(path):
         """
-        Try to create a directory, recursively. If it already exists as such, do nothing. Raise the appropriate
+        Try to remove a directory, recursively. If it already exists as such, do nothing. Raise the appropriate
         exception should an error occur.
 
         :param path: str
         """
-        if not os.path.isdir(path):
+        if os.path.isdir(path):
             try:
                 os.rmdir(path)
             except (IOError, OSError) as e:
@@ -394,6 +395,10 @@ class CGroups(object):
             if ext in self.name.lower():
                 logger.info('No cgroups limits for {0}'.format(self.name))
                 return
+
+        # If no threshold was set - defaults come from top as well.
+        if not self.threshold:
+            return
 
         cpu_limit = self.threshold.cpu_limit
         mem_limit = self.threshold.memory_limit
@@ -641,9 +646,6 @@ class CGroups(object):
         if not CGroups.enabled():
             return
 
-        if not limit:
-            return
-
         if 'cpu' in self.cgroups:
             total_units = float(self.get_parameter('cpu', 'cpu.cfs_period_us'))
             limit_units = int(self._convert_cpu_limit_to_fraction(limit) * total_units)
@@ -691,7 +693,7 @@ class CGroups(object):
 
         # expected_memory_flags = {"memory_pressure_warning": "low", "memory_oom_kill": "enabled"}
         if 'memory' in self.cgroups:
-            from azurelinuxagent.ga.exthandlers import MEMORY_OOM_KILL_OPTIONS
+            from azurelinuxagent.ga.utils.exthandler_utils import MEMORY_OOM_KILL_OPTIONS
             if memory_flags["memory_oom_kill"] in MEMORY_OOM_KILL_OPTIONS:
 
                 memory_oom_control = self._get_cgroup_file('memory', 'memory.oom_control')

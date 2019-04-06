@@ -79,14 +79,15 @@ class ExtensionOperationError(ExtensionError):
         super(ExtensionOperationError, self).__init__(msg, inner, code)
 
 
-class ExtensionConfigurationError(ExtensionError):
+class ExtensionHandlerConfigurationError(ExtensionError):
     """
-    When failed to configure an extension, either reading the HandlerConfiguration, or configuring the extension
-    requirements for capabilities or cgroups.
+    When failed to configure an extension - when either reading
+    the HandlerConfiguration or validating the extension configurations,
+    or configuring the extension requirements for cgroups.
     """
 
     def __init__(self, msg=None, inner=None, code=-1):
-        super(ExtensionConfigurationError, self).__init__(msg, inner, code)
+        super(ExtensionHandlerConfigurationError, self).__init__(msg, inner, code)
 
 
 class ProvisionError(AgentError):

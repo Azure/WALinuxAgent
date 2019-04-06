@@ -42,7 +42,7 @@ from azurelinuxagent.common.cgroups.cgroups import CGroups, CGroupsTelemetry
 from azurelinuxagent.common.errorstate import ErrorState, ERROR_STATE_DELTA_INSTALL
 from azurelinuxagent.common.event import add_event, WALAEventOperation, elapsed_milliseconds
 from azurelinuxagent.common.exception import ExtensionError, ProtocolError, ProtocolNotFoundError, \
-    ExtensionDownloadError, ExtensionOperationError, ExtensionErrorCodes, ExtensionConfigurationError
+    ExtensionDownloadError, ExtensionOperationError, ExtensionErrorCodes
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol import get_protocol_util
 from azurelinuxagent.common.protocol.restapi import ExtHandlerStatus, \
@@ -57,13 +57,14 @@ from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION, GOAL_STA
     DISTRO_NAME, DISTRO_VERSION, PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO
 
 # HandlerEnvironment.json schema version
+from azurelinuxagent.ga.utils.exthandler_utils import HandlerConfiguration
+
 HANDLER_ENVIRONMENT_VERSION = 1.0
 
 EXTENSION_STATUS_ERROR = 'error'
 EXTENSION_STATUS_SUCCESS = 'success'
 VALID_EXTENSION_STATUS = ['transitioning', 'error', 'success', 'warning']
 EXTENSION_TERMINAL_STATUSES = ['error', 'success']
-MEMORY_OOM_KILL_OPTIONS = ["enabled", "disabled"]
 
 VALID_HANDLER_STATUS = ['Ready', 'NotReady', "Installing", "Unresponsive"]
 
@@ -78,7 +79,6 @@ AGENT_STATUS_FILE = "waagent_status.json"
 
 NUMBER_OF_DOWNLOAD_RETRIES = 5
 
-DEFAULT_CORES_COUNT = -1
 
 def get_traceback(e):
     if sys.version_info[0] == 3:
@@ -876,7 +876,7 @@ class ExtHandlerInstance(object):
     def enable(self):
         self.set_operation(WALAEventOperation.Enable)
         man = self.load_manifest()
-        handler_configuration = self.load_handler_configuration() #azurelinuxagent.ga.exthandlers.ExtHandlerInstance#load_handler_configuration
+        handler_configuration = self.load_handler_configuration()
 
         enable_cmd = man.get_enable_command()
         self.logger.info("Enable extension [{0}]".format(enable_cmd))
@@ -1157,21 +1157,21 @@ class ExtHandlerInstance(object):
                                                env=env,
                                                preexec_fn=pre_exec_function)
                 except OSError as e:
+
                     raise ExtensionOperationError("Failed to launch '{0}': {1}".format(full_path, e.strerror),
                                                   code=extension_error_code)
 
                 try:
-                    resource_config = None
+                    resource_limits = None
                     if handler_configuration:
-                        resource_config = handler_configuration.get_resource_configurations()
-                    cg = CGroups.for_extension(self.ext_handler.name, resource_config)
-                    CGroupsTelemetry.track_extension(self.ext_handler.name, cg, resource_config)
+                        resource_limits = handler_configuration.get_resource_limits()
+                    cg = CGroups.for_extension(self.ext_handler.name, resource_limits)
+                    CGroupsTelemetry.track_extension(self.ext_handler.name, cg, resource_limits)
                 except Exception as e:
                     self.logger.warn("Unable to setup cgroup {0}: {1}".format(self.ext_handler.name, e))
 
                 msg = ExtHandlerInstance._capture_process_output(process, stdout, stderr, cmd, timeout,
                                                                  extension_error_code)
-
                 duration = elapsed_milliseconds(begin_utc)
                 log_msg = "{0}\n{1}".format(cmd, "\n".join([line for line in msg.split('\n') if line != ""]))
                 self.logger.verbose(log_msg)
@@ -1209,32 +1209,36 @@ class ExtHandlerInstance(object):
         time.sleep(1)
 
         return_code = process.wait()
+
         if return_code != 0:
             raise ExtensionError("Non-zero exit code: {0}, {1}\n{2}".format(return_code, cmd, read_output()), code=code)
 
         return read_output()
 
     def load_handler_configuration(self):
-        handler_config = None
         data = None
         config_file = self.get_handler_configuration_file()
+
+        log_msg = None
         try:
+            # No config present - Limits not set now.
+            if not os.path.isfile(config_file):
+                return None
+
             data = json.loads(fileutil.read_file(config_file))
         except (IOError, OSError) as e:
-            self.logger.warn('Failed to load resource manifest file ({0}): {1}'.format(config_file, e.strerror))
+            log_msg = 'Failed to load resource manifest file ({0}): {1}'.format(config_file, e.strerror)
         except ValueError as e:
-            self.logger.warn('Malformed resource manifest file ({0}).'.format(ustr(e)))
+            log_msg = 'Malformed resource manifest file ({0}).'.format(ustr(e))
 
-        try:
-            if data:
-                handler_config = HandlerConfiguration(data)
-        except ExtensionError as e:
-            msg = 'Failed to load resource manifest file: {0}'.format(ustr(e))
-            self.logger.warn(msg)
-            HandlerConfiguration.send_handler_configuration_event(message=msg, is_success=False, log_event=False,
+        # No config present or config json is incorrect.
+        if log_msg:
+            self.logger.warn(log_msg)
+            HandlerConfiguration.send_handler_configuration_event(message=log_msg, is_success=False, log_event=False,
                                                                   operation=WALAEventOperation.HandlerConfiguration)
+            return None
 
-        return handler_config
+        return HandlerConfiguration(handler_config_json=data, name=self.ext_handler.name)
 
     def load_manifest(self):
         man_file = self.get_manifest_file()
@@ -1445,189 +1449,3 @@ class HandlerManifest(object):
         if update_mode is None:
             return True
         return update_mode.lower() == "updatewithinstall"
-
-
-class HandlerConfiguration(object):
-    @staticmethod
-    def send_handler_configuration_event(name=AGENT_NAME, message="", operation=WALAEventOperation.Unknown,
-                                         is_success=True, log_event=True):
-        add_event(name=name, message=message, op=operation, is_success=is_success, log_event=log_event)
-
-    def __init__(self, data):
-        if data is None:
-            raise ExtensionConfigurationError('Malformed handler configuration file.')
-        if "handlerConfiguration" not in data:
-            raise ExtensionConfigurationError('Malformed handler configuration file.')
-        if "linux" not in data['handlerConfiguration']:
-            raise ExtensionConfigurationError('No linux configurations present in HandlerConfiguration')
-
-        self.data = data
-        self.resource_config = None
-        try:
-            self.resource_config = self.get_resource_configurations()
-        except ExtensionConfigurationError as e:
-            logger.warn(ustr(e))
-            HandlerConfiguration.send_handler_configuration_event(message=ustr(e), is_success=False, log_event=False,
-                                                                  operation=WALAEventOperation.HandlerConfiguration)
-
-    def get_name(self):
-        return self.data["name"]
-
-    def get_version(self):
-        return self.data["version"]
-
-    def get_linux_configurations(self):
-        return self.data['handlerConfiguration']['linux']
-
-    def get_resource_configurations(self):
-        if "resources" in self.get_linux_configurations() and (
-                "cpu" in self.get_linux_configurations()["resources"] or
-                "memory" in self.get_linux_configurations()["resources"]):
-            return ExtensionResourcesConfiguration(self.get_linux_configurations()["resources"])
-        else:
-            raise ExtensionConfigurationError("Incorrect resource configuration provided")
-
-
-class ExtensionResourcesConfiguration(HandlerConfiguration):
-    def __init__(self, resource_configuration):
-        self.data = resource_configuration
-        self.cpu_limits_for_extension = self.get_cpu_limits_for_extension()
-        self.memory_limits_for_extension = self.get_memory_limits_for_extension()
-
-    def get_cpu_limits_for_extension(self):
-        try:
-            if "cpu" in self.data:
-                return CpuLimits(self.data["cpu"])
-        except ExtensionConfigurationError as e:
-            logger.warn(ustr(e))
-            HandlerConfiguration.send_handler_configuration_event(message=ustr(e), is_success=False, log_event=False,
-                                                                  operation=WALAEventOperation.HandlerConfiguration)
-        return None
-
-    def get_memory_limits_for_extension(self):
-        try:
-            if "memory" in self.data:
-                return MemoryLimits(self.data["memory"])
-        except ExtensionConfigurationError as e:
-            logger.warn(ustr(e))
-            HandlerConfiguration.send_handler_configuration_event(message="{0}".format(ustr(e)), is_success=False,
-                                                                  log_event=False,
-                                                                  operation=WALAEventOperation.HandlerConfiguration)
-        return None
-
-
-class CpuLimits(object):
-    def __init__(self, cpu_node):
-        self.cpu_limits = []
-        self.cores = []
-
-        for property in cpu_node:
-            # integers and > 0.
-            if "cores" not in property or "limit_percentage" not in property:
-                raise ExtensionConfigurationError("Malformed CPU limit node in HandlerConfiguration")
-            self.cpu_limits.append(CpuLimitInstance(property["cores"], property["limit_percentage"]))
-            self.cores.append(property["cores"])
-
-        if DEFAULT_CORES_COUNT not in self.cores:
-            raise ExtensionConfigurationError("Default CPU limit not set."
-                                              " Core configuration for {0} not present".format(DEFAULT_CORES_COUNT))
-
-        self.cpu_limits = sorted(self.cpu_limits)
-
-    def __str__(self):
-        return self.cpu_limits.__str__()
-
-
-class CpuLimitInstance(object):
-    def __init__(self, cores, limit_percentage):
-        if type(cores) is not int:
-            raise ExtensionConfigurationError(
-                "Incorrect types for CPU values | field - {0}/ value - {1}/ type - {2}".format("cores", cores,
-                                                                                               type(cores)))
-
-        if type(limit_percentage) is not float and type(limit_percentage) is not int:
-            raise ExtensionConfigurationError(
-                "Incorrect types for CPU values | field - {0}/ value - {1}/ type - {2}".format("limit_percentage",
-                                                                                               limit_percentage,
-                                                                                               type(limit_percentage)))
-
-        if cores != DEFAULT_CORES_COUNT and cores < 1:
-            raise ExtensionConfigurationError(
-                "CPU cores value incorrect | field - {0}, {1}/ value - {2}, {3}".format("cores", "limit_percentage",
-                                                                                        cores, limit_percentage))
-
-        if limit_percentage > 100 or limit_percentage < 1:
-            raise ExtensionConfigurationError(
-                "CPU cores limit_percentage out of range | "
-                "field - {0}, {1}/ value - {2}, {3}".format("cores",
-                                                            "limit_percentage",
-                                                            cores,
-                                                            limit_percentage))
-        self.cores = int(cores)
-        self.limit_percentage = float(limit_percentage)
-
-    def __eq__(self, other):
-        return self.cores == other.cores
-
-    def __lt__(self, other):
-        return self.cores < other.cores
-
-    def __gt__(self, other):
-        return self.cores > other.cores
-
-    def __str__(self):
-        return {"cores": self.cores, "limit_percentage": self.limit_percentage}.__str__()
-
-    def __repr__(self):
-        return {"cores": self.cores, "limit_percentage": self.limit_percentage}.__str__()
-
-
-class MemoryLimits(object):
-    def __init__(self, memory_node):
-        if "max_limit_MBs" in memory_node and "max_limit_percentage" in memory_node:
-            self.max_limit_percentage = memory_node.get("max_limit_percentage", None)
-            self.max_limit_MBs = memory_node.get("max_limit_MBs", None)
-
-            if type(self.max_limit_percentage) is not float and type(self.max_limit_percentage) is not int:
-                raise ExtensionConfigurationError(
-                    "Incorrect types for Memory values | field - {0}/ value - {1}/ type - {2}".format(
-                        "max_limit_percentage",
-                        self.max_limit_percentage,
-                        type(self.max_limit_percentage)))
-
-            if type(self.max_limit_MBs) is not float and type(self.max_limit_MBs) is not int:
-                raise ExtensionConfigurationError(
-                    "Incorrect types for Memory values "
-                    "| field - {0}/ value - {1}/ type - {2}".format(
-                        "max_limit_MBs", self.max_limit_MBs, type(self.max_limit_MBs)))
-
-            if self.max_limit_percentage > 100 or self.max_limit_percentage < 1:
-                raise ExtensionConfigurationError(
-                    "Incorrect types for Memory values "
-                    "| field - {0}/ value - {1}/ type - {2}".format(
-                        "max_limit_MBs", self.max_limit_MBs, type(self.max_limit_MBs)))
-        else:
-            raise ExtensionConfigurationError(
-                "Default max memory limit not set. max_limit_MBs: {0}, max_limit_percentage: {1}".format(
-                    memory_node.get("max_limit_MBs", None), memory_node.get("max_limit_percentage", None)))
-
-        self.memory_pressure_warning = memory_node.get("memory_pressure_warning", None)
-        self.memory_oom_kill = None  # default will be set in compute_default for memory flags.
-
-        if "memory_oom_kill" in memory_node:
-            if memory_node["memory_oom_kill"].lower() in MEMORY_OOM_KILL_OPTIONS:
-                self.memory_oom_kill = memory_node["memory_oom_kill"].lower()
-            else:
-                raise ExtensionConfigurationError("Malformed memory_oom_kill flag in HandlerConfiguration")
-
-    def __str__(self):
-        return {"max_limit_MBs": self.max_limit_MBs,
-                "max_limit_percentage": self.max_limit_percentage,
-                "memory_oom_kill": self.memory_oom_kill,
-                "memory_pressure_warning": self.memory_pressure_warning}.__str__()
-
-    def __repr__(self):
-        return {"max_limit_MBs": self.max_limit_MBs,
-                "max_limit_percentage": self.max_limit_percentage,
-                "memory_oom_kill": self.memory_oom_kill,
-                "memory_pressure_warning": self.memory_pressure_warning}.__str__()

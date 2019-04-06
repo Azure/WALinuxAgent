@@ -17,20 +17,12 @@
 import re
 
 from azurelinuxagent.common.osutil import get_osutil
-from azurelinuxagent.common.osutil.default import BASE_CGROUPS
 
 WRAPPER_CGROUP_NAME = "WALinuxAgent"
-AGENT_CGROUP_NAME = "WALinuxAgent"
 METRIC_HIERARCHIES = ['cpu', 'memory']
 MEMORY_DEFAULT = -1
 
 # percentage of a single core
-DEFAULT_CPU_LIMIT_AGENT = 10
-DEFAULT_CPU_LIMIT_EXT = 40
-
-DEFAULT_MEM_LIMIT_MIN_MB_FOR_EXTN = 256  # mb, applies to agent and extensions
-DEFAULT_MEM_LIMIT_MAX_MB_FOR_AGENT = 512  # mb, applies to agent only
-DEFAULT_MEM_LIMIT_PCT_FOR_EXTN = 15  # percent, applies to extensions
 
 re_user_system_times = re.compile('user (\d+)\nsystem (\d+)\n')
 
@@ -152,110 +144,3 @@ class Memory(object):
         """
         usage = self.get_memory_usage()
         return [("Memory", "Total Memory Usage", usage)]
-
-
-class CGroupsLimits(object):
-    def __init__(self, cgroup_name, resource_configuration=None):
-        self.osutil = get_osutil()
-
-        if not cgroup_name or cgroup_name == "":
-            cgroup_name = "Agents+Extensions"
-
-        self.cpu_limit = self.get_cpu_limits(cgroup_name, resource_configuration,
-                                             CGroupsLimits.get_default_cpu_limits)
-        self.memory_limit = self.get_memory_limits(cgroup_name, resource_configuration,
-                                                   CGroupsLimits.get_default_memory_limits)
-        self.memory_flags = self.get_memory_flags(cgroup_name, resource_configuration,
-                                                  CGroupsLimits.get_default_memory_flags)
-
-    def get_cpu_limits(self, name, resource_configuration, compute_default):
-        limit_requested = None
-
-        cpu_limits_requested_by_extn = resource_configuration.get_cpu_limits_for_extension() if resource_configuration \
-            else None
-
-        if cpu_limits_requested_by_extn:
-            cores_count = self.osutil.get_processor_cores()
-            # Sorted by cores. -1 is the default entry - and the first entry.
-            # Sorted inside azurelinuxagent.ga.exthandlers.CpuLimits
-
-            default_limits = cpu_limits_requested_by_extn.cpu_limits[0]
-            if len(cpu_limits_requested_by_extn.cpu_limits) > 1:
-                for i in cpu_limits_requested_by_extn.cpu_limits[1:]:
-                    if cores_count <= i.cores:
-                        limit_requested = i.limit_percentage
-                        break
-
-            if not limit_requested:
-                limit_requested = default_limits.limit_percentage
-
-        return limit_requested if limit_requested else compute_default(name)
-
-    def get_memory_limits(self, name, resource_configuration, compute_default):
-        limit_requested = None
-
-        memory_limits_requested_by_extn = resource_configuration.get_memory_limits_for_extension() if \
-            resource_configuration else None
-
-        if memory_limits_requested_by_extn:
-            total_memory = self.osutil.get_total_mem()
-            limit_requested = max(DEFAULT_MEM_LIMIT_MIN_MB_FOR_EXTN,
-                                  min((memory_limits_requested_by_extn.max_limit_percentage / 100.0) * total_memory,
-                                       memory_limits_requested_by_extn.max_limit_MBs)
-                                  )
-
-        return limit_requested if limit_requested else compute_default(name)
-
-    def get_memory_flags(self, cgroup_name, resource_configuration, get_default_memory_flags):
-        flags_requested = {}
-
-        memory_limits_requested_by_extn = resource_configuration.get_memory_limits_for_extension() if \
-            resource_configuration else None
-
-        if memory_limits_requested_by_extn:
-            if memory_limits_requested_by_extn.memory_pressure_warning:
-                flags_requested["memory_pressure_warning"] = memory_limits_requested_by_extn.memory_pressure_warning
-            else:
-                flags_requested["memory_pressure_warning"] = get_default_memory_flags()["memory_pressure_warning"]
-
-            if memory_limits_requested_by_extn.memory_oom_kill:
-                flags_requested["memory_oom_kill"] = memory_limits_requested_by_extn.memory_oom_kill
-            else:
-                flags_requested["memory_oom_kill"] = get_default_memory_flags()["memory_oom_kill"]
-
-        return flags_requested if bool(flags_requested) else get_default_memory_flags()
-
-    @staticmethod
-    def get_default_cpu_limits(cgroup_name):
-        # default values
-        cpu_limit = DEFAULT_CPU_LIMIT_EXT
-        if AGENT_CGROUP_NAME.lower() in cgroup_name.lower():
-            cpu_limit = DEFAULT_CPU_LIMIT_AGENT
-        return cpu_limit
-
-    @staticmethod
-    def get_default_memory_limits(cgroup_name):
-        os_util = get_osutil()
-
-        # default values
-        mem_limit = max(DEFAULT_MEM_LIMIT_MIN_MB_FOR_EXTN, round(os_util.get_total_mem() * DEFAULT_MEM_LIMIT_PCT_FOR_EXTN / 100, 0))
-
-        # agent values
-        if AGENT_CGROUP_NAME.lower() in cgroup_name.lower():
-            mem_limit = min(DEFAULT_MEM_LIMIT_MAX_MB_FOR_AGENT, mem_limit)
-        return mem_limit
-
-    @staticmethod
-    def get_default_memory_flags():
-        default_memory_flags = {"memory_pressure_warning": None, "memory_oom_kill": "disabled"}
-        return default_memory_flags
-
-    def __str__(self):
-        return {"cpu_limit": self.cpu_limit,
-                "memory_limit": self.memory_limit,
-                "memory_flags": self.memory_flags}.__str__()
-
-    def __repr__(self):
-        return {"cpu_limit": self.cpu_limit,
-                "memory_limit": self.memory_limit,
-                "memory_flags": self.memory_flags}.__str__()
