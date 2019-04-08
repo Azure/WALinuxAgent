@@ -21,7 +21,7 @@ import time
 from azurelinuxagent.common import logger, conf
 from azurelinuxagent.common.cgroups.cgutils import CGroupsException, Cpu, Memory, WRAPPER_CGROUP_NAME, \
     METRIC_HIERARCHIES, MEMORY_DEFAULT
-from azurelinuxagent.ga.utils.exthandler_utils import AGENT_CGROUP_NAME, CGroupsLimits
+from azurelinuxagent.ga.utils.exthandler_utils import AGENT_CGROUP_NAME
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.osutil.default import BASE_CGROUPS

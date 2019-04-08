@@ -28,11 +28,13 @@ MEMORY_OOM_KILL_OPTIONS = ["enabled", "disabled"]
 DEFAULT_CORES_COUNT = -1
 
 AGENT_CGROUP_NAME = "WALinuxAgent"
-DEFAULT_CPU_LIMIT_AGENT = 10
-DEFAULT_CPU_LIMIT_EXT = 40
-DEFAULT_MEM_LIMIT_MIN_MB_FOR_EXTN = 256  # mb, applies to agent and extensions
-DEFAULT_MEM_LIMIT_MAX_MB_FOR_AGENT = 512  # mb, applies to agent only
-DEFAULT_MEM_LIMIT_PCT_FOR_EXTN = 15  # percent, applies to extensions
+DEFAULT_CPU_LIMIT_AGENT = 10.0
+DEFAULT_CPU_LIMIT_EXT = 40.0
+DEFAULT_MEM_LIMIT_MIN_MB_FOR_EXTN = 256.0  # mb, applies to agent and extensions
+DEFAULT_MEM_LIMIT_MAX_MB_FOR_AGENT = 512.0  # mb, applies to agent only
+DEFAULT_MEM_LIMIT_PCT_FOR_EXTN = 15.0  # percent, applies to extensions
+
+CGROUPS_ENFORCE_DEFAULT_LIMITS = False  # Currently, we don't want to enforce defaults as well.
 
 
 class HandlerConfiguration(object):
@@ -64,7 +66,7 @@ class HandlerConfiguration(object):
             except ExtensionHandlerConfigurationError as e:
                 raise e
 
-            if self.resource_config or conf.get_cgroups_enforce_default_limits():
+            if self.resource_config or CGROUPS_ENFORCE_DEFAULT_LIMITS:
                 self.resource_limits = CGroupsLimits(self._name, self.resource_config)
 
         except ExtensionHandlerConfigurationError as e:
@@ -281,7 +283,7 @@ class CGroupsLimits(object):
             total_memory = self.osutil.get_total_mem()
             limit_requested = max(DEFAULT_MEM_LIMIT_MIN_MB_FOR_EXTN,
                                   min((memory_limits_requested_by_extn.max_limit_percentage / 100.0) * total_memory,
-                                       memory_limits_requested_by_extn.max_limit_MBs)
+                                      memory_limits_requested_by_extn.max_limit_MBs)
                                   )
 
         return limit_requested if limit_requested else compute_default(cgroup_name)
