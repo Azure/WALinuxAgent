@@ -17,7 +17,7 @@
 # Requires Python 2.6+ and Openssl 1.0+
 
 
-from azurelinuxagent.common import logger as logger, conf
+from azurelinuxagent.common import logger as logger
 from azurelinuxagent.common.event import WALAEventOperation, add_event
 from azurelinuxagent.common.exception import ExtensionHandlerConfigurationError
 from azurelinuxagent.common.future import ustr
@@ -40,9 +40,15 @@ CGROUPS_ENFORCE_DEFAULT_LIMITS = False  # Currently, we don't want to enforce de
 class HandlerConfiguration(object):
     @staticmethod
     def send_handler_configuration_event(name=AGENT_NAME, message="", operation=WALAEventOperation.Unknown,
-                                         is_success=True, log_event=True):
+                                         is_success=True, log_event=False):
+        if log_event and message:
+            if is_success:
+                logger.info(message)
+            else:
+                logger.warn(message)
+
         if message:
-            add_event(name=name, message=message, op=operation, is_success=is_success, log_event=log_event)
+            add_event(name=name, message=message, op=operation, is_success=is_success, log_event=False)
 
     def __init__(self, handler_config_json, name=None):
         self._data = handler_config_json
@@ -51,15 +57,15 @@ class HandlerConfiguration(object):
         self.resource_limits = None
 
         try:
-            if handler_config_json is None:
+            if self._data is None:
                 raise ExtensionHandlerConfigurationError('Malformed handler configuration file. '
-                                                  'No data present')
-            if "handlerConfiguration" not in handler_config_json:
+                                                         'No data present')
+            if "handlerConfiguration" not in self._data:
                 raise ExtensionHandlerConfigurationError('Malformed handler configuration file. '
-                                                  '"HandlerConfiguration" key not present')
-            if "linux" not in handler_config_json['handlerConfiguration']:
+                                                         '"HandlerConfiguration" key not present')
+            if "linux" not in self._data['handlerConfiguration']:
                 raise ExtensionHandlerConfigurationError('No linux configurations present in '
-                                                  'HandlerConfiguration')
+                                                         'HandlerConfiguration')
 
             try:
                 self.resource_config = ExtensionResourcesConfiguration(self.get_linux_configurations())
@@ -70,9 +76,8 @@ class HandlerConfiguration(object):
                 self.resource_limits = CGroupsLimits(self._name, self.resource_config)
 
         except ExtensionHandlerConfigurationError as e:
-            logger.warn(ustr(e))
-            self.send_handler_configuration_event(message=ustr(e), is_success=False, log_event=False,
-                                                                  operation=WALAEventOperation.HandlerConfiguration)
+            self.send_handler_configuration_event(message=ustr(e), is_success=False, log_event=True,
+                                                  operation=WALAEventOperation.HandlerConfiguration)
 
     def get_name(self):
         return self._data.get("name", None)
@@ -92,23 +97,29 @@ class HandlerConfiguration(object):
 
 class ExtensionResourcesConfiguration(object):
     def __init__(self, resource_configuration):
-        self._data = resource_configuration["resources"]
+        self._data = resource_configuration
         self.cpu_limits = None
         self.memory_limits = None
 
         try:
-            if "cpu" not in self._data and "memory" not in self._data:
-                raise ExtensionHandlerConfigurationError('No "cpu" node present in '
-                                                  'ResourceConfiguration')
+            if "resources" not in self._data:
+                raise ExtensionHandlerConfigurationError('No resource configurations present in '
+                                                         'HandlerConfiguration')
 
-            if "cpu" in self._data:
+            if "cpu" not in self._get_resource_configurations() and "memory" not in self._get_resource_configurations():
+                raise ExtensionHandlerConfigurationError('No "cpu" or "memory" node present in '
+                                                         'ResourceConfiguration. '
+                                                         'Keys passed {0}'.format(self._data.keys))
+
+            if "cpu" in self._get_resource_configurations():
                 self.cpu_limits = CpuLimits(self._data["cpu"])
-            if "memory" in self._data:
+
+            if "memory" in self._get_resource_configurations():
                 self.memory_limits = MemoryLimits(self._data["memory"])
+
         except ExtensionHandlerConfigurationError as e:
-            logger.warn(ustr(e))
             HandlerConfiguration.send_handler_configuration_event(message=ustr(e), is_success=False,
-                                                                  log_event=False,
+                                                                  log_event=True,
                                                                   operation=WALAEventOperation.HandlerConfiguration)
             raise e
 
@@ -117,6 +128,9 @@ class ExtensionResourcesConfiguration(object):
 
     def get_memory_limits_for_extension(self):
         return self.memory_limits
+
+    def _get_resource_configurations(self):
+        return self._data["resources"]
 
 
 class CpuLimits(object):

@@ -1161,10 +1161,11 @@ class ExtHandlerInstance(object):
                     raise ExtensionOperationError("Failed to launch '{0}': {1}".format(full_path, e.strerror),
                                                   code=extension_error_code)
 
+                resource_limits = None
+                if handler_configuration:
+                    resource_limits = handler_configuration.get_resource_limits()
+
                 try:
-                    resource_limits = None
-                    if handler_configuration:
-                        resource_limits = handler_configuration.get_resource_limits()
                     cg = CGroups.for_extension(self.ext_handler.name, resource_limits)
                     CGroupsTelemetry.track_extension(self.ext_handler.name, cg, resource_limits)
                 except Exception as e:
@@ -1233,8 +1234,7 @@ class ExtHandlerInstance(object):
 
         # No config present or config json is incorrect.
         if log_msg:
-            self.logger.warn(log_msg)
-            HandlerConfiguration.send_handler_configuration_event(message=log_msg, is_success=False, log_event=False,
+            HandlerConfiguration.send_handler_configuration_event(message=log_msg, is_success=False, log_event=True,
                                                                   operation=WALAEventOperation.HandlerConfiguration)
             return None
 

@@ -1439,11 +1439,11 @@ class TestExtensionWithCGroupsEnabled(AgentTestCase):
         except Exception:
             page_size = 4096  # Standard Page Size
 
-        # Pyton 2 and 3 handle the sys.maxsize / page_size value differently. Thus causing this issue.
-        python_correction = 1 if sys.version_info[0] == 3 else 0
-
-        ## returning standard memory value, cpu.cfs_quota_us, cpu.cfs_period_us and memory.oom_control_file
-        return int((sys.maxsize / page_size) - python_correction) * page_size, \
+        # returning standard memory value,
+        # cpu.cfs_quota_us,
+        # cpu.cfs_period_us and
+        # memory.oom_control_file
+        return (sys.maxsize // page_size) * page_size, \
                -1, \
                100000, \
                TestExtensionWithCGroupsEnabled._cgroup_translate_into_oom_flags("enabled")
@@ -1494,9 +1494,9 @@ class TestExtensionWithCGroupsEnabled(AgentTestCase):
         memory_oom_control = "memory.oom_control"
 
         # validating the actual limits set in the CGroup files.
-        for i in exthandlers_handler.ext_handlers.extHandlers:
-            ehi = ExtHandlerInstance(i, protocol)
-            test_cgroup = CGroups.for_extension(i.name)
+        for extHandler in exthandlers_handler.ext_handlers.extHandlers:
+            ehi = ExtHandlerInstance(extHandler, protocol)
+            test_cgroup = CGroups.for_extension(extHandler.name)
 
             resource_config = None
             if ehi.load_handler_configuration():
@@ -1504,10 +1504,10 @@ class TestExtensionWithCGroupsEnabled(AgentTestCase):
 
             # Getting expected values ready
             if no_limits_set:
-                memory_limit_expected, cpu_limit_expected, cpu_period_cfs_expected, oom_flags_expected= \
+                memory_limit_expected, cpu_limit_expected, cpu_period_cfs_expected, oom_flags_expected = \
                     self.get_default_cgroup_properties()
             else:
-                cgroup_limits_expected = CGroupsLimits(i.name, resource_config)
+                cgroup_limits_expected = CGroupsLimits(extHandler.name, resource_config)
                 memory_limit_expected = CGroups._format_memory_value(unit='megabytes',
                                                                      limit=cgroup_limits_expected.memory_limit)
 
@@ -1517,8 +1517,8 @@ class TestExtensionWithCGroupsEnabled(AgentTestCase):
                 oom_flags_expected = self._cgroup_translate_into_oom_flags(cgroup_limits_expected.memory_flags["memory_oom_kill"])
 
             # Getting actual values ready
-            cpu_cgroup = CGroups._construct_custom_path_for_hierarchy("cpu", i.name)
-            memory_cgroup = CGroups._construct_custom_path_for_hierarchy("memory", i.name)
+            cpu_cgroup = CGroups._construct_custom_path_for_hierarchy("cpu", extHandler.name)
+            memory_cgroup = CGroups._construct_custom_path_for_hierarchy("memory", extHandler.name)
 
             memory_limit_filepath = os.path.join(memory_cgroup, limit_in_bytes)
             cpu_quota_cfs_filepath = os.path.join(cpu_cgroup, quota)
