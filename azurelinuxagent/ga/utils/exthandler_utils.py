@@ -70,12 +70,16 @@ class HandlerConfiguration(object):
             try:
                 self.resource_config = ExtensionResourcesConfiguration(self.get_linux_configurations())
             except ExtensionHandlerConfigurationError as e:
-                raise e
+                self.send_handler_configuration_event(message=ustr(e), is_success=False, log_event=True,
+                                                      operation=WALAEventOperation.HandlerConfiguration)
 
             if self.resource_config or CGROUPS_ENFORCE_DEFAULT_LIMITS:
                 self.resource_limits = CGroupsLimits(self._name, self.resource_config)
 
         except ExtensionHandlerConfigurationError as e:
+            self.send_handler_configuration_event(message=ustr(e), is_success=False, log_event=True,
+                                                  operation=WALAEventOperation.HandlerConfiguration)
+        except Exception as e: # Catch all to make sure no other HandlerConfiguratio related issues are uncaught.
             self.send_handler_configuration_event(message=ustr(e), is_success=False, log_event=True,
                                                   operation=WALAEventOperation.HandlerConfiguration)
 
@@ -109,18 +113,15 @@ class ExtensionResourcesConfiguration(object):
             if "cpu" not in self._get_resource_configurations() and "memory" not in self._get_resource_configurations():
                 raise ExtensionHandlerConfigurationError('No "cpu" or "memory" node present in '
                                                          'ResourceConfiguration. '
-                                                         'Keys passed {0}'.format(self._data.keys))
+                                                         'Keys passed {0}'.format(self._get_resource_configurations().keys))
 
             if "cpu" in self._get_resource_configurations():
-                self.cpu_limits = CpuLimits(self._data["cpu"])
+                self.cpu_limits = CpuLimits(self._get_resource_configurations()["cpu"])
 
             if "memory" in self._get_resource_configurations():
-                self.memory_limits = MemoryLimits(self._data["memory"])
+                self.memory_limits = MemoryLimits(self._get_resource_configurations()["memory"])
 
         except ExtensionHandlerConfigurationError as e:
-            HandlerConfiguration.send_handler_configuration_event(message=ustr(e), is_success=False,
-                                                                  log_event=True,
-                                                                  operation=WALAEventOperation.HandlerConfiguration)
             raise e
 
     def get_cpu_limits_for_extension(self):
@@ -138,16 +139,20 @@ class CpuLimits(object):
         self.cpu_limits = []
         self.cores = []
 
-        for cpu_info in cpu_node:
-            # integers and > 0.
-            if "cores" not in cpu_info or "limit_percentage" not in cpu_info:
-                raise ExtensionHandlerConfigurationError("Malformed CPU limit node in HandlerConfiguration")
-            self.cpu_limits.append(CpuLimitInstance(cpu_info["cores"], cpu_info["limit_percentage"]))
-            self.cores.append(cpu_info["cores"])
+        if len(cpu_node) > 0:
+            for cpu_info in cpu_node:
+                # integers and > 0.
+                if "cores" not in cpu_info or "limit_percentage" not in cpu_info:
+                    raise ExtensionHandlerConfigurationError("Malformed CPU limit node in HandlerConfiguration")
+                self.cpu_limits.append(CpuLimitInstance(cpu_info["cores"], cpu_info["limit_percentage"]))
+                self.cores.append(cpu_info["cores"])
 
-        if DEFAULT_CORES_COUNT not in self.cores:
-            raise ExtensionHandlerConfigurationError("Default CPU limit not set."
-                                              " Core configuration for {0} not present".format(DEFAULT_CORES_COUNT))
+            if DEFAULT_CORES_COUNT not in self.cores:
+                raise ExtensionHandlerConfigurationError("Default CPU limit not set."
+                                                         " Core configuration for {0} not present".format(
+                    DEFAULT_CORES_COUNT))
+        else:
+            raise ExtensionHandlerConfigurationError("No CPU requirements passed, but CPU node defined.")
 
         self.cpu_limits = sorted(self.cpu_limits)
 

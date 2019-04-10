@@ -633,7 +633,7 @@ class CGroups(object):
             logger.error("Exception while attempting to read {0}: {1}".format(parameter_filename, ustr(e)))
         return result
 
-    def set_cpu_limit(self, limit=None):
+    def set_cpu_limit(self, limit):
         """
         Limit this cgroup to a percentage of a single core. limit=10 means 10% of one core; 150 means 150%, which
         is useful only in multi-core systems.
@@ -680,7 +680,7 @@ class CGroups(object):
                 value = int(limit * units[unit])
         return value
 
-    def set_memory_limit(self, limit=None, unit='megabytes'):
+    def set_memory_limit(self, limit, unit='megabytes'):
         if 'memory' in self.cgroups:
             value = self._format_memory_value(unit, limit)
             memory_limit_file = self._get_cgroup_file('memory', 'memory.limit_in_bytes')
