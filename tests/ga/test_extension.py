@@ -1418,7 +1418,8 @@ class TestExtensionWithCGroupsEnabled(AgentTestCase):
     @staticmethod
     def _cleanup_cgroups(cgroup):
         try:
-            cgroup.remove_cgroup()
+            for cgroup_hierarchy in cgroup.cgroups.items():
+                CGroups._try_rmdir(cgroup_hierarchy[1])
         except Exception as e:
             logger.info(ustr(e))
 
@@ -1671,10 +1672,11 @@ class TestExtensionWithCGroupsEnabled(AgentTestCase):
         self._assert_cgroup_limits(exthandlers_handler, protocol, limits_set_expected=False)
 
     @patch("azurelinuxagent.ga.utils.exthandler_utils.CGROUPS_ENFORCE_DEFAULT_LIMITS", return_value=True)
+    @patch("azurelinuxagent.ga.exthandlers.CGROUPS_ENFORCE_DEFAULT_LIMITS", return_value=True)
     @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_total_mem")
     @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_processor_cores")
     def test_ext_handler_with_no_limits_passed_defaults_set(self, patch_get_processor_cores, patch_get_total_mem,
-                                               patch_cgroups_enforce_defaults, *args):
+                                               patch_cgroups_enforce_defaults, patch_cgroups_enforce_defaults2, *args):
         ### Configuration
         ### RAM - 1024 MB
         ### # of cores - 8
@@ -1689,7 +1691,7 @@ class TestExtensionWithCGroupsEnabled(AgentTestCase):
         exthandlers_handler.run()
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
         self._assert_ext_status(protocol.report_ext_status, "success", 0)
-        self._assert_cgroup_limits(exthandlers_handler, protocol, limits_set_expected=False)
+        self._assert_cgroup_limits(exthandlers_handler, protocol, limits_set_expected=True)
 
     @classmethod
     def tearDownClass(cls):

@@ -42,7 +42,7 @@ from azurelinuxagent.common.cgroups.cgroups import CGroups, CGroupsTelemetry
 from azurelinuxagent.common.errorstate import ErrorState, ERROR_STATE_DELTA_INSTALL
 from azurelinuxagent.common.event import add_event, WALAEventOperation, elapsed_milliseconds
 from azurelinuxagent.common.exception import ExtensionError, ProtocolError, ProtocolNotFoundError, \
-    ExtensionDownloadError, ExtensionOperationError, ExtensionErrorCodes
+    ExtensionDownloadError, ExtensionOperationError, ExtensionErrorCodes, ExtensionHandlerConfigurationError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol import get_protocol_util
 from azurelinuxagent.common.protocol.restapi import ExtHandlerStatus, \
@@ -57,7 +57,7 @@ from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION, GOAL_STA
     DISTRO_NAME, DISTRO_VERSION, PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO
 
 # HandlerEnvironment.json schema version
-from azurelinuxagent.ga.utils.exthandler_utils import HandlerConfiguration
+from azurelinuxagent.ga.utils.exthandler_utils import HandlerConfiguration, CGROUPS_ENFORCE_DEFAULT_LIMITS
 
 HANDLER_ENVIRONMENT_VERSION = 1.0
 
@@ -1222,17 +1222,21 @@ class ExtHandlerInstance(object):
 
         log_msg = None
         try:
-            # No config present - Limits not set now.
+            # No config present - Limits not set now. Check defaults
             if not os.path.isfile(config_file):
+                if CGROUPS_ENFORCE_DEFAULT_LIMITS:
+                    raise ExtensionHandlerConfigurationError()
                 return None
 
             data = json.loads(fileutil.read_file(config_file))
         except (IOError, OSError) as e:
+            # No config present or config json is incorrect.
             log_msg = 'Failed to load resource manifest file ({0}): {1}'.format(config_file, e.strerror)
         except ValueError as e:
             log_msg = 'Malformed resource manifest file ({0}).'.format(ustr(e))
+        except ExtensionHandlerConfigurationError:
+            pass
 
-        # No config present or config json is incorrect.
         if log_msg:
             HandlerConfiguration.send_handler_configuration_event(message=log_msg, is_success=False, log_event=True,
                                                                   operation=WALAEventOperation.HandlerConfiguration)

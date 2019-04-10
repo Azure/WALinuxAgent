@@ -73,15 +73,15 @@ class HandlerConfiguration(object):
                 self.send_handler_configuration_event(message=ustr(e), is_success=False, log_event=True,
                                                       operation=WALAEventOperation.HandlerConfiguration)
 
-            if self.resource_config or CGROUPS_ENFORCE_DEFAULT_LIMITS:
-                self.resource_limits = CGroupsLimits(self._name, self.resource_config)
-
         except ExtensionHandlerConfigurationError as e:
             self.send_handler_configuration_event(message=ustr(e), is_success=False, log_event=True,
                                                   operation=WALAEventOperation.HandlerConfiguration)
-        except Exception as e: # Catch all to make sure no other HandlerConfiguratio related issues are uncaught.
+        except Exception as e:  # Catch all to make sure no other HandlerConfiguratio related issues are uncaught.
             self.send_handler_configuration_event(message=ustr(e), is_success=False, log_event=True,
                                                   operation=WALAEventOperation.HandlerConfiguration)
+
+        if self.resource_config or CGROUPS_ENFORCE_DEFAULT_LIMITS:
+            self.resource_limits = CGroupsLimits(self._name, self.resource_config)
 
     def get_name(self):
         return self._data.get("name", None)

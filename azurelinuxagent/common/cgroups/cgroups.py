@@ -712,7 +712,3 @@ class CGroups(object):
             # fileutil.write_file(memory_limit_file, '{0}\n'.format(value))
         else:
             raise CGroupsException("Memory hierarchy not available in this cgroup")
-
-    def remove_cgroup(self):
-        for cgroup_hierarchy in self.cgroups.items():
-            self._try_rmdir(cgroup_hierarchy[1])
