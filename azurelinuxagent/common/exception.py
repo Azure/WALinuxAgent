@@ -80,6 +80,9 @@ class ExtensionOperationError(ExtensionError):
 
 
 class ExtensionHandlerConfigurationError(ExtensionError):
+    """
+    When failed to get a valid HandlerConfiguration from the extension.
+    """
     def __init__(self, msg=None, inner=None, code=-1):
         super(ExtensionHandlerConfigurationError, self).__init__(msg, inner, code)
 
