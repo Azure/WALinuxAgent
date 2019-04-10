@@ -82,7 +82,7 @@ class ExtensionOperationError(ExtensionError):
 class ExtensionHandlerConfigurationError(ExtensionError):
     """
     When failed to get valid configurations from the extension - when either reading the HandlerConfiguration or
-    validating the extension configurations values.
+    validating the extension configuration values.
     """
 
     def __init__(self, msg=None, inner=None, code=-1):

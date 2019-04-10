@@ -1242,6 +1242,8 @@ class TestHandlerConfiguration(ExtensionTestCase):
             self.assertEqual(handler_config, None)
             self.assertEqual(patch_send_handler_configuration_event.call_count, 1)
 
+        # Resetting the count
+        patch_send_handler_configuration_event.call_count = 0
         with patch(
                 "azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_handler_configuration_file") as \
                 patch_get_handler_configuration_file:
@@ -1249,4 +1251,4 @@ class TestHandlerConfiguration(ExtensionTestCase):
                 "ext/SampleInvalidButCorrectJsonHandlerConfiguration.json")
             handler_config = ext_handler_i.load_handler_configuration()
             self.assertNotEqual(handler_config, None)
-            self.assertEqual(patch_send_handler_configuration_event.call_count, 3)
+            self.assertEqual(patch_send_handler_configuration_event.call_count, 1)
