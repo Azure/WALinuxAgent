@@ -19,16 +19,16 @@ import datetime
 import json
 import os
 import platform
-import time
 import threading
+import time
 import traceback
 import uuid
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
-from azurelinuxagent.common.errorstate import ErrorState
-
+import azurelinuxagent.common.utils.networkutil as networkutil
 from azurelinuxagent.common.cgroups.cgroups import CGroups, CGroupsTelemetry
+from azurelinuxagent.common.errorstate import ErrorState
 from azurelinuxagent.common.event import add_event, report_metric, WALAEventOperation
 from azurelinuxagent.common.exception import EventError, ProtocolError, OSUtilError, HttpError
 from azurelinuxagent.common.future import ustr
@@ -40,12 +40,11 @@ from azurelinuxagent.common.protocol.restapi import TelemetryEventParam, \
     TelemetryEventList, \
     TelemetryEvent, \
     set_properties
-import azurelinuxagent.common.utils.networkutil as networkutil
 from azurelinuxagent.common.utils.restutil import IOErrorCounter
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, getattrib, hash_strings
 from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_VERSION, \
-    DISTRO_CODE_NAME, AGENT_LONG_VERSION, \
-    AGENT_NAME, CURRENT_AGENT, CURRENT_VERSION
+    DISTRO_CODE_NAME, AGENT_NAME, CURRENT_AGENT, CURRENT_VERSION
+from azurelinuxagent.ga.utils.exthandler_utils import CGroupsLimits
 
 
 def parse_event(data_str):
@@ -427,18 +426,18 @@ class MonitorHandler(object):
             try:
                 metric_reported, metric_threshold = CGroupsTelemetry.collect_all_tracked()
                 for cgroup_name, metrics in metric_reported.items():
-                    thresholds = metric_threshold[cgroup_name]
-
                     for metric_group, metric_name, value in metrics:
                         if value > 0:
                             report_metric(metric_group, metric_name, cgroup_name, value)
 
                         if metric_group == "Memory":
                             # Memory is collected in bytes, and limit is set in megabytes.
-                            if value >= CGroups._format_memory_value('megabytes', thresholds.memory_limit):
+                            if value >= CGroups._format_memory_value('megabytes',
+                                                                     CGroupsLimits.get_default_memory_limits(
+                                                                             cgroup_name)):
                                 msg = "CGroup {0}: Crossed the Memory Threshold. " \
                                       "Current Value: {1} bytes, Threshold: {2} megabytes." \
-                                       .format(cgroup_name, value, thresholds.memory_limit)
+                                       .format(cgroup_name, value, CGroupsLimits.get_default_memory_limits(cgroup_name))
 
                                 logger.warn(msg)
                                 add_event(name=AGENT_NAME,
@@ -449,10 +448,18 @@ class MonitorHandler(object):
                                           log_event=True)
 
                         if metric_group == "Process":
-                            if value >= thresholds.cpu_limit:
+                            # value here is calculated across all the cores and not normalized for a single core.
+                            # We pass the limits normalized to the capacity of the whole machine.
+                            # Thus, we need to normalized the measured value to match the limit
+                            #
+                            # Check the usage here "azurelinuxagent.common.cgroups.cgutils.Cpu#get_cpu_percent"
+                            normalized_value = value / self.osutil.get_processor_cores()
+
+                            if normalized_value >= CGroupsLimits.get_default_cpu_limits(cgroup_name):
                                 msg = "CGroup {0}: Crossed the Processor Threshold. " \
                                       "Current Value: {1}, Threshold: {2}." \
-                                       .format(cgroup_name, value, thresholds.cpu_limit)
+                                    .format(cgroup_name, normalized_value,
+                                            CGroupsLimits.get_default_cpu_limits(cgroup_name))
 
                                 logger.warn(msg)
                                 add_event(name=AGENT_NAME,

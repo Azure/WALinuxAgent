@@ -339,7 +339,8 @@ class CGroupsLimits(object):
         os_util = get_osutil()
 
         # default values
-        mem_limit = max(DEFAULT_MEM_LIMIT_MIN_MB_FOR_EXTN, round(os_util.get_total_mem() * DEFAULT_MEM_LIMIT_PCT_FOR_EXTN / 100, 0))
+        mem_limit = max(DEFAULT_MEM_LIMIT_MIN_MB_FOR_EXTN,
+                        round(os_util.get_total_mem() * DEFAULT_MEM_LIMIT_PCT_FOR_EXTN / 100, 0))
 
         # agent values
         if AGENT_CGROUP_NAME.lower() in cgroup_name.lower():
