@@ -413,6 +413,10 @@ class MonitorHandler(object):
             logger.verbose(traceback.format_exc())
 
     def send_cgroup_telemetry(self):
+        if not self.protocol.supports_telemetry:
+            # If the protocol that is being used does not support telemetry, short-circuit.
+            return
+ 
         if self.last_cgroup_telemetry is None:
             self.last_cgroup_telemetry = datetime.datetime.utcnow()
 
