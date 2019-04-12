@@ -148,6 +148,10 @@ class MetadataProtocol(Protocol):
         # Metadata protocol does not support overprovisioning
         return False
 
+    def supports_telemetry(self):
+        # Metadata protocol does not support telemetry
+        return False
+
     def detect(self):
         self.get_vminfo()
         trans_prv_file = os.path.join(conf.get_lib_dir(),

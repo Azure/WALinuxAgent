@@ -361,3 +361,6 @@ class Protocol(DataContract):
 
     def supports_overprovisioning(self):
         return True
+
+    def supports_telemetry(self):
+        return True
