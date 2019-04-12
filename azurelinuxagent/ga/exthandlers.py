@@ -921,7 +921,15 @@ class ExtHandlerInstance(object):
             if os.path.isdir(base_dir):
                 self.logger.info("Remove extension handler directory: {0}",
                                  base_dir)
-                shutil.rmtree(base_dir)
+
+                # some extensions uninstall asynchronously so ignore error 2 while removing them
+                def on_rmtree_error(_, __, exc_info):
+                    _, exception, _ = exc_info
+                    if not isinstance(exception,
+                                      OSError) or exception.errno != 2:  # [Errno 2] No such file or directory
+                        raise exception
+
+                shutil.rmtree(base_dir, onerror=on_rmtree_error)
         except IOError as e:
             message = "Failed to remove extension handler directory: {0}".format(e)
             self.report_event(message=message, is_success=False)
