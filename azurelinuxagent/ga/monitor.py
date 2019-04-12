@@ -412,7 +412,7 @@ class MonitorHandler(object):
             logger.warn("Monitor: cgroups not initialized: {0}", ustr(e))
             logger.verbose(traceback.format_exc())
 
-    def send_cgroup_telemetry(self):
+    def send_cgroup_telemetry(self): 
         if self.last_cgroup_telemetry is None:
             self.last_cgroup_telemetry = datetime.datetime.utcnow()
 
@@ -456,7 +456,9 @@ class MonitorHandler(object):
 
             # Look for extension cgroups we're not already tracking and track them
             try:
-                CGroupsTelemetry.update_tracked(self.protocol.client.get_current_handlers())
+                if self.protocol.supports_telemetry:
+                    # Only emit if the underlying protocol supports telemetry
+                    CGroupsTelemetry.update_tracked(self.protocol.client.get_current_handlers())
             except Exception as e:
                 logger.warn("Monitor: failed to update cgroups tracked extensions: {0}", ustr(e))
                 logger.verbose(traceback.format_exc())
