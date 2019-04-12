@@ -402,6 +402,40 @@ class TestWireProtocol(AgentTestCase):
                     self.assertEqual(patch_fetch.call_args_list[0][0][0], uri1.uri)
                     self.assertEqual(patch_fetch.call_args_list[1][0][0], host_uri)
 
+    def test_fetch_manifest_manifest_uri(self, *args):
+        uri1 = ExtHandlerVersionUri()
+        uri1.uri = 'ext_uri'
+        uris = DataContractList(ExtHandlerVersionUri)
+        uris.append(uri1)
+        host_uri = 'host_uri'
+        mock_host = HostPluginProtocol(host_uri,
+                                       'container_id',
+                                       'role_config')
+        client = WireProtocol(wireserver_url).client
+        manifest_return = "manifest.xml"
+
+        with patch.object(WireClient,
+                          "get_host_plugin",
+                          return_value=mock_host):
+            with patch.object(HostPluginProtocol,
+                              "get_artifact_request",
+                              return_value=[host_uri, {}]):
+                with patch.object(WireClient,
+                                  "fetch",
+                                  return_value=manifest_return) as patch_fetch:
+                    HostPluginProtocol.set_default_channel(False)
+                    self.assertEqual(client.fetch_manifest(uris), manifest_return)
+                    self.assertEqual(patch_fetch.call_count, 1)
+                    self.assertEqual(mock_host.manifest_uri, uri1.uri)
+
+                with patch.object(WireClient,
+                                  "fetch") as patch_fetch:
+                    patch_fetch.side_effect = [None, manifest_return]
+                    self.assertEqual(client.fetch_manifest(uris), manifest_return)
+                    self.assertEqual(patch_fetch.call_count, 2)
+                    self.assertEqual(mock_host.manifest_uri, uri1.uri)
+                    self.assertTrue(HostPluginProtocol.is_default_channel())
+
     def test_get_in_vm_artifacts_profile_host_ga_plugin(self, *args):
         wire_protocol_client = WireProtocol(wireserver_url).client
         wire_protocol_client.ext_conf = ExtensionsConfig(None)
