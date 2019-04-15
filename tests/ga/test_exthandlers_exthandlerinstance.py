@@ -33,30 +33,6 @@ class ExtHandlerInstanceTestCase(AgentTestCase):
 
         self.assertFalse(os.path.exists(self.extension_directory))
 
-    def test_rm_ext_handler_dir_should_report_an_event_if_an_error_occurrs_while_deleting_the_extension_directory(self):
-        extension_directory = os.path.join(self.tmp_dir, "extension_directory")
-        os.mkdir(extension_directory)
-        os.mknod(os.path.join(extension_directory, "extension_file1"))
-        os.mknod(os.path.join(extension_directory, "extension_file2"))
-        os.mknod(os.path.join(extension_directory, "extension_file3"))
-
-        original_remove = shutil.os.remove
-
-        def mock_remove(path):
-            if path.endswith("extension_file2"):
-                mock_remove.exception_raised = True
-                raise IOError("A mocked error")
-            original_remove(path)
-
-        with patch.object(shutil.os, "remove", mock_remove) as mock_remove:
-            with patch.object(self.ext_handler_instance, "report_event") as mock_report_event:
-                self.ext_handler_instance.rm_ext_handler_dir()
-
-        args, kwargs = mock_report_event.call_args
-        self.assertTrue("A mocked error" in kwargs["message"])
-
-        self.assertTrue(mock_remove.exception_raised)  # verify the mock was actually called
-
     def test_rm_ext_handler_dir_should_not_report_an_event_if_the_extension_directory_does_not_exist(self):
         if os.path.exists(self.extension_directory):
             os.rmdir(self.extension_directory)
@@ -66,30 +42,68 @@ class ExtHandlerInstanceTestCase(AgentTestCase):
 
         mock_report_event.assert_not_called()
 
-    def test_rm_ext_handler_dir_should_not_report_an_event_if_a_child_is_removed_asynchronously(self):
+    def test_rm_ext_handler_dir_should_not_report_an_event_if_a_child_is_removed_asynchronously_while_deleting_the_extension_directory(self):
         os.mkdir(self.extension_directory)
         os.mknod(os.path.join(self.extension_directory, "extension_file1"))
         os.mknod(os.path.join(self.extension_directory, "extension_file2"))
         os.mknod(os.path.join(self.extension_directory, "extension_file3"))
 
+        #
         # Some extensions uninstall asynchronously and the files we are trying to remove may be removed
         # while shutil.rmtree is traversing the extension's directory. Mock this by deleting a file
         # twice (the second call will produce "[Errno 2] No such file or directory", which should not be
         # reported as a telemetry event.
-        original_remove = shutil.os.remove
+        # In order to mock this, we need to know that rm_ext_handler_dir invokes Pyhon's shutil.rmtree,
+        # which in turn invokes os.unlink (Python 3) or os.remove (Python 2)
+        #
+        remove_api_name = "unlink" if sys.version_info >= (3, 0) else "remove"
 
-        def mock_remove(path):
+        original_remove_api = getattr(shutil.os, remove_api_name)
+
+        extension_directory = self.extension_directory
+
+        def mock_remove(path, dir_fd=None):
+            if dir_fd is not None:  # path is relative, make it absolute
+                path = os.path.join(extension_directory, path)
+
             if path.endswith("extension_file2"):
-                original_remove(path)
+                original_remove_api(path)
                 mock_remove.file_deleted_asynchronously = True
-            original_remove(path)
+            original_remove_api(path)
 
-        with patch.object(shutil.os, "remove", mock_remove) as mock_remove:
+        mock_remove.file_deleted_asynchronously = False
+
+        with patch.object(shutil.os, remove_api_name, mock_remove):
             with patch.object(self.ext_handler_instance, "report_event") as mock_report_event:
                 self.ext_handler_instance.rm_ext_handler_dir()
 
         mock_report_event.assert_not_called()
 
+        # The next 2 asserts are checks on the mock itself, in case the implementation of rm_ext_handler_dir changes (mocks may need to be updated then)
         self.assertTrue(mock_remove.file_deleted_asynchronously)  # verify the mock was actually called
         self.assertFalse(os.path.exists(self.extension_directory))  # verify the error produced by the mock did not prevent the deletion
+
+    def test_rm_ext_handler_dir_should_report_an_event_if_an_error_occurs_while_deleting_the_extension_directory(self):
+        os.mkdir(self.extension_directory)
+        os.mknod(os.path.join(self.extension_directory, "extension_file1"))
+        os.mknod(os.path.join(self.extension_directory, "extension_file2"))
+        os.mknod(os.path.join(self.extension_directory, "extension_file3"))
+
+        # The mock below relies on the knowledge that rm_ext_handler_dir invokes Pyhon's shutil.rmtree,
+        # which in turn invokes os.unlink (Python 3) or os.remove (Python 2)
+        remove_api_name = "unlink" if sys.version_info >= (3, 0) else "remove"
+
+        original_remove_api = getattr(shutil.os, remove_api_name)
+
+        def mock_remove(path, dir_fd=None):
+            if path.endswith("extension_file2"):
+                raise IOError("A mocked error")
+            original_remove_api(path)
+
+        with patch.object(shutil.os, remove_api_name, mock_remove):
+            with patch.object(self.ext_handler_instance, "report_event") as mock_report_event:
+                self.ext_handler_instance.rm_ext_handler_dir()
+
+        args, kwargs = mock_report_event.call_args
+        self.assertTrue("A mocked error" in kwargs["message"])
 
