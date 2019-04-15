@@ -225,7 +225,8 @@ class EventLogger(object):
                 hfile.write(data.encode("utf-8"))
             os.rename(filename + ".tmp", filename + ".tld")
         except IOError as e:
-            raise EventError("Failed to write events to file:{0}", e)
+            msg = "Failed to write events to file:{0}".format(e)
+            raise EventError(msg)
 
     def reset_periodic(self):
         self.periodic_events = {}
