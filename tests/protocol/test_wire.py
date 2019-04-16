@@ -420,16 +420,16 @@ class TestWireProtocol(AgentTestCase):
             with patch.object(HostPluginProtocol,
                               "get_artifact_request",
                               return_value=[host_uri, {}]):
-                with patch.object(WireClient,
-                                  "fetch",
-                                  return_value=manifest_return) as patch_fetch:
+
+                # First fetch works (direct download works)
+                with patch.object(WireClient, "fetch", return_value=manifest_return) as patch_fetch:
                     HostPluginProtocol.set_default_channel(False)
                     self.assertEqual(client.fetch_manifest(uris), manifest_return)
                     self.assertEqual(patch_fetch.call_count, 1)
                     self.assertEqual(mock_host.manifest_uri, uri1.uri)
 
-                with patch.object(WireClient,
-                                  "fetch") as patch_fetch:
+                # First fetch fails, 2nd fetch works (HostGA)
+                with patch.object(WireClient, "fetch") as patch_fetch:
                     patch_fetch.side_effect = [None, manifest_return]
                     self.assertEqual(client.fetch_manifest(uris), manifest_return)
                     self.assertEqual(patch_fetch.call_count, 2)
