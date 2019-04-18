@@ -402,19 +402,14 @@ class TestWireProtocol(AgentTestCase):
                     self.assertEqual(patch_fetch.call_args_list[0][0][0], uri1.uri)
                     self.assertEqual(patch_fetch.call_args_list[1][0][0], host_uri)
 
-<<<<<<< HEAD
-    # This test checks if the manifest_uri variable is set in the host object of WireClient
+# This test checks if the manifest_uri variable is set in the host object of WireClient
     # This variable is used when we make /extensionArtifact API calls to the HostGA
     def test_fetch_manifest_ensure_manifest_uri_is_set(self, *args):
-=======
-    def test_fetch_manifest_manifest_uri(self, *args):
->>>>>>> Added a unit test to check if the manifest is being set for both cases - when it was downloaded directly or through HostGA
         uri1 = ExtHandlerVersionUri()
         uri1.uri = 'ext_uri'
         uris = DataContractList(ExtHandlerVersionUri)
         uris.append(uri1)
         host_uri = 'host_uri'
-<<<<<<< HEAD
         mock_host = HostPluginProtocol(host_uri, 'container_id', 'role_config')
         client = WireProtocol(wireserver_url).client
         manifest_return = "manifest.xml"
@@ -437,35 +432,6 @@ class TestWireProtocol(AgentTestCase):
                 self.assertEqual(patch_fetch.call_count, 2)
                 self.assertEqual(mock_host.manifest_uri, uri1.uri)
                 self.assertTrue(HostPluginProtocol.is_default_channel())
-=======
-        mock_host = HostPluginProtocol(host_uri,
-                                       'container_id',
-                                       'role_config')
-        client = WireProtocol(wireserver_url).client
-        manifest_return = "manifest.xml"
-
-        with patch.object(WireClient,
-                          "get_host_plugin",
-                          return_value=mock_host):
-            with patch.object(HostPluginProtocol,
-                              "get_artifact_request",
-                              return_value=[host_uri, {}]):
-
-                # First fetch works (direct download works)
-                with patch.object(WireClient, "fetch", return_value=manifest_return) as patch_fetch:
-                    self.assertEqual(client.fetch_manifest(uris), manifest_return)
-                    self.assertEqual(patch_fetch.call_count, 1)
-                    self.assertEqual(mock_host.manifest_uri, uri1.uri)
-
-                # First fetch fails, 2nd fetch works (HostGA)
-                with patch.object(WireClient, "fetch") as patch_fetch:
-                    patch_fetch.side_effect = [None, manifest_return]
-                    self.assertEqual(client.fetch_manifest(uris), manifest_return)
-                    self.assertEqual(patch_fetch.call_count, 2)
-                    self.assertEqual(mock_host.manifest_uri, uri1.uri)
-                    self.assertTrue(HostPluginProtocol.is_default_channel())
->>>>>>> Added a unit test to check if the manifest is being set for both cases - when it was downloaded directly or through HostGA
-
     def test_get_in_vm_artifacts_profile_host_ga_plugin(self, *args):
         wire_protocol_client = WireProtocol(wireserver_url).client
         wire_protocol_client.ext_conf = ExtensionsConfig(None)
