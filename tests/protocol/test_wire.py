@@ -402,7 +402,7 @@ class TestWireProtocol(AgentTestCase):
                     self.assertEqual(patch_fetch.call_args_list[0][0][0], uri1.uri)
                     self.assertEqual(patch_fetch.call_args_list[1][0][0], host_uri)
 
-# This test checks if the manifest_uri variable is set in the host object of WireClient
+    # This test checks if the manifest_uri variable is set in the host object of WireClient
     # This variable is used when we make /extensionArtifact API calls to the HostGA
     def test_fetch_manifest_ensure_manifest_uri_is_set(self, *args):
         uri1 = ExtHandlerVersionUri()
@@ -432,6 +432,7 @@ class TestWireProtocol(AgentTestCase):
                 self.assertEqual(patch_fetch.call_count, 2)
                 self.assertEqual(mock_host.manifest_uri, uri1.uri)
                 self.assertTrue(HostPluginProtocol.is_default_channel())
+
     def test_get_in_vm_artifacts_profile_host_ga_plugin(self, *args):
         wire_protocol_client = WireProtocol(wireserver_url).client
         wire_protocol_client.ext_conf = ExtensionsConfig(None)
