@@ -424,7 +424,7 @@ class TestWireProtocol(AgentTestCase):
                     self.assertEqual(patch_fetch.call_count, 1)
                     self.assertEqual(mock_host.manifest_uri, uri1.uri)
 
-                # Second test tries to download from the HostGA and asserts manifest_uri is set
+                # Second test tries to download from the HostGA (by failing the direct download) and asserts manifest_uri is set
                 with patch.object(WireClient, "fetch") as patch_fetch:
                     patch_fetch.side_effect = [None, manifest_return]
                     fetch_manifest_mock = client.fetch_manifest(uris)
