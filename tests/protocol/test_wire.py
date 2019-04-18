@@ -453,7 +453,6 @@ class TestWireProtocol(AgentTestCase):
 
                 # First fetch works (direct download works)
                 with patch.object(WireClient, "fetch", return_value=manifest_return) as patch_fetch:
-                    HostPluginProtocol.set_default_channel(False)
                     self.assertEqual(client.fetch_manifest(uris), manifest_return)
                     self.assertEqual(patch_fetch.call_count, 1)
                     self.assertEqual(mock_host.manifest_uri, uri1.uri)
