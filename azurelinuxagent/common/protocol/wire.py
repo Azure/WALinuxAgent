@@ -622,7 +622,6 @@ class WireClient(object):
                                    "switching to host plugin")
 
                 try:
-                    # host = self.get_host_plugin()
                     uri, headers = host.get_artifact_request(version.uri)
                     response = self.fetch(uri, headers, use_proxy=False)
 
@@ -632,7 +631,6 @@ class WireClient(object):
                     HostPluginProtocol.set_default_channel(True)
                     raise
 
-                # host.manifest_uri = version.uri
                 logger.verbose("Manifest downloaded successfully from host plugin")
                 if not HostPluginProtocol.is_default_channel():
                     logger.info("Setting host plugin as default channel")
