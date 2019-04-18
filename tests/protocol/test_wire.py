@@ -415,23 +415,23 @@ class TestWireProtocol(AgentTestCase):
         manifest_return = "manifest.xml"
 
         with patch.object(WireClient, "get_host_plugin", return_value=mock_host):
-            with patch.object(HostPluginProtocol, "get_artifact_request", return_value=[host_uri, {}]):
+            mock_host.get_artifact_request = MagicMock(return_value=[host_uri, {}])
 
-                # First test tried to download directly from blob and asserts manifest_uri is set
-                with patch.object(WireClient, "fetch", return_value=manifest_return) as patch_fetch:
-                    fetch_manifest_mock = client.fetch_manifest(uris)
-                    self.assertEqual(fetch_manifest_mock, manifest_return)
-                    self.assertEqual(patch_fetch.call_count, 1)
-                    self.assertEqual(mock_host.manifest_uri, uri1.uri)
+            # First test tried to download directly from blob and asserts manifest_uri is set
+            with patch.object(WireClient, "fetch", return_value=manifest_return) as patch_fetch:
+                fetch_manifest_mock = client.fetch_manifest(uris)
+                self.assertEqual(fetch_manifest_mock, manifest_return)
+                self.assertEqual(patch_fetch.call_count, 1)
+                self.assertEqual(mock_host.manifest_uri, uri1.uri)
 
-                # Second test tries to download from the HostGA (by failing the direct download) and asserts manifest_uri is set
-                with patch.object(WireClient, "fetch") as patch_fetch:
-                    patch_fetch.side_effect = [None, manifest_return]
-                    fetch_manifest_mock = client.fetch_manifest(uris)
-                    self.assertEqual(fetch_manifest_mock, manifest_return)
-                    self.assertEqual(patch_fetch.call_count, 2)
-                    self.assertEqual(mock_host.manifest_uri, uri1.uri)
-                    self.assertTrue(HostPluginProtocol.is_default_channel())
+            # Second test tries to download from the HostGA (by failing the direct download) and asserts manifest_uri is set
+            with patch.object(WireClient, "fetch") as patch_fetch:
+                patch_fetch.side_effect = [None, manifest_return]
+                fetch_manifest_mock = client.fetch_manifest(uris)
+                self.assertEqual(fetch_manifest_mock, manifest_return)
+                self.assertEqual(patch_fetch.call_count, 2)
+                self.assertEqual(mock_host.manifest_uri, uri1.uri)
+                self.assertTrue(HostPluginProtocol.is_default_channel())
 
     def test_get_in_vm_artifacts_profile_host_ga_plugin(self, *args):
         wire_protocol_client = WireProtocol(wireserver_url).client
