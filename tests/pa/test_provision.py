@@ -71,24 +71,47 @@ class TestProvision(AgentTestCase):
     @patch('os.path.isfile', return_value=False)
     def test_is_provisioned_not_provisioned(self, mock_isfile):
         ph = ProvisionHandler()
-        self.assertFalse(ph.is_provisioned())
+        self.assertEqual(ph.is_provisioned(), 'not_provisioned')
 
-    @patch('os.path.isfile', return_value=True)
+    @patch('os.path.isfile')
     @patch('azurelinuxagent.common.utils.fileutil.read_file',
             return_value="B9F3C233-9913-9F42-8EB3-BA656DF32502")
     @patch('azurelinuxagent.pa.deprovision.get_deprovision_handler')
-    def test_is_provisioned_is_provisioned(self,
+    def test_is_provisioned_is_provisioned_signaled(self,
             mock_deprovision, mock_read, mock_isfile):
 
         ph = ProvisionHandler()
         ph.osutil = Mock()
         ph.osutil.is_current_instance_id = Mock(return_value=True)
         ph.write_provisioned = Mock()
+        ph.write_signaled = Mock()
 
         deprovision_handler = Mock()
         mock_deprovision.return_value = deprovision_handler
 
-        self.assertTrue(ph.is_provisioned())
+        self.assertEqual(ph.is_provisioned(), 'provisioned_signaled')
+        self.assertEqual(1, ph.osutil.is_current_instance_id.call_count)
+        self.assertEqual(0, deprovision_handler.run_changed_unique_id.call_count)
+        self.assertEqual(0, ph.write_provisioned.call_count)
+        self.assertEqual(0, ph.write_signaled.call_count)
+
+    @patch('os.path.isfile', return_value=False)
+    @patch('azurelinuxagent.common.utils.fileutil.read_file',
+           return_value="B9F3C233-9913-9F42-8EB3-BA656DF32502")
+    @patch('azurelinuxagent.pa.deprovision.get_deprovision_handler')
+    def test_is_provisioned_is_provisioned_not_signaled(self,
+                                                    mock_deprovision, mock_read, mock_isfile):
+
+        ph = ProvisionHandler()
+        ph.osutil = Mock()
+        ph.osutil.is_current_instance_id = Mock(return_value=True)
+        ph.write_provisioned = Mock()
+        ph.write_signaled = Mock()
+
+        deprovision_handler = Mock()
+        mock_deprovision.return_value = deprovision_handler
+
+        self.assertEqual(ph.is_provisioned(), 'provisioned_not_signaled')
         self.assertEqual(1, ph.osutil.is_current_instance_id.call_count)
         self.assertEqual(0, deprovision_handler.run_changed_unique_id.call_count)
 
@@ -104,11 +127,12 @@ class TestProvision(AgentTestCase):
         ph.osutil.is_current_instance_id = Mock(return_value=False)
         ph.report_ready = Mock()
         ph.write_provisioned = Mock()
+        ph.write_signaled = Mock()
 
         deprovision_handler = Mock()
         mock_deprovision.return_value = deprovision_handler
 
-        self.assertTrue(ph.is_provisioned())
+        self.assertEqual(ph.is_provisioned(), 'provisioned_signaled')
         self.assertEqual(1, ph.osutil.is_current_instance_id.call_count)
         self.assertEqual(1, deprovision_handler.run_changed_unique_id.call_count)
 
@@ -120,6 +144,9 @@ class TestProvision(AgentTestCase):
         """
         ProvisionGuestAgent flag is 'false'
         """
+
+        ProvisionHandler.write_signaled = Mock()
+
         self._provision_test(distro_name,
                              distro_version,
                              distro_full_name,
@@ -135,6 +162,9 @@ class TestProvision(AgentTestCase):
         """
         ProvisionGuestAgent flag is 'true'
         """
+
+        ProvisionHandler.write_signaled = Mock()
+
         self._provision_test(distro_name,
                              distro_version,
                              distro_full_name,
@@ -150,6 +180,7 @@ class TestProvision(AgentTestCase):
         """
         ProvisionGuestAgent flag is ''
         """
+
         self._provision_test(distro_name,
                              distro_version,
                              distro_full_name,
@@ -165,6 +196,9 @@ class TestProvision(AgentTestCase):
         """
         ProvisionGuestAgent flag is 'bad data'
         """
+
+        ProvisionHandler.write_signaled = Mock()
+
         self._provision_test(distro_name,
                              distro_version,
                              distro_full_name,
@@ -215,7 +249,7 @@ class TestProvision(AgentTestCase):
             self.assertEqual(2, ph.report_event.call_count)
             positional_args, kw_args = ph.report_event.call_args_list[0]
             # [call('Provisioning succeeded (146473.68s)', duration=65, is_success=True)]
-            self.assertTrue(re.match(r'Provisioning succeeded \(\d+\.\d+s\)', positional_args[0]) is not None)
+            self.assertTrue(re.match(r'Provisioning succeeded \(\d+(\.\d+)?s\)', positional_args[0]) is not None)
             self.assertTrue(isinstance(kw_args['duration'], int))
             self.assertTrue(kw_args['is_success'])
 
@@ -269,7 +303,7 @@ class TestProvision(AgentTestCase):
 
         ph.run()
         positional_args, kw_args = ph.report_event.call_args_list[0]
-        self.assertTrue(re.match(r'Provisioning failed: \[ProvisionError\] --unit-test-- \(\d+\.\d+s\)', positional_args[0]) is not None)
+        self.assertTrue(re.match(r'Provisioning failed: \[ProvisionError\] --unit-test-- \(\d+(\.\d+)?s\)', positional_args[0]) is not None)
 
     @patch('azurelinuxagent.pa.provision.default.ProvisionHandler.write_agent_disabled')
     @distros()
