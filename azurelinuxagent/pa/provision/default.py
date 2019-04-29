@@ -46,6 +46,7 @@ CLOUD_INIT_PATTERN = b".*/bin/cloud-init.*"
 CLOUD_INIT_REGEX = re.compile(CLOUD_INIT_PATTERN)
 
 PROVISIONED_FILE = 'provisioned'
+SIGNALED_FILE = 'signaled'
 
 
 class ProvisionHandler(object):
@@ -57,45 +58,70 @@ class ProvisionHandler(object):
         if not conf.get_provision_enabled():
             logger.info("Provisioning is disabled, skipping.")
             self.write_provisioned()
-            self.report_ready()
+            logger.info("signaling...")
+            if self.report_ready():
+                self.write_signaled()
+                logger.info("signaling complete")
+            else:
+                logger.info("signaling incomplete")
             return
 
         try:
             utc_start = datetime.utcnow()
             thumbprint = None
 
-            if self.is_provisioned():
-                logger.info("Provisioning already completed, skipping.")
-                return
+            provision_state = self.is_provisioned()
+            if provision_state == "provisioned_signaled":
+                logger.info("Provisioning and signaling already completed, skipping.")
 
-            logger.info("Running default provisioning handler")
+            elif provision_state == "provisioned_not_signaled":
+                logger.info("provisioning complete, not signaled")
+                logger.info("signaling...")
+                if self.report_ready():
+                    self.write_signaled()
+                    logger.info("signaling complete")
+                else:
+                    logger.info("signaling incomplete")
 
-            if not self.validate_cloud_init(is_expected=False):
-                raise ProvisionError("cloud-init appears to be running, "
-                                        "this is not expected, cannot continue")
+            else:
+                if provision_state != "not_provisioned":
+                    logger.warn("unexpected previsioning state {0}", provision_state)
 
-            logger.info("Copying ovf-env.xml")
-            ovf_env = self.protocol_util.copy_ovf_env()
+                logger.info("Running default provisioning handler")
 
-            self.protocol_util.get_protocol(by_file=True)
-            self.report_not_ready("Provisioning", "Starting")
-            logger.info("Starting provisioning")
+                if not self.validate_cloud_init(is_expected=False):
+                    raise ProvisionError("cloud-init appears to be running, "
+                                            "this is not expected, cannot continue")
 
-            self.provision(ovf_env)
+                logger.info("Copying ovf-env.xml")
+                ovf_env = self.protocol_util.copy_ovf_env()
 
-            thumbprint = self.reg_ssh_host_key()
-            self.osutil.restart_ssh_service()
+                self.protocol_util.get_protocol(by_file=True)
+                self.report_not_ready("Provisioning", "Starting")
+                logger.info("Starting provisioning")
 
-            self.write_provisioned()
+                self.provision(ovf_env)
 
-            self.report_event("Provisioning succeeded ({0}s)".format(self._get_uptime_seconds()),
-                is_success=True,
-                duration=elapsed_milliseconds(utc_start))
+                thumbprint = self.reg_ssh_host_key()
+                self.osutil.restart_ssh_service()
 
-            self.handle_provision_guest_agent(ovf_env.provision_guest_agent)
+                self.write_provisioned()
+                logger.info("Provisioning complete")
 
-            self.report_ready(thumbprint)
-            logger.info("Provisioning complete")
+                self.report_event("Provisioning succeeded ({0}s)".format(self._get_uptime_seconds()),
+                    is_success=True,
+                    duration=elapsed_milliseconds(utc_start))
+
+                self.handle_provision_guest_agent(ovf_env.provision_guest_agent)
+
+                logger.info("signaling...")
+                if self.report_ready():
+                    self.write_signaled()
+                    logger.info("signaling complete")
+                else:
+                    logger.info("signaling incomplete")
+
+
 
         except (ProtocolError, ProvisionError) as e:
             msg = "Provisioning failed: {0} ({1}s)".format(ustr(e), self._get_uptime_seconds())
@@ -166,11 +192,14 @@ class ProvisionHandler(object):
     def provisioned_file_path(self):
         return os.path.join(conf.get_lib_dir(), PROVISIONED_FILE)
 
+    def signaled_file_path(self):
+        return os.path.join(conf.get_lib_dir(), SIGNALED_FILE)
+
     def is_provisioned(self):
         '''
-        A VM is considered provisionend *anytime* the provisioning
+        A VM is considered provisioned *anytime* the provisioning
         sentinel file exists and not provisioned *anytime* the file
-        is absent.
+        is absent. This is also the case for signaling of VM.
 
         If the VM was provisioned using an agent that did not record
         the VM unique identifier, the provisioning file will be re-written
@@ -180,7 +209,7 @@ class ProvisionHandler(object):
         since VM was provisioned.
         '''
         if not os.path.isfile(self.provisioned_file_path()):
-            return False
+            return "not_provisioned"
 
         s = fileutil.read_file(self.provisioned_file_path()).strip()
         if not self.osutil.is_current_instance_id(s):
@@ -194,14 +223,28 @@ class ProvisionHandler(object):
                 deprovision_handler.run_changed_unique_id()
 
             self.write_provisioned()
-            self.report_ready()
 
-        return True
+            logger.info("signaling...")
+            if self.report_ready():
+                self.write_signaled()
+                logger.info("signaling complete")
+                return "provisioned_signaled"
+            else:
+                logger.info("signaling incomplete")
+                return "provisioned_not_signaled"
+
+        if not os.path.isfile(self.signaled_file_path()):
+            return "provisioned_not_signaled"
+
+        return "provisioned_signaled"
 
     def write_provisioned(self):
         fileutil.write_file(
             self.provisioned_file_path(),
             get_osutil().get_instance_id())
+
+    def write_signaled(self):
+        fileutil.write_file(self.signaled_file_path())
 
     @staticmethod
     def write_agent_disabled():
@@ -314,6 +357,8 @@ class ProvisionHandler(object):
         try:
             protocol = self.protocol_util.get_protocol()
             protocol.report_provision_status(status)
+            return True
         except ProtocolError as e:
             logger.error("Reporting Ready failed: {0}", e)
             self.report_event(ustr(e))
+        return False
