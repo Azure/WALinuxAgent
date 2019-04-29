@@ -46,6 +46,7 @@ CLOUD_INIT_PATTERN = b".*/bin/cloud-init.*"
 CLOUD_INIT_REGEX = re.compile(CLOUD_INIT_PATTERN)
 
 PROVISIONED_FILE = 'provisioned'
+SIGNALED_FILE = 'signaled'
 
 
 class ProvisionHandler(object):
@@ -166,9 +167,12 @@ class ProvisionHandler(object):
     def provisioned_file_path(self):
         return os.path.join(conf.get_lib_dir(), PROVISIONED_FILE)
 
+    def signaled_file_path(self):
+        return os.path.join(conf.get_lib_dir(), SIGNALED_FILE)
+
     def is_provisioned(self):
         '''
-        A VM is considered provisionend *anytime* the provisioning
+        A VM is considered provisioned *anytime* the provisioning
         sentinel file exists and not provisioned *anytime* the file
         is absent.
 
