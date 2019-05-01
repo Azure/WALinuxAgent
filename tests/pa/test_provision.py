@@ -71,7 +71,7 @@ class TestProvision(AgentTestCase):
     @patch('os.path.isfile', return_value=False)
     def test_is_provisioned_not_provisioned(self, mock_isfile):
         ph = ProvisionHandler()
-        self.assertFalse(ph.is_provisioned())
+        self.assertEqual(ph.is_provisioned(), 'not_provisioned')
 
     @patch('os.path.isfile', return_value=True)
     @patch('azurelinuxagent.common.utils.fileutil.read_file',
@@ -84,11 +84,12 @@ class TestProvision(AgentTestCase):
         ph.osutil = Mock()
         ph.osutil.is_current_instance_id = Mock(return_value=True)
         ph.write_provisioned = Mock()
+        ph.write_signaled = Mock()
 
         deprovision_handler = Mock()
         mock_deprovision.return_value = deprovision_handler
 
-        self.assertTrue(ph.is_provisioned())
+        self.assertNotEqual(ph.is_provisioned(), 'not_provisioned')
         self.assertEqual(1, ph.osutil.is_current_instance_id.call_count)
         self.assertEqual(0, deprovision_handler.run_changed_unique_id.call_count)
 
@@ -104,11 +105,12 @@ class TestProvision(AgentTestCase):
         ph.osutil.is_current_instance_id = Mock(return_value=False)
         ph.report_ready = Mock()
         ph.write_provisioned = Mock()
+        ph.write_signaled = Mock()
 
         deprovision_handler = Mock()
         mock_deprovision.return_value = deprovision_handler
 
-        self.assertTrue(ph.is_provisioned())
+        self.assertNotEqual(ph.is_provisioned(), 'not_provisioned')
         self.assertEqual(1, ph.osutil.is_current_instance_id.call_count)
         self.assertEqual(1, deprovision_handler.run_changed_unique_id.call_count)
 
@@ -120,6 +122,9 @@ class TestProvision(AgentTestCase):
         """
         ProvisionGuestAgent flag is 'false'
         """
+
+        ProvisionHandler.write_signaled = Mock()
+
         self._provision_test(distro_name,
                              distro_version,
                              distro_full_name,
