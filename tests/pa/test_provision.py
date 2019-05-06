@@ -105,6 +105,7 @@ class TestProvision(AgentTestCase):
         ph = ProvisionHandler()
         ph.osutil = Mock()
         ph.osutil.is_current_instance_id = Mock(return_value=True)
+
         ph.write_provisioned = Mock()
         ph.write_signaled = Mock()
 

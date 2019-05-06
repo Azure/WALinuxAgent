@@ -203,7 +203,11 @@ class ProvisionHandler(object):
         A warning is logged *if* the VM unique identifier has changed
         since VM was provisioned.
         '''
-        if not os.path.isfile(self.provisioned_file_path()):
+
+        file = {"provisioned": os.path.isfile(self.provisioned_file_path()),
+                "signaled": os.path.isfile(self.signaled_file_path())}
+
+        if not file["provisioned"]:
             return "not_provisioned"
 
         s = fileutil.read_file(self.provisioned_file_path()).strip()
@@ -228,7 +232,7 @@ class ProvisionHandler(object):
                 logger.info("signaling incomplete")
                 return "provisioned_not_signaled"
 
-        if not os.path.isfile(self.signaled_file_path()):
+        if not file["signaled"]:
             return "provisioned_not_signaled"
 
         return "provisioned_signaled"
