@@ -216,10 +216,13 @@ class ProvisionHandler(object):
             self.write_provisioned()
 
             logger.info("signaling...")
-            self.report_ready()
-            self.write_signaled()
-            logger.info("signaling complete")
-            return "provisioned_signaled"
+            if self.report_ready():
+                self.write_signaled()
+                logger.info("signaling complete")
+                return "provisioned_signaled"
+            else:
+                logger.info("signaling incomplete")
+                "provisioned_not_signaled"
 
         if not os.path.isfile(self.signaled_file_path()):
             return "provisioned_not_signaled"
