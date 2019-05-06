@@ -190,7 +190,7 @@ class ProvisionHandler(object):
         '''
         A VM is considered provisioned *anytime* the provisioning
         sentinel file exists and not provisioned *anytime* the file
-        is absent.
+        is absent. This is also the case for signaling of VM.
 
         If the VM was provisioned using an agent that did not record
         the VM unique identifier, the provisioning file will be re-written
@@ -345,6 +345,8 @@ class ProvisionHandler(object):
         try:
             protocol = self.protocol_util.get_protocol()
             protocol.report_provision_status(status)
+            return True
         except ProtocolError as e:
             logger.error("Reporting Ready failed: {0}", e)
             self.report_event(ustr(e))
+        return False
