@@ -73,11 +73,11 @@ class TestProvision(AgentTestCase):
         ph = ProvisionHandler()
         self.assertEqual(ph.is_provisioned(), 'not_provisioned')
 
-    @patch('os.path.isfile', return_value=True)
+    @patch('os.path.isfile')
     @patch('azurelinuxagent.common.utils.fileutil.read_file',
             return_value="B9F3C233-9913-9F42-8EB3-BA656DF32502")
     @patch('azurelinuxagent.pa.deprovision.get_deprovision_handler')
-    def test_is_provisioned_is_provisioned(self,
+    def test_is_provisioned_is_provisioned_signaled(self,
             mock_deprovision, mock_read, mock_isfile):
 
         ph = ProvisionHandler()
@@ -89,7 +89,28 @@ class TestProvision(AgentTestCase):
         deprovision_handler = Mock()
         mock_deprovision.return_value = deprovision_handler
 
-        self.assertNotEqual(ph.is_provisioned(), 'not_provisioned')
+        self.assertEqual(ph.is_provisioned(), 'provisioned_signaled')
+        self.assertEqual(1, ph.osutil.is_current_instance_id.call_count)
+        self.assertEqual(0, deprovision_handler.run_changed_unique_id.call_count)
+
+    @patch('os.path.isfile', return_value=True)
+    @patch('azurelinuxagent.common.utils.fileutil.read_file',
+           return_value="B9F3C233-9913-9F42-8EB3-BA656DF32502")
+    @patch('azurelinuxagent.pa.deprovision.get_deprovision_handler')
+    def test_is_provisioned_is_provisioned_not_signaled(self,
+                                                    mock_deprovision, mock_read, mock_isfile):
+
+        ph = ProvisionHandler()
+        ph.osutil = Mock()
+        ph.osutil.is_current_instance_id = Mock(return_value=True)
+        os.path.isfile = Mock(return_value=False)
+        ph.write_provisioned = Mock()
+        ph.write_signaled = Mock()
+
+        deprovision_handler = Mock()
+        mock_deprovision.return_value = deprovision_handler
+
+        self.assertEqual(ph.is_provisioned(), 'provisioned_not_signaled')
         self.assertEqual(1, ph.osutil.is_current_instance_id.call_count)
         self.assertEqual(0, deprovision_handler.run_changed_unique_id.call_count)
 
@@ -110,7 +131,7 @@ class TestProvision(AgentTestCase):
         deprovision_handler = Mock()
         mock_deprovision.return_value = deprovision_handler
 
-        self.assertNotEqual(ph.is_provisioned(), 'not_provisioned')
+        self.assertEqual(ph.is_provisioned(), 'provisioned_signaled')
         self.assertEqual(1, ph.osutil.is_current_instance_id.call_count)
         self.assertEqual(1, deprovision_handler.run_changed_unique_id.call_count)
 
