@@ -72,9 +72,11 @@ class ProvisionHandler(object):
             elif provision_state == "provisioned_not_signaled":
                 logger.info("provisioning complete, not signaled")
                 logger.info("signaling...")
-                self.report_ready()
-                self.write_signaled()
-                logger.info("signaling complete")
+                if self.report_ready():
+                    self.write_signaled()
+                    logger.info("signaling complete")
+                else:
+                    logger.info("signaling incomplete")
 
             else:
                 if provision_state != "not_provisioned":
@@ -108,9 +110,11 @@ class ProvisionHandler(object):
                 self.handle_provision_guest_agent(ovf_env.provision_guest_agent)
 
                 logger.info("signaling...")
-                self.report_ready(thumbprint)
-                self.write_signaled()
-                logger.info("signaling complete")
+                if self.report_ready():
+                    self.write_signaled()
+                    logger.info("signaling complete")
+                else:
+                    logger.info("signaling incomplete")
 
 
 
@@ -222,7 +226,7 @@ class ProvisionHandler(object):
                 return "provisioned_signaled"
             else:
                 logger.info("signaling incomplete")
-                "provisioned_not_signaled"
+                return "provisioned_not_signaled"
 
         if not os.path.isfile(self.signaled_file_path()):
             return "provisioned_not_signaled"
