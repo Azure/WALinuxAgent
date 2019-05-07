@@ -58,7 +58,12 @@ class ProvisionHandler(object):
         if not conf.get_provision_enabled():
             logger.info("Provisioning is disabled, skipping.")
             self.write_provisioned()
-            self.report_ready()
+            logger.info("signaling...")
+            if self.report_ready():
+                self.write_signaled()
+                logger.info("signaling complete")
+            else:
+                logger.info("signaling incomplete")
             return
 
         try:
