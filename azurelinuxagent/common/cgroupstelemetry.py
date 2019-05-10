@@ -20,6 +20,11 @@ from azurelinuxagent.common import logger
 from azurelinuxagent.common.cgroup import CpuCgroup, MemoryCGroup
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 
+related_services = {
+    "Microsoft.OSTCExtensions.LinuxDiagnostic":    ["omid", "omsagent-LAD", "mdsd-lde"],
+    "Microsoft.Azure.Diagnostics.LinuxDiagnostic": ["omid", "omsagent-LAD", "mdsd-lde"],
+}
+
 class CGroupsTelemetry(object):
     """
     Encapsulate the cgroup-based telemetry for the agent or one of its extensions, or for the aggregation across

@@ -39,12 +39,6 @@ DEFAULT_MEM_LIMIT_MIN_MB = 256  # mb, applies to agent and extensions
 DEFAULT_MEM_LIMIT_MAX_MB = 512  # mb, applies to agent only
 DEFAULT_MEM_LIMIT_PCT = 15  # percent, applies to extensions
 
-related_services = {
-    "Microsoft.OSTCExtensions.LinuxDiagnostic":    ["omid", "omsagent-LAD", "mdsd-lde"],
-    "Microsoft.Azure.Diagnostics.LinuxDiagnostic": ["omid", "omsagent-LAD", "mdsd-lde"],
-}
-
-
 class CGroupConfigurator(object):
     """
     This class represents the cgroup folders for the agent or an extension. This is a pretty lightweight object
