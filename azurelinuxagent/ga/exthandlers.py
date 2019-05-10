@@ -38,7 +38,8 @@ import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.version as version
-from azurelinuxagent.common.cgroups import CGroups, CGroupsTelemetry
+from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
+from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.errorstate import ErrorState, ERROR_STATE_DELTA_INSTALL
 from azurelinuxagent.common.event import add_event, WALAEventOperation, elapsed_milliseconds, report_event
 from azurelinuxagent.common.exception import ExtensionError, ProtocolError, ProtocolNotFoundError, \
@@ -1135,7 +1136,7 @@ class ExtHandlerInstance(object):
                         the fork() and the exec() of sub-process creation.
                         """
                         os.setsid()
-                        CGroups.add_to_extension_cgroup(self.ext_handler.name, os.getpid())
+                        CGroupConfigurator.add_to_extension_cgroup(self.ext_handler.name, os.getpid())
 
                     process = subprocess.Popen(full_path,
                                                shell=True,
@@ -1149,7 +1150,7 @@ class ExtHandlerInstance(object):
                                                   code=extension_error_code)
 
                 try:
-                    cg = CGroups.for_extension(self.ext_handler.name)
+                    cg = CGroupConfigurator.for_extension(self.ext_handler.name)
                     CGroupsTelemetry.track_extension(self.ext_handler.name, cg)
                 except Exception as e:
                     self.logger.warn("Unable to setup cgroup {0}: {1}".format(self.ext_handler.name, e))

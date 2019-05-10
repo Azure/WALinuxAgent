@@ -16,11 +16,9 @@
 
 import errno
 import os
-import re
-
-import time
 
 from azurelinuxagent.common import logger, conf
+from azurelinuxagent.common.exception import CGroupsException
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.osutil.default import BASE_CGROUPS
@@ -41,328 +39,20 @@ DEFAULT_MEM_LIMIT_MIN_MB = 256  # mb, applies to agent and extensions
 DEFAULT_MEM_LIMIT_MAX_MB = 512  # mb, applies to agent only
 DEFAULT_MEM_LIMIT_PCT = 15  # percent, applies to extensions
 
-re_user_system_times = re.compile('user (\d+)\nsystem (\d+)\n')
-
 related_services = {
     "Microsoft.OSTCExtensions.LinuxDiagnostic":    ["omid", "omsagent-LAD", "mdsd-lde"],
     "Microsoft.Azure.Diagnostics.LinuxDiagnostic": ["omid", "omsagent-LAD", "mdsd-lde"],
 }
 
 
-class CGroupsException(Exception):
-
-    def __init__(self, msg):
-        self.msg = msg
-
-    def __str__(self):
-        return repr(self.msg)
-
-
-# The metric classes (Cpu, Memory, etc) can all assume that CGroups is enabled, as the CGroupTelemetry
-# class is very careful not to call them if CGroups isn't enabled. Any tests should be disabled if the osutil
-# is_cgroups_support() method returns false.
-
-
-class Cpu(object):
-    def __init__(self, cgt):
-        """
-        Initialize data collection for the Cpu hierarchy. User must call update() before attempting to get
-        any useful metrics.
-
-        :param cgt: CGroupsTelemetry
-        :return:
-        """
-        self.cgt = cgt
-        self.osutil = get_osutil()
-        self.current_cpu_total = self.get_current_cpu_total()
-        self.previous_cpu_total = 0
-        self.current_system_cpu = self.osutil.get_total_cpu_ticks_since_boot()
-        self.previous_system_cpu = 0
-
-    def __str__(self):
-        return "Cgroup: Current {0}, previous {1}; System: Current {2}, previous {3}".format(
-            self.current_cpu_total, self.previous_cpu_total, self.current_system_cpu, self.previous_system_cpu
-        )
-
-    def get_current_cpu_total(self):
-        """
-        Compute the number of USER_HZ of CPU time (user and system) consumed by this cgroup since boot.
-
-        :return: int
-        """
-        cpu_total = 0
-        try:
-            cpu_stat = self.cgt.cgroup.\
-                get_file_contents('cpu', 'cpuacct.stat')
-            if cpu_stat is not None:
-                m = re_user_system_times.match(cpu_stat)
-                if m:
-                    cpu_total = int(m.groups()[0]) + int(m.groups()[1])
-        except CGroupsException:
-            # There are valid reasons for file contents to be unavailable; for example, if an extension
-            # has not yet started (or has stopped) an associated service on a VM using systemd, the cgroup for
-            # the service will not exist ('cause systemd will tear it down). This might be a transient or a
-            # long-lived state, so there's no point in logging it, much less emitting telemetry.
-            pass
-        return cpu_total
-
-    def update(self):
-        """
-        Update all raw data required to compute metrics of interest. The intent is to call update() once, then
-        call the various get_*() methods which use this data, which we've collected exactly once.
-        """
-        self.previous_cpu_total = self.current_cpu_total
-        self.previous_system_cpu = self.current_system_cpu
-        self.current_cpu_total = self.get_current_cpu_total()
-        self.current_system_cpu = self.osutil.get_total_cpu_ticks_since_boot()
-
-    def get_cpu_percent(self):
-        """
-        Compute the percent CPU time used by this cgroup over the elapsed time since the last time this instance was
-        update()ed.  If the cgroup fully consumed 2 cores on a 4 core system, return 200.
-
-        :return: CPU usage in percent of a single core
-        :rtype: float
-        """
-        cpu_delta = self.current_cpu_total - self.previous_cpu_total
-        system_delta = max(1, self.current_system_cpu - self.previous_system_cpu)
-
-        return round(float(cpu_delta * self.cgt.cpu_count * 100) / float(system_delta), 3)
-
-    def collect(self):
-        """
-        Collect and return a list of all cpu metrics. If no metrics are collected, return an empty list.
-
-        :rtype: [(str, str, float)]
-        """
-        self.update()
-        usage = self.get_cpu_percent()
-        return [("Process", "% Processor Time", usage)]
-
-
-class Memory(object):
-    def __init__(self, cgt):
-        """
-        Initialize data collection for the Memory hierarchy
-
-        :param CGroupsTelemetry cgt: The telemetry object for which memory metrics should be collected
-        :return:
-        """
-        self.cgt = cgt
-
-    def get_memory_usage(self):
-        """
-        Collect memory.usage_in_bytes from the cgroup.
-
-        :return: Memory usage in bytes
-        :rtype: int
-        """
-        usage = self.cgt.cgroup.get_parameter('memory', 'memory.usage_in_bytes')
-        if not usage:
-            usage = "0"
-        return int(usage)
-
-    def collect(self):
-        """
-        Collect and return a list of all memory metrics
-
-        :rtype: [(str, str, float)]
-        """
-        usage = self.get_memory_usage()
-        return [("Memory", "Total Memory Usage", usage)]
-
-
-class CGroupsTelemetry(object):
-    """
-    Encapsulate the cgroup-based telemetry for the agent or one of its extensions, or for the aggregation across
-    the agent and all of its extensions. These objects should have lifetimes that span the time window over which
-    measurements are desired; in general, they're not terribly effective at providing instantaneous measurements.
-    """
-    _tracked = {}
-    _metrics = {
-        "cpu": Cpu,
-        "memory": Memory
-    }
-    _hierarchies = list(_metrics.keys())
-
-    tracked_names = set()
-
-    @staticmethod
-    def metrics_hierarchies():
-        return CGroupsTelemetry._hierarchies
-
-    @staticmethod
-    def track_cgroup(cgroup):
-        """
-        Create a CGroupsTelemetry object to track a particular CGroups instance. Typical usage:
-        1) Create a CGroups object
-        2) Ask CGroupsTelemetry to track it
-        3) Tell the CGroups object to add one or more processes (or let systemd handle that, for its cgroups)
-
-        :param CGroups cgroup: The cgroup to track
-        """
-        name = cgroup.name
-        if CGroups.enabled() and not CGroupsTelemetry.is_tracked(name):
-            tracker = CGroupsTelemetry(name, cgroup=cgroup)
-            CGroupsTelemetry._tracked[name] = tracker
-
-    @staticmethod
-    def track_systemd_service(name):
-        """
-        If not already tracking it, create the CGroups object for a systemd service and track it.
-
-        :param str name: Service name (without .service suffix) to be tracked.
-        """
-        service_name = "{0}.service".format(name).lower()
-        if CGroups.enabled() and not CGroupsTelemetry.is_tracked(service_name):
-            cgroup = CGroups.for_systemd_service(service_name)
-            logger.info("Now tracking cgroup {0}".format(service_name))
-            tracker = CGroupsTelemetry(service_name, cgroup=cgroup)
-            CGroupsTelemetry._tracked[service_name] = tracker
-
-    @staticmethod
-    def track_extension(name, cgroup=None):
-        """
-        Create all required CGroups to track all metrics for an extension and its associated services.
-
-        :param str name: Full name of the extension to be tracked
-        :param CGroups cgroup: CGroup for the extension itself. This method will create it if none is supplied.
-        """
-        if not CGroups.enabled():
-            return
-
-        if not CGroupsTelemetry.is_tracked(name):
-            cgroup = CGroups.for_extension(name) if cgroup is None else cgroup
-            logger.info("Now tracking cgroup {0}".format(name))
-            cgroup.set_limits()
-            CGroupsTelemetry.track_cgroup(cgroup)
-        if CGroups.is_systemd_manager():
-            if name in related_services:
-                for service_name in related_services[name]:
-                    CGroupsTelemetry.track_systemd_service(service_name)
-
-    @staticmethod
-    def track_agent():
-        """
-        Create and track the correct cgroup for the agent itself. The actual cgroup depends on whether systemd
-        is in use, but the caller doesn't need to know that.
-        """
-        if not CGroups.enabled():
-            return
-        if CGroups.is_systemd_manager():
-            logger.info("Tracking systemd cgroup for {0}".format(AGENT_CGROUP_NAME))
-            CGroupsTelemetry.track_systemd_service(AGENT_CGROUP_NAME)
-        else:
-            logger.info("Tracking cgroup for {0}".format(AGENT_CGROUP_NAME))
-            # This creates /sys/fs/cgroup/{cpu,memory}/WALinuxAgent/WALinuxAgent
-            CGroupsTelemetry.track_cgroup(CGroups.for_extension(AGENT_CGROUP_NAME))
-
-    @staticmethod
-    def is_tracked(name):
-        return name in CGroupsTelemetry._tracked
-
-    @staticmethod
-    def stop_tracking(name):
-        """
-        Stop tracking telemetry for the CGroups associated with an extension. If any system services are being
-        tracked, those will continue to be tracked; multiple extensions might rely upon the same service.
-
-        :param str name: Extension to be dropped from tracking
-        """
-        if CGroupsTelemetry.is_tracked(name):
-            del (CGroupsTelemetry._tracked[name])
-
-    @staticmethod
-    def collect_all_tracked():
-        """
-        Return a dictionary mapping from the name of a tracked cgroup to the list of collected metrics for that cgroup.
-        Collecting metrics is not guaranteed to be a fast operation; it's possible some other thread might add or remove
-        tracking for a cgroup while we're doing it. To avoid "dictionary changed size during iteration" exceptions,
-        work from a shallow copy of the _tracked dictionary.
-
-        :returns: Dictionary of list collected metrics (metric class, metric name, value), by cgroup
-        :rtype: dict(str: [(str, str, float)])
-        """
-        results = {}
-        limits = {}
-
-        for cgroup_name, collector in CGroupsTelemetry._tracked.copy().items():
-            results[cgroup_name] = collector.collect()
-            limits[cgroup_name] = collector.cgroup.threshold
-
-        return results, limits
-
-    @staticmethod
-    def update_tracked(ext_handlers):
-        """
-        Track CGroups for all enabled extensions.
-        Track CGroups for services created by enabled extensions.
-        Stop tracking CGroups for not-enabled extensions.
-
-        :param List(ExtHandler) ext_handlers:
-        """
-        if not CGroups.enabled():
-            return
-
-        not_enabled_extensions = set()
-        for extension in ext_handlers:
-            if extension.properties.state == u"enabled":
-                CGroupsTelemetry.track_extension(extension.name)
-            else:
-                not_enabled_extensions.add(extension.name)
-
-        names_now_tracked = set(CGroupsTelemetry._tracked.keys())
-        if CGroupsTelemetry.tracked_names != names_now_tracked:
-            now_tracking = " ".join("[{0}]".format(name) for name in sorted(names_now_tracked))
-            if len(now_tracking):
-                logger.info("After updating cgroup telemetry, tracking {0}".format(now_tracking))
-            else:
-                logger.warn("After updating cgroup telemetry, tracking no cgroups.")
-            CGroupsTelemetry.tracked_names = names_now_tracked
-
-    def __init__(self, name, cgroup=None):
-        """
-        Create the necessary state to collect metrics for the agent, one of its extensions, or the aggregation across
-        the agent and all of its extensions. To access aggregated metrics, instantiate this object with an empty string
-        or None.
-
-        :param name: str
-        """
-        if name is None:
-            name = ""
-        self.name = name
-        if cgroup is None:
-            cgroup = CGroups.for_extension(name)
-        self.cgroup = cgroup
-        self.cpu_count = CGroups.get_num_cores()
-        self.current_wall_time = time.time()
-        self.previous_wall_time = 0
-
-        self.data = {}
-        if CGroups.enabled():
-            for hierarchy in CGroupsTelemetry.metrics_hierarchies():
-                self.data[hierarchy] = CGroupsTelemetry._metrics[hierarchy](self)
-
-    def collect(self):
-        """
-        Return a list of collected metrics. Each element is a tuple of
-        (metric group name, metric name, metric value)
-        :return: [(str, str, float)]
-        """
-        results = []
-        for collector in self.data.values():
-            results.extend(collector.collect())
-        return results
-
-
-class CGroups(object):
+class CGroupConfigurator(object):
     """
     This class represents the cgroup folders for the agent or an extension. This is a pretty lightweight object
     without much state worth preserving; it's not unreasonable to create one just when you need it.
     """
     # whether cgroup support is enabled
     _enabled = True
-    _hierarchies = CGroupsTelemetry.metrics_hierarchies()
+    _hierarchies = [ "cpu", "memory" ]
     _use_systemd = None     # Tri-state: None (i.e. "unknown"), True, False
     _osutil = get_osutil()
 
@@ -378,23 +68,23 @@ class CGroups(object):
 
     @staticmethod
     def for_extension(name, limits=None):
-        return CGroups(name, CGroups._construct_custom_path_for_hierarchy, limits)
+        return CGroupConfigurator(name, CGroupConfigurator._construct_custom_path_for_hierarchy, limits)
 
     @staticmethod
     def for_systemd_service(name, limits=None):
-        return CGroups(name.lower(), CGroups._construct_systemd_path_for_hierarchy, limits)
+        return CGroupConfigurator(name.lower(), CGroupConfigurator._construct_systemd_path_for_hierarchy, limits)
 
     @staticmethod
     def enabled():
-        return CGroups._osutil.is_cgroups_supported() and CGroups._enabled
+        return CGroupConfigurator._osutil.is_cgroups_supported() and CGroupConfigurator._enabled
 
     @staticmethod
     def disable():
-        CGroups._enabled = False
+        CGroupConfigurator._enabled = False
 
     @staticmethod
     def enable():
-        CGroups._enabled = True
+        CGroupConfigurator._enabled = True
 
     def __init__(self, name, path_maker, limits=None):
         """
@@ -418,7 +108,7 @@ class CGroups(object):
             return
 
         system_hierarchies = os.listdir(BASE_CGROUPS)
-        for hierarchy in CGroups._hierarchies:
+        for hierarchy in CGroupConfigurator._hierarchies:
             if hierarchy not in system_hierarchies:
                 self.disable()
                 raise CGroupsException("Hierarchy {0} is not mounted".format(hierarchy))
@@ -426,7 +116,7 @@ class CGroups(object):
             cgroup_name = "" if self.is_wrapper_cgroup else self.name
             cgroup_path = path_maker(hierarchy, cgroup_name)
             if not os.path.isdir(cgroup_path):
-                CGroups._try_mkdir(cgroup_path)
+                CGroupConfigurator._try_mkdir(cgroup_path)
                 logger.info("Created cgroup {0}".format(cgroup_path))
 
             self.cgroups[hierarchy] = cgroup_path
@@ -442,13 +132,13 @@ class CGroups(object):
         :return: True if systemd is managing system services
         :rtype: Bool
         """
-        if not CGroups.enabled():
+        if not CGroupConfigurator.enabled():
             return False
-        if CGroups._use_systemd is None:
+        if CGroupConfigurator._use_systemd is None:
             hierarchy = METRIC_HIERARCHIES[0]
-            path = CGroups.get_my_cgroup_folder(hierarchy)
-            CGroups._use_systemd = path.startswith(CGroups._construct_systemd_path_for_hierarchy(hierarchy, ""))
-        return CGroups._use_systemd
+            path = CGroupConfigurator.get_my_cgroup_folder(hierarchy)
+            CGroupConfigurator._use_systemd = path.startswith(CGroupConfigurator._construct_systemd_path_for_hierarchy(hierarchy, ""))
+        return CGroupConfigurator._use_systemd
 
     @staticmethod
     def _try_mkdir(path):
@@ -547,9 +237,9 @@ class CGroups(object):
         """
         for hierarchy in METRIC_HIERARCHIES:
             # This creates /sys/fs/cgroup/{cpu,memory}/WALinuxAgent
-            root_dir = CGroups._construct_custom_path_for_hierarchy(hierarchy, "")
-            CGroups._try_mkdir(root_dir)
-            CGroups._apply_wrapper_limits(root_dir, hierarchy)
+            root_dir = CGroupConfigurator._construct_custom_path_for_hierarchy(hierarchy, "")
+            CGroupConfigurator._try_mkdir(root_dir)
+            CGroupConfigurator._apply_wrapper_limits(root_dir, hierarchy)
 
     @staticmethod
     def setup(suppress_process_add=False):
@@ -560,23 +250,23 @@ class CGroups(object):
             Add this process to the "agent" cgroup, if required
         Actual collection of metrics from cgroups happens in the -run-exthandlers instance
         """
-        if CGroups.enabled():
+        if CGroupConfigurator.enabled():
             try:
-                CGroups._osutil.mount_cgroups()
+                CGroupConfigurator._osutil.mount_cgroups()
                 if not suppress_process_add:
                     # Creates /sys/fs/cgroup/{cpu,memory}/WALinuxAgent wrapper cgroup
-                    CGroups._setup_wrapper_groups()
+                    CGroupConfigurator._setup_wrapper_groups()
                     pid = int(os.getpid())
-                    if CGroups.is_systemd_manager():
+                    if CGroupConfigurator.is_systemd_manager():
                         # When daemon is running as a service, it's called walinuxagent.service
                         # and is created and tracked by systemd, so we don't explicitly add the PID ourselves,
                         # just track it for our reporting purposes
-                        cg = CGroups.for_systemd_service(AGENT_CGROUP_NAME.lower() + ".service")
+                        cg = CGroupConfigurator.for_systemd_service(AGENT_CGROUP_NAME.lower() + ".service")
                         logger.info("Daemon process id {0} is tracked in systemd cgroup {1}".format(pid, cg.name))
                         # systemd sets limits; any limits we write would be overwritten
                     else:
                         # Creates /sys/fs/cgroup/{cpu,memory}/WALinuxAgent/WALinuxAgent cgroup
-                        cg = CGroups.for_extension(AGENT_CGROUP_NAME)
+                        cg = CGroupConfigurator.for_extension(AGENT_CGROUP_NAME)
                         logger.info("Daemon process id {0} is tracked in cgroup {1}".format(pid, cg.name))
                         cg.add(pid)
                         cg.set_limits()
@@ -584,13 +274,13 @@ class CGroups(object):
                 status = "successfully set up agent cgroup"
             except CGroupsException as cge:
                 status = cge.msg
-                CGroups.disable()
+                CGroupConfigurator.disable()
             except Exception as ge:
                 status = ustr(ge)
-                CGroups.disable()
+                CGroupConfigurator.disable()
         else:
             status = "not supported by platform"
-            CGroups.disable()
+            CGroupConfigurator.disable()
 
         logger.info("CGroups: {0}".format(status))
 
@@ -599,7 +289,7 @@ class CGroups(object):
             AGENT_NAME,
             version=CURRENT_VERSION,
             op=WALAEventOperation.InitializeCGroups,
-            is_success=CGroups.enabled(),
+            is_success=CGroupConfigurator.enabled(),
             message=status,
             log_event=False)
 
@@ -614,7 +304,7 @@ class CGroups(object):
         :param str name: Short name of extension, suitable for naming directories in the filesystem
         :param int pid: Process id of extension to be added to the cgroup
         """
-        if not CGroups.enabled():
+        if not CGroupConfigurator.enabled():
             return
         if name == AGENT_CGROUP_NAME:
             logger.warn('Extension cgroup name cannot match extension handler cgroup name ({0}). ' \
@@ -623,7 +313,7 @@ class CGroups(object):
 
         try:
             logger.info("Move process {0} into cgroup for extension {1}".format(pid, name))
-            CGroups.for_extension(name).add(pid)
+            CGroupConfigurator.for_extension(name).add(pid)
         except Exception as ex:
             logger.warn("Unable to move process {0} into cgroup for extension {1}: {2}".format(pid, name, ex))
 
@@ -667,8 +357,8 @@ class CGroups(object):
         :param hierarchy: str
         :return: str
         """
-        hierarchy_id = CGroups.get_hierarchy_id(hierarchy)
-        return os.path.join(BASE_CGROUPS, hierarchy, CGroups.get_my_cgroup_path(hierarchy_id))
+        hierarchy_id = CGroupConfigurator.get_hierarchy_id(hierarchy)
+        return os.path.join(BASE_CGROUPS, hierarchy, CGroupConfigurator.get_my_cgroup_path(hierarchy_id))
 
     def _get_cgroup_file(self, hierarchy, file_name):
         return os.path.join(self.cgroups[hierarchy], file_name)
@@ -685,7 +375,7 @@ class CGroups(object):
         except ValueError:
             raise CGroupsException('CPU Limit must be convertible to a float')
 
-        if limit <= float(0) or limit > float(CGroups.get_num_cores() * 100):
+        if limit <= float(0) or limit > float(CGroupConfigurator.get_num_cores() * 100):
             raise CGroupsException('CPU Limit must be between 0 and 100 * numCores')
 
         return limit / 100.0
@@ -745,7 +435,7 @@ class CGroups(object):
 
         :param limit:
         """
-        if not CGroups.enabled():
+        if not CGroupConfigurator.enabled():
             return
 
         if limit is None:
@@ -767,7 +457,7 @@ class CGroups(object):
 
         :return: int
         """
-        return CGroups._osutil.get_processor_cores()
+        return CGroupConfigurator._osutil.get_processor_cores()
 
     @staticmethod
     def _format_memory_value(unit, limit=None):

@@ -281,11 +281,11 @@ class TestHandlerStateMigration(AgentTestCase):
 class ExtensionTestCase(AgentTestCase):
     @classmethod
     def setUpClass(cls):
-        CGroups.disable()
+        CGroupConfigurator.disable()
 
     @classmethod
     def tearDownClass(cls):
-        CGroups.enable()
+        CGroupConfigurator.enable()
 
 
 @patch("azurelinuxagent.common.protocol.wire.CryptUtil")
@@ -1341,9 +1341,10 @@ class TestExtension(ExtensionTestCase):
 
         # Disable of the old extn fails
         patch_get_disable_command.return_value = "exit 1"
-        with patch("zipfile.ZipFile.extractall") as patch_zipfile_extractall:
-            patch_zipfile_extractall.side_effect = raise_ioerror
-            exthandlers_handler.run()  # Check if the zipfile was corrupt and re-download again in the next run.
+        with patch("time.sleep"):  # the download logic has retry logic that sleeps before each try - make sleep a no-op.
+            with patch("zipfile.ZipFile.extractall") as patch_zipfile_extractall:
+                patch_zipfile_extractall.side_effect = raise_ioerror
+                exthandlers_handler.run()  # Check if the zipfile was corrupt and re-download again in the next run.
 
         # Disable of the old extn fails
         patch_get_disable_command.return_value = "exit 1"
