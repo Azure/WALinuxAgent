@@ -16,7 +16,7 @@ class DownloadExtensionTestCase(AgentTestCase):
     @classmethod
     def setUpClass(cls):
         AgentTestCase.setUpClass()
-        cls.mock_cgroups = patch("azurelinuxagent.ga.exthandlers.CGroups")
+        cls.mock_cgroups = patch("azurelinuxagent.ga.exthandlers.CGroupConfigurator")
         cls.mock_cgroups.start()
 
         cls.mock_cgroups_telemetry = patch("azurelinuxagent.ga.exthandlers.CGroupsTelemetry")

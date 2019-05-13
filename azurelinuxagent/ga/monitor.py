@@ -28,7 +28,8 @@ import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.errorstate import ErrorState
 
-from azurelinuxagent.common.cgroups import CGroups, CGroupsTelemetry
+from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
+from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.event import add_event, report_metric, WALAEventOperation
 from azurelinuxagent.common.exception import EventError, ProtocolError, OSUtilError, HttpError
 from azurelinuxagent.common.future import ustr
@@ -407,7 +408,7 @@ class MonitorHandler(object):
             # /sys/fs/cgroup/{cpu,memory}/WALinuxAgent/
             # There is no need in tracking this cgroup, as it only serves
             # as an umbrella for the agent and extensions cgroups
-            CGroups.for_extension("")
+            CGroupConfigurator.for_extension("")
             # This creates the agent's cgroup (for the daemon and extension handler)
             # /sys/fs/cgroup/{cpu,memory}/WALinuxAgent/WALinuxAgent
             # If the system is using systemd, it would have already been set up under /system.slice
@@ -435,7 +436,7 @@ class MonitorHandler(object):
 
                         if metric_group == "Memory":
                             # Memory is collected in bytes, and limit is set in megabytes.
-                            if value >= CGroups._format_memory_value('megabytes', thresholds.memory_limit):
+                            if value >= CGroupConfigurator._format_memory_value('megabytes', thresholds.memory_limit):
                                 msg = "CGroup {0}: Crossed the Memory Threshold. " \
                                       "Current Value: {1} bytes, Threshold: {2} megabytes." \
                                        .format(cgroup_name, value, thresholds.memory_limit)

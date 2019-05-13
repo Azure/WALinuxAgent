@@ -17,8 +17,10 @@
 
 from __future__ import print_function
 
-from azurelinuxagent.common.cgroups import CGroupsTelemetry, CGroups, CGroupsLimits, \
-    CGroupsException, CGroupsLimits, BASE_CGROUPS, Cpu, Memory, DEFAULT_MEM_LIMIT_MIN_MB
+from azurelinuxagent.common.cgroup import CpuCgroup, MemoryCGroup
+from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator, CGroupsLimits, BASE_CGROUPS,  DEFAULT_MEM_LIMIT_MIN_MB
+from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
+from azurelinuxagent.common.exception import CGroupsException
 from azurelinuxagent.common.version import AGENT_NAME
 from tests.tools import *
 
@@ -39,14 +41,14 @@ def make_self_cgroups():
     Build a CGroups object for the cgroup to which this process already belongs
 
     :return: CGroups containing this process
-    :rtype: CGroups
+    :rtype: CGroupConfigurator
     """
 
     def path_maker(hierarchy, __):
-        suffix = CGroups.get_my_cgroup_path(CGroups.get_hierarchy_id('cpu'))
+        suffix = CGroupConfigurator.get_my_cgroup_path(CGroupConfigurator.get_hierarchy_id('cpu'))
         return os.path.join(BASE_CGROUPS, hierarchy, suffix)
 
-    return CGroups("inplace", path_maker)
+    return CGroupConfigurator("inplace", path_maker)
 
 
 def make_root_cgroups():
@@ -54,33 +56,33 @@ def make_root_cgroups():
     Build a CGroups object for the topmost cgroup
 
     :return: CGroups for most-encompassing cgroup
-    :rtype: CGroups
+    :rtype: CGroupConfigurator
     """
 
     def path_maker(hierarchy, _):
         return os.path.join(BASE_CGROUPS, hierarchy)
 
-    return CGroups("root", path_maker)
+    return CGroupConfigurator("root", path_maker)
 
 
 def i_am_root():
     return os.geteuid() == 0
 
 
-@skip_if_predicate_false(CGroups.enabled, "CGroups not supported in this environment")
+@skip_if_predicate_false(CGroupConfigurator.enabled, "CGroups not supported in this environment")
 class TestCGroups(AgentTestCase):
     @classmethod
     def setUpClass(cls):
-        CGroups.setup(True)
+        CGroupConfigurator.setup(True)
         super(AgentTestCase, cls).setUpClass()
 
     def test_cgroup_utilities(self):
         """
         Test utilities for querying cgroup metadata
         """
-        cpu_id = CGroups.get_hierarchy_id('cpu')
+        cpu_id = CGroupConfigurator.get_hierarchy_id('cpu')
         self.assertGreater(int(cpu_id), 0)
-        memory_id = CGroups.get_hierarchy_id('memory')
+        memory_id = CGroupConfigurator.get_hierarchy_id('memory')
         self.assertGreater(int(memory_id), 0)
         self.assertNotEqual(cpu_id, memory_id)
 
@@ -92,7 +94,7 @@ class TestCGroups(AgentTestCase):
         self.assertIn('cpu', cg.cgroups)
         self.assertIn('memory', cg.cgroups)
         ct = CGroupsTelemetry("test", cg)
-        cpu = Cpu(ct)
+        cpu = CpuCgroup(ct)
         self.assertGreater(cpu.current_system_cpu, 0)
 
         consume_cpu_time()  # Eat some CPU
@@ -114,7 +116,7 @@ class TestCGroups(AgentTestCase):
         root = make_root_cgroups()
         if cg.cgroups['cpu'] != root.cgroups['cpu']:
             ct = CGroupsTelemetry("test", cg)
-            cpu = Cpu(ct)
+            cpu = CpuCgroup(ct)
             self.assertLess(cpu.current_cpu_total, cpu.current_system_cpu)
 
             consume_cpu_time()  # Eat some CPU
@@ -158,7 +160,7 @@ class TestCGroups(AgentTestCase):
         initial_cgroup = make_self_cgroups()
 
         # Put the process into a different cgroup, consume some resources, ensure we see them end-to-end
-        test_cgroup = CGroups.for_extension("agent_unittest")
+        test_cgroup = CGroupConfigurator.for_extension("agent_unittest")
         test_cgroup.add(os.getpid())
         self.assertNotEqual(initial_cgroup.cgroups['cpu'], test_cgroup.cgroups['cpu'])
         self.assertNotEqual(initial_cgroup.cgroups['memory'], test_cgroup.cgroups['memory'])
@@ -178,8 +180,8 @@ class TestCGroups(AgentTestCase):
 
     @skip_if_predicate_true(i_am_root, "Test does not run when root")
     @patch("azurelinuxagent.common.conf.get_cgroups_enforce_limits")
-    @patch("azurelinuxagent.common.cgroups.CGroups.set_cpu_limit")
-    @patch("azurelinuxagent.common.cgroups.CGroups.set_memory_limit")
+    @patch("azurelinuxagent.common.cgroupconfigurator.CGroupConfigurator.set_cpu_limit")
+    @patch("azurelinuxagent.common.cgroupconfigurator.CGroupConfigurator.set_memory_limit")
     def test_telemetry_instantiation_as_normal_user_with_limits(self, mock_get_cgroups_enforce_limits,
                                                                 mock_set_cpu_limit,
                                                                 mock_set_memory_limit):
@@ -200,7 +202,7 @@ class TestCGroups(AgentTestCase):
         self.assertIn('cpu', cg.cgroups)
         ct = CGroupsTelemetry('test', cg)
         self.assertIs(cg, ct.cgroup)
-        cpu = Cpu(ct)
+        cpu = CpuCgroup(ct)
         self.assertIs(cg, cpu.cgt.cgroup)
         ticks_before = cpu.current_cpu_total
         consume_cpu_time()
@@ -225,7 +227,7 @@ class TestCGroups(AgentTestCase):
         self.assertIn('memory', cg.cgroups)
         ct = CGroupsTelemetry('test', cg)
         self.assertIs(cg, ct.cgroup)
-        memory = Memory(ct)
+        memory = MemoryCGroup(ct)
         usage_in_bytes = memory.get_memory_usage()
         self.assertGreater(usage_in_bytes, 100000)
 
@@ -233,19 +235,19 @@ class TestCGroups(AgentTestCase):
         """
         Test formatting of memory amounts into human-readable units
         """
-        self.assertEqual(-1, CGroups._format_memory_value('bytes', None))
-        self.assertEqual(2048, CGroups._format_memory_value('kilobytes', 2))
-        self.assertEqual(0, CGroups._format_memory_value('kilobytes', 0))
-        self.assertEqual(2048000, CGroups._format_memory_value('kilobytes', 2000))
-        self.assertEqual(2048 * 1024, CGroups._format_memory_value('megabytes', 2))
-        self.assertEqual((1024 + 512) * 1024 * 1024, CGroups._format_memory_value('gigabytes', 1.5))
-        self.assertRaises(CGroupsException, CGroups._format_memory_value, 'KiloBytes', 1)
+        self.assertEqual(-1, CGroupConfigurator._format_memory_value('bytes', None))
+        self.assertEqual(2048, CGroupConfigurator._format_memory_value('kilobytes', 2))
+        self.assertEqual(0, CGroupConfigurator._format_memory_value('kilobytes', 0))
+        self.assertEqual(2048000, CGroupConfigurator._format_memory_value('kilobytes', 2000))
+        self.assertEqual(2048 * 1024, CGroupConfigurator._format_memory_value('megabytes', 2))
+        self.assertEqual((1024 + 512) * 1024 * 1024, CGroupConfigurator._format_memory_value('gigabytes', 1.5))
+        self.assertRaises(CGroupsException, CGroupConfigurator._format_memory_value, 'KiloBytes', 1)
 
     @patch('azurelinuxagent.common.event.add_event')
     @patch('azurelinuxagent.common.conf.get_cgroups_enforce_limits')
-    @patch('azurelinuxagent.common.cgroups.CGroups.set_memory_limit')
-    @patch('azurelinuxagent.common.cgroups.CGroups.set_cpu_limit')
-    @patch('azurelinuxagent.common.cgroups.CGroups._try_mkdir')
+    @patch('azurelinuxagent.common.cgroupconfigurator.CGroupConfigurator.set_memory_limit')
+    @patch('azurelinuxagent.common.cgroupconfigurator.CGroupConfigurator.set_cpu_limit')
+    @patch('azurelinuxagent.common.cgroupconfigurator.CGroupConfigurator._try_mkdir')
     def assert_limits(self, _, patch_set_cpu, patch_set_memory_limit, patch_get_enforce, patch_add_event,
                       ext_name,
                       expected_cpu_limit,
@@ -259,7 +261,7 @@ class TestCGroups(AgentTestCase):
             patch_set_memory_limit.side_effect = CGroupsException('set_memory_limit error')
 
         try:
-            cg = CGroups.for_extension(ext_name)
+            cg = CGroupConfigurator.for_extension(ext_name)
             cg.set_limits()
             if exception_raised:
                 self.fail('exception expected')

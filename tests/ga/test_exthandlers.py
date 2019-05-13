@@ -9,7 +9,7 @@ from azurelinuxagent.ga.exthandlers import parse_ext_status, ExtHandlerInstance,
 from azurelinuxagent.common.exception import ProtocolError, ExtensionError, ExtensionErrorCodes
 from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.utils.processutil import TELEMETRY_MESSAGE_MAX_LEN, format_stdout_stderr
-from azurelinuxagent.common.cgroups import CGroups
+from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from tests.tools import *
 
 
@@ -232,7 +232,7 @@ class LaunchCommandTestCase(AgentTestCase):
         os.mkdir(os.path.join(self.base_cgroups, "cpu"))
         os.mkdir(os.path.join(self.base_cgroups, "memory"))
 
-        self.mock__base_cgroups = patch("azurelinuxagent.common.cgroups.BASE_CGROUPS", self.base_cgroups)
+        self.mock__base_cgroups = patch("azurelinuxagent.common.cgroupconfigurator.BASE_CGROUPS", self.base_cgroups)
         self.mock__base_cgroups.start()
 
         self.mock_get_base_dir = patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_base_dir", lambda *_: self.tmp_dir)
@@ -606,12 +606,12 @@ open("{0}", "w").close()
 
 '''.format(signal_file))
 
-        with patch('azurelinuxagent.common.cgroups.CGroups.for_extension', side_effect=Exception):
+        with patch('azurelinuxagent.common.cgroupconfigurator.CGroupConfigurator.for_extension', side_effect=Exception):
             self.ext_handler_instance.launch_command(command)
 
         self.assertTrue(os.path.exists(signal_file))
 
-    @skip_if_predicate_false(CGroups.enabled, "CGroups not supported in this environment")
+    @skip_if_predicate_false(CGroupConfigurator.enabled, "CGroups not supported in this environment")
     def test_it_should_add_the_child_process_to_its_own_cgroup(self):
         # We are checking for the parent PID here since the PID getting written to the corresponding cgroup
         # would be from the shell process started before launch_command invokes the actual command.
