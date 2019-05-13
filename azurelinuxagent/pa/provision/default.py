@@ -107,6 +107,7 @@ class ProvisionHandler(object):
 
                 self.write_provisioned()
                 logger.info("Provisioning complete")
+                self.osutil.eject_dvd()
 
                 self.report_event("Provisioning succeeded ({0}s)".format(self._get_uptime_seconds()),
                     is_success=True,

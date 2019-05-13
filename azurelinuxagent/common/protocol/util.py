@@ -126,7 +126,6 @@ class ProtocolUtil(object):
     def _cleanup_ovf_dvd(self):
         try:
             self.osutil.umount_dvd()
-            self.osutil.eject_dvd()
         except OSUtilError as e:
             logger.warn(ustr(e))
 
