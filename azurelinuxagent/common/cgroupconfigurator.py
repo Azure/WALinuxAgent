@@ -18,13 +18,14 @@ import errno
 import os
 
 from azurelinuxagent.common import logger, conf
+from azurelinuxagent.common.cgroupapi import FileSystemCgroupsApi, SystemdCgroupsApi
 from azurelinuxagent.common.exception import CGroupsException
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.osutil.default import BASE_CGROUPS
 from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
-
+from azurelinuxagent.common.event import add_event, WALAEventOperation
 
 WRAPPER_CGROUP_NAME = "WALinuxAgent"
 AGENT_CGROUP_NAME = "WALinuxAgent"
@@ -39,15 +40,14 @@ DEFAULT_MEM_LIMIT_MIN_MB = 256  # mb, applies to agent and extensions
 DEFAULT_MEM_LIMIT_MAX_MB = 512  # mb, applies to agent only
 DEFAULT_MEM_LIMIT_PCT = 15  # percent, applies to extensions
 
+
 class CGroupConfigurator(object):
     """
-    This class represents the cgroup folders for the agent or an extension. This is a pretty lightweight object
-    without much state worth preserving; it's not unreasonable to create one just when you need it.
+    This class implements the high-level operations on CGroups (e.g. initialization, creation, etc)
     """
     # whether cgroup support is enabled
     _enabled = True
     _hierarchies = [ "cpu", "memory" ]
-    _use_systemd = None     # Tri-state: None (i.e. "unknown"), True, False
     _osutil = get_osutil()
 
     @staticmethod
@@ -87,12 +87,7 @@ class CGroupConfigurator(object):
         :param str name: Name for the cgroup (usually the full name of the extension)
         :param path_maker: Function which constructs the root path for a given hierarchy where this cgroup lives
         """
-        if not name or name == "":
-            self.name = "Agents+Extensions"
-            self.is_wrapper_cgroup = True
-        else:
-            self.name = name
-            self.is_wrapper_cgroup = False
+        self.name = name
 
         self.cgroups = {}
 
@@ -107,32 +102,36 @@ class CGroupConfigurator(object):
                 self.disable()
                 raise CGroupsException("Hierarchy {0} is not mounted".format(hierarchy))
 
-            cgroup_name = "" if self.is_wrapper_cgroup else self.name
-            cgroup_path = path_maker(hierarchy, cgroup_name)
+            cgroup_path = path_maker(hierarchy, self.name)
             if not os.path.isdir(cgroup_path):
                 CGroupConfigurator._try_mkdir(cgroup_path)
                 logger.info("Created cgroup {0}".format(cgroup_path))
 
             self.cgroups[hierarchy] = cgroup_path
 
+    _is_systemd_return_value = None
+
     @staticmethod
-    def is_systemd_manager():
+    def is_systemd():
         """
-        Determine if systemd is managing system services. Many extensions are structured as a set of services,
-        including the agent itself; systemd expects those services to remain in the cgroups in which it placed them.
-        If this process (presumed to be the agent) is in a cgroup that looks like one created by systemd, we can
-        assume systemd is in use.
+        Determine if systemd is managing system services. If this process (presumed to be the agent) is in a CPU cgroup
+        that looks like one created by systemd, we can assume systemd is in use.
+
+        NOTE: This function has the side effect of mounting the cgroups file system if it is not already mounted.
+
+        TODO: We need to re-evaluate whether this the right logic to determine whether Systemd is managing cgroups.
 
         :return: True if systemd is managing system services
         :rtype: Bool
         """
-        if not CGroupConfigurator.enabled():
-            return False
-        if CGroupConfigurator._use_systemd is None:
-            hierarchy = METRIC_HIERARCHIES[0]
-            path = CGroupConfigurator.get_my_cgroup_folder(hierarchy)
-            CGroupConfigurator._use_systemd = path.startswith(CGroupConfigurator._construct_systemd_path_for_hierarchy(hierarchy, ""))
-        return CGroupConfigurator._use_systemd
+        if CGroupConfigurator._is_systemd_return_value is None:
+            if not CGroupConfigurator.enabled():
+                CGroupConfigurator._is_systemd_return_value = False
+            else:
+                path = CGroupConfigurator.get_my_cgroup_folder("cpu")
+                CGroupConfigurator._is_systemd_return_value = path.startswith(CGroupConfigurator._construct_systemd_path_for_hierarchy("cpu", ""))
+
+        return CGroupConfigurator._is_systemd_return_value
 
     @staticmethod
     def _try_mkdir(path):
@@ -164,9 +163,6 @@ class CGroupConfigurator(object):
         """
         if not self.enabled():
             return
-
-        if self.is_wrapper_cgroup:
-            raise CGroupsException("Cannot add a process to the Agents+Extensions wrapper cgroup")
 
         if not self._osutil.check_pid_alive(pid):
             raise CGroupsException('PID {0} does not exist'.format(pid))
@@ -213,79 +209,6 @@ class CGroupConfigurator(object):
                 is_success=success,
                 message=msg,
                 log_event=False)
-
-    @staticmethod
-    def _apply_wrapper_limits(path, hierarchy):
-        """
-        Find wrapping limits for the hierarchy and apply them to the cgroup denoted by the path
-
-        :param path: str
-        :param hierarchy: str
-        """
-        pass
-
-    @staticmethod
-    def _setup_wrapper_groups():
-        """
-        For each hierarchy, construct the wrapper cgroup and apply the appropriate limits
-        """
-        for hierarchy in METRIC_HIERARCHIES:
-            # This creates /sys/fs/cgroup/{cpu,memory}/WALinuxAgent
-            root_dir = CGroupConfigurator._construct_custom_path_for_hierarchy(hierarchy, "")
-            CGroupConfigurator._try_mkdir(root_dir)
-            CGroupConfigurator._apply_wrapper_limits(root_dir, hierarchy)
-
-    @staticmethod
-    def setup(suppress_process_add=False):
-        """
-        Only needs to be called once, and should be called from the -daemon instance of the agent.
-            Mount the cgroup fs if necessary
-            Create wrapper cgroups for agent-plus-extensions and set limits on them;
-            Add this process to the "agent" cgroup, if required
-        Actual collection of metrics from cgroups happens in the -run-exthandlers instance
-        """
-        if CGroupConfigurator.enabled():
-            try:
-                CGroupConfigurator._osutil.mount_cgroups()
-                if not suppress_process_add:
-                    # Creates /sys/fs/cgroup/{cpu,memory}/WALinuxAgent wrapper cgroup
-                    CGroupConfigurator._setup_wrapper_groups()
-                    pid = int(os.getpid())
-                    if CGroupConfigurator.is_systemd_manager():
-                        # When daemon is running as a service, it's called walinuxagent.service
-                        # and is created and tracked by systemd, so we don't explicitly add the PID ourselves,
-                        # just track it for our reporting purposes
-                        cg = CGroupConfigurator.for_systemd_service(AGENT_CGROUP_NAME.lower() + ".service")
-                        logger.info("Daemon process id {0} is tracked in systemd cgroup {1}".format(pid, cg.name))
-                        # systemd sets limits; any limits we write would be overwritten
-                    else:
-                        # Creates /sys/fs/cgroup/{cpu,memory}/WALinuxAgent/WALinuxAgent cgroup
-                        cg = CGroupConfigurator.for_extension(AGENT_CGROUP_NAME)
-                        logger.info("Daemon process id {0} is tracked in cgroup {1}".format(pid, cg.name))
-                        cg.add(pid)
-                        cg.set_limits()
-
-                status = "successfully set up agent cgroup"
-            except CGroupsException as cge:
-                status = cge.msg
-                CGroupConfigurator.disable()
-            except Exception as ge:
-                status = ustr(ge)
-                CGroupConfigurator.disable()
-        else:
-            status = "not supported by platform"
-            CGroupConfigurator.disable()
-
-        logger.info("CGroups: {0}".format(status))
-
-        from azurelinuxagent.common.event import add_event, WALAEventOperation
-        add_event(
-            AGENT_NAME,
-            version=CURRENT_VERSION,
-            op=WALAEventOperation.InitializeCGroups,
-            is_success=CGroupConfigurator.enabled(),
-            message=status,
-            log_event=False)
 
     @staticmethod
     def add_to_extension_cgroup(name, pid):
@@ -485,9 +408,6 @@ class CGroupsLimits(object):
         return threshold[limit] if threshold and limit in threshold else compute_default(name)
 
     def __init__(self, cgroup_name, threshold=None):
-        if not cgroup_name or cgroup_name == "":
-            cgroup_name = "Agents+Extensions"
-
         self.cpu_limit = self._get_value_or_default(cgroup_name, threshold, "cpu", CGroupsLimits.get_default_cpu_limits)
         self.memory_limit = self._get_value_or_default(cgroup_name, threshold, "memory",
                                                        CGroupsLimits.get_default_memory_limits)
@@ -511,3 +431,55 @@ class CGroupsLimits(object):
         if AGENT_CGROUP_NAME.lower() in cgroup_name.lower():
             mem_limit = min(DEFAULT_MEM_LIMIT_MAX_MB, mem_limit)
         return mem_limit
+
+
+class CGroupConfigurator_tmp(object):
+    #
+    # TODO: code from CGroupConfigurator is being moved to this class
+    #
+    class __impl(object):
+        def __init__(self):
+            """
+            Ensures the cgroups file system is mounted and selects the correct API to interact with it
+            """
+            self.cgroups_api = None
+
+            if CGroupConfigurator.enabled():
+                try:
+                    CGroupConfigurator._osutil.mount_cgroups()
+                    self.cgroups_api = SystemdCgroupsApi() if CGroupConfigurator.is_systemd() else FileSystemCgroupsApi()
+                    status = "The cgroup filesystem is ready to use"
+                except Exception as e:
+                    status = ustr(e)
+                    CGroupConfigurator.disable()
+            else:
+                status = "Cgroups are not supported by the platform"
+
+            logger.info("CGroups Status: {0}".format(status))
+
+            add_event(
+                AGENT_NAME,
+                version=CURRENT_VERSION,
+                op=WALAEventOperation.InitializeCGroups,
+                is_success=CGroupConfigurator.enabled(),
+                message=status,
+                log_event=False)
+
+        def create_agent_cgroups(self):
+            if not CGroupConfigurator.enabled():
+                return
+            self.cgroups_api.create_agent_cgroups()
+
+        def create_extension_cgroups_root(self):
+            if not CGroupConfigurator.enabled():
+                return
+            self.cgroups_api.create_extension_cgroups_root()
+
+    # unique instance for the singleton (TODO: find a better pattern for a singleton)
+    __instance = None
+
+    @staticmethod
+    def get_instance():
+        if CGroupConfigurator_tmp.__instance is None:
+            CGroupConfigurator_tmp.__instance = CGroupConfigurator_tmp.__impl()
+        return CGroupConfigurator_tmp.__instance

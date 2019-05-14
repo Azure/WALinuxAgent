@@ -20,11 +20,6 @@ from azurelinuxagent.common import logger
 from azurelinuxagent.common.cgroup import CpuCgroup, MemoryCGroup
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator, AGENT_CGROUP_NAME
 
-related_services = {
-    "Microsoft.OSTCExtensions.LinuxDiagnostic":    ["omid", "omsagent-LAD", "mdsd-lde"],
-    "Microsoft.Azure.Diagnostics.LinuxDiagnostic": ["omid", "omsagent-LAD", "mdsd-lde"],
-}
-
 class CGroupsTelemetry(object):
     """
     Encapsulate the cgroup-based telemetry for the agent or one of its extensions, or for the aggregation across
@@ -87,28 +82,7 @@ class CGroupsTelemetry(object):
         if not CGroupsTelemetry.is_tracked(name):
             cgroup = CGroupConfigurator.for_extension(name) if cgroup is None else cgroup
             logger.info("Now tracking cgroup {0}".format(name))
-            cgroup.set_limits()
             CGroupsTelemetry.track_cgroup(cgroup)
-        if CGroupConfigurator.is_systemd_manager():
-            if name in related_services:
-                for service_name in related_services[name]:
-                    CGroupsTelemetry.track_systemd_service(service_name)
-
-    @staticmethod
-    def track_agent():
-        """
-        Create and track the correct cgroup for the agent itself. The actual cgroup depends on whether systemd
-        is in use, but the caller doesn't need to know that.
-        """
-        if not CGroupConfigurator.enabled():
-            return
-        if CGroupConfigurator.is_systemd_manager():
-            logger.info("Tracking systemd cgroup for {0}".format(AGENT_CGROUP_NAME))
-            CGroupsTelemetry.track_systemd_service(AGENT_CGROUP_NAME)
-        else:
-            logger.info("Tracking cgroup for {0}".format(AGENT_CGROUP_NAME))
-            # This creates /sys/fs/cgroup/{cpu,memory}/WALinuxAgent/WALinuxAgent
-            CGroupsTelemetry.track_cgroup(CGroupConfigurator.for_extension(AGENT_CGROUP_NAME))
 
     @staticmethod
     def is_tracked(name):
@@ -144,34 +118,6 @@ class CGroupsTelemetry(object):
             limits[cgroup_name] = collector.cgroup.threshold
 
         return results, limits
-
-    @staticmethod
-    def update_tracked(ext_handlers):
-        """
-        Track CGroups for all enabled extensions.
-        Track CGroups for services created by enabled extensions.
-        Stop tracking CGroups for not-enabled extensions.
-
-        :param List(ExtHandler) ext_handlers:
-        """
-        if not CGroupConfigurator.enabled():
-            return
-
-        not_enabled_extensions = set()
-        for extension in ext_handlers:
-            if extension.properties.state == u"enabled":
-                CGroupsTelemetry.track_extension(extension.name)
-            else:
-                not_enabled_extensions.add(extension.name)
-
-        names_now_tracked = set(CGroupsTelemetry._tracked.keys())
-        if CGroupsTelemetry.tracked_names != names_now_tracked:
-            now_tracking = " ".join("[{0}]".format(name) for name in sorted(names_now_tracked))
-            if len(now_tracking):
-                logger.info("After updating cgroup telemetry, tracking {0}".format(now_tracking))
-            else:
-                logger.warn("After updating cgroup telemetry, tracking no cgroups.")
-            CGroupsTelemetry.tracked_names = names_now_tracked
 
     def __init__(self, name, cgroup=None):
         """
