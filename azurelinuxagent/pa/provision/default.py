@@ -80,6 +80,7 @@ class ProvisionHandler(object):
                 if self.report_ready():
                     self.write_signaled()
                     logger.info("signaling complete")
+                    self.osutil.eject_dvd()
                 else:
                     logger.info("signaling incomplete")
 
@@ -107,7 +108,7 @@ class ProvisionHandler(object):
 
                 self.write_provisioned()
                 logger.info("Provisioning complete")
-                self.osutil.eject_dvd()
+
 
                 self.report_event("Provisioning succeeded ({0}s)".format(self._get_uptime_seconds()),
                     is_success=True,
@@ -116,13 +117,12 @@ class ProvisionHandler(object):
                 self.handle_provision_guest_agent(ovf_env.provision_guest_agent)
 
                 logger.info("signaling...")
-                if self.report_ready():
+                if self.report_ready(thumbprint):
                     self.write_signaled()
                     logger.info("signaling complete")
+                    self.osutil.eject_dvd()
                 else:
                     logger.info("signaling incomplete")
-
-
 
         except (ProtocolError, ProvisionError) as e:
             msg = "Provisioning failed: {0} ({1}s)".format(ustr(e), self._get_uptime_seconds())
@@ -196,6 +196,12 @@ class ProvisionHandler(object):
     def signaled_file_path(self):
         return os.path.join(conf.get_lib_dir(), SIGNALED_FILE)
 
+    def isfile_provisioned(self):
+        return os.path.isfile(self.provisioned_file_path())
+
+    def isfile_signaled(self):
+        return os.path.isfile(self.signaled_file_path())
+
     def is_provisioned(self):
         '''
         A VM is considered provisioned *anytime* the provisioning
@@ -209,7 +215,7 @@ class ProvisionHandler(object):
         A warning is logged *if* the VM unique identifier has changed
         since VM was provisioned.
         '''
-        if not os.path.isfile(self.provisioned_file_path()):
+        if not self.isfile_provisioned():
             return "not_provisioned"
 
         s = fileutil.read_file(self.provisioned_file_path()).strip()
@@ -234,7 +240,7 @@ class ProvisionHandler(object):
                 logger.info("signaling incomplete")
                 return "provisioned_not_signaled"
 
-        if not os.path.isfile(self.signaled_file_path()):
+        if not self.isfile_signaled():
             return "provisioned_not_signaled"
 
         return "provisioned_signaled"
