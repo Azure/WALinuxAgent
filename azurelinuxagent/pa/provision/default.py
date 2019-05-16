@@ -251,7 +251,7 @@ class ProvisionHandler(object):
             get_osutil().get_instance_id())
 
     def write_signaled(self):
-        fileutil.write_file(self.signaled_file_path())
+        fileutil.write_file(self.signaled_file_path(), SIGNALED_FILE)
 
     @staticmethod
     def write_agent_disabled():
