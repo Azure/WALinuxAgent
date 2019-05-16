@@ -259,7 +259,7 @@ class MonitorHandler(object):
                         MonitorHandler.IMDS_HEARTBEAT_PERIOD).seconds
         while self.should_run:
             self.send_telemetry_heartbeat()
-            self.send_cgroup_telemetry()
+            # TODO self.send_cgroup_telemetry()
             self.collect_and_send_events()
             self.send_host_plugin_heartbeat()
             self.send_imds_heartbeat()

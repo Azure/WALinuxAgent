@@ -465,7 +465,7 @@ class CGroupConfigurator_tmp(object):
                 message=status,
                 log_event=False)
 
-        def create_agent_cgroups(self):
+        def create_agent_cgroups(self, track_cgroups):
             if not CGroupConfigurator.enabled():
                 return
             self.cgroups_api.create_agent_cgroups()

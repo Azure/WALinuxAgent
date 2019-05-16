@@ -450,7 +450,9 @@ class UpdateHandler(object):
                 os.chmod(path, stat.S_IRUSR)
 
     def _ensure_cgroups_initialized(self):
-        CGroupConfigurator_tmp.get_instance().create_agent_cgroups()
+        configurator = CGroupConfigurator_tmp.get_instance()\
+        configurator.create_agent_cgroups(True)
+        configurator
 
     def _evaluate_agent_health(self, latest_agent):
         """
