@@ -152,42 +152,24 @@ class TestProvision(AgentTestCase):
 
     @patch('azurelinuxagent.common.conf.get_provision_enabled',
         return_value=False)
-    def test_provisioning_is_skipped_when_not_enabled_signaled(self, mock_conf):
+    def test_provisioning_is_skipped_when_not_enabled(self, mock_conf):
         ph = ProvisionHandler()
         ph.osutil = DefaultOSUtil()
         ph.osutil.get_instance_id = Mock(
                         return_value='B9F3C233-9913-9F42-8EB3-BA656DF32502')
 
+        ph.is_provisioned = Mock()
         ph.report_ready = Mock()
+        ph.write_provisioned = Mock()
         ph.write_signaled = Mock()
-        ph.is_provisioned = Mock()
         ph.osutil.eject_dvd = Mock()
 
         ph.run()
 
+        self.assertEqual(0, ph.is_provisioned.call_count)
         self.assertEqual(1, ph.report_ready.call_count)
+        self.assertEqual(1, ph.write_provisioned.call_count)
         self.assertEqual(1, ph.write_signaled.call_count)
-        self.assertEqual(0, ph.is_provisioned.call_count)
-        self.assertEqual(0, ph.osutil.eject_dvd.call_count)
-
-    @patch('azurelinuxagent.common.conf.get_provision_enabled',
-        return_value=False)
-    def test_provisioning_is_skipped_when_not_enabled_not_signaled(self, mock_conf):
-        ph = ProvisionHandler()
-        ph.osutil = DefaultOSUtil()
-        ph.osutil.get_instance_id = Mock(
-                        return_value='B9F3C233-9913-9F42-8EB3-BA656DF32502')
-
-        ph.report_ready = Mock(return_value=False)
-        ph.write_signaled = Mock()
-        ph.is_provisioned = Mock()
-        ph.osutil.eject_dvd = Mock()
-
-        ph.run()
-
-        self.assertEqual(1, ph.report_ready.call_count)
-        self.assertEqual(0, ph.write_signaled.call_count)
-        self.assertEqual(0, ph.is_provisioned.call_count)
         self.assertEqual(0, ph.osutil.eject_dvd.call_count)
 
     @patch('os.path.isfile', return_value=False)
