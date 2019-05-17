@@ -75,7 +75,7 @@ class TestCGroupConfigurator(AgentTestCase):
     # TODO -- Need to write actual tests
     #
     def test_initialize(self):
-        CGroupConfigurator_tmp.get_instance().create_agent_cgroups()
+        CGroupConfigurator_tmp.get_instance().create_extension_cgroups_root()
 
 
 @skip_if_predicate_false(CGroupConfigurator.enabled, "CGroups not supported in this environment")

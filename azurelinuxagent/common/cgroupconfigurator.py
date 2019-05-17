@@ -465,15 +465,33 @@ class CGroupConfigurator_tmp(object):
                 message=status,
                 log_event=False)
 
-        def create_agent_cgroups(self, track_cgroups):
+        def _invoke_cgroup_operation(self, operation, error_message):
+            """
+            Ensures the given operation is invoked only if cgroups are enabled and traps any errors on the operation
+            """
             if not CGroupConfigurator.enabled():
                 return
-            self.cgroups_api.create_agent_cgroups()
+
+            try:
+                operation()
+            except Exception as e:
+                logger.warn("{0}. Error: {1}".format(error_message, ustr(e)))
+
+        def create_agent_cgroups(self, track_cgroups):
+            def __impl():
+                cgroups = self.cgroups_api.create_agent_cgroups()
+
+                if track_cgroups:
+                    # TODO: Add to tracking list
+                    pass
+
+            self._invoke_cgroup_operation(__impl, "Failed to create a cgroup for the VM Agent; resource usage for the Agent will not be tracked")
 
         def create_extension_cgroups_root(self):
-            if not CGroupConfigurator.enabled():
-                return
-            self.cgroups_api.create_extension_cgroups_root()
+            def __impl():
+                self.cgroups_api.create_extension_cgroups_root()
+
+            self._invoke_cgroup_operation(__impl, "Failed to create a root cgroup for extensions; resource usage for extensions will not be tracked")
 
     # unique instance for the singleton (TODO: find a better pattern for a singleton)
     __instance = None

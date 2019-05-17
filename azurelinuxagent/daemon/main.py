@@ -68,7 +68,7 @@ class DaemonHandler(object):
         self.check_pid()
         self.initialize_environment()
 
-        CGroupConfigurator_tmp.get_instance().create_agent_cgroups(False)
+        CGroupConfigurator_tmp.get_instance().create_agent_cgroups(track_cgroups=False)
 
         # If FIPS is enabled, set the OpenSSL environment variable
         # Note:
