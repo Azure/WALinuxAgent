@@ -106,15 +106,14 @@ class ProvisionHandler(object):
                 thumbprint = self.reg_ssh_host_key()
                 self.osutil.restart_ssh_service()
 
-                self.write_provisioned()
-                logger.info("Provisioning complete")
-
-
                 self.report_event("Provisioning succeeded ({0}s)".format(self._get_uptime_seconds()),
                     is_success=True,
                     duration=elapsed_milliseconds(utc_start))
 
                 self.handle_provision_guest_agent(ovf_env.provision_guest_agent)
+
+                self.write_provisioned()
+                logger.info("Provisioning complete")
 
                 logger.info("signaling...")
                 if self.report_ready(thumbprint):
@@ -206,7 +205,7 @@ class ProvisionHandler(object):
         '''
         A VM is considered provisioned *anytime* the provisioning
         sentinel file exists and not provisioned *anytime* the file
-        is absent. This is also the case for signaling of VM.
+        is absent. This also applies to when a VM is signaled.
 
         If the VM was provisioned using an agent that did not record
         the VM unique identifier, the provisioning file will be re-written
@@ -214,6 +213,9 @@ class ProvisionHandler(object):
 
         A warning is logged *if* the VM unique identifier has changed
         since VM was provisioned.
+
+        After the VM is provisioned, it's considered signaled if it
+        successfully reported ready to wire server.
         '''
         if not self.isfile_provisioned():
             return "not_provisioned"

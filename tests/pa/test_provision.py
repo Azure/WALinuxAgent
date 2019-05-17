@@ -144,7 +144,6 @@ class TestProvision(AgentTestCase):
         self.assertEqual(1, ph.report_ready.call_count)
         self.assertEqual(0, ph.write_signaled.call_count)
 
-
     def test_customdata(self):
         base64data = 'Q3VzdG9tRGF0YQ=='
         data = DefaultOSUtil().decode_customdata(base64data)
@@ -176,7 +175,6 @@ class TestProvision(AgentTestCase):
     def test_is_provisioned_not_provisioned(self, mock_isfile):
         ph = ProvisionHandler()
         self.assertEqual(ph.is_provisioned(), 'not_provisioned')
-
 
     @patch('os.path.isfile')
     @patch('azurelinuxagent.common.utils.fileutil.read_file',
@@ -217,13 +215,11 @@ class TestProvision(AgentTestCase):
         deprovision_handler = Mock()
         mock_deprovision.return_value = deprovision_handler
 
-
         self.assertEqual(ph.is_provisioned(), 'provisioned_not_signaled')
         self.assertEqual(1, ph.osutil.is_current_instance_id.call_count)
         self.assertEqual(0, deprovision_handler.run_changed_unique_id.call_count)
         self.assertEqual(0, ph.write_provisioned.call_count)
         self.assertEqual(0, ph.write_signaled.call_count)
-
 
     @patch('os.path.isfile')
     @patch('azurelinuxagent.common.utils.fileutil.read_file',

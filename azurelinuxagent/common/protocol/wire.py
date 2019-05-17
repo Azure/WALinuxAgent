@@ -642,7 +642,6 @@ class WireClient(object):
 
         raise ProtocolError("Failed to fetch manifest from all sources")
 
-
     def stream(self, uri, destination, headers=None, use_proxy=None):
         success = False
         logger.verbose("Fetch [{0}] with headers [{1}] to file [{2}]", uri, headers, destination)
