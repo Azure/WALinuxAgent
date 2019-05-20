@@ -68,7 +68,8 @@ class FileSystemCgroupsApi(CGroupsApi):
                 else:
                     raise
 
-    def _foreach_controller(self, operation, message):
+    @staticmethod
+    def _foreach_controller(operation, message):
         """
         Executes the given operation on all controllers that need to be tracked; outputs 'message' if the controller is not mounted.
         """
@@ -103,7 +104,7 @@ class FileSystemCgroupsApi(CGroupsApi):
             except Exception as e:
                 logger.warn('Cannot create "{0}" cgroup for the agent. Error: {1}'.format(controller, ustr(e)))
 
-        self._foreach_controller(__impl, 'Will not create a cgroup for the VM Agent')
+        FileSystemCgroupsApi._foreach_controller(__impl, 'Will not create a cgroup for the VM Agent')
 
         if len(cgroup_paths) == 0:
             raise CGroupsException("Failed to create any cgroup for the VM Agent")
@@ -118,7 +119,7 @@ class FileSystemCgroupsApi(CGroupsApi):
                 FileSystemCgroupsApi._try_mkdir(path)
                 logger.info("Created {0}".format(path))
 
-        self._foreach_controller(__impl, 'Will not create a root cgroup for extensions')
+        FileSystemCgroupsApi._foreach_controller(__impl, 'Will not create a root cgroup for extensions')
 
 
 class SystemdCgroupsApi(CGroupsApi):

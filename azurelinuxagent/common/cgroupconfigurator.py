@@ -117,8 +117,6 @@ class CGroupConfigurator(object):
         Determine if systemd is managing system services. If this process (presumed to be the agent) is in a CPU cgroup
         that looks like one created by systemd, we can assume systemd is in use.
 
-        NOTE: This function has the side effect of mounting the cgroups file system if it is not already mounted.
-
         TODO: We need to re-evaluate whether this the right logic to determine whether Systemd is managing cgroups.
 
         :return: True if systemd is managing system services
@@ -465,7 +463,8 @@ class CGroupConfigurator_tmp(object):
                 message=status,
                 log_event=False)
 
-        def _invoke_cgroup_operation(self, operation, error_message):
+        @staticmethod
+        def _invoke_cgroup_operation(operation, error_message):
             """
             Ensures the given operation is invoked only if cgroups are enabled and traps any errors on the operation
             """
