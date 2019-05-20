@@ -39,6 +39,7 @@ import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.restutil as restutil
 import azurelinuxagent.common.utils.textutil as textutil
+from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator_tmp
 
 from azurelinuxagent.common.event import add_event, add_periodic, \
                                     elapsed_milliseconds, \
@@ -274,6 +275,7 @@ class UpdateHandler(object):
             self._emit_restart_event()
             self._ensure_partition_assigned()
             self._ensure_readonly_files()
+            self._ensure_cgroups_initialized()
 
             goal_state_interval = GOAL_STATE_INTERVAL \
                 if conf.get_extensions_enabled() \
@@ -446,6 +448,11 @@ class UpdateHandler(object):
         for g in READONLY_FILE_GLOBS:
             for path in glob.iglob(os.path.join(conf.get_lib_dir(), g)):
                 os.chmod(path, stat.S_IRUSR)
+
+    def _ensure_cgroups_initialized(self):
+        configurator = CGroupConfigurator_tmp.get_instance()
+        configurator.create_agent_cgroups(track_cgroups=True)
+        configurator.create_extension_cgroups_root()
 
     def _evaluate_agent_health(self, latest_agent):
         """

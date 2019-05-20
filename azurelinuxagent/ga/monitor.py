@@ -132,7 +132,6 @@ class MonitorHandler(object):
     def run(self):
         self.init_protocols()
         self.init_sysinfo()
-        self.init_cgroups()
         self.start()
 
     def stop(self):
@@ -400,26 +399,6 @@ class MonitorHandler(object):
 
             self.last_telemetry_heartbeat = datetime.datetime.utcnow()
 
-    @staticmethod
-    def init_cgroups():
-        # Track metrics for the wrapper cgroup and for the agent cgroup
-        try:
-            # This creates the wrapper cgroup for everything under agent,
-            # /sys/fs/cgroup/{cpu,memory}/WALinuxAgent/
-            # There is no need in tracking this cgroup, as it only serves
-            # as an umbrella for the agent and extensions cgroups
-            CGroupConfigurator.for_extension("")
-            # This creates the agent's cgroup (for the daemon and extension handler)
-            # /sys/fs/cgroup/{cpu,memory}/WALinuxAgent/WALinuxAgent
-            # If the system is using systemd, it would have already been set up under /system.slice
-            CGroupsTelemetry.track_agent()
-        except Exception as e:
-            # when a hierarchy is not mounted, we raise an exception
-            # and we should therefore only issue a warning, since this
-            # is not unexpected
-            logger.warn("Monitor: cgroups not initialized: {0}", ustr(e))
-            logger.verbose(traceback.format_exc())
-
     def send_cgroup_telemetry(self):
         if self.last_cgroup_telemetry is None:
             self.last_cgroup_telemetry = datetime.datetime.utcnow()
@@ -465,13 +444,6 @@ class MonitorHandler(object):
 
             except Exception as e:
                 logger.warn("Monitor: failed to collect cgroups performance metrics: {0}", ustr(e))
-                logger.verbose(traceback.format_exc())
-
-            # Look for extension cgroups we're not already tracking and track them
-            try:
-                CGroupsTelemetry.update_tracked(self.protocol.client.get_current_handlers())
-            except Exception as e:
-                logger.warn("Monitor: failed to update cgroups tracked extensions: {0}", ustr(e))
                 logger.verbose(traceback.format_exc())
 
             self.last_cgroup_telemetry = datetime.datetime.utcnow()

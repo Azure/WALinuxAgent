@@ -18,7 +18,7 @@
 from __future__ import print_function
 
 from azurelinuxagent.common.cgroup import CpuCgroup, MemoryCGroup
-from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator, CGroupsLimits, BASE_CGROUPS,  DEFAULT_MEM_LIMIT_MIN_MB
+from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator_tmp, CGroupConfigurator, CGroupsLimits, BASE_CGROUPS,  DEFAULT_MEM_LIMIT_MIN_MB
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.exception import CGroupsException
 from azurelinuxagent.common.version import AGENT_NAME
@@ -70,10 +70,19 @@ def i_am_root():
 
 
 @skip_if_predicate_false(CGroupConfigurator.enabled, "CGroups not supported in this environment")
+class TestCGroupConfigurator(AgentTestCase):
+    #
+    # TODO -- Need to write actual tests
+    #
+    def test_initialize(self):
+        CGroupConfigurator_tmp.get_instance().create_extension_cgroups_root()
+
+
+@skip_if_predicate_false(CGroupConfigurator.enabled, "CGroups not supported in this environment")
 class TestCGroups(AgentTestCase):
     @classmethod
     def setUpClass(cls):
-        CGroupConfigurator.setup(True)
+        CGroupConfigurator_tmp.get_instance()
         super(AgentTestCase, cls).setUpClass()
 
     def test_cgroup_utilities(self):
@@ -302,10 +311,6 @@ class TestCGroupsLimits(AgentTestCase):
         limits = CGroupsLimits(cgroup_name)
         self.assertEqual(limits.cpu_limit, CGroupsLimits.get_default_cpu_limits(cgroup_name ))
         self.assertEqual(limits.memory_limit, CGroupsLimits.get_default_memory_limits(cgroup_name ))
-
-        limits = CGroupsLimits(None)
-        self.assertEqual(limits.cpu_limit, CGroupsLimits.get_default_cpu_limits(cgroup_name))
-        self.assertEqual(limits.memory_limit, CGroupsLimits.get_default_memory_limits(cgroup_name))
 
     @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_total_mem", return_value=1024)
     def test_with_limits_passed(self, patched_get_total_mem):
