@@ -80,7 +80,6 @@ class ProvisionHandler(object):
                 if self.report_ready():
                     self.write_signaled()
                     logger.info("signaling complete")
-                    self.osutil.eject_dvd()
                 else:
                     logger.info("signaling incomplete")
 
@@ -119,7 +118,6 @@ class ProvisionHandler(object):
                 if self.report_ready(thumbprint):
                     self.write_signaled()
                     logger.info("signaling complete")
-                    self.osutil.eject_dvd()
                 else:
                     logger.info("signaling incomplete")
 
