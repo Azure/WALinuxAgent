@@ -9,7 +9,7 @@ from azurelinuxagent.ga.exthandlers import parse_ext_status, ExtHandlerInstance,
 from azurelinuxagent.common.exception import ProtocolError, ExtensionError, ExtensionErrorCodes
 from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.utils.processutil import TELEMETRY_MESSAGE_MAX_LEN, format_stdout_stderr
-from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
+from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator, CGroupConfigurator_tmp
 from tests.tools import *
 
 
@@ -227,12 +227,12 @@ class LaunchCommandTestCase(AgentTestCase):
         self.ext_handler.properties = ext_handler_properties
         self.ext_handler_instance = ExtHandlerInstance(ext_handler=self.ext_handler, protocol=None)
 
-        self.base_cgroups = os.path.join(self.tmp_dir, "cgroup")
-        os.mkdir(self.base_cgroups)
-        os.mkdir(os.path.join(self.base_cgroups, "cpu"))
-        os.mkdir(os.path.join(self.base_cgroups, "memory"))
+        self.cgroups_file_system_root = os.path.join(self.tmp_dir, "cgroup")
+        os.mkdir(self.cgroups_file_system_root)
+        os.mkdir(os.path.join(self.cgroups_file_system_root, "cpu"))
+        os.mkdir(os.path.join(self.cgroups_file_system_root, "memory"))
 
-        self.mock__base_cgroups = patch("azurelinuxagent.common.cgroupconfigurator.BASE_CGROUPS", self.base_cgroups)
+        self.mock__base_cgroups = patch("azurelinuxagent.common.cgroupapi.CGROUPS_FILE_SYSTEM_ROOT", self.cgroups_file_system_root)
         self.mock__base_cgroups.start()
 
         self.mock_get_base_dir = patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_base_dir", lambda *_: self.tmp_dir)
@@ -624,6 +624,10 @@ print(os.getppid())
 
 ''')
 
+        configurator = CGroupConfigurator_tmp.get_instance()
+        configurator.create_extension_cgroups_root()
+        configurator.create_extension_cgroups(self.ext_handler_instance.get_full_name())
+
         output = self.ext_handler_instance.launch_command(command)
 
         match = re.match(LaunchCommandTestCase._output_regex('(\d+)', '.*'), output)
@@ -632,9 +636,9 @@ print(os.getppid())
 
         expected_pid = int(match.group(1))
 
-        controllers = os.listdir(self.base_cgroups)
+        controllers = os.listdir(self.cgroups_file_system_root)
         for c in controllers:
-            procs = os.path.join(self.base_cgroups, c, "WALinuxAgent", self.ext_handler.name, "cgroup.procs")
+            procs = os.path.join(self.cgroups_file_system_root, c, "walinuxagent.extensions", self.ext_handler_instance.get_full_name().replace('-', '_'), "cgroup.procs")
             with open(procs, "r") as f:
                 contents = f.read()
                 pid = int(contents)

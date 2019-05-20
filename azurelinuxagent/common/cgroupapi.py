@@ -16,6 +16,7 @@
 
 import errno
 import os
+import shutil
 
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.exception import CGroupsException
@@ -36,6 +37,12 @@ class CGroupsApi(object):
         raise NotImplementedError()
 
     def create_extension_cgroups_root(self):
+        raise NotImplementedError()
+
+    def create_extension_cgroups(self):
+        raise NotImplementedError()
+
+    def remove_extension_cgroups(self, extension_name):
         raise NotImplementedError()
 
 
@@ -61,7 +68,7 @@ class FileSystemCgroupsApi(CGroupsApi):
                     if not os.path.isdir(path):
                         raise CGroupsException("Create directory for cgroup {0}: normal file already exists with that name".format(path))
                     else:
-                        pass # There was a race to create the directory, but it's there now, and that's fine
+                        pass  # There was a race to create the directory, but it's there now, and that's fine
                 elif e.errno == errno.EACCES:
                     # This is unexpected, as the agent runs as root
                     raise CGroupsException("Create directory for cgroup {0}: permission denied".format(path))
@@ -81,12 +88,34 @@ class FileSystemCgroupsApi(CGroupsApi):
             else:
                 operation(controller)
 
+    def _get_extension_cgroups_root_path(self, controller):
+        return os.path.join(CGROUPS_FILE_SYSTEM_ROOT, controller, EXTENSIONS_ROOT_CGROUP_NAME)
+
+    def _get_extension_cgroup_path(self, controller, extension_name):
+        extensions_root = self._get_extension_cgroups_root_path(controller)
+
+        if not os.path.exists(extensions_root):
+            logger.warn("Root directory {0} does not exist.".format(extensions_root))
+
+        # '-' has a special meaning within systemd unit names; for consistency we also replace with '_' here
+        cgroup_name = extension_name.replace('-', '_')
+
+        return os.path.join(extensions_root, cgroup_name)
+
+    def _add_process_to_cgroup(self, pid, cgroup_path):
+        tasks_file = os.path.join(cgroup_path, 'cgroup.procs')
+        fileutil.append_file(tasks_file, "{0}\n".format(pid))
+        logger.info("Added PID {0} to cgroup {1}".format(pid, cgroup_path))
+
     def create_agent_cgroups(self):
+        """
+        Creates a cgroup for the VM Agent in each of the controllers we are tracking; returns the created cgroups.
+        """
         cgroup_paths = []
 
         pid = int(os.getpid())
 
-        def __impl(controller):
+        def create_cgroup(controller):
             try:
                 path = os.path.join(CGROUPS_FILE_SYSTEM_ROOT, controller, VM_AGENT_CGROUP_NAME)
 
@@ -94,17 +123,14 @@ class FileSystemCgroupsApi(CGroupsApi):
                     FileSystemCgroupsApi._try_mkdir(path)
                     logger.info("Created cgroup {0}".format(path))
 
-                tasks_file = os.path.join(path, 'cgroup.procs')
-                fileutil.append_file(tasks_file, "{0}\n".format(pid))
-
-                logger.info("Added Agent (PID {0}) to cgroup {1}".format(pid, path))
+                self._add_process_to_cgroup(pid, path)
 
                 cgroup_paths.append(path)
 
             except Exception as e:
                 logger.warn('Cannot create "{0}" cgroup for the agent. Error: {1}'.format(controller, ustr(e)))
 
-        FileSystemCgroupsApi._foreach_controller(__impl, 'Will not create a cgroup for the VM Agent')
+        self._foreach_controller(create_cgroup, 'Will not create a cgroup for the VM Agent')
 
         if len(cgroup_paths) == 0:
             raise CGroupsException("Failed to create any cgroup for the VM Agent")
@@ -112,14 +138,71 @@ class FileSystemCgroupsApi(CGroupsApi):
         return cgroup_paths
 
     def create_extension_cgroups_root(self):
-        def __impl(controller):
-            path = os.path.join(CGROUPS_FILE_SYSTEM_ROOT, controller, EXTENSIONS_ROOT_CGROUP_NAME)
+        """
+        Creates the directory within the cgroups file system that will contain the cgroups for the extensions.
+        """
+        def create_cgroup(controller):
+            path = self._get_extension_cgroups_root_path(controller)
 
             if not os.path.isdir(path):
                 FileSystemCgroupsApi._try_mkdir(path)
                 logger.info("Created {0}".format(path))
 
-        FileSystemCgroupsApi._foreach_controller(__impl, 'Will not create a root cgroup for extensions')
+        self._foreach_controller(create_cgroup, 'Will not create a root cgroup for extensions')
+
+    def create_extension_cgroups(self, extension_name):
+        """
+        Creates a cgroup for the given extension in each of the controllers we are tracking; returns the created cgroups.
+        """
+        cgroup_paths = []
+
+        def create_cgroup(controller):
+            path = self._get_extension_cgroup_path(controller, extension_name)
+
+            if not os.path.isdir(path):
+                FileSystemCgroupsApi._try_mkdir(path)
+                logger.info("Created cgroup {0}".format(path))
+
+            cgroup_paths.append(path)
+
+        self._foreach_controller(create_cgroup, 'Will not create a cgroup for extension {0}'.format(extension_name))
+
+        return cgroup_paths
+
+    def remove_extension_cgroups(self, extension_name):
+        """
+        Deletes the cgroups for the given extension.
+        """
+        def remove_cgroup(controller):
+            path = self._get_extension_cgroup_path(controller, extension_name)
+
+            shutil.rmtree(path)
+
+        self._foreach_controller(remove_cgroup, 'Failed to delete cgroups for extension {0}'.format(extension_name))
+
+    def get_extension_cgroups(self, extension_name):
+        """
+        Returns the cgroups for the given extension.
+        """
+        cgroup_paths = []
+
+        def get_cgroup(controller):
+            path = self._get_extension_cgroup_path(controller, extension_name)
+            cgroup_paths.append(path)
+
+        self._foreach_controller(get_cgroup, 'Failed to retrieve cgroups for extension {0}'.format(extension_name))
+
+        return cgroup_paths
+
+    def add_process_to_extension_cgroup(self, extension_name, pid):
+        """
+        Adds the given PID to the cgroups for the given extension
+        """
+        def add_pid(controller):
+            path = self._get_extension_cgroup_path(controller, extension_name)
+            self._add_process_to_cgroup(pid, path)
+
+        self._foreach_controller(add_pid, 'Failed to add PID {0} to the cgroups for extension {1}'.format(pid, extension_name))
 
 
 class SystemdCgroupsApi(CGroupsApi):
@@ -132,6 +215,8 @@ class SystemdCgroupsApi(CGroupsApi):
     def create_extension_cgroups_root(self):
         pass
 
+    def create_extension_cgroups(self):
+        pass
 
-
-
+    def remove_extension_cgroups(self, extension_name):
+        pass
