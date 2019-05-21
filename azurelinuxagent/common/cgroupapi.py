@@ -17,6 +17,7 @@
 import errno
 import os
 import shutil
+import subprocess
 
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.exception import CGroupsException
@@ -44,6 +45,9 @@ class CGroupsApi(object):
 
     def remove_extension_cgroups(self, extension_name):
         raise NotImplementedError()
+
+    def start_extension_command(self, extension_name, command, cwd, env, stdout, stderr):
+        pass
 
 
 class FileSystemCgroupsApi(CGroupsApi):
@@ -196,15 +200,41 @@ class FileSystemCgroupsApi(CGroupsApi):
 
         return cgroup_paths
 
-    def add_process_to_extension_cgroup(self, extension_name, pid):
+    def start_extension_command(self, extension_name, command, cwd, env, stdout, stderr):
         """
-        Adds the given PID to the cgroups for the given extension
+        Starts a command (install/enable/etc) for an extension and adds the command's PID to the extension's cgroup
+        :param extension_name: The extension executing the command
+        :param command: The command to invoke
+        :param cwd: The working directory for the command
+        :param env:  The environment to pass to the command's process
+        :param stdout: File object to redirect stdout to
+        :param stderr: File object to redirect stderr to
         """
-        def add_pid(controller):
-            path = self._get_extension_cgroup_path(controller, extension_name)
-            self._add_process_to_cgroup(pid, path)
+        def pre_exec_function():
+            os.setsid()
 
-        self._foreach_controller(add_pid, 'Failed to add PID {0} to the cgroups for extension {1}'.format(pid, extension_name))
+            try:
+                pid = os.getpid()
+
+                def add_pid(controller):
+                    path = self._get_extension_cgroup_path(controller, extension_name)
+                    self._add_process_to_cgroup(pid, path)
+
+                self._foreach_controller(add_pid, 'Failed to add PID {0} to the cgroups for extension {1}. Resource usage will not be tracked.'.format(pid, extension_name))
+
+            except Exception as e:
+                logger.warn("Failed to add extension {0} to its cgroup. Resource usage will not be tracked. Error: {1}".format(extension_name, ustr(e)))
+
+        process = subprocess.Popen(
+            command,
+            shell=True,
+            cwd=cwd,
+            stdout=stdout,
+            stderr=stderr,
+            env=env,
+            preexec_fn=pre_exec_function)
+
+        return process
 
 
 class SystemdCgroupsApi(CGroupsApi):
@@ -221,4 +251,7 @@ class SystemdCgroupsApi(CGroupsApi):
         pass
 
     def remove_extension_cgroups(self, extension_name):
+        pass
+
+    def start_extension_command(self, extension_name, command, cwd, env, stdout, stderr):
         pass
