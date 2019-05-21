@@ -263,6 +263,7 @@ After=system.slice"""
         logger.info("Created and started {0}".format(unit_filename))
 
     def create_extension_cgroups(self, extension_name):
+        # TODO: revisit if we need this code now (not used until we interact with the D-bus API)
         unit_contents = """[Unit]
 Description=Slice for extension {0}
 DefaultDependencies=no
@@ -272,6 +273,13 @@ After=system-{1}.slice""".format(extension_name, EXTENSIONS_ROOT_CGROUP_NAME)
         unit_filename = self._get_extension_unit_path(extension_name)
         self.create_and_start_unit(unit_filename, unit_contents)
         logger.info("Created and started {0}".format(unit_filename))
+
+        # TODO: revisit if the cgroup (path) creation should happen here or later
+        scope_name = extension_name.replace('-', '_')
+        cpu_cgroup_path = os.path.join(CGROUPS_FILE_SYSTEM_ROOT, 'cpu', 'system.slice', scope_name)
+        memory_cgroup_path = os.path.join(CGROUPS_FILE_SYSTEM_ROOT, 'memory', 'system.slice', scope_name)
+
+        return [cpu_cgroup_path, memory_cgroup_path]
 
     def remove_extension_cgroups(self, extension_name):
         # In the future, when the extension is running under the extensions slice:
