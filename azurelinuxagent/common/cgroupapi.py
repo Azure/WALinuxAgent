@@ -47,6 +47,9 @@ class CGroupsApi(object):
     def remove_extension_cgroups(self, extension_name):
         raise NotImplementedError()
 
+    def get_extension_cgroups(self, extension_name):
+        raise NotImplementedError()
+
     def start_extension_command(self, extension_name, command, cwd, env, stdout, stderr):
         raise NotImplementedError()
 
@@ -253,12 +256,16 @@ class SystemdCgroupsApi(CGroupsApi):
             logger.warn("Failed to create and start {0}. Error: {1}".format(unit_filename, ustr(e)))
 
     @staticmethod
-    def _get_extension_unit_root_path():
+    def _get_extensions_slice_root_name():
         return "system-{0}.slice".format(EXTENSIONS_ROOT_CGROUP_NAME)
 
     @staticmethod
-    def _get_extension_unit_path(extension_name):
+    def _get_extension_slice_name(extension_name):
         return "system-walinuxagent.extensions-{0}.slice".format(extension_name.replace('-', '_'))
+
+    @staticmethod
+    def _get_extension_scope_name(extension_name):
+        return extension_name.replace('-', '_')
 
     def create_agent_cgroups(self):
         try:
@@ -283,7 +290,7 @@ DefaultDependencies=no
 Before=slices.target
 Requires=system.slice
 After=system.slice"""
-        unit_filename = self._get_extension_unit_root_path()
+        unit_filename = self._get_extensions_slice_root_name()
         self.create_and_start_unit(unit_filename, unit_contents)
         logger.info("Created and started {0}".format(unit_filename))
 
@@ -296,39 +303,42 @@ DefaultDependencies=no
 Before=slices.target
 Requires=system-{1}.slice
 After=system-{1}.slice""".format(extension_name, EXTENSIONS_ROOT_CGROUP_NAME)
-        unit_filename = self._get_extension_unit_path(extension_name)
+        unit_filename = self._get_extension_slice_name(extension_name)
         self.create_and_start_unit(unit_filename, unit_contents)
         logger.info("Created and started {0}".format(unit_filename))
 
-        # TODO: revisit if the cgroup (path) creation should happen here or later
-        scope_name = extension_name.replace('-', '_')
-        cpu_cgroup_path = os.path.join(CGROUPS_FILE_SYSTEM_ROOT, 'cpu', 'system.slice', scope_name)
-        memory_cgroup_path = os.path.join(CGROUPS_FILE_SYSTEM_ROOT, 'memory', 'system.slice', scope_name)
-
-        return [cpu_cgroup_path, memory_cgroup_path]
+        # Reuse the same method for getting cgroup paths since we don't need to create them (systemd will)
+        return self.get_extension_cgroups(extension_name)
 
     def remove_extension_cgroups(self, extension_name):
-        # In the future, when the extension is running under the extensions slice:
-        # unit_filename = self._get_extension_unit_path()
-
-        # Current implementation when extensions are running within a scope on the system level
-        unit_filename = "{0}.scope".format(extension_name.replace('-', '_'))
+        # For transient units, cgroups are released automatically when the unit stops, so it is sufficient
+        # to call stop on them. Persistent cgroups are released when the unit is disabled and its configuration
+        # file is deleted.
+        # The assumption is that this method is called after the extension has been uninstalled. For now, since
+        # we're running extensions within transient scopes which clean up after they finish running, no removal
+        # of units is needed. In the future, when the extension is running under its own slice,
+        # the following clean up is needed.
+        unit_filename = self._get_extension_slice_name(extension_name)
         try:
-            # For transient units, cgroups are released automatically when the unit stops, so it is sufficient
-            # to call stop on them. Persistent cgroups are released when the unit is disabled and its configuration
-            # file is deleted.
             shellutil.run_get_output("systemctl stop {0}".format(unit_filename))
             fileutil.rm_files("/etc/systemd/system/{0}".format(unit_filename))
             shellutil.run_get_output("systemctl daemon-reload")
         except Exception as e:
             logger.warn("Failed to remove {0}. Error: {1}".format(unit_filename, ustr(e)))
 
+    def get_extension_cgroups(self, extension_name):
+        scope_name = self._get_extension_scope_name(extension_name)
+        cpu_cgroup_path = os.path.join(CGROUPS_FILE_SYSTEM_ROOT, 'cpu', 'system.slice', scope_name)
+        memory_cgroup_path = os.path.join(CGROUPS_FILE_SYSTEM_ROOT, 'memory', 'system.slice', scope_name)
+
+        return [cpu_cgroup_path, memory_cgroup_path]
+
     def start_extension_command(self, extension_name, command, cwd, env, stdout, stderr):
         def pre_exec_function():
             os.setsid()
 
         process = subprocess.Popen(
-            "systemd-run --unit={0} --scope {1}".format(extension_name.replace('-', '_'), command),
+            "systemd-run --unit={0} --scope {1}".format(self._get_extension_scope_name(extension_name), command),
             shell=True,
             cwd=cwd,
             stdout=stdout,
@@ -337,4 +347,3 @@ After=system-{1}.slice""".format(extension_name, EXTENSIONS_ROOT_CGROUP_NAME)
             preexec_fn=pre_exec_function)
 
         return process
-

@@ -82,44 +82,6 @@ class TestCGroupConfigurator(AgentTestCase):
 
 
 @skip_if_predicate_false(CGroupConfigurator.enabled, "CGroups not supported in this environment")
-class TestSystemdCgroupsApi(AgentTestCase):
-
-    @skip_if_predicate_false(i_am_root, "Test does not run when normal user")
-    def test_if_extensions_root_slice_is_created(self):
-        SystemdCgroupsApi().create_extension_cgroups_root()
-
-        unit_name = SystemdCgroupsApi()._get_extension_unit_root_path()
-        _, status = shellutil.run_get_output("systemctl status {0}".format(unit_name))
-        self.assertIn("Loaded: loaded", status)
-        self.assertIn("Active: active", status)
-
-        shellutil.run_get_output("systemctl stop {0}".format(unit_name))
-        shellutil.run_get_output("systemctl disable {0}".format(unit_name))
-        os.remove("/etc/systemd/system/{0}".format(unit_name))
-        shellutil.run_get_output("systemctl daemon-reload")
-
-    @skip_if_predicate_false(i_am_root, "Test does not run when normal user")
-    def test_if_extension_slice_is_created(self):
-        extension_name = "Microsoft.Azure.DummyExtension-1.0"
-        cgroups = SystemdCgroupsApi().create_extension_cgroups(extension_name)
-        cpu_cgroup, memory_cgroup = cgroups[0], cgroups[1]
-        self.assertEqual(cpu_cgroup, "/sys/fs/cgroup/cpu/system.slice/Microsoft.Azure.DummyExtension_1.0")
-        self.assertEqual(memory_cgroup, "/sys/fs/cgroup/memory/system.slice/Microsoft.Azure.DummyExtension_1.0")
-
-        unit_name = SystemdCgroupsApi._get_extension_unit_path(extension_name)
-        self.assertEqual("system-walinuxagent.extensions-Microsoft.Azure.DummyExtension_1.0.slice", unit_name)
-
-        _, status = shellutil.run_get_output("systemctl status {0}".format(unit_name))
-        self.assertIn("Loaded: loaded", status)
-        self.assertIn("Active: active", status)
-
-        shellutil.run_get_output("systemctl stop {0}".format(unit_name))
-        shellutil.run_get_output("systemctl disable {0}".format(unit_name))
-        os.remove("/etc/systemd/system/{0}".format(unit_name))
-        shellutil.run_get_output("systemctl daemon-reload")
-
-
-@skip_if_predicate_false(CGroupConfigurator.enabled, "CGroups not supported in this environment")
 class TestCGroups(AgentTestCase):
     @classmethod
     def setUpClass(cls):
