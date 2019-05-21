@@ -49,13 +49,64 @@ class CGroupsApi(object):
     def start_extension_command(self, extension_name, command, cwd, env, stdout, stderr):
         pass
 
+    """
+    Factory method to create the correct API for the current platform
+    """
+    @staticmethod
+    def create():
+        return SystemdCgroupsApi() if CGroupsApi._is_systemd() else FileSystemCgroupsApi()
+
+    @staticmethod
+    def _is_systemd():
+        """
+        Determine if systemd is managing system services. If this process (presumed to be the agent) is in a CPU cgroup
+        that looks like one created by systemd, we can assume systemd is in use.
+
+        TODO: We need to re-evaluate whether this the right logic to determine whether Systemd is managing cgroups.
+
+        :return: True if systemd is managing system services
+        :rtype: Bool
+        """
+        controller_id = CGroupsApi._get_controller_id('cpu')
+        current_process_cgroup_relative_path = CGroupsApi._get_current_process_cgroup_relative_path(controller_id)
+        current_process_cgroup_path = os.path.join(CGROUPS_FILE_SYSTEM_ROOT, 'cpu', current_process_cgroup_relative_path)
+        systemd_cpu_system_slice = os.path.join(CGROUPS_FILE_SYSTEM_ROOT, 'cpu', 'system.slice')
+        is_systemd = current_process_cgroup_path.startswith(systemd_cpu_system_slice)
+
+        return is_systemd
+
+    @staticmethod
+    def _get_current_process_cgroup_relative_path(controller_id):
+        """
+        Get the cgroup path "suffix" for this process for the given controller. The leading "/" is always stripped,
+        so the suffix is suitable for passing to os.path.join(). (If the process is in the root cgroup, an empty
+        string is returned, and os.path.join() will still do the right thing.)
+        """
+        cgroup_paths = fileutil.read_file("/proc/self/cgroup")
+        for entry in cgroup_paths.splitlines():
+            fields = entry.split(':')
+            if fields[0] == controller_id:
+                return fields[2].lstrip(os.path.sep)
+        raise CGroupsException("This process belongs to no cgroup for hierarchy ID {0}".format(controller_id))
+
+
+    @staticmethod
+    def _get_controller_id(controller):
+        """
+        Get the ID for a given cgroup controller
+        """
+        cgroup_states = fileutil.read_file("/proc/cgroups")
+        for entry in cgroup_states.splitlines():
+            fields = entry.split('\t')
+            if fields[0] == controller:
+                return fields[1]
+        raise CGroupsException("Cgroup controller {0} not found in /proc/cgroups".format(controller))
+
 
 class FileSystemCgroupsApi(CGroupsApi):
     """
     Cgroups interface using the cgroups file system directly
     """
-    _osutil = get_osutil()
-
     @staticmethod
     def _try_mkdir(path):
         """

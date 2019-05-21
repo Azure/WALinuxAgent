@@ -281,11 +281,11 @@ class TestHandlerStateMigration(AgentTestCase):
 class ExtensionTestCase(AgentTestCase):
     @classmethod
     def setUpClass(cls):
-        CGroupConfigurator.disable()
+        CGroupConfigurator.get_instance().disable()
 
     @classmethod
     def tearDownClass(cls):
-        CGroupConfigurator.enable()
+        CGroupConfigurator.get_instance().enable()
 
 
 @patch("azurelinuxagent.common.protocol.wire.CryptUtil")

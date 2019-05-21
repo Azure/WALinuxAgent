@@ -22,12 +22,10 @@ from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from tests.tools import *
 
 
-@skip_if_predicate_false(CGroupConfigurator.enabled, "CGroups not supported in this environment")
+@skip_if_predicate_false(lambda: False, "TODO: Need unit tests")
 class TestCGroupConfigurator(AgentTestCase):
     #
     # TODO -- Need to write actual tests
     #
     def test_dummy(self):
-        api = FileSystemCgroupsApi()
-        api.create_agent_cgroups()
-        self.assertTrue(True)
+        pass

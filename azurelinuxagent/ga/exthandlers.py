@@ -38,7 +38,7 @@ import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.version as version
-from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator, CGroupConfigurator_tmp
+from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.errorstate import ErrorState, ERROR_STATE_DELTA_INSTALL
 from azurelinuxagent.common.event import add_event, WALAEventOperation, elapsed_milliseconds, report_event
@@ -870,7 +870,7 @@ class ExtHandlerInstance(object):
             raise ExtensionDownloadError(u"Failed to initialize extension '{0}'".format(self.get_full_name()), e)
 
         # Create cgroups for the extension
-        self.cgroups = CGroupConfigurator_tmp.get_instance().create_extension_cgroups(self.get_full_name())
+        self.cgroups = CGroupConfigurator.get_instance().create_extension_cgroups(self.get_full_name())
 
         # Save HandlerEnvironment.json
         self.create_handler_env()
@@ -940,7 +940,7 @@ class ExtHandlerInstance(object):
             self.logger.warn(message)
 
         # Also remove the cgroups for the extension
-        CGroupConfigurator_tmp.get_instance().remove_extension_cgroups(self.get_full_name())
+        CGroupConfigurator.get_instance().remove_extension_cgroups(self.get_full_name())
 
     def update(self, version=None):
         if version is None:
@@ -1137,7 +1137,7 @@ class ExtHandlerInstance(object):
                     # as root-relative. (Issue #1170)
                     full_path = os.path.join(base_dir, cmd.lstrip(os.path.sep))
 
-                    process = CGroupConfigurator_tmp.get_instance().start_extension_command(
+                    process = CGroupConfigurator.get_instance().start_extension_command(
                         extension_name=self.get_full_name(),
                         command=full_path,
                         cwd=base_dir,
