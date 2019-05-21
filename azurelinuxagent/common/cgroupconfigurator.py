@@ -115,11 +115,8 @@ class CGroupConfigurator(object):
     @staticmethod
     def is_systemd():
         """
-        Determine if systemd is managing system services. If this process (presumed to be the agent) is in a CPU cgroup
-        that looks like one created by systemd, we can assume systemd is in use.
-
-        TODO: We need to re-evaluate whether this the right logic to determine whether Systemd is managing cgroups.
-
+        Determine if we are on a system that's running systemd. Since cgroups are a core component of the systemd
+        suite, we can safely assume systemd is also managing the cgroups.
         :return: True if systemd is managing system services
         :rtype: Bool
         """
@@ -129,12 +126,6 @@ class CGroupConfigurator(object):
                 CGroupConfigurator._is_systemd_return_value = output.strip() == 'systemd'
             except Exception:
                 CGroupConfigurator._is_systemd_return_value = False
-
-            # if not CGroupConfigurator.enabled():
-            #     CGroupConfigurator._is_systemd_return_value = False
-            # else:
-            #     path = CGroupConfigurator.get_my_cgroup_folder("cpu")
-            #     CGroupConfigurator._is_systemd_return_value = path.startswith(CGroupConfigurator._construct_systemd_path_for_hierarchy("cpu", ""))
 
         return CGroupConfigurator._is_systemd_return_value
 
