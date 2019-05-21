@@ -55,15 +55,18 @@ class ProvisionHandler(object):
         self.protocol_util = get_protocol_util()
 
     def run(self):
-        if not conf.get_provision_enabled():
-            logger.info("Provisioning is disabled, skipping.")
-            self.write_provisioned()
+        def signal(thumbprint=None):
             logger.info("signaling...")
-            if self.report_ready():
+            if self.report_ready(thumbprint):
                 self.write_signaled()
                 logger.info("signaling complete")
             else:
                 logger.info("signaling incomplete")
+
+        if not conf.get_provision_enabled():
+            logger.info("Provisioning is disabled, skipping.")
+            self.write_provisioned()
+            signal()
             return
 
         try:
@@ -76,12 +79,7 @@ class ProvisionHandler(object):
 
             elif provision_state == "provisioned_not_signaled":
                 logger.info("provisioning complete, not signaled")
-                logger.info("signaling...")
-                if self.report_ready():
-                    self.write_signaled()
-                    logger.info("signaling complete")
-                else:
-                    logger.info("signaling incomplete")
+                signal()
 
             else:
                 if provision_state != "not_provisioned":
@@ -114,12 +112,7 @@ class ProvisionHandler(object):
                 self.write_provisioned()
                 logger.info("Provisioning complete")
 
-                logger.info("signaling...")
-                if self.report_ready(thumbprint):
-                    self.write_signaled()
-                    logger.info("signaling complete")
-                else:
-                    logger.info("signaling incomplete")
+                signal(thumbprint)
 
         except (ProtocolError, ProvisionError) as e:
             msg = "Provisioning failed: {0} ({1}s)".format(ustr(e), self._get_uptime_seconds())
