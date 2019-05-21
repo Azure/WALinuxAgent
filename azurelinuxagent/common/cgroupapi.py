@@ -89,7 +89,7 @@ class FileSystemCgroupsApi(CGroupsApi):
                 operation(controller)
 
     @staticmethod
-    def _get_extension_cgroups_root_path(self, controller):
+    def _get_extension_cgroups_root_path(controller):
         return os.path.join(CGROUPS_FILE_SYSTEM_ROOT, controller, EXTENSIONS_ROOT_CGROUP_NAME)
 
     def _get_extension_cgroup_path(self, controller, extension_name):
@@ -104,7 +104,7 @@ class FileSystemCgroupsApi(CGroupsApi):
         return os.path.join(extensions_root, cgroup_name)
 
     @staticmethod
-    def _add_process_to_cgroup(self, pid, cgroup_path):
+    def _add_process_to_cgroup(pid, cgroup_path):
         tasks_file = os.path.join(cgroup_path, 'cgroup.procs')
         fileutil.append_file(tasks_file, "{0}\n".format(pid))
         logger.info("Added PID {0} to cgroup {1}".format(pid, cgroup_path))
