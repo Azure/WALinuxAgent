@@ -263,7 +263,8 @@ After=system.slice"""
         logger.info("Created and started {0}".format(unit_filename))
 
     def create_extension_cgroups(self, extension_name):
-        # TODO: revisit if we need this code now (not used until we interact with the D-bus API)
+        # TODO: revisit if we need this code now (not used until we interact with the D-bus API and run the
+        #  extension scopes within their designated slice)
         unit_contents = """[Unit]
 Description=Slice for extension {0}
 DefaultDependencies=no
@@ -288,8 +289,10 @@ After=system-{1}.slice""".format(extension_name, EXTENSIONS_ROOT_CGROUP_NAME)
         # Current implementation when extensions are running within a scope on the system level
         unit_filename = "{0}.scope".format(extension_name.replace('-', '_'))
         try:
+            # For transient units, cgroups are released automatically when the unit stops, so it is sufficient
+            # to call stop on them. Persistent cgroups are released when the unit is disabled and its configuration
+            # file is deleted.
             shellutil.run_get_output("systemctl stop {0}".format(unit_filename))
-            shellutil.run_get_output("systemctl disable {0}".format(unit_filename))
             fileutil.rm_files("/etc/systemd/system/{0}".format(unit_filename))
         except Exception as e:
             logger.warn("Failed to remove {0}. Error: {1}".format(unit_filename, ustr(e)))

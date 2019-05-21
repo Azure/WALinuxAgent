@@ -84,7 +84,7 @@ class TestCGroupConfigurator(AgentTestCase):
 class TestSystemdCgroupsApi(AgentTestCase):
 
     @skip_if_predicate_false(i_am_root, "Test does not run when normal user")
-    def test_if_extensions_slice_is_created(self):
+    def test_if_extensions_root_slice_is_created(self):
         SystemdCgroupsApi().create_extension_cgroups_root()
 
         unit_name = SystemdCgroupsApi()._get_extension_unit_root_path()
@@ -95,6 +95,10 @@ class TestSystemdCgroupsApi(AgentTestCase):
         shellutil.run_get_output("systemctl stop {0}".format(unit_name))
         shellutil.run_get_output("systemctl disable {0}".format(unit_name))
         os.remove("/etc/systemd/system/{0}".format(unit_name))
+
+        _, status = shellutil.run_get_output("systemctl status {0}".format(unit_name))
+        self.assertIn("Loaded: not-found (Reason: No such file or directory", status)
+        self.assertIn("Active: inactive (dead)", status)
 
     @skip_if_predicate_false(i_am_root, "Test does not run when normal user")
     def test_if_extension_slice_is_created(self):
@@ -114,6 +118,10 @@ class TestSystemdCgroupsApi(AgentTestCase):
         shellutil.run_get_output("systemctl stop {0}".format(unit_name))
         shellutil.run_get_output("systemctl disable {0}".format(unit_name))
         os.remove("/etc/systemd/system/{0}".format(unit_name))
+
+        _, status = shellutil.run_get_output("systemctl status {0}".format(unit_name))
+        self.assertIn("Loaded: not-found (Reason: No such file or directory", status)
+        self.assertIn("Active: inactive (dead)", status)
 
 
 @skip_if_predicate_false(CGroupConfigurator.enabled, "CGroups not supported in this environment")
