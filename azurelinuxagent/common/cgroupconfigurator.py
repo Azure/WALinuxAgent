@@ -125,8 +125,8 @@ class CGroupConfigurator(object):
         """
         if CGroupConfigurator._is_systemd_return_value is None:
             try:
-                _, output = shellutil.run_get_output('cat /proc/1/comm')[0].strip()
-                CGroupConfigurator._is_systemd_return_value = output == 'systemd'
+                _, output = shellutil.run_get_output('cat /proc/1/comm')
+                CGroupConfigurator._is_systemd_return_value = output.strip() == 'systemd'
             except Exception:
                 CGroupConfigurator._is_systemd_return_value = False
 
