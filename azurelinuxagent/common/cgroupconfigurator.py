@@ -24,7 +24,7 @@ from azurelinuxagent.common.exception import CGroupsException
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.osutil.default import BASE_CGROUPS
-from azurelinuxagent.common.utils import fileutil
+from azurelinuxagent.common.utils import fileutil, shellutil
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 from azurelinuxagent.common.event import add_event, WALAEventOperation
 
@@ -124,11 +124,16 @@ class CGroupConfigurator(object):
         :rtype: Bool
         """
         if CGroupConfigurator._is_systemd_return_value is None:
-            if not CGroupConfigurator.enabled():
+            try:
+                CGroupConfigurator._is_systemd_return_value = shellutil.run_get_output('cat /proc/1/comm')[0].strip() == 'systemd'
+            except Exception:
                 CGroupConfigurator._is_systemd_return_value = False
-            else:
-                path = CGroupConfigurator.get_my_cgroup_folder("cpu")
-                CGroupConfigurator._is_systemd_return_value = path.startswith(CGroupConfigurator._construct_systemd_path_for_hierarchy("cpu", ""))
+                
+            # if not CGroupConfigurator.enabled():
+            #     CGroupConfigurator._is_systemd_return_value = False
+            # else:
+            #     path = CGroupConfigurator.get_my_cgroup_folder("cpu")
+            #     CGroupConfigurator._is_systemd_return_value = path.startswith(CGroupConfigurator._construct_systemd_path_for_hierarchy("cpu", ""))
 
         return CGroupConfigurator._is_systemd_return_value
 
