@@ -93,7 +93,8 @@ class FileSystemCgroupsApi(CGroupsApi):
             else:
                 operation(controller)
 
-    def _get_extension_cgroups_root_path(self, controller):
+    @staticmethod
+    def _get_extension_cgroups_root_path(controller):
         return os.path.join(CGROUPS_FILE_SYSTEM_ROOT, controller, EXTENSIONS_ROOT_CGROUP_NAME)
 
     def _get_extension_cgroup_path(self, controller, extension_name):
@@ -107,7 +108,8 @@ class FileSystemCgroupsApi(CGroupsApi):
 
         return os.path.join(extensions_root, cgroup_name)
 
-    def _add_process_to_cgroup(self, pid, cgroup_path):
+    @staticmethod
+    def _add_process_to_cgroup(pid, cgroup_path):
         tasks_file = os.path.join(cgroup_path, 'cgroup.procs')
         fileutil.append_file(tasks_file, "{0}\n".format(pid))
         logger.info("Added PID {0} to cgroup {1}".format(pid, cgroup_path))
@@ -199,18 +201,41 @@ class FileSystemCgroupsApi(CGroupsApi):
 
         return cgroup_paths
 
-    def add_process_to_extension_cgroup(self, extension_name, pid):
-        """
-        Adds the given PID to the cgroups for the given extension
-        """
-        def add_pid(controller):
-            path = self._get_extension_cgroup_path(controller, extension_name)
-            self._add_process_to_cgroup(pid, path)
-
-        self._foreach_controller(add_pid, 'Failed to add PID {0} to the cgroups for extension {1}'.format(pid, extension_name))
-
     def start_extension_command(self, extension_name, command, cwd, env, stdout, stderr):
-        pass
+        """
+        Starts a command (install/enable/etc) for an extension and adds the command's PID to the extension's cgroup
+        :param extension_name: The extension executing the command
+        :param command: The command to invoke
+        :param cwd: The working directory for the command
+        :param env:  The environment to pass to the command's process
+        :param stdout: File object to redirect stdout to
+        :param stderr: File object to redirect stderr to
+        """
+        def pre_exec_function():
+            os.setsid()
+
+            try:
+                pid = os.getpid()
+
+                def add_pid(controller):
+                    path = self._get_extension_cgroup_path(controller, extension_name)
+                    self._add_process_to_cgroup(pid, path)
+
+                self._foreach_controller(add_pid, 'Failed to add PID {0} to the cgroups for extension {1}. Resource usage will not be tracked.'.format(pid, extension_name))
+
+            except Exception as e:
+                logger.warn("Failed to add extension {0} to its cgroup. Resource usage will not be tracked. Error: {1}".format(extension_name, ustr(e)))
+
+        process = subprocess.Popen(
+            command,
+            shell=True,
+            cwd=cwd,
+            stdout=stdout,
+            stderr=stderr,
+            env=env,
+            preexec_fn=pre_exec_function)
+
+        return process
 
 
 class SystemdCgroupsApi(CGroupsApi):
@@ -312,3 +337,4 @@ After=system-{1}.slice""".format(extension_name, EXTENSIONS_ROOT_CGROUP_NAME)
             preexec_fn=pre_exec_function)
 
         return process
+

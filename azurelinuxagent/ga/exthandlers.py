@@ -823,7 +823,7 @@ class ExtHandlerInstance(object):
         self.report_event(message="Download succeeded", duration=duration)
 
     def initialize(self):
-        self.logger.info("Initialize extension")
+        self.logger.info("Initializing extension {0}".format(self.get_full_name()))
 
         # Add user execute permission to all files under the base dir
         for file in fileutil.get_all_files(self.get_base_dir()):

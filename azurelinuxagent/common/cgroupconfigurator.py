@@ -446,12 +446,12 @@ class CGroupConfigurator_tmp(object):
             """
             Ensures the cgroups file system is mounted and selects the correct API to interact with it
             """
-            self.cgroups_api = None
+            self._cgroups_api = None
 
             if CGroupConfigurator.enabled():
                 try:
                     CGroupConfigurator._osutil.mount_cgroups()
-                    self.cgroups_api = SystemdCgroupsApi() if CGroupConfigurator.is_systemd() else FileSystemCgroupsApi()
+                    self._cgroups_api = SystemdCgroupsApi() if CGroupConfigurator.is_systemd() else FileSystemCgroupsApi()
                     status = "The cgroup filesystem is ready to use"
                 except Exception as e:
                     status = ustr(e)
@@ -487,7 +487,7 @@ class CGroupConfigurator_tmp(object):
             Creates and returns the cgroups needed to track the VM Agent
             """
             def __impl():
-                cgroups = self.cgroups_api.create_agent_cgroups()
+                cgroups = self._cgroups_api.create_agent_cgroups()
 
                 if track_cgroups:
                     # TODO: Add to tracking list
@@ -502,7 +502,7 @@ class CGroupConfigurator_tmp(object):
             Creates the container (directory/cgroup) that includes the cgroups for all extensions (/sys/fs/cgroup/*/walinuxagent.extensions)
             """
             def __impl():
-                self.cgroups_api.create_extension_cgroups_root()
+                self._cgroups_api.create_extension_cgroups_root()
 
             self._invoke_cgroup_operation(__impl, "Failed to create a root cgroup for extensions; resource usage for extensions will not be tracked")
 
@@ -511,7 +511,7 @@ class CGroupConfigurator_tmp(object):
             Creates and returns the cgroups for the given extension
             """
             def __impl():
-                cgroups = self.cgroups_api.create_extension_cgroups(name)
+                cgroups = self._cgroups_api.create_extension_cgroups(name)
 
                 # TODO: Add to tracking list
 
@@ -524,7 +524,7 @@ class CGroupConfigurator_tmp(object):
             Deletes the cgroup for the given extension
             """
             def __impl():
-                cgroups = self.cgroups_api.remove_extension_cgroups(name)
+                cgroups = self._cgroups_api.remove_extension_cgroups(name)
 
                 # TODO: Add to tracking list
 
@@ -540,31 +540,32 @@ class CGroupConfigurator_tmp(object):
             :param cwd: The working directory for the command
             :param env:  The environment to pass to the command's process
             :param stdout: File object to redirect stdout to
-            :param stderr: File pbject to redirect stderr to
+            :param stderr: File object to redirect stderr to
             """
-            def pre_exec_function():
-                os.setsid()
+            if not CGroupConfigurator.enabled():
+                process = subprocess.Popen(
+                    command,
+                    shell=True,
+                    cwd=cwd,
+                    env=env,
+                    stdout=stdout,
+                    stderr=stderr,
+                    preexec_fn=os.setsid)
+            else:
+                process = self._cgroups_api.start_extension_command(
+                    extension_name,
+                    command,
+                    cwd=cwd,
+                    env=env,
+                    stdout=stdout,
+                    stderr=stderr)
 
-                def add_to_cgroup():
-                    self.cgroups_api.add_process_to_extension_cgroup(extension_name, os.getpid())
+                def track_cgroups():
+                    cgroups = self._cgroups_api.get_extension_cgroups(extension_name)
 
-                self._invoke_cgroup_operation(add_to_cgroup, "Failed add extension '{0}' to its cgroup; resource usage will not be tracked".format(extension_name))
+                    # TODO: Add to tracking list
 
-            process = subprocess.Popen(
-                command,
-                shell=True,
-                cwd=cwd,
-                stdout=stdout,
-                stderr=stderr,
-                env=env,
-                preexec_fn=pre_exec_function)
-
-            def track_cgroups():
-                cgroups = self.cgroups_api.get_extension_cgroups(extension_name)
-
-                # TODO: Add to tracking list
-
-            self._invoke_cgroup_operation(track_cgroups, "Failed to add cgroups for extension '{0}' to the tracking list; resource usage will not be tracked".format(extension_name))
+                self._invoke_cgroup_operation(track_cgroups, "Failed to add cgroups for extension '{0}' to the tracking list; resource usage will not be tracked".format(extension_name))
 
             return process
 
