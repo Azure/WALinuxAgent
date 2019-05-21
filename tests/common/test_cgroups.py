@@ -17,9 +17,7 @@
 
 from __future__ import print_function
 
-from azurelinuxagent.common.utils import shellutil
 from azurelinuxagent.common.cgroup import CpuCgroup, MemoryCGroup
-from azurelinuxagent.common.cgroupapi import SystemdCgroupsApi
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator_tmp, CGroupConfigurator, CGroupsLimits, \
     BASE_CGROUPS, DEFAULT_MEM_LIMIT_MIN_MB
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry

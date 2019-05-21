@@ -17,8 +17,9 @@
 
 from __future__ import print_function
 
-from azurelinuxagent.common.cgroupapi import FileSystemCgroupsApi
+from azurelinuxagent.common.cgroupapi import FileSystemCgroupsApi, SystemdCgroupsApi
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
+from azurelinuxagent.common.utils import shellutil
 from tests.tools import *
 
 
@@ -44,7 +45,7 @@ class TestSystemdCgroupsApi(AgentTestCase):
     def test_if_extensions_root_slice_is_created(self):
         SystemdCgroupsApi().create_extension_cgroups_root()
 
-        unit_name = SystemdCgroupsApi()._get_extension_unit_root_path()
+        unit_name = SystemdCgroupsApi()._get_extensions_slice_root_name()
         _, status = shellutil.run_get_output("systemctl status {0}".format(unit_name))
         self.assertIn("Loaded: loaded", status)
         self.assertIn("Active: active", status)
@@ -62,7 +63,7 @@ class TestSystemdCgroupsApi(AgentTestCase):
         self.assertEqual(cpu_cgroup, "/sys/fs/cgroup/cpu/system.slice/Microsoft.Azure.DummyExtension_1.0")
         self.assertEqual(memory_cgroup, "/sys/fs/cgroup/memory/system.slice/Microsoft.Azure.DummyExtension_1.0")
 
-        unit_name = SystemdCgroupsApi._get_extension_unit_path(extension_name)
+        unit_name = SystemdCgroupsApi._get_extension_slice_name(extension_name)
         self.assertEqual("system-walinuxagent.extensions-Microsoft.Azure.DummyExtension_1.0.slice", unit_name)
 
         _, status = shellutil.run_get_output("systemctl status {0}".format(unit_name))
