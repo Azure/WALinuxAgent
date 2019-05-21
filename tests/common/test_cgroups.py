@@ -18,6 +18,7 @@
 from __future__ import print_function
 
 from azurelinuxagent.common.cgroup import CpuCgroup, MemoryCGroup
+from azurelinuxagent.common.cgroupapi import FileSystemCgroupsApi, SystemdCgroupsApi
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator_tmp, CGroupConfigurator, CGroupsLimits, BASE_CGROUPS,  DEFAULT_MEM_LIMIT_MIN_MB
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.exception import CGroupsException
@@ -76,6 +77,37 @@ class TestCGroupConfigurator(AgentTestCase):
     #
     def test_initialize(self):
         CGroupConfigurator_tmp.get_instance().create_extension_cgroups_root()
+
+
+@skip_if_predicate_false(CGroupConfigurator.enabled, "CGroups not supported in this environment")
+class TestSystemdCgroupsApi(AgentTestCase):
+
+    @skip_if_predicate_false(i_am_root, "Test does not run when normal user")
+    def test_if_extensions_slice_is_created(self):
+        SystemdCgroupsApi().create_extension_cgroups_root()
+
+        unit_name = SystemdCgroupsApi()._get_extension_unit_root_path()
+        _, status = shellutil.run_get_output("systemctl status {0}".format(unit_name))
+        self.assertIn("Loaded: loaded", status)
+        self.assertIn("Active: active", status)
+
+        shellutil.run_get_output("systemctl stop {0}".format(unit_name))
+        shellutil.run_get_output("systemctl disable {0}".format(unit_name))
+        os.remove("/etc/systemd/system/{0}".format(unit_name))
+
+    @skip_if_predicate_false(i_am_root, "Test does not run when normal user")
+    def test_if_extension_slice_is_created(self):
+        extension_name = "Microsoft.Azure.DummyExtension-1.0"
+        SystemdCgroupsApi().create_extension_cgroups(extension_name)
+
+        unit_name = SystemdCgroupsApi._get_extension_unit_path(extension_name)
+        _, status = shellutil.run_get_output("systemctl status {0}".format(unit_name))
+        self.assertIn("Loaded: loaded", status)
+        self.assertIn("Active: active", status)
+
+        shellutil.run_get_output("systemctl stop {0}".format(unit_name))
+        shellutil.run_get_output("systemctl disable {0}".format(unit_name))
+        os.remove("/etc/systemd/system/{0}".format(unit_name))
 
 
 @skip_if_predicate_false(CGroupConfigurator.enabled, "CGroups not supported in this environment")
