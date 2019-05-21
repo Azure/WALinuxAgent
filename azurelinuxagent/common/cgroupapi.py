@@ -294,6 +294,7 @@ After=system-{1}.slice""".format(extension_name, EXTENSIONS_ROOT_CGROUP_NAME)
             # file is deleted.
             shellutil.run_get_output("systemctl stop {0}".format(unit_filename))
             fileutil.rm_files("/etc/systemd/system/{0}".format(unit_filename))
+            shellutil.run_get_output("systemctl daemon-reload")
         except Exception as e:
             logger.warn("Failed to remove {0}. Error: {1}".format(unit_filename, ustr(e)))
 
