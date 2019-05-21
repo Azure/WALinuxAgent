@@ -39,7 +39,7 @@ class CGroupsApi(object):
     def create_extension_cgroups_root(self):
         raise NotImplementedError()
 
-    def create_extension_cgroups(self):
+    def create_extension_cgroups(self, extension_name):
         raise NotImplementedError()
 
     def remove_extension_cgroups(self, extension_name):
@@ -88,6 +88,7 @@ class FileSystemCgroupsApi(CGroupsApi):
             else:
                 operation(controller)
 
+    @staticmethod
     def _get_extension_cgroups_root_path(self, controller):
         return os.path.join(CGROUPS_FILE_SYSTEM_ROOT, controller, EXTENSIONS_ROOT_CGROUP_NAME)
 
@@ -102,6 +103,7 @@ class FileSystemCgroupsApi(CGroupsApi):
 
         return os.path.join(extensions_root, cgroup_name)
 
+    @staticmethod
     def _add_process_to_cgroup(self, pid, cgroup_path):
         tasks_file = os.path.join(cgroup_path, 'cgroup.procs')
         fileutil.append_file(tasks_file, "{0}\n".format(pid))
@@ -215,7 +217,7 @@ class SystemdCgroupsApi(CGroupsApi):
     def create_extension_cgroups_root(self):
         pass
 
-    def create_extension_cgroups(self):
+    def create_extension_cgroups(self, extension_name):
         pass
 
     def remove_extension_cgroups(self, extension_name):

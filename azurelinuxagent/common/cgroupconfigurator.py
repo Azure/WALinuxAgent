@@ -548,7 +548,7 @@ class CGroupConfigurator_tmp(object):
                 def add_to_cgroup():
                     self.cgroups_api.add_process_to_extension_cgroup(extension_name, os.getpid())
 
-                self._invoke_cgroup_operation(add_to_cgroup, "Failed add extension '{0}' to its cgroup; resource usage will not be tracked".format(extension_name))
+                self._invoke_cgroup_operation(add_to_cgroup, "Failed to add extension '{0}' to its cgroup; resource usage will not be tracked".format(extension_name))
 
             process = subprocess.Popen(
                 command,
