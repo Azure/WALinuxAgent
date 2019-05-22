@@ -17,7 +17,7 @@
 
 from __future__ import print_function
 
-from azurelinuxagent.common.cgroupapi import FileSystemCgroupsApi, SystemdCgroupsApi
+from azurelinuxagent.common.cgroupapi import CGroupsApi, FileSystemCgroupsApi, SystemdCgroupsApi
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.utils import shellutil
 from tests.tools import *
@@ -26,21 +26,18 @@ from tests.tools import *
 def i_am_root():
     return os.geteuid() == 0
 
-@skip_if_predicate_false(CGroupConfigurator.get_instance().enabled, "CGroups not supported in this environment")
-class TestCGroupConfigurator(AgentTestCase):
-    def dummy(self):
-        pass
-    # @patch('azurelinuxagent.common.cgroupapi.SystemdCgroupsApi.create_agent_cgroups')
-    # @patch('azurelinuxagent.common.cgroupapi.FileSystemCgroupsApi.create_agent_cgroups')
-    # @patch('azurelinuxagent.common.cgroupconfigurator.CGroupConfigurator.is_systemd')
-    # def test_it_should_call_systemd_api(self, mock_is_systemd, mock_create_agent_cgroups_filesystem,mock_create_agent_cgroups_systemd):
-    #     mock_is_systemd.return_value = True
-    #
-    #     configurator = CGroupConfigurator.get_instance()
-    #     configurator.create_agent_cgroups(track_cgroups=False)
-    #
-    #     self.assertEqual(mock_create_agent_cgroups_systemd.call_count, 1)
-    #     self.assertEqual(mock_create_agent_cgroups_filesystem.call_count, 0)
+class TestCGroupsApi(AgentTestCase):
+    def test_create_should_return_a_SystemdCgroupsApi_on_systemd_platforms(self):
+        with patch("azurelinuxagent.common.cgroupapi.CGroupsApi._is_systemd", return_value=True):
+            api = CGroupsApi.create()
+
+        self.assertTrue(type(api) == SystemdCgroupsApi)
+
+    def test_create_should_return_a_FileSystemCgroupsApi_on_non_systemd_platforms(self):
+        with patch("azurelinuxagent.common.cgroupapi.CGroupsApi._is_systemd", return_value=False):
+            api = CGroupsApi.create()
+
+        self.assertTrue(type(api) == FileSystemCgroupsApi)
 
 
 @skip_if_predicate_false(CGroupConfigurator.get_instance().enabled, "CGroups not supported in this environment")
