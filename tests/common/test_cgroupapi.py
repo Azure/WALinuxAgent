@@ -17,8 +17,8 @@
 
 from __future__ import print_function
 
-from azurelinuxagent.common.cgroupapi import FileSystemCgroupsApi, SystemdCgroupsApi
-from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator, CGroupConfigurator_tmp
+from azurelinuxagent.common.cgroupapi import CGroupsApi, FileSystemCgroupsApi, SystemdCgroupsApi
+from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.utils import shellutil
 from tests.tools import *
 
@@ -26,32 +26,21 @@ from tests.tools import *
 def i_am_root():
     return os.geteuid() == 0
 
+class TestCGroupsApi(AgentTestCase):
+    def test_create_should_return_a_SystemdCgroupsApi_on_systemd_platforms(self):
+        with patch("azurelinuxagent.common.cgroupapi.CGroupsApi._is_systemd", return_value=True):
+            api = CGroupsApi.create()
 
-@skip_if_predicate_false(CGroupConfigurator.enabled, "CGroups not supported in this environment")
-class TestCGroupConfigurator(AgentTestCase):
-    #
-    # TODO -- Need to write actual tests
-    #
-    def test_dummy(self):
-        api = FileSystemCgroupsApi()
-        api.create_agent_cgroups()
-        self.assertTrue(True)
+        self.assertTrue(type(api) == SystemdCgroupsApi)
 
-    @patch('azurelinuxagent.common.cgroupapi.SystemdCgroupsApi.create_agent_cgroups')
-    @patch('azurelinuxagent.common.cgroupapi.FileSystemCgroupsApi.create_agent_cgroups')
-    @patch('azurelinuxagent.common.cgroupconfigurator.CGroupConfigurator.is_systemd')
-    def test_it_should_call_systemd_api(self, mock_is_systemd, mock_create_agent_cgroups_filesystem,
-                                        mock_create_agent_cgroups_systemd):
-        mock_is_systemd.return_value = True
+    def test_create_should_return_a_FileSystemCgroupsApi_on_non_systemd_platforms(self):
+        with patch("azurelinuxagent.common.cgroupapi.CGroupsApi._is_systemd", return_value=False):
+            api = CGroupsApi.create()
 
-        configurator = CGroupConfigurator_tmp.get_instance()
-        configurator.create_agent_cgroups(track_cgroups=False)
-
-        self.assertEqual(mock_create_agent_cgroups_systemd.call_count, 1)
-        self.assertEqual(mock_create_agent_cgroups_filesystem.call_count, 0)
+        self.assertTrue(type(api) == FileSystemCgroupsApi)
 
 
-@skip_if_predicate_false(CGroupConfigurator.enabled, "CGroups not supported in this environment")
+@skip_if_predicate_false(CGroupConfigurator.get_instance().enabled, "CGroups not supported in this environment")
 class TestSystemdCgroupsApi(AgentTestCase):
 
     def test_it_should_return_extensions_slice_root_name(self):

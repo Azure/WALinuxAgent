@@ -39,7 +39,7 @@ import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.restutil as restutil
 import azurelinuxagent.common.utils.textutil as textutil
-from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator_tmp
+from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 
 from azurelinuxagent.common.event import add_event, add_periodic, \
                                     elapsed_milliseconds, \
@@ -450,7 +450,7 @@ class UpdateHandler(object):
                 os.chmod(path, stat.S_IRUSR)
 
     def _ensure_cgroups_initialized(self):
-        configurator = CGroupConfigurator_tmp.get_instance()
+        configurator = CGroupConfigurator.get_instance()
         configurator.create_agent_cgroups(track_cgroups=True)
         configurator.create_extension_cgroups_root()
 

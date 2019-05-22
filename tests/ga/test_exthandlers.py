@@ -9,7 +9,7 @@ from azurelinuxagent.ga.exthandlers import parse_ext_status, ExtHandlerInstance,
 from azurelinuxagent.common.exception import ProtocolError, ExtensionError, ExtensionErrorCodes
 from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.utils.processutil import TELEMETRY_MESSAGE_MAX_LEN, format_stdout_stderr
-from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator, CGroupConfigurator_tmp
+from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from tests.tools import *
 
 
@@ -238,11 +238,19 @@ class LaunchCommandTestCase(AgentTestCase):
         self.mock_get_base_dir = patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_base_dir", lambda *_: self.tmp_dir)
         self.mock_get_base_dir.start()
 
-        log_dir = os.path.join(self.tmp_dir, "log")
+        self.log_dir = os.path.join(self.tmp_dir, "log")
         self.mock_get_log_dir = patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_log_dir", lambda *_: self.log_dir)
         self.mock_get_log_dir.start()
 
+        self.cgroups_enabled = CGroupConfigurator.get_instance().enabled()
+        CGroupConfigurator.get_instance().disable()
+
     def tearDown(self):
+        if self.cgroups_enabled:
+            CGroupConfigurator.get_instance().enable()
+        else:
+            CGroupConfigurator.get_instance().disable()
+
         self.mock_get_log_dir.stop()
         self.mock_get_base_dir.stop()
         self.mock__base_cgroups.stop()
@@ -597,21 +605,7 @@ sys.stderr.write("STDERR")
 
         self.assertIn("[stderr]\nCannot read stdout/stderr:", output)
 
-    def test_it_should_handle_exceptions_from_cgroups_and_run_command(self):
-        # file used to verify the command completed successfully
-        signal_file = os.path.join(self.tmp_dir, "signal_file.txt")
-
-        command = self._create_script("create_file.py", '''
-open("{0}", "w").close()
-
-'''.format(signal_file))
-
-        with patch('azurelinuxagent.common.cgroupconfigurator.CGroupConfigurator.for_extension', side_effect=Exception):
-            self.ext_handler_instance.launch_command(command)
-
-        self.assertTrue(os.path.exists(signal_file))
-
-    @skip_if_predicate_false(CGroupConfigurator.enabled, "CGroups not supported in this environment")
+    @skip_if_predicate_false(lambda: False, "TODO: Need to move this test elsewhere")
     def test_it_should_add_the_child_process_to_its_own_cgroup(self):
         # We are checking for the parent PID here since the PID getting written to the corresponding cgroup
         # would be from the shell process started before launch_command invokes the actual command.
@@ -624,7 +618,7 @@ print(os.getppid())
 
 ''')
 
-        configurator = CGroupConfigurator_tmp.get_instance()
+        configurator = CGroupConfigurator.get_instance()
         configurator.create_extension_cgroups_root()
         configurator.create_extension_cgroups(self.ext_handler_instance.get_full_name())
 
