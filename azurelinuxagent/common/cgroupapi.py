@@ -23,12 +23,14 @@ from azurelinuxagent.common import logger
 from azurelinuxagent.common.exception import CGroupsException
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
-from azurelinuxagent.common.utils import fileutil
+from azurelinuxagent.common.utils import fileutil, shellutil
 
 CGROUPS_FILE_SYSTEM_ROOT = '/sys/fs/cgroup'
 CGROUP_CONTROLLERS = ["cpu", "memory"]
 VM_AGENT_CGROUP_NAME = "walinuxagent.service"
 EXTENSIONS_ROOT_CGROUP_NAME = "walinuxagent.extensions"
+UNIT_FILES_FILE_SYSTEM_PATH = "/etc/systemd/system"
+
 
 class CGroupsApi(object):
     """
@@ -46,14 +48,22 @@ class CGroupsApi(object):
     def remove_extension_cgroups(self, extension_name):
         raise NotImplementedError()
 
-    def start_extension_command(self, extension_name, command, cwd, env, stdout, stderr):
-        pass
+    def get_extension_cgroups(self, extension_name):
+        raise NotImplementedError()
 
-    """
-    Factory method to create the correct API for the current platform
-    """
+    def start_extension_command(self, extension_name, command, cwd, env, stdout, stderr):
+        raise NotImplementedError()
+
+    @staticmethod
+    def _get_extension_scope_name(extension_name):
+        # Since '-' is used as a separator in systemd unit names, we replace it with '_' to prevent side-effects.
+        return extension_name.replace('-', '_')
+
     @staticmethod
     def create():
+        """
+        Factory method to create the correct API for the current platform
+        """
         return SystemdCgroupsApi() if CGroupsApi._is_systemd() else FileSystemCgroupsApi()
 
     @staticmethod
@@ -153,8 +163,7 @@ class FileSystemCgroupsApi(CGroupsApi):
         if not os.path.exists(extensions_root):
             logger.warn("Root directory {0} does not exist.".format(extensions_root))
 
-        # '-' has a special meaning within systemd unit names; for consistency we also replace with '_' here
-        cgroup_name = extension_name.replace('-', '_')
+        cgroup_name = self._get_extension_scope_name(extension_name)
 
         return os.path.join(extensions_root, cgroup_name)
 
@@ -292,17 +301,104 @@ class SystemdCgroupsApi(CGroupsApi):
     """
     Cgroups interface via systemd
     """
+
+    @staticmethod
+    def create_and_start_unit(unit_filename, unit_contents):
+        try:
+            unit_path = os.path.join(UNIT_FILES_FILE_SYSTEM_PATH, unit_filename)
+            fileutil.write_file(unit_path, unit_contents)
+            shellutil.run_get_output("systemctl daemon-reload")
+            shellutil.run_get_output("systemctl start {0}".format(unit_filename))
+        except Exception as e:
+            raise CGroupsException("Failed to create and start {0}. Error: {1}".format(unit_filename, ustr(e)))
+
+    @staticmethod
+    def _get_extensions_slice_root_name():
+        return "system-{0}.slice".format(EXTENSIONS_ROOT_CGROUP_NAME)
+
+    def _get_extension_slice_name(self, extension_name):
+        return "system-{0}-{1}.slice".format(EXTENSIONS_ROOT_CGROUP_NAME, self._get_extension_scope_name(extension_name))
+
     def create_agent_cgroups(self):
-        pass
+        try:
+            cgroup_unit = None
+            cgroup_paths = fileutil.read_file("/proc/self/cgroup")
+            for entry in cgroup_paths.splitlines():
+                fields = entry.split(':')
+                if fields[1] == "name=systemd":
+                    cgroup_unit = fields[2].lstrip(os.path.sep)
+
+            cpu_cgroup_path = os.path.join(CGROUPS_FILE_SYSTEM_ROOT, 'cpu', cgroup_unit)
+            memory_cgroup_path = os.path.join(CGROUPS_FILE_SYSTEM_ROOT, 'memory', cgroup_unit)
+
+            return [cpu_cgroup_path, memory_cgroup_path]
+        except Exception as e:
+            raise CGroupsException("Failed to get paths of agent's cgroups. Error: {0}".format(ustr(e)))
 
     def create_extension_cgroups_root(self):
-        pass
+        unit_contents = """
+[Unit]
+Description=Slice for walinuxagent extensions
+DefaultDependencies=no
+Before=slices.target
+Requires=system.slice
+After=system.slice"""
+        unit_filename = self._get_extensions_slice_root_name()
+        self.create_and_start_unit(unit_filename, unit_contents)
+        logger.info("Created slice for walinuxagent extensions {0}".format(unit_filename))
 
     def create_extension_cgroups(self, extension_name):
-        pass
+        # TODO: revisit if we need this code now (not used until we interact with the D-bus API and run the
+        #  extension scopes within their designated slice)
+        unit_contents = """
+[Unit]
+Description=Slice for extension {0}
+DefaultDependencies=no
+Before=slices.target
+Requires=system-{1}.slice
+After=system-{1}.slice""".format(extension_name, EXTENSIONS_ROOT_CGROUP_NAME)
+        unit_filename = self._get_extension_slice_name(extension_name)
+        self.create_and_start_unit(unit_filename, unit_contents)
+        logger.info("Created slice for {0}".format(unit_filename))
+
+        # Reuse the same method for getting cgroup paths since we don't need to create them (systemd will)
+        return self.get_extension_cgroups(extension_name)
 
     def remove_extension_cgroups(self, extension_name):
-        pass
+        # For transient units, cgroups are released automatically when the unit stops, so it is sufficient
+        # to call stop on them. Persistent cgroups are released when the unit is disabled and its configuration
+        # file is deleted.
+        # The assumption is that this method is called after the extension has been uninstalled. For now, since
+        # we're running extensions within transient scopes which clean up after they finish running, no removal
+        # of units is needed. In the future, when the extension is running under its own slice,
+        # the following clean up is needed.
+        unit_filename = self._get_extension_slice_name(extension_name)
+        try:
+            unit_path = os.path.join(UNIT_FILES_FILE_SYSTEM_PATH, unit_filename)
+            shellutil.run_get_output("systemctl stop {0}".format(unit_filename))
+            fileutil.rm_files(unit_path)
+            shellutil.run_get_output("systemctl daemon-reload")
+        except Exception as e:
+            raise CGroupsException("Failed to remove {0}. Error: {1}".format(unit_filename, ustr(e)))
+
+    def get_extension_cgroups(self, extension_name):
+        scope_name = self._get_extension_scope_name(extension_name)
+        cpu_cgroup_path = os.path.join(CGROUPS_FILE_SYSTEM_ROOT, 'cpu', 'system.slice', scope_name)
+        memory_cgroup_path = os.path.join(CGROUPS_FILE_SYSTEM_ROOT, 'memory', 'system.slice', scope_name)
+
+        return [cpu_cgroup_path, memory_cgroup_path]
 
     def start_extension_command(self, extension_name, command, cwd, env, stdout, stderr):
-        pass
+        def pre_exec_function():
+            os.setsid()
+
+        process = subprocess.Popen(
+            "systemd-run --unit={0} --scope {1}".format(self._get_extension_scope_name(extension_name), command),
+            shell=True,
+            cwd=cwd,
+            stdout=stdout,
+            stderr=stderr,
+            env=env,
+            preexec_fn=pre_exec_function)
+
+        return process

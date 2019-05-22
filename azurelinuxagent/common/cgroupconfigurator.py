@@ -66,11 +66,12 @@ class CGroupConfigurator(object):
                 log_event=False)
 
         def enabled(self):
-            if not self._cgroups_supported:
-                raise CGroupsException("cgroups are not supported on the current platform")
             return self._enabled
 
         def enable(self):
+            if not self._cgroups_supported:
+                raise CGroupsException("cgroups are not supported on the current platform")
+
             self._enabled = True
 
         def disable(self):
@@ -117,11 +118,7 @@ class CGroupConfigurator(object):
             Creates and returns the cgroups for the given extension
             """
             def __impl():
-                cgroups = self._cgroups_api.create_extension_cgroups(name)
-
-                # TODO: Add to tracking list
-
-                return cgroups
+                return self._cgroups_api.create_extension_cgroups(name)
 
             self._invoke_cgroup_operation(__impl, "Failed to create a cgroup for extension '{0}'; resource usage will not be tracked".format(name))
 
@@ -132,7 +129,7 @@ class CGroupConfigurator(object):
             def __impl():
                 cgroups = self._cgroups_api.remove_extension_cgroups(name)
 
-                # TODO: Add to tracking list
+                # TODO: Remove from tracking list
 
                 return cgroups
 

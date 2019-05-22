@@ -310,8 +310,8 @@ class TestCGroupsLimits(AgentTestCase):
     def test_no_limits_passed(self, patched_get_total_mem):
         cgroup_name = "test_cgroup"
         limits = CGroupsLimits(cgroup_name)
-        self.assertEqual(limits.cpu_limit, CGroupsLimits.get_default_cpu_limits(cgroup_name ))
-        self.assertEqual(limits.memory_limit, CGroupsLimits.get_default_memory_limits(cgroup_name ))
+        self.assertEqual(limits.cpu_limit, CGroupsLimits.get_default_cpu_limits(cgroup_name))
+        self.assertEqual(limits.memory_limit, CGroupsLimits.get_default_memory_limits(cgroup_name))
 
     @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_total_mem", return_value=1024)
     def test_with_limits_passed(self, patched_get_total_mem):
