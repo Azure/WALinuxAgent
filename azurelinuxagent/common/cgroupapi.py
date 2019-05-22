@@ -29,6 +29,7 @@ CGROUPS_FILE_SYSTEM_ROOT = '/sys/fs/cgroup'
 CGROUP_CONTROLLERS = ["cpu", "memory"]
 VM_AGENT_CGROUP_NAME = "walinuxagent.service"
 EXTENSIONS_ROOT_CGROUP_NAME = "walinuxagent.extensions"
+UNIT_FILES_FILE_SYSTEM_PATH = "/etc/systemd/system"
 
 
 class CGroupsApi(object):
@@ -249,11 +250,12 @@ class SystemdCgroupsApi(CGroupsApi):
     @staticmethod
     def create_and_start_unit(unit_filename, unit_contents):
         try:
-            fileutil.write_file("/etc/systemd/system/{0}".format(unit_filename), unit_contents)
+            unit_path = os.path.join(UNIT_FILES_FILE_SYSTEM_PATH, unit_filename)
+            fileutil.write_file(unit_path, unit_contents)
             shellutil.run_get_output("systemctl daemon-reload")
             shellutil.run_get_output("systemctl start {0}".format(unit_filename))
         except Exception as e:
-            logger.warn("Failed to create and start {0}. Error: {1}".format(unit_filename, ustr(e)))
+            raise CGroupsException("Failed to create and start {0}. Error: {1}".format(unit_filename, ustr(e)))
 
     @staticmethod
     def _get_extensions_slice_root_name():
@@ -261,10 +263,11 @@ class SystemdCgroupsApi(CGroupsApi):
 
     @staticmethod
     def _get_extension_slice_name(extension_name):
-        return "system-walinuxagent.extensions-{0}.slice".format(extension_name.replace('-', '_'))
+        return "system-{0}-{1}.slice".format(EXTENSIONS_ROOT_CGROUP_NAME, extension_name.replace('-', '_'))
 
     @staticmethod
     def _get_extension_scope_name(extension_name):
+        # Since '-' is used as a separator in systemd unit names, we replace it with '_' to prevent side-effects.
         return extension_name.replace('-', '_')
 
     def create_agent_cgroups(self):
@@ -281,7 +284,7 @@ class SystemdCgroupsApi(CGroupsApi):
 
             return [cpu_cgroup_path, memory_cgroup_path]
         except Exception as e:
-            logger.warn("Failed to get paths of agent's cgroups. Error: {0}".format(ustr(e)))
+            raise CGroupsException("Failed to get paths of agent's cgroups. Error: {0}".format(ustr(e)))
 
     def create_extension_cgroups_root(self):
         unit_contents = """[Unit]
@@ -320,11 +323,12 @@ After=system-{1}.slice""".format(extension_name, EXTENSIONS_ROOT_CGROUP_NAME)
         # the following clean up is needed.
         unit_filename = self._get_extension_slice_name(extension_name)
         try:
+            unit_path = os.path.join(UNIT_FILES_FILE_SYSTEM_PATH, unit_filename)
             shellutil.run_get_output("systemctl stop {0}".format(unit_filename))
-            fileutil.rm_files("/etc/systemd/system/{0}".format(unit_filename))
+            fileutil.rm_files(unit_path)
             shellutil.run_get_output("systemctl daemon-reload")
         except Exception as e:
-            logger.warn("Failed to remove {0}. Error: {1}".format(unit_filename, ustr(e)))
+            raise CGroupsException("Failed to remove {0}. Error: {1}".format(unit_filename, ustr(e)))
 
     def get_extension_cgroups(self, extension_name):
         scope_name = self._get_extension_scope_name(extension_name)
