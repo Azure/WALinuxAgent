@@ -54,6 +54,15 @@ class TestCGroupConfigurator(AgentTestCase):
 @skip_if_predicate_false(CGroupConfigurator.enabled, "CGroups not supported in this environment")
 class TestSystemdCgroupsApi(AgentTestCase):
 
+    def test_it_should_return_extensions_slice_root_name(self):
+        root_slice_name = SystemdCgroupsApi()._get_extensions_slice_root_name()
+        self.assertEqual(root_slice_name, "system-walinuxagent.extensions.slice")
+
+    def test_it_should_return_extension_slice_name(self):
+        extension_name = "Microsoft.Azure.DummyExtension-1.0"
+        extension_slice_name = SystemdCgroupsApi()._get_extension_slice_name(extension_name)
+        self.assertEqual(extension_slice_name, "system-walinuxagent.extensions-Microsoft.Azure.DummyExtension_1.0.slice")
+
     @skip_if_predicate_false(i_am_root, "Test does not run when normal user")
     def test_if_extensions_root_slice_is_created(self):
         SystemdCgroupsApi().create_extension_cgroups_root()

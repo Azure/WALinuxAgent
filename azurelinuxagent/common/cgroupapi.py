@@ -54,6 +54,11 @@ class CGroupsApi(object):
     def start_extension_command(self, extension_name, command, cwd, env, stdout, stderr):
         raise NotImplementedError()
 
+    @staticmethod
+    def _get_extension_scope_name(extension_name):
+        # Since '-' is used as a separator in systemd unit names, we replace it with '_' to prevent side-effects.
+        return extension_name.replace('-', '_')
+
 
 class FileSystemCgroupsApi(CGroupsApi):
     """
@@ -107,8 +112,7 @@ class FileSystemCgroupsApi(CGroupsApi):
         if not os.path.exists(extensions_root):
             logger.warn("Root directory {0} does not exist.".format(extensions_root))
 
-        # '-' has a special meaning within systemd unit names; for consistency we also replace with '_' here
-        cgroup_name = extension_name.replace('-', '_')
+        cgroup_name = self._get_extension_scope_name(extension_name)
 
         return os.path.join(extensions_root, cgroup_name)
 
@@ -261,14 +265,8 @@ class SystemdCgroupsApi(CGroupsApi):
     def _get_extensions_slice_root_name():
         return "system-{0}.slice".format(EXTENSIONS_ROOT_CGROUP_NAME)
 
-    @staticmethod
-    def _get_extension_slice_name(extension_name):
-        return "system-{0}-{1}.slice".format(EXTENSIONS_ROOT_CGROUP_NAME, extension_name.replace('-', '_'))
-
-    @staticmethod
-    def _get_extension_scope_name(extension_name):
-        # Since '-' is used as a separator in systemd unit names, we replace it with '_' to prevent side-effects.
-        return extension_name.replace('-', '_')
+    def _get_extension_slice_name(self, extension_name):
+        return "system-{0}-{1}.slice".format(EXTENSIONS_ROOT_CGROUP_NAME, self._get_extension_scope_name(extension_name))
 
     def create_agent_cgroups(self):
         try:
@@ -287,20 +285,22 @@ class SystemdCgroupsApi(CGroupsApi):
             raise CGroupsException("Failed to get paths of agent's cgroups. Error: {0}".format(ustr(e)))
 
     def create_extension_cgroups_root(self):
-        unit_contents = """[Unit]
-Description=Slice for WALinuxAgent extensions
+        unit_contents = """
+[Unit]
+Description=Slice for walinuxagent extensions
 DefaultDependencies=no
 Before=slices.target
 Requires=system.slice
 After=system.slice"""
         unit_filename = self._get_extensions_slice_root_name()
         self.create_and_start_unit(unit_filename, unit_contents)
-        logger.info("Created and started {0}".format(unit_filename))
+        logger.info("Created slice for walinuxagent extensions {0}".format(unit_filename))
 
     def create_extension_cgroups(self, extension_name):
         # TODO: revisit if we need this code now (not used until we interact with the D-bus API and run the
         #  extension scopes within their designated slice)
-        unit_contents = """[Unit]
+        unit_contents = """
+[Unit]
 Description=Slice for extension {0}
 DefaultDependencies=no
 Before=slices.target
@@ -308,7 +308,7 @@ Requires=system-{1}.slice
 After=system-{1}.slice""".format(extension_name, EXTENSIONS_ROOT_CGROUP_NAME)
         unit_filename = self._get_extension_slice_name(extension_name)
         self.create_and_start_unit(unit_filename, unit_contents)
-        logger.info("Created and started {0}".format(unit_filename))
+        logger.info("Created slice for {0}".format(unit_filename))
 
         # Reuse the same method for getting cgroup paths since we don't need to create them (systemd will)
         return self.get_extension_cgroups(extension_name)
