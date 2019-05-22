@@ -18,7 +18,8 @@
 from __future__ import print_function
 
 from azurelinuxagent.common.cgroup import CpuCgroup, MemoryCGroup
-from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator_tmp, CGroupConfigurator, CGroupsLimits, BASE_CGROUPS,  DEFAULT_MEM_LIMIT_MIN_MB
+from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator_tmp, CGroupConfigurator, CGroupsLimits, \
+    BASE_CGROUPS, DEFAULT_MEM_LIMIT_MIN_MB
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.exception import CGroupsException
 from azurelinuxagent.common.version import AGENT_NAME
@@ -309,8 +310,8 @@ class TestCGroupsLimits(AgentTestCase):
     def test_no_limits_passed(self, patched_get_total_mem):
         cgroup_name = "test_cgroup"
         limits = CGroupsLimits(cgroup_name)
-        self.assertEqual(limits.cpu_limit, CGroupsLimits.get_default_cpu_limits(cgroup_name ))
-        self.assertEqual(limits.memory_limit, CGroupsLimits.get_default_memory_limits(cgroup_name ))
+        self.assertEqual(limits.cpu_limit, CGroupsLimits.get_default_cpu_limits(cgroup_name))
+        self.assertEqual(limits.memory_limit, CGroupsLimits.get_default_memory_limits(cgroup_name))
 
     @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_total_mem", return_value=1024)
     def test_with_limits_passed(self, patched_get_total_mem):

@@ -24,7 +24,7 @@ from azurelinuxagent.common.exception import CGroupsException
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.osutil.default import BASE_CGROUPS
-from azurelinuxagent.common.utils import fileutil
+from azurelinuxagent.common.utils import fileutil, shellutil
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 from azurelinuxagent.common.event import add_event, WALAEventOperation
 
@@ -540,7 +540,7 @@ class CGroupConfigurator_tmp(object):
             :param cwd: The working directory for the command
             :param env:  The environment to pass to the command's process
             :param stdout: File object to redirect stdout to
-            :param stderr: File pbject to redirect stderr to
+            :param stderr: File object to redirect stderr to
             """
             if not CGroupConfigurator.enabled():
                 process = subprocess.Popen(
