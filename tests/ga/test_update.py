@@ -999,12 +999,23 @@ class TestUpdate(UpdateTestCase):
         # Ensure at least three agents initially exist
         self.assertTrue(2 < len(self.update_handler.agents))
 
-        # Purge every other agent
-        kept_agents = self.update_handler.agents[1::2]
-        purged_agents = self.update_handler.agents[::2]
+        # Purge every other agent. Don't add the current version to agents_to_keep explicitly;
+        # the current version is never purged
+        agents_to_keep = []
+        kept_agents = []
+        purged_agents = []
+        for i in range(0, len(self.update_handler.agents)):
+            if self.update_handler.agents[i].version == CURRENT_VERSION:
+                kept_agents.append(self.update_handler.agents[i])
+            else:
+                if i % 2 == 0:
+                    agents_to_keep.append(self.update_handler.agents[i])
+                    kept_agents.append(self.update_handler.agents[i])
+                else:
+                    purged_agents.append(self.update_handler.agents[i])
 
         # Reload and assert only the kept agents remain on disk
-        self.update_handler.agents = kept_agents
+        self.update_handler.agents = agents_to_keep
         self.update_handler._purge_agents()
         self.update_handler._find_agents()
         self.assertEqual(

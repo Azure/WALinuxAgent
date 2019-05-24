@@ -594,6 +594,14 @@ class TestHostPlugin(AgentTestCase):
         result = host_plugin.get_health()
         self.assertFalse(result)
 
+        patch_http_get.side_effect = IOError('client IO error')
+        try:
+            host_plugin.get_health()
+            self.fail('IO error expected to be raised')
+        except IOError:
+            # expected
+            pass
+
     @patch("azurelinuxagent.common.utils.restutil.http_get",
            return_value=MockResponse(status_code=200, body=b''))
     @patch("azurelinuxagent.common.protocol.healthservice.HealthService.report_host_plugin_versions")
@@ -652,11 +660,8 @@ class TestHostPlugin(AgentTestCase):
         # put status blob
         patch_http_put.return_value = MockResponse(None, 500)
 
-        if sys.version_info < (2, 7):
-            self.assertRaises(HttpError, host_plugin.put_vm_status, status_blob, sas_url)
-        else:
-            with self.assertRaises(HttpError):
-                host_plugin.put_vm_status(status_blob=status_blob, sas_url=sas_url)
+        with self.assertRaises(HttpError):
+            host_plugin.put_vm_status(status_blob=status_blob, sas_url=sas_url)
 
         self.assertEqual(1, patch_http_get.call_count)
         self.assertEqual(hostplugin_versions_url, patch_http_get.call_args[0][0])
@@ -695,11 +700,8 @@ class TestHostPlugin(AgentTestCase):
 
         host_plugin.status_error_state.is_triggered = Mock(return_value=True)
 
-        if sys.version_info < (2, 7):
-            self.assertRaises(HttpError, host_plugin.put_vm_status, status_blob, sas_url)
-        else:
-            with self.assertRaises(HttpError):
-                host_plugin.put_vm_status(status_blob=status_blob, sas_url=sas_url)
+        with self.assertRaises(HttpError):
+            host_plugin.put_vm_status(status_blob=status_blob, sas_url=sas_url)
 
         self.assertEqual(1, patch_http_get.call_count)
         self.assertEqual(hostplugin_versions_url, patch_http_get.call_args[0][0])

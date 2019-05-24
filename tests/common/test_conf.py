@@ -43,6 +43,7 @@ class TestConf(AgentTestCase):
         "ResourceDisk.Filesystem": "ext4",
         "ResourceDisk.MountPoint": "/mnt/resource",
         "ResourceDisk.EnableSwap": False,
+        "ResourceDisk.EnableSwapEncryption": False,
         "ResourceDisk.SwapSizeMB": 0,
         "ResourceDisk.MountOptions": None,
         "Logs.Verbose": False,
@@ -66,7 +67,9 @@ class TestConf(AgentTestCase):
         "AutoUpdate.GAFamily": "Prod",
         "EnableOverProvisioning": True,
         "OS.AllowHTTP": False,
-        "OS.EnableFirewall": False
+        "OS.EnableFirewall": False,
+        "CGroups.EnforceLimits": False,
+        "CGroups.Excluded": "customscript,runcommand",
     }
 
     def setUp(self):
@@ -134,3 +137,36 @@ class TestConf(AgentTestCase):
     def test_get_extensions_enabled(self):
         self.assertTrue(get_extensions_enabled(self.conf))
 
+    @patch('azurelinuxagent.common.conf.ConfigurationProvider.get')
+    def assert_get_cgroups_excluded(self, patch_get, config, expected_value):
+        patch_get.return_value = config
+        self.assertEqual(expected_value, conf.get_cgroups_excluded(self.conf))
+
+    def test_get_cgroups_excluded(self):
+        self.assert_get_cgroups_excluded(config=None,
+                                         expected_value=[])
+
+        self.assert_get_cgroups_excluded(config='',
+                                         expected_value=[])
+
+        self.assert_get_cgroups_excluded(config='  ',
+                                         expected_value=[])
+
+        self.assert_get_cgroups_excluded(config='  ,  ,,  ,',
+                                         expected_value=[])
+
+        standard_values = ['customscript', 'runcommand']
+        self.assert_get_cgroups_excluded(config='CustomScript, RunCommand',
+                                         expected_value=standard_values)
+
+        self.assert_get_cgroups_excluded(config='customScript, runCommand  , , ,,',
+                                         expected_value=standard_values)
+
+        self.assert_get_cgroups_excluded(config='  customscript,runcommand  ',
+                                         expected_value=standard_values)
+
+        self.assert_get_cgroups_excluded(config='customscript,, runcommand',
+                                         expected_value=standard_values)
+
+        self.assert_get_cgroups_excluded(config=',,customscript ,runcommand',
+                                         expected_value=standard_values)

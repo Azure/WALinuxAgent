@@ -1,4 +1,4 @@
-# Copyright 2018 Microsoft Corporation
+# Copyright 2019 Microsoft Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -82,6 +82,9 @@ def get_distro():
         osinfo = ['openbsd', release, '', 'openbsd']
     elif 'Linux' in platform.system():
         osinfo = get_linux_distribution(0, 'alpine')
+    elif 'NS-BSD' in platform.system():
+        release = re.sub('\-.*\Z', '', ustr(platform.release()))
+        osinfo = ['nsbsd', release, '', 'nsbsd']
     else:
         try:
             # dist() removed in Python 3.7
@@ -116,7 +119,7 @@ def get_distro():
 
 AGENT_NAME = "WALinuxAgent"
 AGENT_LONG_NAME = "Azure Linux Agent"
-AGENT_VERSION = '2.2.31.1'
+AGENT_VERSION = '2.2.40'
 AGENT_LONG_VERSION = "{0}-{1}".format(AGENT_NAME, AGENT_VERSION)
 AGENT_DESCRIPTION = """
 The Azure Linux Agent supports the provisioning and running of Linux

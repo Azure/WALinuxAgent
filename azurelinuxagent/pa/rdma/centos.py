@@ -59,7 +59,7 @@ class CentOSRDMAHandler(RDMAHandler):
 
         # Find out RDMA firmware version and see if the existing package needs
         # updating or if the package is missing altogether (and install it)
-        fw_version = RDMAHandler.get_rdma_version()
+        fw_version = self.get_rdma_version()
         if not fw_version:
             raise Exception('Cannot determine RDMA firmware version')
         logger.info("RDMA: found firmware version: {0}".format(fw_version))

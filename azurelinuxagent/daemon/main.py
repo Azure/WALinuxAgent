@@ -140,7 +140,8 @@ class DaemonHandler(object):
 
         # Enable RDMA, continue in errors
         if conf.enable_rdma():
-            self.rdma_handler.install_driver()
+            nd_version = self.rdma_handler.get_rdma_version()
+            self.rdma_handler.install_driver_if_needed()
 
             logger.info("RDMA capabilities are enabled in configuration")
             try:
@@ -154,7 +155,7 @@ class DaemonHandler(object):
                     raise Exception("Attempt to setup RDMA without Wireserver")
                 client.update_goal_state(forced=True)
 
-                setup_rdma_device()
+                setup_rdma_device(nd_version)
             except Exception as e:
                 logger.error("Error setting up rdma device: %s" % e)
         else:

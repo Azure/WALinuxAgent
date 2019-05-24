@@ -2,6 +2,9 @@
 
 ## Master branch status
 
+[![Travis CI](https://travis-ci.org/Azure/WALinuxAgent.svg?branch=develop)](https://travis-ci.org/Azure/WALinuxAgent/branches)
+[![CodeCov](https://codecov.io/gh/Azure/WALinusAgent/branch/develop/graph/badge.svg)](https://codecov.io/gh/Azure/WALinuxAgent/branch/develop)
+
 Each badge below represents our basic validation tests for an image, which are executed several times each day. These include provisioning, user account, disk, extension and networking scenarios.
 
 Image | Status |
@@ -195,6 +198,7 @@ ResourceDisk.Filesystem=ext4
 ResourceDisk.MountPoint=/mnt/resource
 ResourceDisk.MountOptions=None
 ResourceDisk.EnableSwap=n
+ResourceDisk.EnableSwapEncryption=n
 ResourceDisk.SwapSizeMB=0
 Logs.Verbose=n
 OS.AllowHTTP=n
@@ -205,6 +209,8 @@ OS.SshClientAliveInterval=180
 OS.SshDir=/etc/ssh
 HttpProxy.Host=None
 HttpProxy.Port=None
+CGroups.EnforceLimits=y
+CGroups.Excluded=customscript,runcommand
 ```
 
 The various configuration options are described in detail below. Configuration
@@ -368,6 +374,13 @@ _Default: n_
 If set, a swap file (/swapfile) is created on the resource disk and added to the
 system swap space.
 
+#### __ResourceDisk.EnableSwapEncryption__
+
+_Type: Boolean_  
+_Default: n_
+
+If set, the swap file (/swapfile) is mounted as an encrypted filesystem.
+
 #### __ResourceDisk.SwapSizeMB__
 
 _Type: Integer_  
@@ -452,6 +465,21 @@ If set, the agent will use this proxy server to access the internet. These value
 *will* override the `http_proxy` or `https_proxy` environment variables. Lastly,
 `HttpProxy.Host` is required (if to be used) and `HttpProxy.Port` is optional.
 
+#### __CGroups.EnforceLimits__
+
+_Type: Boolean_  
+_Default: y_
+
+If set, the agent will attempt to set cgroups limits for cpu and memory for the agent process itself
+as well as extension processes. See the wiki for further details on this.
+
+#### __CGroups.Excluded__
+
+_Type: String_  
+_Default: customscript,runcommand_
+
+The list of extensions which will be excluded from cgroups limits. This should be comma separated. 
+
 ### Telemetry
 
 WALinuxAgent collects usage data and sends it to Microsoft to help improve our products and services. The data collected is used to track service health and
@@ -480,7 +508,7 @@ Run once:
 2. Create the pbuilder environment
 
    ```bash
-   sudo pbuilder create --debootstrapopts --variant=buildd`
+   sudo pbuilder create --debootstrapopts --variant=buildd
    ```
 
 3. Obtain `waagent.dsc` from a downstream package repo
@@ -496,7 +524,7 @@ To compile the package, from the top-most directory:
 2. Build the package
 
    ```bash
-   sudo pbuilder build {waagent.dsc}
+   sudo pbuilder build waagent.dsc
    ```
 
 3. Fetch the built package, usually from `/var/cache/pbuilder/result`

@@ -609,6 +609,8 @@ class WireClient(object):
                 continue
 
             response = None
+            host = self.get_host_plugin()
+
             if not HostPluginProtocol.is_default_channel():
                 response = self.fetch(version.uri)
 
@@ -620,7 +622,6 @@ class WireClient(object):
                                    "switching to host plugin")
 
                 try:
-                    host = self.get_host_plugin()
                     uri, headers = host.get_artifact_request(version.uri)
                     response = self.fetch(uri, headers, use_proxy=False)
 
@@ -630,13 +631,13 @@ class WireClient(object):
                     HostPluginProtocol.set_default_channel(True)
                     raise
 
-                host.manifest_uri = version.uri
                 logger.verbose("Manifest downloaded successfully from host plugin")
                 if not HostPluginProtocol.is_default_channel():
                     logger.info("Setting host plugin as default channel")
                     HostPluginProtocol.set_default_channel(True)
 
             if response:
+                host.manifest_uri = version.uri
                 return response
 
         raise ProtocolError("Failed to fetch manifest from all sources")
@@ -766,39 +767,39 @@ class WireClient(object):
                                         INCARNATION_FILE_NAME)
         uri = GOAL_STATE_URI.format(self.endpoint)
 
-        goal_state = None
+        current_goal_state_from_configuration = None
         for retry in range(0, max_retry):
             try:
-                if goal_state is None:
+                if current_goal_state_from_configuration is None:
                     xml_text = self.fetch_config(uri, self.get_header())
-                    goal_state = GoalState(xml_text)
+                    current_goal_state_from_configuration = GoalState(xml_text)
 
                     if not forced:
                         last_incarnation = None
                         if os.path.isfile(incarnation_file):
                             last_incarnation = fileutil.read_file(
                                                     incarnation_file)
-                        new_incarnation = goal_state.incarnation
+                        new_incarnation = current_goal_state_from_configuration.incarnation
                         if last_incarnation is not None and \
                                         last_incarnation == new_incarnation:
                             # Goalstate is not updated.
                             return                
                 self.goal_state_flusher.flush(datetime.utcnow())
 
-                self.goal_state = goal_state
-                file_name = GOAL_STATE_FILE_NAME.format(goal_state.incarnation)
+                self.goal_state = current_goal_state_from_configuration
+                file_name = GOAL_STATE_FILE_NAME.format(current_goal_state_from_configuration.incarnation)
                 goal_state_file = os.path.join(conf.get_lib_dir(), file_name)
                 self.save_cache(goal_state_file, xml_text)
-                self.update_hosting_env(goal_state)
-                self.update_shared_conf(goal_state)
-                self.update_certs(goal_state)
-                self.update_ext_conf(goal_state)
-                self.update_remote_access_conf(goal_state)
-                self.save_cache(incarnation_file, goal_state.incarnation)
+                self.update_hosting_env(current_goal_state_from_configuration)
+                self.update_shared_conf(current_goal_state_from_configuration)
+                self.update_certs(current_goal_state_from_configuration)
+                self.update_ext_conf(current_goal_state_from_configuration)
+                self.update_remote_access_conf(current_goal_state_from_configuration)
+                self.save_cache(incarnation_file, current_goal_state_from_configuration.incarnation)
 
                 if self.host_plugin is not None:
-                    self.host_plugin.container_id = goal_state.container_id
-                    self.host_plugin.role_config_name = goal_state.role_config_name
+                    self.host_plugin.container_id = current_goal_state_from_configuration.container_id
+                    self.host_plugin.role_config_name = current_goal_state_from_configuration.role_config_name
 
                 return
 
@@ -807,7 +808,7 @@ class WireClient(object):
 
             except ResourceGoneError:
                 logger.info("Goal state is stale, re-fetching")
-                goal_state = None
+                current_goal_state_from_configuration = None
 
             except ProtocolError as e:
                 if retry < max_retry - 1:
@@ -1117,6 +1118,8 @@ class WireClient(object):
         data = data_format.format(provider_id, event_str)
         try:
             header = self.get_header_for_xml_content()
+            # NOTE: The call to wireserver requests utf-8 encoding in the headers, but the body should not
+            #       be encoded: some nodes in the telemetry pipeline do not support utf-8 encoding.
             resp = self.call_wireserver(restutil.http_post, uri, data, header)
         except HttpError as e:
             raise ProtocolError("Failed to send events:{0}".format(e))
@@ -1451,6 +1454,12 @@ class Certificates(object):
         data = findtext(xml_doc, "Data")
         if data is None:
             return
+    
+        # if the certificates format is not Pkcs7BlobWithPfxContents do not parse it
+        certificateFormat = findtext(xml_doc, "Format")
+        if certificateFormat and certificateFormat != "Pkcs7BlobWithPfxContents":
+            logger.warn("The Format is not Pkcs7BlobWithPfxContents. Format is " + certificateFormat)
+            return
 
         cryptutil = CryptUtil(conf.get_openssl_cmd())
         p7m_file = os.path.join(conf.get_lib_dir(), P7M_FILE_NAME)
@@ -1591,11 +1600,6 @@ class ExtensionsConfig(object):
         ext_handler.properties.version = getattrib(plugin, "version")
         ext_handler.properties.state = getattrib(plugin, "state")
 
-        try:
-            ext_handler.properties.dependencyLevel = int(getattrib(plugin, "dependencyLevel"))
-        except ValueError:
-            ext_handler.properties.dependencyLevel = 0
-
         location = getattrib(plugin, "location")
         failover_location = getattrib(plugin, "failoverlocation")
         for uri in [location, failover_location]:
@@ -1627,6 +1631,15 @@ class ExtensionsConfig(object):
             logger.error("Invalid extension settings")
             return
 
+        depends_on_level = 0
+        depends_on_node = find(settings[0], "DependsOn")
+        if depends_on_node != None:
+            try:
+                depends_on_level = int(getattrib(depends_on_node, "dependencyLevel"))
+            except (ValueError, TypeError):
+                logger.warn("Could not parse dependencyLevel for handler {0}. Setting it to 0".format(name))
+                depends_on_level = 0
+
         for plugin_settings_list in runtime_settings["runtimeSettings"]:
             handler_settings = plugin_settings_list["handlerSettings"]
             ext = Extension()
@@ -1636,6 +1649,7 @@ class ExtensionsConfig(object):
             ext.sequenceNumber = seqNo
             ext.publicSettings = handler_settings.get("publicSettings")
             ext.protectedSettings = handler_settings.get("protectedSettings")
+            ext.dependencyLevel = depends_on_level
             thumbprint = handler_settings.get(
                 "protectedSettingsCertThumbprint")
             ext.certificateThumbprint = thumbprint
@@ -1706,5 +1720,5 @@ class InVMArtifactsProfile(object):
     def is_on_hold(self):
         # hasattr() is not available in Python 2.6
         if 'onHold' in self.__dict__:
-            return self.onHold.lower() == 'true'
+            return str(self.onHold).lower() == 'true'
         return False

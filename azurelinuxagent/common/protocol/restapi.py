@@ -151,18 +151,19 @@ class Extension(DataContract):
                  sequenceNumber=None,
                  publicSettings=None,
                  protectedSettings=None,
-                 certificateThumbprint=None):
+                 certificateThumbprint=None,
+                 dependencyLevel=0):
         self.name = name
         self.sequenceNumber = sequenceNumber
         self.publicSettings = publicSettings
         self.protectedSettings = protectedSettings
         self.certificateThumbprint = certificateThumbprint
+        self.dependencyLevel = dependencyLevel
 
 
 class ExtHandlerProperties(DataContract):
     def __init__(self):
         self.version = None
-        self.dependencyLevel = None
         self.state = None
         self.extensions = DataContractList(Extension)
 
@@ -179,9 +180,11 @@ class ExtHandler(DataContract):
         self.versionUris = DataContractList(ExtHandlerVersionUri)
 
     def sort_key(self):
-        level = self.properties.dependencyLevel
-        if level is None:
+        levels = [e.dependencyLevel for e in self.properties.extensions]
+        if len(levels) == 0:
             level = 0
+        else:
+            level = min(levels)
         # Process uninstall or disabled before enabled, in reverse order
         # remap 0 to -1, 1 to -2, 2 to -3, etc
         if self.properties.state != u"enabled":
@@ -355,3 +358,6 @@ class Protocol(DataContract):
 
     def report_event(self, event):
         raise NotImplementedError()
+
+    def supports_overprovisioning(self):
+        return True

@@ -16,6 +16,7 @@
 #
 from datetime import timedelta
 
+from azurelinuxagent.common.protocol.wire import WireProtocol
 from tests.tools import *
 from azurelinuxagent.ga.monitor import *
 
@@ -215,4 +216,35 @@ class TestMonitor(AgentTestCase):
         self.assertEqual(1, args[5].call_count)
         self.assertEqual('HostPluginHeartbeatExtended', args[5].call_args[1]['op'])
         self.assertEqual(False, args[5].call_args[1]['is_success'])
+        monitor_handler.stop()
+
+
+@patch('azurelinuxagent.common.event.EventLogger.add_event')
+@patch("azurelinuxagent.common.utils.restutil.http_post")
+@patch("azurelinuxagent.common.utils.restutil.http_get")
+@patch('azurelinuxagent.common.protocol.wire.WireClient.get_goal_state')
+@patch('azurelinuxagent.common.protocol.util.ProtocolUtil.get_protocol', return_value=WireProtocol('endpoint'))
+class TestMonitorFailure(AgentTestCase):
+
+    @patch("azurelinuxagent.common.protocol.healthservice.HealthService.report_host_plugin_heartbeat")
+    def test_error_heartbeat_creates_no_signal(self, patch_report_heartbeat, *args):
+        patch_http_get = args[2]
+        patch_add_event = args[4]
+
+        monitor_handler = get_monitor_handler()
+        monitor_handler.init_protocols()
+        monitor_handler.last_host_plugin_heartbeat = datetime.datetime.utcnow() - timedelta(hours=1)
+
+        patch_http_get.side_effect = IOError('client error')
+        monitor_handler.send_host_plugin_heartbeat()
+
+        # health report should not be made
+        self.assertEqual(0, patch_report_heartbeat.call_count)
+
+        # telemetry with failure details is sent
+        self.assertEqual(1, patch_add_event.call_count)
+        self.assertEqual('HostPluginHeartbeat', patch_add_event.call_args[1]['op'])
+        self.assertTrue('client error' in patch_add_event.call_args[1]['message'])
+
+        self.assertEqual(False, patch_add_event.call_args[1]['is_success'])
         monitor_handler.stop()

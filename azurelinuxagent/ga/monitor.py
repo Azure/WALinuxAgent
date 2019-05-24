@@ -37,15 +37,15 @@ from azurelinuxagent.common.protocol import get_protocol_util
 from azurelinuxagent.common.protocol.healthservice import HealthService
 from azurelinuxagent.common.protocol.imds import get_imds_client
 from azurelinuxagent.common.protocol.restapi import TelemetryEventParam, \
-                                                    TelemetryEventList, \
-                                                    TelemetryEvent, \
-                                                    set_properties
+    TelemetryEventList, \
+    TelemetryEvent, \
+    set_properties
 import azurelinuxagent.common.utils.networkutil as networkutil
 from azurelinuxagent.common.utils.restutil import IOErrorCounter
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, getattrib, hash_strings
 from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_VERSION, \
-            DISTRO_CODE_NAME, AGENT_LONG_VERSION, \
-            AGENT_NAME, CURRENT_AGENT, CURRENT_VERSION
+    DISTRO_CODE_NAME, AGENT_LONG_VERSION, \
+    AGENT_NAME, CURRENT_AGENT, CURRENT_VERSION
 
 
 def parse_event(data_str):
@@ -95,7 +95,6 @@ def get_monitor_handler():
 
 
 class MonitorHandler(object):
-
     EVENT_COLLECTION_PERIOD = datetime.timedelta(minutes=1)
     TELEMETRY_HEARTBEAT_PERIOD = datetime.timedelta(minutes=30)
     CGROUP_TELEMETRY_PERIOD = datetime.timedelta(minutes=5)
@@ -320,7 +319,8 @@ class MonitorHandler(object):
         if self.last_host_plugin_heartbeat is None:
             self.last_host_plugin_heartbeat = datetime.datetime.utcnow() - MonitorHandler.HOST_PLUGIN_HEARTBEAT_PERIOD
 
-        if datetime.datetime.utcnow() >= (self.last_host_plugin_heartbeat + MonitorHandler.HOST_PLUGIN_HEARTBEAT_PERIOD):
+        if datetime.datetime.utcnow() >= (
+                self.last_host_plugin_heartbeat + MonitorHandler.HOST_PLUGIN_HEARTBEAT_PERIOD):
             try:
                 host_plugin = self.protocol.client.get_host_plugin()
                 host_plugin.ensure_initialized()
@@ -401,9 +401,16 @@ class MonitorHandler(object):
 
     @staticmethod
     def init_cgroups():
-        # Track metrics for the roll-up cgroup and for the agent cgroup
+        # Track metrics for the wrapper cgroup and for the agent cgroup
         try:
-            CGroupsTelemetry.track_cgroup(CGroups.for_extension(""))
+            # This creates the wrapper cgroup for everything under agent,
+            # /sys/fs/cgroup/{cpu,memory}/WALinuxAgent/
+            # There is no need in tracking this cgroup, as it only serves
+            # as an umbrella for the agent and extensions cgroups
+            CGroups.for_extension("")
+            # This creates the agent's cgroup (for the daemon and extension handler)
+            # /sys/fs/cgroup/{cpu,memory}/WALinuxAgent/WALinuxAgent
+            # If the system is using systemd, it would have already been set up under /system.slice
             CGroupsTelemetry.track_agent()
         except Exception as e:
             # when a hierarchy is not mounted, we raise an exception
@@ -418,10 +425,43 @@ class MonitorHandler(object):
 
         if datetime.datetime.utcnow() >= (self.last_telemetry_heartbeat + MonitorHandler.CGROUP_TELEMETRY_PERIOD):
             try:
-                for cgroup_name, metrics in CGroupsTelemetry.collect_all_tracked().items():
+                metric_reported, metric_threshold = CGroupsTelemetry.collect_all_tracked()
+                for cgroup_name, metrics in metric_reported.items():
+                    thresholds = metric_threshold[cgroup_name]
+
                     for metric_group, metric_name, value in metrics:
                         if value > 0:
                             report_metric(metric_group, metric_name, cgroup_name, value)
+
+                        if metric_group == "Memory":
+                            # Memory is collected in bytes, and limit is set in megabytes.
+                            if value >= CGroups._format_memory_value('megabytes', thresholds.memory_limit):
+                                msg = "CGroup {0}: Crossed the Memory Threshold. " \
+                                      "Current Value: {1} bytes, Threshold: {2} megabytes." \
+                                       .format(cgroup_name, value, thresholds.memory_limit)
+
+                                logger.warn(msg)
+                                add_event(name=AGENT_NAME,
+                                          version=CURRENT_VERSION,
+                                          op=WALAEventOperation.CGroupsLimitsCrossed,
+                                          is_success=True,
+                                          message=msg,
+                                          log_event=True)
+
+                        if metric_group == "Process":
+                            if value >= thresholds.cpu_limit:
+                                msg = "CGroup {0}: Crossed the Processor Threshold. " \
+                                      "Current Value: {1}, Threshold: {2}." \
+                                       .format(cgroup_name, value, thresholds.cpu_limit)
+
+                                logger.warn(msg)
+                                add_event(name=AGENT_NAME,
+                                          version=CURRENT_VERSION,
+                                          op=WALAEventOperation.CGroupsLimitsCrossed,
+                                          is_success=True,
+                                          message=msg,
+                                          log_event=True)
+
             except Exception as e:
                 logger.warn("Monitor: failed to collect cgroups performance metrics: {0}", ustr(e))
                 logger.verbose(traceback.format_exc())

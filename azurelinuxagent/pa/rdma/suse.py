@@ -1,6 +1,6 @@
 # Microsoft Azure Linux Agent
 #
-# Copyright 2017 Microsoft Corporation
+# Copyright 2018 Microsoft Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -28,7 +28,7 @@ class SUSERDMAHandler(RDMAHandler):
     def install_driver(self):
         """Install the appropriate driver package for the RDMA firmware"""
 
-        fw_version = RDMAHandler.get_rdma_version()
+        fw_version = self.get_rdma_version()
         if not fw_version:
             error_msg = 'RDMA: Could not determine firmware version. '
             error_msg += 'Therefore, no driver will be installed.'
@@ -40,7 +40,23 @@ class SUSERDMAHandler(RDMAHandler):
         zypper_remove = 'zypper -n rm %s'
         zypper_search = 'zypper -n se -s %s'
         zypper_unlock = 'zypper removelock %s'
-        package_name = 'msft-rdma-kmp-default'
+        package_name = 'dummy'
+        # Figure out the kernel that is running to find the proper kmp
+        cmd = 'uname -r'
+        status, kernel_release = shellutil.run_get_output(cmd)
+        if 'default' in kernel_release:
+            package_name = 'msft-rdma-kmp-default'
+            info_msg = 'RDMA: Detected kernel-default'
+            logger.info(info_msg)
+        elif 'azure' in kernel_release:
+            package_name = 'msft-rdma-kmp-azure'
+            info_msg = 'RDMA: Detected kernel-azure'
+            logger.info(info_msg)
+        else:
+            error_msg = 'RDMA: Could not detect kernel build, unable to '
+            error_msg += 'load kernel module. Kernel release: "%s"'
+            logger.error(error_msg % kernel_release)
+            return
         cmd = zypper_search % package_name
         status, repo_package_info = shellutil.run_get_output(cmd)
         driver_package_versions = []

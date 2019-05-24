@@ -55,6 +55,13 @@ class TestHealthService(AgentTestCase):
         self.assertEqual(is_healthy, obs_healthy)
         self.assertEqual(description, obs_description)
 
+    def assert_telemetry(self, call_args, response=''):
+        args, kw_args = call_args
+        self.assertFalse(kw_args['is_success'])
+        self.assertEqual('HealthObservation', kw_args['op'])
+        obs = json.loads(kw_args['message'])
+        self.assertEqual(obs['Value'], response)
+
     def test_observation_validity(self):
         try:
             Observation(name=None, is_healthy=True)
@@ -101,11 +108,13 @@ class TestHealthService(AgentTestCase):
         actual = sorted(json.loads(health_service.as_json).items())
         self.assertEqual(expected, actual)
 
+    @patch('azurelinuxagent.common.event.add_event')
     @patch("azurelinuxagent.common.utils.restutil.http_post")
-    def test_reporting(self, patch_post):
+    def test_reporting(self, patch_post, patch_add_event):
         health_service = HealthService('endpoint')
         health_service.report_host_plugin_status(is_healthy=True, response='response')
         self.assertEqual(1, patch_post.call_count)
+        self.assertEqual(0, patch_add_event.call_count)
         self.assert_observation(call_args=patch_post.call_args,
                                 name=HealthService.HOST_PLUGIN_STATUS_OBSERVATION_NAME,
                                 is_healthy=True,
@@ -115,6 +124,8 @@ class TestHealthService(AgentTestCase):
 
         health_service.report_host_plugin_status(is_healthy=False, response='error')
         self.assertEqual(2, patch_post.call_count)
+        self.assertEqual(1, patch_add_event.call_count)
+        self.assert_telemetry(call_args=patch_add_event.call_args, response='error')
         self.assert_observation(call_args=patch_post.call_args,
                                 name=HealthService.HOST_PLUGIN_STATUS_OBSERVATION_NAME,
                                 is_healthy=False,
@@ -124,6 +135,7 @@ class TestHealthService(AgentTestCase):
 
         health_service.report_host_plugin_extension_artifact(is_healthy=True, source='source', response='response')
         self.assertEqual(3, patch_post.call_count)
+        self.assertEqual(1, patch_add_event.call_count)
         self.assert_observation(call_args=patch_post.call_args,
                                 name=HealthService.HOST_PLUGIN_ARTIFACT_OBSERVATION_NAME,
                                 is_healthy=True,
@@ -133,6 +145,8 @@ class TestHealthService(AgentTestCase):
 
         health_service.report_host_plugin_extension_artifact(is_healthy=False, source='source', response='response')
         self.assertEqual(4, patch_post.call_count)
+        self.assertEqual(2, patch_add_event.call_count)
+        self.assert_telemetry(call_args=patch_add_event.call_args, response='response')
         self.assert_observation(call_args=patch_post.call_args,
                                 name=HealthService.HOST_PLUGIN_ARTIFACT_OBSERVATION_NAME,
                                 is_healthy=False,
@@ -142,6 +156,7 @@ class TestHealthService(AgentTestCase):
 
         health_service.report_host_plugin_heartbeat(is_healthy=True)
         self.assertEqual(5, patch_post.call_count)
+        self.assertEqual(2, patch_add_event.call_count)
         self.assert_observation(call_args=patch_post.call_args,
                                 name=HealthService.HOST_PLUGIN_HEARTBEAT_OBSERVATION_NAME,
                                 is_healthy=True,
@@ -150,6 +165,8 @@ class TestHealthService(AgentTestCase):
         self.assertEqual(0, len(health_service.observations))
 
         health_service.report_host_plugin_heartbeat(is_healthy=False)
+        self.assertEqual(3, patch_add_event.call_count)
+        self.assert_telemetry(call_args=patch_add_event.call_args)
         self.assertEqual(6, patch_post.call_count)
         self.assert_observation(call_args=patch_post.call_args,
                                 name=HealthService.HOST_PLUGIN_HEARTBEAT_OBSERVATION_NAME,
@@ -160,6 +177,7 @@ class TestHealthService(AgentTestCase):
 
         health_service.report_host_plugin_versions(is_healthy=True, response='response')
         self.assertEqual(7, patch_post.call_count)
+        self.assertEqual(3, patch_add_event.call_count)
         self.assert_observation(call_args=patch_post.call_args,
                                 name=HealthService.HOST_PLUGIN_VERSIONS_OBSERVATION_NAME,
                                 is_healthy=True,
@@ -169,6 +187,8 @@ class TestHealthService(AgentTestCase):
 
         health_service.report_host_plugin_versions(is_healthy=False, response='response')
         self.assertEqual(8, patch_post.call_count)
+        self.assertEqual(4, patch_add_event.call_count)
+        self.assert_telemetry(call_args=patch_add_event.call_args, response='response')
         self.assert_observation(call_args=patch_post.call_args,
                                 name=HealthService.HOST_PLUGIN_VERSIONS_OBSERVATION_NAME,
                                 is_healthy=False,
@@ -180,6 +200,7 @@ class TestHealthService(AgentTestCase):
         health_service.report_host_plugin_versions(is_healthy=True, response='')
 
         self.assertEqual(9, patch_post.call_count)
+        self.assertEqual(4, patch_add_event.call_count)
         self.assertEqual(0, len(health_service.observations))
 
     def test_observation_length(self):

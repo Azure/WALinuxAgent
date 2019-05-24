@@ -96,6 +96,7 @@ __SWITCH_OPTIONS__ = {
     "OS.UpdateRdmaDriver": False,
     "OS.CheckRdmaDriver": False,
     "Logs.Verbose": False,
+    "Logs.Console": True,
     "Extensions.Enabled": True,
     "Provisioning.Enabled": True,
     "Provisioning.UseCloudInit": False,
@@ -108,8 +109,10 @@ __SWITCH_OPTIONS__ = {
     "DetectScvmmEnv": False,
     "ResourceDisk.Format": False,
     "ResourceDisk.EnableSwap": False,
+    "ResourceDisk.EnableSwapEncryption": False,
     "AutoUpdate.Enabled": True,
-    "EnableOverProvisioning": True
+    "EnableOverProvisioning": True,
+    "CGroups.EnforceLimits": False,
 }
 
 
@@ -130,7 +133,8 @@ __STRING_OPTIONS__ = {
     "ResourceDisk.MountPoint": "/mnt/resource",
     "ResourceDisk.MountOptions": None,
     "ResourceDisk.Filesystem": "ext3",
-    "AutoUpdate.GAFamily": "Prod"
+    "AutoUpdate.GAFamily": "Prod",
+    "CGroups.Excluded": "customscript,runcommand",
 }
 
 
@@ -170,10 +174,14 @@ def enable_rdma(conf=__conf__):
 def enable_rdma_update(conf=__conf__):
     return conf.get_switch("OS.UpdateRdmaDriver", False)
 
+def enable_check_rdma_driver(conf=__conf__):
+    return conf.get_switch("OS.CheckRdmaDriver", True)
 
 def get_logs_verbose(conf=__conf__):
     return conf.get_switch("Logs.Verbose", False)
 
+def get_logs_console(conf=__conf__):
+    return conf.get_switch("Logs.Console", True)
 
 def get_lib_dir(conf=__conf__):
     return conf.get("Lib.Dir", "/var/lib/waagent")
@@ -322,7 +330,9 @@ def get_resourcedisk_format(conf=__conf__):
 
 def get_resourcedisk_enable_swap(conf=__conf__):
     return conf.get_switch("ResourceDisk.EnableSwap", False)
-
+    
+def get_resourcedisk_enable_swap_encryption(conf=__conf__):
+    return conf.get_switch("ResourceDisk.EnableSwapEncryption", False)
 
 def get_resourcedisk_mountpoint(conf=__conf__):
     return conf.get("ResourceDisk.MountPoint", "/mnt/resource")
@@ -362,3 +372,12 @@ def get_allow_http(conf=__conf__):
 
 def get_disable_agent_file_path(conf=__conf__):
     return os.path.join(get_lib_dir(conf), DISABLE_AGENT_FILE)
+
+
+def get_cgroups_enforce_limits(conf=__conf__):
+    return conf.get_switch("CGroups.EnforceLimits", False)
+
+
+def get_cgroups_excluded(conf=__conf__):
+    excluded_value = conf.get("CGroups.Excluded", "customscript, runcommand")
+    return [s for s in [i.strip().lower() for i in excluded_value.split(',')] if len(s) > 0] if excluded_value else []

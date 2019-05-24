@@ -62,8 +62,9 @@ class Agent(object):
         level = logger.LogLevel.VERBOSE if verbose else logger.LogLevel.INFO
         logger.add_logger_appender(logger.AppenderType.FILE, level,
                                  path="/var/log/waagent.log")
-        logger.add_logger_appender(logger.AppenderType.CONSOLE, level,
-                                 path="/dev/console")
+        if conf.get_logs_console():
+            logger.add_logger_appender(logger.AppenderType.CONSOLE, level,
+                    path="/dev/console")
         # See issue #1035
         # logger.add_logger_appender(logger.AppenderType.TELEMETRY,
         #                            logger.LogLevel.WARNING,
@@ -126,14 +127,14 @@ class Agent(object):
         print("Start {0} service".format(AGENT_NAME))
         self.osutil.start_agent_service()
 
-    def run_exthandlers(self):
+    def run_exthandlers(self, debug=False):
         """
         Run the update and extension handler
         """
         logger.set_prefix("ExtHandler")
         from azurelinuxagent.ga.update import get_update_handler
         update_handler = get_update_handler()
-        update_handler.run()
+        update_handler.run(debug)
 
     def show_configuration(self):
         configuration = conf.get_configuration()
@@ -147,7 +148,7 @@ def main(args=[]):
     """
     if len(args) <= 0:
         args = sys.argv[1:]
-    command, force, verbose, conf_file_path = parse_args(args)
+    command, force, verbose, debug, conf_file_path = parse_args(args)
     if command == "version":
         version()
     elif command == "help":
@@ -168,7 +169,7 @@ def main(args=[]):
             elif command == "daemon":
                 agent.daemon()
             elif command == "run-exthandlers":
-                agent.run_exthandlers()
+                agent.run_exthandlers(debug)
             elif command == "show-configuration":
                 agent.show_configuration()
         except Exception:
@@ -183,6 +184,7 @@ def parse_args(sys_args):
     cmd = "help"
     force = False
     verbose = False
+    debug = False
     conf_file_path = None
     for a in sys_args:
         m = re.match("^(?:[-/]*)configuration-path:([\w/\.\-_]+)", a)
@@ -210,6 +212,8 @@ def parse_args(sys_args):
             cmd = "version"
         elif re.match("^([-/]*)verbose", a):
             verbose = True
+        elif re.match("^([-/]*)debug", a):
+            debug = True
         elif re.match("^([-/]*)force", a):
             force = True
         elif re.match("^([-/]*)show-configuration", a):
@@ -219,7 +223,9 @@ def parse_args(sys_args):
         else:
             cmd = "help"
             break
-    return cmd, force, verbose, conf_file_path
+
+    return cmd, force, verbose, debug, conf_file_path
+
 
 def version():
     """

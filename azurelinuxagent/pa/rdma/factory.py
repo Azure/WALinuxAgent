@@ -23,6 +23,8 @@ from .suse import SUSERDMAHandler
 from .centos import CentOSRDMAHandler
 from .ubuntu import UbuntuRDMAHandler
 
+from distutils.version import LooseVersion as Version
+
 
 def get_rdma_handler(
         distro_full_name=DISTRO_FULL_NAME,
@@ -32,11 +34,11 @@ def get_rdma_handler(
     if (
             (distro_full_name == 'SUSE Linux Enterprise Server' or
              distro_full_name == 'SLES') and
-            int(distro_version) > 11
+            Version(distro_version) > Version('11')
     ):
         return SUSERDMAHandler()
 
-    if distro_full_name == 'CentOS Linux' or distro_full_name == 'CentOS':
+    if distro_full_name == 'CentOS Linux' or distro_full_name == 'CentOS' or distro_full_name == 'Red Hat Enterprise Linux Server':
         return CentOSRDMAHandler(distro_version)
 
     if distro_full_name == 'Ubuntu':

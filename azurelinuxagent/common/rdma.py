@@ -22,7 +22,6 @@ Handle packages and modules to enable RDMA for IB networking
 import os
 import re
 import time
-import threading
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
@@ -39,7 +38,7 @@ dapl_config_paths = [
     '/usr/local/etc/dat.conf'
 ]
 
-def setup_rdma_device():
+def setup_rdma_device(nd_version):
     logger.verbose("Parsing SharedConfig XML contents for RDMA details")
     xml_doc = parse_doc(
         fileutil.read_file(os.path.join(conf.get_lib_dir(), SHARED_CONF_FILE_NAME)))
@@ -71,18 +70,21 @@ def setup_rdma_device():
         rdma_ipv4_addr, rdma_mac_addr))
 
     # Set up the RDMA device with collected informatino
-    RDMADeviceHandler(rdma_ipv4_addr, rdma_mac_addr).start()
+    RDMADeviceHandler(rdma_ipv4_addr, rdma_mac_addr, nd_version).start()
     logger.info("RDMA: device is set up")
     return
 
 class RDMAHandler(object):
 
     driver_module_name = 'hv_network_direct'
+    nd_version = None
 
-    @staticmethod
-    def get_rdma_version():
+    def get_rdma_version(self):
         """Retrieve the firmware version information from the system.
            This depends on information provided by the Linux kernel."""
+
+        if self.nd_version :
+            return self.nd_version
 
         kvp_key_size = 512
         kvp_value_size = 2048
@@ -104,7 +106,8 @@ class RDMAHandler(object):
                 value_0 = value.split("\x00")[0]
                 if key_0 == "NdDriverVersion" :
                     f.close()
-                    return value_0
+                    self.nd_version = value_0
+                    return self.nd_version
             else :
                 break
         f.close()
@@ -148,6 +151,15 @@ class RDMAHandler(object):
         logger.info('RDMA: Loaded the kernel driver successfully.')
         return True
 
+    def install_driver_if_needed(self):
+        if self.nd_version:
+            if conf.enable_check_rdma_driver():
+                self.install_driver()
+            else:
+                logger.info('RDMA: check RDMA driver is disabled, skip installing driver')
+        else:
+            logger.info('RDMA: skip installing driver when ndversion not present\n')
+
     def install_driver(self):
         """Install the driver. This is distribution specific and must
            be overwritten in the child implementation."""
@@ -184,61 +196,109 @@ class RDMADeviceHandler(object):
     """
 
     rdma_dev = '/dev/hvnd_rdma'
+    sriov_dir = '/sys/class/infiniband'
     device_check_timeout_sec = 120
     device_check_interval_sec = 1
+    ipoib_check_timeout_sec = 60
+    ipoib_check_interval_sec = 1
 
     ipv4_addr = None
     mac_adr = None
+    nd_version = None
 
-    def __init__(self, ipv4_addr, mac_addr):
+    def __init__(self, ipv4_addr, mac_addr, nd_version):
         self.ipv4_addr = ipv4_addr
         self.mac_addr = mac_addr
+        self.nd_version = nd_version
 
     def start(self):
-        """
-        Start a thread in the background to process the RDMA tasks and returns.
-        """
-        logger.info("RDMA: starting device processing in the background.")
-        threading.Thread(target=self.process).start()
+        logger.info("RDMA: starting device processing.")
+        self.process()
+        logger.info("RDMA: completed device processing.")
 
     def process(self):
         try:
-            RDMADeviceHandler.update_dat_conf(dapl_config_paths, self.ipv4_addr)
-
-            skip_rdma_device = False
-            module_name = "hv_network_direct"
-            retcode,out = shellutil.run_get_output("modprobe -R %s" % module_name, chk_err=False)
-            if retcode == 0:
-                module_name = out.strip()
-            else:
-                logger.info("RDMA: failed to resolve module name. Use original name")
-            retcode,out = shellutil.run_get_output("modprobe %s" % module_name)
-            if retcode != 0:
-                logger.error("RDMA: failed to load module %s" % module_name)
-                return
-            retcode,out = shellutil.run_get_output("modinfo %s" % module_name)
-            if retcode == 0:
-                version = re.search("version:\s+(\d+)\.(\d+)\.(\d+)\D", out, re.IGNORECASE)
-                if version:
-                    v1 = int(version.groups(0)[0])
-                    v2 = int(version.groups(0)[1])
-                    if v1>4 or v1==4 and v2>0:
-                        logger.info("Skip setting /dev/hvnd_rdma on 4.1 or later")
-                        skip_rdma_device = True
-                else:
-                    logger.info("RDMA: hv_network_direct driver version not present, assuming 4.0.x or older.")
-            else:
-                logger.warn("RDMA: failed to get module info on hv_network_direct.")
-
-            if not skip_rdma_device:
-                RDMADeviceHandler.wait_rdma_device(
-                    self.rdma_dev, self.device_check_timeout_sec, self.device_check_interval_sec)
-                RDMADeviceHandler.write_rdma_config_to_device(
-                    self.rdma_dev, self.ipv4_addr, self.mac_addr)
-
-            RDMADeviceHandler.update_network_interface(self.mac_addr, self.ipv4_addr)
+            if not self.nd_version :
+                logger.info("RDMA: provisioning SRIOV RDMA device.")
+                self.provision_sriov_rdma()
+            else :
+                logger.info("RDMA: provisioning Network Direct RDMA device.")
+                self.provision_network_direct_rdma()
         except Exception as e:
             logger.error("RDMA: device processing failed: {0}".format(e))
+
+    def provision_network_direct_rdma(self) :
+        RDMADeviceHandler.update_dat_conf(dapl_config_paths, self.ipv4_addr)
+
+        if not conf.enable_check_rdma_driver():
+            logger.info("RDMA: skip checking RDMA driver version")
+            RDMADeviceHandler.update_network_interface(self.mac_addr, self.ipv4_addr)
+            return
+
+        skip_rdma_device = False
+        module_name = "hv_network_direct"
+        retcode,out = shellutil.run_get_output("modprobe -R %s" % module_name, chk_err=False)
+        if retcode == 0:
+            module_name = out.strip()
+        else:
+            logger.info("RDMA: failed to resolve module name. Use original name")
+        retcode,out = shellutil.run_get_output("modprobe %s" % module_name)
+        if retcode != 0:
+            logger.error("RDMA: failed to load module %s" % module_name)
+            return
+        retcode,out = shellutil.run_get_output("modinfo %s" % module_name)
+        if retcode == 0:
+            version = re.search("version:\s+(\d+)\.(\d+)\.(\d+)\D", out, re.IGNORECASE)
+            if version:
+                v1 = int(version.groups(0)[0])
+                v2 = int(version.groups(0)[1])
+                if v1>4 or v1==4 and v2>0:
+                    logger.info("Skip setting /dev/hvnd_rdma on 4.1 or later")
+                    skip_rdma_device = True
+            else:
+                logger.info("RDMA: hv_network_direct driver version not present, assuming 4.0.x or older.")
+        else:
+            logger.warn("RDMA: failed to get module info on hv_network_direct.")
+
+        if not skip_rdma_device:
+            RDMADeviceHandler.wait_rdma_device(
+                self.rdma_dev, self.device_check_timeout_sec, self.device_check_interval_sec)
+            RDMADeviceHandler.write_rdma_config_to_device(
+                self.rdma_dev, self.ipv4_addr, self.mac_addr)
+
+        RDMADeviceHandler.update_network_interface(self.mac_addr, self.ipv4_addr)
+
+    def provision_sriov_rdma(self) :
+        RDMADeviceHandler.wait_any_rdma_device(
+            self.sriov_dir, self.device_check_timeout_sec, self.device_check_interval_sec)
+        RDMADeviceHandler.update_iboip_interface(self.ipv4_addr, self.ipoib_check_timeout_sec, self.ipoib_check_interval_sec)
+        return
+
+    @staticmethod
+    def update_iboip_interface(ipv4_addr, timeout_sec, check_interval_sec) :
+        logger.info("Wait for ib0 become available")
+        total_retries = timeout_sec/check_interval_sec
+        n = 0
+        found_ib0 = None
+        while not found_ib0 and n < total_retries:
+            ret, output = shellutil.run_get_output("ifconfig -a")
+            if ret != 0:
+                raise Exception("Failed to list network interfaces")
+            found_ib0 = re.search("ib0", output, re.IGNORECASE)
+            if found_ib0:
+                break
+            time.sleep(check_interval_sec)
+            n += 1
+
+        if not found_ib0:
+            raise Exception("ib0 is not available")
+
+        netmask = 16
+        logger.info("RDMA: configuring IPv4 addr and netmask on ipoib interface")
+        addr = '{0}/{1}'.format(ipv4_addr, netmask)
+        if shellutil.run("ifconfig ib0 {0}".format(addr)) != 0:
+            raise Exception("Could set addr to {0} on ib0".format(addr))
+        logger.info("RDMA: ipoib address and netmask configured on interface")
 
     @staticmethod
     def update_dat_conf(paths, ipv4_addr):
@@ -292,6 +352,26 @@ class RDMADeviceHandler(object):
         while n < total_retries:
             if os.path.exists(path):
                 logger.info("RDMA: device ready")
+                return
+            logger.verbose(
+                "RDMA: device not ready, sleep {0}s".format(check_interval_sec))
+            time.sleep(check_interval_sec)
+            n += 1
+        logger.error("RDMA device wait timed out")
+        raise Exception("The device did not show up in {0} seconds ({1} retries)".format(
+            timeout_sec, total_retries))
+
+    @staticmethod
+    def wait_any_rdma_device(dir, timeout_sec, check_interval_sec):
+        logger.info(
+            "RDMA: waiting for any Infiniband device at directory={0} timeout={1}s".format(
+            dir, timeout_sec))
+        total_retries = timeout_sec/check_interval_sec
+        n = 0
+        while n < total_retries:
+            r = os.listdir(dir)
+            if r:
+                logger.info("RDMA: device found in {0}".format(dir))
                 return
             logger.verbose(
                 "RDMA: device not ready, sleep {0}s".format(check_interval_sec))

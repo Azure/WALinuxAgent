@@ -241,6 +241,89 @@ class TestHttpOperations(AgentTestCase):
             self.assertEqual("foo.com", h)
             self.assertEqual(80, p)
 
+    def test_get_no_proxy_with_values_set(self):
+        no_proxy_list = ["foo.com", "www.google.com"]
+        with patch.dict(os.environ, {
+            'no_proxy': ",".join(no_proxy_list)
+        }):
+            no_proxy_from_environment = restutil.get_no_proxy()
+
+            self.assertEquals(len(no_proxy_list), len(no_proxy_from_environment))
+
+            for i, j in zip(no_proxy_from_environment, no_proxy_list):
+                self.assertEqual(i, j)
+
+    def test_get_no_proxy_with_incorrect_variable_set(self):
+        no_proxy_list = ["foo.com", "www.google.com", "", ""]
+        no_proxy_list_cleaned = [entry for entry in no_proxy_list if entry]
+
+        with patch.dict(os.environ, {
+            'no_proxy': ",".join(no_proxy_list)
+        }):
+            no_proxy_from_environment = restutil.get_no_proxy()
+
+            self.assertEquals(len(no_proxy_list_cleaned), len(no_proxy_from_environment))
+
+            for i, j in zip(no_proxy_from_environment, no_proxy_list_cleaned):
+                print(i, j)
+                self.assertEqual(i, j)
+
+    def test_get_no_proxy_with_ip_addresses_set(self):
+        no_proxy_var = "10.0.0.1,10.0.0.2,10.0.0.3,10.0.0.4,10.0.0.5,10.0.0.6,10.0.0.7,10.0.0.8,10.0.0.9,10.0.0.10,"
+        no_proxy_list = ['10.0.0.1', '10.0.0.2', '10.0.0.3', '10.0.0.4', '10.0.0.5',
+                         '10.0.0.6', '10.0.0.7', '10.0.0.8', '10.0.0.9', '10.0.0.10']
+
+        with patch.dict(os.environ, {
+            'no_proxy': no_proxy_var
+        }):
+            no_proxy_from_environment = restutil.get_no_proxy()
+
+            self.assertEquals(len(no_proxy_list), len(no_proxy_from_environment))
+
+            for i, j in zip(no_proxy_from_environment, no_proxy_list):
+                self.assertEqual(i, j)
+
+    def test_get_no_proxy_default(self):
+        no_proxy_generator = restutil.get_no_proxy()
+        self.assertIsNone(no_proxy_generator)
+
+    def test_is_ipv4_address(self):
+        self.assertTrue(restutil.is_ipv4_address('8.8.8.8'))
+        self.assertFalse(restutil.is_ipv4_address('localhost.localdomain'))
+        self.assertFalse(restutil.is_ipv4_address('2001:4860:4860::8888')) # ipv6 tests
+
+    def test_is_valid_cidr(self):
+        self.assertTrue(restutil.is_valid_cidr('192.168.1.0/24'))
+        self.assertFalse(restutil.is_valid_cidr('8.8.8.8'))
+        self.assertFalse(restutil.is_valid_cidr('192.168.1.0/a'))
+        self.assertFalse(restutil.is_valid_cidr('192.168.1.0/128'))
+        self.assertFalse(restutil.is_valid_cidr('192.168.1.0/-1'))
+        self.assertFalse(restutil.is_valid_cidr('192.168.1.999/24'))
+
+    def test_address_in_network(self):
+        self.assertTrue(restutil.address_in_network('192.168.1.1', '192.168.1.0/24'))
+        self.assertFalse(restutil.address_in_network('172.16.0.1', '192.168.1.0/24'))
+
+    def test_dotted_netmask(self):
+        self.assertEquals(restutil.dotted_netmask(0), '0.0.0.0')
+        self.assertEquals(restutil.dotted_netmask(8), '255.0.0.0')
+        self.assertEquals(restutil.dotted_netmask(16), '255.255.0.0')
+        self.assertEquals(restutil.dotted_netmask(24), '255.255.255.0')
+        self.assertEquals(restutil.dotted_netmask(32), '255.255.255.255')
+        self.assertRaises(ValueError, restutil.dotted_netmask, 33)
+
+    def test_bypass_proxy(self):
+        no_proxy_list = ["foo.com", "www.google.com", "168.63.129.16", "Microsoft.com"]
+        with patch.dict(os.environ, {
+            'no_proxy': ",".join(no_proxy_list)
+        }):
+            self.assertFalse(restutil.bypass_proxy("http://bar.com"))
+            self.assertTrue(restutil.bypass_proxy("http://foo.com"))
+            self.assertTrue(restutil.bypass_proxy("http://168.63.129.16"))
+            self.assertFalse(restutil.bypass_proxy("http://baz.com"))
+            self.assertFalse(restutil.bypass_proxy("http://10.1.1.1"))
+            self.assertTrue(restutil.bypass_proxy("http://www.microsoft.com"))
+
     @patch("azurelinuxagent.common.future.httpclient.HTTPSConnection")
     @patch("azurelinuxagent.common.future.httpclient.HTTPConnection")
     def test_http_request_direct(self, HTTPConnection, HTTPSConnection):
@@ -310,6 +393,114 @@ class TestHttpOperations(AgentTestCase):
         self.assertEqual(1, mock_conn.getresponse.call_count)
         self.assertNotEquals(None, resp)
         self.assertEquals("TheResults", resp.read())
+
+    @patch("azurelinuxagent.common.utils.restutil._get_http_proxy")
+    @patch("time.sleep")
+    @patch("azurelinuxagent.common.utils.restutil._http_request")
+    def test_http_request_proxy_with_no_proxy_check(self, _http_request, sleep, mock_get_http_proxy):
+        mock_http_resp = MagicMock()
+        mock_http_resp.read = Mock(return_value="hehe")
+        _http_request.return_value = mock_http_resp
+        mock_get_http_proxy.return_value = "host", 1234 # Return a host/port combination
+
+        no_proxy_list = ["foo.com", "www.google.com", "168.63.129.16"]
+        with patch.dict(os.environ, {
+            'no_proxy': ",".join(no_proxy_list)
+        }):
+            # Test http get
+            resp = restutil.http_get("http://foo.com", use_proxy=True)
+            self.assertEquals("hehe", resp.read())
+            self.assertEquals(0, mock_get_http_proxy.call_count)
+
+            # Test http get
+            resp = restutil.http_get("http://bar.com", use_proxy=True)
+            self.assertEquals("hehe", resp.read())
+            self.assertEquals(1, mock_get_http_proxy.call_count)
+
+    def test_proxy_conditions_with_no_proxy(self):
+        should_use_proxy = True
+        should_not_use_proxy = False
+        use_proxy = True
+
+        no_proxy_list = ["foo.com", "www.google.com", "168.63.129.16"]
+        with patch.dict(os.environ, {
+            'no_proxy': ",".join(no_proxy_list)
+        }):
+            host = "10.0.0.1"
+            self.assertEquals(should_use_proxy, use_proxy and not restutil.bypass_proxy(host))
+
+            host = "foo.com"
+            self.assertEquals(should_not_use_proxy, use_proxy and not restutil.bypass_proxy(host))
+
+            host = "www.google.com"
+            self.assertEquals(should_not_use_proxy, use_proxy and not restutil.bypass_proxy(host))
+
+            host = "168.63.129.16"
+            self.assertEquals(should_not_use_proxy, use_proxy and not restutil.bypass_proxy(host))
+
+            host = "www.bar.com"
+            self.assertEquals(should_use_proxy, use_proxy and not restutil.bypass_proxy(host))
+
+        no_proxy_list = ["10.0.0.1/24"]
+        with patch.dict(os.environ, {
+            'no_proxy': ",".join(no_proxy_list)
+        }):
+            host = "www.bar.com"
+            self.assertEquals(should_use_proxy, use_proxy and not restutil.bypass_proxy(host))
+
+            host = "10.0.0.1"
+            self.assertEquals(should_not_use_proxy, use_proxy and not restutil.bypass_proxy(host))
+
+            host = "10.0.1.1"
+            self.assertEquals(should_use_proxy, use_proxy and not restutil.bypass_proxy(host))
+
+        # When No_proxy is empty
+        with patch.dict(os.environ, {
+            'no_proxy': ""
+        }):
+            host = "10.0.0.1"
+            self.assertTrue(use_proxy and not restutil.bypass_proxy(host))
+
+            host = "foo.com"
+            self.assertTrue(use_proxy and not restutil.bypass_proxy(host))
+
+            host = "www.google.com"
+            self.assertTrue(use_proxy and not restutil.bypass_proxy(host))
+
+            host = "168.63.129.16"
+            self.assertTrue(use_proxy and not restutil.bypass_proxy(host))
+
+            host = "www.bar.com"
+            self.assertTrue(use_proxy and not restutil.bypass_proxy(host))
+
+            host = "10.0.0.1"
+            self.assertTrue(use_proxy and not restutil.bypass_proxy(host))
+
+            host = "10.0.1.1"
+            self.assertTrue(use_proxy and not restutil.bypass_proxy(host))
+
+        # When os.environ is empty - No global variables defined.
+        with patch.dict(os.environ, {}):
+            host = "10.0.0.1"
+            self.assertTrue(use_proxy and not restutil.bypass_proxy(host))
+
+            host = "foo.com"
+            self.assertTrue(use_proxy and not restutil.bypass_proxy(host))
+
+            host = "www.google.com"
+            self.assertTrue(use_proxy and not restutil.bypass_proxy(host))
+
+            host = "168.63.129.16"
+            self.assertTrue(use_proxy and not restutil.bypass_proxy(host))
+
+            host = "www.bar.com"
+            self.assertTrue(use_proxy and not restutil.bypass_proxy(host))
+
+            host = "10.0.0.1"
+            self.assertTrue(use_proxy and not restutil.bypass_proxy(host))
+
+            host = "10.0.1.1"
+            self.assertTrue(use_proxy and not restutil.bypass_proxy(host))
 
     @patch("azurelinuxagent.common.future.httpclient.HTTPSConnection")
     @patch("azurelinuxagent.common.future.httpclient.HTTPConnection")

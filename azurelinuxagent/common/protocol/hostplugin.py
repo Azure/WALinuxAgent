@@ -96,13 +96,8 @@ class HostPluginProtocol(object):
         url = URI_FORMAT_HEALTH.format(self.endpoint,
                                        HOST_PLUGIN_PORT)
         logger.verbose("HostGAPlugin: Getting health from [{0}]", url)
-        status_ok = False
-        try:
-            response = restutil.http_get(url, max_retry=1)
-            status_ok = restutil.request_succeeded(response)
-        except HttpError as e:
-            logger.verbose("HostGAPlugin: Exception getting health", ustr(e))
-        return status_ok
+        response = restutil.http_get(url, max_retry=1)
+        return restutil.request_succeeded(response)
 
     def get_api_versions(self):
         url = URI_FORMAT_GET_API_VERSIONS.format(self.endpoint,

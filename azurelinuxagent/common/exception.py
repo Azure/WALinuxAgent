@@ -61,6 +61,24 @@ class ExtensionError(AgentError):
         self.code = code
 
 
+class ExtensionDownloadError(ExtensionError):
+    """
+    When failed to download and setup an extension
+    """
+
+    def __init__(self, msg=None, inner=None, code=-1):
+        super(ExtensionDownloadError, self).__init__(msg, inner, code)
+
+
+class ExtensionOperationError(ExtensionError):
+    """
+    When failed to execute an extension
+    """
+
+    def __init__(self, msg=None, inner=None, code=-1):
+        super(ExtensionOperationError, self).__init__(msg, inner, code)
+
+
 class ProvisionError(AgentError):
     """
     When provision failed
@@ -169,3 +187,55 @@ class RemoteAccessError(AgentError):
 
     def __init__(self, msg=None, inner=None):
         super(RemoteAccessError, self).__init__(msg, inner)
+
+
+class ExtensionErrorCodes(object):
+    """
+    Common Error codes used across by Compute RP for better understanding
+    the cause and clarify common occurring errors
+    """
+
+    # Unknown Failures
+    PluginUnknownFailure = -1
+
+    # Success
+    PluginSuccess = 0
+
+    # Catch all error code.
+    PluginProcessingError = 1000
+
+    # Plugin failed to download
+    PluginManifestDownloadError = 1001
+
+    # Cannot find or load successfully the HandlerManifest.json
+    PluginHandlerManifestNotFound = 1002
+
+    # Cannot successfully serialize the HandlerManifest.json
+    PluginHandlerManifestDeserializationError = 1003
+
+    # Cannot download the plugin package
+    PluginPackageDownloadFailed = 1004
+
+    # Cannot extract the plugin form package
+    PluginPackageExtractionFailed = 1005
+
+    # Install failed
+    PluginInstallProcessingFailed = 1007
+
+    # Update failed
+    PluginUpdateProcessingFailed = 1008
+
+    # Enable failed
+    PluginEnableProcessingFailed = 1009
+
+    # Disable failed
+    PluginDisableProcessingFailed = 1010
+
+    # Extension script timed out
+    PluginHandlerScriptTimedout = 1011
+
+    # Invalid status file of the extension.
+    PluginSettingsStatusInvalid = 1012
+
+    def __init__(self):
+        pass

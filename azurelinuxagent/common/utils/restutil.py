@@ -22,6 +22,8 @@ import re
 import threading
 import time
 import traceback
+import socket
+import struct
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
@@ -65,6 +67,10 @@ OK_CODES = [
     httpclient.ACCEPTED
 ]
 
+NOT_MODIFIED_CODES = [
+    httpclient.NOT_MODIFIED
+]
+
 HOSTPLUGIN_UPSTREAM_FAILURE_CODES = [
     502
 ]
@@ -82,8 +88,11 @@ RETRY_EXCEPTIONS = [
     httpclient.BadStatusLine
 ]
 
+# http://www.gnu.org/software/wget/manual/html_node/Proxies.html
 HTTP_PROXY_ENV = "http_proxy"
 HTTPS_PROXY_ENV = "https_proxy"
+NO_PROXY_ENV = "no_proxy"
+
 HTTP_USER_AGENT = "{0}/{1}".format(AGENT_NAME, GOAL_STATE_AGENT_VERSION)
 HTTP_USER_AGENT_HEALTH = "{0}+health".format(HTTP_USER_AGENT)
 INVALID_CONTAINER_CONFIGURATION = "InvalidContainerConfiguration"
@@ -153,6 +162,10 @@ def _is_invalid_container_configuration(response):
 
 
 def _parse_url(url):
+    """
+    Parse URL to get the components of the URL broken down to host, port
+    :rtype: string, int, bool, string
+    """
     o = urlparse(url)
     rel_uri = o.path
     if o.fragment:
@@ -163,6 +176,95 @@ def _parse_url(url):
     if o.scheme.lower() == "https":
         secure = True
     return o.hostname, o.port, secure, rel_uri
+
+
+def is_valid_cidr(string_network):
+    """
+    Very simple check of the cidr format in no_proxy variable.
+    :rtype: bool
+    """
+    if string_network.count('/') == 1:
+        try:
+            mask = int(string_network.split('/')[1])
+        except ValueError:
+            return False
+
+        if mask < 1 or mask > 32:
+            return False
+
+        try:
+            socket.inet_aton(string_network.split('/')[0])
+        except socket.error:
+            return False
+    else:
+        return False
+    return True
+
+
+def dotted_netmask(mask):
+    """Converts mask from /xx format to xxx.xxx.xxx.xxx
+    Example: if mask is 24 function returns 255.255.255.0
+    :rtype: str
+    """
+    bits = 0xffffffff ^ (1 << 32 - mask) - 1
+    return socket.inet_ntoa(struct.pack('>I', bits))
+
+
+def address_in_network(ip, net):
+    """This function allows you to check if an IP belongs to a network subnet
+    Example: returns True if ip = 192.168.1.1 and net = 192.168.1.0/24
+             returns False if ip = 192.168.1.1 and net = 192.168.100.0/24
+    :rtype: bool
+    """
+    ipaddr = struct.unpack('=L', socket.inet_aton(ip))[0]
+    netaddr, bits = net.split('/')
+    netmask = struct.unpack('=L', socket.inet_aton(dotted_netmask(int(bits))))[0]
+    network = struct.unpack('=L', socket.inet_aton(netaddr))[0] & netmask
+    return (ipaddr & netmask) == (network & netmask)
+
+
+def is_ipv4_address(string_ip):
+    """
+    :rtype: bool
+    """
+    try:
+        socket.inet_aton(string_ip)
+    except socket.error:
+        return False
+    return True
+
+
+def get_no_proxy():
+    no_proxy = os.environ.get(NO_PROXY_ENV) or os.environ.get(NO_PROXY_ENV.upper())
+
+    if no_proxy:
+        no_proxy = [host for host in no_proxy.replace(' ', '').split(',') if host]
+
+    # no_proxy in the proxies argument takes precedence
+    return no_proxy
+
+
+def bypass_proxy(host):
+    no_proxy = get_no_proxy()
+
+    if no_proxy:
+        if is_ipv4_address(host):
+            for proxy_ip in no_proxy:
+                if is_valid_cidr(proxy_ip):
+                    if address_in_network(host, proxy_ip):
+                        return True
+                elif host == proxy_ip:
+                    # If no_proxy ip was defined in plain IP notation instead of cidr notation &
+                    # matches the IP of the index
+                    return True
+        else:
+            for proxy_domain in no_proxy:
+                if host.lower().endswith(proxy_domain.lower()):
+                    # The URL does match something in no_proxy, so we don't want
+                    # to apply the proxies on this URL.
+                    return True
+
+    return False
 
 
 def _get_http_proxy(secure=False):
@@ -247,7 +349,7 @@ def http_request(method,
 
     # Use the HTTP(S) proxy
     proxy_host, proxy_port = (None, None)
-    if use_proxy:
+    if use_proxy and not bypass_proxy(host):
         proxy_host, proxy_port = _get_http_proxy(secure=secure)
 
         if proxy_host or proxy_port:
@@ -441,6 +543,8 @@ def request_failed(resp, ok_codes=OK_CODES):
 def request_succeeded(resp, ok_codes=OK_CODES):
     return resp is not None and resp.status in ok_codes
 
+def request_not_modified(resp):
+    return resp is not None and resp.status in NOT_MODIFIED_CODES
 
 def request_failed_at_hostplugin(resp, upstream_failure_codes=HOSTPLUGIN_UPSTREAM_FAILURE_CODES):
     """

@@ -60,11 +60,13 @@ def set_systemd_files(data_files, dest="/lib/systemd/system",
     data_files.append((dest, src))
 
 
-def set_freebsd_rc_files(data_files, dest="/etc/rc.d/", src=["init/freebsd/waagent"]):
+def set_freebsd_rc_files(data_files, dest="/etc/rc.d/",
+                         src=["init/freebsd/waagent"]):
     data_files.append((dest, src))
 
 
-def set_openbsd_rc_files(data_files, dest="/etc/rc.d/", src=["init/openbsd/waagent"]):
+def set_openbsd_rc_files(data_files, dest="/etc/rc.d/",
+                         src=["init/openbsd/waagent"]):
     data_files.append((dest, src))
 
 
@@ -93,7 +95,6 @@ def get_data_files(name, version, fullname):
             if version.startswith("7.1"):
                 # TODO this is a mitigation to systemctl bug on 7.1
                 set_sysv_files(data_files)
-
     elif name == 'arch':
         set_bin_files(data_files, dest="/usr/bin")
         set_conf_files(data_files, src=["config/arch/waagent.conf"])
@@ -108,8 +109,7 @@ def get_data_files(name, version, fullname):
         set_udev_files(data_files)
         set_files(data_files, dest="/usr/share/oem",
                   src=["init/coreos/cloud-config.yml"])
-    elif name == 'clear linux os for intel architecture' \
-            or name == 'clear linux software for intel architecture':
+    elif "Clear Linux" in fullname:
         set_bin_files(data_files, dest="/usr/bin")
         set_conf_files(data_files, dest="/usr/share/defaults/waagent",
                        src=["config/clearlinux/waagent.conf"])
@@ -140,7 +140,7 @@ def get_data_files(name, version, fullname):
         set_udev_files(data_files)
         if fullname == 'SUSE Linux Enterprise Server' and \
                 version.startswith('11') or \
-                                fullname == 'openSUSE' and version.startswith(
+                fullname == 'openSUSE' and version.startswith(
                     '13.1'):
             set_sysv_files(data_files, dest='/etc/init.d',
                            src=["init/suse/waagent"])
@@ -180,6 +180,11 @@ def get_data_files(name, version, fullname):
         if version.startswith("7.1"):
             # TODO this is a mitigation to systemctl bug on 7.1
             set_sysv_files(data_files)
+    elif name == 'openwrt':
+        set_bin_files(data_files)
+        set_conf_files(data_files)
+        set_logrotate_files(data_files)
+        set_sysv_files(data_files, dest='/etc/init.d', src=["init/openwrt/waagent"])  
     else:
         # Use default setting
         set_bin_files(data_files)
@@ -195,6 +200,14 @@ def debian_has_systemd():
             ['cat', '/proc/1/comm']).strip() == 'systemd'
     except subprocess.CalledProcessError:
         return False
+
+def debian_has_systemd():
+    try:
+        return subprocess.check_output(
+            ['cat', '/proc/1/comm']).strip() == 'systemd'
+    except subprocess.CalledProcessError:
+        return False
+
 
 class install(_install):
     user_options = _install.user_options + [
@@ -231,6 +244,7 @@ class install(_install):
             osutil.stop_agent_service()
             osutil.start_agent_service()
 
+
 # Note to packagers and users from source.
 # In version 3.5 of Python distribution information handling in the platform
 # module was deprecated. Depending on the Linux distribution the
@@ -239,6 +253,11 @@ class install(_install):
 requires = []
 if float(sys.version[:3]) >= 3.7:
     requires = ['distro']
+
+modules = []
+
+if "bdist_egg" in sys.argv:
+    modules.append("__main__")
 
 setuptools.setup(
     name=AGENT_NAME,
@@ -250,7 +269,7 @@ setuptools.setup(
     url='https://github.com/Azure/WALinuxAgent',
     license='Apache License Version 2.0',
     packages=find_packages(exclude=["tests*"]),
-    py_modules=["__main__"],
+    py_modules=modules,
     install_requires=requires,
     cmdclass={
         'install': install

@@ -16,11 +16,14 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 #
+import os
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.shellutil as shellutil
+import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common.exception import ResourceDiskError
 from azurelinuxagent.daemon.resourcedisk.default import ResourceDiskHandler
+
 
 class FreeBSDResourceDiskHandler(ResourceDiskHandler):
     """
@@ -34,6 +37,7 @@ class FreeBSDResourceDiskHandler(ResourceDiskHandler):
     1. MBR: The resource disk partition is /dev/da1s1
     2. GPT: The resource disk partition is /dev/da1p2, /dev/da1p1 is for reserved usage.
     """
+
     def __init__(self):
         super(FreeBSDResourceDiskHandler, self).__init__()
 
@@ -50,25 +54,30 @@ class FreeBSDResourceDiskHandler(ResourceDiskHandler):
     def mount_resource_disk(self, mount_point):
         fs = self.fs
         if fs != 'ufs':
-            raise ResourceDiskError("Unsupported filesystem type:{0}, only ufs is supported.".format(fs))
+            raise ResourceDiskError(
+                "Unsupported filesystem type:{0}, only ufs is supported.".format(fs))
 
         # 1. Detect device
         err, output = shellutil.run_get_output('gpart list')
         if err:
-            raise ResourceDiskError("Unable to detect resource disk device:{0}".format(output))
+            raise ResourceDiskError(
+                "Unable to detect resource disk device:{0}".format(output))
         disks = self.parse_gpart_list(output)
 
         device = self.osutil.device_for_ide_port(1)
-        if device is None or not device in disks:
-        # fallback logic to find device
-            err, output = shellutil.run_get_output('camcontrol periphlist 2:1:0')
+        if device is None or device not in disks:
+            # fallback logic to find device
+            err, output = shellutil.run_get_output(
+                'camcontrol periphlist 2:1:0')
             if err:
                 # try again on "3:1:0"
-                err, output = shellutil.run_get_output('camcontrol periphlist 3:1:0')
+                err, output = shellutil.run_get_output(
+                    'camcontrol periphlist 3:1:0')
                 if err:
-                    raise ResourceDiskError("Unable to detect resource disk device:{0}".format(output))
+                    raise ResourceDiskError(
+                        "Unable to detect resource disk device:{0}".format(output))
 
-        # 'da1:  generation: 4 index: 1 status: MORE\npass2:  generation: 4 index: 2 status: LAST\n'
+            # 'da1:  generation: 4 index: 1 status: MORE\npass2:  generation: 4 index: 2 status: LAST\n'
             for line in output.split('\n'):
                 index = line.find(':')
                 if index > 0:
@@ -89,9 +98,11 @@ class FreeBSDResourceDiskHandler(ResourceDiskHandler):
         elif partition_table_type == 'GPT':
             provider_name = device + 'p2'
         else:
-            raise ResourceDiskError("Unsupported partition table type:{0}".format(output))
+            raise ResourceDiskError(
+                "Unsupported partition table type:{0}".format(output))
 
-        err, output = shellutil.run_get_output('gpart show -p {0}'.format(device))
+        err, output = shellutil.run_get_output(
+            'gpart show -p {0}'.format(device))
         if err or output.find(provider_name) == -1:
             raise ResourceDiskError("Resource disk partition not found.")
 
@@ -110,14 +121,63 @@ class FreeBSDResourceDiskHandler(ResourceDiskHandler):
         mount_cmd = 'mount -t {0} {1} {2}'.format(fs, partition, mount_point)
         err = shellutil.run(mount_cmd, chk_err=False)
         if err:
-            logger.info('Creating {0} filesystem on partition {1}'.format(fs, partition))
-            err, output = shellutil.run_get_output('newfs -U {0}'.format(partition))
+            logger.info(
+                'Creating {0} filesystem on partition {1}'.format(
+                    fs, partition))
+            err, output = shellutil.run_get_output(
+                'newfs -U {0}'.format(partition))
             if err:
-                raise ResourceDiskError("Failed to create new filesystem on partition {0}, error:{1}"
-                                        .format(partition, output))
+                raise ResourceDiskError(
+                    "Failed to create new filesystem on partition {0}, error:{1}" .format(
+                        partition, output))
             err, output = shellutil.run_get_output(mount_cmd, chk_err=False)
             if err:
-                raise ResourceDiskError("Failed to mount partition {0}, error {1}".format(partition, output))
+                raise ResourceDiskError(
+                    "Failed to mount partition {0}, error {1}".format(
+                        partition, output))
 
-        logger.info("Resource disk partition {0} is mounted at {1} with fstype {2}", partition, mount_point, fs)
+        logger.info(
+            "Resource disk partition {0} is mounted at {1} with fstype {2}",
+            partition,
+            mount_point,
+            fs)
         return mount_point
+
+    def create_swap_space(self, mount_point, size_mb):
+        size_kb = size_mb * 1024
+        size = size_kb * 1024
+        swapfile = os.path.join(mount_point, 'swapfile')
+        swaplist = shellutil.run_get_output("swapctl -l")[1]
+
+        if self.check_existing_swap_file(swapfile, swaplist, size):
+            return
+
+        if os.path.isfile(swapfile) and os.path.getsize(swapfile) != size:
+            logger.info("Remove old swap file")
+            shellutil.run("swapoff -a", chk_err=False)
+            os.remove(swapfile)
+
+        if not os.path.isfile(swapfile):
+            logger.info("Create swap file")
+            self.mkfile(swapfile, size_kb * 1024)
+
+        mddevice = shellutil.run_get_output(
+            "mdconfig -a -t vnode -f {0}".format(swapfile))[1].rstrip()
+        shellutil.run("chmod 0600 /dev/{0}".format(mddevice))
+
+        if conf.get_resourcedisk_enable_swap_encryption():
+            shellutil.run("kldload aesni")
+            shellutil.run("kldload cryptodev")
+            shellutil.run("kldload geom_eli")
+            shellutil.run(
+                "geli onetime -e AES-XTS -l 256 -d /dev/{0}".format(mddevice))
+            shellutil.run("chmod 0600 /dev/{0}.eli".format(mddevice))
+            if shellutil.run("swapon /dev/{0}.eli".format(mddevice)):
+                raise ResourceDiskError("/dev/{0}.eli".format(mddevice))
+            logger.info(
+                "Enabled {0}KB of swap at /dev/{1}.eli ({2})".format(size_kb, mddevice, swapfile))
+        else:
+            if shellutil.run("swapon /dev/{0}".format(mddevice)):
+                raise ResourceDiskError("/dev/{0}".format(mddevice))
+            logger.info(
+                "Enabled {0}KB of swap at /dev/{1} ({2})".format(size_kb, mddevice, swapfile))
