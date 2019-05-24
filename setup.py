@@ -25,7 +25,7 @@ from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, \
 from azurelinuxagent.common.osutil import get_osutil
 import setuptools
 from setuptools import find_packages
-from setuptools.command.install import install as  _install
+from setuptools.command.install import install as _install
 import subprocess
 import sys
 
@@ -167,7 +167,6 @@ def get_data_files(name, version, fullname):
         set_conf_files(data_files, src=["config/kali/waagent.conf"])
         set_logrotate_files(data_files)
         set_udev_files(data_files, dest="/lib/udev/rules.d")
-        #Kali Linux uses systemd
         set_systemd_files(data_files,
                           src=["init/kali/walinuxagent.service",
                                "init/kali/waagent-apt.service"])
