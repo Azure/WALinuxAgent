@@ -26,6 +26,7 @@ from azurelinuxagent.common.osutil import get_osutil
 import setuptools
 from setuptools import find_packages
 from setuptools.command.install import install as  _install
+import subprocess
 import sys
 
 root_dir = os.path.dirname(os.path.abspath(__file__))
@@ -159,6 +160,8 @@ def get_data_files(name, version, fullname):
         set_conf_files(data_files, src=["config/debian/waagent.conf"])
         set_logrotate_files(data_files)
         set_udev_files(data_files, dest="/lib/udev/rules.d")
+        if debian_has_systemd():
+            set_systemd_files(data_files)
     elif name == 'kali':
         set_bin_files(data_files)
         set_conf_files(data_files, src=["config/kali/waagent.conf"])
@@ -187,6 +190,12 @@ def get_data_files(name, version, fullname):
         set_sysv_files(data_files)
     return data_files
 
+def debian_has_systemd():
+    try:
+        return subprocess.check_output(
+            ['cat', '/proc/1/comm']).strip() == 'systemd'
+    except subprocess.CalledProcessError:
+        return False
 
 class install(_install):
     user_options = _install.user_options + [
