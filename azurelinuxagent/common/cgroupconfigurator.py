@@ -19,6 +19,7 @@ import subprocess
 
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.cgroupapi import CGroupsApi
+from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.exception import CGroupsException
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
@@ -166,9 +167,12 @@ class CGroupConfigurator(object):
                 def track_cgroups():
                     cgroups = self._cgroups_api.get_extension_cgroups(extension_name)
 
-                    # TODO: Add to tracking list
+                    for cgroup in cgroups:
+                        CGroupsTelemetry.track_cgroup(cgroup)
 
-                self._invoke_cgroup_operation(track_cgroups, "Failed to add cgroups for extension '{0}' to the tracking list; resource usage will not be tracked".format(extension_name))
+                self._invoke_cgroup_operation(track_cgroups,
+                                              "Failed to add cgroups for extension '{0}' to the tracking list; "
+                                              "resource usage will not be tracked".format(extension_name))
 
             return process
 

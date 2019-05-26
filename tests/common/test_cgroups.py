@@ -17,16 +17,15 @@
 
 from __future__ import print_function
 
-from azurelinuxagent.common.cgroup import CpuCgroup, MemoryCGroup
+import json
+import random
+
+from azurelinuxagent.common.cgroup import CpuCgroup, MemoryCgroup
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.exception import CGroupsException
 from azurelinuxagent.common.version import AGENT_NAME
 from tests.tools import *
-
-import os
-import random
-import time
 
 
 def consume_cpu_time():
@@ -69,6 +68,25 @@ def i_am_root():
     return os.geteuid() == 0
 
 
+def median(lst: list) -> float:
+    data = sorted(lst)
+    l_len = len(data)
+    if l_len < 1:
+        return None
+    if l_len % 2 == 0:
+        return (data[int((l_len - 1) / 2)] + data[int((l_len + 1) / 2)]) / 2.0
+    else:
+        return data[int((l_len - 1) / 2)]
+
+
+def generate_metric_list(lst):
+    return [sum(lst) / len(lst),
+            min(lst),
+            max(lst),
+            median(lst),
+            len(lst)]
+
+
 @skip_if_predicate_false(lambda: False, "TODO: Need unit tests")
 class TestCGroupConfigurator(AgentTestCase):
     #
@@ -104,15 +122,15 @@ class TestCGroups(AgentTestCase):
         self.assertIn('memory', cg.cgroups)
         ct = CGroupsTelemetry("test", cg)
         cpu = CpuCgroup(ct)
-        self.assertGreater(cpu.current_system_cpu, 0)
+        self.assertGreater(cpu._current_system_cpu, 0)
 
         consume_cpu_time()  # Eat some CPU
-        cpu.update()
+        cpu._update_cpu_data()
 
-        self.assertGreater(cpu.current_cpu_total, cpu.previous_cpu_total)
-        self.assertGreater(cpu.current_system_cpu, cpu.previous_system_cpu)
+        self.assertGreater(cpu._current_cpu_total, cpu._previous_cpu_total)
+        self.assertGreater(cpu._current_system_cpu, cpu._previous_system_cpu)
 
-        percent_used = cpu.get_cpu_percent()
+        percent_used = cpu._get_cpu_percent()
         self.assertGreater(percent_used, 0)
 
     def test_telemetry_in_place_leaf_cgroup(self):
@@ -126,12 +144,12 @@ class TestCGroups(AgentTestCase):
         if cg.cgroups['cpu'] != root.cgroups['cpu']:
             ct = CGroupsTelemetry("test", cg)
             cpu = CpuCgroup(ct)
-            self.assertLess(cpu.current_cpu_total, cpu.current_system_cpu)
+            self.assertLess(cpu._current_cpu_total, cpu._current_system_cpu)
 
             consume_cpu_time()  # Eat some CPU
             time.sleep(1)  # Generate some idle time
-            cpu.update()
-            self.assertLess(cpu.current_cpu_total, cpu.current_system_cpu)
+            cpu._update_cpu_data()
+            self.assertLess(cpu._current_cpu_total, cpu._current_system_cpu)
 
     def exercise_telemetry_instantiation(self, test_cgroup):
         test_extension_name = test_cgroup.name
@@ -213,13 +231,13 @@ class TestCGroups(AgentTestCase):
         self.assertIs(cg, ct.cgroup)
         cpu = CpuCgroup(ct)
         self.assertIs(cg, cpu.cgt.cgroup)
-        ticks_before = cpu.current_cpu_total
+        ticks_before = cpu._current_cpu_total
         consume_cpu_time()
         time.sleep(1)
-        cpu.update()
-        ticks_after = cpu.current_cpu_total
+        cpu._update_cpu_data()
+        ticks_after = cpu._current_cpu_total
         self.assertGreater(ticks_after, ticks_before)
-        p2 = cpu.get_cpu_percent()
+        p2 = cpu._get_cpu_percent()
         self.assertGreater(p2, 0)
         # when running under PyCharm, this is often > 100
         # on a multi-core machine
@@ -236,8 +254,8 @@ class TestCGroups(AgentTestCase):
         self.assertIn('memory', cg.cgroups)
         ct = CGroupsTelemetry('test', cg)
         self.assertIs(cg, ct.cgroup)
-        memory = MemoryCGroup(ct)
-        usage_in_bytes = memory.get_memory_usage()
+        memory = MemoryCgroup(ct)
+        usage_in_bytes = memory._get_memory_usage()
         self.assertGreater(usage_in_bytes, 100000)
 
     def test_format_memory_value(self):
@@ -303,6 +321,121 @@ class TestCGroups(AgentTestCase):
         self.assert_limits(ext_name=AGENT_NAME, expected_cpu_limit=-1, limits_enforced=False)
         self.assert_limits(ext_name="normal_extension", expected_cpu_limit=40, exception_raised=True)
 
+
+class TestCGroupsTelemetry(AgentTestCase):
+    @staticmethod
+    def cleanup_cgroup_telemetry():
+        CGroupsTelemetry.cleanup()
+
+    @patch("azurelinuxagent.common.cgroup.CpuCgroup._get_current_cpu_total")
+    @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_total_cpu_ticks_since_boot")
+    def test_telemetry_polling(self, *args):
+        num_extensions = 5
+        for i in range(num_extensions):
+            dummy_cpu_cgroup = CpuCgroup("dummy_extension_{0}".format(i),
+                                         "dummy_path")
+            CGroupsTelemetry.track_cgroup(dummy_cpu_cgroup)
+
+            dummy_memory_cgroup = MemoryCgroup("dummy_extension_{0}".format(i),
+                                               "dummy_path")
+            CGroupsTelemetry.track_cgroup(dummy_memory_cgroup)
+
+        with patch("azurelinuxagent.common.cgroup.CpuCgroup._get_cpu_percent") as mock_get_cpu_percent:
+            with patch("azurelinuxagent.common.cgroup.MemoryCgroup._get_memory_max_usage") as mock_get_memory_usage:
+                with patch("azurelinuxagent.common.cgroup.MemoryCgroup._get_memory_usage") as mock_get_memory_max_usage:
+                    mock_get_cpu_percent.return_value = 30
+                    mock_get_memory_usage.return_value = 209715200  # example 200 MB
+                    mock_get_memory_max_usage.return_value = 471859200  # example 450 MB
+
+                    CGroupsTelemetry.poll_all_tracked()
+
+                    self.assertEqual(CGroupsTelemetry._cgroup_metrics.__len__(), num_extensions)
+                    for cgroup_name, cgroup_metric in CGroupsTelemetry._cgroup_metrics.items():
+                        self.assertEqual(len(cgroup_metric.current_memory_usage.data), 1)
+                        self.assertEqual(len(cgroup_metric.max_memory_levels.data), 1)
+                        self.assertEqual(len(cgroup_metric.current_cpu_usage.data), 1)
+
+                    CGroupsTelemetry.poll_all_tracked()
+
+                    self.assertEqual(CGroupsTelemetry._cgroup_metrics.__len__(), num_extensions)
+                    for cgroup_name, cgroup_metric in CGroupsTelemetry._cgroup_metrics.items():
+                        self.assertEqual(len(cgroup_metric.current_memory_usage.data), 2)
+                        self.assertEqual(len(cgroup_metric.max_memory_levels.data), 2)
+                        self.assertEqual(len(cgroup_metric.current_cpu_usage.data), 2)
+
+                    CGroupsTelemetry.poll_all_tracked()
+
+                    self.assertEqual(CGroupsTelemetry._cgroup_metrics.__len__(), num_extensions)
+                    for cgroup_name, cgroup_metric in CGroupsTelemetry._cgroup_metrics.items():
+                        self.assertEqual(len(cgroup_metric.current_memory_usage.data), 3)
+                        self.assertEqual(len(cgroup_metric.max_memory_levels.data), 3)
+                        self.assertEqual(len(cgroup_metric.current_cpu_usage.data), 3)
+
+                    CGroupsTelemetry.collect_all_tracked()
+                    self.assertEqual(CGroupsTelemetry._cgroup_metrics.__len__(), num_extensions)
+                    for cgroup_name, cgroup_metric in CGroupsTelemetry._cgroup_metrics.items():
+                        self.assertEqual(len(cgroup_metric.current_memory_usage.data), 0)
+                        self.assertEqual(len(cgroup_metric.max_memory_levels.data), 0)
+                        self.assertEqual(len(cgroup_metric.current_cpu_usage.data), 0)
+
+        self.cleanup_cgroup_telemetry()
+
+    @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_total_cpu_ticks_since_boot")
+    @patch("azurelinuxagent.common.cgroup.CpuCgroup._get_current_cpu_total")
+    @patch("azurelinuxagent.common.cgroup.CpuCgroup._update_cpu_data")
+    def test_telemetry_calculations(self, *args):
+        num_polls = 10
+        num_extensions = 1
+        num_summarization_values = 7
+
+        cpu_percent_values = [random.randint(0, 100) for _ in range(num_polls)]
+
+        # only verifying calculations and not validity of the values.
+        memory_usage_values = [random.randint(0, 8 * 1024 ** 3) for _ in range(num_polls)]
+        max_memory_usage_values = [random.randint(0, 8 * 1024 ** 3) for _ in range(num_polls)]
+
+        for i in range(num_extensions):
+            dummy_cpu_cgroup = CpuCgroup("dummy_extension_{0}".format(i), "dummy_path")
+            CGroupsTelemetry.track_cgroup(dummy_cpu_cgroup)
+
+            dummy_memory_cgroup = MemoryCgroup("dummy_extension_{0}".format(i), "dummy_path")
+            CGroupsTelemetry.track_cgroup(dummy_memory_cgroup)
+
+        self.assertEqual(2 * num_extensions, len(CGroupsTelemetry._tracked))
+
+        with patch("azurelinuxagent.common.cgroup.CpuCgroup._get_cpu_percent") as patch_get_cpu_percent:
+            with patch(
+                    "azurelinuxagent.common.cgroup.MemoryCgroup._get_memory_max_usage") as patch_get_memory_max_usage:
+                with patch("azurelinuxagent.common.cgroup.MemoryCgroup._get_memory_usage") as patch_get_memory_usage:
+                    for i in range(num_polls):
+                        patch_get_cpu_percent.return_value = cpu_percent_values[i]
+                        patch_get_memory_usage.return_value = memory_usage_values[i]  # example 200 MB
+                        patch_get_memory_max_usage.return_value = max_memory_usage_values[i]  # example 450 MB
+                        CGroupsTelemetry.poll_all_tracked()
+
+        collected_metrics = CGroupsTelemetry.collect_all_tracked()
+        for i in range(num_extensions):
+            name = "dummy_extension_{0}".format(i)
+
+            self.assertIn(name, collected_metrics)
+            self.assertIn("memory", collected_metrics[name])
+            self.assertIn("cur_mem", collected_metrics[name]["memory"])
+            self.assertIn("max_mem", collected_metrics[name]["memory"])
+            self.assertEqual(num_summarization_values, len(collected_metrics[name]["memory"]["cur_mem"]))
+            self.assertEqual(num_summarization_values, len(collected_metrics[name]["memory"]["max_mem"]))
+
+            self.assertListEqual(generate_metric_list(memory_usage_values),
+                                 collected_metrics[name]["memory"]["cur_mem"][0:5])
+            self.assertListEqual(generate_metric_list(max_memory_usage_values),
+                                 collected_metrics[name]["memory"]["max_mem"][0:5])
+
+            self.assertIn("cpu", collected_metrics[name])
+            self.assertIn("cur_cpu", collected_metrics[name]["cpu"])
+            self.assertEqual(num_summarization_values, len(collected_metrics[name]["cpu"]["cur_cpu"]))
+            self.assertListEqual(generate_metric_list(cpu_percent_values),
+                                 collected_metrics[name]["cpu"]["cur_cpu"][0:5])
+
+        self.cleanup_cgroup_telemetry()
 
 @skip_if_predicate_false(lambda: False, "TODO: Need new unit tests")
 class TestCGroupsLimits(AgentTestCase):
