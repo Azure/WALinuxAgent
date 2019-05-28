@@ -226,14 +226,6 @@ class LaunchCommandTestCase(AgentTestCase):
         self.ext_handler.properties = ext_handler_properties
         self.ext_handler_instance = ExtHandlerInstance(ext_handler=self.ext_handler, protocol=None)
 
-        # self.cgroups_file_system_root = os.path.join(self.tmp_dir, "cgroup")
-        # os.mkdir(self.cgroups_file_system_root)
-        # os.mkdir(os.path.join(self.cgroups_file_system_root, "cpu"))
-        # os.mkdir(os.path.join(self.cgroups_file_system_root, "memory"))
-
-        # self.mock__base_cgroups = patch("azurelinuxagent.common.cgroupapi.CGROUPS_FILE_SYSTEM_ROOT", self.cgroups_file_system_root)
-        # self.mock__base_cgroups.start()
-
         self.mock_get_base_dir = patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_base_dir", lambda *_: self.tmp_dir)
         self.mock_get_base_dir.start()
 
@@ -252,7 +244,6 @@ class LaunchCommandTestCase(AgentTestCase):
 
         self.mock_get_log_dir.stop()
         self.mock_get_base_dir.stop()
-        #self.mock__base_cgroups.stop()
 
         AgentTestCase.tearDown(self)
 
