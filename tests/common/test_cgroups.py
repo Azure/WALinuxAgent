@@ -329,6 +329,8 @@ class TestCGroupsTelemetry(AgentTestCase):
     @patch("azurelinuxagent.common.cgroup.CpuCgroup._get_current_cpu_total")
     @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_total_cpu_ticks_since_boot")
     def test_telemetry_polling(self, *args):
+        self.cleanup_cgroup_telemetry()
+
         num_extensions = 5
         for i in range(num_extensions):
             dummy_cpu_cgroup = CpuCgroup("dummy_extension_{0}".format(i),
@@ -339,43 +341,45 @@ class TestCGroupsTelemetry(AgentTestCase):
                                                "dummy_path")
             CGroupsTelemetry.track_cgroup(dummy_memory_cgroup)
 
-        with patch("azurelinuxagent.common.cgroup.CpuCgroup._get_cpu_percent") as mock_get_cpu_percent:
-            with patch("azurelinuxagent.common.cgroup.MemoryCgroup._get_memory_max_usage") as mock_get_memory_usage:
-                with patch("azurelinuxagent.common.cgroup.MemoryCgroup._get_memory_usage") as mock_get_memory_max_usage:
-                    mock_get_cpu_percent.return_value = 30
-                    mock_get_memory_usage.return_value = 209715200  # example 200 MB
-                    mock_get_memory_max_usage.return_value = 471859200  # example 450 MB
+        with patch("azurelinuxagent.common.cgroup.CpuCgroup._get_cpu_percent") as patch_get_cpu_percent:
+            with patch("azurelinuxagent.common.cgroup.MemoryCgroup._get_memory_max_usage") as patch_get_memory_usage:
+                with patch("azurelinuxagent.common.cgroup.MemoryCgroup._get_memory_usage") as patch_get_memory_max_usage:
+                    with patch("azurelinuxagent.common.cgroup.CGroup.is_active") as patch_is_active:
+                        patch_is_active.return_value = True
+                        patch_get_cpu_percent.return_value = 30
+                        patch_get_memory_usage.return_value = 209715200  # example 200 MB
+                        patch_get_memory_max_usage.return_value = 471859200  # example 450 MB
 
-                    CGroupsTelemetry.poll_all_tracked()
+                        CGroupsTelemetry.poll_all_tracked()
 
-                    self.assertEqual(CGroupsTelemetry._cgroup_metrics.__len__(), num_extensions)
-                    for cgroup_name, cgroup_metric in CGroupsTelemetry._cgroup_metrics.items():
-                        self.assertEqual(len(cgroup_metric.current_memory_usage.data), 1)
-                        self.assertEqual(len(cgroup_metric.max_memory_levels.data), 1)
-                        self.assertEqual(len(cgroup_metric.current_cpu_usage.data), 1)
+                        self.assertEqual(CGroupsTelemetry._cgroup_metrics.__len__(), num_extensions)
+                        for cgroup_name, cgroup_metric in CGroupsTelemetry._cgroup_metrics.items():
+                            self.assertEqual(len(cgroup_metric.current_memory_usage.data), 1)
+                            self.assertEqual(len(cgroup_metric.max_memory_levels.data), 1)
+                            self.assertEqual(len(cgroup_metric.current_cpu_usage.data), 1)
 
-                    CGroupsTelemetry.poll_all_tracked()
+                        CGroupsTelemetry.poll_all_tracked()
 
-                    self.assertEqual(CGroupsTelemetry._cgroup_metrics.__len__(), num_extensions)
-                    for cgroup_name, cgroup_metric in CGroupsTelemetry._cgroup_metrics.items():
-                        self.assertEqual(len(cgroup_metric.current_memory_usage.data), 2)
-                        self.assertEqual(len(cgroup_metric.max_memory_levels.data), 2)
-                        self.assertEqual(len(cgroup_metric.current_cpu_usage.data), 2)
+                        self.assertEqual(CGroupsTelemetry._cgroup_metrics.__len__(), num_extensions)
+                        for cgroup_name, cgroup_metric in CGroupsTelemetry._cgroup_metrics.items():
+                            self.assertEqual(len(cgroup_metric.current_memory_usage.data), 2)
+                            self.assertEqual(len(cgroup_metric.max_memory_levels.data), 2)
+                            self.assertEqual(len(cgroup_metric.current_cpu_usage.data), 2)
 
-                    CGroupsTelemetry.poll_all_tracked()
+                        CGroupsTelemetry.poll_all_tracked()
 
-                    self.assertEqual(CGroupsTelemetry._cgroup_metrics.__len__(), num_extensions)
-                    for cgroup_name, cgroup_metric in CGroupsTelemetry._cgroup_metrics.items():
-                        self.assertEqual(len(cgroup_metric.current_memory_usage.data), 3)
-                        self.assertEqual(len(cgroup_metric.max_memory_levels.data), 3)
-                        self.assertEqual(len(cgroup_metric.current_cpu_usage.data), 3)
+                        self.assertEqual(CGroupsTelemetry._cgroup_metrics.__len__(), num_extensions)
+                        for cgroup_name, cgroup_metric in CGroupsTelemetry._cgroup_metrics.items():
+                            self.assertEqual(len(cgroup_metric.current_memory_usage.data), 3)
+                            self.assertEqual(len(cgroup_metric.max_memory_levels.data), 3)
+                            self.assertEqual(len(cgroup_metric.current_cpu_usage.data), 3)
 
-                    CGroupsTelemetry.collect_all_tracked()
-                    self.assertEqual(CGroupsTelemetry._cgroup_metrics.__len__(), num_extensions)
-                    for cgroup_name, cgroup_metric in CGroupsTelemetry._cgroup_metrics.items():
-                        self.assertEqual(len(cgroup_metric.current_memory_usage.data), 0)
-                        self.assertEqual(len(cgroup_metric.max_memory_levels.data), 0)
-                        self.assertEqual(len(cgroup_metric.current_cpu_usage.data), 0)
+                        CGroupsTelemetry.collect_all_tracked()
+                        self.assertEqual(CGroupsTelemetry._cgroup_metrics.__len__(), num_extensions)
+                        for cgroup_name, cgroup_metric in CGroupsTelemetry._cgroup_metrics.items():
+                            self.assertEqual(len(cgroup_metric.current_memory_usage.data), 0)
+                            self.assertEqual(len(cgroup_metric.max_memory_levels.data), 0)
+                            self.assertEqual(len(cgroup_metric.current_cpu_usage.data), 0)
 
         self.cleanup_cgroup_telemetry()
 
@@ -383,6 +387,8 @@ class TestCGroupsTelemetry(AgentTestCase):
     @patch("azurelinuxagent.common.cgroup.CpuCgroup._get_current_cpu_total")
     @patch("azurelinuxagent.common.cgroup.CpuCgroup._update_cpu_data")
     def test_telemetry_calculations(self, *args):
+        self.cleanup_cgroup_telemetry()
+
         num_polls = 10
         num_extensions = 1
         num_summarization_values = 7
@@ -406,11 +412,13 @@ class TestCGroupsTelemetry(AgentTestCase):
             with patch(
                     "azurelinuxagent.common.cgroup.MemoryCgroup._get_memory_max_usage") as patch_get_memory_max_usage:
                 with patch("azurelinuxagent.common.cgroup.MemoryCgroup._get_memory_usage") as patch_get_memory_usage:
-                    for i in range(num_polls):
-                        patch_get_cpu_percent.return_value = cpu_percent_values[i]
-                        patch_get_memory_usage.return_value = memory_usage_values[i]  # example 200 MB
-                        patch_get_memory_max_usage.return_value = max_memory_usage_values[i]  # example 450 MB
-                        CGroupsTelemetry.poll_all_tracked()
+                    with patch("azurelinuxagent.common.cgroup.CGroup.is_active") as patch_is_active:
+                        for i in range(num_polls):
+                            patch_is_active.return_value = True
+                            patch_get_cpu_percent.return_value = cpu_percent_values[i]
+                            patch_get_memory_usage.return_value = memory_usage_values[i]  # example 200 MB
+                            patch_get_memory_max_usage.return_value = max_memory_usage_values[i]  # example 450 MB
+                            CGroupsTelemetry.poll_all_tracked()
 
         collected_metrics = CGroupsTelemetry.collect_all_tracked()
         for i in range(num_extensions):

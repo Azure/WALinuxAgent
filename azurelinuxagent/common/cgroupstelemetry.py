@@ -109,7 +109,7 @@ class CGroupsTelemetry(object):
 
     @staticmethod
     def cleanup():
-        CGroupsTelemetry._tracked.clear()
+        CGroupsTelemetry._tracked *= 0  # emptying the list
 
     def __init__(self):
         pass
@@ -155,7 +155,7 @@ class Metric(object):
         self.last_poll_time = dt.utcnow()
 
     def clear(self):
-        self.data.clear()
+        self.data *= 0
 
     def average(self):
         return sum(self.data) / len(self.data)
