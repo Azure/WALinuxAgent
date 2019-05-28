@@ -17,7 +17,6 @@
 
 from __future__ import print_function
 
-import json
 import random
 
 from azurelinuxagent.common.cgroup import CpuCgroup, MemoryCgroup
@@ -68,7 +67,7 @@ def i_am_root():
     return os.geteuid() == 0
 
 
-def median(lst: list) -> float:
+def median(lst):
     data = sorted(lst)
     l_len = len(data)
     if l_len < 1:

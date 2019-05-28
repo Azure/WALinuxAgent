@@ -17,8 +17,8 @@
 from datetime import timedelta
 
 from azurelinuxagent.common.protocol.wire import WireProtocol
-from tests.tools import *
 from azurelinuxagent.ga.monitor import *
+from tests.tools import *
 
 
 @patch('azurelinuxagent.common.event.EventLogger.add_event')
@@ -222,6 +222,16 @@ class TestMonitor(AgentTestCase):
     @patch("azurelinuxagent.common.cgroupstelemetry.CGroupsTelemetry.poll_all_tracked")
     @patch("azurelinuxagent.common.cgroupstelemetry.CGroupsTelemetry.collect_all_tracked")
     def test_send_extension_metrics_telemetry(self, patch_collect_all_tracked, patch_poll_all_tracked, *args):
+        patch_collect_all_tracked.return_value = {
+            "memory": {
+                "cur_mem": [1, 1, 1, 1, 1, str(datetime.datetime.utcnow()), str(datetime.datetime.utcnow())],
+                "max_mem": [1, 1, 1, 1, 1, str(datetime.datetime.utcnow()), str(datetime.datetime.utcnow())]
+            },
+            "cpu": {
+                "cur_cpu": [1, 1, 1, 1, 1, str(datetime.datetime.utcnow()), str(datetime.datetime.utcnow())]
+            }
+        }
+
         monitor_handler = get_monitor_handler()
         monitor_handler.init_protocols()
         monitor_handler.last_cgroup_polling_telemetry = datetime.datetime.utcnow() - timedelta(hours=1)
