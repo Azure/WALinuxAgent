@@ -135,7 +135,7 @@ class CGroupConfigurator(object):
 
             self._invoke_cgroup_operation(__impl, "Failed to delete cgroups for extension '{0}'.".format(name))
 
-        def start_extension_command(self, extension_name, command, cwd, env, stdout, stderr):
+        def start_extension_command(self, extension_name, command, shell, cwd, env, stdout, stderr):
             """
             Starts a command (install/enable/etc) for an extension and adds the command's PID to the extension's cgroup
             :param extension_name: The extension executing the command
@@ -148,7 +148,7 @@ class CGroupConfigurator(object):
             if not self.enabled():
                 process = subprocess.Popen(
                     command,
-                    shell=True,
+                    shell=shell,
                     cwd=cwd,
                     env=env,
                     stdout=stdout,
@@ -158,6 +158,7 @@ class CGroupConfigurator(object):
                 process = self._cgroups_api.start_extension_command(
                     extension_name,
                     command,
+                    shell=shell,
                     cwd=cwd,
                     env=env,
                     stdout=stdout,
