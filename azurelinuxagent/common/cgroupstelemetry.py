@@ -50,11 +50,9 @@ class CGroupsTelemetry(object):
         """
         Adds the given item to the dictionary of tracked cgroups
         """
-        # Making track thread-safe.
-        CGroupsTelemetry._rlock.acquire()
-        CGroupsTelemetry._tracked.append(cgroup)
-        CGroupsTelemetry._rlock.release()
-        logger.info("Started tracking new cgroup: {0}, path: {1}".format(cgroup.name, cgroup.path))
+        with CGroupsTelemetry._rlock:
+            CGroupsTelemetry._tracked.append(cgroup)
+            logger.info("Started tracking new cgroup: {0}, path: {1}".format(cgroup.name, cgroup.path))
 
     @staticmethod
     def is_tracked(name, controller):
@@ -73,12 +71,11 @@ class CGroupsTelemetry(object):
         """
         Stop tracking the cgroups for the given name
         """
-        # Pop is atomic and thread-safe.
         CGroupsTelemetry._tracked.remove(cgroup)
         logger.info("Stopped tracking cgroup: {0}, path: {1}".format(cgroup.name, cgroup.path))
 
     @staticmethod
-    def collect_all_tracked():
+    def report_all_tracked():
         collected_metrics = {}
         for name, cgroup_metrics in CGroupsTelemetry._cgroup_metrics.items():
             collected_metrics[name] = CGroupsTelemetry._process_cgroup_metric(cgroup_metrics)
@@ -93,27 +90,22 @@ class CGroupsTelemetry(object):
 
     @staticmethod
     def poll_all_tracked():
-        CGroupsTelemetry._rlock.acquire()
-        for cgroup in CGroupsTelemetry._tracked:
-            if cgroup.name not in CGroupsTelemetry._cgroup_metrics:
-                CGroupsTelemetry._cgroup_metrics[cgroup.name] = CgroupMetrics()
+        with CGroupsTelemetry._rlock:
+            for cgroup in CGroupsTelemetry._tracked:
+                if cgroup.name not in CGroupsTelemetry._cgroup_metrics:
+                    CGroupsTelemetry._cgroup_metrics[cgroup.name] = CgroupMetrics()
+                CGroupsTelemetry._cgroup_metrics[cgroup.name].add_new_data(cgroup.controller, cgroup.collect())
 
-            CGroupsTelemetry._cgroup_metrics[cgroup.name].add_new_data(cgroup.controller,
-                                                                       cgroup.collect())
-            if not cgroup.is_active():
-                CGroupsTelemetry.stop_tracking(cgroup)
-                CGroupsTelemetry._cgroup_metrics[cgroup.name].marked_for_delete = True
-
-        CGroupsTelemetry._rlock.release()
+                if not cgroup.is_active():
+                    CGroupsTelemetry.stop_tracking(cgroup)
+                    CGroupsTelemetry._cgroup_metrics[cgroup.name].marked_for_delete = True
 
     @staticmethod
     def prune_all_tracked():
-        CGroupsTelemetry._rlock.acquire()
-        for cgroup in CGroupsTelemetry._tracked:
-            if not cgroup.is_active():
-                CGroupsTelemetry.stop_tracking(cgroup)
-
-        CGroupsTelemetry._rlock.release()
+        with CGroupsTelemetry._rlock:
+            for cgroup in CGroupsTelemetry._tracked:
+                if not cgroup.is_active():
+                    CGroupsTelemetry.stop_tracking(cgroup)
 
     @staticmethod
     def cleanup():

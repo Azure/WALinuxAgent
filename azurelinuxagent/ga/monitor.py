@@ -269,7 +269,8 @@ class MonitorHandler(object):
                         MonitorHandler.IMDS_HEARTBEAT_PERIOD).seconds
         while self.should_run:
             self.send_telemetry_heartbeat()
-            self.send_extension_metrics_telemetry()
+            self.poll_telemetry_metrics()
+            self.send_telemetry_metrics()
             self.collect_and_send_events()
             self.send_host_plugin_heartbeat()
             self.send_imds_heartbeat()
@@ -280,9 +281,7 @@ class MonitorHandler(object):
         sysinfo_names = [v.name for v in self.sysinfo]
         for param in event.parameters:
             if param.name in sysinfo_names:
-                logger.verbose("Remove existing event parameter: [{0}:{1}]",
-                               param.name,
-                               param.value)
+                logger.verbose("Remove existing event parameter: [{0}:{1}]", param.name, param.value)
                 event.parameters.remove(param)
         event.parameters.extend(self.sysinfo)
 
@@ -409,29 +408,30 @@ class MonitorHandler(object):
 
             self.last_telemetry_heartbeat = datetime.datetime.utcnow()
 
-    def send_extension_metrics_telemetry(self):
-        to_send = False
+    def poll_telemetry_metrics(self):
         time_now = datetime.datetime.utcnow()
-        performance_metrics = {}
-
         if not self.last_cgroup_polling_telemetry:
             self.last_cgroup_polling_telemetry = time_now
-
-        if not self.last_cgroup_report_telemetry:
-            self.last_cgroup_report_telemetry = time_now
 
         if time_now >= (self.last_cgroup_polling_telemetry +
                         MonitorHandler.CGROUP_TELEMETRY_POLLING_PERIOD):
             CGroupsTelemetry.poll_all_tracked()
             self.last_cgroup_polling_telemetry = time_now
 
+    def send_telemetry_metrics(self):
+        to_send = False
+        time_now = datetime.datetime.utcnow()
+        performance_metrics = {}
+
+        if not self.last_cgroup_report_telemetry:
+            self.last_cgroup_report_telemetry = time_now
+
         if time_now >= (self.last_cgroup_report_telemetry +
                         MonitorHandler.CGROUP_TELEMETRY_REPORTING_PERIOD):
-            performance_metrics = CGroupsTelemetry.collect_all_tracked()
+            performance_metrics = CGroupsTelemetry.report_all_tracked()
             self.last_cgroup_report_telemetry = time_now
             to_send = True
 
-        # Making it separate to accommodate future additions to extension_metrics messages
         if to_send:
             message = generate_extension_metrics_telemetry_dictionary(schema_version=1.0,
                                                                       performance_metrics=performance_metrics)

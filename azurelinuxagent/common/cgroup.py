@@ -26,7 +26,24 @@ re_user_system_times = re.compile(r'user (\d+)\nsystem (\d+)\n')
 
 
 class CGroup(object):
+    @staticmethod
+    def create(cgroup_path, controller, extension_name):
+        """
+        Factory method to create the correct CGroup.
+        """
+        if controller is "cpu":
+            return CpuCgroup(extension_name, cgroup_path)
+        elif controller is "memory":
+            return MemoryCgroup(extension_name, cgroup_path)
+
     def __init__(self, name, cgroup_path, controller_type):
+        """
+        Initialize _data collection for the Memory controller
+        :param: name: Name of the CGroup
+        :param: cgroup_path: Path of the controller
+        :param: controller_type:
+        :return:
+        """
         self.name = name
         self.path = cgroup_path
         self.controller = controller_type
@@ -34,9 +51,9 @@ class CGroup(object):
     def _get_cgroup_file(self, file_name):
         return os.path.join(self.path, file_name)
 
-    def get_file_contents(self, file_name):
+    def _get_file_contents(self, file_name):
         """
-        Retrieve the value of a parameter from a controller.
+        Retrieve the contents to file.
 
         :param str file_name: Name of file within that metric controller
         :return: Entire contents of the file
@@ -51,26 +68,25 @@ class CGroup(object):
             raise CGroupsException("Could not retrieve cgroup file {0}/{1}".
                                    format(self.path, file_name))
 
-    def get_parameters(self, parameter_name, first_line_only=False):
+    def _get_parameters(self, parameter_name, first_line_only=False):
         """
-        Retrieve the value of a parameter from a hierarchy.
+        Retrieve the values of a parameter from a controller.
         Returns a list of values in the file.
 
         :param first_line_only: return only the first line.
-        :param str parameter_name: Name of file within that metric hierarchy
+        :param str parameter_name: Name of file within that metric controller
         :return: The first line of the file, without line terminator
         :rtype: [str]
         """
         result = []
         try:
-            values = self.get_file_contents(parameter_name).splitlines()
+            values = self._get_file_contents(parameter_name).splitlines()
             result = values[0] if first_line_only else values
         except IndexError:
             parameter_filename = self._get_cgroup_file(parameter_name)
             logger.error("File {0} is empty but should not be".format(parameter_filename))
         except CGroupsException:
-            # ignore if the file does not exist yet
-            pass
+            return None
         except Exception as e:
             parameter_filename = self._get_cgroup_file(parameter_name)
             logger.error("Exception while attempting to read {0}: {1}".format(parameter_filename, ustr(e)))
@@ -80,20 +96,22 @@ class CGroup(object):
         raise NotImplementedError()
 
     def is_active(self):
-        tasks = self.get_parameters("tasks")
-        return len(tasks) != 0
+        tasks = self._get_parameters("tasks")
+        if tasks:
+            return len(tasks) != 0
+        else:
+            return False
 
 
 class CpuCgroup(CGroup):
-    def __init__(self, name, cgroup_path, controller="cpu"):
+    def __init__(self, name, cgroup_path):
         """
-        Initialize _data collection for the Cpu hierarchy. User must call update() before attempting to get
+        Initialize _data collection for the Cpu controller. User must call update() before attempting to get
         any useful metrics.
 
-        :param path: Filepath
-        :return:
+        :return: CpuCgroup
         """
-        super(CpuCgroup, self).__init__(name, cgroup_path, controller)
+        super(CpuCgroup, self).__init__(name, cgroup_path, "cpu")
 
         self._osutil = get_osutil()
         self._current_cpu_total = self._get_current_cpu_total()
@@ -114,7 +132,7 @@ class CpuCgroup(CGroup):
         """
         cpu_total = 0
         try:
-            cpu_stat = self.get_file_contents('cpuacct.stat')
+            cpu_stat = self._get_file_contents('cpuacct.stat')
             if cpu_stat is not None:
                 m = re_user_system_times.match(cpu_stat)
                 if m:
@@ -148,7 +166,7 @@ class CpuCgroup(CGroup):
         cpu_delta = self._current_cpu_total - self._previous_cpu_total
         system_delta = max(1, self._current_system_cpu - self._previous_system_cpu)
 
-        return round(float(cpu_delta * self.cgt.cpu_count * 100) / float(system_delta), 3)
+        return round(float(cpu_delta * self._osutil.get_processor_cores() * 100) / float(system_delta), 3)
 
     def collect(self):
         """
@@ -162,14 +180,13 @@ class CpuCgroup(CGroup):
 
 
 class MemoryCgroup(CGroup):
-    def __init__(self, name, cgroup_path, controller="memory"):
+    def __init__(self, name, cgroup_path):
         """
-        Initialize _data collection for the Memory hierarchy
+        Initialize _data collection for the Memory controller
 
-        :param CGroupsTelemetry cgt: The telemetry object for which memory metrics should be collected
-        :return:
+        :return: MemoryCgroup
         """
-        super(MemoryCgroup, self).__init__(name, cgroup_path, controller)
+        super(MemoryCgroup, self).__init__(name, cgroup_path, "memory")
 
     def _get_memory_usage(self):
         """
@@ -178,7 +195,7 @@ class MemoryCgroup(CGroup):
         :return: Memory usage in bytes
         :rtype: int
         """
-        usage = self.get_parameters('memory.usage_in_bytes', first_line_only=True)
+        usage = self._get_parameters('memory.usage_in_bytes', first_line_only=True)
         if not usage:
             usage = "0"
         return int(usage)
@@ -190,7 +207,7 @@ class MemoryCgroup(CGroup):
         :return: Memory usage in bytes
         :rtype: int
         """
-        usage = self.get_parameters('memory.max_usage_in_bytes', first_line_only=True)
+        usage = self._get_parameters('memory.max_usage_in_bytes', first_line_only=True)
         if not usage:
             usage = "0"
         return int(usage)
@@ -265,7 +282,7 @@ class CollectedMetrics(object):
 #         logger.verbose("writing {0} to {1}".format(limit_units, cpu_shares_file))
 #         fileutil.write_file(cpu_shares_file, '{0}\n'.format(limit_units))
 #     else:
-#         raise CGroupsException("CPU hierarchy not available in this cgroup")
+#         raise CGroupsException("CPU controller not available in this cgroup")
 #
 # @staticmethod
 # def get_num_cores():
@@ -299,7 +316,7 @@ class CollectedMetrics(object):
 #         logger.verbose("writing {0} to {1}".format(value, memory_limit_file))
 #         fileutil.write_file(memory_limit_file, '{0}\n'.format(value))
 #     else:
-#         raise CGroupsException("Memory hierarchy not available in this cgroup")
+#         raise CGroupsException("Memory controller not available in this cgroup")
 #
 # class CGroupsLimits(object):
 #     @staticmethod

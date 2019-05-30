@@ -165,8 +165,11 @@ class CGroupConfigurator(object):
                 def track_cgroups():
                     cgroups = self._cgroups_api.get_extension_cgroups(extension_name)
 
-                    for cgroup in cgroups:
-                        CGroupsTelemetry.track_cgroup(cgroup)
+                    try:
+                        for cgroup in cgroups:
+                            CGroupsTelemetry.track_cgroup(cgroup)
+                    except Exception as e:
+                        logger.info("Cannot add CGroup into tracking list. Error: {0}".format(ustr(e)))
 
                 self._invoke_cgroup_operation(track_cgroups,
                                               "Failed to add cgroups for extension '{0}' to the tracking list; "
