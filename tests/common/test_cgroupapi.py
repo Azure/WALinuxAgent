@@ -189,6 +189,7 @@ class FileSystemCgroupsApiTestCase(AgentTestCase):
         for cgroup in extension_cgroups:
             self.assertFalse(os.path.exists(cgroup.path))
 
+
     def test_get_extension_cgroups_should_return_all_cgroups(self):
         api = FileSystemCgroupsApi()
         api.create_extension_cgroups_root()
