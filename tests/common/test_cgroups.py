@@ -79,7 +79,7 @@ def median(lst):
 
 
 def generate_metric_list(lst):
-    return [sum(lst) / len(lst),
+    return [float(sum(lst)) / float(len(lst)),
             min(lst),
             max(lst),
             median(lst),
