@@ -16,6 +16,8 @@
 import threading
 from datetime import datetime as dt
 
+from azurelinuxagent.common import logger
+
 
 class CGroupsTelemetry(object):
     """
@@ -26,8 +28,8 @@ class CGroupsTelemetry(object):
 
     @staticmethod
     def _get_metrics_list(metric):
-        return [metric.average(), metric.min(), metric.max(), metric.median(), metric.count(), metric.first_polltime(),
-                metric.last_polltime()]
+        return [metric.average(), metric.min(), metric.max(), metric.median(), metric.count(), metric.first_poll_time(),
+                metric.last_poll_time()]
 
     @staticmethod
     def _process_cgroup_metric(cgroup_metrics):
@@ -44,10 +46,6 @@ class CGroupsTelemetry(object):
         return processed_extension
 
     @staticmethod
-    def metrics_hierarchies():
-        pass  # return CGroupsTelemetry._hierarchies
-
-    @staticmethod
     def track_cgroup(cgroup):
         """
         Adds the given item to the dictionary of tracked cgroups
@@ -55,25 +53,29 @@ class CGroupsTelemetry(object):
         # Making track thread-safe.
         CGroupsTelemetry._rlock.acquire()
         CGroupsTelemetry._tracked.append(cgroup)
-        # if not CGroupsTelemetry.is_tracked(cgroup.name, cgroup.controller):
-        #     CGroupsTelemetry._tracked[cgroup.name] = {cgroup.controller: cgroup}
-
         CGroupsTelemetry._rlock.release()
+        logger.info("Started tracking new cgroup: {0}, path: {1}".format(cgroup.name, cgroup.path))
 
     @staticmethod
     def is_tracked(name, controller):
         """
         Returns true if the given item is in the list of tracked items
+        O(n) operation. But limited to few cgroup objects we have.
         """
-        return name in CGroupsTelemetry._tracked and controller in CGroupsTelemetry._tracked[name]
+        for cgroup in CGroupsTelemetry._tracked:
+            if name == cgroup.name and controller == cgroup.controller:
+                return True
+
+        return False
 
     @staticmethod
-    def stop_tracking(name):
+    def stop_tracking(cgroup):
         """
         Stop tracking the cgroups for the given name
         """
         # Pop is atomic and thread-safe.
-        return CGroupsTelemetry._tracked.pop(name, None)
+        CGroupsTelemetry._tracked.remove(cgroup)
+        logger.info("Stopped tracking cgroup: {0}, path: {1}".format(cgroup.name, cgroup.path))
 
     @staticmethod
     def collect_all_tracked():
@@ -81,6 +83,11 @@ class CGroupsTelemetry(object):
         for name, cgroup_metrics in CGroupsTelemetry._cgroup_metrics.items():
             collected_metrics[name] = CGroupsTelemetry._process_cgroup_metric(cgroup_metrics)
             cgroup_metrics.clear()
+
+            if cgroup_metrics.marked_for_delete:
+                # Clear the _cgroup_metrics to make sure we don't send stale entries,
+                # only after sending its content first
+                CGroupsTelemetry._cgroup_metrics.pop(name, None)
 
         return collected_metrics
 
@@ -94,7 +101,8 @@ class CGroupsTelemetry(object):
             CGroupsTelemetry._cgroup_metrics[cgroup.name].add_new_data(cgroup.controller,
                                                                        cgroup.collect())
             if not cgroup.is_active():
-                CGroupsTelemetry._tracked.remove(cgroup)
+                CGroupsTelemetry.stop_tracking(cgroup)
+                CGroupsTelemetry._cgroup_metrics[cgroup.name].marked_for_delete = True
 
         CGroupsTelemetry._rlock.release()
 
@@ -103,7 +111,7 @@ class CGroupsTelemetry(object):
         CGroupsTelemetry._rlock.acquire()
         for cgroup in CGroupsTelemetry._tracked:
             if not cgroup.is_active():
-                CGroupsTelemetry._tracked.remove(cgroup)
+                CGroupsTelemetry.stop_tracking(cgroup)
 
         CGroupsTelemetry._rlock.release()
 
@@ -118,16 +126,17 @@ class CGroupsTelemetry(object):
 
 class CgroupMetrics(object):
     def __init__(self):
-        self.current_memory_usage = Metric()
-        self.max_memory_levels = Metric()
-        self.current_cpu_usage = Metric()
+        self._current_memory_usage = Metric()
+        self._max_memory_levels = Metric()
+        self._current_cpu_usage = Metric()
+        self.marked_for_delete = False
 
     def _add_memory_usage(self, metric):
-        self.current_memory_usage.append(metric[0].value)
-        self.max_memory_levels.append(metric[1].value)
+        self._current_memory_usage.append(metric[0].value)
+        self._max_memory_levels.append(metric[1].value)
 
     def _add_cpu_usage(self, metric):
-        self.current_cpu_usage.append(metric[0].value)
+        self._current_cpu_usage.append(metric[0].value)
 
     def add_new_data(self, controller, metric):
         if controller is "cpu":
@@ -136,38 +145,43 @@ class CgroupMetrics(object):
             self._add_memory_usage(metric)
 
     def get_metrics(self):
-        return self.current_memory_usage, self.max_memory_levels, self.current_cpu_usage
+        return self._current_memory_usage, self._max_memory_levels, self._current_cpu_usage
 
     def clear(self):
-        self.current_memory_usage.clear()
-        self.max_memory_levels.clear()
-        self.current_cpu_usage.clear()
+        self._current_memory_usage.clear()
+        self._max_memory_levels.clear()
+        self._current_cpu_usage.clear()
 
 
 class Metric(object):
     def __init__(self):
-        self.data = []
-        self.first_poll_time = dt.utcnow()
-        self.last_poll_time = dt.utcnow()
+        self._data = []
+        self._first_poll_time = None
+        self._last_poll_time = None
 
     def append(self, metric):
-        self.data.append(metric)
-        self.last_poll_time = dt.utcnow()
+        if not self._first_poll_time:
+            #  We only want to do it first time.
+            self._first_poll_time = dt.utcnow()
+
+        self._data.append(metric)
+        self._last_poll_time = dt.utcnow()
 
     def clear(self):
-        self.data *= 0
+        self._data *= 0
 
     def average(self):
-        return sum(self.data) / len(self.data)
+        return float(sum(self._data)
+                     ) / float(len(self._data))
 
     def max(self):
-        return max(self.data)
+        return max(self._data)
 
     def min(self):
-        return min(self.data)
+        return min(self._data)
 
     def median(self):
-        data = sorted(self.data)
+        data = sorted(self._data)
         l_len = len(data)
         if l_len < 1:
             return None
@@ -177,20 +191,10 @@ class Metric(object):
             return data[int((l_len - 1) / 2)]
 
     def count(self):
-        return len(self.data)
+        return len(self._data)
 
-    def first_polltime(self):
-        return str(self.first_poll_time)
+    def first_poll_time(self):
+        return str(self._first_poll_time)
 
-    def last_polltime(self):
-        return str(self.last_poll_time)
-
-
-class CpuMetrics(Metric):
-    def __init__(self):
-        super(CpuMetrics, self).__init__()
-
-
-class MemoryMetrics(Metric):
-    def __init__(self):
-        super(MemoryMetrics, self).__init__()
+    def last_poll_time(self):
+        return str(self._last_poll_time)

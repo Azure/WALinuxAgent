@@ -1,7 +1,6 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the Apache License.
 import json
-import re
 import stat
 
 from azurelinuxagent.common.protocol.restapi import ExtensionStatus, Extension, ExtHandler, ExtHandlerProperties
@@ -227,14 +226,6 @@ class LaunchCommandTestCase(AgentTestCase):
         self.ext_handler.properties = ext_handler_properties
         self.ext_handler_instance = ExtHandlerInstance(ext_handler=self.ext_handler, protocol=None)
 
-        self.cgroups_file_system_root = os.path.join(self.tmp_dir, "cgroup")
-        os.mkdir(self.cgroups_file_system_root)
-        os.mkdir(os.path.join(self.cgroups_file_system_root, "cpu"))
-        os.mkdir(os.path.join(self.cgroups_file_system_root, "memory"))
-
-        self.mock__base_cgroups = patch("azurelinuxagent.common.cgroupapi.CGROUPS_FILE_SYSTEM_ROOT", self.cgroups_file_system_root)
-        self.mock__base_cgroups.start()
-
         self.mock_get_base_dir = patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_base_dir", lambda *_: self.tmp_dir)
         self.mock_get_base_dir.start()
 
@@ -253,7 +244,6 @@ class LaunchCommandTestCase(AgentTestCase):
 
         self.mock_get_log_dir.stop()
         self.mock_get_base_dir.stop()
-        self.mock__base_cgroups.stop()
 
         AgentTestCase.tearDown(self)
 
@@ -604,40 +594,3 @@ sys.stderr.write("STDERR")
             output = self.ext_handler_instance.launch_command(command)
 
         self.assertIn("[stderr]\nCannot read stdout/stderr:", output)
-
-    # TODO
-    @skip_if_predicate_false(lambda: False, "TODO: Need to move this test elsewhere")
-    def test_it_should_add_the_child_process_to_its_own_cgroup(self):
-        # We are checking for the parent PID here since the PID getting written to the corresponding cgroup
-        # would be from the shell process started before launch_command invokes the actual command.
-        # In a non-mocked scenario, the kernel would actually also write all the children's PIDs to the procs
-        # file as well, but here we are mocking the base cgroup path, so it is not taken care for us.
-        command = self._create_script("output_parent_pid.py", '''
-import os
-
-print(os.getppid())
-
-''')
-
-        configurator = CGroupConfigurator.get_instance()
-        configurator.create_extension_cgroups_root()
-        configurator.create_extension_cgroups(self.ext_handler_instance.get_full_name())
-
-        output = self.ext_handler_instance.launch_command(command)
-
-        match = re.match(LaunchCommandTestCase._output_regex('(\d+)', '.*'), output)
-        if match is None or match.group(1) is None:
-            raise Exception("Could not extract the PID of the child command from its output")
-
-        expected_pid = int(match.group(1))
-
-        controllers = os.listdir(self.cgroups_file_system_root)
-        for c in controllers:
-            procs = os.path.join(self.cgroups_file_system_root, c, "walinuxagent.extensions", self.ext_handler_instance.get_full_name().replace('-', '_'), "cgroup.procs")
-            with open(procs, "r") as f:
-                contents = f.read()
-                pid = int(contents)
-
-                self.assertNotEqual(os.getpid(), pid, "The PID {0} added to {1} was of the launch command caller, not the command itself.".format(pid, procs))
-                self.assertEquals(pid, expected_pid, "The PID of the command was not added to {0}. Expected: {1}, got: {2}".format(procs, expected_pid, pid))
-

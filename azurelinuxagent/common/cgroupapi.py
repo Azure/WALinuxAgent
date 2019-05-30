@@ -23,7 +23,6 @@ from azurelinuxagent.common import logger
 from azurelinuxagent.common.cgroup import CpuCgroup, MemoryCgroup
 from azurelinuxagent.common.exception import CGroupsException
 from azurelinuxagent.common.future import ustr
-from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils import fileutil, shellutil
 
 CGROUPS_FILE_SYSTEM_ROOT = '/sys/fs/cgroup'
@@ -52,7 +51,7 @@ class CGroupsApi(object):
     def get_extension_cgroups(self, extension_name):
         raise NotImplementedError()
 
-    def start_extension_command(self, extension_name, command, cwd, env, stdout, stderr):
+    def start_extension_command(self, extension_name, command, shell, cwd, env, stdout, stderr):
         raise NotImplementedError()
 
     @staticmethod
@@ -73,16 +72,14 @@ class CGroupsApi(object):
         Determine if systemd is managing system services. If this process (presumed to be the agent) is in a CPU cgroup
         that looks like one created by systemd, we can assume systemd is in use.
 
-        TODO: We need to re-evaluate whether this the right logic to determine whether Systemd is managing cgroups.
+        TODO: We need to re-evaluate whether this the right logic to determine if Systemd is managing cgroups.
 
         :return: True if systemd is managing system services
         :rtype: Bool
         """
         controller_id = CGroupsApi._get_controller_id('cpu')
-        current_process_cgroup_relative_path = CGroupsApi._get_current_process_cgroup_relative_path(controller_id)
-        current_process_cgroup_path = os.path.join(CGROUPS_FILE_SYSTEM_ROOT, 'cpu', current_process_cgroup_relative_path)
-        systemd_cpu_system_slice = os.path.join(CGROUPS_FILE_SYSTEM_ROOT, 'cpu', 'system.slice')
-        is_systemd = current_process_cgroup_path.startswith(systemd_cpu_system_slice)
+        current_process_cgroup_path = CGroupsApi._get_current_process_cgroup_relative_path(controller_id)
+        is_systemd = current_process_cgroup_path == 'system.slice/walinuxagent.service'
 
         return is_systemd
 
@@ -168,7 +165,7 @@ class FileSystemCgroupsApi(CGroupsApi):
 
         return os.path.join(extensions_root, cgroup_name)
 
-    def _get_extension_cgroup(self, controller, extension_name):
+    def _create_extension_cgroup(self, controller, extension_name):
         if controller in CGROUP_CONTROLLERS:
             if controller is "cpu":
                 return CpuCgroup(extension_name, self._get_extension_cgroup_path(controller, extension_name))
@@ -233,7 +230,7 @@ class FileSystemCgroupsApi(CGroupsApi):
         cgroups = []
 
         def create_cgroup(controller):
-            cgroup = self._get_extension_cgroup(controller, extension_name)
+            cgroup = self._create_extension_cgroup(controller, extension_name)
 
             if not os.path.isdir(cgroup.path):
                 FileSystemCgroupsApi._try_mkdir(cgroup.path)
@@ -264,14 +261,14 @@ class FileSystemCgroupsApi(CGroupsApi):
         cgroups = []
 
         def get_cgroup(controller):
-            cgroup = self._get_extension_cgroup(controller, extension_name)
+            cgroup = self._create_extension_cgroup(controller, extension_name)
             cgroups.append(cgroup)
 
         self._foreach_controller(get_cgroup, 'Failed to retrieve cgroups for extension {0}'.format(extension_name))
 
         return cgroups
 
-    def start_extension_command(self, extension_name, command, cwd, env, stdout, stderr):
+    def start_extension_command(self, extension_name, command, shell, cwd, env, stdout, stderr):
         """
         Starts a command (install/enable/etc) for an extension and adds the command's PID to the extension's cgroup
         :param extension_name: The extension executing the command
@@ -298,7 +295,7 @@ class FileSystemCgroupsApi(CGroupsApi):
 
         process = subprocess.Popen(
             command,
-            shell=True,
+            shell=shell,
             cwd=cwd,
             stdout=stdout,
             stderr=stderr,
@@ -342,7 +339,7 @@ class SystemdCgroupsApi(CGroupsApi):
             cpu_cgroup_path = os.path.join(CGROUPS_FILE_SYSTEM_ROOT, 'cpu', cgroup_unit)
             memory_cgroup_path = os.path.join(CGROUPS_FILE_SYSTEM_ROOT, 'memory', cgroup_unit)
 
-            return [cpu_cgroup_path, memory_cgroup_path]
+            return [CpuCgroup(cgroup_unit, cpu_cgroup_path), MemoryCgroup(cgroup_unit, memory_cgroup_path)]
         except Exception as e:
             raise CGroupsException("Failed to get paths of agent's cgroups. Error: {0}".format(ustr(e)))
 
@@ -400,13 +397,13 @@ After=system-{1}.slice""".format(extension_name, EXTENSIONS_ROOT_CGROUP_NAME)
         return [CpuCgroup(extension_name, cpu_cgroup_path),
                 MemoryCgroup(extension_name, memory_cgroup_path)]
 
-    def start_extension_command(self, extension_name, command, cwd, env, stdout, stderr):
+    def start_extension_command(self, extension_name, command, shell, cwd, env, stdout, stderr):
         def pre_exec_function():
             os.setsid()
 
         process = subprocess.Popen(
             "systemd-run --unit={0} --scope {1}".format(self._get_extension_scope_name(extension_name), command),
-            shell=True,
+            shell=shell,
             cwd=cwd,
             stdout=stdout,
             stderr=stderr,

@@ -24,78 +24,47 @@ from azurelinuxagent.common.utils import fileutil
 
 re_user_system_times = re.compile(r'user (\d+)\nsystem (\d+)\n')
 
-# The metric classes (Cpu, Memory, etc) can all assume that CGroups is enabled, as the CGroupTelemetry
-# class is very careful not to call them if CGroups isn't enabled. Any tests should be disabled if the osutil
-# is_cgroups_support() method returns false.
-
 
 class CGroup(object):
-    def __init__(self, extension_name, cgroup_path, controller_type):
-        self.name = extension_name
+    def __init__(self, name, cgroup_path, controller_type):
+        self.name = name
         self.path = cgroup_path
         self.controller = controller_type
 
     def _get_cgroup_file(self, file_name):
         return os.path.join(self.path, file_name)
 
-    def get_file_contents(self, controller, file_name):
+    def get_file_contents(self, file_name):
         """
         Retrieve the value of a parameter from a controller.
 
-        :param str controller: Name of cgroup metric controller
         :param str file_name: Name of file within that metric controller
         :return: Entire contents of the file
         :rtype: str
         """
-        if controller == self.controller:
-            parameter_file = self._get_cgroup_file(file_name)
 
-            try:
-                return fileutil.read_file(parameter_file)
-            except Exception:
-                raise CGroupsException("Could not retrieve cgroup file {0}/{1}".format(self.path, file_name))
-        else:
-            raise CGroupsException("Incorrect controller: {0} passed for cgroup: {1}. Cgroup path is: {2}".format(
-                controller, self.name, self.path))
+        parameter_file = self._get_cgroup_file(file_name)
 
-    def get_parameter(self, controller, parameter_name):
-        """
-        Retrieve the value of a parameter from a hierarchy.
-        Assumes the parameter is the sole line of the file.
-
-        :param str controller: Name of cgroup metric hierarchy
-        :param str parameter_name: Name of file within that metric hierarchy
-        :return: The first line of the file, without line terminator
-        :rtype: str
-        """
-        result = ""
         try:
-            values = self.get_file_contents(controller, parameter_name).splitlines()
-            result = values[0]
-        except IndexError:
-            parameter_filename = self._get_cgroup_file(parameter_name)
-            logger.error("File {0} is empty but should not be".format(parameter_filename))
-        except CGroupsException:
-            # ignore if the file does not exist yet
-            pass
-        except Exception as e:
-            parameter_filename = self._get_cgroup_file(parameter_name)
-            logger.error("Exception while attempting to read {0}: {1}".format(parameter_filename, ustr(e)))
-        return result
+            return fileutil.read_file(parameter_file)
+        except Exception:
+            raise CGroupsException("Could not retrieve cgroup file {0}/{1}".
+                                   format(self.path, file_name))
 
-    def get_parameters(self, controller, parameter_name):
+    def get_parameters(self, parameter_name, first_line_only=False):
         """
         Retrieve the value of a parameter from a hierarchy.
         Returns a list of values in the file.
 
-        :param str controller: Name of cgroup metric hierarchy
+        :param first_line_only: return only the first line.
         :param str parameter_name: Name of file within that metric hierarchy
         :return: The first line of the file, without line terminator
         :rtype: [str]
         """
         result = []
         try:
-            result = self.get_file_contents(controller, parameter_name).splitlines()
+            values = self.get_file_contents(parameter_name).splitlines()
+            result = values[0] if first_line_only else values
         except IndexError:
             parameter_filename = self._get_cgroup_file(parameter_name)
             logger.error("File {0} is empty but should not be".format(parameter_filename))
@@ -111,20 +80,20 @@ class CGroup(object):
         raise NotImplementedError()
 
     def is_active(self):
-        tasks = self.get_parameters(self.controller, "tasks")
+        tasks = self.get_parameters("tasks")
         return len(tasks) != 0
 
 
 class CpuCgroup(CGroup):
-    def __init__(self, extension_name, cgroup_path, controller="cpu"):
+    def __init__(self, name, cgroup_path, controller="cpu"):
         """
-        Initialize data collection for the Cpu hierarchy. User must call update() before attempting to get
+        Initialize _data collection for the Cpu hierarchy. User must call update() before attempting to get
         any useful metrics.
 
         :param path: Filepath
         :return:
         """
-        super(CpuCgroup, self).__init__(extension_name, cgroup_path, controller)
+        super(CpuCgroup, self).__init__(name, cgroup_path, controller)
 
         self._osutil = get_osutil()
         self._current_cpu_total = self._get_current_cpu_total()
@@ -145,7 +114,7 @@ class CpuCgroup(CGroup):
         """
         cpu_total = 0
         try:
-            cpu_stat = self.get_file_contents('cpu', 'cpuacct.stat')
+            cpu_stat = self.get_file_contents('cpuacct.stat')
             if cpu_stat is not None:
                 m = re_user_system_times.match(cpu_stat)
                 if m:
@@ -160,8 +129,8 @@ class CpuCgroup(CGroup):
 
     def _update_cpu_data(self):
         """
-        Update all raw data required to compute metrics of interest. The intent is to call update() once, then
-        call the various get_*() methods which use this data, which we've collected exactly once.
+        Update all raw _data required to compute metrics of interest. The intent is to call update() once, then
+        call the various get_*() methods which use this _data, which we've collected exactly once.
         """
         self._previous_cpu_total = self._current_cpu_total
         self._previous_system_cpu = self._current_system_cpu
@@ -193,14 +162,14 @@ class CpuCgroup(CGroup):
 
 
 class MemoryCgroup(CGroup):
-    def __init__(self, extension_name, cgroup_path, controller="memory"):
+    def __init__(self, name, cgroup_path, controller="memory"):
         """
-        Initialize data collection for the Memory hierarchy
+        Initialize _data collection for the Memory hierarchy
 
         :param CGroupsTelemetry cgt: The telemetry object for which memory metrics should be collected
         :return:
         """
-        super(MemoryCgroup, self).__init__(extension_name, cgroup_path, controller)
+        super(MemoryCgroup, self).__init__(name, cgroup_path, controller)
 
     def _get_memory_usage(self):
         """
@@ -209,7 +178,7 @@ class MemoryCgroup(CGroup):
         :return: Memory usage in bytes
         :rtype: int
         """
-        usage = self.get_parameter('memory', 'memory.usage_in_bytes')
+        usage = self.get_parameters('memory.usage_in_bytes', first_line_only=True)
         if not usage:
             usage = "0"
         return int(usage)
@@ -221,7 +190,7 @@ class MemoryCgroup(CGroup):
         :return: Memory usage in bytes
         :rtype: int
         """
-        usage = self.get_parameter(self.controller, 'memory.max_usage_in_bytes')
+        usage = self.get_parameters('memory.max_usage_in_bytes', first_line_only=True)
         if not usage:
             usage = "0"
         return int(usage)
@@ -244,7 +213,7 @@ class CollectedMetrics(object):
         self.value = value
 
 #
-# TODO: Do we need this code?
+# TODO: Do we need this code? - For not we'll keep this code. Will remove in the next round.
 #
 #
 # MEMORY_DEFAULT = -1

@@ -354,32 +354,36 @@ class TestCGroupsTelemetry(AgentTestCase):
 
                         self.assertEqual(CGroupsTelemetry._cgroup_metrics.__len__(), num_extensions)
                         for cgroup_name, cgroup_metric in CGroupsTelemetry._cgroup_metrics.items():
-                            self.assertEqual(len(cgroup_metric.current_memory_usage.data), 1)
-                            self.assertEqual(len(cgroup_metric.max_memory_levels.data), 1)
-                            self.assertEqual(len(cgroup_metric.current_cpu_usage.data), 1)
+                            current_memory_usage, max_memory_levels, current_cpu_usage = cgroup_metric.get_metrics()
+                            self.assertEqual(len(current_memory_usage._data), 1)
+                            self.assertEqual(len(max_memory_levels._data), 1)
+                            self.assertEqual(len(current_cpu_usage._data), 1)
 
                         CGroupsTelemetry.poll_all_tracked()
 
                         self.assertEqual(CGroupsTelemetry._cgroup_metrics.__len__(), num_extensions)
                         for cgroup_name, cgroup_metric in CGroupsTelemetry._cgroup_metrics.items():
-                            self.assertEqual(len(cgroup_metric.current_memory_usage.data), 2)
-                            self.assertEqual(len(cgroup_metric.max_memory_levels.data), 2)
-                            self.assertEqual(len(cgroup_metric.current_cpu_usage.data), 2)
+                            current_memory_usage, max_memory_levels, current_cpu_usage = cgroup_metric.get_metrics()
+                            self.assertEqual(len(current_memory_usage._data), 2)
+                            self.assertEqual(len(max_memory_levels._data), 2)
+                            self.assertEqual(len(current_cpu_usage._data), 2)
 
                         CGroupsTelemetry.poll_all_tracked()
 
                         self.assertEqual(CGroupsTelemetry._cgroup_metrics.__len__(), num_extensions)
                         for cgroup_name, cgroup_metric in CGroupsTelemetry._cgroup_metrics.items():
-                            self.assertEqual(len(cgroup_metric.current_memory_usage.data), 3)
-                            self.assertEqual(len(cgroup_metric.max_memory_levels.data), 3)
-                            self.assertEqual(len(cgroup_metric.current_cpu_usage.data), 3)
+                            current_memory_usage, max_memory_levels, current_cpu_usage = cgroup_metric.get_metrics()
+                            self.assertEqual(len(current_memory_usage._data), 3)
+                            self.assertEqual(len(max_memory_levels._data), 3)
+                            self.assertEqual(len(current_cpu_usage._data), 3)
 
                         CGroupsTelemetry.collect_all_tracked()
                         self.assertEqual(CGroupsTelemetry._cgroup_metrics.__len__(), num_extensions)
                         for cgroup_name, cgroup_metric in CGroupsTelemetry._cgroup_metrics.items():
-                            self.assertEqual(len(cgroup_metric.current_memory_usage.data), 0)
-                            self.assertEqual(len(cgroup_metric.max_memory_levels.data), 0)
-                            self.assertEqual(len(cgroup_metric.current_cpu_usage.data), 0)
+                            current_memory_usage, max_memory_levels, current_cpu_usage = cgroup_metric.get_metrics()
+                            self.assertEqual(len(current_memory_usage._data), 0)
+                            self.assertEqual(len(max_memory_levels._data), 0)
+                            self.assertEqual(len(current_cpu_usage._data), 0)
 
         self.cleanup_cgroup_telemetry()
 

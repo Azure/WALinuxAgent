@@ -1139,6 +1139,7 @@ class ExtHandlerInstance(object):
                     process = CGroupConfigurator.get_instance().start_extension_command(
                         extension_name=self.get_full_name(),
                         command=full_path,
+                        shell=True,
                         cwd=base_dir,
                         env=env,
                         stdout=stdout,

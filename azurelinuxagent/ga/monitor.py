@@ -410,20 +410,21 @@ class MonitorHandler(object):
             self.last_telemetry_heartbeat = datetime.datetime.utcnow()
 
     def send_extension_metrics_telemetry(self):
+        to_send = False
+        time_now = datetime.datetime.utcnow()
+        performance_metrics = {}
+
         if not self.last_cgroup_polling_telemetry:
-            self.last_cgroup_polling_telemetry = datetime.datetime.utcnow()
+            self.last_cgroup_polling_telemetry = time_now
 
         if not self.last_cgroup_report_telemetry:
-            self.last_cgroup_report_telemetry = datetime.datetime.utcnow()
+            self.last_cgroup_report_telemetry = time_now
 
-        time_now = datetime.datetime.utcnow()
         if time_now >= (self.last_cgroup_polling_telemetry +
                         MonitorHandler.CGROUP_TELEMETRY_POLLING_PERIOD):
             CGroupsTelemetry.poll_all_tracked()
             self.last_cgroup_polling_telemetry = time_now
 
-        to_send = False
-        performance_metrics = {}
         if time_now >= (self.last_cgroup_report_telemetry +
                         MonitorHandler.CGROUP_TELEMETRY_REPORTING_PERIOD):
             performance_metrics = CGroupsTelemetry.collect_all_tracked()
