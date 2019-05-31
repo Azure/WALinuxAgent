@@ -91,7 +91,7 @@ class CGroupsTelemetry(object):
     @staticmethod
     def poll_all_tracked():
         with CGroupsTelemetry._rlock:
-            for cgroup in CGroupsTelemetry._tracked:
+            for cgroup in CGroupsTelemetry._tracked[:]:
                 if cgroup.name not in CGroupsTelemetry._cgroup_metrics:
                     CGroupsTelemetry._cgroup_metrics[cgroup.name] = CgroupMetrics()
                 CGroupsTelemetry._cgroup_metrics[cgroup.name].add_new_data(cgroup.controller, cgroup.collect())
@@ -103,7 +103,7 @@ class CGroupsTelemetry(object):
     @staticmethod
     def prune_all_tracked():
         with CGroupsTelemetry._rlock:
-            for cgroup in CGroupsTelemetry._tracked:
+            for cgroup in CGroupsTelemetry._tracked[:]:
                 if not cgroup.is_active():
                     CGroupsTelemetry.stop_tracking(cgroup)
 
@@ -164,13 +164,13 @@ class Metric(object):
 
     def average(self):
         return float(sum(self._data)
-                     ) / float(len(self._data))
+                     ) / float(len(self._data)) if self._data else None
 
     def max(self):
-        return max(self._data)
+        return max(self._data) if self._data else None
 
     def min(self):
-        return min(self._data)
+        return min(self._data) if self._data else None
 
     def median(self):
         data = sorted(self._data)

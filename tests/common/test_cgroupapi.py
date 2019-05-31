@@ -146,7 +146,7 @@ class FileSystemCgroupsApiTestCase(AgentTestCase):
 
         def assert_cgroup_created(controller):
             cgroup_path = os.path.join(self.cgroups_file_system_root, controller, "walinuxagent.service")
-            self.assertIn(cgroup_path, agent_cgroups)
+            self.assertTrue(any(cgroups.path == cgroup_path for cgroups in agent_cgroups))
             self.assertTrue(os.path.exists(cgroup_path))
             cgroup_task = int(fileutil.read_file(os.path.join(cgroup_path, "cgroup.procs")))
             current_process = os.getpid()

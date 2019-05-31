@@ -13,6 +13,7 @@
 # limitations under the License.
 #
 # Requires Python 2.6+ and Openssl 1.0+
+
 import os
 import re
 
@@ -120,8 +121,8 @@ class CpuCgroup(CGroup):
         self._previous_system_cpu = 0
 
     def __str__(self):
-        return "Cgroup: Current {0}, previous {1}; System: Current {2}, previous {3}".format(
-            self._current_cpu_total, self._previous_cpu_total, self._current_system_cpu, self._previous_system_cpu
+        return "cgroup: Name: {0}, cgroup_path: {1}; Controller: {2}".format(
+            self.name, self.path, self.controller
         )
 
     def _get_current_cpu_total(self):
@@ -188,6 +189,11 @@ class MemoryCgroup(CGroup):
         """
         super(MemoryCgroup, self).__init__(name, cgroup_path, "memory")
 
+    def __str__(self):
+        return "cgroup: Name: {0}, cgroup_path: {1}; Controller: {2}".format(
+            self.name, self.path, self.controller
+        )
+
     def _get_memory_usage(self):
         """
         Collect memory.usage_in_bytes from the cgroup.
@@ -220,7 +226,8 @@ class MemoryCgroup(CGroup):
         """
         usage = self._get_memory_usage()
         max_usage = self._get_memory_max_usage()
-        return [CollectedMetrics("memory", "Total Memory Usage", usage), CollectedMetrics("memory", "Max Memory Usage", max_usage)]
+        return [CollectedMetrics("memory", "Total Memory Usage", usage),
+                CollectedMetrics("memory", "Max Memory Usage", max_usage)]
 
 
 class CollectedMetrics(object):
