@@ -25,23 +25,21 @@ import os
 import random
 import re
 import shutil
-import stat
 import signal
-import subprocess
-import time
+import stat
+import sys
 import tempfile
+import time
 import traceback
 import zipfile
-import sys
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.version as version
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
-from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.errorstate import ErrorState, ERROR_STATE_DELTA_INSTALL
-from azurelinuxagent.common.event import add_event, WALAEventOperation, elapsed_milliseconds, report_event
+from azurelinuxagent.common.event import add_event, WALAEventOperation, elapsed_milliseconds
 from azurelinuxagent.common.exception import ExtensionError, ProtocolError, ProtocolNotFoundError, \
     ExtensionDownloadError, ExtensionOperationError, ExtensionErrorCodes
 from azurelinuxagent.common.future import ustr
@@ -1120,7 +1118,8 @@ class ExtHandlerInstance(object):
         last_update = int(time.time() - os.stat(heartbeat_file).st_mtime)
         return last_update <= 600
 
-    def launch_command(self, cmd, timeout=300, extension_error_code=ExtensionErrorCodes.PluginProcessingError, env=None):
+    def launch_command(self, cmd, timeout=300, extension_error_code=ExtensionErrorCodes.PluginProcessingError,
+                       env=None):
         begin_utc = datetime.datetime.utcnow()
         self.logger.verbose("Launch command: [{0}]", cmd)
 
@@ -1147,9 +1146,11 @@ class ExtHandlerInstance(object):
                         stderr=stderr)
 
                 except OSError as e:
-                    raise ExtensionOperationError("Failed to launch '{0}': {1}".format(full_path, e.strerror), code=extension_error_code)
+                    raise ExtensionOperationError("Failed to launch '{0}': {1}".format(full_path, e.strerror),
+                                                  code=extension_error_code)
 
-                msg = ExtHandlerInstance._capture_process_output(process, stdout, stderr, cmd, timeout, extension_error_code)
+                msg = ExtHandlerInstance._capture_process_output(process, stdout, stderr, cmd, timeout,
+                                                                 extension_error_code)
 
                 duration = elapsed_milliseconds(begin_utc)
                 log_msg = "{0}\n{1}".format(cmd, "\n".join([line for line in msg.split('\n') if line != ""]))

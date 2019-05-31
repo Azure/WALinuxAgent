@@ -47,6 +47,7 @@ class WALAEventOperation:
     AutoUpdate = "AutoUpdate"
     CustomData = "CustomData"
     CGroupsLimitsCrossed = "CGroupsLimitsCrossed"
+    ExtensionMetricsData = "ExtensionMetricsData"
     Deploy = "Deploy"
     Disable = "Disable"
     Downgrade = "Downgrade"

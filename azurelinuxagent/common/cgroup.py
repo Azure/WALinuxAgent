@@ -14,94 +14,118 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 
+import os
 import re
 
+from azurelinuxagent.common import logger
 from azurelinuxagent.common.exception import CGroupsException
+from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
+from azurelinuxagent.common.utils import fileutil
 
-re_user_system_times = re.compile('user (\d+)\nsystem (\d+)\n')
-
-# The metric classes (Cpu, Memory, etc) can all assume that CGroups is enabled, as the CGroupTelemetry
-# class is very careful not to call them if CGroups isn't enabled. Any tests should be disabled if the osutil
-# is_cgroups_support() method returns false.
+re_user_system_times = re.compile(r'user (\d+)\nsystem (\d+)\n')
 
 
 class CGroup(object):
-    def __init__(self):
-        pass
-
-    def _get_cgroup_file(self, hierarchy, file_name):
-        return os.path.join(self.cgroups[hierarchy], file_name)
-
-
-    def get_file_contents(self, hierarchy, file_name):
+    @staticmethod
+    def create(cgroup_path, controller, extension_name):
         """
-        Retrieve the value of a parameter from a hierarchy.
+        Factory method to create the correct CGroup.
+        """
+        if controller is "cpu":
+            return CpuCgroup(extension_name, cgroup_path)
+        elif controller is "memory":
+            return MemoryCgroup(extension_name, cgroup_path)
 
-        :param str hierarchy: Name of cgroup metric hierarchy
-        :param str file_name: Name of file within that metric hierarchy
+    def __init__(self, name, cgroup_path, controller_type):
+        """
+        Initialize _data collection for the Memory controller
+        :param: name: Name of the CGroup
+        :param: cgroup_path: Path of the controller
+        :param: controller_type:
+        :return:
+        """
+        self.name = name
+        self.path = cgroup_path
+        self.controller = controller_type
+
+    def _get_cgroup_file(self, file_name):
+        return os.path.join(self.path, file_name)
+
+    def _get_file_contents(self, file_name):
+        """
+        Retrieve the contents to file.
+
+        :param str file_name: Name of file within that metric controller
         :return: Entire contents of the file
         :rtype: str
         """
-        if hierarchy in self.cgroups:
-            parameter_file = self._get_cgroup_file(hierarchy, file_name)
 
-            try:
-                return fileutil.read_file(parameter_file)
-            except Exception:
-                raise CGroupsException("Could not retrieve cgroup file {0}/{1}".format(hierarchy, file_name))
-        else:
-            raise CGroupsException("{0} subsystem not available in cgroup {1}. cgroup paths: {2}".format(
-                hierarchy, self.name, self.cgroups))
+        parameter_file = self._get_cgroup_file(file_name)
 
-    def get_parameter(self, hierarchy, parameter_name):
-        """
-        Retrieve the value of a parameter from a hierarchy.
-        Assumes the parameter is the sole line of the file.
-
-        :param str hierarchy: Name of cgroup metric hierarchy
-        :param str parameter_name: Name of file within that metric hierarchy
-        :return: The first line of the file, without line terminator
-        :rtype: str
-        """
-        result = ""
         try:
-            values = self.get_file_contents(hierarchy, parameter_name).splitlines()
-            result = values[0]
+            return fileutil.read_file(parameter_file)
+        except Exception:
+            raise CGroupsException("Could not retrieve cgroup file {0}/{1}".
+                                   format(self.path, file_name))
+
+    def _get_parameters(self, parameter_name, first_line_only=False):
+        """
+        Retrieve the values of a parameter from a controller.
+        Returns a list of values in the file.
+
+        :param first_line_only: return only the first line.
+        :param str parameter_name: Name of file within that metric controller
+        :return: The first line of the file, without line terminator
+        :rtype: [str]
+        """
+        result = []
+        try:
+            values = self._get_file_contents(parameter_name).splitlines()
+            result = values[0] if first_line_only else values
         except IndexError:
-            parameter_filename = self._get_cgroup_file(hierarchy, parameter_name)
+            parameter_filename = self._get_cgroup_file(parameter_name)
             logger.error("File {0} is empty but should not be".format(parameter_filename))
-        except CGroupsException as e:
-            # ignore if the file does not exist yet
-            pass
+        except CGroupsException:
+            return None
         except Exception as e:
-            parameter_filename = self._get_cgroup_file(hierarchy, parameter_name)
+            parameter_filename = self._get_cgroup_file(parameter_name)
             logger.error("Exception while attempting to read {0}: {1}".format(parameter_filename, ustr(e)))
         return result
 
+    def collect(self):
+        raise NotImplementedError()
+
+    def is_active(self):
+        tasks = self._get_parameters("tasks")
+        if tasks:
+            return len(tasks) != 0
+        else:
+            return False
+
 
 class CpuCgroup(CGroup):
-    def __init__(self, cgt):
+    def __init__(self, name, cgroup_path):
         """
-        Initialize data collection for the Cpu hierarchy. User must call update() before attempting to get
+        Initialize _data collection for the Cpu controller. User must call update() before attempting to get
         any useful metrics.
 
-        :param cgt: CGroupsTelemetry
-        :return:
+        :return: CpuCgroup
         """
-        self.cgt = cgt
-        self.osutil = get_osutil()
-        self.current_cpu_total = self.get_current_cpu_total()
-        self.previous_cpu_total = 0
-        self.current_system_cpu = self.osutil.get_total_cpu_ticks_since_boot()
-        self.previous_system_cpu = 0
+        super(CpuCgroup, self).__init__(name, cgroup_path, "cpu")
+
+        self._osutil = get_osutil()
+        self._current_cpu_total = self._get_current_cpu_total()
+        self._previous_cpu_total = 0
+        self._current_system_cpu = self._osutil.get_total_cpu_ticks_since_boot()
+        self._previous_system_cpu = 0
 
     def __str__(self):
-        return "Cgroup: Current {0}, previous {1}; System: Current {2}, previous {3}".format(
-            self.current_cpu_total, self.previous_cpu_total, self.current_system_cpu, self.previous_system_cpu
+        return "cgroup: Name: {0}, cgroup_path: {1}; Controller: {2}".format(
+            self.name, self.path, self.controller
         )
 
-    def get_current_cpu_total(self):
+    def _get_current_cpu_total(self):
         """
         Compute the number of USER_HZ of CPU time (user and system) consumed by this cgroup since boot.
 
@@ -109,8 +133,7 @@ class CpuCgroup(CGroup):
         """
         cpu_total = 0
         try:
-            cpu_stat = self.cgt.cgroup.\
-                get_file_contents('cpu', 'cpuacct.stat')
+            cpu_stat = self._get_file_contents('cpuacct.stat')
             if cpu_stat is not None:
                 m = re_user_system_times.match(cpu_stat)
                 if m:
@@ -123,17 +146,17 @@ class CpuCgroup(CGroup):
             pass
         return cpu_total
 
-    def update(self):
+    def _update_cpu_data(self):
         """
-        Update all raw data required to compute metrics of interest. The intent is to call update() once, then
-        call the various get_*() methods which use this data, which we've collected exactly once.
+        Update all raw _data required to compute metrics of interest. The intent is to call update() once, then
+        call the various get_*() methods which use this _data, which we've collected exactly once.
         """
-        self.previous_cpu_total = self.current_cpu_total
-        self.previous_system_cpu = self.current_system_cpu
-        self.current_cpu_total = self.get_current_cpu_total()
-        self.current_system_cpu = self.osutil.get_total_cpu_ticks_since_boot()
+        self._previous_cpu_total = self._current_cpu_total
+        self._previous_system_cpu = self._current_system_cpu
+        self._current_cpu_total = self._get_current_cpu_total()
+        self._current_system_cpu = self._osutil.get_total_cpu_ticks_since_boot()
 
-    def get_cpu_percent(self):
+    def _get_cpu_percent(self):
         """
         Compute the percent CPU time used by this cgroup over the elapsed time since the last time this instance was
         update()ed.  If the cgroup fully consumed 2 cores on a 4 core system, return 200.
@@ -141,10 +164,10 @@ class CpuCgroup(CGroup):
         :return: CPU usage in percent of a single core
         :rtype: float
         """
-        cpu_delta = self.current_cpu_total - self.previous_cpu_total
-        system_delta = max(1, self.current_system_cpu - self.previous_system_cpu)
+        cpu_delta = self._current_cpu_total - self._previous_cpu_total
+        system_delta = max(1, self._current_system_cpu - self._previous_system_cpu)
 
-        return round(float(cpu_delta * self.cgt.cpu_count * 100) / float(system_delta), 3)
+        return round(float(cpu_delta * self._osutil.get_processor_cores() * 100) / float(system_delta), 3)
 
     def collect(self):
         """
@@ -152,29 +175,45 @@ class CpuCgroup(CGroup):
 
         :rtype: [(str, str, float)]
         """
-        self.update()
-        usage = self.get_cpu_percent()
-        return [("Process", "% Processor Time", usage)]
+        self._update_cpu_data()
+        usage = self._get_cpu_percent()
+        return [CollectedMetrics("cpu", "% Processor Time", usage)]
 
 
-class MemoryCGroup(CGroup):
-    def __init__(self, cgt):
+class MemoryCgroup(CGroup):
+    def __init__(self, name, cgroup_path):
         """
-        Initialize data collection for the Memory hierarchy
+        Initialize _data collection for the Memory controller
 
-        :param CGroupsTelemetry cgt: The telemetry object for which memory metrics should be collected
-        :return:
+        :return: MemoryCgroup
         """
-        self.cgt = cgt
+        super(MemoryCgroup, self).__init__(name, cgroup_path, "memory")
 
-    def get_memory_usage(self):
+    def __str__(self):
+        return "cgroup: Name: {0}, cgroup_path: {1}; Controller: {2}".format(
+            self.name, self.path, self.controller
+        )
+
+    def _get_memory_usage(self):
         """
         Collect memory.usage_in_bytes from the cgroup.
 
         :return: Memory usage in bytes
         :rtype: int
         """
-        usage = self.cgt.cgroup.get_parameter('memory', 'memory.usage_in_bytes')
+        usage = self._get_parameters('memory.usage_in_bytes', first_line_only=True)
+        if not usage:
+            usage = "0"
+        return int(usage)
+
+    def _get_memory_max_usage(self):
+        """
+        Collect memory.usage_in_bytes from the cgroup.
+
+        :return: Memory usage in bytes
+        :rtype: int
+        """
+        usage = self._get_parameters('memory.max_usage_in_bytes', first_line_only=True)
         if not usage:
             usage = "0"
         return int(usage)
@@ -185,11 +224,20 @@ class MemoryCGroup(CGroup):
 
         :rtype: [(str, str, float)]
         """
-        usage = self.get_memory_usage()
-        return [("Memory", "Total Memory Usage", usage)]
+        usage = self._get_memory_usage()
+        max_usage = self._get_memory_max_usage()
+        return [CollectedMetrics("memory", "Total Memory Usage", usage),
+                CollectedMetrics("memory", "Max Memory Usage", max_usage)]
+
+
+class CollectedMetrics(object):
+    def __init__(self, controller, metric_name, value):
+        self.controller = controller
+        self.metric_name = metric_name
+        self.value = value
 
 #
-# TODO: Do we need this code?
+# TODO: Do we need this code? - For not we'll keep this code. Will remove in the next round.
 #
 #
 # MEMORY_DEFAULT = -1
@@ -241,7 +289,7 @@ class MemoryCGroup(CGroup):
 #         logger.verbose("writing {0} to {1}".format(limit_units, cpu_shares_file))
 #         fileutil.write_file(cpu_shares_file, '{0}\n'.format(limit_units))
 #     else:
-#         raise CGroupsException("CPU hierarchy not available in this cgroup")
+#         raise CGroupsException("CPU controller not available in this cgroup")
 #
 # @staticmethod
 # def get_num_cores():
@@ -275,7 +323,7 @@ class MemoryCGroup(CGroup):
 #         logger.verbose("writing {0} to {1}".format(value, memory_limit_file))
 #         fileutil.write_file(memory_limit_file, '{0}\n'.format(value))
 #     else:
-#         raise CGroupsException("Memory hierarchy not available in this cgroup")
+#         raise CGroupsException("Memory controller not available in this cgroup")
 #
 # class CGroupsLimits(object):
 #     @staticmethod

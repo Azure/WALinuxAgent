@@ -19,6 +19,7 @@ import subprocess
 
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.cgroupapi import CGroupsApi
+from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.exception import CGroupsException
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
@@ -97,8 +98,8 @@ class CGroupConfigurator(object):
                 cgroups = self._cgroups_api.create_agent_cgroups()
 
                 if track_cgroups:
-                    # TODO: Add to tracking list
-                    pass
+                    for cgroup in cgroups:
+                        CGroupsTelemetry.track_cgroup(cgroup)
 
                 return cgroups
 
@@ -128,9 +129,6 @@ class CGroupConfigurator(object):
             """
             def __impl():
                 cgroups = self._cgroups_api.remove_extension_cgroups(name)
-
-                # TODO: Remove from tracking list
-
                 return cgroups
 
             self._invoke_cgroup_operation(__impl, "Failed to delete cgroups for extension '{0}'.".format(name))
@@ -167,9 +165,15 @@ class CGroupConfigurator(object):
                 def track_cgroups():
                     cgroups = self._cgroups_api.get_extension_cgroups(extension_name)
 
-                    # TODO: Add to tracking list
+                    try:
+                        for cgroup in cgroups:
+                            CGroupsTelemetry.track_cgroup(cgroup)
+                    except Exception as e:
+                        logger.info("Cannot add CGroup into tracking list. Error: {0}".format(ustr(e)))
 
-                self._invoke_cgroup_operation(track_cgroups, "Failed to add cgroups for extension '{0}' to the tracking list; resource usage will not be tracked".format(extension_name))
+                self._invoke_cgroup_operation(track_cgroups,
+                                              "Failed to add cgroups for extension '{0}' to the tracking list; "
+                                              "resource usage will not be tracked".format(extension_name))
 
             return process
 

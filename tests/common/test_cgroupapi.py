@@ -146,7 +146,7 @@ class FileSystemCgroupsApiTestCase(AgentTestCase):
 
         def assert_cgroup_created(controller):
             cgroup_path = os.path.join(self.cgroups_file_system_root, controller, "walinuxagent.service")
-            self.assertIn(cgroup_path, agent_cgroups)
+            self.assertTrue(any(cgroups.path == cgroup_path for cgroups in agent_cgroups))
             self.assertTrue(os.path.exists(cgroup_path))
             cgroup_task = int(fileutil.read_file(os.path.join(cgroup_path, "cgroup.procs")))
             current_process = os.getpid()
@@ -170,8 +170,10 @@ class FileSystemCgroupsApiTestCase(AgentTestCase):
         extension_cgroups = api.create_extension_cgroups("Microsoft.Compute.TestExtension-1.2.3")
 
         def assert_cgroup_created(controller):
-            cgroup_path = os.path.join(self.cgroups_file_system_root, controller, "walinuxagent.extensions", "Microsoft.Compute.TestExtension_1.2.3")
-            self.assertIn(cgroup_path, extension_cgroups)
+            cgroup_path = os.path.join(self.cgroups_file_system_root, controller, "walinuxagent.extensions",
+                                       "Microsoft.Compute.TestExtension_1.2.3")
+
+            self.assertTrue(any(cgroups.path == cgroup_path for cgroups in extension_cgroups))
             self.assertTrue(os.path.exists(cgroup_path))
 
         assert_cgroup_created("cpu")
@@ -185,7 +187,8 @@ class FileSystemCgroupsApiTestCase(AgentTestCase):
         api.remove_extension_cgroups("Microsoft.Compute.TestExtension-1.2.3")
 
         for cgroup in extension_cgroups:
-            self.assertFalse(os.path.exists(cgroup))
+            self.assertFalse(os.path.exists(cgroup.path))
+
 
     def test_get_extension_cgroups_should_return_all_cgroups(self):
         api = FileSystemCgroupsApi()
@@ -197,7 +200,7 @@ class FileSystemCgroupsApiTestCase(AgentTestCase):
         self.assertEqual(len(retrieved), len(created))
 
         for cgroup in created:
-            self.assertTrue(cgroup in retrieved)
+            self.assertTrue(any(retrieved_cgroup.path == cgroup.path for retrieved_cgroup in retrieved))
 
     def test_start_extension_command_should_add_the_child_process_to_the_extension_cgroup(self):
         api = FileSystemCgroupsApi()
@@ -216,7 +219,7 @@ class FileSystemCgroupsApiTestCase(AgentTestCase):
         process.wait()
 
         for cgroup in extension_cgroups:
-            cgroups_procs_path = os.path.join(cgroup, "cgroup.procs")
+            cgroups_procs_path = os.path.join(cgroup.path, "cgroup.procs")
             with open(cgroups_procs_path, "r") as f:
                 contents = f.read()
             pid = int(contents)

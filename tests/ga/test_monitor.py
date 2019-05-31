@@ -17,8 +17,8 @@
 from datetime import timedelta
 
 from azurelinuxagent.common.protocol.wire import WireProtocol
-from tests.tools import *
 from azurelinuxagent.ga.monitor import *
+from tests.tools import *
 
 
 @patch('azurelinuxagent.common.event.EventLogger.add_event')
@@ -87,11 +87,13 @@ class TestMonitor(AgentTestCase):
     @patch("azurelinuxagent.ga.monitor.MonitorHandler.send_telemetry_heartbeat")
     @patch("azurelinuxagent.ga.monitor.MonitorHandler.collect_and_send_events")
     @patch("azurelinuxagent.ga.monitor.MonitorHandler.send_host_plugin_heartbeat")
-    @patch("azurelinuxagent.ga.monitor.MonitorHandler.send_cgroup_telemetry")
+    @patch("azurelinuxagent.ga.monitor.MonitorHandler.poll_telemetry_metrics")
+    @patch("azurelinuxagent.ga.monitor.MonitorHandler.send_telemetry_metrics")
     @patch("azurelinuxagent.ga.monitor.MonitorHandler.send_imds_heartbeat")
     def test_heartbeats(self,
                         patch_imds_heartbeat,
-                        patch_cgroup_telemetry,
+                        patch_send_telemetry_metrics,
+                        patch_poll_telemetry_metrics,
                         patch_hostplugin_heartbeat,
                         patch_send_events,
                         patch_telemetry_heartbeat,
@@ -107,7 +109,8 @@ class TestMonitor(AgentTestCase):
         self.assertEqual(0, patch_send_events.call_count)
         self.assertEqual(0, patch_telemetry_heartbeat.call_count)
         self.assertEqual(0, patch_imds_heartbeat.call_count)
-        self.assertEqual(0, patch_cgroup_telemetry.call_count)
+        self.assertEqual(0, patch_send_telemetry_metrics.call_count)
+        self.assertEqual(0, patch_poll_telemetry_metrics.call_count)
 
         monitor_handler.start()
         time.sleep(1)
@@ -117,11 +120,13 @@ class TestMonitor(AgentTestCase):
         self.assertNotEqual(0, patch_send_events.call_count)
         self.assertNotEqual(0, patch_telemetry_heartbeat.call_count)
         self.assertNotEqual(0, patch_imds_heartbeat.call_count)
-        self.assertNotEqual(0, patch_cgroup_telemetry.call_count)
+        self.assertNotEqual(0, patch_send_telemetry_metrics.call_count)
+        self.assertNotEqual(0, patch_poll_telemetry_metrics.call_count)
 
         monitor_handler.stop()
 
-    @patch("azurelinuxagent.ga.monitor.MonitorHandler.send_cgroup_telemetry")
+    @patch("azurelinuxagent.ga.monitor.MonitorHandler.send_telemetry_metrics")
+    @patch("azurelinuxagent.ga.monitor.MonitorHandler.poll_telemetry_metrics")
     def test_heartbeat_timings_updates_after_window(self, *args):
         monitor_handler = get_monitor_handler()
 
@@ -158,7 +163,8 @@ class TestMonitor(AgentTestCase):
 
         monitor_handler.stop()
 
-    @patch("azurelinuxagent.ga.monitor.MonitorHandler.send_cgroup_telemetry")
+    @patch("azurelinuxagent.ga.monitor.MonitorHandler.send_telemetry_metrics")
+    @patch("azurelinuxagent.ga.monitor.MonitorHandler.poll_telemetry_metrics")
     def test_heartbeat_timings_no_updates_within_window(self, *args):
         monitor_handler = get_monitor_handler()
 
@@ -216,6 +222,30 @@ class TestMonitor(AgentTestCase):
         self.assertEqual(1, args[5].call_count)
         self.assertEqual('HostPluginHeartbeatExtended', args[5].call_args[1]['op'])
         self.assertEqual(False, args[5].call_args[1]['is_success'])
+        monitor_handler.stop()
+
+    @patch("azurelinuxagent.common.event.add_event")
+    @patch("azurelinuxagent.common.cgroupstelemetry.CGroupsTelemetry.poll_all_tracked")
+    @patch("azurelinuxagent.common.cgroupstelemetry.CGroupsTelemetry.report_all_tracked")
+    def test_send_extension_metrics_telemetry(self, patch_report_all_tracked, patch_poll_all_tracked, *args):
+        patch_report_all_tracked.return_value = {
+            "memory": {
+                "cur_mem": [1, 1, 1, 1, 1, str(datetime.datetime.utcnow()), str(datetime.datetime.utcnow())],
+                "max_mem": [1, 1, 1, 1, 1, str(datetime.datetime.utcnow()), str(datetime.datetime.utcnow())]
+            },
+            "cpu": {
+                "cur_cpu": [1, 1, 1, 1, 1, str(datetime.datetime.utcnow()), str(datetime.datetime.utcnow())]
+            }
+        }
+
+        monitor_handler = get_monitor_handler()
+        monitor_handler.init_protocols()
+        monitor_handler.last_cgroup_polling_telemetry = datetime.datetime.utcnow() - timedelta(hours=1)
+        monitor_handler.last_cgroup_report_telemetry = datetime.datetime.utcnow() - timedelta(hours=1)
+        monitor_handler.poll_telemetry_metrics()
+        monitor_handler.send_telemetry_metrics()
+        self.assertEqual(1, patch_poll_all_tracked.call_count)
+        self.assertEqual(1, patch_report_all_tracked.call_count)
         monitor_handler.stop()
 
 

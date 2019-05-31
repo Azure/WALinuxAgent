@@ -20,6 +20,7 @@ import shutil
 import subprocess
 
 from azurelinuxagent.common import logger
+from azurelinuxagent.common.cgroup import CpuCgroup, MemoryCgroup, CGroup
 from azurelinuxagent.common.exception import CGroupsException
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.utils import fileutil, shellutil
@@ -94,7 +95,7 @@ class CGroupsApi(object):
             fields = entry.split(':')
             if fields[0] == controller_id:
                 return fields[2].lstrip(os.path.sep)
-        raise CGroupsException("This process belongs to no cgroup for hierarchy ID {0}".format(controller_id))
+        raise CGroupsException("This process belongs to no cgroup for controller ID {0}".format(controller_id))
 
 
     @staticmethod
@@ -164,6 +165,10 @@ class FileSystemCgroupsApi(CGroupsApi):
 
         return os.path.join(extensions_root, cgroup_name)
 
+    def _create_extension_cgroup(self, controller, extension_name):
+        return CGroup.create(self._get_extension_cgroup_path(controller, extension_name),
+                             controller, extension_name)
+
     @staticmethod
     def _add_process_to_cgroup(pid, cgroup_path):
         tasks_file = os.path.join(cgroup_path, 'cgroup.procs')
@@ -174,7 +179,7 @@ class FileSystemCgroupsApi(CGroupsApi):
         """
         Creates a cgroup for the VM Agent in each of the controllers we are tracking; returns the created cgroups.
         """
-        cgroup_paths = []
+        cgroups = []
 
         pid = int(os.getpid())
 
@@ -188,17 +193,17 @@ class FileSystemCgroupsApi(CGroupsApi):
 
                 self._add_process_to_cgroup(pid, path)
 
-                cgroup_paths.append(path)
+                cgroups.append(CGroup.create(path, controller, VM_AGENT_CGROUP_NAME))
 
             except Exception as e:
                 logger.warn('Cannot create "{0}" cgroup for the agent. Error: {1}'.format(controller, ustr(e)))
 
         self._foreach_controller(create_cgroup, 'Will not create a cgroup for the VM Agent')
 
-        if len(cgroup_paths) == 0:
+        if len(cgroups) == 0:
             raise CGroupsException("Failed to create any cgroup for the VM Agent")
 
-        return cgroup_paths
+        return cgroups
 
     def create_extension_cgroups_root(self):
         """
@@ -217,20 +222,20 @@ class FileSystemCgroupsApi(CGroupsApi):
         """
         Creates a cgroup for the given extension in each of the controllers we are tracking; returns the created cgroups.
         """
-        cgroup_paths = []
+        cgroups = []
 
         def create_cgroup(controller):
-            path = self._get_extension_cgroup_path(controller, extension_name)
+            cgroup = self._create_extension_cgroup(controller, extension_name)
 
-            if not os.path.isdir(path):
-                FileSystemCgroupsApi._try_mkdir(path)
-                logger.info("Created cgroup {0}".format(path))
+            if not os.path.isdir(cgroup.path):
+                FileSystemCgroupsApi._try_mkdir(cgroup.path)
+                logger.info("Created cgroup {0}".format(cgroup.path))
 
-            cgroup_paths.append(path)
+            cgroups.append(cgroup)
 
         self._foreach_controller(create_cgroup, 'Will not create a cgroup for extension {0}'.format(extension_name))
 
-        return cgroup_paths
+        return cgroups
 
     def remove_extension_cgroups(self, extension_name):
         """
@@ -247,15 +252,16 @@ class FileSystemCgroupsApi(CGroupsApi):
         """
         Returns the cgroups for the given extension.
         """
-        cgroup_paths = []
+
+        cgroups = []
 
         def get_cgroup(controller):
-            path = self._get_extension_cgroup_path(controller, extension_name)
-            cgroup_paths.append(path)
+            cgroup = self._create_extension_cgroup(controller, extension_name)
+            cgroups.append(cgroup)
 
         self._foreach_controller(get_cgroup, 'Failed to retrieve cgroups for extension {0}'.format(extension_name))
 
-        return cgroup_paths
+        return cgroups
 
     def start_extension_command(self, extension_name, command, shell, cwd, env, stdout, stderr):
         """
@@ -328,7 +334,8 @@ class SystemdCgroupsApi(CGroupsApi):
             cpu_cgroup_path = os.path.join(CGROUPS_FILE_SYSTEM_ROOT, 'cpu', cgroup_unit)
             memory_cgroup_path = os.path.join(CGROUPS_FILE_SYSTEM_ROOT, 'memory', cgroup_unit)
 
-            return [cpu_cgroup_path, memory_cgroup_path]
+            return [CGroup.create(cpu_cgroup_path, 'cpu', cgroup_unit),
+                    CGroup.create(memory_cgroup_path, 'memory', cgroup_unit)]
         except Exception as e:
             raise CGroupsException("Failed to get paths of agent's cgroups. Error: {0}".format(ustr(e)))
 
@@ -383,7 +390,8 @@ After=system-{1}.slice""".format(extension_name, EXTENSIONS_ROOT_CGROUP_NAME)
         cpu_cgroup_path = os.path.join(CGROUPS_FILE_SYSTEM_ROOT, 'cpu', 'system.slice', scope_name)
         memory_cgroup_path = os.path.join(CGROUPS_FILE_SYSTEM_ROOT, 'memory', 'system.slice', scope_name)
 
-        return [cpu_cgroup_path, memory_cgroup_path]
+        return [CGroup.create(cpu_cgroup_path, 'cpu', extension_name),
+                CGroup.create(memory_cgroup_path, 'cpu', extension_name)]
 
     def start_extension_command(self, extension_name, command, shell, cwd, env, stdout, stderr):
         def pre_exec_function():

@@ -17,16 +17,14 @@
 
 from __future__ import print_function
 
-from azurelinuxagent.common.cgroup import CpuCgroup, MemoryCGroup
+import random
+
+from azurelinuxagent.common.cgroup import CpuCgroup, MemoryCgroup
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.exception import CGroupsException
 from azurelinuxagent.common.version import AGENT_NAME
 from tests.tools import *
-
-import os
-import random
-import time
 
 
 def consume_cpu_time():
@@ -104,15 +102,15 @@ class TestCGroups(AgentTestCase):
         self.assertIn('memory', cg.cgroups)
         ct = CGroupsTelemetry("test", cg)
         cpu = CpuCgroup(ct)
-        self.assertGreater(cpu.current_system_cpu, 0)
+        self.assertGreater(cpu._current_system_cpu, 0)
 
         consume_cpu_time()  # Eat some CPU
-        cpu.update()
+        cpu._update_cpu_data()
 
-        self.assertGreater(cpu.current_cpu_total, cpu.previous_cpu_total)
-        self.assertGreater(cpu.current_system_cpu, cpu.previous_system_cpu)
+        self.assertGreater(cpu._current_cpu_total, cpu._previous_cpu_total)
+        self.assertGreater(cpu._current_system_cpu, cpu._previous_system_cpu)
 
-        percent_used = cpu.get_cpu_percent()
+        percent_used = cpu._get_cpu_percent()
         self.assertGreater(percent_used, 0)
 
     def test_telemetry_in_place_leaf_cgroup(self):
@@ -126,12 +124,12 @@ class TestCGroups(AgentTestCase):
         if cg.cgroups['cpu'] != root.cgroups['cpu']:
             ct = CGroupsTelemetry("test", cg)
             cpu = CpuCgroup(ct)
-            self.assertLess(cpu.current_cpu_total, cpu.current_system_cpu)
+            self.assertLess(cpu._current_cpu_total, cpu._current_system_cpu)
 
             consume_cpu_time()  # Eat some CPU
             time.sleep(1)  # Generate some idle time
-            cpu.update()
-            self.assertLess(cpu.current_cpu_total, cpu.current_system_cpu)
+            cpu._update_cpu_data()
+            self.assertLess(cpu._current_cpu_total, cpu._current_system_cpu)
 
     def exercise_telemetry_instantiation(self, test_cgroup):
         test_extension_name = test_cgroup.name
@@ -141,7 +139,7 @@ class TestCGroups(AgentTestCase):
         self.assertTrue(CGroupsTelemetry.is_tracked(test_extension_name))
         consume_cpu_time()
         time.sleep(1)
-        metrics, limits = CGroupsTelemetry.collect_all_tracked()
+        metrics, limits = CGroupsTelemetry.report_all_tracked()
         my_metrics = metrics[test_extension_name]
         self.assertEqual(len(my_metrics), 2)
         for item in my_metrics:
@@ -213,13 +211,13 @@ class TestCGroups(AgentTestCase):
         self.assertIs(cg, ct.cgroup)
         cpu = CpuCgroup(ct)
         self.assertIs(cg, cpu.cgt.cgroup)
-        ticks_before = cpu.current_cpu_total
+        ticks_before = cpu._current_cpu_total
         consume_cpu_time()
         time.sleep(1)
-        cpu.update()
-        ticks_after = cpu.current_cpu_total
+        cpu._update_cpu_data()
+        ticks_after = cpu._current_cpu_total
         self.assertGreater(ticks_after, ticks_before)
-        p2 = cpu.get_cpu_percent()
+        p2 = cpu._get_cpu_percent()
         self.assertGreater(p2, 0)
         # when running under PyCharm, this is often > 100
         # on a multi-core machine
@@ -236,8 +234,8 @@ class TestCGroups(AgentTestCase):
         self.assertIn('memory', cg.cgroups)
         ct = CGroupsTelemetry('test', cg)
         self.assertIs(cg, ct.cgroup)
-        memory = MemoryCGroup(ct)
-        usage_in_bytes = memory.get_memory_usage()
+        memory = MemoryCgroup(ct)
+        usage_in_bytes = memory._get_memory_usage()
         self.assertGreater(usage_in_bytes, 100000)
 
     def test_format_memory_value(self):
