@@ -20,6 +20,7 @@ from __future__ import print_function
 import subprocess
 
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
+from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.exception import CGroupsException
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
 from tests.tools import *
@@ -78,8 +79,9 @@ class CGroupConfiguratorTestCase(AgentTestCase):
 
     def test_enable_should_raise_CGroupsException_when_cgroups_are_not_supported(self):
         with patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.is_cgroups_supported", return_value=False):
-            with self.assertRaises(CGroupsException):
+            with self.assertRaises(CGroupsException) as context_manager:
                 CGroupConfigurator.get_instance().enable()
+            self.assertIn("cgroups are not supported", str(context_manager.exception))
 
     def test_cgroup_operations_should_not_invoke_the_cgroup_api_when_cgroups_are_not_enabled(self):
         configurator = CGroupConfigurator.get_instance()
@@ -154,3 +156,38 @@ class CGroupConfiguratorTestCase(AgentTestCase):
                 stderr=subprocess.PIPE)
 
             self.assertEqual(mock_start_extension_command.call_count, 1)
+
+    def test_start_extension_command_should_start_tracking_the_extension_cgroups(self):
+        configurator = CGroupConfigurator.get_instance()
+
+        # mock FileSystemCgroupsApi.start_extension_command to make it a noop
+        with patch("azurelinuxagent.common.cgroupapi.FileSystemCgroupsApi.start_extension_command"):
+            configurator.start_extension_command(
+                extension_name="Microsoft.Compute.TestExtension-1.2.3",
+                command="date",
+                shell=False,
+                cwd=self.tmp_dir,
+                env={},
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE)
+
+            self.assertTrue(CGroupsTelemetry.is_tracked("Microsoft.Compute.TestExtension-1.2.3", "cpu"))
+            self.assertTrue(CGroupsTelemetry.is_tracked("Microsoft.Compute.TestExtension-1.2.3", "memory"))
+
+    def test_start_extension_command_should_raise_an_exception_when_the_command_cannot_be_started(self):
+        configurator = CGroupConfigurator.get_instance()
+
+        def raise_exception(*_, **__):
+            raise Exception("A TEST EXCEPTION")
+
+        with patch("azurelinuxagent.common.cgroupapi.FileSystemCgroupsApi.start_extension_command", raise_exception):
+            with self.assertRaises(Exception) as context_manager:
+                configurator.start_extension_command(
+                    extension_name="Microsoft.Compute.TestExtension-1.2.3",
+                    command="date",
+                    shell=False,
+                    cwd=self.tmp_dir,
+                    env={},
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE)
+            self.assertIn("A TEST EXCEPTION", str(context_manager.exception))
