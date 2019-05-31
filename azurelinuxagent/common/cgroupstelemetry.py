@@ -28,8 +28,8 @@ class CGroupsTelemetry(object):
 
     @staticmethod
     def _get_metrics_list(metric):
-        return [metric.average(), metric.min(), metric.max(), metric.median(), metric.count(), metric.first_poll_time(),
-                metric.last_poll_time()]
+        return [metric.average(), metric.min(), metric.max(), metric.median(), metric.count(),
+                metric.first_poll_time(), metric.last_poll_time()]
 
     @staticmethod
     def _process_cgroup_metric(cgroup_metrics):
@@ -60,9 +60,10 @@ class CGroupsTelemetry(object):
         Returns true if the given item is in the list of tracked items
         O(n) operation. But limited to few cgroup objects we have.
         """
-        for cgroup in CGroupsTelemetry._tracked:
-            if name == cgroup.name and controller == cgroup.controller:
-                return True
+        with CGroupsTelemetry._rlock:
+            for cgroup in CGroupsTelemetry._tracked:
+                if name == cgroup.name and controller == cgroup.controller:
+                    return True
 
         return False
 
@@ -71,20 +72,22 @@ class CGroupsTelemetry(object):
         """
         Stop tracking the cgroups for the given name
         """
-        CGroupsTelemetry._tracked.remove(cgroup)
-        logger.info("Stopped tracking cgroup: {0}, path: {1}".format(cgroup.name, cgroup.path))
+        with CGroupsTelemetry._rlock:
+            CGroupsTelemetry._tracked.remove(cgroup)
+            logger.info("Stopped tracking cgroup: {0}, path: {1}".format(cgroup.name, cgroup.path))
 
     @staticmethod
     def report_all_tracked():
         collected_metrics = {}
+
         for name, cgroup_metrics in CGroupsTelemetry._cgroup_metrics.items():
             collected_metrics[name] = CGroupsTelemetry._process_cgroup_metric(cgroup_metrics)
             cgroup_metrics.clear()
 
-            if cgroup_metrics.marked_for_delete:
-                # Clear the _cgroup_metrics to make sure we don't send stale entries,
-                # only after sending its content first
-                CGroupsTelemetry._cgroup_metrics.pop(name, None)
+        # Doing cleanup after the metrics have already been collected.
+        for key in [key for key in CGroupsTelemetry._cgroup_metrics if
+                    CGroupsTelemetry._cgroup_metrics[key].marked_for_delete]:
+            del CGroupsTelemetry._cgroup_metrics[key]
 
         return collected_metrics
 
@@ -109,11 +112,8 @@ class CGroupsTelemetry(object):
 
     @staticmethod
     def cleanup():
-        CGroupsTelemetry._tracked *= 0  # emptying the list
-
-    def __init__(self):
-        pass
-        # TODO
+        with CGroupsTelemetry._rlock:
+            CGroupsTelemetry._tracked *= 0  # emptying the list
 
 
 class CgroupMetrics(object):
