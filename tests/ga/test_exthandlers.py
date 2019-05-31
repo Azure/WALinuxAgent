@@ -594,4 +594,3 @@ sys.stderr.write("STDERR")
             output = self.ext_handler_instance.launch_command(command)
 
         self.assertIn("[stderr]\nCannot read stdout/stderr:", output)
-
