@@ -362,7 +362,7 @@ class AgentTestCase(unittest.TestCase):
         self.fail(msg)
 
     def emulate_assertIsInstance(self, obj, object_type, msg=None):
-        if not type(obj) == object_type:
+        if not isinstance(obj, object_type):
             msg = msg if msg is not None else '{0} is not an instance of {1}'.format(_safe_repr(obj),
                                                                                      _safe_repr(object_type))
             self.fail(msg)

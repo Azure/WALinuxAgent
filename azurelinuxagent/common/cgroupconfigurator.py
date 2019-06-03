@@ -185,3 +185,7 @@ class CGroupConfigurator(object):
         if CGroupConfigurator.__instance is None:
             CGroupConfigurator.__instance = CGroupConfigurator.__impl()
         return CGroupConfigurator.__instance
+
+    @staticmethod
+    def is_cgroups_supported():
+        return CGroupConfigurator.get_instance().enabled()

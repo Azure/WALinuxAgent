@@ -438,7 +438,7 @@ class TestCGroupsTelemetry(AgentTestCase):
         self.assertFalse(CGroupsTelemetry.is_tracked("not_present_dummy_extension_{0}".format(i), 'cpu'))
         self.assertFalse(CGroupsTelemetry.is_tracked("not_present_dummy_extension_{0}".format(i), 'memory'))
 
-    @skip_if_predicate_false(CGroupConfigurator.get_instance().enabled, "CGroups not supported in this environment")
+    @skip_if_predicate_false(CGroupConfigurator.is_cgroups_supported, "CGroups not supported in this environment")
     def test_telemetry_with_tracked_cgroup(self):
         num_polls = 5
         name = "test-cgroup"

@@ -304,16 +304,14 @@ class DefaultOSUtil(object):
         Enabled by default; disabled in WSL/Travis (Disabled on Trusty only)
         """
         is_wsl = '-Microsoft-' in platform.platform()
-        is_travis = 'TRAVIS' in os.environ and os.environ['TRAVIS'] == 'true'
-
-        supported_in_travis = True  # By default supported in Travis
+        supported = True  # By default supported in Travis
 
         # Travis with python 2.6 fails (on Trusty based systems)
-        if is_travis and PY_VERSION_MAJOR == 2 and PY_VERSION_MINOR == 6:
-            supported_in_travis = False
+        if PY_VERSION_MAJOR == 2 and PY_VERSION_MINOR == 6:
+            supported = False
 
         base_fs_exists = os.path.exists(BASE_CGROUPS)
-        return not is_wsl and base_fs_exists and supported_in_travis
+        return not is_wsl and base_fs_exists and supported
 
     @staticmethod
     def _cgroup_path(tail=""):
