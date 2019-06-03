@@ -67,15 +67,6 @@ def i_am_root():
     return os.geteuid() == 0
 
 
-@skip_if_predicate_false(lambda: False, "TODO: Need unit tests")
-class TestCGroupConfigurator(AgentTestCase):
-    #
-    # TODO -- Need to write actual tests
-    #
-    def test_initialize(self):
-        CGroupConfigurator.get_instance()
-
-
 @skip_if_predicate_false(lambda: False, "TODO: Need new unit tests")
 class TestCGroups(AgentTestCase):
     @classmethod
