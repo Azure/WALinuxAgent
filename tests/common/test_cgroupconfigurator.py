@@ -44,8 +44,13 @@ class CGroupConfiguratorTestCase(AgentTestCase):
         cls.mock_is_cgroups_supported = patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.is_cgroups_supported", return_value=True)
         cls.mock_is_cgroups_supported.start()
 
+        # Mounting the cgroup filesystem requires root privileges. Since these tests do not perform any actual operation on cgroups, make it a noop.
+        cls.mock_mount_cgroups = patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.mount_cgroups")
+        cls.mock_mount_cgroups.start()
+
     @classmethod
     def tearDownClass(cls):
+        cls.mock_mount_cgroups.stop()
         cls.mock_is_cgroups_supported.stop()
         cls.mock_get_osutil.stop()
         cls.mock_is_systemd.stop()
