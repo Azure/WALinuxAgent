@@ -15,14 +15,17 @@
 # Requires Python 2.4+ and Openssl 1.0+
 #
 
-
+import os
 import random
+import time
 
 from mock import patch
 
 from azurelinuxagent.common.cgroup import CGroup
+from azurelinuxagent.common.cgroupapi import CGroupsApi, CGROUPS_FILE_SYSTEM_ROOT
+from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry, Metric
-from tests.tools import AgentTestCase
+from tests.tools import AgentTestCase, skip_if_predicate_false
 
 
 def median(lst):
@@ -42,6 +45,49 @@ def generate_metric_list(lst):
             max(lst),
             median(lst),
             len(lst)]
+
+
+def consume_cpu_time():
+    waste = 0
+    for x in range(1, 200000):
+        waste += random.random()
+    return waste
+
+
+def consume_memory():
+    waste = []
+    for x in range(1, 3):
+        waste.append([random.random()] * 10000)
+        time.sleep(0.1)
+        waste *= 0
+    return waste
+
+
+def make_root_cgroup():
+    cpu_controller_id = CGroupsApi._get_controller_id('cpu')
+    current_process_cpu_cgroup_path = CGroupsApi._get_current_process_cgroup_relative_path(cpu_controller_id)
+
+    memory_controller_id = CGroupsApi._get_controller_id('memory')
+    current_process_memory_cgroup_path = CGroupsApi._get_current_process_cgroup_relative_path(memory_controller_id)
+
+    return [CGroup.create(current_process_cpu_cgroup_path, "cpu", "test-cgroup"),
+            CGroup.create(current_process_memory_cgroup_path, "memory", "test-cgroup")]
+
+
+def make_self_cgroup(name="test-cgroup"):
+    current_process_cgroup_suffix = ""
+    cgroups = []
+    for controller in ["cpu", "memory"]:
+        try:
+            controller_id = CGroupsApi._get_controller_id(controller)
+            current_process_cgroup_suffix = CGroupsApi._get_current_process_cgroup_relative_path(controller_id)
+        except Exception:
+            pass
+
+        cgroups.append(CGroup.create(os.path.join(CGROUPS_FILE_SYSTEM_ROOT, controller,
+                                                  current_process_cgroup_suffix), controller, name))
+
+    return cgroups
 
 
 class TestCGroupsTelemetry(AgentTestCase):
@@ -391,6 +437,51 @@ class TestCGroupsTelemetry(AgentTestCase):
 
         self.assertFalse(CGroupsTelemetry.is_tracked("not_present_dummy_extension_{0}".format(i), 'cpu'))
         self.assertFalse(CGroupsTelemetry.is_tracked("not_present_dummy_extension_{0}".format(i), 'memory'))
+
+    @skip_if_predicate_false(CGroupConfigurator.get_instance().enabled, "CGroups not supported in this environment")
+    def test_telemetry_with_tracked_cgroup(self):
+        num_polls = 5
+        name = "test-cgroup"
+
+        cgs = make_self_cgroup(name)
+
+        self.assertEqual(len(cgs), 2)
+
+        for cgroup in cgs:
+            CGroupsTelemetry.track_cgroup(cgroup)
+
+        for i in range(num_polls):
+            CGroupsTelemetry.poll_all_tracked()
+            consume_cpu_time()  # Eat some CPU
+            consume_memory()
+
+        collected_metrics = CGroupsTelemetry.report_all_tracked()
+
+        self.assertIn("memory", collected_metrics[name])
+        self.assertIn("cur_mem", collected_metrics[name]["memory"])
+        self.assertIn("max_mem", collected_metrics[name]["memory"])
+        self.assertGreater(len(collected_metrics[name]["memory"]["cur_mem"]), 0)
+        self.assertGreater(len(collected_metrics[name]["memory"]["max_mem"]), 0)
+
+        self.assertIsInstance(collected_metrics[name]["memory"]["cur_mem"][5], str)
+        self.assertIsInstance(collected_metrics[name]["memory"]["cur_mem"][6], str)
+        self.assertIsInstance(collected_metrics[name]["memory"]["max_mem"][5], str)
+        self.assertIsInstance(collected_metrics[name]["memory"]["max_mem"][6], str)
+
+        self.assertIn("cpu", collected_metrics[name])
+        self.assertIn("cur_cpu", collected_metrics[name]["cpu"])
+        self.assertGreaterEqual(len(collected_metrics[name]["cpu"]["cur_cpu"]), 0)
+
+        self.assertIsInstance(collected_metrics[name]["cpu"]["cur_cpu"][5], str)
+        self.assertIsInstance(collected_metrics[name]["cpu"]["cur_cpu"][6], str)
+
+        for i in range(5):
+            self.assertGreater(collected_metrics[name]["memory"]["cur_mem"][i], 0)
+            self.assertGreater(collected_metrics[name]["memory"]["max_mem"][i], 0)
+            self.assertGreaterEqual(collected_metrics[name]["cpu"]["cur_cpu"][i], 0)
+            # Equal because CPU could be zero for minimum value.
+
+        self.cleanup_cgroup_telemetry()
 
 
 class TestMetric(AgentTestCase):

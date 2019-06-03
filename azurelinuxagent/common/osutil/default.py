@@ -47,6 +47,8 @@ from azurelinuxagent.common.utils.networkutil import RouteEntry, NetworkInterfac
 
 from pwd import getpwall
 
+from azurelinuxagent.common.version import PY_VERSION_MAJOR, PY_VERSION_MINOR
+
 __RULES_FILES__ = [ "/lib/udev/rules.d/75-persistent-net-generator.rules",
                     "/etc/udev/rules.d/70-persistent-net.rules" ]
 
@@ -299,12 +301,19 @@ class DefaultOSUtil(object):
     @staticmethod
     def is_cgroups_supported():
         """
-        Enabled by default; disabled in WSL/Travis
+        Enabled by default; disabled in WSL/Travis (Disabled on Trusty only)
         """
         is_wsl = '-Microsoft-' in platform.platform()
         is_travis = 'TRAVIS' in os.environ and os.environ['TRAVIS'] == 'true'
+
+        supported_in_travis = True  # By default supported in Travis
+
+        # Travis with python 2.6 fails (on Trusty based systems)
+        if is_travis and PY_VERSION_MAJOR == 2 and PY_VERSION_MINOR == 6:
+            supported_in_travis = False
+
         base_fs_exists = os.path.exists(BASE_CGROUPS)
-        return not is_wsl and not is_travis and base_fs_exists
+        return not is_wsl and base_fs_exists and supported_in_travis
 
     @staticmethod
     def _cgroup_path(tail=""):
