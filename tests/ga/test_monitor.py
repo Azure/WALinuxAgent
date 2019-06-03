@@ -18,6 +18,7 @@ from datetime import timedelta
 
 from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.ga.monitor import *
+from tests.common.test_cgroupstelemetry import make_self_cgroup, consume_cpu_time, consume_memory
 from tests.tools import *
 
 
@@ -224,10 +225,18 @@ class TestMonitor(AgentTestCase):
         self.assertEqual(False, args[5].call_args[1]['is_success'])
         monitor_handler.stop()
 
-    @patch("azurelinuxagent.common.event.add_event")
+
+@patch('azurelinuxagent.common.osutil.get_osutil')
+@patch('azurelinuxagent.common.protocol.get_protocol_util')
+@patch('azurelinuxagent.common.protocol.util.ProtocolUtil.get_protocol')
+@patch("azurelinuxagent.common.protocol.healthservice.HealthService._report")
+@patch("azurelinuxagent.common.utils.restutil.http_get")
+class TestExtensionMetricsDataTelemetry(AgentTestCase):
+    @patch('azurelinuxagent.common.event.EventLogger.add_event')
     @patch("azurelinuxagent.common.cgroupstelemetry.CGroupsTelemetry.poll_all_tracked")
     @patch("azurelinuxagent.common.cgroupstelemetry.CGroupsTelemetry.report_all_tracked")
-    def test_send_extension_metrics_telemetry(self, patch_report_all_tracked, patch_poll_all_tracked, *args):
+    def test_send_extension_metrics_telemetry(self, patch_report_all_tracked, patch_poll_all_tracked, patch_add_event,
+                                              *args):
         patch_report_all_tracked.return_value = {
             "memory": {
                 "cur_mem": [1, 1, 1, 1, 1, str(datetime.datetime.utcnow()), str(datetime.datetime.utcnow())],
@@ -246,6 +255,44 @@ class TestMonitor(AgentTestCase):
         monitor_handler.send_telemetry_metrics()
         self.assertEqual(1, patch_poll_all_tracked.call_count)
         self.assertEqual(1, patch_report_all_tracked.call_count)
+        self.assertEqual(1, patch_add_event.call_count)
+        monitor_handler.stop()
+
+    @patch('azurelinuxagent.common.event.EventLogger.add_event')
+    def test_send_extension_metrics_telemetry_with_actual_cgroup(self, patch_add_event, *args):
+        num_polls = 5
+        name = "test-cgroup"
+
+        cgs = make_self_cgroup(name)
+
+        self.assertEqual(len(cgs), 2)
+
+        for cgroup in cgs:
+            CGroupsTelemetry.track_cgroup(cgroup)
+
+        for i in range(num_polls):
+            CGroupsTelemetry.poll_all_tracked()
+            consume_cpu_time()  # Eat some CPU
+            consume_memory()
+
+        monitor_handler = get_monitor_handler()
+        monitor_handler.init_protocols()
+        monitor_handler.last_cgroup_polling_telemetry = datetime.datetime.utcnow() - timedelta(hours=1)
+        monitor_handler.last_cgroup_report_telemetry = datetime.datetime.utcnow() - timedelta(hours=1)
+        monitor_handler.poll_telemetry_metrics()
+        monitor_handler.send_telemetry_metrics()
+        self.assertEqual(1, patch_add_event.call_count)
+
+        name = patch_add_event.call_args[0][0]
+        fields = patch_add_event.call_args[1]
+
+        self.assertEqual(name, "WALinuxAgent")
+        self.assertEqual(fields["op"], "ExtensionMetricsData")
+        self.assertEqual(fields["is_success"], True)
+        self.assertEqual(fields["log_event"], False)
+        self.assertEqual(fields["is_internal"], False)
+        self.assertIsInstance(fields["message"], str)
+
         monitor_handler.stop()
 
 
