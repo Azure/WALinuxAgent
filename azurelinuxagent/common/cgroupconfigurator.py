@@ -178,10 +178,10 @@ class CGroupConfigurator(object):
             return process
 
     # unique instance for the singleton (TODO: find a better pattern for a singleton)
-    __instance = None
+    _instance = None
 
     @staticmethod
     def get_instance():
-        if CGroupConfigurator.__instance is None:
-            CGroupConfigurator.__instance = CGroupConfigurator.__impl()
-        return CGroupConfigurator.__instance
+        if CGroupConfigurator._instance is None:
+            CGroupConfigurator._instance = CGroupConfigurator.__impl()
+        return CGroupConfigurator._instance
