@@ -1526,6 +1526,18 @@ class Certificates(object):
                 tmp_file = prvs[pubkey]
                 prv = "{0}.prv".format(thumbprint)
                 os.rename(tmp_file, os.path.join(conf.get_lib_dir(), prv))
+                logger.info("Found private key matching thumbprint {0}".format(thumbprint))
+            else:
+                # Since private key has *no* matching certificate,
+                # it will not be named correctly
+                logger.warn("Found NO matching cert/thumbprint for private key!")
+
+        # Log if any certificates were found without matching private keys
+        # This can happen (rarely), and is useful to know for debugging
+        for pubkey in thumbprints:
+            if not pubkey in prvs:
+                msg = "Certificate with thumbprint {0} has no matching private key."
+                logger.info(msg.format(thumbprints[pubkey]))
 
         for v1_cert in v1_cert_list:
             cert = Cert()
