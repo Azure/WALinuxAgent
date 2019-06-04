@@ -189,6 +189,18 @@ class FileSystemCgroupsApiTestCase(AgentTestCase):
         for cgroup in extension_cgroups:
             self.assertFalse(os.path.exists(cgroup.path))
 
+    def test_remove_extension_cgroups_should_log_a_warning_when_the_cgroup_contains_active_tasks(self):
+        api = FileSystemCgroupsApi()
+        api.create_extension_cgroups_root()
+        extension_cgroups = api.create_extension_cgroups("Microsoft.Compute.TestExtension-1.2.3")
+
+        with patch("azurelinuxagent.common.cgroupapi.logger.warn") as mock_logger_warn:
+            with patch("azurelinuxagent.common.cgroupapi.os.rmdir", side_effect=OSError(16, "Device or resource busy")):
+                api.remove_extension_cgroups("Microsoft.Compute.TestExtension-1.2.3")
+
+            args, kwargs = mock_logger_warn.call_args
+            message = args[0]
+            self.assertIn("still has active tasks", message)
 
     def test_get_extension_cgroups_should_return_all_cgroups(self):
         api = FileSystemCgroupsApi()

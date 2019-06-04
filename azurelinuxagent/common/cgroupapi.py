@@ -16,7 +16,6 @@
 
 import errno
 import os
-import shutil
 import subprocess
 
 from azurelinuxagent.common import logger
@@ -244,7 +243,13 @@ class FileSystemCgroupsApi(CGroupsApi):
         def remove_cgroup(controller):
             path = self._get_extension_cgroup_path(controller, extension_name)
 
-            shutil.rmtree(path)
+            if os.path.exists(path):
+                try:
+                    os.rmdir(path)
+                    logger.info('Deleted cgroup "{0}".'.format(path))
+                except OSError as exception:
+                    if exception.errno == 16:  # [Errno 16] Device or resource busy
+                        logger.warn('CGroup "{0}" still has active tasks; will not remove it.'.format(path))
 
         self._foreach_controller(remove_cgroup, 'Failed to delete cgroups for extension {0}'.format(extension_name))
 
