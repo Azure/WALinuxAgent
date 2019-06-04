@@ -440,7 +440,7 @@ class MonitorHandler(object):
                       version=CURRENT_VERSION,
                       op=WALAEventOperation.ExtensionMetricsData,
                       is_success=True,
-                      message=json.dumps(message, separators=(',', ':')),
+                      message=ustr(message),
                       log_event=False)
 
     def log_altered_network_configuration(self):

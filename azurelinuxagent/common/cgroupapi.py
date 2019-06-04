@@ -209,6 +209,8 @@ class FileSystemCgroupsApi(CGroupsApi):
         """
         Creates the directory within the cgroups file system that will contain the cgroups for the extensions.
         """
+        cgroups = []
+
         def create_cgroup(controller):
             path = self._get_extension_cgroups_root_path(controller)
 
@@ -216,7 +218,11 @@ class FileSystemCgroupsApi(CGroupsApi):
                 FileSystemCgroupsApi._try_mkdir(path)
                 logger.info("Created {0}".format(path))
 
+            cgroups.append(path)
+
         self._foreach_controller(create_cgroup, 'Will not create a root cgroup for extensions')
+
+        return cgroups
 
     def create_extension_cgroups(self, extension_name):
         """
