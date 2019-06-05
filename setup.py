@@ -89,6 +89,8 @@ def get_data_files(name, version, fullname):
         set_udev_files(data_files)
         if version.startswith("6"):
             set_sysv_files(data_files)
+        elif version.startswith("8"):
+            set_systemd_files(data_files, dest="/usr/lib/systemd/system", src=["init/rhel/8.0/waagent.service"])
         else:
             # redhat7.0+ use systemd
             set_systemd_files(data_files, dest="/usr/lib/systemd/system")
