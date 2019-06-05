@@ -299,13 +299,13 @@ class DefaultOSUtil(object):
     @staticmethod
     def is_cgroups_supported():
         """
-        Enabled by default; disabled in WSL/Travis (Trusty only)
+        Enabled by default; disabled in WSL (Trusty only)
         """
         is_wsl = '-Microsoft-' in platform.platform()
         supported = True
         base_fs_exists = os.path.exists(BASE_CGROUPS)
 
-        # Travis with python 2.6 fails on Trusty based systems
+        # Fails on Trusty based systems as cgroups is not mounted by default.
         if DISTRO_CODE_NAME is "trusty":
             supported = False
 
