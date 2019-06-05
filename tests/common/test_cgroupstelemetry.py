@@ -402,6 +402,7 @@ class TestCGroupsTelemetry(AgentTestCase):
         max_num_polls = 30
         time_to_wait = 3
         extn_name = "foobar-1.0.0"
+        num_summarization_values = 7
 
         cgs = make_new_cgroup(extn_name)
         self.assertEqual(len(cgs), 2)
@@ -433,13 +434,12 @@ for i in range(5):
             time.sleep(0.5)
 
         collected_metrics = CGroupsTelemetry.report_all_tracked()
-        print(collected_metrics)
 
         self.assertIn("memory", collected_metrics[extn_name])
         self.assertIn("cur_mem", collected_metrics[extn_name]["memory"])
         self.assertIn("max_mem", collected_metrics[extn_name]["memory"])
-        self.assertGreater(len(collected_metrics[extn_name]["memory"]["cur_mem"]), 0)
-        self.assertGreater(len(collected_metrics[extn_name]["memory"]["max_mem"]), 0)
+        self.assertEqual(len(collected_metrics[extn_name]["memory"]["cur_mem"]), num_summarization_values)
+        self.assertEqual(len(collected_metrics[extn_name]["memory"]["max_mem"]), num_summarization_values)
 
         self.assertIsInstance(collected_metrics[extn_name]["memory"]["cur_mem"][5], str)
         self.assertIsInstance(collected_metrics[extn_name]["memory"]["cur_mem"][6], str)
@@ -448,7 +448,7 @@ for i in range(5):
 
         self.assertIn("cpu", collected_metrics[extn_name])
         self.assertIn("cur_cpu", collected_metrics[extn_name]["cpu"])
-        self.assertGreaterEqual(len(collected_metrics[extn_name]["cpu"]["cur_cpu"]), 0)
+        self.assertEqual(len(collected_metrics[extn_name]["cpu"]["cur_cpu"]), num_summarization_values)
 
         self.assertIsInstance(collected_metrics[extn_name]["cpu"]["cur_cpu"][5], str)
         self.assertIsInstance(collected_metrics[extn_name]["cpu"]["cur_cpu"][6], str)
