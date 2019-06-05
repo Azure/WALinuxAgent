@@ -233,7 +233,7 @@ class LaunchCommandTestCase(AgentTestCase):
         self.mock_get_log_dir = patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_log_dir", lambda *_: self.log_dir)
         self.mock_get_log_dir.start()
 
-        self.cgroups_enabled = CGroupConfigurator.is_cgroups_supported()
+        self.cgroups_enabled = CGroupConfigurator.get_instance().enabled()
         CGroupConfigurator.get_instance().disable()
 
     def tearDown(self):

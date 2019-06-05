@@ -227,7 +227,7 @@ class FileSystemCgroupsApiTestCase(AgentTestCase):
             self.assertEquals(pid, process.pid, "The PID of the command was not added to {0}. Expected: {1}, got: {2}".format(cgroups_procs_path, process.pid, pid))
 
 
-@skip_if_predicate_false(CGroupConfigurator.is_cgroups_supported, "CGroups not supported in this environment")
+@skip_if_predicate_false(CGroupConfigurator.get_instance().enabled, "CGroups not supported in this environment")
 class SystemdCgroupsApiTestCase(AgentTestCase):
 
     def test_it_should_return_extensions_slice_root_name(self):

@@ -287,7 +287,7 @@ class TestHandlerStateMigration(AgentTestCase):
 class ExtensionTestCase(AgentTestCase):
     @classmethod
     def setUpClass(cls):
-        cls.cgroups_enabled = CGroupConfigurator.is_cgroups_supported()
+        cls.cgroups_enabled = CGroupConfigurator.get_instance().enabled()
         CGroupConfigurator.get_instance().disable()
 
     @classmethod
@@ -1605,7 +1605,7 @@ class TestInVMArtifactsProfile(AgentTestCase):
 
 
 @skip_if_predicate_false(i_am_root, "Test does not run when non-root")
-@skip_if_predicate_false(CGroupConfigurator.is_cgroups_supported, "CGroups not supported in this environment")
+@skip_if_predicate_false(CGroupConfigurator.get_instance().enabled, "CGroups not supported in this environment")
 @patch("azurelinuxagent.common.cgroupapi.CGroupsApi._is_systemd", return_value=True)
 @patch("azurelinuxagent.common.conf.get_cgroups_enforce_limits", return_value=False)
 @patch("azurelinuxagent.common.protocol.wire.CryptUtil")
