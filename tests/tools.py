@@ -23,6 +23,7 @@ import os
 import pprint
 import re
 import shutil
+import stat
 import sys
 import tempfile
 import unittest
@@ -373,6 +374,24 @@ class AgentTestCase(unittest.TestCase):
             f = os.path.join(tmp_dir, '.'.join((prefix, str(i), suffix)))
             fileutil.write_file(f, "faux content")
             time.sleep(with_sleep)
+
+    def _create_script(self, file_name, contents):
+        """
+        Creates an executable script with the given contents.
+        If file_name ends with ".py", it creates a Python3 script, otherwise it creates a bash script
+        """
+        file_path = os.path.join(self.tmp_dir, file_name)
+
+        with open(file_path, "w") as script:
+            if file_name.endswith(".py"):
+                script.write("#!/usr/bin/env python3\n")
+            else:
+                script.write("#!/usr/bin/env bash\n")
+            script.write(contents)
+
+        os.chmod(file_path, stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
+
+        return file_name
 
 
 def load_data(name):

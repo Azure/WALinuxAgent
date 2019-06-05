@@ -258,10 +258,10 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
         extension_name = "Microsoft.Azure.DummyExtension-1.0"
         cgroups = SystemdCgroupsApi().create_extension_cgroups(extension_name)
         cpu_cgroup, memory_cgroup = cgroups[0], cgroups[1]
-        self.assertEqual(cpu_cgroup, "/sys/fs/cgroup/cpu/system.slice/Microsoft.Azure.DummyExtension_1.0")
-        self.assertEqual(memory_cgroup, "/sys/fs/cgroup/memory/system.slice/Microsoft.Azure.DummyExtension_1.0")
+        self.assertEqual(cpu_cgroup.path, "/sys/fs/cgroup/cpu/system.slice/Microsoft.Azure.DummyExtension_1.0")
+        self.assertEqual(memory_cgroup.path, "/sys/fs/cgroup/memory/system.slice/Microsoft.Azure.DummyExtension_1.0")
 
-        unit_name = SystemdCgroupsApi._get_extension_slice_name(extension_name)
+        unit_name = SystemdCgroupsApi()._get_extension_slice_name(extension_name)
         self.assertEqual("system-walinuxagent.extensions-Microsoft.Azure.DummyExtension_1.0.slice", unit_name)
 
         _, status = shellutil.run_get_output("systemctl status {0}".format(unit_name))

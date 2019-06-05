@@ -202,7 +202,7 @@ class TestWireProtocol(AgentTestCase):
         self.assertTrue(os.path.exists(destination))
 
         # verify size
-        self.assertEqual(18380915, os.stat(destination).st_size)
+        self.assertEqual(33193077, os.stat(destination).st_size)
 
         # verify unzip
         zipfile.ZipFile(destination).extractall(tmp)
@@ -211,7 +211,7 @@ class TestWireProtocol(AgentTestCase):
         fileutil.chmod(packer, os.stat(packer).st_mode | stat.S_IXUSR)
 
         # verify unpacked size
-        self.assertEqual(87393596, os.stat(packer).st_size)
+        self.assertEqual(105552030, os.stat(packer).st_size)
 
         # execute, verify result
         packer_version = '{0} --version'.format(packer)

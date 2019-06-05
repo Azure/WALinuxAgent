@@ -17,20 +17,15 @@
 
 import os
 import random
-import shutil
 import stat
-import subprocess
-import tempfile
 import time
 
 from mock import patch
 
 from azurelinuxagent.common.cgroup import CGroup
-from azurelinuxagent.common.cgroupapi import CGroupsApi, CGROUPS_FILE_SYSTEM_ROOT
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry, Metric
 from azurelinuxagent.common.protocol.restapi import ExtHandlerProperties, ExtHandler
-from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.ga.exthandlers import ExtHandlerInstance
 from tests.common.test_cgroupapi import i_am_root
 from tests.tools import AgentTestCase, skip_if_predicate_false
@@ -76,61 +71,13 @@ def make_new_cgroup(name="test-cgroup"):
 
 
 class TestCGroupsTelemetry(AgentTestCase):
-    @classmethod
-    def tearDownClass(cls):
-        pass
-
     def setUp(self):
-        prefix = "{0}_".format(self.__class__.__name__)
-
-        self.temp_dir = tempfile.mkdtemp(prefix=prefix)
-
-        ext_handler_properties = ExtHandlerProperties()
-        ext_handler_properties.version = "1.2.3"
-        self.ext_handler = ExtHandler(name='foo')
-        self.ext_handler.properties = ext_handler_properties
-        self.ext_handler_instance = ExtHandlerInstance(ext_handler=self.ext_handler, protocol=None)
-
-        self.mock_get_base_dir = patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_base_dir",
-                                       lambda *_: self.temp_dir)
-        self.mock_get_base_dir.start()
-
-        self.log_dir = os.path.join(self.temp_dir, "log")
-        self.mock_get_log_dir = patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_log_dir",
-                                      lambda *_: self.log_dir)
-        self.mock_get_log_dir.start()
-
-    def tearDown(self):
-        if self.temp_dir is not None:
-            shutil.rmtree(self.temp_dir)
-
-    def _create_script(self, file_name, contents):
-        """
-        Creates an executable script with the given contents.
-        If file_name ends with ".py", it creates a Python3 script, otherwise it creates a bash script
-        """
-        file_path = os.path.join(self.temp_dir, file_name)
-
-        with open(file_path, "w") as script:
-            if file_name.endswith(".py"):
-                script.write("#!/usr/bin/env python3\n")
-            else:
-                script.write("#!/usr/bin/env bash\n")
-            script.write(contents)
-
-        os.chmod(file_path, stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
-
-        return file_name
-
-    @staticmethod
-    def cleanup_cgroup_telemetry():
+        AgentTestCase.setUp(self)
         CGroupsTelemetry.cleanup()
 
     @patch("azurelinuxagent.common.cgroup.CpuCgroup._get_current_cpu_total")
     @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_total_cpu_ticks_since_boot")
     def test_telemetry_polling_with_active_cgroups(self, *args):
-        self.cleanup_cgroup_telemetry()
-
         num_extensions = 5
         for i in range(num_extensions):
             dummy_cpu_cgroup = CGroup.create("dummy_path", "cpu", "dummy_extension_{0}".format(i))
@@ -150,8 +97,8 @@ class TestCGroupsTelemetry(AgentTestCase):
                         current_max_memory = 471859200
 
                         patch_get_cpu_percent.return_value = current_cpu
-                        patch_get_memory_usage.return_value = current_memory            # example 200 MB
-                        patch_get_memory_max_usage.return_value = current_max_memory    # example 450 MB
+                        patch_get_memory_usage.return_value = current_memory  # example 200 MB
+                        patch_get_memory_max_usage.return_value = current_max_memory  # example 450 MB
 
                         poll_count = 1
 
@@ -187,8 +134,8 @@ class TestCGroupsTelemetry(AgentTestCase):
                         current_max_memory = 471859200
 
                         patch_get_cpu_percent.return_value = current_cpu
-                        patch_get_memory_usage.return_value = current_memory            # example 200 MB
-                        patch_get_memory_max_usage.return_value = current_max_memory    # example 450 MB
+                        patch_get_memory_usage.return_value = current_memory  # example 200 MB
+                        patch_get_memory_max_usage.return_value = current_max_memory  # example 450 MB
 
                         poll_count = 1
 
@@ -213,13 +160,9 @@ class TestCGroupsTelemetry(AgentTestCase):
                             self.assertEqual(len(max_memory_levels._data), 0)
                             self.assertEqual(len(current_cpu_usage._data), 0)
 
-        self.cleanup_cgroup_telemetry()
-
     @patch("azurelinuxagent.common.cgroup.CpuCgroup._get_current_cpu_total")
     @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_total_cpu_ticks_since_boot")
     def test_telemetry_polling_with_inactive_cgroups(self, *args):
-        self.cleanup_cgroup_telemetry()
-
         num_extensions = 5
         for i in range(num_extensions):
             dummy_cpu_cgroup = CGroup.create("dummy_path", "cpu", "dummy_extension_{0}".format(i))
@@ -274,13 +217,9 @@ class TestCGroupsTelemetry(AgentTestCase):
                             self.assertEqual(len(max_memory_levels._data), 0)
                             self.assertEqual(len(current_cpu_usage._data), 0)
 
-        self.cleanup_cgroup_telemetry()
-
     @patch("azurelinuxagent.common.cgroup.CpuCgroup._get_current_cpu_total")
     @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_total_cpu_ticks_since_boot")
     def test_telemetry_polling_with_changing_cgroups_state(self, *args):
-        self.cleanup_cgroup_telemetry()
-
         num_extensions = 5
         for i in range(num_extensions):
             dummy_cpu_cgroup = CGroup.create("dummy_path", "cpu", "dummy_extension_{0}".format(i))
@@ -345,14 +284,10 @@ class TestCGroupsTelemetry(AgentTestCase):
                             self.assertEqual(len(max_memory_levels._data), 0)
                             self.assertEqual(len(current_cpu_usage._data), 0)
 
-        self.cleanup_cgroup_telemetry()
-
     @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_total_cpu_ticks_since_boot")
     @patch("azurelinuxagent.common.cgroup.CpuCgroup._get_current_cpu_total")
     @patch("azurelinuxagent.common.cgroup.CpuCgroup._update_cpu_data")
     def test_telemetry_calculations(self, *args):
-        self.cleanup_cgroup_telemetry()
-
         num_polls = 10
         num_extensions = 1
         num_summarization_values = 7
@@ -405,11 +340,7 @@ class TestCGroupsTelemetry(AgentTestCase):
             self.assertListEqual(generate_metric_list(cpu_percent_values),
                                  collected_metrics[name]["cpu"]["cur_cpu"][0:5])
 
-        self.cleanup_cgroup_telemetry()
-
     def test_cgroup_tracking(self):
-        self.cleanup_cgroup_telemetry()
-
         num_extensions = 5
         num_controllers = 2
         for i in range(num_extensions):
@@ -426,8 +357,6 @@ class TestCGroupsTelemetry(AgentTestCase):
         self.assertEqual(num_extensions * num_controllers, len(CGroupsTelemetry._tracked))
 
     def test_cgroup_pruning(self):
-        self.cleanup_cgroup_telemetry()
-
         num_extensions = 5
         num_controllers = 2
         for i in range(num_extensions):
@@ -452,8 +381,6 @@ class TestCGroupsTelemetry(AgentTestCase):
         self.assertEqual(0, len(CGroupsTelemetry._tracked))
 
     def test_cgroup_is_tracked(self):
-        self.cleanup_cgroup_telemetry()
-
         num_extensions = 5
         for i in range(num_extensions):
             dummy_cpu_cgroup = CGroup.create("dummy_path", "cpu", "dummy_extension_{0}".format(i))
@@ -472,13 +399,18 @@ class TestCGroupsTelemetry(AgentTestCase):
     @skip_if_predicate_false(i_am_root, "This test will only run as root")
     @skip_if_predicate_false(CGroupConfigurator.is_cgroups_supported, "CGroups not supported in this environment")
     def test_telemetry_with_tracked_cgroup(self):
-        CGroupsTelemetry.cleanup()
-
         max_num_polls = 30
         time_to_wait = 3
-        extn_name = "foo-1.2.3"
+        extn_name = "foobar-1.0.0"
 
         cgs = make_new_cgroup(extn_name)
+        self.assertEqual(len(cgs), 2)
+
+        ext_handler_properties = ExtHandlerProperties()
+        ext_handler_properties.version = "1.0.0"
+        self.ext_handler = ExtHandler(name='foobar')
+        self.ext_handler.properties = ext_handler_properties
+        self.ext_handler_instance = ExtHandlerInstance(ext_handler=self.ext_handler, protocol=None)
 
         command = self._create_script("keep_cpu_busy_and_consume_memory_for_5_seconds", '''
 nohup python -c "import time
@@ -490,8 +422,11 @@ for i in range(5):
     print('Test loop')" &
 '''.format(time_to_wait))
 
-        self.assertEqual(len(cgs), 2)
-        self.ext_handler_instance.launch_command(command)
+        self.log_dir = os.path.join(self.tmp_dir, "log")
+
+        with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_base_dir", lambda *_: self.tmp_dir) as patch_get_base_dir:
+            with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_log_dir", lambda *_: self.log_dir) as patch_get_log_dir:
+                self.ext_handler_instance.launch_command(command)
 
         for i in range(max_num_polls):
             CGroupsTelemetry.poll_all_tracked()
@@ -523,8 +458,6 @@ for i in range(5):
             self.assertGreater(collected_metrics[extn_name]["memory"]["max_mem"][i], 0)
             self.assertGreaterEqual(collected_metrics[extn_name]["cpu"]["cur_cpu"][i], 0)
             # Equal because CPU could be zero for minimum value.
-
-        self.cleanup_cgroup_telemetry()
 
 
 class TestMetric(AgentTestCase):

@@ -247,24 +247,6 @@ class LaunchCommandTestCase(AgentTestCase):
 
         AgentTestCase.tearDown(self)
 
-    def _create_script(self, file_name, contents):
-        """
-        Creates an executable script with the given contents.
-        If file_name ends with ".py", it creates a Python3 script, otherwise it creates a bash script
-        """
-        file_path = os.path.join(self.ext_handler_instance.get_base_dir(), file_name)
-
-        with open(file_path, "w") as script:
-            if file_name.endswith(".py"):
-                script.write("#!/usr/bin/env python3\n")
-            else:
-                script.write("#!/usr/bin/env bash\n")
-            script.write(contents)
-
-        os.chmod(file_path, stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
-
-        return file_name
-
     @staticmethod
     def _output_regex(stdout, stderr):
         return r"\[stdout\]\s+{0}\s+\[stderr\]\s+{1}".format(stdout, stderr)
