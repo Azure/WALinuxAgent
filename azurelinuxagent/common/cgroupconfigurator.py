@@ -121,7 +121,7 @@ class CGroupConfigurator(object):
             def __impl():
                 return self._cgroups_api.create_extension_cgroups(name)
 
-            self._invoke_cgroup_operation(__impl, "Failed to create a cgroup for extension '{0}'; resource usage will not be tracked".format(name))
+            return self._invoke_cgroup_operation(__impl, "Failed to create a cgroup for extension '{0}'; resource usage will not be tracked".format(name))
 
         def remove_extension_cgroups(self, name):
             """

@@ -16,7 +16,6 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-import array
 import base64
 import datetime
 import errno
@@ -32,20 +31,21 @@ import socket
 import struct
 import sys
 import time
+from pwd import getpwall
 
-import azurelinuxagent.common.logger as logger
+import array
+
 import azurelinuxagent.common.conf as conf
+import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.shellutil as shellutil
 import azurelinuxagent.common.utils.textutil as textutil
-
 from azurelinuxagent.common.exception import OSUtilError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.utils.networkutil import RouteEntry, NetworkInterfaceCard
-
-from pwd import getpwall
+from azurelinuxagent.common.version import DISTRO_CODE_NAME
 
 __RULES_FILES__ = [ "/lib/udev/rules.d/75-persistent-net-generator.rules",
                     "/etc/udev/rules.d/70-persistent-net.rules" ]
@@ -299,12 +299,17 @@ class DefaultOSUtil(object):
     @staticmethod
     def is_cgroups_supported():
         """
-        Enabled by default; disabled in WSL/Travis
+        Enabled by default; disabled in WSL and Trusty.
         """
         is_wsl = '-Microsoft-' in platform.platform()
-        is_travis = 'TRAVIS' in os.environ and os.environ['TRAVIS'] == 'true'
+        supported = True
         base_fs_exists = os.path.exists(BASE_CGROUPS)
-        return not is_wsl and not is_travis and base_fs_exists
+
+        # Fails on Trusty based systems as cgroups is not mounted by default.
+        if DISTRO_CODE_NAME.lower() is "trusty":
+            supported = False
+
+        return not is_wsl and base_fs_exists and supported
 
     @staticmethod
     def _cgroup_path(tail=""):

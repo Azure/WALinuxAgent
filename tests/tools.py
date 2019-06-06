@@ -23,6 +23,7 @@ import os
 import pprint
 import re
 import shutil
+import stat
 import sys
 import tempfile
 import unittest
@@ -129,6 +130,8 @@ class AgentTestCase(unittest.TestCase):
             cls.assertRaisesRegex = cls.emulate_raises_regex
         if not hasattr(cls, "assertListEqual"):
             cls.assertListEqual = cls.emulate_assertListEqual
+        if not hasattr(cls, "assertIsInstance"):
+            cls.assertIsInstance = cls.emulate_assertIsInstance
         if sys.version_info < (2, 7):
             # assertRaises does not implement a context manager in 2.6; override it with emulate_assertRaises but
             # keep a pointer to the original implementation to use when a context manager is not requested.
@@ -359,12 +362,36 @@ class AgentTestCase(unittest.TestCase):
         msg = self._formatMessage(msg, standardMsg)
         self.fail(msg)
 
+    def emulate_assertIsInstance(self, obj, object_type, msg=None):
+        if not isinstance(obj, object_type):
+            msg = msg if msg is not None else '{0} is not an instance of {1}'.format(_safe_repr(obj),
+                                                                                     _safe_repr(object_type))
+            self.fail(msg)
+
     @staticmethod
     def _create_files(tmp_dir, prefix, suffix, count, with_sleep=0):
         for i in range(count):
             f = os.path.join(tmp_dir, '.'.join((prefix, str(i), suffix)))
             fileutil.write_file(f, "faux content")
             time.sleep(with_sleep)
+
+    def _create_script(self, file_name, contents):
+        """
+        Creates an executable script with the given contents.
+        If file_name ends with ".py", it creates a Python3 script, otherwise it creates a bash script
+        """
+        file_path = os.path.join(self.tmp_dir, file_name)
+
+        with open(file_path, "w") as script:
+            if file_name.endswith(".py"):
+                script.write("#!/usr/bin/env python3\n")
+            else:
+                script.write("#!/usr/bin/env bash\n")
+            script.write(contents)
+
+        os.chmod(file_path, stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
+
+        return file_name
 
 
 def load_data(name):
