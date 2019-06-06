@@ -397,7 +397,7 @@ class TestCGroupsTelemetry(AgentTestCase):
         self.assertFalse(CGroupsTelemetry.is_tracked("not_present_dummy_extension_{0}".format(i), 'memory'))
 
     @skip_if_predicate_false(i_am_root, "This test will only run as root")
-    @skip_if_predicate_false(CGroupConfigurator.get_instance().enabled, "CGroups not supported in this environment")
+    @skip_if_predicate_false(CGroupConfigurator.get_instance().enabled, "Does not run when Cgroups are not enabled")
     def test_telemetry_with_tracked_cgroup(self):
         max_num_polls = 30
         time_to_wait = 3
