@@ -431,7 +431,6 @@ class MonitorHandler(object):
             if performance_metrics:
                 message = generate_extension_metrics_telemetry_dictionary(schema_version=1.0,
                                                                           performance_metrics=performance_metrics)
-
                 add_event(name=AGENT_NAME,
                           version=CURRENT_VERSION,
                           op=WALAEventOperation.ExtensionMetricsData,
