@@ -261,6 +261,24 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
         self.assertEqual(1, patch_add_event.call_count)
         monitor_handler.stop()
 
+    @patch('azurelinuxagent.common.event.EventLogger.add_event')
+    @patch("azurelinuxagent.common.cgroupstelemetry.CGroupsTelemetry.poll_all_tracked")
+    @patch("azurelinuxagent.common.cgroupstelemetry.CGroupsTelemetry.report_all_tracked", return_value={})
+    def test_send_extension_metrics_telemetry_for_empty_cgroup(self, patch_report_all_tracked, patch_poll_all_tracked,
+                                                               patch_add_event, *args):
+        patch_report_all_tracked.return_value = {}
+
+        monitor_handler = get_monitor_handler()
+        monitor_handler.init_protocols()
+        monitor_handler.last_cgroup_polling_telemetry = datetime.datetime.utcnow() - timedelta(hours=1)
+        monitor_handler.last_cgroup_report_telemetry = datetime.datetime.utcnow() - timedelta(hours=1)
+        monitor_handler.poll_telemetry_metrics()
+        monitor_handler.send_telemetry_metrics()
+        self.assertEqual(1, patch_poll_all_tracked.call_count)
+        self.assertEqual(1, patch_report_all_tracked.call_count)
+        self.assertEqual(0, patch_add_event.call_count)
+        monitor_handler.stop()
+
     @skip_if_predicate_false(i_am_root, "Test does not run when non-root")
     @skip_if_predicate_false(CGroupConfigurator.get_instance().enabled, "Does not run when Cgroups are not enabled")
     @patch('azurelinuxagent.common.event.EventLogger.add_event')

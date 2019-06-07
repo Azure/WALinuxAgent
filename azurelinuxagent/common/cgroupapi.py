@@ -56,7 +56,9 @@ class CGroupsApi(object):
     @staticmethod
     def _get_extension_scope_name(extension_name):
         # Since '-' is used as a separator in systemd unit names, we replace it with '_' to prevent side-effects.
-        return extension_name.replace('-', '_')
+        extn_name = extension_name.replace('-', '_')
+        scope_name = extn_name + ".scope"  # Adding the suffix for scope names
+        return scope_name
 
     @staticmethod
     def create():
