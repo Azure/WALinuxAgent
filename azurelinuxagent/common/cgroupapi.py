@@ -56,9 +56,7 @@ class CGroupsApi(object):
     @staticmethod
     def _get_extension_scope_name(extension_name):
         # Since '-' is used as a separator in systemd unit names, we replace it with '_' to prevent side-effects.
-        extn_name = extension_name.replace('-', '_')
-        scope_name = extn_name + ".scope"  # Adding the suffix for scope names
-        return scope_name
+        return extension_name.replace('-', '_')
 
     @staticmethod
     def create():
@@ -394,8 +392,8 @@ After=system-{1}.slice""".format(extension_name, EXTENSIONS_ROOT_CGROUP_NAME)
 
     def get_extension_cgroups(self, extension_name):
         scope_name = self._get_extension_scope_name(extension_name)
-        cpu_cgroup_path = os.path.join(CGROUPS_FILE_SYSTEM_ROOT, 'cpu', 'system.slice', scope_name)
-        memory_cgroup_path = os.path.join(CGROUPS_FILE_SYSTEM_ROOT, 'memory', 'system.slice', scope_name)
+        cpu_cgroup_path = os.path.join(CGROUPS_FILE_SYSTEM_ROOT, 'cpu', 'system.slice', scope_name + ".scope")
+        memory_cgroup_path = os.path.join(CGROUPS_FILE_SYSTEM_ROOT, 'memory', 'system.slice', scope_name + ".scope")
 
         return [CGroup.create(cpu_cgroup_path, 'cpu', extension_name),
                 CGroup.create(memory_cgroup_path, 'cpu', extension_name)]
