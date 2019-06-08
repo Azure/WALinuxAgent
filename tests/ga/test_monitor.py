@@ -235,6 +235,11 @@ class TestMonitor(AgentTestCase):
 @patch("azurelinuxagent.common.protocol.healthservice.HealthService._report")
 @patch("azurelinuxagent.common.utils.restutil.http_get")
 class TestExtensionMetricsDataTelemetry(AgentTestCase):
+
+    def setUp(self):
+        AgentTestCase.setUp(self)
+        CGroupsTelemetry.cleanup()
+
     @patch('azurelinuxagent.common.event.EventLogger.add_event')
     @patch("azurelinuxagent.common.cgroupstelemetry.CGroupsTelemetry.poll_all_tracked")
     @patch("azurelinuxagent.common.cgroupstelemetry.CGroupsTelemetry.report_all_tracked")

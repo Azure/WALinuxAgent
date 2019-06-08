@@ -217,7 +217,7 @@ class TestWireProtocol(AgentTestCase):
         packer_version = '{0} --version'.format(packer)
         rc, stdout = run_get_output(packer_version)
         self.assertEqual(0, rc)
-        self.assertEqual('1.2.5\n', stdout)
+        self.assertEqual('1.3.5\n', stdout)
 
 
     @patch("azurelinuxagent.common.protocol.wire.WireClient.update_goal_state")
