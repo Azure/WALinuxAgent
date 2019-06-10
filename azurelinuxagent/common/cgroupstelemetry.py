@@ -51,19 +51,19 @@ class CGroupsTelemetry(object):
         Adds the given item to the dictionary of tracked cgroups
         """
         with CGroupsTelemetry._rlock:
-            if not CGroupsTelemetry.is_tracked(cgroup.name, cgroup.controller, cgroup.path):
+            if not CGroupsTelemetry.is_tracked(cgroup.path):
                 CGroupsTelemetry._tracked.append(cgroup)
                 logger.info("Started tracking new cgroup: {0}, path: {1}".format(cgroup.name, cgroup.path))
 
     @staticmethod
-    def is_tracked(name, controller, path):
+    def is_tracked(path):
         """
         Returns true if the given item is in the list of tracked items
         O(n) operation. But limited to few cgroup objects we have.
         """
         with CGroupsTelemetry._rlock:
             for cgroup in CGroupsTelemetry._tracked:
-                if name == cgroup.name and controller == cgroup.controller and path == cgroup.path:
+                if path == cgroup.path:
                     return True
 
         return False

@@ -80,10 +80,11 @@ class TestCGroupsTelemetry(AgentTestCase):
     def test_telemetry_polling_with_active_cgroups(self, *args):
         num_extensions = 5
         for i in range(num_extensions):
-            dummy_cpu_cgroup = CGroup.create("dummy_path", "cpu", "dummy_extension_{0}".format(i))
+            dummy_cpu_cgroup = CGroup.create("dummy_cpu_path_{0}".format(i), "cpu", "dummy_extension_{0}".format(i))
             CGroupsTelemetry.track_cgroup(dummy_cpu_cgroup)
 
-            dummy_memory_cgroup = CGroup.create("dummy_path", "memory", "dummy_extension_{0}".format(i))
+            dummy_memory_cgroup = CGroup.create("dummy_memory_path_{0}".format(i), "memory",
+                                                "dummy_extension_{0}".format(i))
             CGroupsTelemetry.track_cgroup(dummy_memory_cgroup)
 
         with patch("azurelinuxagent.common.cgroup.MemoryCgroup._get_memory_max_usage") as patch_get_memory_max_usage:
@@ -165,10 +166,11 @@ class TestCGroupsTelemetry(AgentTestCase):
     def test_telemetry_polling_with_inactive_cgroups(self, *args):
         num_extensions = 5
         for i in range(num_extensions):
-            dummy_cpu_cgroup = CGroup.create("dummy_path", "cpu", "dummy_extension_{0}".format(i))
+            dummy_cpu_cgroup = CGroup.create("dummy_cpu_path_{0}".format(i), "cpu", "dummy_extension_{0}".format(i))
             CGroupsTelemetry.track_cgroup(dummy_cpu_cgroup)
 
-            dummy_memory_cgroup = CGroup.create("dummy_path", "memory", "dummy_extension_{0}".format(i))
+            dummy_memory_cgroup = CGroup.create("dummy_memory_path_{0}".format(i), "memory",
+                                                "dummy_extension_{0}".format(i))
             CGroupsTelemetry.track_cgroup(dummy_memory_cgroup)
 
         with patch("azurelinuxagent.common.cgroup.MemoryCgroup._get_memory_max_usage") as patch_get_memory_max_usage:
@@ -188,14 +190,14 @@ class TestCGroupsTelemetry(AgentTestCase):
                         patch_get_memory_max_usage.return_value = current_max_memory  # example 450 MB
 
                         for i in range(num_extensions):
-                            self.assertTrue(CGroupsTelemetry.is_tracked("dummy_extension_{0}".format(i), "cpu", "dummy_path"))
-                            self.assertTrue(CGroupsTelemetry.is_tracked("dummy_extension_{0}".format(i), "memory", "dummy_path"))
+                            self.assertTrue(CGroupsTelemetry.is_tracked("dummy_cpu_path_{0}".format(i)))
+                            self.assertTrue(CGroupsTelemetry.is_tracked("dummy_memory_path_{0}".format(i)))
 
                         CGroupsTelemetry.poll_all_tracked()
 
                         for i in range(num_extensions):
-                            self.assertFalse(CGroupsTelemetry.is_tracked("dummy_extension_{0}".format(i), "cpu", "dummy_path"))
-                            self.assertFalse(CGroupsTelemetry.is_tracked("dummy_extension_{0}".format(i), "memory", "dummy_path"))
+                            self.assertFalse(CGroupsTelemetry.is_tracked("dummy_cpu_path_{0}".format(i)))
+                            self.assertFalse(CGroupsTelemetry.is_tracked("dummy_memory_path_{0}".format(i)))
 
                         self.assertEqual(CGroupsTelemetry._cgroup_metrics.__len__(), num_extensions)
 
@@ -222,10 +224,11 @@ class TestCGroupsTelemetry(AgentTestCase):
     def test_telemetry_polling_with_changing_cgroups_state(self, *args):
         num_extensions = 5
         for i in range(num_extensions):
-            dummy_cpu_cgroup = CGroup.create("dummy_path", "cpu", "dummy_extension_{0}".format(i))
+            dummy_cpu_cgroup = CGroup.create("dummy_cpu_path_{0}".format(i), "cpu", "dummy_extension_{0}".format(i))
             CGroupsTelemetry.track_cgroup(dummy_cpu_cgroup)
 
-            dummy_memory_cgroup = CGroup.create("dummy_path", "memory", "dummy_extension_{0}".format(i))
+            dummy_memory_cgroup = CGroup.create("dummy_memory_path_{0}".format(i), "memory",
+                                                "dummy_extension_{0}".format(i))
             CGroupsTelemetry.track_cgroup(dummy_memory_cgroup)
 
         with patch("azurelinuxagent.common.cgroup.MemoryCgroup._get_memory_max_usage") as patch_get_memory_max_usage:
@@ -246,14 +249,14 @@ class TestCGroupsTelemetry(AgentTestCase):
                         patch_get_memory_max_usage.return_value = current_max_memory  # example 450 MB
 
                         for i in range(num_extensions):
-                            self.assertTrue(CGroupsTelemetry.is_tracked("dummy_extension_{0}".format(i), "cpu", "dummy_path"))
-                            self.assertTrue(CGroupsTelemetry.is_tracked("dummy_extension_{0}".format(i), "memory", "dummy_path"))
+                            self.assertTrue(CGroupsTelemetry.is_tracked("dummy_cpu_path_{0}".format(i)))
+                            self.assertTrue(CGroupsTelemetry.is_tracked("dummy_memory_path_{0}".format(i)))
 
                         CGroupsTelemetry.poll_all_tracked()
 
                         for i in range(num_extensions):
-                            self.assertTrue(CGroupsTelemetry.is_tracked("dummy_extension_{0}".format(i), "cpu", "dummy_path"))
-                            self.assertTrue(CGroupsTelemetry.is_tracked("dummy_extension_{0}".format(i), "memory", "dummy_path"))
+                            self.assertTrue(CGroupsTelemetry.is_tracked("dummy_cpu_path_{0}".format(i)))
+                            self.assertTrue(CGroupsTelemetry.is_tracked("dummy_memory_path_{0}".format(i)))
 
                         self.assertEqual(CGroupsTelemetry._cgroup_metrics.__len__(), num_extensions)
 
@@ -261,8 +264,8 @@ class TestCGroupsTelemetry(AgentTestCase):
                         CGroupsTelemetry.poll_all_tracked()
 
                         for i in range(num_extensions):
-                            self.assertFalse(CGroupsTelemetry.is_tracked("dummy_extension_{0}".format(i), "cpu", "dummy_path"))
-                            self.assertFalse(CGroupsTelemetry.is_tracked("dummy_extension_{0}".format(i), "memory", "dummy_path"))
+                            self.assertFalse(CGroupsTelemetry.is_tracked("dummy_cpu_path_{0}".format(i)))
+                            self.assertFalse(CGroupsTelemetry.is_tracked("dummy_memory_path_{0}".format(i)))
 
                         self.assertEqual(CGroupsTelemetry._cgroup_metrics.__len__(), num_extensions)
 
@@ -299,10 +302,11 @@ class TestCGroupsTelemetry(AgentTestCase):
         max_memory_usage_values = [random.randint(0, 8 * 1024 ** 3) for _ in range(num_polls)]
 
         for i in range(num_extensions):
-            dummy_cpu_cgroup = CGroup.create("dummy_path", "cpu", "dummy_extension_{0}".format(i))
+            dummy_cpu_cgroup = CGroup.create("dummy_cpu_path_{0}".format(i), "cpu", "dummy_extension_{0}".format(i))
             CGroupsTelemetry.track_cgroup(dummy_cpu_cgroup)
 
-            dummy_memory_cgroup = CGroup.create("dummy_path", "memory", "dummy_extension_{0}".format(i))
+            dummy_memory_cgroup = CGroup.create("dummy_memory_path_{0}".format(i), "memory",
+                                                "dummy_extension_{0}".format(i))
             CGroupsTelemetry.track_cgroup(dummy_memory_cgroup)
 
         self.assertEqual(2 * num_extensions, len(CGroupsTelemetry._tracked))
@@ -344,15 +348,16 @@ class TestCGroupsTelemetry(AgentTestCase):
         num_extensions = 5
         num_controllers = 2
         for i in range(num_extensions):
-            dummy_cpu_cgroup = CGroup.create("dummy_path", "cpu", "dummy_extension_{0}".format(i))
+            dummy_cpu_cgroup = CGroup.create("dummy_cpu_path_{0}".format(i), "cpu", "dummy_extension_{0}".format(i))
             CGroupsTelemetry.track_cgroup(dummy_cpu_cgroup)
 
-            dummy_memory_cgroup = CGroup.create("dummy_path", "memory", "dummy_extension_{0}".format(i))
+            dummy_memory_cgroup = CGroup.create("dummy_memory_path_{0}".format(i), "memory",
+                                                "dummy_extension_{0}".format(i))
             CGroupsTelemetry.track_cgroup(dummy_memory_cgroup)
 
         for i in range(num_extensions):
-            self.assertTrue(CGroupsTelemetry.is_tracked("dummy_extension_{0}".format(i), "cpu", "dummy_path"))
-            self.assertTrue(CGroupsTelemetry.is_tracked("dummy_extension_{0}".format(i), "memory", "dummy_path"))
+            self.assertTrue(CGroupsTelemetry.is_tracked("dummy_cpu_path_{0}".format(i)))
+            self.assertTrue(CGroupsTelemetry.is_tracked("dummy_memory_path_{0}".format(i)))
 
         self.assertEqual(num_extensions * num_controllers, len(CGroupsTelemetry._tracked))
 
@@ -360,41 +365,42 @@ class TestCGroupsTelemetry(AgentTestCase):
         num_extensions = 5
         num_controllers = 2
         for i in range(num_extensions):
-            dummy_cpu_cgroup = CGroup.create("dummy_path", "cpu", "dummy_extension_{0}".format(i))
+            dummy_cpu_cgroup = CGroup.create("dummy_cpu_path_{0}".format(i), "cpu", "dummy_extension_{0}".format(i))
             CGroupsTelemetry.track_cgroup(dummy_cpu_cgroup)
 
-            dummy_memory_cgroup = CGroup.create("dummy_path", "memory", "dummy_extension_{0}".format(i))
+            dummy_memory_cgroup = CGroup.create("dummy_memory_path_{0}".format(i), "memory",
+                                                "dummy_extension_{0}".format(i))
             CGroupsTelemetry.track_cgroup(dummy_memory_cgroup)
 
         for i in range(num_extensions):
-            self.assertTrue(CGroupsTelemetry.is_tracked("dummy_extension_{0}".format(i), "cpu", "dummy_path"))
-            self.assertTrue(CGroupsTelemetry.is_tracked("dummy_extension_{0}".format(i), "memory", "dummy_path"))
+            self.assertTrue(CGroupsTelemetry.is_tracked("dummy_cpu_path_{0}".format(i)))
+            self.assertTrue(CGroupsTelemetry.is_tracked("dummy_memory_path_{0}".format(i)))
 
         self.assertEqual(num_extensions * num_controllers, len(CGroupsTelemetry._tracked))
 
         CGroupsTelemetry.prune_all_tracked()
 
         for i in range(num_extensions):
-            self.assertFalse(CGroupsTelemetry.is_tracked("dummy_extension_{0}".format(i), "cpu", "dummy_path"))
-            self.assertFalse(CGroupsTelemetry.is_tracked("dummy_extension_{0}".format(i), "memory", "dummy_path"))
+            self.assertFalse(CGroupsTelemetry.is_tracked("dummy_cpu_path_{0}".format(i)))
+            self.assertFalse(CGroupsTelemetry.is_tracked("dummy_memory_path_{0}".format(i)))
 
         self.assertEqual(0, len(CGroupsTelemetry._tracked))
 
     def test_cgroup_is_tracked(self):
         num_extensions = 5
         for i in range(num_extensions):
-            dummy_cpu_cgroup = CGroup.create("dummy_path", "cpu", "dummy_extension_{0}".format(i))
+            dummy_cpu_cgroup = CGroup.create("dummy_cpu_path_{0}".format(i), "cpu", "dummy_extension_{0}".format(i))
             CGroupsTelemetry.track_cgroup(dummy_cpu_cgroup)
 
-            dummy_memory_cgroup = CGroup.create("dummy_path", "memory", "dummy_extension_{0}".format(i))
+            dummy_memory_cgroup = CGroup.create("dummy_memory_path_{0}".format(i), "memory", "dummy_extension_{0}".format(i))
             CGroupsTelemetry.track_cgroup(dummy_memory_cgroup)
 
         for i in range(num_extensions):
-            self.assertTrue(CGroupsTelemetry.is_tracked("dummy_extension_{0}".format(i), 'cpu', "dummy_path"))
-            self.assertTrue(CGroupsTelemetry.is_tracked("dummy_extension_{0}".format(i), 'memory', "dummy_path"))
+            self.assertTrue(CGroupsTelemetry.is_tracked("dummy_cpu_path_{0}".format(i)))
+            self.assertTrue(CGroupsTelemetry.is_tracked("dummy_memory_path_{0}".format(i)))
 
-        self.assertFalse(CGroupsTelemetry.is_tracked("not_dummy_extension_{0}".format(i), 'cpu', "dummy_path"))
-        self.assertFalse(CGroupsTelemetry.is_tracked("not_dummy_extension_{0}".format(i), 'memory', "dummy_path"))
+        self.assertFalse(CGroupsTelemetry.is_tracked("not_present_cpu_dummy_path"))
+        self.assertFalse(CGroupsTelemetry.is_tracked("not_present_memory_dummy_path"))
 
     @skip_if_predicate_false(i_am_root, "This test will only run as root")
     @skip_if_predicate_false(CGroupConfigurator.get_instance().enabled, "Does not run when Cgroups are not enabled")
@@ -429,10 +435,8 @@ for i in range(5):
             with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_log_dir", lambda *_: self.log_dir) as patch_get_log_dir:
                 self.ext_handler_instance.launch_command(command)
 
-        self.assertTrue(CGroupsTelemetry.is_tracked("foobar-1.0.0", 'cpu',
-                                                    "/sys/fs/cgroup/cpu/walinuxagent.extensions/foobar_1.0.0"))
-        self.assertTrue(CGroupsTelemetry.is_tracked("foobar-1.0.0", 'memory',
-                                                    "/sys/fs/cgroup/memory/walinuxagent.extensions/foobar_1.0.0"))
+        self.assertTrue(CGroupsTelemetry.is_tracked("/sys/fs/cgroup/cpu/walinuxagent.extensions/foobar_1.0.0"))
+        self.assertTrue(CGroupsTelemetry.is_tracked("/sys/fs/cgroup/memory/walinuxagent.extensions/foobar_1.0.0"))
 
         for i in range(max_num_polls):
             CGroupsTelemetry.poll_all_tracked()

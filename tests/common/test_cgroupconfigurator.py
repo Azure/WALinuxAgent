@@ -184,11 +184,9 @@ class CGroupConfiguratorTestCase(AgentTestCase):
             stderr=subprocess.PIPE)
 
             self.assertTrue(
-                CGroupsTelemetry.is_tracked("Microsoft.Compute.TestExtension-1.2.3", "cpu",
-                                            "/sys/fs/cgroup/cpu/walinuxagent.extensions/Microsoft.Compute.TestExtension_1.2.3"))
+                CGroupsTelemetry.is_tracked("/sys/fs/cgroup/cpu/walinuxagent.extensions/Microsoft.Compute.TestExtension_1.2.3"))
             self.assertTrue(
-                CGroupsTelemetry.is_tracked("Microsoft.Compute.TestExtension-1.2.3", "memory",
-                                            "/sys/fs/cgroup/memory/walinuxagent.extensions/Microsoft.Compute.TestExtension_1.2.3"))
+                CGroupsTelemetry.is_tracked("/sys/fs/cgroup/memory/walinuxagent.extensions/Microsoft.Compute.TestExtension_1.2.3"))
 
     def test_start_extension_command_should_raise_an_exception_when_the_command_cannot_be_started(self):
         configurator = CGroupConfigurator.get_instance()
