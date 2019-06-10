@@ -90,7 +90,7 @@ def get_data_files(name, version, fullname):
             set_bin_files(data_files)
             set_sysv_files(data_files)
         elif version.startswith("8"):
-            set_bin_files(data_files, src=["init/rhel/8.0/waagent", "init/rhel/8.0/waagent2.0"])
+            set_bin_files(data_files, src=["init/rhel/8.0/waagent", "bin/waagent2.0"])
             set_systemd_files(data_files, dest="/usr/lib/systemd/system", src=["init/rhel/8.0/waagent.service"])
         else:
             # redhat7.0+ use systemd
