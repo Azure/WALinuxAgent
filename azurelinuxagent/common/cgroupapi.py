@@ -17,6 +17,7 @@
 import errno
 import os
 import subprocess
+import uuid
 
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.cgroup import CpuCgroup, MemoryCgroup, CGroup
@@ -54,7 +55,7 @@ class CGroupsApi(object):
         raise NotImplementedError()
 
     @staticmethod
-    def _get_extension_scope_name(extension_name):
+    def _get_extension_cgroup_name(extension_name):
         # Since '-' is used as a separator in systemd unit names, we replace it with '_' to prevent side-effects.
         return extension_name.replace('-', '_')
 
@@ -109,6 +110,19 @@ class CGroupsApi(object):
                 return fields[1]
         raise CGroupsException("Cgroup controller {0} not found in /proc/cgroups".format(controller))
 
+    @staticmethod
+    def _foreach_controller(operation, message):
+        """
+        Executes the given operation on all controllers that need to be tracked; outputs 'message' if the controller is not mounted.
+        """
+        mounted_controllers = os.listdir(CGROUPS_FILE_SYSTEM_ROOT)
+
+        for controller in CGROUP_CONTROLLERS:
+            if controller not in mounted_controllers:
+                logger.warn('Controller "{0}" is not mounted. {1}'.format(controller, message))
+            else:
+                operation(controller)
+
 
 class FileSystemCgroupsApi(CGroupsApi):
     """
@@ -138,19 +152,6 @@ class FileSystemCgroupsApi(CGroupsApi):
                     raise
 
     @staticmethod
-    def _foreach_controller(operation, message):
-        """
-        Executes the given operation on all controllers that need to be tracked; outputs 'message' if the controller is not mounted.
-        """
-        mounted_controllers = os.listdir(CGROUPS_FILE_SYSTEM_ROOT)
-
-        for controller in CGROUP_CONTROLLERS:
-            if controller not in mounted_controllers:
-                logger.warn('Controller "{0}" is not mounted. {1}'.format(controller, message))
-            else:
-                operation(controller)
-
-    @staticmethod
     def _get_extension_cgroups_root_path(controller):
         return os.path.join(CGROUPS_FILE_SYSTEM_ROOT, controller, EXTENSIONS_ROOT_CGROUP_NAME)
 
@@ -160,7 +161,7 @@ class FileSystemCgroupsApi(CGroupsApi):
         if not os.path.exists(extensions_root):
             logger.warn("Root directory {0} does not exist.".format(extensions_root))
 
-        cgroup_name = self._get_extension_scope_name(extension_name)
+        cgroup_name = self._get_extension_cgroup_name(extension_name)
 
         return os.path.join(extensions_root, cgroup_name)
 
@@ -278,18 +279,23 @@ class FileSystemCgroupsApi(CGroupsApi):
         :param stdout: File object to redirect stdout to
         :param stderr: File object to redirect stderr to
         """
+        try:
+            extension_cgroups = self.create_extension_cgroups(extension_name)
+        except Exception as exception:
+            extension_cgroups = []
+            logger.warn("Failed to create cgroups for extension '{0}'; resource usage will not be tracked. Error: {1}".format(extension_name, ustr(exception)))
+
         def pre_exec_function():
             os.setsid()
 
             try:
                 pid = os.getpid()
 
-                def add_pid(controller):
-                    path = self._get_extension_cgroup_path(controller, extension_name)
-                    self._add_process_to_cgroup(pid, path)
-
-                self._foreach_controller(add_pid, 'Failed to add PID {0} to the cgroups for extension {1}. Resource usage will not be tracked.'.format(pid, extension_name))
-
+                for cgroup in extension_cgroups:
+                    try:
+                        self._add_process_to_cgroup(pid, cgroup.path)
+                    except Exception as exception:
+                        logger.warn("Failed to add PID {0} to the cgroups for extension '{1}'. Resource usage will not be tracked. Error: {2}".format(pid, extension_name, ustr(exception)))
             except Exception as e:
                 logger.warn("Failed to add extension {0} to its cgroup. Resource usage will not be tracked. Error: {1}".format(extension_name, ustr(e)))
 
@@ -302,7 +308,7 @@ class FileSystemCgroupsApi(CGroupsApi):
             env=env,
             preexec_fn=pre_exec_function)
 
-        return process
+        return process, extension_cgroups
 
 
 class SystemdCgroupsApi(CGroupsApi):
@@ -325,7 +331,7 @@ class SystemdCgroupsApi(CGroupsApi):
         return "system-{0}.slice".format(EXTENSIONS_ROOT_CGROUP_NAME)
 
     def _get_extension_slice_name(self, extension_name):
-        return "system-{0}-{1}.slice".format(EXTENSIONS_ROOT_CGROUP_NAME, self._get_extension_scope_name(extension_name))
+        return "system-{0}-{1}.slice".format(EXTENSIONS_ROOT_CGROUP_NAME, self._get_extension_cgroup_name(extension_name))
 
     def create_agent_cgroups(self):
         try:
@@ -370,9 +376,6 @@ After=system-{1}.slice""".format(extension_name, EXTENSIONS_ROOT_CGROUP_NAME)
         self.create_and_start_unit(unit_filename, unit_contents)
         logger.info("Created slice for {0}".format(unit_filename))
 
-        # Reuse the same method for getting cgroup paths since we don't need to create them (systemd will)
-        return self.get_extension_cgroups(extension_name)
-
     def remove_extension_cgroups(self, extension_name):
         # For transient units, cgroups are released automatically when the unit stops, so it is sufficient
         # to call stop on them. Persistent cgroups are released when the unit is disabled and its configuration
@@ -391,24 +394,38 @@ After=system-{1}.slice""".format(extension_name, EXTENSIONS_ROOT_CGROUP_NAME)
             raise CGroupsException("Failed to remove {0}. Error: {1}".format(unit_filename, ustr(e)))
 
     def get_extension_cgroups(self, extension_name):
-        scope_name = self._get_extension_scope_name(extension_name)
-        cpu_cgroup_path = os.path.join(CGROUPS_FILE_SYSTEM_ROOT, 'cpu', 'system.slice', scope_name)
-        memory_cgroup_path = os.path.join(CGROUPS_FILE_SYSTEM_ROOT, 'memory', 'system.slice', scope_name)
+        slice_name = self._get_extension_cgroup_name(extension_name)
 
-        return [CGroup.create(cpu_cgroup_path, 'cpu', extension_name),
-                CGroup.create(memory_cgroup_path, 'cpu', extension_name)]
+        cgroups = []
+
+        def create_cgroup(controller):
+            cpu_cgroup_path = os.path.join(CGROUPS_FILE_SYSTEM_ROOT, controller, 'system.slice', slice_name)
+            cgroups.append(CGroup.create(cpu_cgroup_path, controller, extension_name))
+
+        self._foreach_controller(create_cgroup, 'Cannot retrieve cgroup for extension {0}; resource usage will not be tracked.'.format(extension_name))
+
+        return cgroups
 
     def start_extension_command(self, extension_name, command, shell, cwd, env, stdout, stderr):
-        def pre_exec_function():
-            os.setsid()
+        scope_name = "{0}.{1}".format(self._get_extension_cgroup_name(extension_name), uuid.uuid4())
 
         process = subprocess.Popen(
-            "systemd-run --unit={0} --scope {1}".format(self._get_extension_scope_name(extension_name), command),
+            "systemd-run --unit={0} --scope {1}".format(scope_name, command),
             shell=shell,
             cwd=cwd,
             stdout=stdout,
             stderr=stderr,
             env=env,
-            preexec_fn=pre_exec_function)
+            preexec_fn=os.setsid)
 
-        return process
+        logger.info("Started extension using scope '{0}'", scope_name)
+
+        cgroups = []
+
+        def create_cgroup(controller):
+            cpu_cgroup_path = os.path.join(CGROUPS_FILE_SYSTEM_ROOT, controller, 'system.slice', scope_name)
+            cgroups.append(CGroup.create(cpu_cgroup_path, controller, extension_name))
+
+        self._foreach_controller(create_cgroup, 'Cannot create cgroup for extension {0}; resource usage will not be tracked.'.format(extension_name))
+
+        return process, cgroups

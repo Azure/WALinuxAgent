@@ -18,10 +18,8 @@
 from __future__ import print_function
 
 import subprocess
-import stat
 
 from azurelinuxagent.common.cgroupapi import CGroupsApi, FileSystemCgroupsApi, SystemdCgroupsApi
-from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.utils import shellutil, fileutil
 from tests.tools import *
 
@@ -217,9 +215,8 @@ class FileSystemCgroupsApiTestCase(AgentTestCase):
     def test_start_extension_command_should_add_the_child_process_to_the_extension_cgroup(self):
         api = FileSystemCgroupsApi()
         api.create_extension_cgroups_root()
-        extension_cgroups = api.create_extension_cgroups("Microsoft.Compute.TestExtension-1.2.3")
 
-        process = api.start_extension_command(
+        process, extension_cgroups = api.start_extension_command(
             extension_name="Microsoft.Compute.TestExtension-1.2.3",
             command="date",
             shell=False,
@@ -239,7 +236,6 @@ class FileSystemCgroupsApiTestCase(AgentTestCase):
             self.assertEquals(pid, process.pid, "The PID of the command was not added to {0}. Expected: {1}, got: {2}".format(cgroups_procs_path, process.pid, pid))
 
 
-@skip_if_predicate_false(CGroupConfigurator.get_instance().enabled, "Does not run when Cgroups are not enabled")
 class SystemdCgroupsApiTestCase(AgentTestCase):
 
     def test_it_should_return_extensions_slice_root_name(self):
@@ -284,3 +280,40 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
         shellutil.run_get_output("systemctl disable {0}".format(unit_name))
         os.remove("/etc/systemd/system/{0}".format(unit_name))
         shellutil.run_get_output("systemctl daemon-reload")
+
+    def test_start_extension_command_should_create_extension_scopes(self):
+        original_popen = subprocess.Popen
+
+        def mock_popen(*args, **kwargs):
+            return original_popen("date", **kwargs)
+
+        # we mock subprocess.Popen to execute a dummy command (date), so no actual cgroups are created; their paths
+        # should be computed properly, though
+        with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", mock_popen):
+            process, extension_cgroups = SystemdCgroupsApi().start_extension_command(
+                extension_name="Microsoft.Compute.TestExtension-1.2.3",
+                command="date",
+                shell=False,
+                cwd=self.tmp_dir,
+                env={},
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE)
+
+            process.wait()
+
+            self.assertEqual(len(extension_cgroups), 2, 'start_extension_command did not return the expected number of cgroups')
+
+            cpu_found = memory_found = False
+
+            for cgroup in extension_cgroups:
+                match = re.match(r'/sys/fs/cgroup/(cpu|memory)/system.slice/Microsoft.Compute.TestExtension_1\.2\.3\.([a-f0-9-]+)', cgroup.path)
+
+                self.assertTrue(match is not None, "Unexpected path for cgroup: {0}".format(cgroup.path))
+
+                if match.group(1) == 'cpu':
+                    cpu_found = True
+                if match.group(1) == 'memory':
+                    memory_found = True
+
+            self.assertTrue(cpu_found, 'start_extension_command did not return a cpu cgroup')
+            self.assertTrue(memory_found, 'start_extension_command did not return a memory cgroup')
