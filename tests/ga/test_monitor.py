@@ -335,10 +335,11 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
         max_memory_usage_values = [random.randint(0, 8 * 1024 ** 3) for _ in range(num_polls)]
 
         for i in range(num_extensions):
-            dummy_cpu_cgroup = CGroup.create("dummy_path", "cpu", "dummy_extension_{0}".format(i))
+            dummy_cpu_cgroup = CGroup.create("dummy_cpu_path_{0}".format(i), "cpu", "dummy_extension_{0}".format(i))
             CGroupsTelemetry.track_cgroup(dummy_cpu_cgroup)
 
-            dummy_memory_cgroup = CGroup.create("dummy_path", "memory", "dummy_extension_{0}".format(i))
+            dummy_memory_cgroup = CGroup.create("dummy_memory_path_{0}".format(i), "memory",
+                                                "dummy_extension_{0}".format(i))
             CGroupsTelemetry.track_cgroup(dummy_memory_cgroup)
 
         self.assertEqual(2 * num_extensions, len(CGroupsTelemetry._tracked))
@@ -358,6 +359,10 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
 
         message_json = generate_extension_metrics_telemetry_dictionary(schema_version=1.0,
                                                                        performance_metrics=performance_metrics)
+
+        for i in range(num_extensions):
+            self.assertTrue(CGroupsTelemetry.is_tracked("dummy_cpu_path_{0}".format(i)))
+            self.assertTrue(CGroupsTelemetry.is_tracked("dummy_memory_path_{0}".format(i)))
 
         self.assertIn("SchemaVersion", message_json)
         self.assertIn("PerfMetrics", message_json)
