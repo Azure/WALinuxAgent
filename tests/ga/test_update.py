@@ -288,6 +288,9 @@ class TestGuestAgentError(UpdateTestCase):
         self.assertEqual(s, str(err))
         return
 
+    def test_get_python_cmd(self):
+        self.assertIn("python", get_python_cmd())
+
 
 class TestGuestAgent(UpdateTestCase):
     def setUp(self):
