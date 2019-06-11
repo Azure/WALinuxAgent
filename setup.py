@@ -83,14 +83,18 @@ def get_data_files(name, version, fullname):
     data_files = []
 
     if name == 'redhat' or name == 'centos':
-        set_bin_files(data_files)
         set_conf_files(data_files)
         set_logrotate_files(data_files)
         set_udev_files(data_files)
         if version.startswith("6"):
+            set_bin_files(data_files)
             set_sysv_files(data_files)
+        elif version.startswith("8"):
+            set_bin_files(data_files, src=["init/rhel/8.0/waagent", "bin/waagent2.0"])
+            set_systemd_files(data_files, dest="/usr/lib/systemd/system", src=["init/rhel/8.0/waagent.service"])
         else:
             # redhat7.0+ use systemd
+            set_bin_files(data_files)
             set_systemd_files(data_files, dest="/usr/lib/systemd/system")
             if version.startswith("7.1"):
                 # TODO this is a mitigation to systemctl bug on 7.1

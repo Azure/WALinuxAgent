@@ -92,8 +92,11 @@ def get_update_handler():
 
 
 def get_python_cmd():
-    major_version = platform.python_version_tuple()[0]
-    return "python" if int(major_version) <= 2 else "python{0}".format(major_version)
+    if sys.executable:
+        return sys.executable
+    else:
+        major_version = platform.python_version_tuple()[0]
+        return "python" if int(major_version) <= 2 else "python{0}".format(major_version)
 
 
 class UpdateHandler(object):
