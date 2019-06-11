@@ -61,6 +61,17 @@ class CGroupConfiguratorTestCase(AgentTestCase):
         AgentTestCase.setUp(self)
         CGroupConfigurator._instance = None  # force get_instance() to create a new instance for each test
 
+        self.cgroups_file_system_root = os.path.join(self.tmp_dir, "cgroup")
+        os.mkdir(self.cgroups_file_system_root)
+        os.mkdir(os.path.join(self.cgroups_file_system_root, "cpu"))
+        os.mkdir(os.path.join(self.cgroups_file_system_root, "memory"))
+
+        self.mock_cgroups_file_system_root = patch("azurelinuxagent.common.cgroupapi.CGROUPS_FILE_SYSTEM_ROOT", self.cgroups_file_system_root)
+        self.mock_cgroups_file_system_root.start()
+
+    def tearDown(self):
+        self.mock_cgroups_file_system_root.stop()
+
     def test_init_should_mount_the_cgroups_file_system(self):
         with patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.mount_cgroups") as mock_mount_cgroups:
             CGroupConfigurator.get_instance()
@@ -150,7 +161,7 @@ class CGroupConfiguratorTestCase(AgentTestCase):
     def test_start_extension_command_should_forward_to_cgroups_api_when_groups_are_enabled(self):
         configurator = CGroupConfigurator.get_instance()
 
-        with patch("azurelinuxagent.common.cgroupapi.FileSystemCgroupsApi.start_extension_command") as mock_start_extension_command:
+        with patch("azurelinuxagent.common.cgroupapi.FileSystemCgroupsApi.start_extension_command", return_value=[None, []]) as mock_start_extension_command:
             configurator.start_extension_command(
                 extension_name="Microsoft.Compute.TestExtension-1.2.3",
                 command="date",
@@ -163,21 +174,17 @@ class CGroupConfiguratorTestCase(AgentTestCase):
             self.assertEqual(mock_start_extension_command.call_count, 1)
 
     def test_start_extension_command_should_start_tracking_the_extension_cgroups(self):
-        configurator = CGroupConfigurator.get_instance()
+        CGroupConfigurator.get_instance().start_extension_command(
+            extension_name="Microsoft.Compute.TestExtension-1.2.3",
+            command="date",
+            shell=False,
+            cwd=self.tmp_dir,
+            env={},
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE)
 
-        # mock FileSystemCgroupsApi.start_extension_command to make it a noop
-        with patch("azurelinuxagent.common.cgroupapi.FileSystemCgroupsApi.start_extension_command"):
-            configurator.start_extension_command(
-                extension_name="Microsoft.Compute.TestExtension-1.2.3",
-                command="date",
-                shell=False,
-                cwd=self.tmp_dir,
-                env={},
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE)
-
-            self.assertTrue(CGroupsTelemetry.is_tracked("Microsoft.Compute.TestExtension-1.2.3", "cpu"))
-            self.assertTrue(CGroupsTelemetry.is_tracked("Microsoft.Compute.TestExtension-1.2.3", "memory"))
+        self.assertTrue(CGroupsTelemetry.is_tracked("Microsoft.Compute.TestExtension-1.2.3", "cpu"))
+        self.assertTrue(CGroupsTelemetry.is_tracked("Microsoft.Compute.TestExtension-1.2.3", "memory"))
 
     def test_start_extension_command_should_raise_an_exception_when_the_command_cannot_be_started(self):
         configurator = CGroupConfigurator.get_instance()

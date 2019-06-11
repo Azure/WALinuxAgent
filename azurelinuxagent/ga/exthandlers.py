@@ -606,7 +606,6 @@ class ExtHandlerInstance(object):
         self.pkg = None
         self.pkg_file = None
         self.is_upgrade = False
-        self.cgroups = []
         self.logger = None
         self.set_logger()
 
@@ -868,7 +867,7 @@ class ExtHandlerInstance(object):
             raise ExtensionDownloadError(u"Failed to initialize extension '{0}'".format(self.get_full_name()), e)
 
         # Create cgroups for the extension
-        self.cgroups = CGroupConfigurator.get_instance().create_extension_cgroups(self.get_full_name())
+        CGroupConfigurator.get_instance().create_extension_cgroups(self.get_full_name())
 
         # Save HandlerEnvironment.json
         self.create_handler_env()
