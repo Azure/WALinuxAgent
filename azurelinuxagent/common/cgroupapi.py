@@ -407,7 +407,7 @@ After=system-{1}.slice""".format(extension_name, EXTENSIONS_ROOT_CGROUP_NAME)
         return cgroups
 
     def start_extension_command(self, extension_name, command, shell, cwd, env, stdout, stderr):
-        scope_name = "{0}.{1}".format(self._get_extension_cgroup_name(extension_name), uuid.uuid4())
+        scope_name = "{0}_{1}".format(self._get_extension_cgroup_name(extension_name), uuid.uuid4())
 
         process = subprocess.Popen(
             "systemd-run --unit={0} --scope {1}".format(scope_name, command),
