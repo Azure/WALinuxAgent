@@ -76,6 +76,10 @@ class TestCGroupsTelemetry(AgentTestCase):
         AgentTestCase.setUp(self)
         CGroupsTelemetry.cleanup()
 
+    def tearDown(self):
+        AgentTestCase.tearDown(self)
+        CGroupsTelemetry.cleanup()
+
     @patch("azurelinuxagent.common.cgroup.CpuCgroup._get_current_cpu_total")
     @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_total_cpu_ticks_since_boot")
     def test_telemetry_polling_with_active_cgroups(self, *args):
@@ -380,8 +384,8 @@ class TestCGroupsTelemetry(AgentTestCase):
 
         with patch("azurelinuxagent.common.cgroup.CpuCgroup.collect") as patch_cpu_cgroup_collect:
             with patch("azurelinuxagent.common.cgroup.MemoryCgroup.collect") as patch_memory_cgroup_collect:
-                patch_cpu_cgroup_collect.side_effect = FileNotFoundError("File not found")
-                patch_memory_cgroup_collect.side_effect = FileNotFoundError("File not found")
+                patch_cpu_cgroup_collect.side_effect = Exception("File not found")
+                patch_memory_cgroup_collect.side_effect = Exception("File not found")
 
                 for data_count in range(1, 10):
                     CGroupsTelemetry.poll_all_tracked()
@@ -393,6 +397,8 @@ class TestCGroupsTelemetry(AgentTestCase):
                     collected_metrics[name] = CGroupsTelemetry._process_cgroup_metric(cgroup_metrics)
                     self.assertEqual(collected_metrics[name], {})  #empty
 
+    @patch("azurelinuxagent.common.cgroup.CpuCgroup._get_current_cpu_total")
+    @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_total_cpu_ticks_since_boot")
     def test_process_cgroup_metric_with_no_memory_cgroup_mounted(self, *args):
         num_extensions = 5
 
@@ -408,7 +414,7 @@ class TestCGroupsTelemetry(AgentTestCase):
             with patch("azurelinuxagent.common.cgroup.MemoryCgroup.collect") as patch_memory_cgroup_collect:
                 with patch("azurelinuxagent.common.cgroup.CGroup.is_active") as patch_is_active:
                     patch_is_active.return_value = True
-                    patch_memory_cgroup_collect.side_effect = FileNotFoundError("File not found")
+                    patch_memory_cgroup_collect.side_effect = Exception("File not found")
 
                     current_cpu = 30
                     patch_get_cpu_percent.return_value = current_cpu
@@ -439,7 +445,9 @@ class TestCGroupsTelemetry(AgentTestCase):
                         self.assertEqual(len(max_memory_levels._data), 0)
                         self.assertEqual(len(current_cpu_usage._data), 0)
 
-    def test_process_cgroup_metric_with_no_cpu_cgroup_mounted(self):
+    @patch("azurelinuxagent.common.cgroup.CpuCgroup._get_current_cpu_total")
+    @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_total_cpu_ticks_since_boot")
+    def test_process_cgroup_metric_with_no_cpu_cgroup_mounted(self, *args):
         num_extensions = 5
         for i in range(num_extensions):
             dummy_cpu_cgroup = CGroup.create("dummy_cpu_path_{0}".format(i), "cpu", "dummy_extension_{0}".format(i))
@@ -449,20 +457,44 @@ class TestCGroupsTelemetry(AgentTestCase):
                                                 "dummy_extension_{0}".format(i))
             CGroupsTelemetry.track_cgroup(dummy_memory_cgroup)
 
-        with patch("azurelinuxagent.common.cgroup.CpuCgroup.collect") as patch_cpu_cgroup_collect:
-            with patch("azurelinuxagent.common.cgroup.MemoryCgroup.collect") as patch_memory_cgroup_collect:
-                patch_cpu_cgroup_collect.side_effect = FileNotFoundError("File not found")
-                patch_memory_cgroup_collect.side_effect = FileNotFoundError("File not found")
+        with patch("azurelinuxagent.common.cgroup.MemoryCgroup._get_memory_max_usage") as patch_get_memory_max_usage:
+            with patch("azurelinuxagent.common.cgroup.MemoryCgroup._get_memory_usage") as patch_get_memory_usage:
+                with patch("azurelinuxagent.common.cgroup.CpuCgroup.collect") as patch_cpu_cgroup_collect:
+                    with patch("azurelinuxagent.common.cgroup.CGroup.is_active") as patch_is_active:
+                        patch_is_active.return_value = True
 
-                for data_count in range(1, 10):
-                    CGroupsTelemetry.poll_all_tracked()
+                        patch_cpu_cgroup_collect.side_effect = Exception("File not found")
 
-                self.assertEqual(CGroupsTelemetry._cgroup_metrics.__len__(), num_extensions)
+                        current_memory = 209715200
+                        current_max_memory = 471859200
 
-                collected_metrics = {}
-                for name, cgroup_metrics in CGroupsTelemetry._cgroup_metrics.items():
-                    collected_metrics[name] = CGroupsTelemetry._process_cgroup_metric(cgroup_metrics)
-                    self.assertEqual(collected_metrics[name], {})  #empty
+                        patch_get_memory_usage.return_value = current_memory  # example 200 MB
+                        patch_get_memory_max_usage.return_value = current_max_memory  # example 450 MB
+
+                        poll_count = 1
+
+                        for data_count in range(poll_count, 10):
+                            CGroupsTelemetry.poll_all_tracked()
+                            self.assertEqual(CGroupsTelemetry._cgroup_metrics.__len__(), num_extensions)
+
+                            for cgroup_name, cgroup_metric in CGroupsTelemetry._cgroup_metrics.items():
+                                current_memory_usage, max_memory_levels, current_cpu_usage = cgroup_metric.get_metrics()
+                                self.assertEqual(len(current_memory_usage._data), data_count)
+                                self.assertListEqual(current_memory_usage._data, [current_memory] * data_count)
+                                self.assertEqual(len(max_memory_levels._data), data_count)
+                                self.assertListEqual(max_memory_levels._data, [current_max_memory] * data_count)
+
+                                self.assertEqual(len(current_cpu_usage._data), 0)
+                                self.assertListEqual(current_cpu_usage._data, [])
+
+                        CGroupsTelemetry.report_all_tracked()
+
+                        self.assertEqual(CGroupsTelemetry._cgroup_metrics.__len__(), num_extensions)
+                        for cgroup_name, cgroup_metric in CGroupsTelemetry._cgroup_metrics.items():
+                            current_memory_usage, max_memory_levels, current_cpu_usage = cgroup_metric.get_metrics()
+                            self.assertEqual(len(current_memory_usage._data), 0)
+                            self.assertEqual(len(max_memory_levels._data), 0)
+                            self.assertEqual(len(current_cpu_usage._data), 0)
 
     @skip_if_predicate_false(i_am_root, "This test will only run as root")
     @skip_if_predicate_false(CGroupConfigurator.get_instance().enabled, "Does not run when Cgroups are not enabled")

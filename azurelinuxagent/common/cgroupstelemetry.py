@@ -136,6 +136,7 @@ class CGroupsTelemetry(object):
     def cleanup():
         with CGroupsTelemetry._rlock:
             CGroupsTelemetry._tracked *= 0  # emptying the list
+            CGroupsTelemetry._cgroup_metrics = {}
 
 
 class CgroupMetrics(object):
