@@ -347,13 +347,14 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
         with patch("azurelinuxagent.common.cgroup.MemoryCgroup._get_memory_max_usage") as patch_get_memory_max_usage:
             with patch("azurelinuxagent.common.cgroup.MemoryCgroup._get_memory_usage") as patch_get_memory_usage:
                 with patch("azurelinuxagent.common.cgroup.CpuCgroup._get_cpu_percent") as patch_get_cpu_percent:
-                    with patch("azurelinuxagent.common.cgroup.CGroup.is_active") as patch_is_active:
-                        for i in range(num_polls):
-                            patch_is_active.return_value = True
-                            patch_get_cpu_percent.return_value = cpu_percent_values[i]
-                            patch_get_memory_usage.return_value = memory_usage_values[i]  # example 200 MB
-                            patch_get_memory_max_usage.return_value = max_memory_usage_values[i]  # example 450 MB
-                            CGroupsTelemetry.poll_all_tracked()
+                    with patch("azurelinuxagent.common.cgroup.CpuCgroup._update_cpu_data") as patch_update_cpu_data:
+                        with patch("azurelinuxagent.common.cgroup.CGroup.is_active") as patch_is_active:
+                            for i in range(num_polls):
+                                patch_is_active.return_value = True
+                                patch_get_cpu_percent.return_value = cpu_percent_values[i]
+                                patch_get_memory_usage.return_value = memory_usage_values[i]  # example 200 MB
+                                patch_get_memory_max_usage.return_value = max_memory_usage_values[i]  # example 450 MB
+                                CGroupsTelemetry.poll_all_tracked()
 
         performance_metrics = CGroupsTelemetry.report_all_tracked()
 

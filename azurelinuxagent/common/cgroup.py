@@ -86,22 +86,27 @@ class CGroup(object):
         except IndexError:
             parameter_filename = self._get_cgroup_file(parameter_name)
             logger.error("File {0} is empty but should not be".format(parameter_filename))
-        except CGroupsException:
-            return None
+            raise CGroupsException("File {0} is empty but should not be".format(parameter_filename))
+        except CGroupsException as e:
+            raise e
         except Exception as e:
             parameter_filename = self._get_cgroup_file(parameter_name)
             logger.error("Exception while attempting to read {0}: {1}".format(parameter_filename, ustr(e)))
+            raise CGroupsException("Exception while attempting to read {0}: {1}".format(parameter_filename, ustr(e)))
         return result
 
     def collect(self):
         raise NotImplementedError()
 
     def is_active(self):
-        tasks = self._get_parameters("tasks")
-        if tasks:
-            return len(tasks) != 0
-        else:
+        try:
+            tasks = self._get_parameters("tasks")
+            if tasks:
+                return len(tasks) != 0
+        except CGroupsException:
             return False
+
+        return False
 
 
 class CpuCgroup(CGroup):
@@ -115,7 +120,12 @@ class CpuCgroup(CGroup):
         super(CpuCgroup, self).__init__(name, cgroup_path, "cpu")
 
         self._osutil = get_osutil()
-        self._current_cpu_total = self._get_current_cpu_total()
+        self._current_cpu_total = 0
+        try:
+            self._current_cpu_total = self._get_current_cpu_total()
+        except:
+            pass
+
         self._previous_cpu_total = 0
         self._current_system_cpu = self._osutil.get_total_cpu_ticks_since_boot()
         self._previous_system_cpu = 0
@@ -143,7 +153,7 @@ class CpuCgroup(CGroup):
             # has not yet started (or has stopped) an associated service on a VM using systemd, the cgroup for
             # the service will not exist ('cause systemd will tear it down). This might be a transient or a
             # long-lived state, so there's no point in logging it, much less emitting telemetry.
-            pass
+            raise
         return cpu_total
 
     def _update_cpu_data(self):
@@ -175,9 +185,12 @@ class CpuCgroup(CGroup):
 
         :rtype: [(str, str, float)]
         """
-        self._update_cpu_data()
-        usage = self._get_cpu_percent()
-        return [CollectedMetrics("cpu", "% Processor Time", usage)]
+        try:
+            self._update_cpu_data()
+            usage = self._get_cpu_percent()
+            return [CollectedMetrics("cpu", "% Processor Time", usage)]
+        except CGroupsException as e:
+            raise e
 
 
 class MemoryCgroup(CGroup):
@@ -201,10 +214,15 @@ class MemoryCgroup(CGroup):
         :return: Memory usage in bytes
         :rtype: int
         """
-        usage = self._get_parameters('memory.usage_in_bytes', first_line_only=True)
-        if not usage:
-            usage = "0"
-        return int(usage)
+        try:
+            usage = self._get_parameters('memory.usage_in_bytes', first_line_only=True)
+
+            if not usage:
+                usage = "0"
+            return int(usage)
+
+        except CGroupsException as e:
+            raise e
 
     def _get_memory_max_usage(self):
         """
@@ -213,10 +231,13 @@ class MemoryCgroup(CGroup):
         :return: Memory usage in bytes
         :rtype: int
         """
-        usage = self._get_parameters('memory.max_usage_in_bytes', first_line_only=True)
-        if not usage:
-            usage = "0"
-        return int(usage)
+        try:
+            usage = self._get_parameters('memory.max_usage_in_bytes', first_line_only=True)
+            if not usage:
+                usage = "0"
+            return int(usage)
+        except CGroupsException as e:
+            raise e
 
     def collect(self):
         """
@@ -224,10 +245,13 @@ class MemoryCgroup(CGroup):
 
         :rtype: [(str, str, float)]
         """
-        usage = self._get_memory_usage()
-        max_usage = self._get_memory_max_usage()
-        return [CollectedMetrics("memory", "Total Memory Usage", usage),
-                CollectedMetrics("memory", "Max Memory Usage", max_usage)]
+        try:
+            usage = self._get_memory_usage()
+            max_usage = self._get_memory_max_usage()
+            return [CollectedMetrics("memory", "Total Memory Usage", usage),
+                    CollectedMetrics("memory", "Max Memory Usage", max_usage)]
+        except CGroupsException as e:
+            raise e
 
 
 class CollectedMetrics(object):
