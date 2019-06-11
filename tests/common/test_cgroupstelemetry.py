@@ -25,6 +25,7 @@ from mock import patch
 from azurelinuxagent.common.cgroup import CGroup
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry, Metric
+from azurelinuxagent.common.osutil.default import BASE_CGROUPS
 from azurelinuxagent.common.protocol.restapi import ExtHandlerProperties, ExtHandler
 from azurelinuxagent.ga.exthandlers import ExtHandlerInstance
 from tests.common.test_cgroupapi import i_am_root
@@ -405,6 +406,8 @@ class TestCGroupsTelemetry(AgentTestCase):
     @skip_if_predicate_false(i_am_root, "This test will only run as root")
     @skip_if_predicate_false(CGroupConfigurator.get_instance().enabled, "Does not run when Cgroups are not enabled")
     def test_telemetry_with_tracked_cgroup(self):
+        # TODO: Write another test like this which would work for systemd as well, explicitely.
+
         max_num_polls = 30
         time_to_wait = 3
         extn_name = "foobar-1.0.0"
@@ -431,12 +434,16 @@ for i in range(5):
 
         self.log_dir = os.path.join(self.tmp_dir, "log")
 
-        with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_base_dir", lambda *_: self.tmp_dir) as patch_get_base_dir:
-            with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_log_dir", lambda *_: self.log_dir) as patch_get_log_dir:
+        with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_base_dir", lambda *_: self.tmp_dir) as \
+                patch_get_base_dir:
+            with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_log_dir", lambda *_: self.log_dir) as \
+                    patch_get_log_dir:
                 self.ext_handler_instance.launch_command(command)
 
-        self.assertTrue(CGroupsTelemetry.is_tracked("/sys/fs/cgroup/cpu/walinuxagent.extensions/foobar_1.0.0"))
-        self.assertTrue(CGroupsTelemetry.is_tracked("/sys/fs/cgroup/memory/walinuxagent.extensions/foobar_1.0.0"))
+        self.assertTrue(CGroupsTelemetry.is_tracked(os.path.join(
+            BASE_CGROUPS, "cpu", "walinuxagent.extensions", "foobar_1.0.0")))
+        self.assertTrue(CGroupsTelemetry.is_tracked(os.path.join(
+            BASE_CGROUPS, "memory", "walinuxagent.extensions", "foobar_1.0.0")))
 
         for i in range(max_num_polls):
             CGroupsTelemetry.poll_all_tracked()
