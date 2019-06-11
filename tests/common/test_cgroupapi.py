@@ -306,7 +306,7 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
             cpu_found = memory_found = False
 
             for cgroup in extension_cgroups:
-                match = re.match(r'^/sys/fs/cgroup/(cpu|memory)/system.slice/Microsoft.Compute.TestExtension_1\.2\.3\_([a-f0-9-]+)$', cgroup.path)
+                match = re.match(r'^/sys/fs/cgroup/(cpu|memory)/system.slice/Microsoft.Compute.TestExtension_1\.2\.3\_([a-f0-9-]+)\.scope$', cgroup.path)
 
                 self.assertTrue(match is not None, "Unexpected path for cgroup: {0}".format(cgroup.path))
 
