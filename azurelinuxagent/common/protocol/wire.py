@@ -609,6 +609,8 @@ class WireClient(object):
                 continue
 
             response = None
+            host = self.get_host_plugin()
+
             if not HostPluginProtocol.is_default_channel():
                 response = self.fetch(version.uri)
 
@@ -620,7 +622,6 @@ class WireClient(object):
                                    "switching to host plugin")
 
                 try:
-                    host = self.get_host_plugin()
                     uri, headers = host.get_artifact_request(version.uri)
                     response = self.fetch(uri, headers, use_proxy=False)
 
@@ -630,13 +631,13 @@ class WireClient(object):
                     HostPluginProtocol.set_default_channel(True)
                     raise
 
-                host.manifest_uri = version.uri
                 logger.verbose("Manifest downloaded successfully from host plugin")
                 if not HostPluginProtocol.is_default_channel():
                     logger.info("Setting host plugin as default channel")
                     HostPluginProtocol.set_default_channel(True)
 
             if response:
+                host.manifest_uri = version.uri
                 return response
 
         raise ProtocolError("Failed to fetch manifest from all sources")
@@ -1178,6 +1179,7 @@ class WireClient(object):
         return {
             "x-ms-agent-name": "WALinuxAgent",
             "x-ms-version": PROTOCOL_VERSION,
+            "x-ms-cipher-name": "DES_EDE3_CBC",
             "x-ms-guest-agent-public-x509-cert": cert
         }
 
@@ -1524,6 +1526,18 @@ class Certificates(object):
                 tmp_file = prvs[pubkey]
                 prv = "{0}.prv".format(thumbprint)
                 os.rename(tmp_file, os.path.join(conf.get_lib_dir(), prv))
+                logger.info("Found private key matching thumbprint {0}".format(thumbprint))
+            else:
+                # Since private key has *no* matching certificate,
+                # it will not be named correctly
+                logger.warn("Found NO matching cert/thumbprint for private key!")
+
+        # Log if any certificates were found without matching private keys
+        # This can happen (rarely), and is useful to know for debugging
+        for pubkey in thumbprints:
+            if not pubkey in prvs:
+                msg = "Certificate with thumbprint {0} has no matching private key."
+                logger.info(msg.format(thumbprints[pubkey]))
 
         for v1_cert in v1_cert_list:
             cert = Cert()

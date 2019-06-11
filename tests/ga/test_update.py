@@ -288,6 +288,9 @@ class TestGuestAgentError(UpdateTestCase):
         self.assertEqual(s, str(err))
         return
 
+    def test_get_python_cmd(self):
+        self.assertIn("python", get_python_cmd())
+
 
 class TestGuestAgent(UpdateTestCase):
     def setUp(self):
@@ -1060,7 +1063,7 @@ class TestUpdate(UpdateTestCase):
 
         self.assertEqual(args, cmds)
         self.assertTrue(len(args) > 1)
-        self.assertTrue(args[0].startswith("python"))
+        self.assertTrue("python" in args[0])
         self.assertEqual("-run-exthandlers", args[len(args)-1])
         self.assertEqual(True, 'cwd' in kwargs)
         self.assertEqual(agent.get_agent_dir(), kwargs['cwd'])
@@ -1074,7 +1077,7 @@ class TestUpdate(UpdateTestCase):
         args = args[0]
 
         self.assertTrue(len(args) > 1)
-        self.assertTrue(args[0].startswith("python"))
+        self.assertTrue("python" in args[0])
         self.assertEqual("AnArgument", args[len(args)-1])
 
     def test_run_latest_polls_and_waits_for_success(self):
