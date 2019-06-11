@@ -235,6 +235,11 @@ class TestMonitor(AgentTestCase):
 @patch("azurelinuxagent.common.protocol.healthservice.HealthService._report")
 @patch("azurelinuxagent.common.utils.restutil.http_get")
 class TestExtensionMetricsDataTelemetry(AgentTestCase):
+
+    def setUp(self):
+        AgentTestCase.setUp(self)
+        CGroupsTelemetry.cleanup()
+
     @patch('azurelinuxagent.common.event.EventLogger.add_event')
     @patch("azurelinuxagent.common.cgroupstelemetry.CGroupsTelemetry.poll_all_tracked")
     @patch("azurelinuxagent.common.cgroupstelemetry.CGroupsTelemetry.report_all_tracked")
@@ -259,6 +264,24 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
         self.assertEqual(1, patch_poll_all_tracked.call_count)
         self.assertEqual(1, patch_report_all_tracked.call_count)
         self.assertEqual(1, patch_add_event.call_count)
+        monitor_handler.stop()
+
+    @patch('azurelinuxagent.common.event.EventLogger.add_event')
+    @patch("azurelinuxagent.common.cgroupstelemetry.CGroupsTelemetry.poll_all_tracked")
+    @patch("azurelinuxagent.common.cgroupstelemetry.CGroupsTelemetry.report_all_tracked", return_value={})
+    def test_send_extension_metrics_telemetry_for_empty_cgroup(self, patch_report_all_tracked, patch_poll_all_tracked,
+                                                               patch_add_event, *args):
+        patch_report_all_tracked.return_value = {}
+
+        monitor_handler = get_monitor_handler()
+        monitor_handler.init_protocols()
+        monitor_handler.last_cgroup_polling_telemetry = datetime.datetime.utcnow() - timedelta(hours=1)
+        monitor_handler.last_cgroup_report_telemetry = datetime.datetime.utcnow() - timedelta(hours=1)
+        monitor_handler.poll_telemetry_metrics()
+        monitor_handler.send_telemetry_metrics()
+        self.assertEqual(1, patch_poll_all_tracked.call_count)
+        self.assertEqual(1, patch_report_all_tracked.call_count)
+        self.assertEqual(0, patch_add_event.call_count)
         monitor_handler.stop()
 
     @skip_if_predicate_false(i_am_root, "Test does not run when non-root")
@@ -312,10 +335,11 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
         max_memory_usage_values = [random.randint(0, 8 * 1024 ** 3) for _ in range(num_polls)]
 
         for i in range(num_extensions):
-            dummy_cpu_cgroup = CGroup.create("dummy_path", "cpu", "dummy_extension_{0}".format(i))
+            dummy_cpu_cgroup = CGroup.create("dummy_cpu_path_{0}".format(i), "cpu", "dummy_extension_{0}".format(i))
             CGroupsTelemetry.track_cgroup(dummy_cpu_cgroup)
 
-            dummy_memory_cgroup = CGroup.create("dummy_path", "memory", "dummy_extension_{0}".format(i))
+            dummy_memory_cgroup = CGroup.create("dummy_memory_path_{0}".format(i), "memory",
+                                                "dummy_extension_{0}".format(i))
             CGroupsTelemetry.track_cgroup(dummy_memory_cgroup)
 
         self.assertEqual(2 * num_extensions, len(CGroupsTelemetry._tracked))
@@ -335,6 +359,10 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
 
         message_json = generate_extension_metrics_telemetry_dictionary(schema_version=1.0,
                                                                        performance_metrics=performance_metrics)
+
+        for i in range(num_extensions):
+            self.assertTrue(CGroupsTelemetry.is_tracked("dummy_cpu_path_{0}".format(i)))
+            self.assertTrue(CGroupsTelemetry.is_tracked("dummy_memory_path_{0}".format(i)))
 
         self.assertIn("SchemaVersion", message_json)
         self.assertIn("PerfMetrics", message_json)
