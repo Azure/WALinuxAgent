@@ -419,29 +419,24 @@ class MonitorHandler(object):
             self.last_cgroup_polling_telemetry = time_now
 
     def send_telemetry_metrics(self):
-        to_send = False
         time_now = datetime.datetime.utcnow()
-        performance_metrics = {}
 
         if not self.last_cgroup_report_telemetry:
             self.last_cgroup_report_telemetry = time_now
 
-        if time_now >= (self.last_cgroup_report_telemetry +
-                        MonitorHandler.CGROUP_TELEMETRY_REPORTING_PERIOD):
+        if time_now >= (self.last_cgroup_report_telemetry + MonitorHandler.CGROUP_TELEMETRY_REPORTING_PERIOD):
             performance_metrics = CGroupsTelemetry.report_all_tracked()
             self.last_cgroup_report_telemetry = time_now
-            to_send = True
 
-        if to_send:
-            message = generate_extension_metrics_telemetry_dictionary(schema_version=1.0,
-                                                                      performance_metrics=performance_metrics)
-
-            add_event(name=AGENT_NAME,
-                      version=CURRENT_VERSION,
-                      op=WALAEventOperation.ExtensionMetricsData,
-                      is_success=True,
-                      message=ustr(message),
-                      log_event=False)
+            if performance_metrics:
+                message = generate_extension_metrics_telemetry_dictionary(schema_version=1.0,
+                                                                          performance_metrics=performance_metrics)
+                add_event(name=AGENT_NAME,
+                          version=CURRENT_VERSION,
+                          op=WALAEventOperation.ExtensionMetricsData,
+                          is_success=True,
+                          message=ustr(message),
+                          log_event=False)
 
     def log_altered_network_configuration(self):
         """
