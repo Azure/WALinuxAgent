@@ -17,7 +17,6 @@ import threading
 from datetime import datetime as dt
 
 from azurelinuxagent.common import logger
-from azurelinuxagent.common.exception import CGroupsException
 
 
 class CGroupsTelemetry(object):
@@ -111,6 +110,7 @@ class CGroupsTelemetry(object):
                     CGroupsTelemetry._cgroup_metrics[cgroup.name] = CgroupMetrics()
 
                 metric = None
+                # noinspection PyBroadException
                 try:
                     metric = cgroup.collect()
                 except Exception:

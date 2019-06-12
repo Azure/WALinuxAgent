@@ -87,8 +87,8 @@ class CGroup(object):
             parameter_filename = self._get_cgroup_file(parameter_name)
             logger.error("File {0} is empty but should not be".format(parameter_filename))
             raise CGroupsException("File {0} is empty but should not be".format(parameter_filename))
-        except CGroupsException as e:
-            raise e
+        except CGroupsException:
+            raise
         except Exception as e:
             parameter_filename = self._get_cgroup_file(parameter_name)
             logger.error("Exception while attempting to read {0}: {1}".format(parameter_filename, ustr(e)))
@@ -185,12 +185,9 @@ class CpuCgroup(CGroup):
 
         :rtype: [(str, str, float)]
         """
-        try:
-            self._update_cpu_data()
-            usage = self._get_cpu_percent()
-            return [CollectedMetrics("cpu", "% Processor Time", usage)]
-        except CGroupsException as e:
-            raise e
+        self._update_cpu_data()
+        usage = self._get_cpu_percent()
+        return [CollectedMetrics("cpu", "% Processor Time", usage)]
 
 
 class MemoryCgroup(CGroup):
@@ -214,15 +211,11 @@ class MemoryCgroup(CGroup):
         :return: Memory usage in bytes
         :rtype: int
         """
-        try:
-            usage = self._get_parameters('memory.usage_in_bytes', first_line_only=True)
+        usage = self._get_parameters('memory.usage_in_bytes', first_line_only=True)
 
-            if not usage:
-                usage = "0"
-            return int(usage)
-
-        except CGroupsException as e:
-            raise e
+        if not usage:
+            usage = "0"
+        return int(usage)
 
     def _get_memory_max_usage(self):
         """
@@ -231,13 +224,10 @@ class MemoryCgroup(CGroup):
         :return: Memory usage in bytes
         :rtype: int
         """
-        try:
-            usage = self._get_parameters('memory.max_usage_in_bytes', first_line_only=True)
-            if not usage:
-                usage = "0"
-            return int(usage)
-        except CGroupsException as e:
-            raise e
+        usage = self._get_parameters('memory.max_usage_in_bytes', first_line_only=True)
+        if not usage:
+            usage = "0"
+        return int(usage)
 
     def collect(self):
         """
@@ -245,13 +235,10 @@ class MemoryCgroup(CGroup):
 
         :rtype: [(str, str, float)]
         """
-        try:
-            usage = self._get_memory_usage()
-            max_usage = self._get_memory_max_usage()
-            return [CollectedMetrics("memory", "Total Memory Usage", usage),
-                    CollectedMetrics("memory", "Max Memory Usage", max_usage)]
-        except CGroupsException as e:
-            raise e
+        usage = self._get_memory_usage()
+        max_usage = self._get_memory_max_usage()
+        return [CollectedMetrics("memory", "Total Memory Usage", usage),
+                CollectedMetrics("memory", "Max Memory Usage", max_usage)]
 
 
 class CollectedMetrics(object):
