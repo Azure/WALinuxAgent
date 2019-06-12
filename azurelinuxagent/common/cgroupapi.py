@@ -17,6 +17,7 @@
 import errno
 import os
 import subprocess
+import time
 import uuid
 
 from azurelinuxagent.common import logger
@@ -308,7 +309,7 @@ class FileSystemCgroupsApi(CGroupsApi):
             env=env,
             preexec_fn=pre_exec_function)
 
-        return process, extension_cgroups
+        return process, extension_cgroups, True
 
 
 class SystemdCgroupsApi(CGroupsApi):
@@ -423,14 +424,27 @@ After=system-{1}.slice""".format(extension_name, EXTENSIONS_ROOT_CGROUP_NAME)
             env=env,
             preexec_fn=os.setsid)
 
-        logger.info("Started extension using scope '{0}'", scope_name)
+        # Wait a bit and check if we completed with error
+        time.sleep(1)
+        return_code = process.poll()
+
+        if return_code is not None and return_code != 0:
+            # Check journal file for this scope and see if it started successfully
+            _, journal = shellutil.run_get_output("journalctl --unit={0}.scope".format(scope_name))
+            if journal == "-- No entries --\n":
+                logger.warn('Failed to run systemd-run for unit {0}.'.format(scope_name))
+                return process, [], False
 
         cgroups = []
 
+        logger.info("Started extension using scope '{0}'", scope_name)
+
         def create_cgroup(controller):
-            cpu_cgroup_path = os.path.join(CGROUPS_FILE_SYSTEM_ROOT, controller, 'system.slice', scope_name + ".scope")
-            cgroups.append(CGroup.create(cpu_cgroup_path, controller, extension_name))
+            cgroup_path = os.path.join(CGROUPS_FILE_SYSTEM_ROOT, controller, 'system.slice', scope_name + ".scope")
+            cgroups.append(CGroup.create(cgroup_path, controller, extension_name))
 
-        self._foreach_controller(create_cgroup, 'Cannot create cgroup for extension {0}; resource usage will not be tracked.'.format(extension_name))
+        self._foreach_controller(create_cgroup,
+                                 'Cannot create cgroup for extension {0}; resource usage will not be tracked.'.format(
+                                     extension_name))
 
-        return process, cgroups
+        return process, cgroups, True

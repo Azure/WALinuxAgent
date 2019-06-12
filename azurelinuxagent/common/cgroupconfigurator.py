@@ -153,7 +153,7 @@ class CGroupConfigurator(object):
                     stderr=stderr,
                     preexec_fn=os.setsid)
             else:
-                process, extension_cgroups = self._cgroups_api.start_extension_command(
+                process, extension_cgroups, started = self._cgroups_api.start_extension_command(
                     extension_name,
                     command,
                     shell=shell,
@@ -161,6 +161,20 @@ class CGroupConfigurator(object):
                     env=env,
                     stdout=stdout,
                     stderr=stderr)
+
+                if not started:
+                    logger.warn("Starting command {0} of extension {1} in regular subprocess mode. "
+                                "No cgroups will be created nor tracked.".format(command, extension_name))
+                    process = subprocess.Popen(
+                        command,
+                        shell=shell,
+                        cwd=cwd,
+                        env=env,
+                        stdout=stdout,
+                        stderr=stderr,
+                        preexec_fn=os.setsid)
+
+                    return process
 
                 try:
                     for cgroup in extension_cgroups:
