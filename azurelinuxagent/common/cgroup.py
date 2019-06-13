@@ -104,9 +104,9 @@ class CGroup(object):
             if tasks:
                 return len(tasks) != 0
         except CGroupsException as e:
-            logger.periodic(logger.EVERY_HALF_HOUR, 'Could not get list of tasks from "tasks" file in the cgroup: {0}.'
-                                                    ' Internal error: {1}'.format(self.path, ustr(e)),
-                            logger.LogLevel.WARNING)
+            logger.periodic_warn(logger.EVERY_HALF_HOUR,
+                                 'Could not get list of tasks from "tasks" file in the cgroup: {0}.'
+                                 ' Internal error: {1}'.format(self.path, ustr(e)))
             return False
 
         return False
@@ -127,9 +127,9 @@ class CpuCgroup(CGroup):
         try:
             self._current_cpu_total = self._get_current_cpu_total()
         except CGroupsException as e:
-            logger.periodic(logger.EVERY_HALF_HOUR,
-                            'Could not get current CPU total usage from cgroup: {0}. Internal error :{1}'.format(
-                                self.path, ustr(e)), logger.LogLevel.WARNING)
+            logger.periodic_warn(logger.EVERY_HALF_HOUR,
+                                 'Could not get current CPU total usage from cgroup: {0}. '
+                                 'Internal error :{1}'.format(self.path, ustr(e)))
 
         self._previous_cpu_total = 0
         self._current_system_cpu = self._osutil.get_total_cpu_ticks_since_boot()

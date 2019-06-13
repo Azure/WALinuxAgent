@@ -117,10 +117,9 @@ class CGroupsTelemetry(object):
                 try:
                     metric = cgroup.collect()
                 except Exception as e:
-                    logger.periodic(logger.EVERY_HALF_HOUR,
-                                    'Could not collect the cgroup metrics for cgroup path {0}. Internal error :'
-                                    '{1}'.format(cgroup.path, ustr(e)),
-                                    logger.LogLevel.WARNING)
+                    logger.periodic_warn(logger.EVERY_HALF_HOUR,
+                                         'Could not collect the cgroup metrics for cgroup path {0}. '
+                                         'Internal error : {1}'.format(cgroup.path, ustr(e)))
                 if metric:
                     CGroupsTelemetry._cgroup_metrics[cgroup.name].add_new_data(cgroup.controller, metric)
 
