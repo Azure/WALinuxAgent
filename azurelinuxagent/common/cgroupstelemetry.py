@@ -17,6 +17,7 @@ import threading
 from datetime import datetime as dt
 
 from azurelinuxagent.common import logger
+from azurelinuxagent.common.future import ustr
 
 
 class CGroupsTelemetry(object):
@@ -99,6 +100,8 @@ class CGroupsTelemetry(object):
                     CGroupsTelemetry._cgroup_metrics[key].marked_for_delete]:
             del CGroupsTelemetry._cgroup_metrics[key]
 
+        logger.reset_periodic()
+
         return collected_metrics
 
     @staticmethod
@@ -113,11 +116,11 @@ class CGroupsTelemetry(object):
                 # noinspection PyBroadException
                 try:
                     metric = cgroup.collect()
-                except Exception:
-                    # Wanted to have other smaller granular exceptions but the recurring nature of this call could
-                    # cause overfill the logs, and prevented any logging here.
-                    pass
-
+                except Exception as e:
+                    logger.periodic(logger.EVERY_HALF_HOUR,
+                                    'Could not collect the cgroup metrics for cgroup path {0}. Internal error :'
+                                    '{1}'.format(cgroup.path, ustr(e)),
+                                    logger.LogLevel.WARNING)
                 if metric:
                     CGroupsTelemetry._cgroup_metrics[cgroup.name].add_new_data(cgroup.controller, metric)
 

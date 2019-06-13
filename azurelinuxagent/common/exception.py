@@ -20,13 +20,6 @@
 Defines all exceptions
 """
 
-class CGroupsException(Exception):
-
-    def __init__(self, msg):
-        self.msg = msg
-
-    def __str__(self):
-        return repr(self.msg)
 
 class AgentError(Exception):
     """
@@ -56,6 +49,12 @@ class AgentNetworkError(AgentError):
 
     def __init__(self, msg=None, inner=None):
         super(AgentNetworkError, self).__init__(msg, inner)
+
+
+class CGroupsException(AgentError):
+
+    def __init__(self, msg, inner=None):
+        super(AgentError, self).__init__(msg, inner)
 
 
 class ExtensionError(AgentError):

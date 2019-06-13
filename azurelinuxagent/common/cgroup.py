@@ -92,7 +92,7 @@ class CGroup(object):
         except Exception as e:
             parameter_filename = self._get_cgroup_file(parameter_name)
             logger.error("Exception while attempting to read {0}: {1}".format(parameter_filename, ustr(e)))
-            raise CGroupsException("Exception while attempting to read {0}: {1}".format(parameter_filename, ustr(e)))
+            raise CGroupsException("Exception while attempting to read {0}".format(parameter_filename), e)
         return result
 
     def collect(self):
@@ -103,7 +103,10 @@ class CGroup(object):
             tasks = self._get_parameters("tasks")
             if tasks:
                 return len(tasks) != 0
-        except CGroupsException:
+        except CGroupsException as e:
+            logger.periodic(logger.EVERY_HALF_HOUR,
+                            'Could not get list of tasks from "tasks" file. Internal error :{0}'.format(ustr(e)),
+                            logger.LogLevel.WARNING)
             return False
 
         return False
@@ -123,8 +126,10 @@ class CpuCgroup(CGroup):
         self._current_cpu_total = 0
         try:
             self._current_cpu_total = self._get_current_cpu_total()
-        except:
-            pass
+        except CGroupsException as e:
+            logger.periodic(logger.EVERY_HALF_HOUR,
+                            'Could not get current CPU total usage. Internal error :{0}'.format(ustr(e)),
+                            logger.LogLevel.WARNING)
 
         self._previous_cpu_total = 0
         self._current_system_cpu = self._osutil.get_total_cpu_ticks_since_boot()
@@ -142,18 +147,16 @@ class CpuCgroup(CGroup):
         :return: int
         """
         cpu_total = 0
-        try:
-            cpu_stat = self._get_file_contents('cpuacct.stat')
-            if cpu_stat is not None:
-                m = re_user_system_times.match(cpu_stat)
-                if m:
-                    cpu_total = int(m.groups()[0]) + int(m.groups()[1])
-        except CGroupsException:
-            # There are valid reasons for file contents to be unavailable; for example, if an extension
-            # has not yet started (or has stopped) an associated service on a VM using systemd, the cgroup for
-            # the service will not exist ('cause systemd will tear it down). This might be a transient or a
-            # long-lived state, so there's no point in logging it, much less emitting telemetry.
-            raise
+        cpu_stat = self._get_file_contents('cpuacct.stat')
+        # There are valid reasons for file contents to be unavailable; for example, if an extension
+        # has not yet started (or has stopped) an associated service on a VM using systemd, the cgroup for
+        # the service will not exist ('cause systemd will tear it down). This might be a transient or a
+        # long-lived state, so there's no point in logging it, much less emitting telemetry.
+
+        if cpu_stat is not None:
+            m = re_user_system_times.match(cpu_stat)
+            if m:
+                cpu_total = int(m.groups()[0]) + int(m.groups()[1])
         return cpu_total
 
     def _update_cpu_data(self):

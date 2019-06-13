@@ -183,9 +183,6 @@ class CGroupConfiguratorTestCase(AgentTestCase):
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE)
 
-        for i in CGroupsTelemetry._tracked:
-            print(i.path)
-
         self.assertTrue(CGroupsTelemetry.is_tracked(os.path.join(
             self.cgroups_file_system_root, "cpu", "walinuxagent.extensions/Microsoft.Compute.TestExtension_1.2.3")))
         self.assertTrue(CGroupsTelemetry.is_tracked(os.path.join(
