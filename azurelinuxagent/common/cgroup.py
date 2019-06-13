@@ -104,8 +104,8 @@ class CGroup(object):
             if tasks:
                 return len(tasks) != 0
         except CGroupsException as e:
-            logger.periodic(logger.EVERY_HALF_HOUR,
-                            'Could not get list of tasks from "tasks" file. Internal error :{0}'.format(ustr(e)),
+            logger.periodic(logger.EVERY_HALF_HOUR, 'Could not get list of tasks from "tasks" file in the cgroup: {0}.'
+                                                    ' Internal error: {1}'.format(self.path, ustr(e)),
                             logger.LogLevel.WARNING)
             return False
 
@@ -128,8 +128,8 @@ class CpuCgroup(CGroup):
             self._current_cpu_total = self._get_current_cpu_total()
         except CGroupsException as e:
             logger.periodic(logger.EVERY_HALF_HOUR,
-                            'Could not get current CPU total usage. Internal error :{0}'.format(ustr(e)),
-                            logger.LogLevel.WARNING)
+                            'Could not get current CPU total usage from cgroup: {0}. Internal error :{1}'.format(
+                                self.path, ustr(e)), logger.LogLevel.WARNING)
 
         self._previous_cpu_total = 0
         self._current_system_cpu = self._osutil.get_total_cpu_ticks_since_boot()
@@ -148,11 +148,6 @@ class CpuCgroup(CGroup):
         """
         cpu_total = 0
         cpu_stat = self._get_file_contents('cpuacct.stat')
-        # There are valid reasons for file contents to be unavailable; for example, if an extension
-        # has not yet started (or has stopped) an associated service on a VM using systemd, the cgroup for
-        # the service will not exist ('cause systemd will tear it down). This might be a transient or a
-        # long-lived state, so there's no point in logging it, much less emitting telemetry.
-
         if cpu_stat is not None:
             m = re_user_system_times.match(cpu_stat)
             if m:

@@ -49,29 +49,23 @@ class Logger(object):
         return h not in self.logger.periodic_messages or \
             (self.logger.periodic_messages[h] + delta) <= datetime.now()
 
-    def periodic_info(self, delta, msg_format, *args):
+    def _periodic(self, delta, msg_format, log_level_op, *args):
         h = hash(msg_format)
         if self.is_period_elapsed(delta, h):
-            self.info(msg_format, *args)
+            log_level_op(msg_format, *args)
             self.logger.periodic_messages[h] = datetime.now()
+
+    def periodic_info(self, delta, msg_format, *args):
+        self._periodic(delta, msg_format, self.info, *args)
 
     def periodic_verbose(self, delta, msg_format, *args):
-        h = hash(msg_format)
-        if self.is_period_elapsed(delta, h):
-            self.verbose(msg_format, *args)
-            self.logger.periodic_messages[h] = datetime.now()
+        self._periodic(delta, msg_format, self.verbose, *args)
 
     def periodic_warn(self, delta, msg_format, *args):
-        h = hash(msg_format)
-        if self.is_period_elapsed(delta, h):
-            self.warn(msg_format, *args)
-            self.logger.periodic_messages[h] = datetime.now()
+        self._periodic(delta, msg_format, self.warn, *args)
 
     def periodic_error(self, delta, msg_format, *args):
-        h = hash(msg_format)
-        if self.is_period_elapsed(delta, h):
-            self.error(msg_format, *args)
-            self.logger.periodic_messages[h] = datetime.now()
+        self._periodic(delta, msg_format, self.error, *args)
 
     def verbose(self, msg_format, *args):
         self.log(LogLevel.VERBOSE, msg_format, *args)
