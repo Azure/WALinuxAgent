@@ -313,6 +313,8 @@ class TestCGroupsTelemetry(AgentTestCase):
             self.assertListEqual(generate_metric_list(cpu_percent_values),
                                  collected_metrics[name]["cpu"]["cur_cpu"][0:5])
 
+    # mocking get_proc_stat to make it run on Mac and other systems
+    # this test does not need to read the values of the /proc/stat file
     @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil._get_proc_stat")
     def test_cgroup_tracking(self, *args):
         num_extensions = 5
