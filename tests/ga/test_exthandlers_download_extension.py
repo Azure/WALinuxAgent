@@ -9,6 +9,7 @@ from azurelinuxagent.ga.exthandlers import ExtHandlerInstance, NUMBER_OF_DOWNLOA
 from azurelinuxagent.common.exception import ExtensionDownloadError, ExtensionErrorCodes
 from tests.tools import *
 
+
 class DownloadExtensionTestCase(AgentTestCase):
     """
     Test cases for launch_command
@@ -16,15 +17,11 @@ class DownloadExtensionTestCase(AgentTestCase):
     @classmethod
     def setUpClass(cls):
         AgentTestCase.setUpClass()
-        cls.mock_cgroups = patch("azurelinuxagent.ga.exthandlers.CGroups")
+        cls.mock_cgroups = patch("azurelinuxagent.ga.exthandlers.CGroupConfigurator")
         cls.mock_cgroups.start()
-
-        cls.mock_cgroups_telemetry = patch("azurelinuxagent.ga.exthandlers.CGroupsTelemetry")
-        cls.mock_cgroups_telemetry.start()
 
     @classmethod
     def tearDownClass(cls):
-        cls.mock_cgroups_telemetry.stop()
         cls.mock_cgroups.stop()
 
         AgentTestCase.tearDownClass()

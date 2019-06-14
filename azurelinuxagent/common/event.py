@@ -22,12 +22,10 @@ import os
 import sys
 import time
 import traceback
-
 from datetime import datetime
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
-
 from azurelinuxagent.common.exception import EventError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.restapi import TelemetryEventParam, \
@@ -47,6 +45,7 @@ class WALAEventOperation:
     AutoUpdate = "AutoUpdate"
     CustomData = "CustomData"
     CGroupsLimitsCrossed = "CGroupsLimitsCrossed"
+    ExtensionMetricsData = "ExtensionMetricsData"
     Deploy = "Deploy"
     Disable = "Disable"
     Downgrade = "Downgrade"
@@ -235,17 +234,17 @@ class EventLogger(object):
             (self.periodic_events[h] + delta) <= datetime.now()
 
     def add_periodic(self,
-        delta, name, op=WALAEventOperation.Unknown, is_success=True, duration=0,
-        version=CURRENT_VERSION, message="", evt_type="",
-        is_internal=False, log_event=True, force=False):
+                     delta, name, op=WALAEventOperation.Unknown, is_success=True, duration=0,
+                     version=CURRENT_VERSION, message="", evt_type="",
+                     is_internal=False, log_event=True, force=False):
 
-        h = hash(name+op+ustr(is_success)+message)
-        
+        h = hash(name + op + ustr(is_success) + message)
+
         if force or self.is_period_elapsed(delta, h):
             self.add_event(name,
-                op=op, is_success=is_success, duration=duration,
-                version=version, message=message, evt_type=evt_type,
-                is_internal=is_internal, log_event=log_event)
+                           op=op, is_success=is_success, duration=duration,
+                           version=version, message=message, evt_type=evt_type,
+                           is_internal=is_internal, log_event=log_event)
             self.periodic_events[h] = datetime.now()
 
     def add_event(self,
