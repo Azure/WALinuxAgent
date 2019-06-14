@@ -67,6 +67,7 @@ class WALAEventOperation:
     Install = "Install"
     InitializeCGroups = "InitializeCGroups"
     InitializeHostPlugin = "InitializeHostPlugin"
+    InvokeCommandUsingSystemd = "InvokeCommandUsingSystemd"
     Log = "Log"
     Partition = "Partition"
     ProcessGoalState = "ProcessGoalState"

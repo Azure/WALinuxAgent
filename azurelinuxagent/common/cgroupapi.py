@@ -21,10 +21,12 @@ import time
 import uuid
 
 from azurelinuxagent.common import logger
-from azurelinuxagent.common.cgroup import CpuCgroup, MemoryCgroup, CGroup
+from azurelinuxagent.common.cgroup import CGroup
+from azurelinuxagent.common.event import add_event, WALAEventOperation
 from azurelinuxagent.common.exception import CGroupsException
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.utils import fileutil, shellutil
+from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 
 CGROUPS_FILE_SYSTEM_ROOT = '/sys/fs/cgroup'
 CGROUP_CONTROLLERS = ["cpu", "memory"]
@@ -309,7 +311,7 @@ class FileSystemCgroupsApi(CGroupsApi):
             env=env,
             preexec_fn=pre_exec_function)
 
-        return process, extension_cgroups, True
+        return process, extension_cgroups
 
 
 class SystemdCgroupsApi(CGroupsApi):
@@ -431,9 +433,27 @@ After=system-{1}.slice""".format(extension_name, EXTENSIONS_ROOT_CGROUP_NAME)
         if return_code is not None and return_code != 0:
             # Check journal file for this scope and see if it started successfully
             _, journal = shellutil.run_get_output("journalctl --unit={0}.scope".format(scope_name))
-            if journal == "-- No entries --\n":
+
+            if "-- No entries --" in journal:
                 logger.warn('Failed to run systemd-run for unit {0}.'.format(scope_name))
-                return process, [], False
+
+                add_event(AGENT_NAME,
+                          version=CURRENT_VERSION,
+                          op=WALAEventOperation.InvokeCommandUsingSystemd,
+                          is_success=False,
+                          message='Failed to run systemd-run for unit {0}.scope.'.format(scope_name))
+
+                # Try starting the process without systemd-run
+                process = subprocess.Popen(
+                    command,
+                    shell=shell,
+                    cwd=cwd,
+                    env=env,
+                    stdout=stdout,
+                    stderr=stderr,
+                    preexec_fn=os.setsid)
+
+                return process, []
 
         cgroups = []
 
@@ -447,4 +467,4 @@ After=system-{1}.slice""".format(extension_name, EXTENSIONS_ROOT_CGROUP_NAME)
                                  'Cannot create cgroup for extension {0}; resource usage will not be tracked.'.format(
                                      extension_name))
 
-        return process, cgroups, True
+        return process, cgroups
