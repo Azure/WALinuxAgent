@@ -1270,6 +1270,7 @@ class DefaultOSUtil(object):
             results = fileutil.read_file('/proc/stat')
         except (OSError, IOError) as ex:
             logger.warn("Couldn't read /proc/stat: {0}".format(ex.strerror))
+            raise
 
         return results
 

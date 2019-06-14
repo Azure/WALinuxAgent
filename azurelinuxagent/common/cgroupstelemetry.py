@@ -17,6 +17,7 @@ import threading
 from datetime import datetime as dt
 
 from azurelinuxagent.common import logger
+from azurelinuxagent.common.future import ustr
 
 
 class CGroupsTelemetry(object):
@@ -34,15 +35,24 @@ class CGroupsTelemetry(object):
     @staticmethod
     def _process_cgroup_metric(cgroup_metrics):
         current_memory_usage, max_memory_levels, current_cpu_usage = cgroup_metrics.get_metrics()
-        processed_extension = {
-            "memory": {
-                "cur_mem": CGroupsTelemetry._get_metrics_list(current_memory_usage),
-                "max_mem": CGroupsTelemetry._get_metrics_list(max_memory_levels)
-            },
-            "cpu": {
-                "cur_cpu": CGroupsTelemetry._get_metrics_list(current_cpu_usage)
-            }
-        }
+
+        processed_extension = {}
+
+        if current_cpu_usage.count() > 0:
+            processed_extension["cpu"] = {"cur_cpu": CGroupsTelemetry._get_metrics_list(current_cpu_usage)}
+
+        if current_memory_usage.count() > 0:
+            if "memory" in processed_extension:
+                processed_extension["memory"]["cur_mem"] = CGroupsTelemetry._get_metrics_list(current_memory_usage)
+            else:
+                processed_extension["memory"] = {"cur_mem": CGroupsTelemetry._get_metrics_list(current_memory_usage)}
+
+        if max_memory_levels.count() > 0:
+            if "memory" in processed_extension:
+                processed_extension["memory"]["max_mem"] = CGroupsTelemetry._get_metrics_list(max_memory_levels)
+            else:
+                processed_extension["memory"] = {"max_mem": CGroupsTelemetry._get_metrics_list(max_memory_levels)}
+
         return processed_extension
 
     @staticmethod
@@ -90,15 +100,28 @@ class CGroupsTelemetry(object):
                     CGroupsTelemetry._cgroup_metrics[key].marked_for_delete]:
             del CGroupsTelemetry._cgroup_metrics[key]
 
+        logger.reset_periodic()
+
         return collected_metrics
 
     @staticmethod
     def poll_all_tracked():
         with CGroupsTelemetry._rlock:
             for cgroup in CGroupsTelemetry._tracked[:]:
+
                 if cgroup.name not in CGroupsTelemetry._cgroup_metrics:
                     CGroupsTelemetry._cgroup_metrics[cgroup.name] = CgroupMetrics()
-                CGroupsTelemetry._cgroup_metrics[cgroup.name].add_new_data(cgroup.controller, cgroup.collect())
+
+                metric = None
+                # noinspection PyBroadException
+                try:
+                    metric = cgroup.collect()
+                except Exception as e:
+                    logger.periodic_warn(logger.EVERY_HALF_HOUR,
+                                         'Could not collect the cgroup metrics for cgroup path {0}. '
+                                         'Internal error : {1}'.format(cgroup.path, ustr(e)))
+                if metric:
+                    CGroupsTelemetry._cgroup_metrics[cgroup.name].add_new_data(cgroup.controller, metric)
 
                 if not cgroup.is_active():
                     CGroupsTelemetry.stop_tracking(cgroup)
@@ -115,6 +138,7 @@ class CGroupsTelemetry(object):
     def cleanup():
         with CGroupsTelemetry._rlock:
             CGroupsTelemetry._tracked *= 0  # emptying the list
+            CGroupsTelemetry._cgroup_metrics = {}
 
 
 class CgroupMetrics(object):
@@ -132,10 +156,11 @@ class CgroupMetrics(object):
         self._current_cpu_usage.append(metric[0].value)
 
     def add_new_data(self, controller, metric):
-        if controller is "cpu":
-            self._add_cpu_usage(metric)
-        elif controller is "memory":
-            self._add_memory_usage(metric)
+        if metric:
+            if controller is "cpu":
+                self._add_cpu_usage(metric)
+            elif controller is "memory":
+                self._add_memory_usage(metric)
 
     def get_metrics(self):
         return self._current_memory_usage, self._max_memory_levels, self._current_cpu_usage
