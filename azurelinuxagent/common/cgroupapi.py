@@ -26,6 +26,7 @@ from azurelinuxagent.common.event import add_event, WALAEventOperation
 from azurelinuxagent.common.exception import CGroupsException
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.utils import fileutil, shellutil
+from azurelinuxagent.common.utils.processutil import read_output
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 
 CGROUPS_FILE_SYSTEM_ROOT = '/sys/fs/cgroup'
@@ -431,17 +432,25 @@ After=system-{1}.slice""".format(extension_name, EXTENSIONS_ROOT_CGROUP_NAME)
         return_code = process.poll()
 
         if return_code is not None and return_code != 0:
-            # Check journal file for this scope and see if it started successfully
-            _, journal = shellutil.run_get_output("journalctl --unit={0}.scope".format(scope_name))
+            process_output = read_output(stdout, stderr)
 
-            if "-- No entries --" in journal:
-                logger.warn('Failed to run systemd-run for unit {0}.'.format(scope_name))
+            # When systemd-run successfully invokes a command, thereby creating its unit, it will output the
+            # unit's name. Since the scope name is only known to systemd-run, and not to the extension itself,
+            # if scope_name appears in the output, we are certain systemd-run managed to run.
+            if scope_name not in process_output:
+                logger.warn('Failed to run systemd-run for unit {0}.scope '
+                            'Process exited with code {1} and output {2}'.format(scope_name,
+                                                                                 return_code,
+                                                                                 process_output))
 
                 add_event(AGENT_NAME,
                           version=CURRENT_VERSION,
                           op=WALAEventOperation.InvokeCommandUsingSystemd,
                           is_success=False,
-                          message='Failed to run systemd-run for unit {0}.scope.'.format(scope_name))
+                          message='Failed to run systemd-run for unit {0}.scope. '
+                                  'Process exited with code {1} and output {2}'.format(scope_name,
+                                                                                       return_code,
+                                                                                       process_output))
 
                 # Try starting the process without systemd-run
                 process = subprocess.Popen(

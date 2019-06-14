@@ -51,7 +51,7 @@ from azurelinuxagent.common.protocol.restapi import ExtHandlerStatus, \
     get_properties, \
     set_properties
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
-from azurelinuxagent.common.utils.processutil import format_stdout_stderr, TELEMETRY_MESSAGE_MAX_LEN
+from azurelinuxagent.common.utils.processutil import read_output
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION, GOAL_STATE_AGENT_VERSION, \
     DISTRO_NAME, DISTRO_VERSION, PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO
 
@@ -1166,22 +1166,10 @@ class ExtHandlerInstance(object):
             time.sleep(1)
             retry -= 1
 
-        def read_output():
-            try:
-                stdout_file.seek(0)
-                stderr_file.seek(0)
-
-                stdout = ustr(stdout_file.read(TELEMETRY_MESSAGE_MAX_LEN), encoding='utf-8', errors='backslashreplace')
-                stderr = ustr(stderr_file.read(TELEMETRY_MESSAGE_MAX_LEN), encoding='utf-8', errors='backslashreplace')
-
-                return format_stdout_stderr(stdout, stderr)
-            except Exception as e:
-                return format_stdout_stderr("", "Cannot read stdout/stderr: {0}".format(str(e)))
-
         # timeout expired
         if retry == 0:
             os.killpg(os.getpgid(process.pid), signal.SIGKILL)
-            raise ExtensionError("Timeout({0}): {1}\n{2}".format(timeout, cmd, read_output()),
+            raise ExtensionError("Timeout({0}): {1}\n{2}".format(timeout, cmd, read_output(stdout_file, stderr_file)),
                                  code=ExtensionErrorCodes.PluginHandlerScriptTimedout)
 
         # process completed or forked; sleep 1 sec to give the child process (if any) a chance to start
@@ -1189,9 +1177,12 @@ class ExtHandlerInstance(object):
 
         return_code = process.wait()
         if return_code != 0:
-            raise ExtensionError("Non-zero exit code: {0}, {1}\n{2}".format(return_code, cmd, read_output()), code=code)
+            raise ExtensionError("Non-zero exit code: {0}, {1}\n{2}".format(return_code,
+                                                                            cmd,
+                                                                            read_output(stdout_file, stderr_file)),
+                                 code=code)
 
-        return read_output()
+        return read_output(stdout_file, stderr_file)
 
     def load_manifest(self):
         man_file = self.get_manifest_file()
