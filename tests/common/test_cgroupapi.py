@@ -318,6 +318,7 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
             self.assertTrue(cpu_found, 'start_extension_command did not return a cpu cgroup')
             self.assertTrue(memory_found, 'start_extension_command did not return a memory cgroup')
 
+    @skip_if_predicate_false(i_am_root, "Test does not run when normal user")
     def test_start_extension_command_should_use_systemd_if_not_failing(self):
         original_popen = subprocess.Popen
 
@@ -342,6 +343,7 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
             self.assertEquals(0, ret)
             self.assertEquals(1, patch_mock_popen.call_count)
 
+    @skip_if_predicate_false(i_am_root, "Test does not run when normal user")
     def test_start_extension_command_should_not_use_systemd_if_failing(self):
         original_popen = subprocess.Popen
 
