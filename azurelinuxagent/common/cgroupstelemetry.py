@@ -92,7 +92,11 @@ class CGroupsTelemetry(object):
         collected_metrics = {}
 
         for name, cgroup_metrics in CGroupsTelemetry._cgroup_metrics.items():
-            collected_metrics[name] = CGroupsTelemetry._process_cgroup_metric(cgroup_metrics)
+            perf_metric = CGroupsTelemetry._process_cgroup_metric(cgroup_metrics)
+
+            if perf_metric:
+                collected_metrics[name] = perf_metric
+
             cgroup_metrics.clear()
 
         # Doing cleanup after the metrics have already been collected.
