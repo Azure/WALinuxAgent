@@ -313,7 +313,8 @@ class TestCGroupsTelemetry(AgentTestCase):
             self.assertListEqual(generate_metric_list(cpu_percent_values),
                                  collected_metrics[name]["cpu"]["cur_cpu"][0:5])
 
-    def test_cgroup_tracking(self):
+    @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil._get_proc_stat")
+    def test_cgroup_tracking(self, *args):
         num_extensions = 5
         num_controllers = 2
         for i in range(num_extensions):
@@ -330,7 +331,8 @@ class TestCGroupsTelemetry(AgentTestCase):
 
         self.assertEqual(num_extensions * num_controllers, len(CGroupsTelemetry._tracked))
 
-    def test_cgroup_pruning(self):
+    @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil._get_proc_stat")
+    def test_cgroup_pruning(self, *args):
         num_extensions = 5
         num_controllers = 2
         for i in range(num_extensions):
@@ -355,7 +357,8 @@ class TestCGroupsTelemetry(AgentTestCase):
 
         self.assertEqual(0, len(CGroupsTelemetry._tracked))
 
-    def test_cgroup_is_tracked(self):
+    @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil._get_proc_stat")
+    def test_cgroup_is_tracked(self, *args):
         num_extensions = 5
         for i in range(num_extensions):
             dummy_cpu_cgroup = CGroup.create("dummy_cpu_path_{0}".format(i), "cpu", "dummy_extension_{0}".format(i))
@@ -372,7 +375,8 @@ class TestCGroupsTelemetry(AgentTestCase):
         self.assertFalse(CGroupsTelemetry.is_tracked("not_present_cpu_dummy_path"))
         self.assertFalse(CGroupsTelemetry.is_tracked("not_present_memory_dummy_path"))
 
-    def test_process_cgroup_metric_with_incorrect_cgroups_mounted(self):
+    @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil._get_proc_stat")
+    def test_process_cgroup_metric_with_incorrect_cgroups_mounted(self, *args):
         num_extensions = 5
         for i in range(num_extensions):
             dummy_cpu_cgroup = CGroup.create("dummy_cpu_path_{0}".format(i), "cpu", "dummy_extension_{0}".format(i))
@@ -495,6 +499,35 @@ class TestCGroupsTelemetry(AgentTestCase):
                             self.assertEqual(len(current_memory_usage._data), 0)
                             self.assertEqual(len(max_memory_levels._data), 0)
                             self.assertEqual(len(current_cpu_usage._data), 0)
+
+    @patch("azurelinuxagent.common.cgroup.CpuCgroup.collect")
+    @patch("azurelinuxagent.common.cgroup.MemoryCgroup._get_memory_usage")
+    @patch("azurelinuxagent.common.cgroup.MemoryCgroup._get_memory_max_usage")
+    @patch("azurelinuxagent.common.cgroup.CpuCgroup._get_current_cpu_total")
+    @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_total_cpu_ticks_since_boot")
+    def test_extension_temetry_not_sent_for_empty_perf_metrics(self, *args):
+        num_extensions = 5
+        for i in range(num_extensions):
+            dummy_cpu_cgroup = CGroup.create("dummy_cpu_path_{0}".format(i), "cpu", "dummy_extension_{0}".format(i))
+            CGroupsTelemetry.track_cgroup(dummy_cpu_cgroup)
+
+            dummy_memory_cgroup = CGroup.create("dummy_memory_path_{0}".format(i), "memory",
+                                                "dummy_extension_{0}".format(i))
+            CGroupsTelemetry.track_cgroup(dummy_memory_cgroup)
+
+        with patch("azurelinuxagent.common.cgroupstelemetry.CGroupsTelemetry._process_cgroup_metric") as \
+                patch_process_cgroup_metric:
+            with patch("azurelinuxagent.common.cgroup.CGroup.is_active") as patch_is_active:
+
+                patch_is_active.return_value = False
+                patch_process_cgroup_metric.return_value = {}
+                poll_count = 1
+
+                for data_count in range(poll_count, 10):
+                    CGroupsTelemetry.poll_all_tracked()
+
+                collected_metrics = CGroupsTelemetry.report_all_tracked()
+                self.assertEqual(0, len(collected_metrics))
 
     @skip_if_predicate_false(i_am_root, "This test will only run as root")
     @skip_if_predicate_false(CGroupConfigurator.get_instance().enabled, "Does not run when Cgroups are not enabled")
