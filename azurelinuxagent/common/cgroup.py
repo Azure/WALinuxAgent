@@ -13,7 +13,7 @@
 # limitations under the License.
 #
 # Requires Python 2.6+ and Openssl 1.0+
-
+import errno
 import os
 import re
 
@@ -66,8 +66,7 @@ class CGroup(object):
         try:
             return fileutil.read_file(parameter_file)
         except Exception:
-            raise CGroupsException("Could not retrieve cgroup file {0}/{1}".
-                                   format(self.path, file_name))
+            raise
 
     def _get_parameters(self, parameter_name, first_line_only=False):
         """
@@ -87,9 +86,9 @@ class CGroup(object):
             parameter_filename = self._get_cgroup_file(parameter_name)
             logger.error("File {0} is empty but should not be".format(parameter_filename))
             raise CGroupsException("File {0} is empty but should not be".format(parameter_filename))
-        except CGroupsException:
-            raise
         except Exception as e:
+            if isinstance(e, (IOError, OSError)) and e.errno == errno.ENOENT:
+                raise e
             parameter_filename = self._get_cgroup_file(parameter_name)
             logger.error("Exception while attempting to read {0}: {1}".format(parameter_filename, ustr(e)))
             raise CGroupsException("Exception while attempting to read {0}".format(parameter_filename), e)
@@ -103,6 +102,14 @@ class CGroup(object):
             tasks = self._get_parameters("tasks")
             if tasks:
                 return len(tasks) != 0
+        except (IOError, OSError) as e:
+            if e.errno == errno.ENOENT:
+                # only suppressing file not found exceptions.
+                pass
+            else:
+                logger.periodic_warn(logger.EVERY_HALF_HOUR,
+                                     'Could not get list of tasks from "tasks" file in the cgroup: {0}.'
+                                     ' Internal error: {1}'.format(self.path, ustr(e)))
         except CGroupsException as e:
             logger.periodic_warn(logger.EVERY_HALF_HOUR,
                                  'Could not get list of tasks from "tasks" file in the cgroup: {0}.'
@@ -124,13 +131,6 @@ class CpuCgroup(CGroup):
 
         self._osutil = get_osutil()
         self._current_cpu_total = 0
-        try:
-            self._current_cpu_total = self._get_current_cpu_total()
-        except CGroupsException as e:
-            logger.periodic_warn(logger.EVERY_HALF_HOUR,
-                                 'Could not get current CPU total usage from cgroup: {0}. '
-                                 'Internal error :{1}'.format(self.path, ustr(e)))
-
         self._previous_cpu_total = 0
         self._current_system_cpu = self._osutil.get_total_cpu_ticks_since_boot()
         self._previous_system_cpu = 0
@@ -147,8 +147,14 @@ class CpuCgroup(CGroup):
         :return: int
         """
         cpu_total = 0
-        cpu_stat = self._get_file_contents('cpuacct.stat')
-        if cpu_stat is not None:
+        try:
+            cpu_stat = self._get_file_contents('cpuacct.stat')
+        except Exception as e:
+            if isinstance(e, (IOError, OSError)) and e.errno == errno.ENOENT:
+                raise e
+            raise CGroupsException("Exception while attempting to read {0}".format("cpuacct.stat"), e)
+
+        if cpu_stat:
             m = re_user_system_times.match(cpu_stat)
             if m:
                 cpu_total = int(m.groups()[0]) + int(m.groups()[1])

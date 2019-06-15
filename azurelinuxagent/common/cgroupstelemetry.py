@@ -13,6 +13,7 @@
 # limitations under the License.
 #
 # Requires Python 2.6+ and Openssl 1.0+
+import errno
 import threading
 from datetime import datetime as dt
 
@@ -121,9 +122,12 @@ class CGroupsTelemetry(object):
                 try:
                     metric = cgroup.collect()
                 except Exception as e:
-                    logger.periodic_warn(logger.EVERY_HALF_HOUR,
-                                         'Could not collect the cgroup metrics for cgroup path {0}. '
-                                         'Internal error : {1}'.format(cgroup.path, ustr(e)))
+                    if isinstance(e, (IOError, OSError)) and e.errno == errno.ENOENT:
+                        pass
+                    else:
+                        logger.periodic_warn(logger.EVERY_HALF_HOUR,
+                                             'Could not collect the cgroup metrics for cgroup path {0}. '
+                                             'Internal error : {1}'.format(cgroup.path, ustr(e)))
                 if metric:
                     CGroupsTelemetry._cgroup_metrics[cgroup.name].add_new_data(cgroup.controller, metric)
 

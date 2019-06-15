@@ -14,10 +14,9 @@
 #
 # Requires Python 2.4+ and Openssl 1.0+
 #
-
+import errno
 import os
 import random
-import stat
 import time
 
 from mock import patch
@@ -256,6 +255,87 @@ class TestCGroupsTelemetry(AgentTestCase):
                             self.assertEqual(len(max_memory_levels._data), 0)
                             self.assertEqual(len(current_cpu_usage._data), 0)
 
+    @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil._get_proc_stat")
+    @patch("azurelinuxagent.common.logger.periodic_warn")
+    @patch("azurelinuxagent.common.utils.fileutil.read_file")
+    def test_telemetry_polling_to_not_generate_transient_logs_ioerror_file_not_found(self, mock_read_file,
+                                                                                     patch_periodic_warn, *args):
+        num_extensions = 1
+        for i in range(num_extensions):
+            dummy_cpu_cgroup = CGroup.create("dummy_cpu_path_{0}".format(i), "cpu", "dummy_extension_{0}".format(i))
+            CGroupsTelemetry.track_cgroup(dummy_cpu_cgroup)
+
+            dummy_memory_cgroup = CGroup.create("dummy_memory_path_{0}".format(i), "memory",
+                                                "dummy_extension_{0}".format(i))
+            CGroupsTelemetry.track_cgroup(dummy_memory_cgroup)
+
+        self.assertEqual(0, patch_periodic_warn.call_count)
+
+        # Not expecting logs present for io_error with errno=errno.ENOENT
+        io_error_2 = IOError()
+        io_error_2.errno = errno.ENOENT
+        mock_read_file.side_effect = io_error_2
+
+        poll_count = 1
+        for data_count in range(poll_count, 10):
+            CGroupsTelemetry.poll_all_tracked()
+            self.assertEqual(0, patch_periodic_warn.call_count)
+
+    @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil._get_proc_stat")
+    @patch("azurelinuxagent.common.logger.periodic_warn")
+    @patch("azurelinuxagent.common.utils.fileutil.read_file")
+    def test_telemetry_polling_to_generate_transient_logs_ioerror_permission_denied(self, mock_read_file,
+                                                                                    patch_periodic_warn, *args):
+        num_extensions = 1
+        num_controllers = 2
+        is_active_check_per_controller = 2
+
+        for i in range(num_extensions):
+            dummy_cpu_cgroup = CGroup.create("dummy_cpu_path_{0}".format(i), "cpu", "dummy_extension_{0}".format(i))
+            CGroupsTelemetry.track_cgroup(dummy_cpu_cgroup)
+
+            dummy_memory_cgroup = CGroup.create("dummy_memory_path_{0}".format(i), "memory",
+                                                "dummy_extension_{0}".format(i))
+            CGroupsTelemetry.track_cgroup(dummy_memory_cgroup)
+
+        self.assertEqual(0, patch_periodic_warn.call_count)
+
+        # Expecting logs to be present for different kind of errors
+        io_error_3 = IOError()
+        io_error_3.errno = errno.EPERM
+        mock_read_file.side_effect = io_error_3
+
+        poll_count = 1
+        expected_count_per_call = num_controllers + is_active_check_per_controller
+        # each collect per controller would generate a log statement, and each cgroup would invoke a
+        # is active check raising an exception
+
+        for data_count in range(poll_count, 10):
+            CGroupsTelemetry.poll_all_tracked()
+            self.assertEqual(poll_count * expected_count_per_call, patch_periodic_warn.call_count)
+
+    @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil._get_proc_stat")
+    @patch("azurelinuxagent.common.utils.fileutil.read_file")
+    def test_telemetry_polling_to_generate_transient_logs_index_error(self, mock_read_file, *args):
+        num_extensions = 1
+        for i in range(num_extensions):
+            dummy_cpu_cgroup = CGroup.create("dummy_cpu_path_{0}".format(i), "cpu", "dummy_extension_{0}".format(i))
+            CGroupsTelemetry.track_cgroup(dummy_cpu_cgroup)
+
+            dummy_memory_cgroup = CGroup.create("dummy_memory_path_{0}".format(i), "memory",
+                                                "dummy_extension_{0}".format(i))
+            CGroupsTelemetry.track_cgroup(dummy_memory_cgroup)
+
+        # Generating a different kind of error (non-IOError) to check the logging.
+        # Trying to invoke IndexError during the getParameter call
+        mock_read_file.return_value = ''
+
+        with patch("azurelinuxagent.common.logger.periodic_warn") as patch_periodic_warn:
+            expected_call_count = 1  # called only once at start, and then gets removed from the tracked data.
+            for data_count in range(1, 10):
+                CGroupsTelemetry.poll_all_tracked()
+                self.assertEqual(expected_call_count, patch_periodic_warn.call_count)
+
     @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_total_cpu_ticks_since_boot")
     @patch("azurelinuxagent.common.cgroup.CpuCgroup._get_current_cpu_total")
     @patch("azurelinuxagent.common.cgroup.CpuCgroup._update_cpu_data")
@@ -407,7 +487,7 @@ class TestCGroupsTelemetry(AgentTestCase):
                 collected_metrics = {}
                 for name, cgroup_metrics in CGroupsTelemetry._cgroup_metrics.items():
                     collected_metrics[name] = CGroupsTelemetry._process_cgroup_metric(cgroup_metrics)
-                    self.assertEqual(collected_metrics[name], {})  #empty
+                    self.assertEqual(collected_metrics[name], {})  # empty
 
     @patch("azurelinuxagent.common.cgroup.CpuCgroup._get_current_cpu_total")
     @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_total_cpu_ticks_since_boot")
