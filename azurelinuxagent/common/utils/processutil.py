@@ -16,14 +16,25 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 #
-import os
-import signal
-from errno import ESRCH
 
-from azurelinuxagent.common.exception import ExtensionError
 from azurelinuxagent.common.future import ustr
 
 TELEMETRY_MESSAGE_MAX_LEN = 3200
+
+
+def read_output(stdout, stderr):
+    try:
+        stdout.seek(0)
+        stderr.seek(0)
+
+        stdout = ustr(stdout.read(TELEMETRY_MESSAGE_MAX_LEN), encoding='utf-8',
+                      errors='backslashreplace')
+        stderr = ustr(stderr.read(TELEMETRY_MESSAGE_MAX_LEN), encoding='utf-8',
+                      errors='backslashreplace')
+
+        return format_stdout_stderr(stdout, stderr)
+    except Exception as e:
+        return format_stdout_stderr("", "Cannot read stdout/stderr: {0}".format(str(e)))
 
 
 def format_stdout_stderr(stdout, stderr, max_len=TELEMETRY_MESSAGE_MAX_LEN):

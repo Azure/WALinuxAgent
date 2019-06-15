@@ -17,13 +17,17 @@
 import errno
 import os
 import subprocess
+import time
 import uuid
 
 from azurelinuxagent.common import logger
-from azurelinuxagent.common.cgroup import CpuCgroup, MemoryCgroup, CGroup
+from azurelinuxagent.common.cgroup import CGroup
+from azurelinuxagent.common.event import add_event, WALAEventOperation
 from azurelinuxagent.common.exception import CGroupsException
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.utils import fileutil, shellutil
+from azurelinuxagent.common.utils.processutil import read_output
+from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 
 CGROUPS_FILE_SYSTEM_ROOT = '/sys/fs/cgroup'
 CGROUP_CONTROLLERS = ["cpu", "memory"]
@@ -423,14 +427,53 @@ After=system-{1}.slice""".format(extension_name, EXTENSIONS_ROOT_CGROUP_NAME)
             env=env,
             preexec_fn=os.setsid)
 
-        logger.info("Started extension using scope '{0}'", scope_name)
+        # Wait a bit and check if we completed with error
+        time.sleep(1)
+        return_code = process.poll()
+
+        if return_code is not None and return_code != 0:
+            process_output = read_output(stdout, stderr)
+
+            # When systemd-run successfully invokes a command, thereby creating its unit, it will output the
+            # unit's name. Since the scope name is only known to systemd-run, and not to the extension itself,
+            # if scope_name appears in the output, we are certain systemd-run managed to run.
+            if scope_name not in process_output:
+                logger.warn('Failed to run systemd-run for unit {0}.scope '
+                            'Process exited with code {1} and output {2}'.format(scope_name,
+                                                                                 return_code,
+                                                                                 process_output))
+
+                add_event(AGENT_NAME,
+                          version=CURRENT_VERSION,
+                          op=WALAEventOperation.InvokeCommandUsingSystemd,
+                          is_success=False,
+                          message='Failed to run systemd-run for unit {0}.scope. '
+                                  'Process exited with code {1} and output {2}'.format(scope_name,
+                                                                                       return_code,
+                                                                                       process_output))
+
+                # Try starting the process without systemd-run
+                process = subprocess.Popen(
+                    command,
+                    shell=shell,
+                    cwd=cwd,
+                    env=env,
+                    stdout=stdout,
+                    stderr=stderr,
+                    preexec_fn=os.setsid)
+
+                return process, []
 
         cgroups = []
 
-        def create_cgroup(controller):
-            cpu_cgroup_path = os.path.join(CGROUPS_FILE_SYSTEM_ROOT, controller, 'system.slice', scope_name + ".scope")
-            cgroups.append(CGroup.create(cpu_cgroup_path, controller, extension_name))
+        logger.info("Started extension using scope '{0}'", scope_name)
 
-        self._foreach_controller(create_cgroup, 'Cannot create cgroup for extension {0}; resource usage will not be tracked.'.format(extension_name))
+        def create_cgroup(controller):
+            cgroup_path = os.path.join(CGROUPS_FILE_SYSTEM_ROOT, controller, 'system.slice', scope_name + ".scope")
+            cgroups.append(CGroup.create(cgroup_path, controller, extension_name))
+
+        self._foreach_controller(create_cgroup,
+                                 'Cannot create cgroup for extension {0}; resource usage will not be tracked.'.format(
+                                     extension_name))
 
         return process, cgroups

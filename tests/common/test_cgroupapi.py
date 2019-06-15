@@ -190,7 +190,7 @@ class FileSystemCgroupsApiTestCase(AgentTestCase):
     def test_remove_extension_cgroups_should_log_a_warning_when_the_cgroup_contains_active_tasks(self):
         api = FileSystemCgroupsApi()
         api.create_extension_cgroups_root()
-        extension_cgroups = api.create_extension_cgroups("Microsoft.Compute.TestExtension-1.2.3")
+        api.create_extension_cgroups("Microsoft.Compute.TestExtension-1.2.3")
 
         with patch("azurelinuxagent.common.cgroupapi.logger.warn") as mock_logger_warn:
             with patch("azurelinuxagent.common.cgroupapi.os.rmdir", side_effect=OSError(16, "Device or resource busy")):
@@ -317,3 +317,90 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
 
             self.assertTrue(cpu_found, 'start_extension_command did not return a cpu cgroup')
             self.assertTrue(memory_found, 'start_extension_command did not return a memory cgroup')
+
+    @skip_if_predicate_false(i_am_root, "Test does not run when normal user")
+    def test_start_extension_command_should_use_systemd_if_not_failing(self):
+        original_popen = subprocess.Popen
+
+        def mock_popen(*args, **kwargs):
+            return original_popen(*args, **kwargs)
+
+        with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stdout:
+            with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stderr:
+                with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", side_effect=mock_popen) as patch_mock_popen:
+                    process, extension_cgroups = SystemdCgroupsApi().start_extension_command(
+                        extension_name="Microsoft.Compute.TestExtension-1.2.3",
+                        command="date",
+                        shell=True,
+                        cwd=self.tmp_dir,
+                        env={},
+                        stdout=stdout,
+                        stderr=stderr)
+
+                    process.wait()
+
+                    ret = process.poll()
+
+                    # We should have invoked the extension command only once and succeeded
+                    self.assertEquals(0, ret)
+                    self.assertEquals(1, patch_mock_popen.call_count)
+
+                    # Assert that the extension's cgroups were created as well
+                    self.assertEqual(len(extension_cgroups), 2, 'start_extension_command did not return the expected number of cgroups')
+
+                    cpu_found = memory_found = False
+
+                    for cgroup in extension_cgroups:
+                        match = re.match(r'^/sys/fs/cgroup/(cpu|memory)/system.slice/Microsoft.Compute.TestExtension_1\.2\.3\_([a-f0-9-]+)\.scope$', cgroup.path)
+
+                        self.assertTrue(match is not None, "Unexpected path for cgroup: {0}".format(cgroup.path))
+
+                        if match.group(1) == 'cpu':
+                            cpu_found = True
+                        if match.group(1) == 'memory':
+                            memory_found = True
+
+                    self.assertTrue(cpu_found, 'start_extension_command did not return a cpu cgroup')
+                    self.assertTrue(memory_found, 'start_extension_command did not return a memory cgroup')
+
+    @skip_if_predicate_false(i_am_root, "Test does not run when normal user")
+    def test_start_extension_command_should_not_use_systemd_if_failing(self):
+        original_popen = subprocess.Popen
+
+        def mock_popen(*args, **kwargs):
+            # Inject a syntax error to the call
+            systemd_command = args[0].replace('systemd-run', 'systemd-run syntax_error')
+            new_args = (systemd_command,)
+            return original_popen(new_args, **kwargs)
+
+        with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stdout:
+            with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stderr:
+                with patch("azurelinuxagent.common.cgroupapi.logger.warn") as mock_logger_warn:
+                    with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", side_effect=mock_popen) as patch_mock_popen:
+
+                        # We expect this call to fail because of the syntax error
+                        process, extension_cgroups = SystemdCgroupsApi().start_extension_command(
+                            extension_name="Microsoft.Compute.TestExtension-1.2.3",
+                            command="date",
+                            shell=True,
+                            cwd=self.tmp_dir,
+                            env={},
+                            stdout=stdout,
+                            stderr=stderr)
+
+                        process.wait()
+
+                        args, kwargs = mock_logger_warn.call_args
+                        message = args[0]
+                        self.assertIn("Failed to find executable syntax_error: No such file or directory", message)
+                        self.assertIn("Failed to run systemd-run for unit Microsoft.Compute.TestExtension_1.2.3", message)
+
+                        # We expect the process to ultimately succeed since the fallback option worked
+                        ret = process.poll()
+                        self.assertEquals(0, ret)
+
+                        # We expect two calls to Popen, first for the systemd-run call, second for the fallback option
+                        self.assertEquals(2, patch_mock_popen.call_count)
+
+                        # No cgroups should have been created
+                        self.assertEquals(extension_cgroups, [])
