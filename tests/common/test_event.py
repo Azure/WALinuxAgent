@@ -20,7 +20,7 @@ from __future__ import print_function
 from datetime import datetime, timedelta
 
 from azurelinuxagent.common.event import add_event, \
-    WALAEventOperation, elapsed_milliseconds
+    WALAEventOperation, elapsed_milliseconds, EventLogger
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.version import CURRENT_VERSION
 
@@ -104,6 +104,58 @@ class TestEvent(AgentTestCase):
         for op in event.__event_status_operations__:
             self.assertTrue(event.should_emit_event("Foo", "1.2", op, True))
             self.assertFalse(event.should_emit_event("Foo", "1.2", op, False))
+
+    @patch('azurelinuxagent.common.event.EventLogger')
+    @patch('azurelinuxagent.common.logger.error')
+    @patch('azurelinuxagent.common.logger.warn')
+    @patch('azurelinuxagent.common.logger.info')
+    def test_should_log_errors_if_failed_operation_and_empty_event_dir(self,
+                                                                       mock_logger_info,
+                                                                       mock_logger_warn,
+                                                                       mock_logger_error,
+                                                                       mock_reporter):
+        mock_reporter.event_dir = None
+        add_event("dummy name",
+                  version=CURRENT_VERSION,
+                  op=WALAEventOperation.Download,
+                  is_success=False,
+                  message="dummy event message",
+                  reporter=mock_reporter)
+
+        self.assertEquals(1, mock_logger_error.call_count)
+        self.assertEquals(1, mock_logger_warn.call_count)
+        self.assertEquals(0, mock_logger_info.call_count)
+
+        args = mock_logger_error.call_args[0]
+        self.assertEquals(('dummy name', 'Download', 'dummy event message', 0), args[1:])
+
+    @patch('azurelinuxagent.common.event.EventLogger')
+    @patch('azurelinuxagent.common.logger.error')
+    @patch('azurelinuxagent.common.logger.warn')
+    @patch('azurelinuxagent.common.logger.info')
+    def test_should_log_errors_if_failed_operation_and_not_empty_event_dir(self,
+                                                                           mock_logger_info,
+                                                                           mock_logger_warn,
+                                                                           mock_logger_error,
+                                                                           mock_reporter):
+        mock_reporter.event_dir = "dummy"
+
+        with patch("azurelinuxagent.common.event.should_emit_event", return_value=True) as mock_should_emit_event:
+            with patch("azurelinuxagent.common.event.mark_event_status"):
+                with patch("azurelinuxagent.common.event.EventLogger._add_event"):
+                    add_event("dummy name",
+                              version=CURRENT_VERSION,
+                              op=WALAEventOperation.Download,
+                              is_success=False,
+                              message="dummy event message")
+
+                    self.assertEquals(1, mock_should_emit_event.call_count)
+                    self.assertEquals(1, mock_logger_error.call_count)
+                    self.assertEquals(0, mock_logger_warn.call_count)
+                    self.assertEquals(0, mock_logger_info.call_count)
+
+                    args = mock_logger_error.call_args[0]
+                    self.assertEquals(('dummy name', 'Download', 'dummy event message', 0), args[1:])
 
     @patch('azurelinuxagent.common.event.EventLogger.add_event')
     def test_periodic_emits_if_not_previously_sent(self, mock_event):

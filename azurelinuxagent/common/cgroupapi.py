@@ -438,11 +438,6 @@ After=system-{1}.slice""".format(extension_name, EXTENSIONS_ROOT_CGROUP_NAME)
             # unit's name. Since the scope name is only known to systemd-run, and not to the extension itself,
             # if scope_name appears in the output, we are certain systemd-run managed to run.
             if scope_name not in process_output:
-                logger.warn('Failed to run systemd-run for unit {0}.scope '
-                            'Process exited with code {1} and output {2}'.format(scope_name,
-                                                                                 return_code,
-                                                                                 process_output))
-
                 add_event(AGENT_NAME,
                           version=CURRENT_VERSION,
                           op=WALAEventOperation.InvokeCommandUsingSystemd,
@@ -451,6 +446,9 @@ After=system-{1}.slice""".format(extension_name, EXTENSIONS_ROOT_CGROUP_NAME)
                                   'Process exited with code {1} and output {2}'.format(scope_name,
                                                                                        return_code,
                                                                                        process_output))
+                # Reset the stdout and stderr
+                stdout.truncate(0)
+                stderr.truncate(0)
 
                 # Try starting the process without systemd-run
                 process = subprocess.Popen(
