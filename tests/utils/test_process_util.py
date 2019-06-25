@@ -105,7 +105,8 @@ class TestProcessUtils(AgentTestCase):
             os.path.join(data_dir, "events", "collect_and_send_extension_stdout_stderror", "dummy_valid_stderr"),
             mode="r+b")
 
-        expected = ''
+        expected = '[stdout]\nThe quick brown fox jumps over the lazy dog.\n\n' \
+                   '[stderr]\nThe five boxing wizards jump quickly.'
         actual = read_output(stdout, stderr)
         self.assertEqual(expected, actual)
-        self.assertEqual(0, len(actual))
+        self.assertEqual(len(expected), len(actual))
