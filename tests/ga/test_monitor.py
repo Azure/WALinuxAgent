@@ -408,6 +408,11 @@ class TestEventMonitoring(AgentTestCase):
                 response="")
             monitor_handler.collect_and_send_events()
 
+        # This test validates that if we hit an issue while sending an event, we never send it again.
+        with patch("azurelinuxagent.common.protocol.wire.WireClient.send_event") as patch_send_event:
+            monitor_handler.collect_and_send_events()
+            self.assertEqual(0, patch_send_event.call_count)
+
         sizes = [1, 2, 3]  # get the powers of 2, and multiple by 1024.
 
         for power in sizes:
