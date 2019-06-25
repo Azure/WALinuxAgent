@@ -17,12 +17,15 @@
 
 from __future__ import print_function
 
+import json
 from datetime import datetime, timedelta
 
 from azurelinuxagent.common.event import add_event, \
     WALAEventOperation, elapsed_milliseconds
 from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.utils.processutil import read_output
 from azurelinuxagent.common.version import CURRENT_VERSION
+from azurelinuxagent.ga.monitor import MonitorHandler
 
 from tests.tools import *
 
@@ -77,7 +80,6 @@ class TestEvent(AgentTestCase):
 
         self.assertTrue(event.should_emit_event("Foo", "1.2", "FauxOperation", True))
         self.assertTrue(event.should_emit_event("Foo", "1.2", "FauxOperation", False))
-
 
     def test_should_emit_event_handles_known_operations(self):
         event.__event_status__ = event.EventStatus()
@@ -162,6 +164,23 @@ class TestEvent(AgentTestCase):
     def test_save_event(self):
         add_event('test', message='test event')
         self.assertTrue(len(os.listdir(self.tmp_dir)) == 2)
+
+    def test_save_event_message_with_non_ascii_characters(self):
+        stdout = open(os.path.join(data_dir, "events", "collect_and_send_extension_stdout_stderror",
+                                   "dummy_stdout_with_non_ascii_characters"), mode="r+b")
+        stderr = open(os.path.join(data_dir, "events", "collect_and_send_extension_stdout_stderror",
+                                   "dummy_stderr_with_non_ascii_characters"), mode="r+b")
+
+        msg = read_output(stdout, stderr)
+        duration = elapsed_milliseconds(datetime.utcnow())
+        log_msg = "{0}\n{1}".format("DummyCmd", "\n".join([line for line in msg.split('\n') if line != ""]))
+
+        add_event('test_extension', message=log_msg, duration=duration)
+        for tld_file in os.listdir(self.tmp_dir):
+            event_str = MonitorHandler.collect_event(os.path.join(self.tmp_dir, tld_file))
+            event_json = json.loads(event_str)
+
+            self.assertEqual(8, len(event_json["parameters"]))
 
     def test_save_event_rollover(self):
         add_event('test', message='first event')

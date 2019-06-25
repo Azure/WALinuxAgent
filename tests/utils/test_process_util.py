@@ -14,7 +14,7 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 #
-from azurelinuxagent.common.utils.processutil import format_stdout_stderr
+from azurelinuxagent.common.utils.processutil import format_stdout_stderr, read_output
 from tests.tools import *
 
 
@@ -92,3 +92,20 @@ class TestProcessUtils(AgentTestCase):
         expected = '[stdout]\n\n\n[stderr]\n'
         actual = format_stdout_stderr('', '', 1000)
         self.assertEqual(expected, actual)
+
+    def test_read_output_valid_stdout_stderr(self):
+        """
+        If stdout and stderr are invalid (have a syntax issue or have a special character which cannot be processed,
+        we should expect an encoded and escaped version of the same
+        """
+        stdout = open(
+            os.path.join(data_dir, "events", "collect_and_send_extension_stdout_stderror", "dummy_valid_stdout"),
+            mode="r+b")
+        stderr = open(
+            os.path.join(data_dir, "events", "collect_and_send_extension_stdout_stderror", "dummy_valid_stderr"),
+            mode="r+b")
+
+        expected = ''
+        actual = read_output(stdout, stderr)
+        self.assertEqual(expected, actual)
+        self.assertEqual(0, len(actual))

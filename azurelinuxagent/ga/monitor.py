@@ -208,7 +208,8 @@ class MonitorHandler(object):
         except (HttpError, ValueError) as e:
             logger.warn("failed to get IMDS info: {0}", e)
 
-    def collect_event(self, evt_file_name):
+    @staticmethod
+    def collect_event(evt_file_name):
         try:
             logger.verbose("Found event file: {0}", evt_file_name)
             with open(evt_file_name, "rb") as evt_file:

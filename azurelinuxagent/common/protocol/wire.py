@@ -1137,7 +1137,9 @@ class WireClient(object):
                 buf[event.providerId] = ""
             event_str = event_to_v1(event)
             if len(event_str) >= 63 * 1024:
-                logger.warn("Single event too large: {0}", event_str[300:])
+                details_of_event = [ustr(x.name) + ":" + ustr(x.value) for x in event.parameters if x.name in
+                                    ["Name", "Version", "Operation", "OperationSuccess"]]
+                logger.warn("Single event too large: {0}".format(str(details_of_event)))
                 continue
             if len(buf[event.providerId] + event_str) >= 63 * 1024:
                 self.send_event(event.providerId, buf[event.providerId])
