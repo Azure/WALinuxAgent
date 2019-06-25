@@ -176,7 +176,7 @@ class MonitorHandler(object):
             self.sysinfo.append(TelemetryEventParam("RAM", ram))
             self.sysinfo.append(TelemetryEventParam("Processors", processors))
         except OSUtilError as e:
-            logger.warn("Failed to get system info: {0}", e)
+            logger.warn("Failed to get system info: {0}".format(ustr(e)))
 
         try:
             vminfo = self.protocol.get_vminfo()
@@ -191,7 +191,7 @@ class MonitorHandler(object):
             self.sysinfo.append(TelemetryEventParam("ContainerId",
                                                     vminfo.containerId))
         except ProtocolError as e:
-            logger.warn("Failed to get system info: {0}", e)
+            logger.warn("Failed to get system info: {0}".format(ustr(e)))
 
         try:
             vminfo = self.imds_client.get_compute()
@@ -206,16 +206,16 @@ class MonitorHandler(object):
             self.sysinfo.append(TelemetryEventParam('ImageOrigin',
                                                     vminfo.image_origin))
         except (HttpError, ValueError) as e:
-            logger.warn("failed to get IMDS info: {0}", e)
+            logger.warn("failed to get IMDS info: {0}".format(ustr(e)))
 
     @staticmethod
     def collect_event(evt_file_name):
         try:
-            logger.verbose("Found event file: {0}", evt_file_name)
+            logger.verbose("Found event file: {0}".format(evt_file_name))
             with open(evt_file_name, "rb") as evt_file:
                 # if fail to open or delete the file, throw exception
                 data_str = evt_file.read().decode("utf-8", 'ignore')
-            logger.verbose("Processed event file: {0}", evt_file_name)
+            logger.verbose("Processed event file: {0}".format(evt_file_name))
             os.remove(evt_file_name)
             return data_str
         except IOError as e:
@@ -238,7 +238,7 @@ class MonitorHandler(object):
                     try:
                         data_str = self.collect_event(event_file_path)
                     except EventError as e:
-                        logger.error("{0}", e)
+                        logger.error(ustr(e))
                         continue
 
                     try:
@@ -246,7 +246,7 @@ class MonitorHandler(object):
                         self.add_sysinfo(event)
                         event_list.events.append(event)
                     except (ValueError, ProtocolError) as e:
-                        logger.warn("Failed to decode event file: {0}", e)
+                        logger.warn("Failed to decode event file: {0}".format(ustr(e)))
                         continue
 
                 if len(event_list.events) == 0:
@@ -255,9 +255,9 @@ class MonitorHandler(object):
                 try:
                     self.protocol.report_event(event_list)
                 except ProtocolError as e:
-                    logger.error("{0}", e)
+                    logger.error(ustr(e))
             except Exception as e:
-                logger.warn("Failed to send events: {0}", e)
+                logger.warn("Failed to send events: {0}".format(ustr(e)))
 
             self.last_event_collection = datetime.datetime.utcnow()
 
@@ -282,7 +282,7 @@ class MonitorHandler(object):
         sysinfo_names = [v.name for v in self.sysinfo]
         for param in event.parameters:
             if param.name in sysinfo_names:
-                logger.verbose("Remove existing event parameter: [{0}:{1}]", param.name, param.value)
+                logger.verbose("Remove existing event parameter: [{0}:{1}]".format(param.name, param.value))
                 event.parameters.remove(param)
         event.parameters.extend(self.sysinfo)
 
@@ -305,7 +305,7 @@ class MonitorHandler(object):
                     self.imds_errorstate.incr()
 
                 is_healthy = self.imds_errorstate.is_triggered() is False
-                logger.verbose("IMDS health: {0} [{1}]", is_healthy, response)
+                logger.verbose("IMDS health: {0} [{1}]".format(is_healthy, response))
 
                 self.health_service.report_imds_status(is_healthy, response)
 
@@ -342,7 +342,7 @@ class MonitorHandler(object):
                     self.host_plugin_errorstate.incr()
 
                 is_healthy = self.host_plugin_errorstate.is_triggered() is False
-                logger.verbose("HostGAPlugin health: {0}", is_healthy)
+                logger.verbose("HostGAPlugin health: {0}".format(is_healthy))
 
                 self.health_service.report_host_plugin_heartbeat(is_healthy)
 
@@ -405,7 +405,7 @@ class MonitorHandler(object):
                         message=msg,
                         log_event=False)
             except Exception as e:
-                logger.warn("Failed to send heartbeat: {0}", e)
+                logger.warn("Failed to send heartbeat: {0}".format(ustr(e)))
 
             self.last_telemetry_heartbeat = datetime.datetime.utcnow()
 
