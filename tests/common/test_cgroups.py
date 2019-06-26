@@ -293,38 +293,3 @@ class TestCGroups(AgentTestCase):
         self.assert_limits(ext_name="normal_extension", expected_cpu_limit=40, exception_raised=True)
 
 
-@skip_if_predicate_false(lambda: False, "TODO: Need new unit tests")
-class TestCGroupsLimits(AgentTestCase):
-    @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_total_mem", return_value=1024)
-    def test_no_limits_passed(self, patched_get_total_mem):
-        cgroup_name = "test_cgroup"
-        limits = CGroupsLimits(cgroup_name)
-        self.assertEqual(limits.cpu_limit, CGroupsLimits.get_default_cpu_limits(cgroup_name))
-        self.assertEqual(limits.memory_limit, CGroupsLimits.get_default_memory_limits(cgroup_name))
-
-    @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_total_mem", return_value=1024)
-    def test_with_limits_passed(self, patched_get_total_mem):
-        cpu_limit = 50
-        memory_limit = 300
-        cgroup_name = "test_cgroup"
-
-        threshold = {"cpu": cpu_limit}
-        limits = CGroupsLimits(cgroup_name, threshold=threshold)
-        self.assertEqual(limits.cpu_limit, cpu_limit)
-        self.assertEqual(limits.memory_limit, CGroupsLimits.get_default_memory_limits(cgroup_name))
-
-        threshold = {"memory": memory_limit}
-        limits = CGroupsLimits(cgroup_name, threshold=threshold)
-        self.assertEqual(limits.cpu_limit, CGroupsLimits.get_default_cpu_limits(cgroup_name))
-        self.assertEqual(limits.memory_limit, memory_limit)
-
-        threshold = {"cpu": cpu_limit, "memory": memory_limit}
-        limits = CGroupsLimits(cgroup_name, threshold=threshold)
-        self.assertEqual(limits.cpu_limit, cpu_limit)
-        self.assertEqual(limits.memory_limit, memory_limit)
-
-        # Incorrect key
-        threshold = {"cpux": cpu_limit}
-        limits = CGroupsLimits(cgroup_name, threshold=threshold)
-        self.assertEqual(limits.cpu_limit, CGroupsLimits.get_default_cpu_limits(cgroup_name))
-        self.assertEqual(limits.memory_limit, CGroupsLimits.get_default_memory_limits(cgroup_name))
