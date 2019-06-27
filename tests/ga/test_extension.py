@@ -654,14 +654,20 @@ class TestExtension(ExtensionTestCase):
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.1.0")
         self._assert_ext_status(protocol.report_ext_status, "success", 0)
 
-    @skip_if_predicate_true(do_not_run_test, "Incorrect test - Change in behavior in reporting events now.")
     @patch('azurelinuxagent.ga.exthandlers.add_event')
     def test_ext_handler_download_failure_transient(self, mock_add_event, *args):
+        original_sleep = time.sleep
+
+        def mock_sleep(*args, **kwargs):
+            return original_sleep(0.1)
+
         test_data = WireProtocolData(DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
         protocol.download_ext_handler_pkg = Mock(side_effect=ProtocolError)
 
-        exthandlers_handler.run()
+        with patch("time.sleep", side_effect=mock_sleep):
+            exthandlers_handler.run()
+
         self.assertEquals(0, mock_add_event.call_count)
 
     @patch('azurelinuxagent.common.errorstate.ErrorState.is_triggered')
@@ -692,7 +698,6 @@ class TestExtension(ExtensionTestCase):
         self.assertTrue("ResourceGoneError" in kw['message'])
         self.assertEquals("ExtensionProcessing", kw['op'])
 
-    @skip_if_predicate_true(do_not_run_test, "Incorrect test - Change in behavior in reporting events now.")
     @patch('azurelinuxagent.common.errorstate.ErrorState.is_triggered')
     @patch('azurelinuxagent.common.event.add_event')
     def test_ext_handler_download_failure_permanent(self, mock_add_event, mock_error_state, *args):
@@ -701,7 +706,9 @@ class TestExtension(ExtensionTestCase):
         protocol.get_ext_handler_pkgs = Mock(side_effect=ProtocolError)
 
         mock_error_state.return_value = True
+
         exthandlers_handler.run()
+
         self.assertEquals(1, mock_add_event.call_count)
         args, kw = mock_add_event.call_args_list[0]
         self.assertEquals(False, kw['is_success'])

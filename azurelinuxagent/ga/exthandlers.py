@@ -39,7 +39,7 @@ import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.version as version
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.errorstate import ErrorState, ERROR_STATE_DELTA_INSTALL
-from azurelinuxagent.common.event import add_event, WALAEventOperation, elapsed_milliseconds
+from azurelinuxagent.common.event import add_event, WALAEventOperation, elapsed_milliseconds, report_event
 from azurelinuxagent.common.exception import ExtensionError, ProtocolError, ProtocolNotFoundError, \
     ExtensionDownloadError, ExtensionOperationError, ExtensionErrorCodes
 from azurelinuxagent.common.future import ustr
@@ -441,7 +441,17 @@ class ExtHandlersHandler(object):
     def handle_handle_ext_handler_error(self, ext_handler_i, e, code=-1):
         msg = ustr(e)
         ext_handler_i.set_handler_status(message=msg, code=code)
-        ext_handler_i.report_event(message=msg, is_success=False, log_event=True)
+
+        if isinstance(e, ExtensionDownloadError):
+            self.get_artifact_error_state.incr()
+            if self.get_artifact_error_state.is_triggered():
+                report_event(op=WALAEventOperation.GetArtifactExtended,
+                             message="Failed to get artifact for over "
+                                     "{0}: {1}".format(self.get_artifact_error_state.min_timedelta, msg),
+                             is_success=False)
+                self.get_artifact_error_state.reset()
+        else:
+            ext_handler_i.report_event(message=msg, is_success=False, log_event=True)
 
     def handle_enable(self, ext_handler_i):
         self.log_process = True
@@ -623,7 +633,7 @@ class ExtHandlerInstance(object):
         try:
             pkg_list = self.protocol.get_ext_handler_pkgs(self.ext_handler)
         except ProtocolError as e:
-            raise ExtensionError("Failed to get ext handler pkgs", e)
+            raise ExtensionDownloadError("Failed to get ext handler pkgs", e)
 
         # Determine the desired and installed versions
         requested_version = FlexibleVersion(str(self.ext_handler.properties.version))
