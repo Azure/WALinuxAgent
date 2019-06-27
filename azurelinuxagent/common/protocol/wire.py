@@ -70,6 +70,8 @@ ENDPOINT_FINE_NAME = "WireServer"
 
 SHORT_WAITING_INTERVAL = 1  # 1 second
 
+MAX_EVENT_BUFFER_SIZE = 2**16 - 2**10
+
 
 class UploadError(HttpError):
     pass
@@ -1136,12 +1138,13 @@ class WireClient(object):
             if event.providerId not in buf:
                 buf[event.providerId] = ""
             event_str = event_to_v1(event)
-            if len(event_str) >= 63 * 1024:
+            if len(event_str) >= MAX_EVENT_BUFFER_SIZE:
                 details_of_event = [ustr(x.name) + ":" + ustr(x.value) for x in event.parameters if x.name in
                                     ["Name", "Version", "Operation", "OperationSuccess"]]
-                logger.warn("Single event too large: {0}".format(str(details_of_event)))
+                logger.periodic_warn("Single event too large: {}, with the length: {} more than the limit({})"
+                            .format(str(details_of_event), len(event_str), MAX_EVENT_BUFFER_SIZE))
                 continue
-            if len(buf[event.providerId] + event_str) >= 63 * 1024:
+            if len(buf[event.providerId] + event_str) >= MAX_EVENT_BUFFER_SIZE:
                 self.send_event(event.providerId, buf[event.providerId])
                 buf[event.providerId] = ""
             buf[event.providerId] = buf[event.providerId] + event_str

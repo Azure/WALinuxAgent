@@ -318,16 +318,16 @@ class TestEventMonitoring(AgentTestCase):
         monitor_handler, protocol = self._create_mock(test_data, *args)
         monitor_handler.init_protocols()
 
-        sizes = [1, 2, 3, 4, 5]  # get the powers of 2, and multiple by 1024.
+        sizes = [15, 15, 15, 15]  # get the powers of 2 - 2**16 is the limit
 
         for power in sizes:
-            size = 2 ** power * 1024
+            size = 2 ** power
             self.event_logger.save_event(create_event_message(size))
         monitor_handler.collect_and_send_events()
 
-        # The send_event call would be called twice - Once when the buffer fills up from 1 to 4, and then for 5.
+        # The send_event call would be called each time, as we are filling up the buffer up to the brim for each call.
 
-        self.assertEqual(2, patch_send_event.call_count)
+        self.assertEqual(4, patch_send_event.call_count)
 
     @patch("azurelinuxagent.common.protocol.wire.WireClient.send_event")
     @patch("azurelinuxagent.common.conf.get_lib_dir")
@@ -338,12 +338,14 @@ class TestEventMonitoring(AgentTestCase):
         monitor_handler, protocol = self._create_mock(test_data, *args)
         monitor_handler.init_protocols()
 
-        sizes = [9, 10, 11]  # get the powers of 2, and multiple by 1024.
+        sizes = [9, 10]  # get the powers of 2, and multiple by 1024.
 
         for power in sizes:
             size = 2 ** power * 1024
             self.event_logger.save_event(create_event_message(size))
-        monitor_handler.collect_and_send_events()
+        with patch("azurelinuxagent.common.logger.Logger.warn") as patch_warn:
+            monitor_handler.collect_and_send_events()
+            self.assertEqual(2, patch_warn.call_count)
 
         # The send_event call should never be called as the events are larger than 2**16.
         self.assertEqual(0, patch_send_event.call_count)
@@ -388,7 +390,7 @@ class TestEventMonitoring(AgentTestCase):
         self.assertEqual(0, patch_send_event.call_count)
 
     @patch("azurelinuxagent.common.conf.get_lib_dir")
-    def test_collect_and_send_generate_protocol_error_while_sending_events(self, mock_lib_dir, *args):
+    def test_collect_and_send_with_http_post_returning_503(self, mock_lib_dir, *args):
         mock_lib_dir.return_value = self.lib_dir
         fileutil.mkdir(self.event_logger.event_dir)
 
@@ -402,16 +404,26 @@ class TestEventMonitoring(AgentTestCase):
             size = 2 ** power * 1024
             self.event_logger.save_event(create_event_message(size))
 
-        with patch("azurelinuxagent.common.utils.restutil.http_post") as mock_http_post:
-            mock_http_post.return_value = ResponseMock(
-                status=restutil.httpclient.SERVICE_UNAVAILABLE,
-                response="")
-            monitor_handler.collect_and_send_events()
+        with patch("azurelinuxagent.common.logger.error") as mock_error:
+            with patch("azurelinuxagent.common.utils.restutil.http_post") as mock_http_post:
+                mock_http_post.return_value = ResponseMock(
+                    status=restutil.httpclient.SERVICE_UNAVAILABLE,
+                    response="")
+                monitor_handler.collect_and_send_events()
+                self.assertEqual(1, mock_error.call_count)
+                self.assertEqual("[ProtocolError] [Wireserver Exception] [ProtocolError] [Wireserver Failed] "
+                                 "URI http://foo.bar/machine?comp=telemetrydata  [HTTP Failed] Status Code 503",
+                                 mock_error.call_args[0][1])
+                self.assertEqual(0, len(os.listdir(self.event_logger.event_dir)))
 
-        # This test validates that if we hit an issue while sending an event, we never send it again.
-        with patch("azurelinuxagent.common.protocol.wire.WireClient.send_event") as patch_send_event:
-            monitor_handler.collect_and_send_events()
-            self.assertEqual(0, patch_send_event.call_count)
+    @patch("azurelinuxagent.common.conf.get_lib_dir")
+    def test_collect_and_send_with_send_event_generating_exception(self, mock_lib_dir, *args):
+        mock_lib_dir.return_value = self.lib_dir
+        fileutil.mkdir(self.event_logger.event_dir)
+
+        test_data = WireProtocolData(DATA_FILE)
+        monitor_handler, protocol = self._create_mock(test_data, *args)
+        monitor_handler.init_protocols()
 
         sizes = [1, 2, 3]  # get the powers of 2, and multiple by 1024.
 
@@ -419,14 +431,39 @@ class TestEventMonitoring(AgentTestCase):
             size = 2 ** power * 1024
             self.event_logger.save_event(create_event_message(size))
 
-        with patch("azurelinuxagent.common.protocol.wire.WireClient.call_wireserver") as patch_call_wireserver:
-            patch_call_wireserver.side_effect = HttpError
-            monitor_handler.collect_and_send_events()
-
+        monitor_handler.last_event_collection = datetime.datetime.utcnow() - timedelta(hours=1)
         # This test validates that if we hit an issue while sending an event, we never send it again.
-        with patch("azurelinuxagent.common.protocol.wire.WireClient.send_event") as patch_send_event:
-            monitor_handler.collect_and_send_events()
-            self.assertEqual(0, patch_send_event.call_count)
+        with patch("azurelinuxagent.common.logger.warn") as mock_warn:
+            with patch("azurelinuxagent.common.protocol.wire.WireClient.send_event") as patch_send_event:
+                patch_send_event.side_effect = Exception()
+                monitor_handler.collect_and_send_events()
+
+                self.assertEqual(1, mock_warn.call_count)
+                self.assertEqual(0, len(os.listdir(self.event_logger.event_dir)))
+
+    @patch("azurelinuxagent.common.conf.get_lib_dir")
+    def test_collect_and_send_with_call_wireserver_returns_http_error(self, mock_lib_dir, *args):
+        mock_lib_dir.return_value = self.lib_dir
+        fileutil.mkdir(self.event_logger.event_dir)
+
+        test_data = WireProtocolData(DATA_FILE)
+        monitor_handler, protocol = self._create_mock(test_data, *args)
+        monitor_handler.init_protocols()
+
+        sizes = [1, 2, 3]  # get the powers of 2, and multiple by 1024.
+
+        for power in sizes:
+            size = 2 ** power * 1024
+            self.event_logger.save_event(create_event_message(size))
+
+        monitor_handler.last_event_collection = datetime.datetime.utcnow() - timedelta(hours=1)
+        with patch("azurelinuxagent.common.logger.error") as mock_error:
+            with patch("azurelinuxagent.common.protocol.wire.WireClient.call_wireserver") as patch_call_wireserver:
+                patch_call_wireserver.side_effect = HttpError
+                monitor_handler.collect_and_send_events()
+
+                self.assertEqual(1, mock_error.call_count)
+                self.assertEqual(0, len(os.listdir(self.event_logger.event_dir)))
 
 
 @patch('azurelinuxagent.common.osutil.get_osutil')

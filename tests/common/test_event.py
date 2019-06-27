@@ -166,21 +166,29 @@ class TestEvent(AgentTestCase):
         self.assertTrue(len(os.listdir(self.tmp_dir)) == 2)
 
     def test_save_event_message_with_non_ascii_characters(self):
-        stdout = open(os.path.join(data_dir, "events", "collect_and_send_extension_stdout_stderror",
-                                   "dummy_stdout_with_non_ascii_characters"), mode="r+b")
-        stderr = open(os.path.join(data_dir, "events", "collect_and_send_extension_stdout_stderror",
-                                   "dummy_stderr_with_non_ascii_characters"), mode="r+b")
+        test_data_dir = os.path.join(data_dir, "events", "collect_and_send_extension_stdout_stderror")
+        msg = ""
 
-        msg = read_output(stdout, stderr)
+        with open(os.path.join(test_data_dir, "dummy_stdout_with_non_ascii_characters"), mode="r+b") as stdout:
+            with open(os.path.join(test_data_dir, "dummy_stderr_with_non_ascii_characters"), mode="r+b") as stderr:
+                msg = read_output(stdout, stderr)
+
         duration = elapsed_milliseconds(datetime.utcnow())
         log_msg = "{0}\n{1}".format("DummyCmd", "\n".join([line for line in msg.split('\n') if line != ""]))
 
         add_event('test_extension', message=log_msg, duration=duration)
+
         for tld_file in os.listdir(self.tmp_dir):
             event_str = MonitorHandler.collect_event(os.path.join(self.tmp_dir, tld_file))
             event_json = json.loads(event_str)
 
-            self.assertEqual(8, len(event_json["parameters"]))
+            self.assertEqual(len(event_json["parameters"]), 8)
+
+            for i in event_json["parameters"]:
+                if i["name"] == "Name":
+                    self.assertEqual(i["value"], "test_extension")
+                if i["name"] == "Message":
+                    self.assertEqual(i["value"], log_msg)
 
     def test_save_event_rollover(self):
         add_event('test', message='first event')
