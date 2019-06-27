@@ -338,14 +338,15 @@ class TestEventMonitoring(AgentTestCase):
         monitor_handler, protocol = self._create_mock(test_data, *args)
         monitor_handler.init_protocols()
 
-        sizes = [9, 10]  # get the powers of 2, and multiple by 1024.
+        sizes = [17, 17, 17]  # get the powers of 2
 
         for power in sizes:
-            size = 2 ** power * 1024
+            size = 2 ** power
             self.event_logger.save_event(create_event_message(size))
-        with patch("azurelinuxagent.common.logger.Logger.warn") as patch_warn:
+
+        with patch("azurelinuxagent.common.logger.periodic_warn") as patch_periodic_warn:
             monitor_handler.collect_and_send_events()
-            self.assertEqual(2, patch_warn.call_count)
+            self.assertEqual(3, patch_periodic_warn.call_count)
 
         # The send_event call should never be called as the events are larger than 2**16.
         self.assertEqual(0, patch_send_event.call_count)

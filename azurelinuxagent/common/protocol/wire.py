@@ -1141,8 +1141,8 @@ class WireClient(object):
             if len(event_str) >= MAX_EVENT_BUFFER_SIZE:
                 details_of_event = [ustr(x.name) + ":" + ustr(x.value) for x in event.parameters if x.name in
                                     ["Name", "Version", "Operation", "OperationSuccess"]]
-                logger.periodic_warn("Single event too large: {}, with the length: {} more than the limit({})"
-                            .format(str(details_of_event), len(event_str), MAX_EVENT_BUFFER_SIZE))
+                logger.periodic_warn(logger.EVERY_HALF_HOUR, "Single event too large: {}, with the length: {} more than the limit({})"
+                                     .format(str(details_of_event), len(event_str), MAX_EVENT_BUFFER_SIZE))
                 continue
             if len(buf[event.providerId] + event_str) >= MAX_EVENT_BUFFER_SIZE:
                 self.send_event(event.providerId, buf[event.providerId])
