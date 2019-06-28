@@ -445,10 +445,9 @@ class ExtHandlersHandler(object):
         if isinstance(e, ExtensionDownloadError):
             self.get_artifact_error_state.incr()
             if self.get_artifact_error_state.is_triggered():
-                report_event(op=WALAEventOperation.GetArtifactExtended,
+                report_event(op=WALAEventOperation.GetArtifactExtended, is_success=False, log_event=True,
                              message="Failed to get artifact for over "
-                                     "{0}: {1}".format(self.get_artifact_error_state.min_timedelta, msg),
-                             is_success=False)
+                                     "{0}: {1}".format(self.get_artifact_error_state.min_timedelta, msg))
                 self.get_artifact_error_state.reset()
         else:
             ext_handler_i.report_event(message=msg, is_success=False, log_event=True)
@@ -633,7 +632,9 @@ class ExtHandlerInstance(object):
         try:
             pkg_list = self.protocol.get_ext_handler_pkgs(self.ext_handler)
         except ProtocolError as e:
-            raise ExtensionDownloadError("Failed to get ext handler pkgs", e)
+            raise ExtensionError("Failed to get ext handler pkgs", e)
+        except ExtensionDownloadError:
+            raise
 
         # Determine the desired and installed versions
         requested_version = FlexibleVersion(str(self.ext_handler.properties.version))
