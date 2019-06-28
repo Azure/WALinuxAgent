@@ -397,7 +397,7 @@ class TestWireProtocol(AgentTestCase):
                                   "get_artifact_request",
                                   return_value=[host_uri, {}]):
                     HostPluginProtocol.set_default_channel(False)
-                    self.assertRaises(ProtocolError, client.fetch_manifest, uris)
+                    self.assertRaises(ExtensionDownloadError, client.fetch_manifest, uris)
                     self.assertEqual(patch_fetch.call_count, 2)
                     self.assertEqual(patch_fetch.call_args_list[0][0][0], uri1.uri)
                     self.assertEqual(patch_fetch.call_args_list[1][0][0], host_uri)
