@@ -699,8 +699,8 @@ class TestExtension(ExtensionTestCase):
         self.assertEquals("ExtensionProcessing", kw['op'])
 
     @patch('azurelinuxagent.common.errorstate.ErrorState.is_triggered')
-    @patch('azurelinuxagent.common.event.add_event')
-    def test_ext_handler_download_failure_permanent(self, mock_add_event, mock_error_state, *args):
+    @patch('azurelinuxagent.ga.exthandlers.ExtHandlerInstance.report_event')
+    def test_ext_handler_download_failure_permanent_ProtocolError(self, mock_add_event, mock_error_state, *args):
         test_data = WireProtocolData(DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
         protocol.get_ext_handler_pkgs = Mock(side_effect=ProtocolError)
@@ -713,8 +713,41 @@ class TestExtension(ExtensionTestCase):
         args, kw = mock_add_event.call_args_list[0]
         self.assertEquals(False, kw['is_success'])
         self.assertTrue("Failed to get ext handler pkgs" in kw['message'])
-        self.assertTrue("Failed to get artifact" in kw['message'])
-        self.assertEquals("GetArtifactExtended", kw['op'])
+        self.assertTrue("ProtocolError" in kw['message'])
+
+    @patch('azurelinuxagent.common.errorstate.ErrorState.is_triggered')
+    @patch('azurelinuxagent.common.event.add_event')
+    def test_ext_handler_download_failure_permanent_with_ExtensionDownloadError_and_triggered(self, mock_add_event,
+                                                                                              mock_error_state, *args):
+        test_data = WireProtocolData(DATA_FILE)
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+        protocol.get_ext_handler_pkgs = Mock(side_effect=ExtensionDownloadError)
+
+        mock_error_state.return_value = True
+
+        exthandlers_handler.run()
+
+        self.assertEquals(1, mock_add_event.call_count)
+        args, kw = mock_add_event.call_args_list[0]
+        self.assertEquals(False, kw['is_success'])
+        self.assertTrue("Failed to get artifact for over" in kw['message'])
+        self.assertTrue("ExtensionDownloadError" in kw['message'])
+        self.assertEquals("Download", kw['op'])
+
+    @patch('azurelinuxagent.common.errorstate.ErrorState.is_triggered')
+    @patch('azurelinuxagent.common.event.add_event')
+    def test_ext_handler_download_failure_permanent_with_ExtensionDownloadError_and_not_triggered(self, mock_add_event,
+                                                                                                  mock_error_state,
+                                                                                                  *args):
+        test_data = WireProtocolData(DATA_FILE)
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+        protocol.get_ext_handler_pkgs = Mock(side_effect=ExtensionDownloadError)
+
+        mock_error_state.return_value = False
+
+        exthandlers_handler.run()
+
+        self.assertEquals(0, mock_add_event.call_count)
 
     @patch('azurelinuxagent.ga.exthandlers.fileutil')
     def test_ext_handler_io_error(self, mock_fileutil, *args):
@@ -1075,9 +1108,9 @@ class TestExtension(ExtensionTestCase):
         self.assertEqual(1, patch_install.call_count)
         self.assertEqual(2, protocol.report_vm_status.call_count)
 
-    @patch('azurelinuxagent.ga.exthandlers.ExtHandlersHandler.handle_handle_ext_handler_error')
+    @patch('azurelinuxagent.ga.exthandlers.ExtHandlersHandler.handle_ext_handler_error')
     @patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_install_command')
-    def test_install_failure_check_exception_handling(self, patch_get_install_command, patch_handle_handle_ext_handler_error, *args):
+    def test_install_failure_check_exception_handling(self, patch_get_install_command, patch_handle_ext_handler_error, *args):
         """
         When extension install fails, the operation should be reported to our telemetry service.
         """
@@ -1089,7 +1122,7 @@ class TestExtension(ExtensionTestCase):
         exthandlers_handler.run()
 
         self.assertEqual(1, protocol.report_vm_status.call_count)
-        self.assertEqual(1, patch_handle_handle_ext_handler_error.call_count)
+        self.assertEqual(1, patch_handle_ext_handler_error.call_count)
 
     @patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_enable_command')
     def test_enable_failure(self, patch_get_enable_command, *args):
@@ -1112,10 +1145,10 @@ class TestExtension(ExtensionTestCase):
         self.assertEqual(1, patch_get_enable_command.call_count)
         self.assertEqual(2, protocol.report_vm_status.call_count)
 
-    @patch('azurelinuxagent.ga.exthandlers.ExtHandlersHandler.handle_handle_ext_handler_error')
+    @patch('azurelinuxagent.ga.exthandlers.ExtHandlersHandler.handle_ext_handler_error')
     @patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_enable_command')
     def test_enable_failure_check_exception_handling(self, patch_get_enable_command,
-                                                     patch_handle_handle_ext_handler_error, *args):
+                                                     patch_handle_ext_handler_error, *args):
         """
         When extension enable fails, the operation should be reported.
         """
@@ -1129,7 +1162,7 @@ class TestExtension(ExtensionTestCase):
 
         self.assertEqual(1, patch_get_enable_command.call_count)
         self.assertEqual(1, protocol.report_vm_status.call_count)
-        self.assertEqual(1, patch_handle_handle_ext_handler_error.call_count)
+        self.assertEqual(1, patch_handle_ext_handler_error.call_count)
 
     @patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_disable_command')
     def test_disable_failure(self, patch_get_disable_command, *args):
@@ -1165,10 +1198,10 @@ class TestExtension(ExtensionTestCase):
         self.assertEqual(3, protocol.report_vm_status.call_count)
         self._assert_handler_status(protocol.report_vm_status, "NotReady", expected_ext_count=1, version="1.0.0")
 
-    @patch('azurelinuxagent.ga.exthandlers.ExtHandlersHandler.handle_handle_ext_handler_error')
+    @patch('azurelinuxagent.ga.exthandlers.ExtHandlersHandler.handle_ext_handler_error')
     @patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_disable_command')
     def test_disable_failure_with_exception_handling(self, patch_get_disable_command,
-                                                     patch_handle_handle_ext_handler_error, *args):
+                                                     patch_handle_ext_handler_error, *args):
         """
         When extension disable fails, the operation should be reported.
         """
@@ -1193,7 +1226,7 @@ class TestExtension(ExtensionTestCase):
 
         self.assertEqual(1, patch_get_disable_command.call_count)
         self.assertEqual(2, protocol.report_vm_status.call_count)
-        self.assertEqual(1, patch_handle_handle_ext_handler_error.call_count)
+        self.assertEqual(1, patch_handle_ext_handler_error.call_count)
 
     @patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_uninstall_command')
     def test_uninstall_failure(self, patch_get_uninstall_command, *args):
@@ -1379,10 +1412,10 @@ class TestExtension(ExtensionTestCase):
         # On the next iteration, update should not be retried
         self._assert_handler_status(protocol.report_vm_status, "NotReady", expected_ext_count=0, version="1.0.1")
 
-    @patch('azurelinuxagent.ga.exthandlers.ExtHandlersHandler.handle_handle_ext_handler_error')
+    @patch('azurelinuxagent.ga.exthandlers.ExtHandlersHandler.handle_ext_handler_error')
     @patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_update_command')
     def test_upgrade_failure_with_exception_handling(self, patch_get_update_command,
-                                                     patch_handle_handle_ext_handler_error, *args):
+                                                     patch_handle_ext_handler_error, *args):
         """
         Extension upgrade failure should not be retried
         """
@@ -1405,7 +1438,7 @@ class TestExtension(ExtensionTestCase):
         patch_get_update_command.return_value = "exit 1"
         exthandlers_handler.run()
         self.assertEqual(1, patch_get_update_command.call_count)
-        self.assertEqual(1, patch_handle_handle_ext_handler_error.call_count)
+        self.assertEqual(1, patch_handle_ext_handler_error.call_count)
 
 
 @patch("azurelinuxagent.common.protocol.wire.CryptUtil")

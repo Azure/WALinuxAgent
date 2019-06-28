@@ -432,25 +432,29 @@ class ExtHandlersHandler(object):
                 message = u"Unknown ext handler state:{0}".format(state)
                 raise ExtensionError(message)
         except ExtensionOperationError as e:
-            self.handle_handle_ext_handler_error(ext_handler_i, e, e.code)
+            self.handle_ext_handler_error(ext_handler_i, e, e.code)
+        except ExtensionDownloadError as e:
+            self.handle_ext_handler_download_error(ext_handler_i, e, e.code)
         except ExtensionError as e:
-            self.handle_handle_ext_handler_error(ext_handler_i, e, e.code)
+            self.handle_ext_handler_error(ext_handler_i, e, e.code)
         except Exception as e:
-            self.handle_handle_ext_handler_error(ext_handler_i, e)
+            self.handle_ext_handler_error(ext_handler_i, e)
 
-    def handle_handle_ext_handler_error(self, ext_handler_i, e, code=-1):
+    def handle_ext_handler_error(self, ext_handler_i, e, code=-1):
+        msg = ustr(e)
+        ext_handler_i.set_handler_status(message=msg, code=code)
+        ext_handler_i.report_event(message=msg, is_success=False, log_event=True)
+
+    def handle_ext_handler_download_error(self, ext_handler_i, e, code=-1):
         msg = ustr(e)
         ext_handler_i.set_handler_status(message=msg, code=code)
 
-        if isinstance(e, ExtensionDownloadError):
-            self.get_artifact_error_state.incr()
-            if self.get_artifact_error_state.is_triggered():
-                report_event(op=WALAEventOperation.GetArtifactExtended, is_success=False, log_event=True,
-                             message="Failed to get artifact for over "
-                                     "{0}: {1}".format(self.get_artifact_error_state.min_timedelta, msg))
-                self.get_artifact_error_state.reset()
-        else:
-            ext_handler_i.report_event(message=msg, is_success=False, log_event=True)
+        self.get_artifact_error_state.incr()
+        if self.get_artifact_error_state.is_triggered():
+            report_event(op=WALAEventOperation.Download, is_success=False, log_event=True,
+                         message="Failed to get artifact for over "
+                                 "{0}: {1}".format(self.get_artifact_error_state.min_timedelta, msg))
+            self.get_artifact_error_state.reset()
 
     def handle_enable(self, ext_handler_i):
         self.log_process = True
@@ -634,6 +638,7 @@ class ExtHandlerInstance(object):
         except ProtocolError as e:
             raise ExtensionError("Failed to get ext handler pkgs", e)
         except ExtensionDownloadError:
+            self.set_operation(WALAEventOperation.Download)
             raise
 
         # Determine the desired and installed versions
