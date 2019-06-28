@@ -213,13 +213,17 @@ class TestEvent(AgentTestCase):
 
     def test_save_event(self):
         add_event('test', message='test event')
-        self.assertTrue(len(os.listdir(self.tmp_dir)) == 1) # We now only send 1 event for event_id = 1
+        self.assertTrue(len(os.listdir(self.tmp_dir)) == 1)
+
+        # checking the extension of the file created.
+        for filename in os.listdir(self.tmp_dir):
+            self.assertEqual(".tld", filename[-4:])
 
     def test_save_event_rollover(self):
         # We keep 1000 events only, and the older ones are removed.
 
         num_of_events = 999
-        add_event('test', message='first event') # this makes number of events to num_of_events + 1.
+        add_event('test', message='first event')  # this makes number of events to num_of_events + 1.
         for i in range(num_of_events):
             add_event('test', message='test event {0}'.format(i))
 
@@ -227,7 +231,7 @@ class TestEvent(AgentTestCase):
 
         events = os.listdir(self.tmp_dir)
         events.sort()
-        self.assertTrue(len(events) == num_of_events, "{} is not equal to {}".format(len(events), num_of_events))
+        self.assertTrue(len(events) == num_of_events, "{0} is not equal to {1}".format(len(events), num_of_events))
 
         first_event = os.path.join(self.tmp_dir, events[0])
         with open(first_event) as first_fh:
@@ -245,7 +249,7 @@ class TestEvent(AgentTestCase):
         first_event = os.path.join(self.tmp_dir, events[0])
         with open(first_event) as first_fh:
             first_event_text = first_fh.read()
-            self.assertFalse('first event' in first_event_text, "'first event' not in {}".format(first_event_text))
+            self.assertFalse('first event' in first_event_text, "'first event' not in {0}".format(first_event_text))
             self.assertTrue('test event 0' in first_event_text)
 
         last_event = os.path.join(self.tmp_dir, events[-1])
