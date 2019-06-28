@@ -30,6 +30,19 @@ def i_am_root():
 
 
 class CGroupsApiTestCase(AgentTestCase):
+    def setUp(self):
+        AgentTestCase.setUp(self)
+
+        self.cgroups_file_system_root = os.path.join(self.tmp_dir, "cgroup")
+        os.mkdir(self.cgroups_file_system_root)
+        os.mkdir(os.path.join(self.cgroups_file_system_root, "cpu"))
+        os.mkdir(os.path.join(self.cgroups_file_system_root, "memory"))
+
+        self.mock__base_cgroups = patch("azurelinuxagent.common.cgroupapi.CGROUPS_FILE_SYSTEM_ROOT", self.cgroups_file_system_root)
+        self.mock__base_cgroups.start()
+
+    def tearDown(self):
+        self.mock__base_cgroups.stop()
 
     def test_create_should_return_a_SystemdCgroupsApi_on_systemd_platforms(self):
         with patch("azurelinuxagent.common.cgroupapi.CGroupsApi._is_systemd", return_value=True):
@@ -121,6 +134,37 @@ rdma	6	1	1
 
         self.assertFalse(is_systemd)
 
+    def test_foreach_controller_should_execute_operation_on_all_mounted_controllers(self):
+        executed_controllers = []
+
+        def controller_operation(controller):
+            executed_controllers.append(controller)
+
+        CGroupsApi._foreach_controller(controller_operation, 'A dummy message')
+
+        # The setUp method mocks azurelinuxagent.common.cgroupapi.CGROUPS_FILE_SYSTEM_ROOT to have the cpu and memory controllers mounted
+        self.assertIn('cpu', executed_controllers, 'The operation was not executed on the cpu controller')
+        self.assertIn('memory', executed_controllers, 'The operation was not executed on the memory controller')
+        self.assertEqual(len(executed_controllers), 2, 'The operation was not executed on unexpected controllers: {0}'.format(executed_controllers))
+
+    def test_foreach_controller_should_handle_errors_in_individual_controllers(self):
+        successful_controllers = []
+
+        def controller_operation(controller):
+            if controller == 'cpu':
+                raise Exception('A test exception')
+
+            successful_controllers.append(controller)
+
+        with patch("azurelinuxagent.common.cgroupapi.logger.warn") as mock_logger_warn:
+            CGroupsApi._foreach_controller(controller_operation, 'A dummy message')
+
+            self.assertIn('memory', successful_controllers, 'The operation was not executed on the memory controller')
+            self.assertEqual(len(successful_controllers), 1, 'The operation was not executed on unexpected controllers: {0}'.format(successful_controllers))
+
+            args, kwargs = mock_logger_warn.call_args
+            message = args[0]
+            self.assertIn('Error in cgroup controller "cpu": A test exception.', message)
 
 class FileSystemCgroupsApiTestCase(AgentTestCase):
 
