@@ -117,15 +117,19 @@ class CGroupsApi(object):
     @staticmethod
     def _foreach_controller(operation, message):
         """
-        Executes the given operation on all controllers that need to be tracked; outputs 'message' if the controller is not mounted.
+        Executes the given operation on all controllers that need to be tracked; outputs 'message' if the controller
+        is not mounted or if an error occurs in the operation
         """
         mounted_controllers = os.listdir(CGROUPS_FILE_SYSTEM_ROOT)
 
         for controller in CGROUP_CONTROLLERS:
-            if controller not in mounted_controllers:
-                logger.warn('Controller "{0}" is not mounted. {1}'.format(controller, message))
-            else:
-                operation(controller)
+            try:
+                if controller not in mounted_controllers:
+                    logger.warn('Cgroup controller "{0}" is not mounted. {1}'.format(controller, message))
+                else:
+                    operation(controller)
+            except Exception as e:
+                logger.warn('Error in cgroup controller "{0}": {1}. {2}'.format(controller, ustr(e), message))
 
 
 class FileSystemCgroupsApi(CGroupsApi):
@@ -188,21 +192,17 @@ class FileSystemCgroupsApi(CGroupsApi):
         pid = int(os.getpid())
 
         def create_cgroup(controller):
-            try:
-                path = os.path.join(CGROUPS_FILE_SYSTEM_ROOT, controller, VM_AGENT_CGROUP_NAME)
+            path = os.path.join(CGROUPS_FILE_SYSTEM_ROOT, controller, VM_AGENT_CGROUP_NAME)
 
-                if not os.path.isdir(path):
-                    FileSystemCgroupsApi._try_mkdir(path)
-                    logger.info("Created cgroup {0}".format(path))
+            if not os.path.isdir(path):
+                FileSystemCgroupsApi._try_mkdir(path)
+                logger.info("Created cgroup {0}".format(path))
 
-                self._add_process_to_cgroup(pid, path)
+            self._add_process_to_cgroup(pid, path)
 
-                cgroups.append(CGroup.create(path, controller, VM_AGENT_CGROUP_NAME))
+            cgroups.append(CGroup.create(path, controller, VM_AGENT_CGROUP_NAME))
 
-            except Exception as e:
-                logger.warn('Cannot create "{0}" cgroup for the agent. Error: {1}'.format(controller, ustr(e)))
-
-        self._foreach_controller(create_cgroup, 'Will not create a cgroup for the VM Agent')
+        self._foreach_controller(create_cgroup, 'Failed to create a cgroup for the VM Agent; resource usage will not be tracked')
 
         if len(cgroups) == 0:
             raise CGroupsException("Failed to create any cgroup for the VM Agent")
@@ -220,7 +220,7 @@ class FileSystemCgroupsApi(CGroupsApi):
                 FileSystemCgroupsApi._try_mkdir(path)
                 logger.info("Created {0}".format(path))
 
-        self._foreach_controller(create_cgroup, 'Will not create a root cgroup for extensions')
+        self._foreach_controller(create_cgroup, 'Failed to create a root cgroup for extensions')
 
     def create_extension_cgroups(self, extension_name):
         """
@@ -237,7 +237,7 @@ class FileSystemCgroupsApi(CGroupsApi):
 
             cgroups.append(cgroup)
 
-        self._foreach_controller(create_cgroup, 'Will not create a cgroup for extension {0}'.format(extension_name))
+        self._foreach_controller(create_cgroup, 'Failed to create a cgroup for extension {0}'.format(extension_name))
 
         return cgroups
 
@@ -470,8 +470,6 @@ After=system-{1}.slice""".format(extension_name, EXTENSIONS_ROOT_CGROUP_NAME)
             cgroup_path = os.path.join(CGROUPS_FILE_SYSTEM_ROOT, controller, 'system.slice', scope_name + ".scope")
             cgroups.append(CGroup.create(cgroup_path, controller, extension_name))
 
-        self._foreach_controller(create_cgroup,
-                                 'Cannot create cgroup for extension {0}; resource usage will not be tracked.'.format(
-                                     extension_name))
+        self._foreach_controller(create_cgroup, 'Cannot create cgroup for extension {0}; resource usage will not be tracked.'.format(extension_name))
 
         return process, cgroups
