@@ -20,7 +20,8 @@ from __future__ import print_function
 import subprocess
 
 from azurelinuxagent.common.cgroupapi import CGroupsApi, FileSystemCgroupsApi, SystemdCgroupsApi
-from azurelinuxagent.common.utils import shellutil, fileutil
+from azurelinuxagent.common.utils import shellutil
+from azurelinuxagent.common.utils.processutil import read_output
 from tests.tools import *
 
 
@@ -281,6 +282,27 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
         os.remove("/etc/systemd/system/{0}".format(unit_name))
         shellutil.run_get_output("systemctl daemon-reload")
 
+    def assert_cgroups_created(self, extension_cgroups):
+        self.assertEqual(len(extension_cgroups), 2,
+                         'start_extension_command did not return the expected number of cgroups')
+
+        cpu_found = memory_found = False
+
+        for cgroup in extension_cgroups:
+            match = re.match(
+                r'^/sys/fs/cgroup/(cpu|memory)/system.slice/Microsoft.Compute.TestExtension_1\.2\.3\_([a-f0-9-]+)\.scope$',
+                cgroup.path)
+
+            self.assertTrue(match is not None, "Unexpected path for cgroup: {0}".format(cgroup.path))
+
+            if match.group(1) == 'cpu':
+                cpu_found = True
+            if match.group(1) == 'memory':
+                memory_found = True
+
+        self.assertTrue(cpu_found, 'start_extension_command did not return a cpu cgroup')
+        self.assertTrue(memory_found, 'start_extension_command did not return a memory cgroup')
+
     def test_start_extension_command_should_create_extension_scopes(self):
         original_popen = subprocess.Popen
 
@@ -300,23 +322,7 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
                 stderr=subprocess.PIPE)
 
             process.wait()
-
-            self.assertEqual(len(extension_cgroups), 2, 'start_extension_command did not return the expected number of cgroups')
-
-            cpu_found = memory_found = False
-
-            for cgroup in extension_cgroups:
-                match = re.match(r'^/sys/fs/cgroup/(cpu|memory)/system.slice/Microsoft.Compute.TestExtension_1\.2\.3\_([a-f0-9-]+)\.scope$', cgroup.path)
-
-                self.assertTrue(match is not None, "Unexpected path for cgroup: {0}".format(cgroup.path))
-
-                if match.group(1) == 'cpu':
-                    cpu_found = True
-                if match.group(1) == 'memory':
-                    memory_found = True
-
-            self.assertTrue(cpu_found, 'start_extension_command did not return a cpu cgroup')
-            self.assertTrue(memory_found, 'start_extension_command did not return a memory cgroup')
+            self.assert_cgroups_created(extension_cgroups)
 
     @skip_if_predicate_false(i_am_root, "Test does not run when normal user")
     def test_start_extension_command_should_use_systemd_if_not_failing(self):
@@ -345,23 +351,10 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
                     self.assertEquals(0, ret)
                     self.assertEquals(1, patch_mock_popen.call_count)
 
-                    # Assert that the extension's cgroups were created as well
-                    self.assertEqual(len(extension_cgroups), 2, 'start_extension_command did not return the expected number of cgroups')
+                    args = patch_mock_popen.call_args[0][0]
+                    self.assertIn("systemd-run --unit", args)
 
-                    cpu_found = memory_found = False
-
-                    for cgroup in extension_cgroups:
-                        match = re.match(r'^/sys/fs/cgroup/(cpu|memory)/system.slice/Microsoft.Compute.TestExtension_1\.2\.3\_([a-f0-9-]+)\.scope$', cgroup.path)
-
-                        self.assertTrue(match is not None, "Unexpected path for cgroup: {0}".format(cgroup.path))
-
-                        if match.group(1) == 'cpu':
-                            cpu_found = True
-                        if match.group(1) == 'memory':
-                            memory_found = True
-
-                    self.assertTrue(cpu_found, 'start_extension_command did not return a cpu cgroup')
-                    self.assertTrue(memory_found, 'start_extension_command did not return a memory cgroup')
+                    self.assert_cgroups_created(extension_cgroups)
 
     @skip_if_predicate_false(i_am_root, "Test does not run when normal user")
     def test_start_extension_command_should_not_use_systemd_if_failing(self):
@@ -375,7 +368,7 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
 
         with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stdout:
             with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stderr:
-                with patch("azurelinuxagent.common.cgroupapi.logger.warn") as mock_logger_warn:
+                with patch("azurelinuxagent.common.cgroupapi.add_event") as mock_add_event:
                     with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", side_effect=mock_popen) as patch_mock_popen:
 
                         # We expect this call to fail because of the syntax error
@@ -390,10 +383,13 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
 
                         process.wait()
 
-                        args, kwargs = mock_logger_warn.call_args
-                        message = args[0]
-                        self.assertIn("Failed to find executable syntax_error: No such file or directory", message)
-                        self.assertIn("Failed to run systemd-run for unit Microsoft.Compute.TestExtension_1.2.3", message)
+                        args, kwargs = mock_add_event.call_args
+                        self.assertIn("Failed to run systemd-run for unit Microsoft.Compute.TestExtension_1.2.3",
+                                      kwargs['message'])
+                        self.assertIn("Failed to find executable syntax_error: No such file or directory",
+                                      kwargs['message'])
+                        self.assertEquals(False, kwargs['is_success'])
+                        self.assertEquals('InvokeCommandUsingSystemd', kwargs['op'])
 
                         # We expect the process to ultimately succeed since the fallback option worked
                         ret = process.poll()
@@ -402,5 +398,39 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
                         # We expect two calls to Popen, first for the systemd-run call, second for the fallback option
                         self.assertEquals(2, patch_mock_popen.call_count)
 
+                        first_call_args = patch_mock_popen.mock_calls[0][1][0]
+                        second_call_args = patch_mock_popen.mock_calls[1][1][0]
+                        self.assertIn("systemd-run --unit", first_call_args)
+                        self.assertNotIn("systemd-run --unit", second_call_args)
+
                         # No cgroups should have been created
                         self.assertEquals(extension_cgroups, [])
+
+    @skip_if_predicate_false(i_am_root, "Test does not run when normal user")
+    def test_start_extension_command_should_capture_only_the_last_subprocess_output(self):
+        original_popen = subprocess.Popen
+
+        def mock_popen(*args, **kwargs):
+            # Inject a syntax error to the call
+            systemd_command = args[0].replace('systemd-run', 'systemd-run syntax_error')
+            new_args = (systemd_command,)
+            return original_popen(new_args, **kwargs)
+
+        with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stdout:
+            with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stderr:
+                with patch("azurelinuxagent.common.cgroupapi.add_event") as mock_add_event:
+                    with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen",
+                               side_effect=mock_popen) as patch_mock_popen:
+                        # We expect this call to fail because of the syntax error
+                        process, extension_cgroups = SystemdCgroupsApi().start_extension_command(
+                            extension_name="Microsoft.Compute.TestExtension-1.2.3",
+                            command="echo 'very specific test message'",
+                            shell=True,
+                            cwd=self.tmp_dir,
+                            env={},
+                            stdout=stdout,
+                            stderr=stderr)
+
+                        process.wait()
+                        process_output = read_output(stdout, stderr)
+                        self.assertEquals("[stdout]\nvery specific test message\n\n\n[stderr]\n", process_output)

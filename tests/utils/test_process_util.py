@@ -19,6 +19,43 @@ from tests.tools import *
 
 
 class TestProcessUtils(AgentTestCase):
+    def setUp(self):
+        AgentTestCase.setUp(self)
+        self.tmp_dir = tempfile.mkdtemp()
+        self.stdout = tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b")
+        self.stderr = tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b")
+
+        self.stdout.write("The quick brown fox jumps over the lazy dog.".encode("utf-8"))
+        self.stderr.write("The five boxing wizards jump quickly.".encode("utf-8"))
+
+    def tearDown(self):
+        if self.tmp_dir is not None:
+            shutil.rmtree(self.tmp_dir)
+
+    def test_read_output_it_should_return_no_content(self):
+        with patch('azurelinuxagent.common.utils.processutil.TELEMETRY_MESSAGE_MAX_LEN', 0):
+            expected = "[stdout]\n\n\n[stderr]\n"
+            actual = read_output(self.stdout, self.stderr)
+            self.assertEqual(expected, actual)
+
+    def test_read_output_it_should_truncate_the_content(self):
+        with patch('azurelinuxagent.common.utils.processutil.TELEMETRY_MESSAGE_MAX_LEN', 10):
+            expected = "[stdout]\nThe quick \n\n[stderr]\nThe five b"
+            actual = read_output(self.stdout, self.stderr)
+            self.assertEqual(expected, actual)
+
+    def test_read_output_it_should_return_all_content(self):
+        with patch('azurelinuxagent.common.utils.processutil.TELEMETRY_MESSAGE_MAX_LEN', 50):
+            expected = "[stdout]\nThe quick brown fox jumps over the lazy dog.\n\n" \
+                       "[stderr]\nThe five boxing wizards jump quickly."
+            actual = read_output(self.stdout, self.stderr)
+            self.assertEqual(expected, actual)
+
+    def test_read_output_it_should_handle_exceptions(self):
+        with patch('azurelinuxagent.common.utils.processutil.TELEMETRY_MESSAGE_MAX_LEN', "type error"):
+            actual = read_output(self.stdout, self.stderr)
+            self.assertIn("Cannot read stdout/stderr", actual)
+
     def test_format_stdout_stderr00(self):
         """
         If stdout and stderr are both smaller than the max length,
