@@ -27,7 +27,7 @@ from datetime import datetime
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.utils.textutil as textutil
 from azurelinuxagent.common.exception import ProtocolNotFoundError, \
-    ResourceGoneError
+    ResourceGoneError, ExtensionDownloadError
 from azurelinuxagent.common.future import httpclient, bytebuffer
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.restapi import *
@@ -634,7 +634,7 @@ class WireClient(object):
                 host.manifest_uri = version.uri
                 return response
 
-        raise ProtocolError("Failed to fetch manifest from all sources")
+        raise ExtensionDownloadError("Failed to fetch manifest from all sources")
 
     def stream(self, uri, destination, headers=None, use_proxy=None):
         success = False
@@ -901,7 +901,7 @@ class WireClient(object):
             except ResourceGoneError:
                 continue
 
-        raise ProtocolError("Failed to retrieve extension manifest")
+        raise ExtensionDownloadError("Failed to retrieve extension manifest")
 
     def filter_package_list(self, family, ga_manifest, goal_state):
         complete_list = ga_manifest.pkg_list
