@@ -211,14 +211,14 @@ class MonitorHandler(object):
     @staticmethod
     def collect_event(evt_file_name):
         try:
-            logger.verbose("Found event file: {0}".format(evt_file_name))
+            logger.verbose("Found event file: {0}", evt_file_name)
             with open(evt_file_name, "rb") as evt_file:
                 # if fail to open or delete the file, throw exception
-                data_str = evt_file.read().decode("utf-8", 'ignore')
-            logger.verbose("Processed event file: {0}".format(evt_file_name))
+                data_str = evt_file.read().decode("utf-8")
+            logger.verbose("Processed event file: {0}", evt_file_name)
             os.remove(evt_file_name)
             return data_str
-        except IOError as e:
+        except (IOError, UnicodeDecodeError) as e:
             os.remove(evt_file_name)
             msg = "Failed to process {0}, {1}".format(evt_file_name, e)
             raise EventError(msg)
@@ -283,7 +283,7 @@ class MonitorHandler(object):
         sysinfo_names = [v.name for v in self.sysinfo]
         for param in event.parameters:
             if param.name in sysinfo_names:
-                logger.verbose("Remove existing event parameter: [{0}:{1}]".format(param.name, param.value))
+                logger.verbose("Remove existing event parameter: [{0}:{1}]", param.name, param.value)
                 event.parameters.remove(param)
         event.parameters.extend(self.sysinfo)
 
@@ -306,7 +306,7 @@ class MonitorHandler(object):
                     self.imds_errorstate.incr()
 
                 is_healthy = self.imds_errorstate.is_triggered() is False
-                logger.verbose("IMDS health: {0} [{1}]".format(is_healthy, response))
+                logger.verbose("IMDS health: {0} [{1}]", is_healthy, response)
 
                 self.health_service.report_imds_status(is_healthy, response)
 
@@ -343,7 +343,7 @@ class MonitorHandler(object):
                     self.host_plugin_errorstate.incr()
 
                 is_healthy = self.host_plugin_errorstate.is_triggered() is False
-                logger.verbose("HostGAPlugin health: {0}".format(is_healthy))
+                logger.verbose("HostGAPlugin health: {0}", is_healthy)
 
                 self.health_service.report_host_plugin_heartbeat(is_healthy)
 

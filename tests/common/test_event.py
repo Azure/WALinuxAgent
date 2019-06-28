@@ -22,6 +22,7 @@ from datetime import datetime, timedelta
 
 from azurelinuxagent.common.event import add_event, \
     WALAEventOperation, elapsed_milliseconds
+from azurelinuxagent.common.exception import EventError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.utils.processutil import read_output
 from azurelinuxagent.common.version import CURRENT_VERSION
@@ -189,6 +190,16 @@ class TestEvent(AgentTestCase):
                     self.assertEqual(i["value"], "test_extension")
                 if i["name"] == "Message":
                     self.assertEqual(i["value"], log_msg)
+
+    def test_save_event_message_with_decode_errors(self):
+        tmp_file = os.path.join(self.tmp_dir, "tmp_file")
+        fileutil.write_file(tmp_file, "This is not JSON data", encoding="utf-16")
+
+        for tld_file in os.listdir(self.tmp_dir):
+            try:
+                MonitorHandler.collect_event(os.path.join(self.tmp_dir, tld_file))
+            except Exception as e:
+                self.assertIsInstance(e, EventError)
 
     def test_save_event_rollover(self):
         add_event('test', message='first event')
