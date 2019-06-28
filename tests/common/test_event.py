@@ -20,7 +20,7 @@ from __future__ import print_function
 from datetime import datetime, timedelta
 
 from azurelinuxagent.common.event import add_event, \
-    WALAEventOperation, elapsed_milliseconds, EventLogger
+    WALAEventOperation, elapsed_milliseconds
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.version import CURRENT_VERSION
 
@@ -213,16 +213,25 @@ class TestEvent(AgentTestCase):
 
     def test_save_event(self):
         add_event('test', message='test event')
-        self.assertTrue(len(os.listdir(self.tmp_dir)) == 2)
+        self.assertTrue(len(os.listdir(self.tmp_dir)) == 1)
+
+        # checking the extension of the file created.
+        for filename in os.listdir(self.tmp_dir):
+            self.assertEqual(".tld", filename[-4:])
 
     def test_save_event_rollover(self):
-        add_event('test', message='first event')
-        for i in range(0, 499):
+        # We keep 1000 events only, and the older ones are removed.
+
+        num_of_events = 999
+        add_event('test', message='first event')  # this makes number of events to num_of_events + 1.
+        for i in range(num_of_events):
             add_event('test', message='test event {0}'.format(i))
+
+        num_of_events += 1 # adding the first add_event.
 
         events = os.listdir(self.tmp_dir)
         events.sort()
-        self.assertTrue(len(events) == 1000)
+        self.assertTrue(len(events) == num_of_events, "{0} is not equal to {1}".format(len(events), num_of_events))
 
         first_event = os.path.join(self.tmp_dir, events[0])
         with open(first_event) as first_fh:
@@ -230,14 +239,17 @@ class TestEvent(AgentTestCase):
             self.assertTrue('first event' in first_event_text)
 
         add_event('test', message='last event')
+        # Adding the above event displaces the first_event
+
         events = os.listdir(self.tmp_dir)
         events.sort()
-        self.assertTrue(len(events) == 1000, "{0} events found, 1000 expected".format(len(events)))
+        self.assertTrue(len(events) == num_of_events,
+                        "{0} events found, {1} expected".format(len(events), num_of_events))
 
         first_event = os.path.join(self.tmp_dir, events[0])
         with open(first_event) as first_fh:
             first_event_text = first_fh.read()
-            self.assertFalse('first event' in first_event_text)
+            self.assertFalse('first event' in first_event_text, "'first event' not in {0}".format(first_event_text))
             self.assertTrue('test event 0' in first_event_text)
 
         last_event = os.path.join(self.tmp_dir, events[-1])
@@ -261,7 +273,7 @@ class TestEvent(AgentTestCase):
         first_event = os.path.join(self.tmp_dir, events[0])
         with open(first_event) as first_fh:
             first_event_text = first_fh.read()
-            self.assertTrue('test event 1002' in first_event_text)
+            self.assertTrue('test event 1001' in first_event_text)
 
         last_event = os.path.join(self.tmp_dir, events[-1])
         with open(last_event) as last_fh:
