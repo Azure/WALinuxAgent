@@ -349,8 +349,8 @@ class SystemdCgroupsApi(CGroupsApi):
             cpu_cgroup_path = os.path.join(CGROUPS_FILE_SYSTEM_ROOT, 'cpu', cgroup_unit)
             memory_cgroup_path = os.path.join(CGROUPS_FILE_SYSTEM_ROOT, 'memory', cgroup_unit)
 
-            return [CGroup.create(cpu_cgroup_path, 'cpu', cgroup_unit),
-                    CGroup.create(memory_cgroup_path, 'memory', cgroup_unit)]
+            return [CGroup.create(cpu_cgroup_path, 'cpu', VM_AGENT_CGROUP_NAME),
+                    CGroup.create(memory_cgroup_path, 'memory', VM_AGENT_CGROUP_NAME)]
         except Exception as e:
             raise CGroupsException("Failed to get paths of agent's cgroups. Error: {0}".format(ustr(e)))
 
