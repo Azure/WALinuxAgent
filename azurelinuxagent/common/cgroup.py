@@ -215,7 +215,16 @@ class MemoryCgroup(CGroup):
         :return: Memory usage in bytes
         :rtype: int
         """
-        usage = self._get_parameters('memory.usage_in_bytes', first_line_only=True)
+        usage = None
+
+        try:
+            usage = self._get_parameters('memory.usage_in_bytes', first_line_only=True)
+        except (IOError, OSError) as e:
+            if e.errno == errno.ENOENT:
+                # only suppressing file not found exceptions.
+                pass
+            else:
+                raise e
 
         if not usage:
             usage = "0"
@@ -228,7 +237,15 @@ class MemoryCgroup(CGroup):
         :return: Memory usage in bytes
         :rtype: int
         """
-        usage = self._get_parameters('memory.max_usage_in_bytes', first_line_only=True)
+        usage = None
+        try:
+            usage = self._get_parameters('memory.max_usage_in_bytes', first_line_only=True)
+        except (IOError, OSError) as e:
+            if e.errno == errno.ENOENT:
+                # only suppressing file not found exceptions.
+                pass
+            else:
+                raise e
         if not usage:
             usage = "0"
         return int(usage)
@@ -250,122 +267,3 @@ class CollectedMetrics(object):
         self.controller = controller
         self.metric_name = metric_name
         self.value = value
-
-#
-# TODO: Do we need this code? - For not we'll keep this code. Will remove in the next round.
-#
-#
-# MEMORY_DEFAULT = -1
-#
-# # percentage of a single core
-# DEFAULT_CPU_LIMIT_AGENT = 10
-# DEFAULT_CPU_LIMIT_EXT = 40
-#
-# DEFAULT_MEM_LIMIT_MIN_MB = 256  # mb, applies to agent and extensions
-# DEFAULT_MEM_LIMIT_MAX_MB = 512  # mb, applies to agent only
-# DEFAULT_MEM_LIMIT_PCT = 15  # percent, applies to extensions
-#
-# @staticmethod
-# def _convert_cpu_limit_to_fraction(value):
-#     """
-#     Convert a CPU limit from percent (e.g. 50 meaning 50%) to a decimal fraction (0.50).
-#     :return: Fraction of one CPU to be made available (e.g. 0.5 means half a core)
-#     :rtype: float
-#     """
-#     try:
-#         limit = float(value)
-#     except ValueError:
-#         raise CGroupsException('CPU Limit must be convertible to a float')
-#
-#     if limit <= float(0) or limit > float(CGroupConfigurator.get_num_cores() * 100):
-#         raise CGroupsException('CPU Limit must be between 0 and 100 * numCores')
-#
-#     return limit / 100.0
-# def set_cpu_limit(self, limit=None):
-#     """
-#     Limit this cgroup to a percentage of a single core. limit=10 means 10% of one core; 150 means 150%, which
-#     is useful only in multi-core systems.
-#     To limit a cgroup to utilize 10% of a single CPU, use the following commands:
-#         # echo 10000 > /cgroup/cpu/red/cpu.cfs_quota_us
-#         # echo 100000 > /cgroup/cpu/red/cpu.cfs_period_us
-#
-#     :param limit:
-#     """
-#     if not CGroupConfigurator.enabled():
-#         return
-#
-#     if limit is None:
-#         return
-#
-#     if 'cpu' in self.cgroups:
-#         total_units = float(self.get_parameter('cpu', 'cpu.cfs_period_us'))
-#         limit_units = int(self._convert_cpu_limit_to_fraction(limit) * total_units)
-#         cpu_shares_file = self._get_cgroup_file('cpu', 'cpu.cfs_quota_us')
-#         logger.verbose("writing {0} to {1}".format(limit_units, cpu_shares_file))
-#         fileutil.write_file(cpu_shares_file, '{0}\n'.format(limit_units))
-#     else:
-#         raise CGroupsException("CPU controller not available in this cgroup")
-#
-# @staticmethod
-# def get_num_cores():
-#     """
-#     Return the number of CPU cores exposed to this system.
-#
-#     :return: int
-#     """
-#     return CGroupConfigurator._osutil.get_processor_cores()
-#
-# @staticmethod
-# def _format_memory_value(unit, limit=None):
-#     units = {'bytes': 1, 'kilobytes': 1024, 'megabytes': 1024*1024, 'gigabytes': 1024*1024*1024}
-#     if unit not in units:
-#         raise CGroupsException("Unit must be one of {0}".format(units.keys()))
-#     if limit is None:
-#         value = MEMORY_DEFAULT
-#     else:
-#         try:
-#             limit = float(limit)
-#         except ValueError:
-#             raise CGroupsException('Limit must be convertible to a float')
-#         else:
-#             value = int(limit * units[unit])
-#     return value
-#
-# def set_memory_limit(self, limit=None, unit='megabytes'):
-#     if 'memory' in self.cgroups:
-#         value = self._format_memory_value(unit, limit)
-#         memory_limit_file = self._get_cgroup_file('memory', 'memory.limit_in_bytes')
-#         logger.verbose("writing {0} to {1}".format(value, memory_limit_file))
-#         fileutil.write_file(memory_limit_file, '{0}\n'.format(value))
-#     else:
-#         raise CGroupsException("Memory controller not available in this cgroup")
-#
-# class CGroupsLimits(object):
-#     @staticmethod
-#     def _get_value_or_default(name, threshold, limit, compute_default):
-#         return threshold[limit] if threshold and limit in threshold else compute_default(name)
-#
-#     def __init__(self, cgroup_name, threshold=None):
-#         self.cpu_limit = self._get_value_or_default(cgroup_name, threshold, "cpu", CGroupsLimits.get_default_cpu_limits)
-#         self.memory_limit = self._get_value_or_default(cgroup_name, threshold, "memory",
-#                                                        CGroupsLimits.get_default_memory_limits)
-#
-#     @staticmethod
-#     def get_default_cpu_limits(cgroup_name):
-#         # default values
-#         cpu_limit = DEFAULT_CPU_LIMIT_EXT
-#         if AGENT_CGROUP_NAME.lower() in cgroup_name.lower():
-#             cpu_limit = DEFAULT_CPU_LIMIT_AGENT
-#         return cpu_limit
-#
-#     @staticmethod
-#     def get_default_memory_limits(cgroup_name):
-#         os_util = get_osutil()
-#
-#         # default values
-#         mem_limit = max(DEFAULT_MEM_LIMIT_MIN_MB, round(os_util.get_total_mem() * DEFAULT_MEM_LIMIT_PCT / 100, 0))
-#
-#         # agent values
-#         if AGENT_CGROUP_NAME.lower() in cgroup_name.lower():
-#             mem_limit = min(DEFAULT_MEM_LIMIT_MAX_MB, mem_limit)
-#         return mem_limit
