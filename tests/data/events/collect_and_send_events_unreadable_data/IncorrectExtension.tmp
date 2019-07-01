@@ -1,0 +1,32 @@
+ {
+            "eventId": 1,
+            "providerId": "69B669B9-4AF8-4C50-BDC4-6006FA76E975",
+            "parameters": [
+                        {
+                        "name": "Name",
+                        "value": "Microsoft.EnterpriseCloud.Monitoring.OmsAgentForLinux"
+                },
+                        {
+
+            			"name": "Version",
+            			"value": "1.11.5"
+             		},
+
+                        {
+                        "name": "Operation",
+                        "value": "Install"
+                },
+                        {
+                        "name": "OperationSuccess",
+                        "value": false
+                },
+                        {
+                        "name": "Message",
+                        "value": "HelloWorld"
+                },
+                        {
+                        "name": "Duration",
+                        "value": 300000
+                }
+            ]
+            }

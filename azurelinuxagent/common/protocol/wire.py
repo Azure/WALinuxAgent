@@ -20,29 +20,21 @@ import json
 import os
 import random
 import re
-import sys
 import time
-import traceback
 import xml.sax.saxutils as saxutils
-
 from datetime import datetime
 
 import azurelinuxagent.common.conf as conf
-import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.textutil as textutil
-
 from azurelinuxagent.common.exception import ProtocolNotFoundError, \
     ResourceGoneError, ExtensionDownloadError
 from azurelinuxagent.common.future import httpclient, bytebuffer
-from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol, URI_FORMAT_GET_EXTENSION_ARTIFACT, \
-    HOST_PLUGIN_PORT
+from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.restapi import *
 from azurelinuxagent.common.utils.archive import StateFlusher
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, \
     findtext, getattrib, gettext, remove_bom, get_bytes_from_pem, parse_json
-from azurelinuxagent.common.version import AGENT_NAME
-from azurelinuxagent.common.osutil import get_osutil
 
 VERSION_INFO_URI = "http://{0}/?comp=versions"
 GOAL_STATE_URI = "http://{0}/machine/?comp=goalstate"
@@ -69,6 +61,8 @@ PROTOCOL_VERSION = "2012-11-30"
 ENDPOINT_FINE_NAME = "WireServer"
 
 SHORT_WAITING_INTERVAL = 1  # 1 second
+
+MAX_EVENT_BUFFER_SIZE = 2**16 - 2**10
 
 
 class UploadError(HttpError):
@@ -1136,10 +1130,14 @@ class WireClient(object):
             if event.providerId not in buf:
                 buf[event.providerId] = ""
             event_str = event_to_v1(event)
-            if len(event_str) >= 63 * 1024:
-                logger.warn("Single event too large: {0}", event_str[300:])
+            if len(event_str) >= MAX_EVENT_BUFFER_SIZE:
+                details_of_event = [ustr(x.name) + ":" + ustr(x.value) for x in event.parameters if x.name in
+                                    ["Name", "Version", "Operation", "OperationSuccess"]]
+                logger.periodic_warn(logger.EVERY_HALF_HOUR,
+                                     "Single event too large: {0}, with the length: {1} more than the limit({2})"
+                                     .format(str(details_of_event), len(event_str), MAX_EVENT_BUFFER_SIZE))
                 continue
-            if len(buf[event.providerId] + event_str) >= 63 * 1024:
+            if len(buf[event.providerId] + event_str) >= MAX_EVENT_BUFFER_SIZE:
                 self.send_event(event.providerId, buf[event.providerId])
                 buf[event.providerId] = ""
             buf[event.providerId] = buf[event.providerId] + event_str
