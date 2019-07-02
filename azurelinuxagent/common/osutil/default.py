@@ -325,22 +325,34 @@ class DefaultOSUtil(object):
                            option="-t tmpfs",
                            chk_err=False)
             elif not os.path.isdir(self._cgroup_path()):
-                logger.error("Could not mount cgroups: ordinary file at {0}".format(path))
+                logger.error("Could not mount cgroups: ordinary file at {0}", path)
                 return
 
-            for metric_hierarchy in ['cpu,cpuacct', 'memory']:
-                target_path = self._cgroup_path(metric_hierarchy)
-                if not os.path.exists(target_path):
-                    fileutil.mkdir(target_path)
-                    self.mount(device=metric_hierarchy,
-                               mount_point=target_path,
-                               option="-t cgroup -o {0}".format(metric_hierarchy),
-                               chk_err=False)
+            controllers_to_mount = ['cpu,cpuacct', 'memory']
+            errors = 0
+            cpu_mounted = False
+            for controller in controllers_to_mount:
+                try:
+                    target_path = self._cgroup_path(controller)
+                    if not os.path.exists(target_path):
+                        fileutil.mkdir(target_path)
+                        self.mount(device=controller,
+                                   mount_point=target_path,
+                                   option="-t cgroup -o {0}".format(controller),
+                                   chk_err=False)
+                        if controller == 'cpu,cpuacct':
+                            cpu_mounted = True
+                except Exception as exception:
+                    errors += 1
+                    if errors == len(controllers_to_mount):
+                        raise
+                    logger.warn("Could not mount cgroup controller {0}: {1}", controller, ustr(exception))
 
-            for metric_hierarchy in ['cpu', 'cpuacct']:
-                target_path = self._cgroup_path(metric_hierarchy)
-                if not os.path.exists(target_path):
-                    os.symlink(self._cgroup_path('cpu,cpuacct'), target_path)
+            if cpu_mounted:
+                for controller in ['cpu', 'cpuacct']:
+                    target_path = self._cgroup_path(controller)
+                    if not os.path.exists(target_path):
+                        os.symlink(self._cgroup_path('cpu,cpuacct'), target_path)
 
         except OSError as oe:
             # log a warning for read-only file systems
