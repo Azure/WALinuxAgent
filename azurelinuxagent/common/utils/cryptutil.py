@@ -33,6 +33,7 @@ import azurelinuxagent.common.utils.textutil as textutil
 
 DECRYPT_SECRET_CMD = "{0} cms -decrypt -inform DER -inkey {1} -in /dev/stdin"
 
+
 class CryptUtil(object):
     def __init__(self, openssl_cmd):
         self.openssl_cmd = openssl_cmd
@@ -54,7 +55,7 @@ class CryptUtil(object):
             raise IOError(errno.ENOENT, "File not found", file_name)
         else:
             cmd = "{0} pkey -in {1} -pubout 2>/dev/null".format(self.openssl_cmd,
-                                                               file_name)
+                                                                file_name)
             pub = shellutil.run_get_output(cmd)[1]
             return pub
 
