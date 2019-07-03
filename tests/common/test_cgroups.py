@@ -98,8 +98,9 @@ class TestCpuCgroup(AgentTestCase):
 
         self.assertEqual("cpu", test_cpu_cg.controller)
 
+    @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_processor_cores", return_value=1)
     @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil._get_proc_stat")
-    def test_collect(self, patch_get_proc_stat):
+    def test_collect(self, patch_get_proc_stat, *args):
         patch_get_proc_stat.return_value = fileutil.read_file(os.path.join(data_dir, "cgroups", "dummy_proc_stat"))
         test_cpu_cg = CpuCgroup("test_extension", os.path.join(data_dir, "cgroups", "cpu_mount"))
 
@@ -111,7 +112,7 @@ class TestCpuCgroup(AgentTestCase):
 
         self.assertEqual("cpu", collected_metric.controller)
         self.assertEqual("% Processor Time", collected_metric.metric_name)
-        self.assertEqual(20.455, collected_metric.value)
+        self.assertEqual(5.114, collected_metric.value)
 
     def test_get_current_cpu_total_exception_handling(self):
         test_cpu_cg = CpuCgroup("test_extension", "dummy_path")
