@@ -19,7 +19,7 @@ from __future__ import print_function
 
 import subprocess
 
-from azurelinuxagent.common.cgroupapi import CGroupsApi, FileSystemCgroupsApi, SystemdCgroupsApi
+from azurelinuxagent.common.cgroupapi import CGroupsApi, FileSystemCgroupsApi, SystemdCgroupsApi, VM_AGENT_CGROUP_NAME
 from azurelinuxagent.common.utils import shellutil
 from azurelinuxagent.common.utils.processutil import read_output
 from tests.tools import *
@@ -166,6 +166,7 @@ rdma	6	1	1
             message = args[0]
             self.assertIn('Error in cgroup controller "cpu": A test exception.', message)
 
+
 class FileSystemCgroupsApiTestCase(AgentTestCase):
 
     def setUp(self):
@@ -188,8 +189,9 @@ class FileSystemCgroupsApiTestCase(AgentTestCase):
         agent_cgroups = FileSystemCgroupsApi().create_agent_cgroups()
 
         def assert_cgroup_created(controller):
-            cgroup_path = os.path.join(self.cgroups_file_system_root, controller, "walinuxagent.service")
+            cgroup_path = os.path.join(self.cgroups_file_system_root, controller, VM_AGENT_CGROUP_NAME)
             self.assertTrue(any(cgroups.path == cgroup_path for cgroups in agent_cgroups))
+            self.assertTrue(any(cgroups.name == VM_AGENT_CGROUP_NAME for cgroups in agent_cgroups))
             self.assertTrue(os.path.exists(cgroup_path))
             cgroup_task = int(fileutil.read_file(os.path.join(cgroup_path, "cgroup.procs")))
             current_process = os.getpid()
@@ -282,6 +284,16 @@ class FileSystemCgroupsApiTestCase(AgentTestCase):
 
 
 class SystemdCgroupsApiTestCase(AgentTestCase):
+    def setUp(self):
+        AgentTestCase.setUp(self)
+
+        self.cgroups_file_system_root = os.path.join(self.tmp_dir, "cgroup")
+        os.mkdir(self.cgroups_file_system_root)
+        os.mkdir(os.path.join(self.cgroups_file_system_root, "cpu"))
+        os.mkdir(os.path.join(self.cgroups_file_system_root, "memory"))
+
+    def tearDown(self):
+        AgentTestCase.tearDown(self)
 
     def test_it_should_return_extensions_slice_root_name(self):
         root_slice_name = SystemdCgroupsApi()._get_extensions_slice_root_name()
@@ -478,3 +490,35 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
                         process.wait()
                         process_output = read_output(stdout, stderr)
                         self.assertEquals("[stdout]\nvery specific test message\n\n\n[stderr]\n", process_output)
+
+    @patch("azurelinuxagent.common.utils.fileutil.read_file")
+    def test_create_agent_cgroups_should_create_cgroups_on_all_controllers(self, patch_read_file):
+        mock__base_cgroups = patch("azurelinuxagent.common.cgroupapi.CGROUPS_FILE_SYSTEM_ROOT",
+                                   self.cgroups_file_system_root)
+        mock__base_cgroups.start()
+        mock_proc_self_cgroup = '''12:blkio:/system.slice/walinuxagent.service
+11:memory:/system.slice/walinuxagent.service
+10:perf_event:/
+9:hugetlb:/
+8:freezer:/
+7:net_cls,net_prio:/
+6:devices:/system.slice/walinuxagent.service
+5:cpuset:/
+4:cpu,cpuacct:/system.slice/walinuxagent.service
+3:pids:/system.slice/walinuxagent.service
+2:rdma:/
+1:name=systemd:/system.slice/walinuxagent.service
+0::/system.slice/walinuxagent.service
+'''
+        patch_read_file.return_value = mock_proc_self_cgroup
+        agent_cgroups = SystemdCgroupsApi().create_agent_cgroups()
+
+        def assert_cgroup_created(controller):
+            expected_cgroup_path = os.path.join(self.cgroups_file_system_root, controller, "system.slice", VM_AGENT_CGROUP_NAME)
+
+            self.assertTrue(any(cgroups.path == expected_cgroup_path for cgroups in agent_cgroups))
+            self.assertTrue(any(cgroups.name == VM_AGENT_CGROUP_NAME for cgroups in agent_cgroups))
+
+        assert_cgroup_created("cpu")
+        assert_cgroup_created("memory")
+        mock__base_cgroups.stop()
