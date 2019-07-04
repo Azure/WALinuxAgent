@@ -74,12 +74,25 @@ class TestCGroup(AgentTestCase):
 
         self.assertEqual(True, test_cgroup.is_active())
 
-    def test_is_active_incorrect_file(self):
+    @patch("azurelinuxagent.common.logger.periodic_warn")
+    def test_is_active_file_not_present(self, patch_periodic_warn):
         test_cgroup = CGroup.create(os.path.join(data_dir, "cgroups", "not_cpu_mount"), "cpu", "test_extension")
         self.assertEqual(False, test_cgroup.is_active())
 
         test_cgroup = CGroup.create(os.path.join(data_dir, "cgroups", "not_memory_mount"), "memory", "test_extension")
         self.assertEqual(False, test_cgroup.is_active())
+
+        self.assertEqual(0, patch_periodic_warn.call_count)
+
+    @patch("azurelinuxagent.common.logger.periodic_warn")
+    def test_is_active_incorrect_file(self, patch_periodic_warn):
+        test_cgroup = CGroup.create(os.path.join(data_dir, "cgroups", "cpu_mount", "tasks"), "cpu", "test_extension")
+        self.assertEqual(False, test_cgroup.is_active())
+        self.assertEqual(1, patch_periodic_warn.call_count)
+
+        test_cgroup = CGroup.create(os.path.join(data_dir, "cgroups", "memory_mount", "tasks"), "memory", "test_extension")
+        self.assertEqual(False, test_cgroup.is_active())
+        self.assertEqual(2, patch_periodic_warn.call_count)
 
 
 class TestCpuCgroup(AgentTestCase):
