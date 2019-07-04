@@ -383,3 +383,16 @@ def hash_strings(string_list):
     for item in string_list:
         sha1_hash.update(item.encode())
     return sha1_hash.digest()
+
+
+def format_memory_value(unit, value):
+    units = {'bytes': 1, 'kilobytes': 1024, 'megabytes': 1024*1024, 'gigabytes': 1024*1024*1024}
+
+    if unit not in units:
+        raise ValueError("Unit must be one of {0}".format(units.keys()))
+    try:
+        value = float(value)
+    except TypeError:
+        raise TypeError('Value must be convertible to a float')
+
+    return int(value * units[unit])
