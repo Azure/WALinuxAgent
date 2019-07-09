@@ -19,6 +19,7 @@ import os.path
 
 from azurelinuxagent.agent import *
 from azurelinuxagent.common.conf import *
+from azurelinuxagent.common.logger import DEFAULT_LOGGER, FileAppender, StdoutAppender, ConsoleAppender
 
 from tests.tools import *
 
@@ -36,7 +37,7 @@ Extensions.Enabled = True
 HttpProxy.Host = None
 HttpProxy.Port = None
 Lib.Dir = /var/lib/waagent
-Logs.Console = True
+Logs.Console = False
 Logs.Verbose = False
 OS.AllowHTTP = False
 OS.CheckRdmaDriver = False
@@ -70,6 +71,7 @@ ResourceDisk.Format = True
 ResourceDisk.MountOptions = None
 ResourceDisk.MountPoint = /mnt/resource
 ResourceDisk.SwapSizeMB = 0""".split('\n')
+
 
 class TestAgent(AgentTestCase):
 
@@ -108,6 +110,37 @@ class TestAgent(AgentTestCase):
     def test_agent_uses_default_configuration_path(self, mock_load):
         Agent(False)
         mock_load.assert_called_once_with("/etc/waagent.conf")
+
+        stdout_appender_present = False
+        file_appender_present = False
+        console_appender_present = False
+
+        for appender in DEFAULT_LOGGER.appenders:
+            if isinstance(appender, StdoutAppender):
+                stdout_appender_present = True
+            if isinstance(appender, FileAppender):
+                file_appender_present = True
+
+        self.assertEqual(stdout_appender_present and file_appender_present and not console_appender_present, True)
+
+    @patch("azurelinuxagent.common.conf.load_conf_from_file")
+    def test_agent_uses_default_configuration_path_console_logging_enabled(self, mock_load):
+        Agent(False, None, True)
+        mock_load.assert_called_once_with("/etc/waagent.conf")
+
+        stdout_appender_present = False
+        file_appender_present = False
+        console_appender_present = False
+
+        for appender in DEFAULT_LOGGER.appenders:
+            if isinstance(appender, StdoutAppender):
+                stdout_appender_present = True
+            if isinstance(appender, FileAppender):
+                file_appender_present = True
+            if isinstance(appender, ConsoleAppender):
+                console_appender_present = True
+
+        self.assertEqual(stdout_appender_present and file_appender_present and console_appender_present, True)
 
     @patch("azurelinuxagent.daemon.get_daemon_handler")
     @patch("azurelinuxagent.common.conf.load_conf_from_file")
@@ -165,6 +198,42 @@ class TestAgent(AgentTestCase):
 
     def test_agent_get_configuration(self):
         Agent(False, conf_file_path=os.path.join(data_dir, "test_waagent.conf"))
+
+        actual_configuration = []
+        configuration = conf.get_configuration()
+        for k in sorted(configuration.keys()):
+            actual_configuration.append("{0} = {1}".format(k, configuration[k]))
+        self.assertEqual(EXPECTED_CONFIGURATION, actual_configuration)
+
+    def test_agent_get_logs_console_true_from_configuration(self):
+        expected_configuration_with_log_console_true = [
+            "Logs.Console = True" if "Logs.Console = False" in config else config for config in EXPECTED_CONFIGURATION]
+
+        Agent(False, conf_file_path=os.path.join(data_dir, "test_waagent.conf"))
+        conf.__conf__.values["Logs.Console"] = "y"
+
+        actual_configuration = []
+        configuration = conf.get_configuration()
+        for k in sorted(configuration.keys()):
+            actual_configuration.append("{0} = {1}".format(k, configuration[k]))
+        self.assertEqual(expected_configuration_with_log_console_true, actual_configuration)
+
+    def test_agent_get_logs_console_false_from_configuration(self):
+        expected_configuration_with_log_console_false = [
+            "Logs.Console = False" if "Logs.Console = True" in config else config for config in EXPECTED_CONFIGURATION]
+
+        Agent(False, conf_file_path=os.path.join(data_dir, "test_waagent.conf"))
+        conf.__conf__.values["Logs.Console"] = "n"
+
+        actual_configuration = []
+        configuration = conf.get_configuration()
+        for k in sorted(configuration.keys()):
+            actual_configuration.append("{0} = {1}".format(k, configuration[k]))
+        self.assertEqual(expected_configuration_with_log_console_false, actual_configuration)
+
+    def test_agent_get_logs_console_default_value(self):
+        Agent(False, conf_file_path=os.path.join(data_dir, "test_waagent.conf"))
+        conf.__conf__.values.pop("Logs.Console")
 
         actual_configuration = []
         configuration = conf.get_configuration()

@@ -77,7 +77,7 @@ def load_conf_from_file(conf_file_path, conf=__conf__):
     """
     Load conf file from: conf_file_path
     """
-    if os.path.isfile(conf_file_path) == False:
+    if not os.path.isfile(conf_file_path):
         raise AgentConfigError(("Missing configuration in {0}"
                                 "").format(conf_file_path))
     try:
@@ -96,7 +96,7 @@ __SWITCH_OPTIONS__ = {
     "OS.UpdateRdmaDriver": False,
     "OS.CheckRdmaDriver": False,
     "Logs.Verbose": False,
-    "Logs.Console": True,
+    "Logs.Console": False,
     "Extensions.Enabled": True,
     "Provisioning.Enabled": True,
     "Provisioning.UseCloudInit": False,
@@ -174,14 +174,18 @@ def enable_rdma(conf=__conf__):
 def enable_rdma_update(conf=__conf__):
     return conf.get_switch("OS.UpdateRdmaDriver", False)
 
+
 def enable_check_rdma_driver(conf=__conf__):
     return conf.get_switch("OS.CheckRdmaDriver", True)
+
 
 def get_logs_verbose(conf=__conf__):
     return conf.get_switch("Logs.Verbose", False)
 
+
 def get_logs_console(conf=__conf__):
-    return conf.get_switch("Logs.Console", True)
+    return conf.get_switch("Logs.Console", False)
+
 
 def get_lib_dir(conf=__conf__):
     return conf.get("Lib.Dir", "/var/lib/waagent")

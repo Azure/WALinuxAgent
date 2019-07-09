@@ -39,32 +39,33 @@ from azurelinuxagent.common.version import AGENT_NAME, AGENT_LONG_VERSION, \
 from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.utils import fileutil
 
+
 class Agent(object):
-    def __init__(self, verbose, conf_file_path=None):
+    def __init__(self, verbose, conf_file_path=None, console_logging=False):
         """
         Initialize agent running environment.
         """
         self.conf_file_path = conf_file_path
         self.osutil = get_osutil()
 
-        #Init stdout log
+        # Init stdout log
         level = logger.LogLevel.VERBOSE if verbose else logger.LogLevel.INFO
         logger.add_logger_appender(logger.AppenderType.STDOUT, level)
 
-        #Init config
+        # Init config
         conf_file_path = self.conf_file_path \
                 if self.conf_file_path is not None \
                     else self.osutil.get_agent_conf_file_path()
         conf.load_conf_from_file(conf_file_path)
 
-        #Init log
+        # Init log
         verbose = verbose or conf.get_logs_verbose()
         level = logger.LogLevel.VERBOSE if verbose else logger.LogLevel.INFO
         logger.add_logger_appender(logger.AppenderType.FILE, level,
-                                 path="/var/log/waagent.log")
-        if conf.get_logs_console():
+                                   path="/var/log/waagent.log")
+        if conf.get_logs_console() or console_logging:
             logger.add_logger_appender(logger.AppenderType.CONSOLE, level,
-                    path="/dev/console")
+                                       path="/dev/console")
         # See issue #1035
         # logger.add_logger_appender(logger.AppenderType.TELEMETRY,
         #                            logger.LogLevel.WARNING,
@@ -81,7 +82,7 @@ class Agent(object):
                 "Exception occurred while creating extension "
                 "log directory {0}: {1}".format(ext_log_dir, e))
 
-        #Init event reporter
+        # Init event reporter
         event.init_event_status(conf.get_lib_dir())
         event_dir = os.path.join(conf.get_lib_dir(), "events")
         event.init_event_logger(event_dir)
@@ -157,7 +158,7 @@ def main(args=[]):
         start(conf_file_path=conf_file_path)
     else:
         try:
-            agent = Agent(verbose, conf_file_path=conf_file_path)
+            agent = Agent(verbose, conf_file_path=conf_file_path, console_logging=debug)
             if command == "deprovision+user":
                 agent.deprovision(force, deluser=True)
             elif command == "deprovision":
