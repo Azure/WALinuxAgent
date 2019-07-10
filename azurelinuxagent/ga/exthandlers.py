@@ -830,10 +830,10 @@ class ExtHandlerInstance(object):
                 raise ExtensionDownloadError("Failed to download extension",
                                              code=ExtensionErrorCodes.PluginManifestDownloadError)
 
-        self.pkg_file = destination
+            duration = elapsed_milliseconds(begin_utc)
+            self.report_event(message="Download succeeded", duration=duration)
 
-        duration = elapsed_milliseconds(begin_utc)
-        self.report_event(message="Download succeeded", duration=duration)
+        self.pkg_file = destination
 
     def initialize(self):
         self.logger.info("Initializing extension {0}".format(self.get_full_name()))
