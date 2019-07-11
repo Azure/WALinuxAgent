@@ -3,7 +3,7 @@ os: linux
 dist: xenial
 language: python
 env:
-  - NOSEOPTS="--no-skip" SETUPOPTS=""
+  - NOSEOPTS="" SETUPOPTS=""
   # Add SETUPOPTS="check flake8" to enable flake8 checks
 
 matrix:
@@ -11,20 +11,20 @@ matrix:
   exclude:
     - python:
       env:
-        - NOSEOPTS="--no-skip" SETUPOPTS="check flake8"
+        - NOSEOPTS="" SETUPOPTS="check flake8"
 
   include:
     - python: 2.6
       dist: trusty
       env:
-        - NOSEOPTS="--no-skip" SETUPOPTS=""
+        - NOSEOPTS="" SETUPOPTS=""
     - python: 2.7
     - python: 3.4
     - python: 3.6
     - python: 3.7
       env:
         - >-
-          NOSEOPTS="--no-skip --with-coverage --cover-inclusive
+          NOSEOPTS="--with-coverage --cover-inclusive
           --cover-min-percentage=60 --cover-branches
           --cover-package=azurelinuxagent --cover-xml"
           SETUPOPTS=""
