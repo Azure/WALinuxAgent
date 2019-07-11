@@ -37,6 +37,16 @@ from tests.tools import *
 
 class DefaultOsUtilTestCase(AgentTestCase):
 
+    def setUp(self):
+        AgentTestCase.setUp(self)
+        self.mock__os_environ = patch.dict("os.environ", {'TRAVIS': 'false'})
+        self.mock__os_environ.start()
+
+    def tearDown(self):
+        self.mock__os_environ.stop()
+
+        AgentTestCase.tearDown(self)
+
     def test_get_osutil_in_travis_environment_it_should_return_trusty(self):
         mock_os_environ = {
             'TRAVIS': 'true',
