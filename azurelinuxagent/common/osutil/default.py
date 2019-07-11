@@ -105,6 +105,10 @@ class DefaultOSUtil(object):
         self.disable_route_warning = False
         self.jit_enabled = False
 
+    @staticmethod
+    def get_service_name():
+        return "waagent"
+
     def get_firewall_dropped_packets(self, dst_ip=None):
         # If a previous attempt failed, do not retry
         global _enable_firewall

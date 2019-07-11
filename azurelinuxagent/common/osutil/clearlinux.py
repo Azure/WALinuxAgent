@@ -39,6 +39,7 @@ class ClearLinuxUtil(DefaultOSUtil):
         super(ClearLinuxUtil, self).__init__()
         self.agent_conf_file_path = '/usr/share/defaults/waagent/waagent.conf'
         self.jit_enabled = True
+        self.service_name = self.get_service_name()
 
     def is_dhcp_enabled(self):
         return True
@@ -60,10 +61,10 @@ class ClearLinuxUtil(DefaultOSUtil):
         return shellutil.run("systemctl start systemd-networkd", chk_err=False)
 
     def start_agent_service(self):
-        return shellutil.run("systemctl start waagent", chk_err=False)
+        return shellutil.run("systemctl start {0}".format(self.service_name), chk_err=False)
 
     def stop_agent_service(self):
-        return shellutil.run("systemctl stop waagent", chk_err=False)
+        return shellutil.run("systemctl stop {0}".format(self.service_name), chk_err=False)
 
     def get_dhcp_pid(self):
         ret= shellutil.run_get_output("pidof systemd-networkd")
