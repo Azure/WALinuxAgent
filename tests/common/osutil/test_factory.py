@@ -80,7 +80,7 @@ class TestOsUtilFactory(AgentTestCase):
             ret = get_osutil(distro_name="debian",
                              distro_version="8")
             self.assertTrue(type(ret) == DebianOS8Util)
-            self.assertEquals(ret.get_service_name(), "waagent")
+            self.assertEquals(ret.get_service_name(), "walinuxagent")
 
     @patch("azurelinuxagent.common.logger.warn")
     def test_get_osutil_it_should_return_default(self, patch_logger):
