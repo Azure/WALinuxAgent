@@ -39,7 +39,6 @@ class ClearLinuxUtil(DefaultOSUtil):
         super(ClearLinuxUtil, self).__init__()
         self.agent_conf_file_path = '/usr/share/defaults/waagent/waagent.conf'
         self.jit_enabled = True
-        self.service_name = self.get_service_name()
 
     def is_dhcp_enabled(self):
         return True

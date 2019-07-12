@@ -35,7 +35,7 @@ from azurelinuxagent.common.osutil.openwrt import OpenWRTOSUtil
 from tests.tools import *
 
 
-class DefaultOsUtilTestCase(AgentTestCase):
+class TestOsUtilFactory(AgentTestCase):
 
     def setUp(self):
         AgentTestCase.setUp(self)
@@ -57,6 +57,7 @@ class DefaultOsUtilTestCase(AgentTestCase):
         with patch.dict("os.environ", mock_os_environ):
             ret = get_osutil()
             self.assertTrue(type(ret) == Ubuntu14OSUtil)
+            self.assertEquals(ret.get_service_name(), "walinuxagent")
 
     def test_get_osutil_in_travis_environment_it_should_return_xenial(self):
         mock_os_environ = {
@@ -68,6 +69,7 @@ class DefaultOsUtilTestCase(AgentTestCase):
         with patch.dict("os.environ", mock_os_environ):
             ret = get_osutil()
             self.assertTrue(type(ret) == Ubuntu16OSUtil)
+            self.assertEquals(ret.get_service_name(), "walinuxagent")
 
     def test_get_osutil_in_travis_environment_it_should_raise_and_catch(self):
         # Leave out necessary environment variables to fail the retrieval and fall back to the given parameters
@@ -78,6 +80,7 @@ class DefaultOsUtilTestCase(AgentTestCase):
             ret = get_osutil(distro_name="debian",
                              distro_version="8")
             self.assertTrue(type(ret) == DebianOS8Util)
+            self.assertEquals(ret.get_service_name(), "waagent")
 
     @patch("azurelinuxagent.common.logger.warn")
     def test_get_osutil_it_should_return_default(self, patch_logger):
@@ -87,6 +90,7 @@ class DefaultOsUtilTestCase(AgentTestCase):
                          distro_full_name="")
         self.assertTrue(type(ret) == DefaultOSUtil)
         self.assertEquals(patch_logger.call_count, 1)
+        self.assertEquals(ret.get_service_name(), "waagent")
 
     def test_get_osutil_it_should_return_ubuntu(self):
         ret = get_osutil(distro_name="ubuntu",

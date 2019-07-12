@@ -33,7 +33,6 @@ class OpenWRTOSUtil(DefaultOSUtil):
         self.dhclient_name = 'udhcpc'
         self.ip_command_output = re.compile('^\d+:\s+(\w+):\s+(.*)$')
         self.jit_enabled = True
-        self.service_name = self.get_service_name()
         
     def eject_dvd(self, chk_err=True):
         logger.warn('eject is not supported on OpenWRT')

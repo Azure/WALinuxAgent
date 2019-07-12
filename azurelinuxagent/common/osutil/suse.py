@@ -39,7 +39,6 @@ class SUSE11OSUtil(DefaultOSUtil):
         super(SUSE11OSUtil, self).__init__()
         self.jit_enabled = True
         self.dhclient_name='dhcpcd'
-        self.service_name = self.get_service_name()
 
     def set_hostname(self, hostname):
         fileutil.write_file('/etc/HOSTNAME', hostname)
@@ -84,7 +83,6 @@ class SUSEOSUtil(SUSE11OSUtil):
     def __init__(self):
         super(SUSEOSUtil, self).__init__()
         self.dhclient_name = 'wickedd-dhcp4'
-        self.service_name = self.get_service_name()
 
     def stop_dhcp_service(self):
         cmd = "systemctl stop {0}".format(self.dhclient_name)

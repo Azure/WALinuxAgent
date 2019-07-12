@@ -42,7 +42,6 @@ class Redhat6xOSUtil(DefaultOSUtil):
     def __init__(self):
         super(Redhat6xOSUtil, self).__init__()
         self.jit_enabled = True
-        self.service_name = self.get_service_name()
 
     def start_network(self):
         return shellutil.run("/sbin/service networking start", chk_err=False)

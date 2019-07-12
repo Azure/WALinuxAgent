@@ -44,7 +44,6 @@ class BigIpOSUtil(DefaultOSUtil):
 
     def __init__(self):
         super(BigIpOSUtil, self).__init__()
-        self.service_name = self.get_service_name()
 
     def _wait_until_mcpd_is_initialized(self):
         """Wait for mcpd to become available

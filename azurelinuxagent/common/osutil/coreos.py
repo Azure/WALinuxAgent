@@ -29,7 +29,6 @@ class CoreOSUtil(DefaultOSUtil):
         self.waagent_path = '/usr/share/oem/bin/waagent'
         self.python_path = '/usr/share/oem/python/bin'
         self.jit_enabled = True
-        self.service_name = self.get_service_name()
         if 'PATH' in os.environ:
             path = "{0}:{1}".format(os.environ['PATH'], self.python_path)
         else:

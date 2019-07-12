@@ -25,7 +25,6 @@ class ArchUtil(DefaultOSUtil):
     def __init__(self):
         super(ArchUtil, self).__init__()
         self.jit_enabled = True
-        self.service_name = self.get_service_name()
     
     def is_dhcp_enabled(self):
         return True

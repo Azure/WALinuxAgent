@@ -104,6 +104,7 @@ class DefaultOSUtil(object):
         self.selinux = None
         self.disable_route_warning = False
         self.jit_enabled = False
+        self.service_name = self.get_service_name()
 
     @staticmethod
     def get_service_name():
