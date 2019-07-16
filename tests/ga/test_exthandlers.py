@@ -245,7 +245,6 @@ class LaunchCommandTestCase(AgentTestCase):
 
         self.mock_get_log_dir.stop()
         self.mock_get_base_dir.stop()
-        self.mock__base_cgroups.stop()
 
         AgentTestCase.tearDown(self)
 
