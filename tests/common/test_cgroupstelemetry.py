@@ -700,7 +700,6 @@ class TestMetric(AgentTestCase):
         self.assertEqual(None, test_metric.max())
         self.assertEqual(None, test_metric.min())
         self.assertEqual(None, test_metric.average())
-        # self.assertEqual("None", test_metric.append())
 
     def test_metrics(self):
         num_polls = 10
@@ -714,3 +713,12 @@ class TestMetric(AgentTestCase):
         self.assertListEqual(generate_metric_list(test_values), [test_metric.average(), test_metric.min(),
                                                                  test_metric.max(), test_metric.median(),
                                                                  test_metric.count()])
+
+        test_metric.clear()
+        self.assertEqual("None", test_metric.first_poll_time())
+        self.assertEqual("None", test_metric.last_poll_time())
+        self.assertEqual(0, test_metric.count())
+        self.assertEqual(None, test_metric.median())
+        self.assertEqual(None, test_metric.max())
+        self.assertEqual(None, test_metric.min())
+        self.assertEqual(None, test_metric.average())
