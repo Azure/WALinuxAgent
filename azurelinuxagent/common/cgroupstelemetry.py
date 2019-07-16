@@ -194,6 +194,8 @@ class Metric(object):
         self._last_poll_time = dt.utcnow()
 
     def clear(self):
+        self._first_poll_time = None
+        self._last_poll_time = None
         self._data *= 0
 
     def average(self):
