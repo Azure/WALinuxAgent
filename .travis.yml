@@ -7,9 +7,6 @@ env:
   # Add SETUPOPTS="check flake8" to enable flake8 checks
 
 matrix:
-  allow_failures:
-    - python: nightly
-
   # exclude the default "python" build - we're being specific here...
   exclude:
     - python:
@@ -31,7 +28,6 @@ matrix:
           --cover-min-percentage=60 --cover-branches
           --cover-package=azurelinuxagent --cover-xml"
           SETUPOPTS=""
-    - python: nightly
 
 install:
   - pip install -r requirements.txt

@@ -51,6 +51,12 @@ class AgentNetworkError(AgentError):
         super(AgentNetworkError, self).__init__(msg, inner)
 
 
+class CGroupsException(AgentError):
+
+    def __init__(self, msg, inner=None):
+        super(AgentError, self).__init__(msg, inner)
+
+
 class ExtensionError(AgentError):
     """
     When failed to execute an extension
