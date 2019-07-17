@@ -39,25 +39,18 @@ from .openwrt import OpenWRTOSUtil
 from distutils.version import LooseVersion as Version
 
 
-def get_osutil_for_travis():
-    distro_name = os.environ['_system_name'].lower()
-    distro_code_name = os.environ['TRAVIS_DIST']
-    distro_version = os.environ['_system_version']
-    distro_full_name = os.environ['_system_name']
-    return distro_name, distro_code_name, distro_version, distro_full_name
-
-
 def get_osutil(distro_name=DISTRO_NAME,
                distro_code_name=DISTRO_CODE_NAME,
                distro_version=DISTRO_VERSION,
                distro_full_name=DISTRO_FULL_NAME):
 
-    if 'TRAVIS' in os.environ and os.environ['TRAVIS'] == 'true':
-        try:
-            distro_name, distro_code_name, distro_version, distro_full_name = get_osutil_for_travis()
-        except KeyError:
-            # Keep default values in case there was an issue retrieving environment variables
-            pass
+    # We are adding another layer of abstraction here since we want to be able to mock the final result of the
+    # function call. Since the get_osutil function is imported in various places in our tests, we can't mock
+    # it globally. Instead, we add _get_osutil function and mock it in the test base class, AgentTestCase.
+    return _get_osutil(distro_name, distro_code_name, distro_version, distro_full_name)
+
+
+def _get_osutil(distro_name, distro_code_name, distro_version, distro_full_name):
 
     if distro_name == "arch":
         return ArchUtil()
