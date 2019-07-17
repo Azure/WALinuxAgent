@@ -69,3 +69,6 @@ bin/waagent2.0c
 
 # rope project
 .ropeproject/
+
+# mac osx specific files
+.DS_Store

@@ -26,7 +26,7 @@ import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
 
-from azurelinuxagent.common.cgroups import CGroups
+from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.event import add_event, WALAEventOperation
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
@@ -68,7 +68,7 @@ class DaemonHandler(object):
         self.check_pid()
         self.initialize_environment()
 
-        CGroups.setup()
+        CGroupConfigurator.get_instance().create_agent_cgroups(track_cgroups=False)
 
         # If FIPS is enabled, set the OpenSSL environment variable
         # Note:
