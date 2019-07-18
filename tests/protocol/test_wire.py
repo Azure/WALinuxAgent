@@ -23,7 +23,6 @@ import zipfile
 from azurelinuxagent.common import event
 from azurelinuxagent.common.protocol.wire import *
 from azurelinuxagent.common.utils.shellutil import run_get_output
-from tests.common.osutil.test_default import running_under_travis
 from tests.ga.test_monitor import get_event_message, random_generator
 from tests.protocol.mockwiredata import *
 

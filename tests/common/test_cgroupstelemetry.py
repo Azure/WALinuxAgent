@@ -28,7 +28,7 @@ from azurelinuxagent.common.osutil.default import BASE_CGROUPS
 from azurelinuxagent.common.protocol.restapi import ExtHandlerProperties, ExtHandler
 from azurelinuxagent.ga.exthandlers import ExtHandlerInstance
 from tests.common.test_cgroupapi import i_am_root
-from tests.tools import AgentTestCase, skip_if_predicate_false
+from tests.tools import AgentTestCase, are_cgroups_enabled, skip_if_predicate_false
 
 
 def median(lst):
@@ -618,9 +618,9 @@ class TestCGroupsTelemetry(AgentTestCase):
                 self.assertEqual(0, len(collected_metrics))
 
     @skip_if_predicate_false(i_am_root, "This test will only run as root")
-    @skip_if_predicate_false(CGroupConfigurator.get_instance().enabled, "Does not run when Cgroups are not enabled")
+    @skip_if_predicate_false(are_cgroups_enabled, "Does not run when Cgroups are not enabled")
     def test_telemetry_with_tracked_cgroup(self):
-        # TODO: Write another test like this which would work for systemd as well, explicitely.
+        # TODO: Write another test like this which would work for systemd as well, explicitly.
 
         max_num_polls = 30
         time_to_wait = 3
@@ -700,7 +700,6 @@ class TestMetric(AgentTestCase):
         self.assertEqual(None, test_metric.max())
         self.assertEqual(None, test_metric.min())
         self.assertEqual(None, test_metric.average())
-        # self.assertEqual("None", test_metric.append())
 
     def test_metrics(self):
         num_polls = 10
@@ -714,3 +713,12 @@ class TestMetric(AgentTestCase):
         self.assertListEqual(generate_metric_list(test_values), [test_metric.average(), test_metric.min(),
                                                                  test_metric.max(), test_metric.median(),
                                                                  test_metric.count()])
+
+        test_metric.clear()
+        self.assertEqual("None", test_metric.first_poll_time())
+        self.assertEqual("None", test_metric.last_poll_time())
+        self.assertEqual(0, test_metric.count())
+        self.assertEqual(None, test_metric.median())
+        self.assertEqual(None, test_metric.max())
+        self.assertEqual(None, test_metric.min())
+        self.assertEqual(None, test_metric.average())

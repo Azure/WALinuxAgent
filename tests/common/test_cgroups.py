@@ -36,6 +36,10 @@ def i_am_root():
 
 
 class TestCGroup(AgentTestCase):
+
+    def setUp(self):
+        AgentTestCase.setUp(self)
+
     def tearDown(self):
         AgentTestCase.tearDown(self)
 
