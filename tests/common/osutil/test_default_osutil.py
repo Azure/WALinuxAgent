@@ -177,3 +177,6 @@ class DefaultOsUtilTestCase(AgentTestCase):
                 DefaultOSUtil().mount_cgroups()
 
                 self.assertEquals(patch_symlink.call_count, 0, 'A symbolic link should not have been created')
+
+    def test_default_service_name(self):
+        self.assertEquals(DefaultOSUtil().get_service_name(), "waagent")
