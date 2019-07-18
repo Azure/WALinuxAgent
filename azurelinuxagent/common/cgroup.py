@@ -232,9 +232,9 @@ class MemoryCgroup(CGroup):
 
     def _get_memory_max_usage(self):
         """
-        Collect memory.usage_in_bytes from the cgroup.
+        Collect memory.max_usage_in_bytes from the cgroup.
 
-        :return: Memory usage in bytes
+        :return: Memory max usage in bytes
         :rtype: int
         """
         usage = None
@@ -250,6 +250,20 @@ class MemoryCgroup(CGroup):
             usage = "0"
         return int(usage)
 
+    def _reset_memory_max_usage(self):
+        """
+        Reset memory.max_usage_in_bytes in the cgroup.
+        """
+        try:
+            max_memory_usage_file = self._get_cgroup_file("memory.max_usage_in_bytes")
+            fileutil.write_file(max_memory_usage_file, '{0}\n'.format(0))
+        except (IOError, OSError) as e:
+            if e.errno == errno.ENOENT:
+                # only suppressing file not found exceptions.
+                pass
+            else:
+                raise e
+
     def collect(self):
         """
         Collect and return a list of all memory metrics
@@ -258,6 +272,8 @@ class MemoryCgroup(CGroup):
         """
         usage = self._get_memory_usage()
         max_usage = self._get_memory_max_usage()
+        self._reset_memory_max_usage()
+
         return [CollectedMetrics("memory", "Total Memory Usage", usage),
                 CollectedMetrics("memory", "Max Memory Usage", max_usage)]
 
