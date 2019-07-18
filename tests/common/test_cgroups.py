@@ -39,6 +39,7 @@ class TestCGroup(AgentTestCase):
 
     def setUp(self):
         AgentTestCase.setUp(self)
+        
         self.cgroup_root = tempfile.mkdtemp()
         self.cgroup_cpu_mount = os.path.join(self.cgroup_root, "cpu")
         self.cgroup_memory_mount = os.path.join(self.cgroup_root, "memory")
