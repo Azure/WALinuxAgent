@@ -45,15 +45,27 @@ class Logger(object):
     def set_prefix(self, prefix):
         self.prefix = prefix
 
-    def is_period_elapsed(self, delta, h):
+    def _is_period_elapsed(self, delta, h):
         return h not in self.logger.periodic_messages or \
             (self.logger.periodic_messages[h] + delta) <= datetime.now()
 
-    def periodic(self, delta, msg_format, *args):
+    def _periodic(self, delta, log_level_op, msg_format, *args):
         h = hash(msg_format)
-        if self.is_period_elapsed(delta, h):
-            self.info(msg_format, *args)
+        if self._is_period_elapsed(delta, h):
+            log_level_op(msg_format, *args)
             self.logger.periodic_messages[h] = datetime.now()
+
+    def periodic_info(self, delta, msg_format, *args):
+        self._periodic(delta, self.info, msg_format, *args)
+
+    def periodic_verbose(self, delta, msg_format, *args):
+        self._periodic(delta, self.verbose, msg_format, *args)
+
+    def periodic_warn(self, delta, msg_format, *args):
+        self._periodic(delta, self.warn, msg_format, *args)
+
+    def periodic_error(self, delta, msg_format, *args):
+        self._periodic(delta, self.error, msg_format, *args)
 
     def verbose(self, msg_format, *args):
         self.log(LogLevel.VERBOSE, msg_format, *args)
@@ -68,7 +80,7 @@ class Logger(object):
         self.log(LogLevel.ERROR, msg_format, *args)
 
     def log(self, level, msg_format, *args):
-        #if msg_format is not unicode convert it to unicode
+        # if msg_format is not unicode convert it to unicode
         if type(msg_format) is not ustr:
             msg_format = ustr(msg_format, errors="backslashreplace")
         if len(args) > 0:
@@ -150,7 +162,7 @@ class TelemetryAppender(object):
                 pass
 
 
-#Initialize logger instance
+# Initialize logger instance
 DEFAULT_LOGGER = Logger()
 
 
@@ -181,11 +193,25 @@ def add_logger_appender(appender_type, level=LogLevel.INFO, path=None):
 def reset_periodic():
     DEFAULT_LOGGER.reset_periodic()
 
+
 def set_prefix(prefix):
     DEFAULT_LOGGER.set_prefix(prefix)
 
-def periodic(delta, msg_format, *args):
-    DEFAULT_LOGGER.periodic(delta, msg_format, *args)
+
+def periodic_info(delta, msg_format, *args):
+    DEFAULT_LOGGER.periodic_info(delta, msg_format, *args)
+
+
+def periodic_verbose(delta, msg_format, *args):
+    DEFAULT_LOGGER.periodic_verbose(delta, msg_format, *args)
+
+
+def periodic_error(delta, msg_format, *args):
+    DEFAULT_LOGGER.periodic_error(delta, msg_format, *args)
+
+
+def periodic_warn(delta, msg_format, *args):
+    DEFAULT_LOGGER.periodic_warn(delta, msg_format, *args)
 
 
 def verbose(msg_format, *args):

@@ -23,6 +23,7 @@ import os
 import pprint
 import re
 import shutil
+import stat
 import sys
 import tempfile
 import unittest
@@ -30,16 +31,20 @@ from functools import wraps
 
 import time
 
+from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 import azurelinuxagent.common.event as event
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
+from azurelinuxagent.common.osutil.factory import _get_osutil
+from azurelinuxagent.common.osutil.ubuntu import Ubuntu14OSUtil, Ubuntu16OSUtil
 from azurelinuxagent.common.utils import fileutil
-
 from azurelinuxagent.common.version import PY_VERSION_MAJOR
 
-# Import mock module for Python2 and Python3
 try:
     from unittest.mock import Mock, patch, MagicMock, ANY, DEFAULT, call
+
+    # Import mock module for Python2 and Python3
+    from bin.waagent2 import Agent
 except ImportError:
     from mock import Mock, patch, MagicMock, ANY, DEFAULT, call
 
@@ -58,6 +63,7 @@ if debug:
 _MAX_LENGTH = 120
 
 _MAX_LENGTH_SAFE_REPR = 80
+
 
 def safe_repr(obj, short=False):
     try:
@@ -98,6 +104,42 @@ def _safe_repr(obj, short=False):
     return result[:_MAX_LENGTH] + ' [truncated]...'
 
 
+def running_under_travis():
+    return 'TRAVIS' in os.environ and os.environ['TRAVIS'] == 'true'
+
+
+def get_osutil_for_travis():
+    distro_name = os.environ['_system_name'].lower()
+    distro_version = os.environ['_system_version']
+
+    if distro_name == "ubuntu" and distro_version == "14.04":
+        return Ubuntu14OSUtil()
+
+    if distro_name == "ubuntu" and distro_version == "16.04":
+        return Ubuntu16OSUtil()
+
+
+def mock_get_osutil(*args):
+    # It's a known issue that calling platform.linux_distribution() in Travis will result in the wrong info.
+    # See https://github.com/travis-ci/travis-ci/issues/2755
+    # When running in Travis, use manual distro resolution that relies on environment variables.
+    if running_under_travis():
+        return get_osutil_for_travis()
+    else:
+        return _get_osutil(*args)
+
+
+def are_cgroups_enabled():
+    # We use a function decorator to check if cgroups are enabled in multiple tests, which at some point calls
+    # get_osutil. The global mock for that function doesn't get executed before the function decorators are imported,
+    # so we need to specifically mock it beforehand.
+    mock__get_osutil = patch("azurelinuxagent.common.osutil.factory._get_osutil", mock_get_osutil)
+    mock__get_osutil.start()
+    ret = CGroupConfigurator.get_instance().enabled
+    mock__get_osutil.stop()
+    return ret
+
+
 class AgentTestCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -129,6 +171,8 @@ class AgentTestCase(unittest.TestCase):
             cls.assertRaisesRegex = cls.emulate_raises_regex
         if not hasattr(cls, "assertListEqual"):
             cls.assertListEqual = cls.emulate_assertListEqual
+        if not hasattr(cls, "assertIsInstance"):
+            cls.assertIsInstance = cls.emulate_assertIsInstance
         if sys.version_info < (2, 7):
             # assertRaises does not implement a context manager in 2.6; override it with emulate_assertRaises but
             # keep a pointer to the original implementation to use when a context manager is not requested.
@@ -156,9 +200,14 @@ class AgentTestCase(unittest.TestCase):
         event.init_event_status(self.tmp_dir)
         event.init_event_logger(self.tmp_dir)
 
+        self.mock__get_osutil = patch("azurelinuxagent.common.osutil.factory._get_osutil", mock_get_osutil)
+        self.mock__get_osutil.start()
+
     def tearDown(self):
         if not debug and self.tmp_dir is not None:
             shutil.rmtree(self.tmp_dir)
+
+        self.mock__get_osutil.stop()
 
     def emulate_assertIn(self, a, b, msg=None):
         if a not in b:
@@ -359,12 +408,36 @@ class AgentTestCase(unittest.TestCase):
         msg = self._formatMessage(msg, standardMsg)
         self.fail(msg)
 
+    def emulate_assertIsInstance(self, obj, object_type, msg=None):
+        if not isinstance(obj, object_type):
+            msg = msg if msg is not None else '{0} is not an instance of {1}'.format(_safe_repr(obj),
+                                                                                     _safe_repr(object_type))
+            self.fail(msg)
+
     @staticmethod
     def _create_files(tmp_dir, prefix, suffix, count, with_sleep=0):
         for i in range(count):
             f = os.path.join(tmp_dir, '.'.join((prefix, str(i), suffix)))
             fileutil.write_file(f, "faux content")
             time.sleep(with_sleep)
+
+    def _create_script(self, file_name, contents):
+        """
+        Creates an executable script with the given contents.
+        If file_name ends with ".py", it creates a Python3 script, otherwise it creates a bash script
+        """
+        file_path = os.path.join(self.tmp_dir, file_name)
+
+        with open(file_path, "w") as script:
+            if file_name.endswith(".py"):
+                script.write("#!/usr/bin/env python3\n")
+            else:
+                script.write("#!/usr/bin/env bash\n")
+            script.write(contents)
+
+        os.chmod(file_path, stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
+
+        return file_name
 
 
 def load_data(name):

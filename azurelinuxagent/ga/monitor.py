@@ -19,17 +19,17 @@ import datetime
 import json
 import os
 import platform
-import time
 import threading
-import traceback
+import time
 import uuid
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
-from azurelinuxagent.common.errorstate import ErrorState
+import azurelinuxagent.common.utils.networkutil as networkutil
 
-from azurelinuxagent.common.cgroups import CGroups, CGroupsTelemetry
-from azurelinuxagent.common.event import add_event, report_metric, WALAEventOperation
+from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
+from azurelinuxagent.common.errorstate import ErrorState
+from azurelinuxagent.common.event import add_event, WALAEventOperation
 from azurelinuxagent.common.exception import EventError, ProtocolError, OSUtilError, HttpError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
@@ -37,15 +37,11 @@ from azurelinuxagent.common.protocol import get_protocol_util
 from azurelinuxagent.common.protocol.healthservice import HealthService
 from azurelinuxagent.common.protocol.imds import get_imds_client
 from azurelinuxagent.common.protocol.restapi import TelemetryEventParam, \
-    TelemetryEventList, \
-    TelemetryEvent, \
-    set_properties
-import azurelinuxagent.common.utils.networkutil as networkutil
+    TelemetryEventList, TelemetryEvent, set_properties
 from azurelinuxagent.common.utils.restutil import IOErrorCounter
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, getattrib, hash_strings
 from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_VERSION, \
-    DISTRO_CODE_NAME, AGENT_LONG_VERSION, \
-    AGENT_NAME, CURRENT_AGENT, CURRENT_VERSION
+    DISTRO_CODE_NAME, AGENT_NAME, CURRENT_AGENT, CURRENT_VERSION
 
 
 def parse_event(data_str):
@@ -90,6 +86,17 @@ def parse_json_event(data_str):
     return event
 
 
+def generate_extension_metrics_telemetry_dictionary(schema_version=1.0,
+                                                    performance_metrics=None):
+    if schema_version == 1.0:
+        telemetry_dict = {"SchemaVersion": 1.0}
+        if performance_metrics:
+            telemetry_dict["PerfMetrics"] = performance_metrics
+        return telemetry_dict
+    else:
+        return None
+
+
 def get_monitor_handler():
     return MonitorHandler()
 
@@ -97,7 +104,9 @@ def get_monitor_handler():
 class MonitorHandler(object):
     EVENT_COLLECTION_PERIOD = datetime.timedelta(minutes=1)
     TELEMETRY_HEARTBEAT_PERIOD = datetime.timedelta(minutes=30)
-    CGROUP_TELEMETRY_PERIOD = datetime.timedelta(minutes=5)
+    # extension metrics period
+    CGROUP_TELEMETRY_POLLING_PERIOD = datetime.timedelta(minutes=5)
+    CGROUP_TELEMETRY_REPORTING_PERIOD = datetime.timedelta(minutes=30)
     # host plugin
     HOST_PLUGIN_HEARTBEAT_PERIOD = datetime.timedelta(minutes=1)
     HOST_PLUGIN_HEALTH_PERIOD = datetime.timedelta(minutes=5)
@@ -113,7 +122,8 @@ class MonitorHandler(object):
         self.event_thread = None
         self.last_event_collection = None
         self.last_telemetry_heartbeat = None
-        self.last_cgroup_telemetry = None
+        self.last_cgroup_polling_telemetry = None
+        self.last_cgroup_report_telemetry = None
         self.last_host_plugin_heartbeat = None
         self.last_imds_heartbeat = None
         self.protocol = None
@@ -131,7 +141,6 @@ class MonitorHandler(object):
     def run(self):
         self.init_protocols()
         self.init_sysinfo()
-        self.init_cgroups()
         self.start()
 
     def stop(self):
@@ -167,7 +176,7 @@ class MonitorHandler(object):
             self.sysinfo.append(TelemetryEventParam("RAM", ram))
             self.sysinfo.append(TelemetryEventParam("Processors", processors))
         except OSUtilError as e:
-            logger.warn("Failed to get system info: {0}", e)
+            logger.warn("Failed to get system info: {0}", ustr(e))
 
         try:
             vminfo = self.protocol.get_vminfo()
@@ -182,7 +191,7 @@ class MonitorHandler(object):
             self.sysinfo.append(TelemetryEventParam("ContainerId",
                                                     vminfo.containerId))
         except ProtocolError as e:
-            logger.warn("Failed to get system info: {0}", e)
+            logger.warn("Failed to get system info: {0}", ustr(e))
 
         try:
             vminfo = self.imds_client.get_compute()
@@ -197,18 +206,20 @@ class MonitorHandler(object):
             self.sysinfo.append(TelemetryEventParam('ImageOrigin',
                                                     vminfo.image_origin))
         except (HttpError, ValueError) as e:
-            logger.warn("failed to get IMDS info: {0}", e)
+            logger.warn("failed to get IMDS info: {0}", ustr(e))
 
-    def collect_event(self, evt_file_name):
+    @staticmethod
+    def collect_event(evt_file_name):
         try:
             logger.verbose("Found event file: {0}", evt_file_name)
             with open(evt_file_name, "rb") as evt_file:
                 # if fail to open or delete the file, throw exception
-                data_str = evt_file.read().decode("utf-8", 'ignore')
+                data_str = evt_file.read().decode("utf-8")
             logger.verbose("Processed event file: {0}", evt_file_name)
             os.remove(evt_file_name)
             return data_str
-        except IOError as e:
+        except (IOError, UnicodeDecodeError) as e:
+            os.remove(evt_file_name)
             msg = "Failed to process {0}, {1}".format(evt_file_name, e)
             raise EventError(msg)
 
@@ -228,7 +239,7 @@ class MonitorHandler(object):
                     try:
                         data_str = self.collect_event(event_file_path)
                     except EventError as e:
-                        logger.error("{0}", e)
+                        logger.error("{0}", ustr(e))
                         continue
 
                     try:
@@ -236,7 +247,7 @@ class MonitorHandler(object):
                         self.add_sysinfo(event)
                         event_list.events.append(event)
                     except (ValueError, ProtocolError) as e:
-                        logger.warn("Failed to decode event file: {0}", e)
+                        logger.warn("Failed to decode event file: {0}", ustr(e))
                         continue
 
                 if len(event_list.events) == 0:
@@ -245,21 +256,23 @@ class MonitorHandler(object):
                 try:
                     self.protocol.report_event(event_list)
                 except ProtocolError as e:
-                    logger.error("{0}", e)
+                    logger.error("{0}", ustr(e))
             except Exception as e:
-                logger.warn("Failed to send events: {0}", e)
+                logger.warn("Failed to send events: {0}", ustr(e))
 
             self.last_event_collection = datetime.datetime.utcnow()
 
     def daemon(self):
         min_delta = min(MonitorHandler.TELEMETRY_HEARTBEAT_PERIOD,
-                        MonitorHandler.CGROUP_TELEMETRY_PERIOD,
+                        MonitorHandler.CGROUP_TELEMETRY_POLLING_PERIOD,
+                        MonitorHandler.CGROUP_TELEMETRY_REPORTING_PERIOD,
                         MonitorHandler.EVENT_COLLECTION_PERIOD,
                         MonitorHandler.HOST_PLUGIN_HEARTBEAT_PERIOD,
                         MonitorHandler.IMDS_HEARTBEAT_PERIOD).seconds
         while self.should_run:
             self.send_telemetry_heartbeat()
-            self.send_cgroup_telemetry()
+            self.poll_telemetry_metrics()
+            self.send_telemetry_metrics()
             self.collect_and_send_events()
             self.send_host_plugin_heartbeat()
             self.send_imds_heartbeat()
@@ -270,9 +283,7 @@ class MonitorHandler(object):
         sysinfo_names = [v.name for v in self.sysinfo]
         for param in event.parameters:
             if param.name in sysinfo_names:
-                logger.verbose("Remove existing event parameter: [{0}:{1}]",
-                               param.name,
-                               param.value)
+                logger.verbose("Remove existing event parameter: [{0}:{1}]", param.name, param.value)
                 event.parameters.remove(param)
         event.parameters.extend(self.sysinfo)
 
@@ -395,85 +406,39 @@ class MonitorHandler(object):
                         message=msg,
                         log_event=False)
             except Exception as e:
-                logger.warn("Failed to send heartbeat: {0}", e)
+                logger.warn("Failed to send heartbeat: {0}", ustr(e))
 
             self.last_telemetry_heartbeat = datetime.datetime.utcnow()
 
-    @staticmethod
-    def init_cgroups():
-        # Track metrics for the wrapper cgroup and for the agent cgroup
-        try:
-            # This creates the wrapper cgroup for everything under agent,
-            # /sys/fs/cgroup/{cpu,memory}/WALinuxAgent/
-            # There is no need in tracking this cgroup, as it only serves
-            # as an umbrella for the agent and extensions cgroups
-            CGroups.for_extension("")
-            # This creates the agent's cgroup (for the daemon and extension handler)
-            # /sys/fs/cgroup/{cpu,memory}/WALinuxAgent/WALinuxAgent
-            # If the system is using systemd, it would have already been set up under /system.slice
-            CGroupsTelemetry.track_agent()
-        except Exception as e:
-            # when a hierarchy is not mounted, we raise an exception
-            # and we should therefore only issue a warning, since this
-            # is not unexpected
-            logger.warn("Monitor: cgroups not initialized: {0}", ustr(e))
-            logger.verbose(traceback.format_exc())
+    def poll_telemetry_metrics(self):
+        time_now = datetime.datetime.utcnow()
+        if not self.last_cgroup_polling_telemetry:
+            self.last_cgroup_polling_telemetry = time_now
 
-    def send_cgroup_telemetry(self):
-        if self.last_cgroup_telemetry is None:
-            self.last_cgroup_telemetry = datetime.datetime.utcnow()
+        if time_now >= (self.last_cgroup_polling_telemetry +
+                        MonitorHandler.CGROUP_TELEMETRY_POLLING_PERIOD):
+            CGroupsTelemetry.poll_all_tracked()
+            self.last_cgroup_polling_telemetry = time_now
 
-        if datetime.datetime.utcnow() >= (self.last_telemetry_heartbeat + MonitorHandler.CGROUP_TELEMETRY_PERIOD):
-            try:
-                metric_reported, metric_threshold = CGroupsTelemetry.collect_all_tracked()
-                for cgroup_name, metrics in metric_reported.items():
-                    thresholds = metric_threshold[cgroup_name]
+    def send_telemetry_metrics(self):
+        time_now = datetime.datetime.utcnow()
 
-                    for metric_group, metric_name, value in metrics:
-                        if value > 0:
-                            report_metric(metric_group, metric_name, cgroup_name, value)
+        if not self.last_cgroup_report_telemetry:
+            self.last_cgroup_report_telemetry = time_now
 
-                        if metric_group == "Memory":
-                            # Memory is collected in bytes, and limit is set in megabytes.
-                            if value >= CGroups._format_memory_value('megabytes', thresholds.memory_limit):
-                                msg = "CGroup {0}: Crossed the Memory Threshold. " \
-                                      "Current Value: {1} bytes, Threshold: {2} megabytes." \
-                                       .format(cgroup_name, value, thresholds.memory_limit)
+        if time_now >= (self.last_cgroup_report_telemetry + MonitorHandler.CGROUP_TELEMETRY_REPORTING_PERIOD):
+            performance_metrics = CGroupsTelemetry.report_all_tracked()
+            self.last_cgroup_report_telemetry = time_now
 
-                                logger.warn(msg)
-                                add_event(name=AGENT_NAME,
-                                          version=CURRENT_VERSION,
-                                          op=WALAEventOperation.CGroupsLimitsCrossed,
-                                          is_success=True,
-                                          message=msg,
-                                          log_event=True)
-
-                        if metric_group == "Process":
-                            if value >= thresholds.cpu_limit:
-                                msg = "CGroup {0}: Crossed the Processor Threshold. " \
-                                      "Current Value: {1}, Threshold: {2}." \
-                                       .format(cgroup_name, value, thresholds.cpu_limit)
-
-                                logger.warn(msg)
-                                add_event(name=AGENT_NAME,
-                                          version=CURRENT_VERSION,
-                                          op=WALAEventOperation.CGroupsLimitsCrossed,
-                                          is_success=True,
-                                          message=msg,
-                                          log_event=True)
-
-            except Exception as e:
-                logger.warn("Monitor: failed to collect cgroups performance metrics: {0}", ustr(e))
-                logger.verbose(traceback.format_exc())
-
-            # Look for extension cgroups we're not already tracking and track them
-            try:
-                CGroupsTelemetry.update_tracked(self.protocol.client.get_current_handlers())
-            except Exception as e:
-                logger.warn("Monitor: failed to update cgroups tracked extensions: {0}", ustr(e))
-                logger.verbose(traceback.format_exc())
-
-            self.last_cgroup_telemetry = datetime.datetime.utcnow()
+            if performance_metrics:
+                message = generate_extension_metrics_telemetry_dictionary(schema_version=1.0,
+                                                                          performance_metrics=performance_metrics)
+                add_event(name=AGENT_NAME,
+                          version=CURRENT_VERSION,
+                          op=WALAEventOperation.ExtensionMetricsData,
+                          is_success=True,
+                          message=ustr(message),
+                          log_event=False)
 
     def log_altered_network_configuration(self):
         """

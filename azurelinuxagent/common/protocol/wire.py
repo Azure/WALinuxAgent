@@ -20,29 +20,21 @@ import json
 import os
 import random
 import re
-import sys
 import time
-import traceback
 import xml.sax.saxutils as saxutils
-
 from datetime import datetime
 
 import azurelinuxagent.common.conf as conf
-import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.textutil as textutil
-
 from azurelinuxagent.common.exception import ProtocolNotFoundError, \
-                                            ResourceGoneError
+    ResourceGoneError, ExtensionDownloadError
 from azurelinuxagent.common.future import httpclient, bytebuffer
-from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol, URI_FORMAT_GET_EXTENSION_ARTIFACT, \
-    HOST_PLUGIN_PORT
+from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.restapi import *
 from azurelinuxagent.common.utils.archive import StateFlusher
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, \
     findtext, getattrib, gettext, remove_bom, get_bytes_from_pem, parse_json
-from azurelinuxagent.common.version import AGENT_NAME
-from azurelinuxagent.common.osutil import get_osutil
 
 VERSION_INFO_URI = "http://{0}/?comp=versions"
 GOAL_STATE_URI = "http://{0}/machine/?comp=goalstate"
@@ -69,6 +61,8 @@ PROTOCOL_VERSION = "2012-11-30"
 ENDPOINT_FINE_NAME = "WireServer"
 
 SHORT_WAITING_INTERVAL = 1  # 1 second
+
+MAX_EVENT_BUFFER_SIZE = 2**16 - 2**10
 
 
 class UploadError(HttpError):
@@ -370,7 +364,7 @@ def vm_status_to_v1(vm_status, ext_statuses):
         'version': '1.1',
         'timestampUTC': timestamp,
         'aggregateStatus': v1_agg_status,
-        'guestOSInfo' : v1_ga_guest_info
+        'guestOSInfo': v1_ga_guest_info
     }
     return v1_vm_status
 
@@ -640,7 +634,7 @@ class WireClient(object):
                 host.manifest_uri = version.uri
                 return response
 
-        raise ProtocolError("Failed to fetch manifest from all sources")
+        raise ExtensionDownloadError("Failed to fetch manifest from all sources")
 
     def stream(self, uri, destination, headers=None, use_proxy=None):
         success = False
@@ -907,7 +901,7 @@ class WireClient(object):
             except ResourceGoneError:
                 continue
 
-        raise ProtocolError("Failed to retrieve extension manifest")
+        raise ExtensionDownloadError("Failed to retrieve extension manifest")
 
     def filter_package_list(self, family, ga_manifest, goal_state):
         complete_list = ga_manifest.pkg_list
@@ -1136,10 +1130,14 @@ class WireClient(object):
             if event.providerId not in buf:
                 buf[event.providerId] = ""
             event_str = event_to_v1(event)
-            if len(event_str) >= 63 * 1024:
-                logger.warn("Single event too large: {0}", event_str[300:])
+            if len(event_str) >= MAX_EVENT_BUFFER_SIZE:
+                details_of_event = [ustr(x.name) + ":" + ustr(x.value) for x in event.parameters if x.name in
+                                    ["Name", "Version", "Operation", "OperationSuccess"]]
+                logger.periodic_warn(logger.EVERY_HALF_HOUR,
+                                     "Single event too large: {0}, with the length: {1} more than the limit({2})"
+                                     .format(str(details_of_event), len(event_str), MAX_EVENT_BUFFER_SIZE))
                 continue
-            if len(buf[event.providerId] + event_str) >= 63 * 1024:
+            if len(buf[event.providerId] + event_str) >= MAX_EVENT_BUFFER_SIZE:
                 self.send_event(event.providerId, buf[event.providerId])
                 buf[event.providerId] = ""
             buf[event.providerId] = buf[event.providerId] + event_str
@@ -1526,6 +1524,18 @@ class Certificates(object):
                 tmp_file = prvs[pubkey]
                 prv = "{0}.prv".format(thumbprint)
                 os.rename(tmp_file, os.path.join(conf.get_lib_dir(), prv))
+                logger.info("Found private key matching thumbprint {0}".format(thumbprint))
+            else:
+                # Since private key has *no* matching certificate,
+                # it will not be named correctly
+                logger.warn("Found NO matching cert/thumbprint for private key!")
+
+        # Log if any certificates were found without matching private keys
+        # This can happen (rarely), and is useful to know for debugging
+        for pubkey in thumbprints:
+            if not pubkey in prvs:
+                msg = "Certificate with thumbprint {0} has no matching private key."
+                logger.info(msg.format(thumbprints[pubkey]))
 
         for v1_cert in v1_cert_list:
             cert = Cert()

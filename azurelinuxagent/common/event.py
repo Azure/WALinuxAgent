@@ -22,12 +22,10 @@ import os
 import sys
 import time
 import traceback
-
 from datetime import datetime
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
-
 from azurelinuxagent.common.exception import EventError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.restapi import TelemetryEventParam, \
@@ -37,6 +35,7 @@ from azurelinuxagent.common.utils import fileutil, textutil
 from azurelinuxagent.common.version import CURRENT_VERSION
 
 _EVENT_MSG = "Event: name={0}, op={1}, message={2}, duration={3}"
+TELEMETRY_EVENT_PROVIDER_ID = "69B669B9-4AF8-4C50-BDC4-6006FA76E975"
 
 
 class WALAEventOperation:
@@ -47,6 +46,7 @@ class WALAEventOperation:
     AutoUpdate = "AutoUpdate"
     CustomData = "CustomData"
     CGroupsLimitsCrossed = "CGroupsLimitsCrossed"
+    ExtensionMetricsData = "ExtensionMetricsData"
     Deploy = "Deploy"
     Disable = "Disable"
     Downgrade = "Downgrade"
@@ -66,6 +66,7 @@ class WALAEventOperation:
     Install = "Install"
     InitializeCGroups = "InitializeCGroups"
     InitializeHostPlugin = "InitializeHostPlugin"
+    InvokeCommandUsingSystemd = "InvokeCommandUsingSystemd"
     Log = "Log"
     Partition = "Partition"
     ProcessGoalState = "ProcessGoalState"
@@ -225,7 +226,8 @@ class EventLogger(object):
                 hfile.write(data.encode("utf-8"))
             os.rename(filename + ".tmp", filename + ".tld")
         except IOError as e:
-            raise EventError("Failed to write events to file:{0}", e)
+            msg = "Failed to write events to file:{0}".format(e)
+            raise EventError(msg)
 
     def reset_periodic(self):
         self.periodic_events = {}
@@ -235,17 +237,17 @@ class EventLogger(object):
             (self.periodic_events[h] + delta) <= datetime.now()
 
     def add_periodic(self,
-        delta, name, op=WALAEventOperation.Unknown, is_success=True, duration=0,
-        version=CURRENT_VERSION, message="", evt_type="",
-        is_internal=False, log_event=True, force=False):
+                     delta, name, op=WALAEventOperation.Unknown, is_success=True, duration=0,
+                     version=CURRENT_VERSION, message="", evt_type="",
+                     is_internal=False, log_event=True, force=False):
 
-        h = hash(name+op+ustr(is_success)+message)
-        
+        h = hash(name + op + ustr(is_success) + message)
+
         if force or self.is_period_elapsed(delta, h):
             self.add_event(name,
-                op=op, is_success=is_success, duration=duration,
-                version=version, message=message, evt_type=evt_type,
-                is_internal=is_internal, log_event=log_event)
+                           op=op, is_success=is_success, duration=duration,
+                           version=version, message=message, evt_type=evt_type,
+                           is_internal=is_internal, log_event=log_event)
             self.periodic_events[h] = datetime.now()
 
     def add_event(self,
@@ -262,11 +264,10 @@ class EventLogger(object):
         if (not is_success) and log_event:
             _log_event(name, op, message, duration, is_success=is_success)
 
-        self._add_event(duration, evt_type, is_internal, is_success, message, name, op, version, eventId=1)
-        self._add_event(duration, evt_type, is_internal, is_success, message, name, op, version, eventId=6)
+        self._add_event(duration, evt_type, is_internal, is_success, message, name, op, version, event_id=1)
 
-    def _add_event(self, duration, evt_type, is_internal, is_success, message, name, op, version, eventId):
-        event = TelemetryEvent(eventId, "69B669B9-4AF8-4C50-BDC4-6006FA76E975")
+    def _add_event(self, duration, evt_type, is_internal, is_success, message, name, op, version, event_id):
+        event = TelemetryEvent(event_id, TELEMETRY_EVENT_PROVIDER_ID)
         event.parameters.append(TelemetryEventParam('Name', name))
         event.parameters.append(TelemetryEventParam('Version', str(version)))
         event.parameters.append(TelemetryEventParam('IsInternal', is_internal))

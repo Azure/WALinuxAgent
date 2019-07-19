@@ -25,20 +25,19 @@ import os
 import random
 import re
 import shutil
-import stat
 import signal
-import subprocess
-import time
+import stat
+import sys
 import tempfile
+import time
 import traceback
 import zipfile
-import sys
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.version as version
-from azurelinuxagent.common.cgroups import CGroups, CGroupsTelemetry
+from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.errorstate import ErrorState, ERROR_STATE_DELTA_INSTALL
 from azurelinuxagent.common.event import add_event, WALAEventOperation, elapsed_milliseconds, report_event
 from azurelinuxagent.common.exception import ExtensionError, ProtocolError, ProtocolNotFoundError, \
@@ -52,7 +51,7 @@ from azurelinuxagent.common.protocol.restapi import ExtHandlerStatus, \
     get_properties, \
     set_properties
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
-from azurelinuxagent.common.utils.processutil import format_stdout_stderr, TELEMETRY_MESSAGE_MAX_LEN
+from azurelinuxagent.common.utils.processutil import read_output
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION, GOAL_STATE_AGENT_VERSION, \
     DISTRO_NAME, DISTRO_VERSION, PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO
 
@@ -312,7 +311,7 @@ class ExtHandlersHandler(object):
         # Finally, remove the directories and packages of the
         # uninstalled handlers
         for handler in handlers:
-            handler.rm_ext_handler_dir()
+            handler.remove_ext_handler()
             pkg = os.path.join(conf.get_lib_dir(), handler.get_full_name() + HANDLER_PKG_EXT)
             if os.path.isfile(pkg):
                 try:
@@ -433,16 +432,29 @@ class ExtHandlersHandler(object):
                 message = u"Unknown ext handler state:{0}".format(state)
                 raise ExtensionError(message)
         except ExtensionOperationError as e:
-            self.handle_handle_ext_handler_error(ext_handler_i, e, e.code)
+            self.handle_ext_handler_error(ext_handler_i, e, e.code)
+        except ExtensionDownloadError as e:
+            self.handle_ext_handler_download_error(ext_handler_i, e, e.code)
         except ExtensionError as e:
-            self.handle_handle_ext_handler_error(ext_handler_i, e, e.code)
+            self.handle_ext_handler_error(ext_handler_i, e, e.code)
         except Exception as e:
-            self.handle_handle_ext_handler_error(ext_handler_i, e)
+            self.handle_ext_handler_error(ext_handler_i, e)
 
-    def handle_handle_ext_handler_error(self, ext_handler_i, e, code=-1):
+    def handle_ext_handler_error(self, ext_handler_i, e, code=-1):
         msg = ustr(e)
         ext_handler_i.set_handler_status(message=msg, code=code)
         ext_handler_i.report_event(message=msg, is_success=False, log_event=True)
+
+    def handle_ext_handler_download_error(self, ext_handler_i, e, code=-1):
+        msg = ustr(e)
+        ext_handler_i.set_handler_status(message=msg, code=code)
+
+        self.get_artifact_error_state.incr()
+        if self.get_artifact_error_state.is_triggered():
+            report_event(op=WALAEventOperation.Download, is_success=False, log_event=True,
+                         message="Failed to get artifact for over "
+                                 "{0}: {1}".format(self.get_artifact_error_state.min_timedelta, msg))
+            self.get_artifact_error_state.reset()
 
     def handle_enable(self, ext_handler_i):
         self.log_process = True
@@ -466,7 +478,7 @@ class ExtHandlersHandler(object):
                 else:
                     old_ext_handler_i.update(version=ext_handler_i.ext_handler.properties.version)
                 old_ext_handler_i.uninstall()
-                old_ext_handler_i.rm_ext_handler_dir()
+                old_ext_handler_i.remove_ext_handler()
                 ext_handler_i.update_with_install()
         else:
             ext_handler_i.update_settings()
@@ -490,7 +502,7 @@ class ExtHandlersHandler(object):
             if handler_state == ExtHandlerState.Enabled:
                 ext_handler_i.disable()
             ext_handler_i.uninstall()
-        ext_handler_i.rm_ext_handler_dir()
+        ext_handler_i.remove_ext_handler()
 
     def report_ext_handlers_status(self):
         """
@@ -625,6 +637,9 @@ class ExtHandlerInstance(object):
             pkg_list = self.protocol.get_ext_handler_pkgs(self.ext_handler)
         except ProtocolError as e:
             raise ExtensionError("Failed to get ext handler pkgs", e)
+        except ExtensionDownloadError:
+            self.set_operation(WALAEventOperation.Download)
+            raise
 
         # Determine the desired and installed versions
         requested_version = FlexibleVersion(str(self.ext_handler.properties.version))
@@ -815,13 +830,13 @@ class ExtHandlerInstance(object):
                 raise ExtensionDownloadError("Failed to download extension",
                                              code=ExtensionErrorCodes.PluginManifestDownloadError)
 
+            duration = elapsed_milliseconds(begin_utc)
+            self.report_event(message="Download succeeded", duration=duration)
+
         self.pkg_file = destination
 
-        duration = elapsed_milliseconds(begin_utc)
-        self.report_event(message="Download succeeded", duration=duration)
-
     def initialize(self):
-        self.logger.info("Initialize extension directory")
+        self.logger.info("Initializing extension {0}".format(self.get_full_name()))
 
         # Add user execute permission to all files under the base dir
         for file in fileutil.get_all_files(self.get_base_dir()):
@@ -865,7 +880,10 @@ class ExtHandlerInstance(object):
 
         except IOError as e:
             fileutil.clean_ioerror(e, paths=[self.get_base_dir(), self.pkg_file])
-            raise ExtensionDownloadError(u"Failed to create status or config dir", e)
+            raise ExtensionDownloadError(u"Failed to initialize extension '{0}'".format(self.get_full_name()), e)
+
+        # Create cgroups for the extension
+        CGroupConfigurator.get_instance().create_extension_cgroups(self.get_full_name())
 
         # Save HandlerEnvironment.json
         self.create_handler_env()
@@ -909,7 +927,7 @@ class ExtHandlerInstance(object):
         except ExtensionError as e:
             self.report_event(message=ustr(e), is_success=False)
 
-    def rm_ext_handler_dir(self):
+    def remove_ext_handler(self):
         try:
             zip_filename = "__".join(os.path.basename(self.get_base_dir()).split("-")) + ".zip"
             destination = os.path.join(conf.get_lib_dir(), zip_filename)
@@ -933,6 +951,9 @@ class ExtHandlerInstance(object):
             message = "Failed to remove extension handler directory: {0}".format(e)
             self.report_event(message=message, is_success=False)
             self.logger.warn(message)
+
+        # Also remove the cgroups for the extension
+        CGroupConfigurator.get_instance().remove_extension_cgroups(self.get_full_name())
 
     def update(self, version=None):
         if version is None:
@@ -1112,7 +1133,8 @@ class ExtHandlerInstance(object):
         last_update = int(time.time() - os.stat(heartbeat_file).st_mtime)
         return last_update <= 600
 
-    def launch_command(self, cmd, timeout=300, extension_error_code=ExtensionErrorCodes.PluginProcessingError, env=None):
+    def launch_command(self, cmd, timeout=300, extension_error_code=ExtensionErrorCodes.PluginProcessingError,
+                       env=None):
         begin_utc = datetime.datetime.utcnow()
         self.logger.verbose("Launch command: [{0}]", cmd)
 
@@ -1129,32 +1151,21 @@ class ExtHandlerInstance(object):
                     # as root-relative. (Issue #1170)
                     full_path = os.path.join(base_dir, cmd.lstrip(os.path.sep))
 
-                    def pre_exec_function():
-                        """
-                        Change process state before the actual target process is started. Effectively, this runs between
-                        the fork() and the exec() of sub-process creation.
-                        """
-                        os.setsid()
-                        CGroups.add_to_extension_cgroup(self.ext_handler.name, os.getpid())
+                    process = CGroupConfigurator.get_instance().start_extension_command(
+                        extension_name=self.get_full_name(),
+                        command=full_path,
+                        shell=True,
+                        cwd=base_dir,
+                        env=env,
+                        stdout=stdout,
+                        stderr=stderr)
 
-                    process = subprocess.Popen(full_path,
-                                               shell=True,
-                                               cwd=base_dir,
-                                               stdout=stdout,
-                                               stderr=stderr,
-                                               env=env,
-                                               preexec_fn=pre_exec_function)
                 except OSError as e:
                     raise ExtensionOperationError("Failed to launch '{0}': {1}".format(full_path, e.strerror),
                                                   code=extension_error_code)
 
-                try:
-                    cg = CGroups.for_extension(self.ext_handler.name)
-                    CGroupsTelemetry.track_extension(self.ext_handler.name, cg)
-                except Exception as e:
-                    self.logger.warn("Unable to setup cgroup {0}: {1}".format(self.ext_handler.name, e))
-
-                msg = ExtHandlerInstance._capture_process_output(process, stdout, stderr, cmd, timeout, extension_error_code)
+                msg = ExtHandlerInstance._capture_process_output(process, stdout, stderr, cmd, timeout,
+                                                                 extension_error_code)
 
                 duration = elapsed_milliseconds(begin_utc)
                 log_msg = "{0}\n{1}".format(cmd, "\n".join([line for line in msg.split('\n') if line != ""]))
@@ -1171,22 +1182,10 @@ class ExtHandlerInstance(object):
             time.sleep(1)
             retry -= 1
 
-        def read_output():
-            try:
-                stdout_file.seek(0)
-                stderr_file.seek(0)
-
-                stdout = ustr(stdout_file.read(TELEMETRY_MESSAGE_MAX_LEN), encoding='utf-8', errors='backslashreplace')
-                stderr = ustr(stderr_file.read(TELEMETRY_MESSAGE_MAX_LEN), encoding='utf-8', errors='backslashreplace')
-
-                return format_stdout_stderr(stdout, stderr)
-            except Exception as e:
-                return format_stdout_stderr("", "Cannot read stdout/stderr: {0}".format(str(e)))
-
         # timeout expired
         if retry == 0:
             os.killpg(os.getpgid(process.pid), signal.SIGKILL)
-            raise ExtensionError("Timeout({0}): {1}\n{2}".format(timeout, cmd, read_output()),
+            raise ExtensionError("Timeout({0}): {1}\n{2}".format(timeout, cmd, read_output(stdout_file, stderr_file)),
                                  code=ExtensionErrorCodes.PluginHandlerScriptTimedout)
 
         # process completed or forked; sleep 1 sec to give the child process (if any) a chance to start
@@ -1194,9 +1193,12 @@ class ExtHandlerInstance(object):
 
         return_code = process.wait()
         if return_code != 0:
-            raise ExtensionError("Non-zero exit code: {0}, {1}\n{2}".format(return_code, cmd, read_output()), code=code)
+            raise ExtensionError("Non-zero exit code: {0}, {1}\n{2}".format(return_code,
+                                                                            cmd,
+                                                                            read_output(stdout_file, stderr_file)),
+                                 code=code)
 
-        return read_output()
+        return read_output(stdout_file, stderr_file)
 
     def load_manifest(self):
         man_file = self.get_manifest_file()

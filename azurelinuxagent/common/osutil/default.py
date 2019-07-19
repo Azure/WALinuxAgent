@@ -16,7 +16,6 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-import array
 import base64
 import datetime
 import errno
@@ -32,20 +31,21 @@ import socket
 import struct
 import sys
 import time
+from pwd import getpwall
 
-import azurelinuxagent.common.logger as logger
+import array
+
 import azurelinuxagent.common.conf as conf
+import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.shellutil as shellutil
 import azurelinuxagent.common.utils.textutil as textutil
-
 from azurelinuxagent.common.exception import OSUtilError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.utils.networkutil import RouteEntry, NetworkInterfaceCard
-
-from pwd import getpwall
+from azurelinuxagent.common.version import DISTRO_CODE_NAME
 
 __RULES_FILES__ = [ "/lib/udev/rules.d/75-persistent-net-generator.rules",
                     "/etc/udev/rules.d/70-persistent-net.rules" ]
@@ -104,6 +104,11 @@ class DefaultOSUtil(object):
         self.selinux = None
         self.disable_route_warning = False
         self.jit_enabled = False
+        self.service_name = self.get_service_name()
+
+    @staticmethod
+    def get_service_name():
+        return "waagent"
 
     def get_firewall_dropped_packets(self, dst_ip=None):
         # If a previous attempt failed, do not retry
@@ -299,12 +304,17 @@ class DefaultOSUtil(object):
     @staticmethod
     def is_cgroups_supported():
         """
-        Enabled by default; disabled in WSL/Travis
+        Enabled by default; disabled in WSL and Trusty.
         """
         is_wsl = '-Microsoft-' in platform.platform()
-        is_travis = 'TRAVIS' in os.environ and os.environ['TRAVIS'] == 'true'
+        supported = True
         base_fs_exists = os.path.exists(BASE_CGROUPS)
-        return not is_wsl and not is_travis and base_fs_exists
+
+        # Fails on Trusty based systems as cgroups is not mounted by default.
+        if DISTRO_CODE_NAME.lower() is "trusty":
+            supported = False
+
+        return not is_wsl and base_fs_exists and supported
 
     @staticmethod
     def _cgroup_path(tail=""):
@@ -320,22 +330,34 @@ class DefaultOSUtil(object):
                            option="-t tmpfs",
                            chk_err=False)
             elif not os.path.isdir(self._cgroup_path()):
-                logger.error("Could not mount cgroups: ordinary file at {0}".format(path))
+                logger.error("Could not mount cgroups: ordinary file at {0}", path)
                 return
 
-            for metric_hierarchy in ['cpu,cpuacct', 'memory']:
-                target_path = self._cgroup_path(metric_hierarchy)
-                if not os.path.exists(target_path):
-                    fileutil.mkdir(target_path)
-                    self.mount(device=metric_hierarchy,
-                               mount_point=target_path,
-                               option="-t cgroup -o {0}".format(metric_hierarchy),
-                               chk_err=False)
+            controllers_to_mount = ['cpu,cpuacct', 'memory']
+            errors = 0
+            cpu_mounted = False
+            for controller in controllers_to_mount:
+                try:
+                    target_path = self._cgroup_path(controller)
+                    if not os.path.exists(target_path):
+                        fileutil.mkdir(target_path)
+                        self.mount(device=controller,
+                                   mount_point=target_path,
+                                   option="-t cgroup -o {0}".format(controller),
+                                   chk_err=False)
+                        if controller == 'cpu,cpuacct':
+                            cpu_mounted = True
+                except Exception as exception:
+                    errors += 1
+                    if errors == len(controllers_to_mount):
+                        raise
+                    logger.warn("Could not mount cgroup controller {0}: {1}", controller, ustr(exception))
 
-            for metric_hierarchy in ['cpu', 'cpuacct']:
-                target_path = self._cgroup_path(metric_hierarchy)
-                if not os.path.exists(target_path):
-                    os.symlink(self._cgroup_path('cpu,cpuacct'), target_path)
+            if cpu_mounted:
+                for controller in ['cpu', 'cpuacct']:
+                    target_path = self._cgroup_path(controller)
+                    if not os.path.exists(target_path):
+                        os.symlink(self._cgroup_path('cpu,cpuacct'), target_path)
 
         except OSError as oe:
             # log a warning for read-only file systems
@@ -1265,6 +1287,7 @@ class DefaultOSUtil(object):
             results = fileutil.read_file('/proc/stat')
         except (OSError, IOError) as ex:
             logger.warn("Couldn't read /proc/stat: {0}".format(ex.strerror))
+            raise
 
         return results
 
