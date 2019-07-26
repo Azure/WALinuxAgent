@@ -43,10 +43,6 @@ def raise_ioerror(*args):
     raise e
 
 
-def i_am_root():
-    return os.geteuid() == 0
-
-
 class TestExtensionCleanup(AgentTestCase):
     def setUp(self):
         AgentTestCase.setUp(self)
@@ -1788,12 +1784,10 @@ class TestExtensionWithCGroupsEnabled(AgentTestCase):
         self.assertEqual(fields["is_success"], True)
         self.assertEqual(fields["log_event"], False)
         self.assertEqual(fields["is_internal"], False)
-        self.assertIsInstance(fields["message"], str)
+        self.assertIsInstance(fields["message"], ustr)
 
         monitor_handler.stop()
 
-    @skip_if_predicate_false(lambda: False, "CGroups for systemd on unittests is currently not working."
-                             "Will activate it after fixing")
     def test_ext_handler_with_systemd_cgroup_enabled(self, *args):
         from azurelinuxagent.common.cgroupapi import CGroupsApi
         print(CGroupsApi._is_systemd())

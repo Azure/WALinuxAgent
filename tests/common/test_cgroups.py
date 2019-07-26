@@ -31,10 +31,6 @@ def consume_cpu_time():
     return waste
 
 
-def i_am_root():
-    return os.geteuid() == 0
-
-
 class TestCGroup(AgentTestCase):
 
     def setUp(self):
