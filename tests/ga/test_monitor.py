@@ -383,12 +383,19 @@ class TestEventMonitoring(AgentTestCase):
 
         for filename in os.listdir(dummy_events_dir):
             shutil.copy(os.path.join(dummy_events_dir, filename), self.event_logger.event_dir)
-            fileutil.chmod(os.path.join(self.event_logger.event_dir, filename), 111)
 
-        monitor_handler.collect_and_send_events()
+        def builtins_version():
+            if sys.version_info[0] == 2:
+                return "__builtin__"
+            else:
+                return "builtins"
 
-        # Invalid events
-        self.assertEqual(0, patch_send_event.call_count)
+        with patch("{0}.open".format(builtins_version())) as mock_open:
+            mock_open.side_effect = OSError(13, "Permission denied")
+            monitor_handler.collect_and_send_events()
+
+            # Invalid events
+            self.assertEqual(0, patch_send_event.call_count)
 
     @patch("azurelinuxagent.common.conf.get_lib_dir")
     def test_collect_and_send_with_http_post_returning_503(self, mock_lib_dir, *args):
@@ -557,7 +564,7 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
         self.assertEqual(fields["is_success"], True)
         self.assertEqual(fields["log_event"], False)
         self.assertEqual(fields["is_internal"], False)
-        self.assertIsInstance(fields["message"], str)
+        self.assertIsInstance(fields["message"], ustr)
 
         monitor_handler.stop()
 

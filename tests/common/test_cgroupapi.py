@@ -25,10 +25,6 @@ from azurelinuxagent.common.utils.processutil import read_output
 from tests.tools import *
 
 
-def i_am_root():
-    return os.geteuid() == 0
-
-
 class CGroupsApiTestCase(AgentTestCase):
     def setUp(self):
         AgentTestCase.setUp(self)
@@ -167,6 +163,7 @@ rdma	6	1	1
             self.assertIn('Error in cgroup controller "cpu": A test exception.', message)
 
 
+@skip_if_predicate_true(is_systemd_present, "FileSystem cgroups API doesn't manage cgroups on systems using systemd.")
 class FileSystemCgroupsApiTestCase(AgentTestCase):
 
     def setUp(self):
@@ -283,6 +280,7 @@ class FileSystemCgroupsApiTestCase(AgentTestCase):
             self.assertEquals(pid, process.pid, "The PID of the command was not added to {0}. Expected: {1}, got: {2}".format(cgroups_procs_path, process.pid, pid))
 
 
+@skip_if_predicate_false(is_systemd_present, "Systemd cgroups API doesn't manage cgroups on systems not using systemd.")
 class SystemdCgroupsApiTestCase(AgentTestCase):
     def setUp(self):
         AgentTestCase.setUp(self)

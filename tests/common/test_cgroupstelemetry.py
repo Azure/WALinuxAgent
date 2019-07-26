@@ -28,7 +28,8 @@ from azurelinuxagent.common.osutil.default import BASE_CGROUPS
 from azurelinuxagent.common.protocol.restapi import ExtHandlerProperties, ExtHandler
 from azurelinuxagent.ga.exthandlers import ExtHandlerInstance
 from tests.common.test_cgroupapi import i_am_root
-from tests.tools import AgentTestCase, are_cgroups_enabled, skip_if_predicate_false
+from tests.tools import AgentTestCase, skip_if_predicate_false, skip_if_predicate_true, \
+                        are_cgroups_enabled, is_trusty_in_travis
 
 
 def median(lst):
@@ -619,9 +620,8 @@ class TestCGroupsTelemetry(AgentTestCase):
 
     @skip_if_predicate_false(i_am_root, "This test will only run as root")
     @skip_if_predicate_false(are_cgroups_enabled, "Does not run when Cgroups are not enabled")
+    @skip_if_predicate_true(is_trusty_in_travis, "Does not run on Trusty in Travis")
     def test_telemetry_with_tracked_cgroup(self):
-        # TODO: Write another test like this which would work for systemd as well, explicitly.
-
         max_num_polls = 30
         time_to_wait = 3
         extn_name = "foobar-1.0.0"

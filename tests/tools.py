@@ -140,6 +140,23 @@ def are_cgroups_enabled():
     return ret
 
 
+def is_trusty_in_travis():
+    # In Travis, Trusty (Ubuntu 14.04) is missing the cpuacct.stat file,
+    # possibly because the accounting is not enabled by default.
+    if not running_under_travis():
+        return False
+
+    return type(get_osutil_for_travis()) == Ubuntu14OSUtil
+
+
+def is_systemd_present():
+    return os.path.exists("/run/systemd/system")
+
+
+def i_am_root():
+    return os.geteuid() == 0
+
+
 class AgentTestCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
