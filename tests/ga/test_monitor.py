@@ -24,8 +24,8 @@ from azurelinuxagent.common.protocol.restapi import get_properties
 from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.common.utils import restutil
 from azurelinuxagent.ga.monitor import *
+from nose.plugins.attrib import attr
 from tests.common.test_cgroupstelemetry import make_new_cgroup, consume_cpu_time, consume_memory
-from tests.ga.test_extension import i_am_root, CGroupConfigurator
 from tests.protocol.mockwiredata import WireProtocolData, DATA_FILE
 from tests.tools import *
 
@@ -532,7 +532,8 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
     @skip_if_predicate_false(i_am_root, "Test does not run when non-root")
     @skip_if_predicate_false(are_cgroups_enabled, "Does not run when Cgroups are not enabled")
     @patch('azurelinuxagent.common.event.EventLogger.add_event')
-    def test_requires_root_send_extension_metrics_telemetry_with_actual_cgroup(self, patch_add_event, *args):
+    @attr(permissions='root')
+    def test_send_extension_metrics_telemetry_with_actual_cgroup(self, patch_add_event, *args):
         num_polls = 5
         name = "test-cgroup"
 

@@ -19,8 +19,8 @@ import os.path
 
 from datetime import timedelta
 
-from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.ga.monitor import get_monitor_handler
+from nose.plugins.attrib import attr
 from tests.protocol.mockwiredata import *
 
 from azurelinuxagent.common.protocol.restapi import Extension
@@ -1695,7 +1695,8 @@ class TestExtensionWithCGroupsEnabled(AgentTestCase):
         return ext_handler, monitor_handler, protocol
 
     @skip_if_predicate_false(i_am_root, "Test does not run when non-root")
-    def test_requires_root_ext_handler_with_cgroup_enabled(self, *args):
+    @attr(permissions='root')
+    def test_ext_handler_with_cgroup_enabled(self, *args):
         test_data = WireProtocolData(DATA_FILE)
         exthandlers_handler, _, protocol = self._create_mock(test_data, *args)
 
@@ -1760,7 +1761,8 @@ class TestExtensionWithCGroupsEnabled(AgentTestCase):
 
     @skip_if_predicate_false(i_am_root, "Test does not run when non-root")
     @patch('azurelinuxagent.common.event.EventLogger.add_event')
-    def test_requires_root_ext_handler_and_monitor_handler_with_cgroup_enabled(self, patch_add_event, *args):
+    @attr(permissions='root')
+    def test_ext_handler_and_monitor_handler_with_cgroup_enabled(self, patch_add_event, *args):
         test_data = WireProtocolData(DATA_FILE)
         exthandlers_handler, monitor_handler, protocol= self._create_mock(test_data, *args)
 
@@ -1790,7 +1792,8 @@ class TestExtensionWithCGroupsEnabled(AgentTestCase):
         monitor_handler.stop()
 
     @skip_if_predicate_false(i_am_root, "Test does not run when non-root")
-    def test_requires_root_ext_handler_with_systemd_cgroup_enabled(self, *args):
+    @attr(permissions='root')
+    def test_ext_handler_with_systemd_cgroup_enabled(self, *args):
         from azurelinuxagent.common.cgroupapi import CGroupsApi
         print(CGroupsApi._is_systemd())
 
