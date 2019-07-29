@@ -30,13 +30,13 @@ matrix:
           SETUPOPTS=""
 
 install:
-  - sudo pip install -r requirements.txt
-  - sudo pip install -r test-requirements.txt
+  - pip install -r requirements.txt
+  - pip install -r test-requirements.txt
 
 script:
   # future: - pylint setup.py makepkg.py azurelinuxagent/
-  - sudo env "PATH=$PATH" nosetests $NOSEOPTS tests
-  - if [ ! -z "$SETUPOPTS" ]; then sudo /usr/bin/env python setup.py $SETUPOPTS; fi
+  - nosetests $NOSEOPTS tests
+  - if [ ! -z "$SETUPOPTS" ]; then /usr/bin/env python setup.py $SETUPOPTS; fi
 
 after_success:
   - if [[ $TRAVIS_PYTHON_VERSION == 3.7 ]]; then codecov; fi

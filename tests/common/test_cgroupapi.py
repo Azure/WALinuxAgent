@@ -163,7 +163,6 @@ rdma	6	1	1
             self.assertIn('Error in cgroup controller "cpu": A test exception.', message)
 
 
-@skip_if_predicate_true(is_systemd_present, "FileSystem cgroups API doesn't manage cgroups on systems using systemd.")
 class FileSystemCgroupsApiTestCase(AgentTestCase):
 
     def setUp(self):
