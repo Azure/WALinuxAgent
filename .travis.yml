@@ -36,6 +36,7 @@ install:
 script:
   # future: - pylint setup.py makepkg.py azurelinuxagent/
   - nosetests $NOSEOPTS tests
+  - sudo env "PATH=$PATH" nosetests $NOSEOPTS tests.common.test_cgroupapi.SystemdCgroupsApiTestCase
   - if [ ! -z "$SETUPOPTS" ]; then /usr/bin/env python setup.py $SETUPOPTS; fi
 
 after_success:
