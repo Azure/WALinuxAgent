@@ -1640,7 +1640,6 @@ class TestInVMArtifactsProfile(AgentTestCase):
         self.assertTrue(profile.is_on_hold(), "Failed to parse '{0}'".format(profile_json))
 
 
-@skip_if_predicate_false(i_am_root, "Test does not run when non-root")
 @skip_if_predicate_false(are_cgroups_enabled, "Does not run when Cgroups are not enabled")
 @patch("azurelinuxagent.common.cgroupapi.CGroupsApi._is_systemd", return_value=True)
 @patch("azurelinuxagent.common.conf.get_cgroups_enforce_limits", return_value=False)
@@ -1695,7 +1694,8 @@ class TestExtensionWithCGroupsEnabled(AgentTestCase):
         monitor_handler.protocol_util.get_protocol = Mock(return_value=protocol)
         return ext_handler, monitor_handler, protocol
 
-    def test_ext_handler_with_cgroup_enabled(self, *args):
+    @skip_if_predicate_false(i_am_root, "Test does not run when non-root")
+    def test_requires_root_ext_handler_with_cgroup_enabled(self, *args):
         test_data = WireProtocolData(DATA_FILE)
         exthandlers_handler, _, protocol = self._create_mock(test_data, *args)
 
@@ -1758,8 +1758,9 @@ class TestExtensionWithCGroupsEnabled(AgentTestCase):
         exthandlers_handler.run()
         self._assert_no_handler_status(protocol.report_vm_status)
 
+    @skip_if_predicate_false(i_am_root, "Test does not run when non-root")
     @patch('azurelinuxagent.common.event.EventLogger.add_event')
-    def test_ext_handler_and_monitor_handler_with_cgroup_enabled(self, patch_add_event, *args):
+    def test_requires_root_ext_handler_and_monitor_handler_with_cgroup_enabled(self, patch_add_event, *args):
         test_data = WireProtocolData(DATA_FILE)
         exthandlers_handler, monitor_handler, protocol= self._create_mock(test_data, *args)
 
@@ -1788,7 +1789,8 @@ class TestExtensionWithCGroupsEnabled(AgentTestCase):
 
         monitor_handler.stop()
 
-    def test_ext_handler_with_systemd_cgroup_enabled(self, *args):
+    @skip_if_predicate_false(i_am_root, "Test does not run when non-root")
+    def test_requires_root_ext_handler_with_systemd_cgroup_enabled(self, *args):
         from azurelinuxagent.common.cgroupapi import CGroupsApi
         print(CGroupsApi._is_systemd())
 
