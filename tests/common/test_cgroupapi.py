@@ -208,15 +208,18 @@ class FileSystemCgroupsApiTestCase(AgentTestCase):
         fileutil.write_file(os.path.join(new_cpu_cgroup, "cgroup.procs"), "999\n")
         fileutil.write_file(os.path.join(new_memory_cgroup, "cgroup.procs"), "999\n")
 
-        with patch("azurelinuxagent.common.cgroupapi.DAEMON_PID_FILE", daemon_pid_file_tmp):
+        with patch("azurelinuxagent.common.cgroupapi.get_agent_pid_file_path", return_value=daemon_pid_file_tmp):
             FileSystemCgroupsApi().cleanup_old_cgroups()
 
-        # The method should have added the daemon PID to the new controllers
+        # The method should have added the daemon PID to the new controllers and deleted the old ones
         new_cpu_contents = fileutil.read_file(os.path.join(new_cpu_cgroup, "cgroup.procs"))
         new_memory_contents = fileutil.read_file(os.path.join(new_memory_cgroup, "cgroup.procs"))
 
         self.assertTrue(daemon_pid in new_cpu_contents)
         self.assertTrue(daemon_pid in new_memory_contents)
+
+        self.assertFalse(os.path.exists(old_cpu_cgroup))
+        self.assertFalse(os.path.exists(old_memory_cgroup))
 
     def test_create_agent_cgroups_should_create_cgroups_on_all_controllers(self):
         agent_cgroups = FileSystemCgroupsApi().create_agent_cgroups()

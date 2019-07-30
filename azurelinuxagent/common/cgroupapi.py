@@ -23,6 +23,7 @@ import uuid
 
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.cgroup import CGroup
+from azurelinuxagent.common.conf import get_agent_pid_file_path
 from azurelinuxagent.common.event import add_event, WALAEventOperation
 from azurelinuxagent.common.exception import CGroupsException
 from azurelinuxagent.common.future import ustr
@@ -35,7 +36,6 @@ CGROUP_CONTROLLERS = ["cpu", "memory"]
 VM_AGENT_CGROUP_NAME = "walinuxagent.service"
 EXTENSIONS_ROOT_CGROUP_NAME = "walinuxagent.extensions"
 UNIT_FILES_FILE_SYSTEM_PATH = "/etc/systemd/system"
-DAEMON_PID_FILE = "/var/run/waagent.pid"
 
 
 class CGroupsApi(object):
@@ -192,7 +192,8 @@ class FileSystemCgroupsApi(CGroupsApi):
         # Old daemon versions (2.2.31-2.2.40) wrote their PID to the WALinuxAgent/WALinuxAgent cgroup.
         # Starting from version 2.2.41, we track the agent service in walinuxagent.service. This method
         # cleans up the old behavior by moving the daemon's PID to the new cgroup and deleting the old cgroup.
-        daemon_pid = fileutil.read_file(DAEMON_PID_FILE)
+        daemon_pid_file = get_agent_pid_file_path()
+        daemon_pid = fileutil.read_file(daemon_pid_file)
 
         def cleanup_old_controller(controller):
             old_path = os.path.join(CGROUPS_FILE_SYSTEM_ROOT, controller, "WALinuxAgent", "WALinuxAgent")
@@ -205,6 +206,7 @@ class FileSystemCgroupsApi(CGroupsApi):
 
             if daemon_pid in contents:
                 fileutil.append_file(os.path.join(new_path, "cgroup.procs"), daemon_pid)
+                shutil.rmtree(old_path, ignore_errors=True)
 
         self._foreach_controller(cleanup_old_controller, "Failed to update the tracking of the daemon; resource usage "
                                                          "of the agent will not include the daemon process.")
