@@ -302,9 +302,10 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
         extension_slice_name = SystemdCgroupsApi()._get_extension_slice_name(extension_name)
         self.assertEqual(extension_slice_name, "system-walinuxagent.extensions-Microsoft.Azure.DummyExtension_1.0.slice")
 
-    @skip_if_predicate_false(i_am_root, "Test does not run when normal user")
-    @attr(permissions='root')
+    @attr('requires_sudo')
     def test_it_should_create_extensions_root_slice(self):
+        self.assertTrue(i_am_root(), "Test does not run when non-root")
+
         SystemdCgroupsApi().create_extension_cgroups_root()
 
         unit_name = SystemdCgroupsApi()._get_extensions_slice_root_name()
@@ -317,9 +318,10 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
         os.remove("/etc/systemd/system/{0}".format(unit_name))
         shellutil.run_get_output("systemctl daemon-reload")
 
-    @skip_if_predicate_false(i_am_root, "Test does not run when normal user")
-    @attr(permissions='root')
+    @attr('requires_sudo')
     def test_it_should_create_extension_slice(self):
+        self.assertTrue(i_am_root(), "Test does not run when non-root")
+
         extension_name = "Microsoft.Azure.DummyExtension-1.0"
         cgroups = SystemdCgroupsApi().create_extension_cgroups(extension_name)
         cpu_cgroup, memory_cgroup = cgroups[0], cgroups[1]
@@ -380,9 +382,10 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
             process.wait()
             self.assert_cgroups_created(extension_cgroups)
 
-    @skip_if_predicate_false(i_am_root, "Test does not run when normal user")
-    @attr(permissions='root')
+    @attr('requires_sudo')
     def test_start_extension_command_should_use_systemd_if_not_failing(self):
+        self.assertTrue(i_am_root(), "Test does not run when non-root")
+
         original_popen = subprocess.Popen
 
         def mock_popen(*args, **kwargs):
@@ -413,9 +416,10 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
 
                     self.assert_cgroups_created(extension_cgroups)
 
-    @skip_if_predicate_false(i_am_root, "Test does not run when normal user")
-    @attr(permissions='root')
+    @attr('requires_sudo')
     def test_start_extension_command_should_not_use_systemd_if_failing(self):
+        self.assertTrue(i_am_root(), "Test does not run when non-root")
+
         original_popen = subprocess.Popen
 
         def mock_popen(*args, **kwargs):
@@ -464,9 +468,10 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
                         # No cgroups should have been created
                         self.assertEquals(extension_cgroups, [])
 
-    @skip_if_predicate_false(i_am_root, "Test does not run when normal user")
-    @attr(permissions='root')
+    @attr('requires_sudo')
     def test_start_extension_command_should_capture_only_the_last_subprocess_output(self):
+        self.assertTrue(i_am_root(), "Test does not run when non-root")
+
         original_popen = subprocess.Popen
 
         def mock_popen(*args, **kwargs):

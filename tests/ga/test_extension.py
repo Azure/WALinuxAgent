@@ -1694,9 +1694,10 @@ class TestExtensionWithCGroupsEnabled(AgentTestCase):
         monitor_handler.protocol_util.get_protocol = Mock(return_value=protocol)
         return ext_handler, monitor_handler, protocol
 
-    @skip_if_predicate_false(i_am_root, "Test does not run when non-root")
-    @attr(permissions='root')
+    @attr('requires_sudo')
     def test_ext_handler_with_cgroup_enabled(self, *args):
+        self.assertTrue(i_am_root(), "Test does not run when non-root")
+
         test_data = WireProtocolData(DATA_FILE)
         exthandlers_handler, _, protocol = self._create_mock(test_data, *args)
 
@@ -1759,10 +1760,11 @@ class TestExtensionWithCGroupsEnabled(AgentTestCase):
         exthandlers_handler.run()
         self._assert_no_handler_status(protocol.report_vm_status)
 
-    @skip_if_predicate_false(i_am_root, "Test does not run when non-root")
     @patch('azurelinuxagent.common.event.EventLogger.add_event')
-    @attr(permissions='root')
+    @attr('requires_sudo')
     def test_ext_handler_and_monitor_handler_with_cgroup_enabled(self, patch_add_event, *args):
+        self.assertTrue(i_am_root(), "Test does not run when non-root")
+
         test_data = WireProtocolData(DATA_FILE)
         exthandlers_handler, monitor_handler, protocol= self._create_mock(test_data, *args)
 
@@ -1791,9 +1793,10 @@ class TestExtensionWithCGroupsEnabled(AgentTestCase):
 
         monitor_handler.stop()
 
-    @skip_if_predicate_false(i_am_root, "Test does not run when non-root")
-    @attr(permissions='root')
+    @attr('requires_sudo')
     def test_ext_handler_with_systemd_cgroup_enabled(self, *args):
+        self.assertTrue(i_am_root(), "Test does not run when non-root")
+
         from azurelinuxagent.common.cgroupapi import CGroupsApi
         print(CGroupsApi._is_systemd())
 

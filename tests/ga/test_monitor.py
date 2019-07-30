@@ -529,11 +529,12 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
         self.assertEqual(0, patch_add_event.call_count)
         monitor_handler.stop()
 
-    @skip_if_predicate_false(i_am_root, "Test does not run when non-root")
     @skip_if_predicate_false(are_cgroups_enabled, "Does not run when Cgroups are not enabled")
     @patch('azurelinuxagent.common.event.EventLogger.add_event')
-    @attr(permissions='root')
+    @attr('requires_sudo')
     def test_send_extension_metrics_telemetry_with_actual_cgroup(self, patch_add_event, *args):
+        self.assertTrue(i_am_root(), "Test does not run when non-root")
+
         num_polls = 5
         name = "test-cgroup"
 
