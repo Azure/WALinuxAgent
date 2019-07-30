@@ -105,6 +105,13 @@ class CGroupConfigurator(object):
 
             self._invoke_cgroup_operation(__impl, "Failed to create a cgroup for the VM Agent; resource usage for the Agent will not be tracked")
 
+        def cleanup_old_cgroups(self):
+            def __impl():
+                self._cgroups_api.cleanup_old_cgroups()
+
+            self._invoke_cgroup_operation(__impl, "Failed to update the tracking of the daemon; resource usage "
+                                                  "of the agent will not include the daemon process.")
+
         def create_extension_cgroups_root(self):
             """
             Creates the container (directory/cgroup) that includes the cgroups for all extensions (/sys/fs/cgroup/*/walinuxagent.extensions)

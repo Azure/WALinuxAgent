@@ -16,12 +16,14 @@
 
 import errno
 import os
+import shutil
 import subprocess
 import time
 import uuid
 
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.cgroup import CGroup
+from azurelinuxagent.common.conf import get_agent_pid_file_path
 from azurelinuxagent.common.event import add_event, WALAEventOperation
 from azurelinuxagent.common.exception import CGroupsException
 from azurelinuxagent.common.future import ustr
@@ -56,6 +58,9 @@ class CGroupsApi(object):
         raise NotImplementedError()
 
     def start_extension_command(self, extension_name, command, shell, cwd, env, stdout, stderr):
+        raise NotImplementedError()
+
+    def cleanup_old_cgroups(self):
         raise NotImplementedError()
 
     @staticmethod
@@ -182,6 +187,29 @@ class FileSystemCgroupsApi(CGroupsApi):
         tasks_file = os.path.join(cgroup_path, 'cgroup.procs')
         fileutil.append_file(tasks_file, "{0}\n".format(pid))
         logger.info("Added PID {0} to cgroup {1}".format(pid, cgroup_path))
+
+    def cleanup_old_cgroups(self):
+        # Old daemon versions (2.2.31-2.2.40) wrote their PID to the WALinuxAgent/WALinuxAgent cgroup.
+        # Starting from version 2.2.41, we track the agent service in walinuxagent.service. This method
+        # cleans up the old behavior by moving the daemon's PID to the new cgroup and deleting the old cgroup.
+        daemon_pid_file = get_agent_pid_file_path()
+        daemon_pid = fileutil.read_file(daemon_pid_file)
+
+        def cleanup_old_controller(controller):
+            old_path = os.path.join(CGROUPS_FILE_SYSTEM_ROOT, controller, "WALinuxAgent", "WALinuxAgent")
+            new_path = os.path.join(CGROUPS_FILE_SYSTEM_ROOT, controller, VM_AGENT_CGROUP_NAME)
+
+            if not os.path.isdir(old_path):
+                return
+
+            contents = fileutil.read_file(os.path.join(old_path, "cgroup.procs"))
+
+            if daemon_pid in contents:
+                fileutil.append_file(os.path.join(new_path, "cgroup.procs"), daemon_pid)
+                shutil.rmtree(old_path, ignore_errors=True)
+
+        self._foreach_controller(cleanup_old_controller, "Failed to update the tracking of the daemon; resource usage "
+                                                         "of the agent will not include the daemon process.")
 
     def create_agent_cgroups(self):
         """
@@ -473,3 +501,7 @@ After=system-{1}.slice""".format(extension_name, EXTENSIONS_ROOT_CGROUP_NAME)
         self._foreach_controller(create_cgroup, 'Cannot create cgroup for extension {0}; resource usage will not be tracked.'.format(extension_name))
 
         return process, cgroups
+
+    def cleanup_old_cgroups(self):
+        # No cleanup needed from the old daemon in the systemd case.
+        pass

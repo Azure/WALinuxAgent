@@ -106,6 +106,7 @@ class CGroupConfiguratorTestCase(AgentTestCase):
         # List of operations to test, and the functions to mock used in order to do verifications
         operations = [
             [lambda: configurator.create_agent_cgroups(track_cgroups=False), "azurelinuxagent.common.cgroupapi.FileSystemCgroupsApi.create_agent_cgroups"],
+            [lambda: configurator.cleanup_old_cgroups(),                     "azurelinuxagent.common.cgroupapi.FileSystemCgroupsApi.cleanup_old_cgroups"],
             [lambda: configurator.create_extension_cgroups_root(),           "azurelinuxagent.common.cgroupapi.FileSystemCgroupsApi.create_extension_cgroups_root"],
             [lambda: configurator.create_extension_cgroups("A.B.C-1.0.0"),   "azurelinuxagent.common.cgroupapi.FileSystemCgroupsApi.create_extension_cgroups"],
             [lambda: configurator.remove_extension_cgroups("A.B.C-1.0.0"),   "azurelinuxagent.common.cgroupapi.FileSystemCgroupsApi.remove_extension_cgroups"]
@@ -123,6 +124,7 @@ class CGroupConfiguratorTestCase(AgentTestCase):
         # List of operations to test, and the functions to mock in order to raise exceptions
         operations = [
             [lambda: configurator.create_agent_cgroups(track_cgroups=False), "azurelinuxagent.common.cgroupapi.FileSystemCgroupsApi.create_agent_cgroups"],
+            [lambda: configurator.cleanup_old_cgroups(),                     "azurelinuxagent.common.cgroupapi.FileSystemCgroupsApi.cleanup_old_cgroups"],
             [lambda: configurator.create_extension_cgroups_root(),           "azurelinuxagent.common.cgroupapi.FileSystemCgroupsApi.create_extension_cgroups_root"],
             [lambda: configurator.create_extension_cgroups("A.B.C-1.0.0"),   "azurelinuxagent.common.cgroupapi.FileSystemCgroupsApi.create_extension_cgroups"],
             [lambda: configurator.remove_extension_cgroups("A.B.C-1.0.0"),   "azurelinuxagent.common.cgroupapi.FileSystemCgroupsApi.remove_extension_cgroups"]

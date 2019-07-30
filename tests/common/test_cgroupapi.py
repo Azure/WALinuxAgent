@@ -163,7 +163,6 @@ rdma	6	1	1
             self.assertIn('Error in cgroup controller "cpu": A test exception.', message)
 
 
-@skip_if_predicate_true(is_systemd_present, "FileSystem cgroups API doesn't manage cgroups on systems using systemd.")
 class FileSystemCgroupsApiTestCase(AgentTestCase):
 
     def setUp(self):
@@ -181,6 +180,46 @@ class FileSystemCgroupsApiTestCase(AgentTestCase):
         self.mock__base_cgroups.stop()
 
         AgentTestCase.tearDown(self)
+
+    def test_cleanup_old_cgroups_should_move_daemon_pid_on_all_controllers(self):
+        # Set up the mock /var/run/waagent.pid file
+        daemon_pid = "42"
+        daemon_pid_file_tmp = os.path.join(self.tmp_dir, "waagent.pid")
+        with open(daemon_pid_file_tmp, "w") as f:
+            f.write(daemon_pid)
+
+        # Set up old controller cgroups and add the daemon PID to them
+        old_cpu_cgroup = os.path.join(self.cgroups_file_system_root, "cpu", "WALinuxAgent", "WALinuxAgent")
+        old_memory_cgroup = os.path.join(self.cgroups_file_system_root, "memory", "WALinuxAgent", "WALinuxAgent")
+
+        os.makedirs(old_cpu_cgroup)
+        os.makedirs(old_memory_cgroup)
+
+        fileutil.write_file(os.path.join(old_cpu_cgroup, "cgroup.procs"), daemon_pid + "\n")
+        fileutil.write_file(os.path.join(old_memory_cgroup, "cgroup.procs"), daemon_pid + "\n")
+
+        # Set up new controller cgroups and add another PID to them
+        new_cpu_cgroup = os.path.join(self.cgroups_file_system_root, "cpu", VM_AGENT_CGROUP_NAME)
+        new_memory_cgroup = os.path.join(self.cgroups_file_system_root, "memory", VM_AGENT_CGROUP_NAME)
+
+        os.makedirs(new_cpu_cgroup)
+        os.makedirs(new_memory_cgroup)
+
+        fileutil.write_file(os.path.join(new_cpu_cgroup, "cgroup.procs"), "999\n")
+        fileutil.write_file(os.path.join(new_memory_cgroup, "cgroup.procs"), "999\n")
+
+        with patch("azurelinuxagent.common.cgroupapi.get_agent_pid_file_path", return_value=daemon_pid_file_tmp):
+            FileSystemCgroupsApi().cleanup_old_cgroups()
+
+        # The method should have added the daemon PID to the new controllers and deleted the old ones
+        new_cpu_contents = fileutil.read_file(os.path.join(new_cpu_cgroup, "cgroup.procs"))
+        new_memory_contents = fileutil.read_file(os.path.join(new_memory_cgroup, "cgroup.procs"))
+
+        self.assertTrue(daemon_pid in new_cpu_contents)
+        self.assertTrue(daemon_pid in new_memory_contents)
+
+        self.assertFalse(os.path.exists(old_cpu_cgroup))
+        self.assertFalse(os.path.exists(old_memory_cgroup))
 
     def test_create_agent_cgroups_should_create_cgroups_on_all_controllers(self):
         agent_cgroups = FileSystemCgroupsApi().create_agent_cgroups()
