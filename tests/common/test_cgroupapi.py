@@ -416,10 +416,7 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
 
                     self.assert_cgroups_created(extension_cgroups)
 
-    @attr('requires_sudo')
     def test_start_extension_command_should_not_use_systemd_if_failing(self):
-        self.assertTrue(i_am_root(), "Test does not run when non-root")
-
         original_popen = subprocess.Popen
 
         def mock_popen(*args, **kwargs):
@@ -468,10 +465,7 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
                         # No cgroups should have been created
                         self.assertEquals(extension_cgroups, [])
 
-    @attr('requires_sudo')
     def test_start_extension_command_should_capture_only_the_last_subprocess_output(self):
-        self.assertTrue(i_am_root(), "Test does not run when non-root")
-
         original_popen = subprocess.Popen
 
         def mock_popen(*args, **kwargs):
