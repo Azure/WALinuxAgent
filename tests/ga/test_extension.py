@@ -19,8 +19,8 @@ import os.path
 
 from datetime import timedelta
 
-from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.ga.monitor import get_monitor_handler
+from nose.plugins.attrib import attr
 from tests.protocol.mockwiredata import *
 
 from azurelinuxagent.common.protocol.restapi import Extension
@@ -1640,7 +1640,6 @@ class TestInVMArtifactsProfile(AgentTestCase):
         self.assertTrue(profile.is_on_hold(), "Failed to parse '{0}'".format(profile_json))
 
 
-@skip_if_predicate_false(i_am_root, "Test does not run when non-root")
 @skip_if_predicate_false(are_cgroups_enabled, "Does not run when Cgroups are not enabled")
 @patch("azurelinuxagent.common.cgroupapi.CGroupsApi._is_systemd", return_value=True)
 @patch("azurelinuxagent.common.conf.get_cgroups_enforce_limits", return_value=False)
@@ -1695,7 +1694,10 @@ class TestExtensionWithCGroupsEnabled(AgentTestCase):
         monitor_handler.protocol_util.get_protocol = Mock(return_value=protocol)
         return ext_handler, monitor_handler, protocol
 
+    @attr('requires_sudo')
     def test_ext_handler_with_cgroup_enabled(self, *args):
+        self.assertTrue(i_am_root(), "Test does not run when non-root")
+
         test_data = WireProtocolData(DATA_FILE)
         exthandlers_handler, _, protocol = self._create_mock(test_data, *args)
 
@@ -1759,7 +1761,10 @@ class TestExtensionWithCGroupsEnabled(AgentTestCase):
         self._assert_no_handler_status(protocol.report_vm_status)
 
     @patch('azurelinuxagent.common.event.EventLogger.add_event')
+    @attr('requires_sudo')
     def test_ext_handler_and_monitor_handler_with_cgroup_enabled(self, patch_add_event, *args):
+        self.assertTrue(i_am_root(), "Test does not run when non-root")
+
         test_data = WireProtocolData(DATA_FILE)
         exthandlers_handler, monitor_handler, protocol= self._create_mock(test_data, *args)
 
@@ -1788,7 +1793,10 @@ class TestExtensionWithCGroupsEnabled(AgentTestCase):
 
         monitor_handler.stop()
 
+    @attr('requires_sudo')
     def test_ext_handler_with_systemd_cgroup_enabled(self, *args):
+        self.assertTrue(i_am_root(), "Test does not run when non-root")
+
         from azurelinuxagent.common.cgroupapi import CGroupsApi
         print(CGroupsApi._is_systemd())
 
