@@ -21,6 +21,7 @@ from azurelinuxagent.common.osutil.arch import ArchUtil
 from azurelinuxagent.common.osutil.clearlinux import ClearLinuxUtil
 from azurelinuxagent.common.osutil.coreos import CoreOSUtil
 from azurelinuxagent.common.osutil.debian import DebianOSUtil, DebianOS8Util
+from azurelinuxagent.common.osutil.kali import KaliOSUtil
 from azurelinuxagent.common.osutil.freebsd import FreeBSDOSUtil
 from azurelinuxagent.common.osutil.openbsd import OpenBSDOSUtil
 from azurelinuxagent.common.osutil.redhat import RedhatOSUtil, Redhat6xOSUtil
@@ -125,7 +126,7 @@ class TestOsUtilFactory(AgentTestCase):
                           distro_code_name="",
                           distro_version="",
                           distro_full_name="")
-        self.assertTrue(type(ret) == DebianOSUtil)
+        self.assertTrue(type(ret) == KaliOSUtil)
         self.assertEquals(ret.get_service_name(), "waagent")
 
     def test_get_osutil_it_should_return_coreos(self):
