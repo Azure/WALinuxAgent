@@ -306,7 +306,7 @@ class DefaultOSUtil(object):
         base_fs_exists = os.path.exists(BASE_CGROUPS)
 
         # Fails on Trusty based systems as cgroups is not mounted by default.
-        if DISTRO_CODE_NAME.lower() is "trusty":
+        if str(DISTRO_CODE_NAME).lower() is "trusty":
             supported = False
 
         return not is_wsl and base_fs_exists and supported
