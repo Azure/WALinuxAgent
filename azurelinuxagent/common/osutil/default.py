@@ -304,17 +304,9 @@ class DefaultOSUtil(object):
     @staticmethod
     def is_cgroups_supported():
         """
-        Enabled by default; disabled in WSL and Trusty.
+        Enabled by default; disabled if the base path of cgroups doesn't exist.
         """
-        is_wsl = '-Microsoft-' in platform.platform()
-        supported = True
-        base_fs_exists = os.path.exists(BASE_CGROUPS)
-
-        # Fails on Trusty based systems as cgroups is not mounted by default.
-        if DISTRO_CODE_NAME.lower() is "trusty":
-            supported = False
-
-        return not is_wsl and base_fs_exists and supported
+        return os.path.exists(BASE_CGROUPS)
 
     @staticmethod
     def _cgroup_path(tail=""):
