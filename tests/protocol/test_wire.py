@@ -39,8 +39,8 @@ class TestWireProtocol(AgentTestCase):
     def setUp(self):
         super(TestWireProtocol, self).setUp()
         HostPluginProtocol.set_default_channel(False)
-    
-    def _test_getters(self, test_data, __, MockCryptUtil, _):
+
+    def _test_getters(self, test_data, certsMustBePresent, __, MockCryptUtil, _):
         MockCryptUtil.side_effect = test_data.mock_crypt_util
 
         with patch.object(restutil, 'http_get', test_data.mock_http_get):
@@ -58,39 +58,52 @@ class TestWireProtocol(AgentTestCase):
                                 '4037FBF5F1F3014F99B5D6C7799E9B20E6871CB3.crt')
             prv2 = os.path.join(self.tmp_dir,
                                 '4037FBF5F1F3014F99B5D6C7799E9B20E6871CB3.prv')
-
-            self.assertTrue(os.path.isfile(crt1))
-            self.assertTrue(os.path.isfile(crt2))
-            self.assertTrue(os.path.isfile(prv2))
-
+            if certsMustBePresent:
+                self.assertTrue(os.path.isfile(crt1))
+                self.assertTrue(os.path.isfile(crt2))
+                self.assertTrue(os.path.isfile(prv2))
+            else:
+                self.assertFalse(os.path.isfile(crt1))
+                self.assertFalse(os.path.isfile(crt2))
+                self.assertFalse(os.path.isfile(prv2))
             self.assertEqual("1", protocol.get_incarnation())
 
     def test_getters(self, *args):
         """Normal case"""
         test_data = WireProtocolData(DATA_FILE)
-        self._test_getters(test_data, *args)
+        self._test_getters(test_data, True, *args)
 
     def test_getters_no_ext(self, *args):
         """Provision with agent is not checked"""
         test_data = WireProtocolData(DATA_FILE_NO_EXT)
-        self._test_getters(test_data, *args)
+        self._test_getters(test_data, True, *args)
 
     def test_getters_ext_no_settings(self, *args):
         """Extensions without any settings"""
         test_data = WireProtocolData(DATA_FILE_EXT_NO_SETTINGS)
-        self._test_getters(test_data, *args)
+        self._test_getters(test_data, True, *args)
 
     def test_getters_ext_no_public(self, *args):
         """Extensions without any public settings"""
         test_data = WireProtocolData(DATA_FILE_EXT_NO_PUBLIC)
-        self._test_getters(test_data, *args)
+        self._test_getters(test_data, True, *args)
+
+    def test_getters_ext_no_cert_format(self, *args):
+        """Certificate format not specified"""
+        test_data = WireProtocolData(DATA_FILE_NO_CERT_FORMAT)
+        self._test_getters(test_data, True, *args)
+
+    def test_getters_ext_cert_format_not_pfx(self, *args):
+        """Certificate format is not Pkcs7BlobWithPfxContents specified"""
+        test_data = WireProtocolData(DATA_FILE_CERT_FORMAT_NOT_PFX)
+        self._test_getters(test_data, False, *args)
 
     @patch("azurelinuxagent.common.protocol.healthservice.HealthService.report_host_plugin_extension_artifact")
     def test_getters_with_stale_goal_state(self, patch_report, *args):
         test_data = WireProtocolData(DATA_FILE)
         test_data.emulate_stale_goal_state = True
 
-        self._test_getters(test_data, *args)
+        self._test_getters(test_data, True, *args)
         # Ensure HostPlugin was invoked
         self.assertEqual(1, test_data.call_counts["/versions"])
         self.assertEqual(2, test_data.call_counts["extensionArtifact"])
@@ -189,7 +202,7 @@ class TestWireProtocol(AgentTestCase):
         self.assertTrue(os.path.exists(destination))
 
         # verify size
-        self.assertEqual(18380915, os.stat(destination).st_size)
+        self.assertEqual(33193077, os.stat(destination).st_size)
 
         # verify unzip
         zipfile.ZipFile(destination).extractall(tmp)
@@ -198,13 +211,13 @@ class TestWireProtocol(AgentTestCase):
         fileutil.chmod(packer, os.stat(packer).st_mode | stat.S_IXUSR)
 
         # verify unpacked size
-        self.assertEqual(87393596, os.stat(packer).st_size)
+        self.assertEqual(105552030, os.stat(packer).st_size)
 
         # execute, verify result
         packer_version = '{0} --version'.format(packer)
         rc, stdout = run_get_output(packer_version)
         self.assertEqual(0, rc)
-        self.assertEqual('1.2.5\n', stdout)
+        self.assertEqual('1.3.5\n', stdout)
 
 
     @patch("azurelinuxagent.common.protocol.wire.WireClient.update_goal_state")
@@ -389,6 +402,37 @@ class TestWireProtocol(AgentTestCase):
                     self.assertEqual(patch_fetch.call_args_list[0][0][0], uri1.uri)
                     self.assertEqual(patch_fetch.call_args_list[1][0][0], host_uri)
 
+    # This test checks if the manifest_uri variable is set in the host object of WireClient
+    # This variable is used when we make /extensionArtifact API calls to the HostGA
+    def test_fetch_manifest_ensure_manifest_uri_is_set(self, *args):
+        uri1 = ExtHandlerVersionUri()
+        uri1.uri = 'ext_uri'
+        uris = DataContractList(ExtHandlerVersionUri)
+        uris.append(uri1)
+        host_uri = 'host_uri'
+        mock_host = HostPluginProtocol(host_uri, 'container_id', 'role_config')
+        client = WireProtocol(wireserver_url).client
+        manifest_return = "manifest.xml"
+
+        with patch.object(WireClient, "get_host_plugin", return_value=mock_host):
+            mock_host.get_artifact_request = MagicMock(return_value=[host_uri, {}])
+
+            # First test tried to download directly from blob and asserts manifest_uri is set
+            with patch.object(WireClient, "fetch", return_value=manifest_return) as patch_fetch:
+                fetch_manifest_mock = client.fetch_manifest(uris)
+                self.assertEqual(fetch_manifest_mock, manifest_return)
+                self.assertEqual(patch_fetch.call_count, 1)
+                self.assertEqual(mock_host.manifest_uri, uri1.uri)
+
+            # Second test tries to download from the HostGA (by failing the direct download) and asserts manifest_uri is set
+            with patch.object(WireClient, "fetch") as patch_fetch:
+                patch_fetch.side_effect = [None, manifest_return]
+                fetch_manifest_mock = client.fetch_manifest(uris)
+                self.assertEqual(fetch_manifest_mock, manifest_return)
+                self.assertEqual(patch_fetch.call_count, 2)
+                self.assertEqual(mock_host.manifest_uri, uri1.uri)
+                self.assertTrue(HostPluginProtocol.is_default_channel())
+
     def test_get_in_vm_artifacts_profile_host_ga_plugin(self, *args):
         wire_protocol_client = WireProtocol(wireserver_url).client
         wire_protocol_client.ext_conf = ExtensionsConfig(None)
@@ -447,7 +491,7 @@ class TestWireProtocol(AgentTestCase):
     def test_send_event(self, mock_http_request, *args):
         mock_http_request.return_value = MockResponse("", 200)
 
-        event_str = u'ćevapčići検索システムκόσμε片仮名'
+        event_str = u'a test string'
         client = WireProtocol(wireserver_url).client
         client.send_event("foo", event_str)
 
@@ -456,8 +500,10 @@ class TestWireProtocol(AgentTestCase):
         method, url, body_received = args
         headers = kwargs['headers']
 
+        # the headers should include utf-8 encoding...
         self.assertTrue("utf-8" in headers['Content-Type'])
-        self.assertIn(str(event_str.encode("utf-8")), body_received)
+        # the body is not encoded, just check for equality
+        self.assertIn(event_str, body_received)
 
 
 class MockResponse:

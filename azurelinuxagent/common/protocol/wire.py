@@ -370,7 +370,7 @@ def vm_status_to_v1(vm_status, ext_statuses):
         'version': '1.1',
         'timestampUTC': timestamp,
         'aggregateStatus': v1_agg_status,
-        'guestOSInfo' : v1_ga_guest_info
+        'guestOSInfo': v1_ga_guest_info
     }
     return v1_vm_status
 
@@ -609,6 +609,8 @@ class WireClient(object):
                 continue
 
             response = None
+            host = self.get_host_plugin()
+
             if not HostPluginProtocol.is_default_channel():
                 response = self.fetch(version.uri)
 
@@ -620,7 +622,6 @@ class WireClient(object):
                                    "switching to host plugin")
 
                 try:
-                    host = self.get_host_plugin()
                     uri, headers = host.get_artifact_request(version.uri)
                     response = self.fetch(uri, headers, use_proxy=False)
 
@@ -630,13 +631,13 @@ class WireClient(object):
                     HostPluginProtocol.set_default_channel(True)
                     raise
 
-                host.manifest_uri = version.uri
                 logger.verbose("Manifest downloaded successfully from host plugin")
                 if not HostPluginProtocol.is_default_channel():
                     logger.info("Setting host plugin as default channel")
                     HostPluginProtocol.set_default_channel(True)
 
             if response:
+                host.manifest_uri = version.uri
                 return response
 
         raise ProtocolError("Failed to fetch manifest from all sources")
@@ -1114,11 +1115,11 @@ class WireClient(object):
                        '<Provider id="{0}">{1}'
                        '</Provider>'
                        '</TelemetryData>')
-        if event_str:
-            event_str = event_str.encode("utf-8")
         data = data_format.format(provider_id, event_str)
         try:
             header = self.get_header_for_xml_content()
+            # NOTE: The call to wireserver requests utf-8 encoding in the headers, but the body should not
+            #       be encoded: some nodes in the telemetry pipeline do not support utf-8 encoding.
             resp = self.call_wireserver(restutil.http_post, uri, data, header)
         except HttpError as e:
             raise ProtocolError("Failed to send events:{0}".format(e))
@@ -1453,6 +1454,12 @@ class Certificates(object):
         data = findtext(xml_doc, "Data")
         if data is None:
             return
+    
+        # if the certificates format is not Pkcs7BlobWithPfxContents do not parse it
+        certificateFormat = findtext(xml_doc, "Format")
+        if certificateFormat and certificateFormat != "Pkcs7BlobWithPfxContents":
+            logger.warn("The Format is not Pkcs7BlobWithPfxContents. Format is " + certificateFormat)
+            return
 
         cryptutil = CryptUtil(conf.get_openssl_cmd())
         p7m_file = os.path.join(conf.get_lib_dir(), P7M_FILE_NAME)
@@ -1519,6 +1526,18 @@ class Certificates(object):
                 tmp_file = prvs[pubkey]
                 prv = "{0}.prv".format(thumbprint)
                 os.rename(tmp_file, os.path.join(conf.get_lib_dir(), prv))
+                logger.info("Found private key matching thumbprint {0}".format(thumbprint))
+            else:
+                # Since private key has *no* matching certificate,
+                # it will not be named correctly
+                logger.warn("Found NO matching cert/thumbprint for private key!")
+
+        # Log if any certificates were found without matching private keys
+        # This can happen (rarely), and is useful to know for debugging
+        for pubkey in thumbprints:
+            if not pubkey in prvs:
+                msg = "Certificate with thumbprint {0} has no matching private key."
+                logger.info(msg.format(thumbprints[pubkey]))
 
         for v1_cert in v1_cert_list:
             cert = Cert()
@@ -1713,5 +1732,5 @@ class InVMArtifactsProfile(object):
     def is_on_hold(self):
         # hasattr() is not available in Python 2.6
         if 'onHold' in self.__dict__:
-            return self.onHold.lower() == 'true'
+            return str(self.onHold).lower() == 'true'
         return False

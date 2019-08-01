@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<CertificateFile xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="certificates10.xsd">
+  <Version>2012-11-30</Version>
+  <Incarnation>12</Incarnation>
+  <Format>CertificatesNonPfxPackage</Format>
+  <Data>NotPFXData</Data>
+</CertificateFile>

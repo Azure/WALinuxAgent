@@ -1,6 +1,8 @@
 WALinuxAgent                                                          Changelog
 |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 
+Refer to releases WALinuxAgent release page: https://github.com/Azure/WALinuxAgent/releases for detailed changelog after v2.2.0
+
 12 August 2016, v2.1.6
    . Improved RDMA support
    . Extension state migration

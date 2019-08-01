@@ -1,14 +1,17 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the Apache License.
 import json
+import re
 import stat
 
 from azurelinuxagent.common.protocol.restapi import ExtensionStatus, Extension, ExtHandler, ExtHandlerProperties
 from azurelinuxagent.ga.exthandlers import parse_ext_status, ExtHandlerInstance, get_exthandlers_handler
-from azurelinuxagent.common.exception import ProtocolError, ExtensionError
+from azurelinuxagent.common.exception import ProtocolError, ExtensionError, ExtensionErrorCodes
 from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.utils.processutil import TELEMETRY_MESSAGE_MAX_LEN, format_stdout_stderr
+from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from tests.tools import *
+
 
 class TestExtHandlers(AgentTestCase):
     def test_parse_extension_status00(self):
@@ -75,6 +78,57 @@ class TestExtHandlers(AgentTestCase):
         self.assertEqual('error', ext_status.status)
         self.assertEqual(0, ext_status.sequenceNumber)
         self.assertEqual(0, len(ext_status.substatusList))
+
+    def test_parse_ext_status_should_parse_missing_substatus_as_empty(self):
+        status = '''[{
+            "status": {
+              "status": "success",
+              "formattedMessage": {
+                "lang": "en-US",
+                "message": "Command is finished."
+              },
+              "operation": "Enable",
+              "code": "0",
+              "name": "Microsoft.OSTCExtensions.CustomScriptForLinux"
+            },
+            
+            "version": "1.0",
+            "timestampUTC": "2018-04-20T21:20:24Z"
+          }
+        ]'''
+
+        extension_status = ExtensionStatus(seq_no=0)
+
+        parse_ext_status(extension_status, json.loads(status))
+
+        self.assertTrue(isinstance(extension_status.substatusList, list), 'substatus was not parsed correctly')
+        self.assertEqual(0, len(extension_status.substatusList))
+
+    def test_parse_ext_status_should_parse_null_substatus_as_empty(self):
+        status = '''[{
+            "status": {
+              "status": "success",
+              "formattedMessage": {
+                "lang": "en-US",
+                "message": "Command is finished."
+              },
+              "operation": "Enable",
+              "code": "0",
+              "name": "Microsoft.OSTCExtensions.CustomScriptForLinux",
+              "substatus": null
+            },
+
+            "version": "1.0",
+            "timestampUTC": "2018-04-20T21:20:24Z"
+          }
+        ]'''
+
+        extension_status = ExtensionStatus(seq_no=0)
+
+        parse_ext_status(extension_status, json.loads(status))
+
+        self.assertTrue(isinstance(extension_status.substatusList, list), 'substatus was not parsed correctly')
+        self.assertEqual(0, len(extension_status.substatusList))
 
     @patch('azurelinuxagent.common.event.EventLogger.add_event')
     @patch('azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_largest_seq_no')
@@ -158,65 +212,41 @@ class TestExtHandlers(AgentTestCase):
         self.assertEquals(second_call_args['is_success'], False)
         self.assertIn(test_message, second_call_args['message'])
 
+
 class LaunchCommandTestCase(AgentTestCase):
     """
     Test cases for launch_command
     """
-    @classmethod
-    def setUpClass(cls):
-        AgentTestCase.setUpClass()
-        cls.mock_cgroups = patch("azurelinuxagent.ga.exthandlers.CGroups")
-        cls.mock_cgroups.start()
-
-        cls.mock_cgroups_telemetry = patch("azurelinuxagent.ga.exthandlers.CGroupsTelemetry")
-        cls.mock_cgroups_telemetry.start()
-
-    @classmethod
-    def tearDownClass(cls):
-        cls.mock_cgroups_telemetry.stop()
-        cls.mock_cgroups.stop()
-
-        AgentTestCase.tearDownClass()
 
     def setUp(self):
         AgentTestCase.setUp(self)
 
         ext_handler_properties = ExtHandlerProperties()
         ext_handler_properties.version = "1.2.3"
-        ext_handler = ExtHandler(name='foo')
-        ext_handler.properties = ext_handler_properties
-        self.ext_handler_instance = ExtHandlerInstance(ext_handler=ext_handler, protocol=None)
+        self.ext_handler = ExtHandler(name='foo')
+        self.ext_handler.properties = ext_handler_properties
+        self.ext_handler_instance = ExtHandlerInstance(ext_handler=self.ext_handler, protocol=None)
 
         self.mock_get_base_dir = patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_base_dir", lambda *_: self.tmp_dir)
         self.mock_get_base_dir.start()
 
-        log_dir = os.path.join(self.tmp_dir, "log")
+        self.log_dir = os.path.join(self.tmp_dir, "log")
         self.mock_get_log_dir = patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_log_dir", lambda *_: self.log_dir)
         self.mock_get_log_dir.start()
 
+        self.cgroups_enabled = CGroupConfigurator.get_instance().enabled()
+        CGroupConfigurator.get_instance().disable()
+
     def tearDown(self):
+        if self.cgroups_enabled:
+            CGroupConfigurator.get_instance().enable()
+        else:
+            CGroupConfigurator.get_instance().disable()
+
         self.mock_get_log_dir.stop()
         self.mock_get_base_dir.stop()
 
         AgentTestCase.tearDown(self)
-
-    def _create_script(self, file_name, contents):
-        """
-        Creates an executable script with the given contents.
-        If file_name ends with ".py", it creates a Python3 script, otherwise it creates a bash script
-        """
-        file_path = os.path.join(self.ext_handler_instance.get_base_dir(), file_name)
-
-        with open(file_path, "w") as script:
-            if file_name.endswith(".py"):
-                script.write("#!/usr/bin/env python3\n")
-            else:
-                script.write("#!/usr/bin/env bash\n")
-            script.write(contents)
-
-        os.chmod(file_path, stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
-
-        return file_name
 
     @staticmethod
     def _output_regex(stdout, stderr):
@@ -261,7 +291,7 @@ sys.stderr.write("{1}")
         self.assertListEqual(files_before, files_after, "Not all temporary files were deleted. File list: {0}".format(files_after))
 
     def test_it_should_raise_an_exception_when_the_command_times_out(self):
-        extension_error_code = 1234
+        extension_error_code = ExtensionErrorCodes.PluginHandlerScriptTimedout
         stdout = "stdout" * 7
         stderr = "stderr" * 7
 
@@ -511,7 +541,7 @@ sys.stderr.write("E" * 5 * 1024 * 1024)
         # Mocking the call to file.read() is difficult, so instead we mock the call to format_stdout_stderr, which takes the
         # return value of the calls to file.read(). The intention of the test is to verify we never read (and load in memory)
         # more than a few KB of data from the files used to capture stdout/stderr
-        with patch('azurelinuxagent.ga.exthandlers.format_stdout_stderr', side_effect=format_stdout_stderr) as mock_format:
+        with patch('azurelinuxagent.common.utils.processutil.format_stdout_stderr', side_effect=format_stdout_stderr) as mock_format:
             output = self.ext_handler_instance.launch_command(command)
 
         self.assertGreaterEqual(len(output), 1024)
@@ -547,4 +577,3 @@ sys.stderr.write("STDERR")
             output = self.ext_handler_instance.launch_command(command)
 
         self.assertIn("[stderr]\nCannot read stdout/stderr:", output)
-
