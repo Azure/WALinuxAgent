@@ -794,7 +794,7 @@ class TestExtension(ExtensionTestCase):
             self.assertEqual(1, patch_handle_ext_handler.call_count)
 
     def test_last_etag_on_extension_processing(self, *args):
-        test_data = WireProtocolData(copy.deepcopy(DATA_FILE))
+        test_data = WireProtocolData(DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
         exthandlers_handler.ext_handlers, etag = protocol.get_ext_handlers()
         exthandlers_handler.protocol = protocol
