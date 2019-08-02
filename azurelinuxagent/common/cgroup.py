@@ -32,10 +32,11 @@ class CGroup(object):
         """
         Factory method to create the correct CGroup.
         """
-        if controller is "cpu":
+        if controller == "cpu":
             return CpuCgroup(extension_name, cgroup_path)
-        elif controller is "memory":
+        if controller == "memory":
             return MemoryCgroup(extension_name, cgroup_path)
+        raise CGroupsException('CGroup controller {0} is not supported'.format(controller))
 
     def __init__(self, name, cgroup_path, controller_type):
         """

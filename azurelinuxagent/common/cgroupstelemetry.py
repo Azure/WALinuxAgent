@@ -19,6 +19,7 @@ from datetime import datetime as dt
 
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.exception import CGroupsException
 
 
 class CGroupsTelemetry(object):
@@ -165,10 +166,12 @@ class CgroupMetrics(object):
 
     def add_new_data(self, controller, metric):
         if metric:
-            if controller is "cpu":
+            if controller == "cpu":
                 self._add_cpu_usage(metric)
-            elif controller is "memory":
+            elif controller == "memory":
                 self._add_memory_usage(metric)
+            else:
+                raise CGroupsException('CGroup controller {0} is not supported'.format(controller))
 
     def get_metrics(self):
         return self._current_memory_usage, self._max_memory_levels, self._current_cpu_usage
