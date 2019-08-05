@@ -203,7 +203,7 @@ class ExtHandlersHandler(object):
         self.protocol_util = get_protocol_util()
         self.protocol = None
         self.ext_handlers = None
-        self.last_etag = None
+        self.last_processed_etag = None
         self.log_report = False
         self.log_etag = True
         self.log_process = False
@@ -249,7 +249,7 @@ class ExtHandlersHandler(object):
 
             if self.extension_processing_allowed():
                 self.handle_ext_handlers(etag)
-                self.last_etag = etag
+                self.last_processed_etag = etag
 
             self.report_ext_handlers_status()
             self.cleanup_outdated_handlers()
@@ -416,7 +416,7 @@ class ExtHandlersHandler(object):
                 return
 
             self.get_artifact_error_state.reset()
-            if not ext_handler_i.is_upgrade and self.last_etag == etag:
+            if not ext_handler_i.is_upgrade and self.last_processed_etag == etag:
                 if self.log_etag:
                     ext_handler_i.logger.verbose("Version {0} is current for etag {1}",
                                                  ext_handler_i.pkg.version,
