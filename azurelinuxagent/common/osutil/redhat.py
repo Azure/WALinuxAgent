@@ -50,16 +50,16 @@ class Redhat6xOSUtil(DefaultOSUtil):
         return shellutil.run("/sbin/service sshd condrestart", chk_err=False)
 
     def stop_agent_service(self):
-        return shellutil.run("/sbin/service {0} stop".format(self.service_name), chk_err=False)
+        return shellutil.run("/sbin/service waagent stop", chk_err=False)
 
     def start_agent_service(self):
-        return shellutil.run("/sbin/service {0} start".format(self.service_name), chk_err=False)
+        return shellutil.run("/sbin/service waagent start", chk_err=False)
 
     def register_agent_service(self):
-        return shellutil.run("chkconfig --add {0}".format(self.service_name), chk_err=False)
+        return shellutil.run("chkconfig --add waagent", chk_err=False)
 
     def unregister_agent_service(self):
-        return shellutil.run("chkconfig --del {0}".format(self.service_name), chk_err=False)
+        return shellutil.run("chkconfig --del waagent", chk_err=False)
 
     def openssl_to_openssh(self, input_file, output_file):
         pubkey = fileutil.read_file(input_file)
@@ -98,7 +98,6 @@ class Redhat6xOSUtil(DefaultOSUtil):
 class RedhatOSUtil(Redhat6xOSUtil):
     def __init__(self):
         super(RedhatOSUtil, self).__init__()
-        self.service_name = self.get_service_name()
 
     def set_hostname(self, hostname):
         """
@@ -119,10 +118,10 @@ class RedhatOSUtil(Redhat6xOSUtil):
         super(RedhatOSUtil, self).publish_hostname(hostname)
 
     def register_agent_service(self):
-        return shellutil.run("systemctl enable {0}".format(self.service_name), chk_err=False)
+        return shellutil.run("systemctl enable waagent", chk_err=False)
 
     def unregister_agent_service(self):
-        return shellutil.run("systemctl disable {0}".format(self.service_name), chk_err=False)
+        return shellutil.run("systemctl disable waagent", chk_err=False)
 
     def openssl_to_openssh(self, input_file, output_file):
         DefaultOSUtil.openssl_to_openssh(self, input_file, output_file)

@@ -22,7 +22,7 @@ from .default import DefaultOSUtil
 from .arch import ArchUtil
 from .clearlinux import ClearLinuxUtil
 from .coreos import CoreOSUtil
-from .debian import DebianOSUtil, DebianOS8Util
+from .debian import DebianOSUtil
 from .freebsd import FreeBSDOSUtil
 from .openbsd import OpenBSDOSUtil
 from .redhat import RedhatOSUtil, Redhat6xOSUtil
@@ -43,14 +43,6 @@ def get_osutil(distro_name=DISTRO_NAME,
                distro_code_name=DISTRO_CODE_NAME,
                distro_version=DISTRO_VERSION,
                distro_full_name=DISTRO_FULL_NAME):
-
-    # We are adding another layer of abstraction here since we want to be able to mock the final result of the
-    # function call. Since the get_osutil function is imported in various places in our tests, we can't mock
-    # it globally. Instead, we add _get_osutil function and mock it in the test base class, AgentTestCase.
-    return _get_osutil(distro_name, distro_code_name, distro_version, distro_full_name)
-
-
-def _get_osutil(distro_name, distro_code_name, distro_version, distro_full_name):
 
     if distro_name == "arch":
         return ArchUtil()
@@ -89,13 +81,10 @@ def _get_osutil(distro_name, distro_code_name, distro_version, distro_full_name)
         else:
             return SUSEOSUtil()
 
-    if distro_name == "debian":
-        if Version(distro_version) > Version("7"):
-            return DebianOS8Util()
-        else:
-            return DebianOSUtil()
+    elif distro_name == "debian":
+        return DebianOSUtil()
 
-    if distro_name == "redhat" \
+    elif distro_name == "redhat" \
             or distro_name == "centos" \
             or distro_name == "oracle":
         if Version(distro_version) < Version("7"):
@@ -103,28 +92,28 @@ def _get_osutil(distro_name, distro_code_name, distro_version, distro_full_name)
         else:
             return RedhatOSUtil()
 
-    if distro_name == "euleros":
+    elif distro_name == "euleros":
         return RedhatOSUtil()
 
-    if distro_name == "freebsd":
+    elif distro_name == "freebsd":
         return FreeBSDOSUtil()
 
-    if distro_name == "openbsd":
+    elif distro_name == "openbsd":
         return OpenBSDOSUtil()
 
-    if distro_name == "bigip":
+    elif distro_name == "bigip":
         return BigIpOSUtil()
 
-    if distro_name == "gaia":
+    elif distro_name == "gaia":
         return GaiaOSUtil()
 
-    if distro_name == "iosxe":
+    elif distro_name == "iosxe":
         return IosxeOSUtil()
 
-    if distro_name == "nsbsd":
+    elif distro_name == "nsbsd":
         return NSBSDOSUtil()
 
-    if distro_name == "openwrt":
+    elif distro_name == "openwrt":
         return OpenWRTOSUtil()
 
     else:

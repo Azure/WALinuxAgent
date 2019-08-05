@@ -35,7 +35,6 @@ UUID_PATTERN = re.compile(
     r'^\s*[A-F0-9]{8}(?:\-[A-F0-9]{4}){3}\-[A-F0-9]{12}\s*$',
     re.IGNORECASE)
 
-
 class OpenBSDOSUtil(DefaultOSUtil):
 
     def __init__(self):
@@ -57,17 +56,17 @@ class OpenBSDOSUtil(DefaultOSUtil):
         return shellutil.run('rcctl restart sshd', chk_err=False)
 
     def start_agent_service(self):
-        return shellutil.run('rcctl start {0}'.format(self.service_name), chk_err=False)
+        return shellutil.run('rcctl start waagent', chk_err=False)
 
     def stop_agent_service(self):
-        return shellutil.run('rcctl stop {0}'.format(self.service_name), chk_err=False)
+        return shellutil.run('rcctl stop waagent', chk_err=False)
 
     def register_agent_service(self):
-        shellutil.run('chmod 0555 /etc/rc.d/{0}'.format(self.service_name), chk_err=False)
-        return shellutil.run('rcctl enable {0}'.format(self.service_name), chk_err=False)
+        shellutil.run('chmod 0555 /etc/rc.d/waagent', chk_err=False)
+        return shellutil.run('rcctl enable waagent', chk_err=False)
 
     def unregister_agent_service(self):
-        return shellutil.run('rcctl disable {0}'.format(self.service_name), chk_err=False)
+        return shellutil.run('rcctl disable waagent', chk_err=False)
 
     def del_account(self, username):
         if self.is_sys_user(username):

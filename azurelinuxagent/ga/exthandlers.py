@@ -39,7 +39,7 @@ import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.version as version
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.errorstate import ErrorState, ERROR_STATE_DELTA_INSTALL
-from azurelinuxagent.common.event import add_event, WALAEventOperation, elapsed_milliseconds, report_event
+from azurelinuxagent.common.event import add_event, WALAEventOperation, elapsed_milliseconds
 from azurelinuxagent.common.exception import ExtensionError, ProtocolError, ProtocolNotFoundError, \
     ExtensionDownloadError, ExtensionOperationError, ExtensionErrorCodes
 from azurelinuxagent.common.future import ustr
@@ -437,29 +437,16 @@ class ExtHandlersHandler(object):
                 message = u"Unknown ext handler state:{0}".format(state)
                 raise ExtensionError(message)
         except ExtensionOperationError as e:
-            self.handle_ext_handler_error(ext_handler_i, e, e.code)
-        except ExtensionDownloadError as e:
-            self.handle_ext_handler_download_error(ext_handler_i, e, e.code)
+            self.handle_handle_ext_handler_error(ext_handler_i, e, e.code)
         except ExtensionError as e:
-            self.handle_ext_handler_error(ext_handler_i, e, e.code)
+            self.handle_handle_ext_handler_error(ext_handler_i, e, e.code)
         except Exception as e:
-            self.handle_ext_handler_error(ext_handler_i, e)
+            self.handle_handle_ext_handler_error(ext_handler_i, e)
 
-    def handle_ext_handler_error(self, ext_handler_i, e, code=-1):
+    def handle_handle_ext_handler_error(self, ext_handler_i, e, code=-1):
         msg = ustr(e)
         ext_handler_i.set_handler_status(message=msg, code=code)
         ext_handler_i.report_event(message=msg, is_success=False, log_event=True)
-
-    def handle_ext_handler_download_error(self, ext_handler_i, e, code=-1):
-        msg = ustr(e)
-        ext_handler_i.set_handler_status(message=msg, code=code)
-
-        self.get_artifact_error_state.incr()
-        if self.get_artifact_error_state.is_triggered():
-            report_event(op=WALAEventOperation.Download, is_success=False, log_event=True,
-                         message="Failed to get artifact for over "
-                                 "{0}: {1}".format(self.get_artifact_error_state.min_timedelta, msg))
-            self.get_artifact_error_state.reset()
 
     def handle_enable(self, ext_handler_i):
         self.log_process = True
@@ -642,9 +629,6 @@ class ExtHandlerInstance(object):
             pkg_list = self.protocol.get_ext_handler_pkgs(self.ext_handler)
         except ProtocolError as e:
             raise ExtensionError("Failed to get ext handler pkgs", e)
-        except ExtensionDownloadError:
-            self.set_operation(WALAEventOperation.Download)
-            raise
 
         # Determine the desired and installed versions
         requested_version = FlexibleVersion(str(self.ext_handler.properties.version))
@@ -835,10 +819,10 @@ class ExtHandlerInstance(object):
                 raise ExtensionDownloadError("Failed to download extension",
                                              code=ExtensionErrorCodes.PluginManifestDownloadError)
 
-            duration = elapsed_milliseconds(begin_utc)
-            self.report_event(message="Download succeeded", duration=duration)
-
         self.pkg_file = destination
+
+        duration = elapsed_milliseconds(begin_utc)
+        self.report_event(message="Download succeeded", duration=duration)
 
     def initialize(self):
         self.logger.info("Initializing extension {0}".format(self.get_full_name()))

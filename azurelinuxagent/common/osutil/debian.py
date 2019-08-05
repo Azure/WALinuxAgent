@@ -32,7 +32,6 @@ import azurelinuxagent.common.utils.shellutil as shellutil
 import azurelinuxagent.common.utils.textutil as textutil
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
 
-
 class DebianOSUtil(DefaultOSUtil):
 
     def __init__(self):
@@ -59,21 +58,3 @@ class DebianOSUtil(DefaultOSUtil):
 
     def get_dhcp_lease_endpoint(self):
         return self.get_endpoint_from_leases_path('/var/lib/dhcp/dhclient.*.leases')
-
-
-class DebianOS8Util(DebianOSUtil):
-
-    def __init__(self):
-        super(DebianOS8Util, self).__init__()
-        self.jit_enabled = True
-        self.service_name = self.get_service_name()
-
-    @staticmethod
-    def get_service_name():
-        return "walinuxagent"
-
-    def stop_agent_service(self):
-        return shellutil.run("systemctl stop {0}".format(self.service_name), chk_err=False)
-
-    def start_agent_service(self):
-        return shellutil.run("systemctl start {0}".format(self.service_name), chk_err=False)

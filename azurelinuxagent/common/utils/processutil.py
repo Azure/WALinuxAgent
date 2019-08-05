@@ -34,7 +34,7 @@ def read_output(stdout, stderr):
 
         return format_stdout_stderr(stdout, stderr)
     except Exception as e:
-        return format_stdout_stderr("", "Cannot read stdout/stderr: {0}".format(ustr(e)))
+        return format_stdout_stderr("", "Cannot read stdout/stderr: {0}".format(str(e)))
 
 
 def format_stdout_stderr(stdout, stderr, max_len=TELEMETRY_MESSAGE_MAX_LEN):

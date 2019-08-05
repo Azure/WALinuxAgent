@@ -72,22 +72,18 @@ class RunGetOutputTestCase(AgentTestCase):
         command_in_message = args[1]
         self.assertEqual(command_in_message, command)
 
+
     def test_it_should_log_command_failures_as_errors(self):
-        logger_delta = str("logger.EVERY_FIFTEEN_MINUTES")
         return_code = 99
         command = "exit {0}".format(return_code)
 
         with patch("azurelinuxagent.common.utils.shellutil.logger", autospec=True) as mock_logger:
             shellutil.run_get_output(command, log_cmd=False)
 
-        self.assertEquals(mock_logger.periodic_error.call_count, 1)
+        self.assertEquals(mock_logger.error.call_count, 1)
 
-        args, kwargs = mock_logger.periodic_error.call_args
-
-        time_delta = str(args[0])
-        self.assertIn(logger_delta, time_delta)
-
-        message = args[1]  # message is similar to "Command: [exit 99], return code: [99], result: []"
+        args, kwargs = mock_logger.error.call_args
+        message = args[0]  # message is similar to "Command: [exit 99], return code: [99], result: []"
         self.assertIn("[{0}]".format(command), message)
         self.assertIn("[{0}]".format(return_code), message)
 
@@ -96,21 +92,16 @@ class RunGetOutputTestCase(AgentTestCase):
         self.assertEquals(mock_logger.warn.call_count, 0)
 
     def test_it_should_log_expected_errors_as_info(self):
-        logger_delta = str("logger.EVERY_FIFTEEN_MINUTES")
         return_code = 99
         command = "exit {0}".format(return_code)
 
         with patch("azurelinuxagent.common.utils.shellutil.logger", autospec=True) as mock_logger:
             shellutil.run_get_output(command, log_cmd=False, expected_errors=[return_code])
 
-        self.assertEquals(mock_logger.periodic_info.call_count, 1)
+        self.assertEquals(mock_logger.info.call_count, 1)
 
-        args, kwargs = mock_logger.periodic_info.call_args
-
-        time_delta = str(args[0])
-        self.assertIn(logger_delta, time_delta)
-
-        message = args[1]  # message is similar to "Command: [exit 99], return code: [99], result: []"
+        args, kwargs = mock_logger.info.call_args
+        message = args[0]  # message is similar to "Command: [exit 99], return code: [99], result: []"
         self.assertIn("[{0}]".format(command), message)
         self.assertIn("[{0}]".format(return_code), message)
 
@@ -119,21 +110,16 @@ class RunGetOutputTestCase(AgentTestCase):
         self.assertEquals(mock_logger.error.call_count, 0)
 
     def test_it_should_log_unexpected_errors_as_errors(self):
-        logger_delta = str("logger.EVERY_FIFTEEN_MINUTES")
         return_code = 99
         command = "exit {0}".format(return_code)
 
         with patch("azurelinuxagent.common.utils.shellutil.logger", autospec=True) as mock_logger:
             shellutil.run_get_output(command, log_cmd=False, expected_errors=[return_code + 1])
 
-        self.assertEquals(mock_logger.periodic_error.call_count, 1)
+        self.assertEquals(mock_logger.error.call_count, 1)
 
-        args, kwargs = mock_logger.periodic_error.call_args
-
-        time_delta = str(args[0])
-        self.assertIn(logger_delta, time_delta)
-
-        message = args[1]  # message is similar to "Command: [exit 99], return code: [99], result: []"
+        args, kwargs = mock_logger.error.call_args
+        message = args[0]  # message is similar to "Command: [exit 99], return code: [99], result: []"
         self.assertIn("[{0}]".format(command), message)
         self.assertIn("[{0}]".format(return_code), message)
 

@@ -50,7 +50,6 @@ def default_system():
 def default_system_no_linux_distro():
     return '', '', ''
 
-
 def default_system_exception():
     raise Exception
 

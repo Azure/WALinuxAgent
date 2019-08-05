@@ -101,12 +101,10 @@ class DownloadExtensionTestCase(AgentTestCase):
             return True
 
         with patch("azurelinuxagent.common.protocol.wire.WireProtocol.download_ext_handler_pkg", side_effect=download_ext_handler_pkg) as mock_download_ext_handler_pkg:
-            with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.report_event") as mock_report_event:
-                self.ext_handler_instance.download()
+            self.ext_handler_instance.download()
 
         # first download attempt should succeed
         mock_download_ext_handler_pkg.assert_called_once()
-        mock_report_event.assert_called_once()
 
         self._assert_download_and_expand_succeeded()
 
@@ -114,11 +112,9 @@ class DownloadExtensionTestCase(AgentTestCase):
         DownloadExtensionTestCase._create_zip_file(self._get_extension_package_file())
 
         with patch("azurelinuxagent.common.protocol.wire.WireProtocol.download_ext_handler_pkg") as mock_download_ext_handler_pkg:
-            with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.report_event") as mock_report_event:
-                self.ext_handler_instance.download()
+            self.ext_handler_instance.download()
 
         mock_download_ext_handler_pkg.assert_not_called()
-        mock_report_event.assert_not_called()
 
         self.assertTrue(os.path.exists(self._get_extension_command_file()), "The extension package was not expanded to the expected location")
 

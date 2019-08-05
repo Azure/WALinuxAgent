@@ -35,7 +35,6 @@ from azurelinuxagent.common.utils import fileutil, textutil
 from azurelinuxagent.common.version import CURRENT_VERSION
 
 _EVENT_MSG = "Event: name={0}, op={1}, message={2}, duration={3}"
-TELEMETRY_EVENT_PROVIDER_ID = "69B669B9-4AF8-4C50-BDC4-6006FA76E975"
 
 
 class WALAEventOperation:
@@ -226,8 +225,7 @@ class EventLogger(object):
                 hfile.write(data.encode("utf-8"))
             os.rename(filename + ".tmp", filename + ".tld")
         except IOError as e:
-            msg = "Failed to write events to file:{0}".format(e)
-            raise EventError(msg)
+            raise EventError("Failed to write events to file:{0}", e)
 
     def reset_periodic(self):
         self.periodic_events = {}
@@ -264,10 +262,11 @@ class EventLogger(object):
         if (not is_success) and log_event:
             _log_event(name, op, message, duration, is_success=is_success)
 
-        self._add_event(duration, evt_type, is_internal, is_success, message, name, op, version, event_id=1)
+        self._add_event(duration, evt_type, is_internal, is_success, message, name, op, version, eventId=1)
+        self._add_event(duration, evt_type, is_internal, is_success, message, name, op, version, eventId=6)
 
-    def _add_event(self, duration, evt_type, is_internal, is_success, message, name, op, version, event_id):
-        event = TelemetryEvent(event_id, TELEMETRY_EVENT_PROVIDER_ID)
+    def _add_event(self, duration, evt_type, is_internal, is_success, message, name, op, version, eventId):
+        event = TelemetryEvent(eventId, "69B669B9-4AF8-4C50-BDC4-6006FA76E975")
         event.parameters.append(TelemetryEventParam('Name', name))
         event.parameters.append(TelemetryEventParam('Version', str(version)))
         event.parameters.append(TelemetryEventParam('IsInternal', is_internal))
