@@ -16,12 +16,14 @@
 
 import errno
 import os
+import shutil
 import subprocess
 import time
 import uuid
 
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.cgroup import CGroup
+from azurelinuxagent.common.conf import get_agent_pid_file_path
 from azurelinuxagent.common.event import add_event, WALAEventOperation
 from azurelinuxagent.common.exception import CGroupsException
 from azurelinuxagent.common.future import ustr
@@ -56,6 +58,9 @@ class CGroupsApi(object):
         raise NotImplementedError()
 
     def start_extension_command(self, extension_name, command, shell, cwd, env, stdout, stderr):
+        raise NotImplementedError()
+
+    def cleanup_old_cgroups(self):
         raise NotImplementedError()
 
     @staticmethod
@@ -117,15 +122,19 @@ class CGroupsApi(object):
     @staticmethod
     def _foreach_controller(operation, message):
         """
-        Executes the given operation on all controllers that need to be tracked; outputs 'message' if the controller is not mounted.
+        Executes the given operation on all controllers that need to be tracked; outputs 'message' if the controller
+        is not mounted or if an error occurs in the operation
         """
         mounted_controllers = os.listdir(CGROUPS_FILE_SYSTEM_ROOT)
 
         for controller in CGROUP_CONTROLLERS:
-            if controller not in mounted_controllers:
-                logger.warn('Controller "{0}" is not mounted. {1}'.format(controller, message))
-            else:
-                operation(controller)
+            try:
+                if controller not in mounted_controllers:
+                    logger.warn('Cgroup controller "{0}" is not mounted. {1}'.format(controller, message))
+                else:
+                    operation(controller)
+            except Exception as e:
+                logger.warn('Error in cgroup controller "{0}": {1}. {2}'.format(controller, ustr(e), message))
 
 
 class FileSystemCgroupsApi(CGroupsApi):
@@ -179,6 +188,29 @@ class FileSystemCgroupsApi(CGroupsApi):
         fileutil.append_file(tasks_file, "{0}\n".format(pid))
         logger.info("Added PID {0} to cgroup {1}".format(pid, cgroup_path))
 
+    def cleanup_old_cgroups(self):
+        # Old daemon versions (2.2.31-2.2.40) wrote their PID to the WALinuxAgent/WALinuxAgent cgroup.
+        # Starting from version 2.2.41, we track the agent service in walinuxagent.service. This method
+        # cleans up the old behavior by moving the daemon's PID to the new cgroup and deleting the old cgroup.
+        daemon_pid_file = get_agent_pid_file_path()
+        daemon_pid = fileutil.read_file(daemon_pid_file)
+
+        def cleanup_old_controller(controller):
+            old_path = os.path.join(CGROUPS_FILE_SYSTEM_ROOT, controller, "WALinuxAgent", "WALinuxAgent")
+            new_path = os.path.join(CGROUPS_FILE_SYSTEM_ROOT, controller, VM_AGENT_CGROUP_NAME)
+
+            if not os.path.isdir(old_path):
+                return
+
+            contents = fileutil.read_file(os.path.join(old_path, "cgroup.procs"))
+
+            if daemon_pid in contents:
+                fileutil.append_file(os.path.join(new_path, "cgroup.procs"), daemon_pid)
+                shutil.rmtree(old_path, ignore_errors=True)
+
+        self._foreach_controller(cleanup_old_controller, "Failed to update the tracking of the daemon; resource usage "
+                                                         "of the agent will not include the daemon process.")
+
     def create_agent_cgroups(self):
         """
         Creates a cgroup for the VM Agent in each of the controllers we are tracking; returns the created cgroups.
@@ -188,21 +220,17 @@ class FileSystemCgroupsApi(CGroupsApi):
         pid = int(os.getpid())
 
         def create_cgroup(controller):
-            try:
-                path = os.path.join(CGROUPS_FILE_SYSTEM_ROOT, controller, VM_AGENT_CGROUP_NAME)
+            path = os.path.join(CGROUPS_FILE_SYSTEM_ROOT, controller, VM_AGENT_CGROUP_NAME)
 
-                if not os.path.isdir(path):
-                    FileSystemCgroupsApi._try_mkdir(path)
-                    logger.info("Created cgroup {0}".format(path))
+            if not os.path.isdir(path):
+                FileSystemCgroupsApi._try_mkdir(path)
+                logger.info("Created cgroup {0}".format(path))
 
-                self._add_process_to_cgroup(pid, path)
+            self._add_process_to_cgroup(pid, path)
 
-                cgroups.append(CGroup.create(path, controller, VM_AGENT_CGROUP_NAME))
+            cgroups.append(CGroup.create(path, controller, VM_AGENT_CGROUP_NAME))
 
-            except Exception as e:
-                logger.warn('Cannot create "{0}" cgroup for the agent. Error: {1}'.format(controller, ustr(e)))
-
-        self._foreach_controller(create_cgroup, 'Will not create a cgroup for the VM Agent')
+        self._foreach_controller(create_cgroup, 'Failed to create a cgroup for the VM Agent; resource usage will not be tracked')
 
         if len(cgroups) == 0:
             raise CGroupsException("Failed to create any cgroup for the VM Agent")
@@ -220,7 +248,7 @@ class FileSystemCgroupsApi(CGroupsApi):
                 FileSystemCgroupsApi._try_mkdir(path)
                 logger.info("Created {0}".format(path))
 
-        self._foreach_controller(create_cgroup, 'Will not create a root cgroup for extensions')
+        self._foreach_controller(create_cgroup, 'Failed to create a root cgroup for extensions')
 
     def create_extension_cgroups(self, extension_name):
         """
@@ -237,7 +265,7 @@ class FileSystemCgroupsApi(CGroupsApi):
 
             cgroups.append(cgroup)
 
-        self._foreach_controller(create_cgroup, 'Will not create a cgroup for extension {0}'.format(extension_name))
+        self._foreach_controller(create_cgroup, 'Failed to create a cgroup for extension {0}'.format(extension_name))
 
         return cgroups
 
@@ -349,8 +377,8 @@ class SystemdCgroupsApi(CGroupsApi):
             cpu_cgroup_path = os.path.join(CGROUPS_FILE_SYSTEM_ROOT, 'cpu', cgroup_unit)
             memory_cgroup_path = os.path.join(CGROUPS_FILE_SYSTEM_ROOT, 'memory', cgroup_unit)
 
-            return [CGroup.create(cpu_cgroup_path, 'cpu', cgroup_unit),
-                    CGroup.create(memory_cgroup_path, 'memory', cgroup_unit)]
+            return [CGroup.create(cpu_cgroup_path, 'cpu', VM_AGENT_CGROUP_NAME),
+                    CGroup.create(memory_cgroup_path, 'memory', VM_AGENT_CGROUP_NAME)]
         except Exception as e:
             raise CGroupsException("Failed to get paths of agent's cgroups. Error: {0}".format(ustr(e)))
 
@@ -438,11 +466,6 @@ After=system-{1}.slice""".format(extension_name, EXTENSIONS_ROOT_CGROUP_NAME)
             # unit's name. Since the scope name is only known to systemd-run, and not to the extension itself,
             # if scope_name appears in the output, we are certain systemd-run managed to run.
             if scope_name not in process_output:
-                logger.warn('Failed to run systemd-run for unit {0}.scope '
-                            'Process exited with code {1} and output {2}'.format(scope_name,
-                                                                                 return_code,
-                                                                                 process_output))
-
                 add_event(AGENT_NAME,
                           version=CURRENT_VERSION,
                           op=WALAEventOperation.InvokeCommandUsingSystemd,
@@ -451,6 +474,9 @@ After=system-{1}.slice""".format(extension_name, EXTENSIONS_ROOT_CGROUP_NAME)
                                   'Process exited with code {1} and output {2}'.format(scope_name,
                                                                                        return_code,
                                                                                        process_output))
+                # Reset the stdout and stderr
+                stdout.truncate(0)
+                stderr.truncate(0)
 
                 # Try starting the process without systemd-run
                 process = subprocess.Popen(
@@ -472,8 +498,10 @@ After=system-{1}.slice""".format(extension_name, EXTENSIONS_ROOT_CGROUP_NAME)
             cgroup_path = os.path.join(CGROUPS_FILE_SYSTEM_ROOT, controller, 'system.slice', scope_name + ".scope")
             cgroups.append(CGroup.create(cgroup_path, controller, extension_name))
 
-        self._foreach_controller(create_cgroup,
-                                 'Cannot create cgroup for extension {0}; resource usage will not be tracked.'.format(
-                                     extension_name))
+        self._foreach_controller(create_cgroup, 'Cannot create cgroup for extension {0}; resource usage will not be tracked.'.format(extension_name))
 
         return process, cgroups
+
+    def cleanup_old_cgroups(self):
+        # No cleanup needed from the old daemon in the systemd case.
+        pass

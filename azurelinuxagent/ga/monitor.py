@@ -176,7 +176,7 @@ class MonitorHandler(object):
             self.sysinfo.append(TelemetryEventParam("RAM", ram))
             self.sysinfo.append(TelemetryEventParam("Processors", processors))
         except OSUtilError as e:
-            logger.warn("Failed to get system info: {0}", e)
+            logger.warn("Failed to get system info: {0}", ustr(e))
 
         try:
             vminfo = self.protocol.get_vminfo()
@@ -191,7 +191,7 @@ class MonitorHandler(object):
             self.sysinfo.append(TelemetryEventParam("ContainerId",
                                                     vminfo.containerId))
         except ProtocolError as e:
-            logger.warn("Failed to get system info: {0}", e)
+            logger.warn("Failed to get system info: {0}", ustr(e))
 
         try:
             vminfo = self.imds_client.get_compute()
@@ -206,18 +206,20 @@ class MonitorHandler(object):
             self.sysinfo.append(TelemetryEventParam('ImageOrigin',
                                                     vminfo.image_origin))
         except (HttpError, ValueError) as e:
-            logger.warn("failed to get IMDS info: {0}", e)
+            logger.warn("failed to get IMDS info: {0}", ustr(e))
 
-    def collect_event(self, evt_file_name):
+    @staticmethod
+    def collect_event(evt_file_name):
         try:
             logger.verbose("Found event file: {0}", evt_file_name)
             with open(evt_file_name, "rb") as evt_file:
                 # if fail to open or delete the file, throw exception
-                data_str = evt_file.read().decode("utf-8", 'ignore')
+                data_str = evt_file.read().decode("utf-8")
             logger.verbose("Processed event file: {0}", evt_file_name)
             os.remove(evt_file_name)
             return data_str
-        except IOError as e:
+        except (IOError, UnicodeDecodeError) as e:
+            os.remove(evt_file_name)
             msg = "Failed to process {0}, {1}".format(evt_file_name, e)
             raise EventError(msg)
 
@@ -237,7 +239,7 @@ class MonitorHandler(object):
                     try:
                         data_str = self.collect_event(event_file_path)
                     except EventError as e:
-                        logger.error("{0}", e)
+                        logger.error("{0}", ustr(e))
                         continue
 
                     try:
@@ -245,7 +247,7 @@ class MonitorHandler(object):
                         self.add_sysinfo(event)
                         event_list.events.append(event)
                     except (ValueError, ProtocolError) as e:
-                        logger.warn("Failed to decode event file: {0}", e)
+                        logger.warn("Failed to decode event file: {0}", ustr(e))
                         continue
 
                 if len(event_list.events) == 0:
@@ -254,9 +256,9 @@ class MonitorHandler(object):
                 try:
                     self.protocol.report_event(event_list)
                 except ProtocolError as e:
-                    logger.error("{0}", e)
+                    logger.error("{0}", ustr(e))
             except Exception as e:
-                logger.warn("Failed to send events: {0}", e)
+                logger.warn("Failed to send events: {0}", ustr(e))
 
             self.last_event_collection = datetime.datetime.utcnow()
 
@@ -404,7 +406,7 @@ class MonitorHandler(object):
                         message=msg,
                         log_event=False)
             except Exception as e:
-                logger.warn("Failed to send heartbeat: {0}", e)
+                logger.warn("Failed to send heartbeat: {0}", ustr(e))
 
             self.last_telemetry_heartbeat = datetime.datetime.utcnow()
 

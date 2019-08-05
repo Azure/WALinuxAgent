@@ -23,13 +23,27 @@ import zipfile
 from azurelinuxagent.common import event
 from azurelinuxagent.common.protocol.wire import *
 from azurelinuxagent.common.utils.shellutil import run_get_output
-from tests.common.osutil.test_default import running_under_travis
+from tests.ga.test_monitor import get_event_message, random_generator
 from tests.protocol.mockwiredata import *
 
 data_with_bom = b'\xef\xbb\xbfhehe'
 testurl = 'http://foo'
 testtype = 'BlockBlob'
 wireserver_url = '168.63.129.16'
+
+
+def get_event(message, duration=30000, evt_type="", is_internal=False, is_success=True,
+              name="", op="Unknown", version=CURRENT_VERSION, eventId=1):
+    event = TelemetryEvent(eventId, "XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX")
+    event.parameters.append(TelemetryEventParam('Name', name))
+    event.parameters.append(TelemetryEventParam('Version', str(version)))
+    event.parameters.append(TelemetryEventParam('IsInternal', is_internal))
+    event.parameters.append(TelemetryEventParam('Operation', op))
+    event.parameters.append(TelemetryEventParam('OperationSuccess', is_success))
+    event.parameters.append(TelemetryEventParam('Message', message))
+    event.parameters.append(TelemetryEventParam('Duration', duration))
+    event.parameters.append(TelemetryEventParam('ExtensionType', evt_type))
+    return event
 
 @patch("time.sleep")
 @patch("azurelinuxagent.common.protocol.wire.CryptUtil")
@@ -397,7 +411,7 @@ class TestWireProtocol(AgentTestCase):
                                   "get_artifact_request",
                                   return_value=[host_uri, {}]):
                     HostPluginProtocol.set_default_channel(False)
-                    self.assertRaises(ProtocolError, client.fetch_manifest, uris)
+                    self.assertRaises(ExtensionDownloadError, client.fetch_manifest, uris)
                     self.assertEqual(patch_fetch.call_count, 2)
                     self.assertEqual(patch_fetch.call_args_list[0][0][0], uri1.uri)
                     self.assertEqual(patch_fetch.call_args_list[1][0][0], host_uri)
@@ -504,6 +518,52 @@ class TestWireProtocol(AgentTestCase):
         self.assertTrue("utf-8" in headers['Content-Type'])
         # the body is not encoded, just check for equality
         self.assertIn(event_str, body_received)
+
+    @patch("azurelinuxagent.common.protocol.wire.WireClient.send_event")
+    def test_report_event_small_event(self, patch_send_event, *args):
+        event_list = TelemetryEventList()
+        client = WireProtocol(wireserver_url).client
+
+        event_str = random_generator(10)
+        event_list.events.append(get_event(message=event_str))
+
+        event_str = random_generator(100)
+        event_list.events.append(get_event(message=event_str))
+
+        event_str = random_generator(1000)
+        event_list.events.append(get_event(message=event_str))
+
+        event_str = random_generator(10000)
+        event_list.events.append(get_event(message=event_str))
+
+        client.report_event(event_list)
+
+        # It merges the messages into one message
+        self.assertEqual(patch_send_event.call_count, 1)
+
+    @patch("azurelinuxagent.common.protocol.wire.WireClient.send_event")
+    def test_report_event_multiple_events_to_fill_buffer(self, patch_send_event, *args):
+        event_list = TelemetryEventList()
+        client = WireProtocol(wireserver_url).client
+
+        event_str = random_generator(2**15)
+        event_list.events.append(get_event(message=event_str))
+        event_list.events.append(get_event(message=event_str))
+
+        client.report_event(event_list)
+
+        # It merges the messages into one message
+        self.assertEqual(patch_send_event.call_count, 2)
+
+    @patch("azurelinuxagent.common.protocol.wire.WireClient.send_event")
+    def test_report_event_large_event(self, patch_send_event, *args):
+        event_list = TelemetryEventList()
+        event_str = random_generator(2 ** 18)
+        event_list.events.append(get_event(message=event_str))
+        client = WireProtocol(wireserver_url).client
+        client.report_event(event_list)
+
+        self.assertEqual(patch_send_event.call_count, 0)
 
 
 class MockResponse:

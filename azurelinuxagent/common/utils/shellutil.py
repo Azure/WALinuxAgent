@@ -98,9 +98,9 @@ def run_get_output(cmd, chk_err=True, log_cmd=True, expected_errors=[]):
                   u"return code: [{1}], " \
                   u"result: [{2}]".format(cmd, e.returncode, output)
             if e.returncode in expected_errors:
-                logger.info(msg)
+                logger.periodic_info(logger.EVERY_FIFTEEN_MINUTES, msg)
             else:
-                logger.error(msg)
+                logger.periodic_error(logger.EVERY_FIFTEEN_MINUTES, msg)
         return e.returncode, output
     except Exception as e:
         if chk_err:

@@ -45,13 +45,13 @@ class Logger(object):
     def set_prefix(self, prefix):
         self.prefix = prefix
 
-    def is_period_elapsed(self, delta, h):
+    def _is_period_elapsed(self, delta, h):
         return h not in self.logger.periodic_messages or \
             (self.logger.periodic_messages[h] + delta) <= datetime.now()
 
     def _periodic(self, delta, log_level_op, msg_format, *args):
         h = hash(msg_format)
-        if self.is_period_elapsed(delta, h):
+        if self._is_period_elapsed(delta, h):
             log_level_op(msg_format, *args)
             self.logger.periodic_messages[h] = datetime.now()
 
@@ -80,7 +80,7 @@ class Logger(object):
         self.log(LogLevel.ERROR, msg_format, *args)
 
     def log(self, level, msg_format, *args):
-        #if msg_format is not unicode convert it to unicode
+        # if msg_format is not unicode convert it to unicode
         if type(msg_format) is not ustr:
             msg_format = ustr(msg_format, errors="backslashreplace")
         if len(args) > 0:
