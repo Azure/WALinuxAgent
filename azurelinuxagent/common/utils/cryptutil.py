@@ -47,15 +47,13 @@ class CryptUtil(object):
                "-out {2}").format(self.openssl_cmd, prv_file, crt_file)
         rc = shellutil.run(cmd)
         if rc != 0:
-            logger.error("Failed to create {0} and {1} certificates".format(
-                prv_file, crt_file))
+            logger.error("Failed to create {0} and {1} certificates".format(prv_file, crt_file))
 
     def get_pubkey_from_prv(self, file_name):
         if not os.path.exists(file_name):
             raise IOError(errno.ENOENT, "File not found", file_name)
         else:
-            cmd = "{0} pkey -in {1} -pubout 2>/dev/null".format(self.openssl_cmd,
-                                                                file_name)
+            cmd = "{0} pkey -in {1} -pubout 2>/dev/null".format(self.openssl_cmd, file_name)
             pub = shellutil.run_get_output(cmd)[1]
             return pub
 
@@ -63,8 +61,7 @@ class CryptUtil(object):
         if not os.path.exists(file_name):
             raise IOError(errno.ENOENT, "File not found", file_name)
         else:
-            cmd = "{0} x509 -in {1} -pubkey -noout".format(self.openssl_cmd,
-                                                           file_name)
+            cmd = "{0} x509 -in {1} -pubkey -noout 2>/dev/null".format(self.openssl_cmd, file_name)
             pub = shellutil.run_get_output(cmd)[1]
             return pub
 
@@ -72,8 +69,7 @@ class CryptUtil(object):
         if not os.path.exists(file_name):
             raise IOError(errno.ENOENT, "File not found", file_name)
         else:
-            cmd = "{0} x509 -in {1} -fingerprint -noout".format(self.openssl_cmd,
-                                                                file_name)
+            cmd = "{0} x509 -in {1} -fingerprint -noout 2>/dev/null".format(self.openssl_cmd, file_name)
             thumbprint = shellutil.run_get_output(cmd)[1]
             thumbprint = thumbprint.rstrip().split('=')[1].replace(':', '').upper()
             return thumbprint
