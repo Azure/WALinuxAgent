@@ -21,6 +21,7 @@ import uuid
 import unittest
 import os
 import azurelinuxagent.common.utils.shellutil as shellutil
+import subprocess
 import test
 
 
@@ -140,6 +141,41 @@ class RunGetOutputTestCase(AgentTestCase):
         self.assertEquals(mock_logger.info.call_count, 0)
         self.assertEquals(mock_logger.verbose.call_count, 0)
         self.assertEquals(mock_logger.warn.call_count, 0)
+
+
+class RunCommandTestCase(AgentTestCase):
+    def test_run_command_it_should_run_without_errors(self):
+        command = "echo 42".split(" ")
+
+        with patch("azurelinuxagent.common.utils.shellutil.logger", autospec=True) as mock_logger:
+            ret = shellutil.run_command(command)
+            self.assertEquals(ret, "42\n")
+            self.assertEquals(mock_logger.error.call_count, 0)
+
+    def test_run_command_it_should_raise_an_exception_file_not_found(self):
+        command = "ls nonexistent_file".split(" ")
+        expected_returncode = 2
+
+        with patch("azurelinuxagent.common.utils.shellutil.logger") as mock_logger:
+            with self.assertRaises(subprocess.CalledProcessError) as context_manager:
+                shellutil.run_command(command)
+
+            ex = context_manager.exception
+            self.assertEquals(subprocess.CalledProcessError, type(ex))
+            self.assertEquals((expected_returncode, ["ls", "nonexistent_file"]), ex.args)
+
+            self.assertEquals(mock_logger.error.call_count, 2)
+
+            logged_error_first = "Command: [{0}], return code: [{1}], " \
+                                 "stdout: [] stderr: [{2}]".format(command, expected_returncode,
+                                                                   "ls: cannot access 'nonexistent_file': "
+                                                                   "No such file or directory\n")
+            self.assertEquals(mock_logger.error.call_args_list[0][0][0], logged_error_first)
+
+            logged_error_second = "Command [{0}] raised unexpected exception: " \
+                                  "[Command '{0}' returned non-zero exit status {1}.]".format(command,
+                                                                                              expected_returncode)
+            self.assertEquals(mock_logger.error.call_args_list[1][0][0], logged_error_second)
 
 
 if __name__ == '__main__':

@@ -110,6 +110,34 @@ def run_get_output(cmd, chk_err=True, log_cmd=True, expected_errors=[]):
     return 0, output
 
 
+def _encode_command_output(output):
+    return ustr(output, encoding='utf-8', errors="backslashreplace")
+
+
+def run_command(command):
+    """
+    Wrapper for subprocess.Popen.
+    Executes the given command and returns its stdout. Logs any errors executing the command and raises an exception.
+    """
+    try:
+        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False)
+        stdout, stderr = process.communicate()
+        retcode = process.returncode
+
+        if retcode:
+            logger.error(u"Command: [{0}], return code: [{1}], "
+                         u"stdout: [{2}] stderr: [{3}]".format(command,
+                                                               retcode,
+                                                               _encode_command_output(stdout),
+                                                               _encode_command_output(stderr)))
+            raise subprocess.CalledProcessError(retcode, command)
+    except Exception as e:
+        logger.error(u"Command [{0}] raised unexpected exception: [{1}]".format(command, ustr(e)))
+        raise
+
+    return _encode_command_output(stdout)
+
+
 def quote(word_list):
     """
     Quote a list or tuple of strings for Unix Shell as words, using the

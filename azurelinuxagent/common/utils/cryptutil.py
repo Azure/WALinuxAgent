@@ -53,24 +53,24 @@ class CryptUtil(object):
         if not os.path.exists(file_name):
             raise IOError(errno.ENOENT, "File not found", file_name)
         else:
-            cmd = "{0} pkey -in {1} -pubout 2>/dev/null".format(self.openssl_cmd, file_name)
-            pub = shellutil.run_get_output(cmd)[1]
+            cmd = "{0} pkey -in {1} -pubout".format(self.openssl_cmd, file_name)
+            pub = shellutil.run_command(cmd.split(" "))
             return pub
 
     def get_pubkey_from_crt(self, file_name):
         if not os.path.exists(file_name):
             raise IOError(errno.ENOENT, "File not found", file_name)
         else:
-            cmd = "{0} x509 -in {1} -pubkey -noout 2>/dev/null".format(self.openssl_cmd, file_name)
-            pub = shellutil.run_get_output(cmd)[1]
+            cmd = "{0} x509 -in {1} -pubkey -noout".format(self.openssl_cmd, file_name)
+            pub = shellutil.run_command(cmd.split(" "))
             return pub
 
     def get_thumbprint_from_crt(self, file_name):
         if not os.path.exists(file_name):
             raise IOError(errno.ENOENT, "File not found", file_name)
         else:
-            cmd = "{0} x509 -in {1} -fingerprint -noout 2>/dev/null".format(self.openssl_cmd, file_name)
-            thumbprint = shellutil.run_get_output(cmd)[1]
+            cmd = "{0} x509 -in {1} -fingerprint -noout".format(self.openssl_cmd, file_name)
+            thumbprint = shellutil.run_command(cmd.split(" "))
             thumbprint = thumbprint.rstrip().split('=')[1].replace(':', '').upper()
             return thumbprint
 
