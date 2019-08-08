@@ -113,7 +113,7 @@ class TestCpuCgroup(AgentTestCase):
 
     @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_processor_cores", return_value=1)
     @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil._get_proc_stat")
-    def test_collect(self, patch_get_proc_stat, *args):
+    def test_get_cpu_usage(self, patch_get_proc_stat, *args):
         patch_get_proc_stat.return_value = fileutil.read_file(os.path.join(data_dir, "cgroups", "dummy_proc_stat"))
         test_cpu_cg = CpuCgroup("test_extension", os.path.join(data_dir, "cgroups", "cpu_mount"))
 
@@ -121,11 +121,9 @@ class TestCpuCgroup(AgentTestCase):
         patch_get_proc_stat.return_value = fileutil.read_file(os.path.join(data_dir, "cgroups",
                                                                            "dummy_proc_stat_updated"))
 
-        collected_metric = test_cpu_cg.collect()[0]
+        cpu_usage = test_cpu_cg.get_cpu_usage()
 
-        self.assertEqual("cpu", collected_metric.controller)
-        self.assertEqual("% Processor Time", collected_metric.metric_name)
-        self.assertEqual(5.114, collected_metric.value)
+        self.assertEqual(5.114, cpu_usage)
 
     def test_get_current_cpu_total_exception_handling(self):
         test_cpu_cg = CpuCgroup("test_extension", "dummy_path")
@@ -141,34 +139,20 @@ class TestMemoryCgroup(AgentTestCase):
         test_mem_cg = MemoryCgroup("test_extension", os.path.join(data_dir, "cgroups", "memory_mount"))
         self.assertEqual("memory", test_mem_cg.controller)
 
-    def test_collect(self):
+    def test_get_metrics(self):
         test_mem_cg = MemoryCgroup("test_extension", os.path.join(data_dir, "cgroups", "memory_mount"))
-        metrics = test_mem_cg.collect()
 
-        current_mem_collected_metric = metrics[0]
+        memory_usage = test_mem_cg.get_memory_usage()
+        self.assertEqual(100000, memory_usage)
 
-        self.assertEqual("memory", current_mem_collected_metric.controller)
-        self.assertEqual("Total Memory Usage", current_mem_collected_metric.metric_name)
-        self.assertEqual(100000, current_mem_collected_metric.value)
+        max_memory_usage = test_mem_cg.get_max_memory_usage()
+        self.assertEqual(1000000, max_memory_usage)
 
-        max_mem_collected_metric = metrics[1]
-
-        self.assertEqual("memory", max_mem_collected_metric.controller)
-        self.assertEqual("Max Memory Usage", max_mem_collected_metric.metric_name)
-        self.assertEqual(1000000, max_mem_collected_metric.value)
-
-    def test_collect_when_files_not_present(self):
+    def test_get_metrics_when_files_not_present(self):
         test_mem_cg = MemoryCgroup("test_extension", os.path.join(data_dir, "cgroups"))
-        metrics = test_mem_cg.collect()
 
-        current_mem_collected_metric = metrics[0]
+        memory_usage = test_mem_cg.get_memory_usage()
+        self.assertEqual(0, memory_usage)
 
-        self.assertEqual("memory", current_mem_collected_metric.controller)
-        self.assertEqual("Total Memory Usage", current_mem_collected_metric.metric_name)
-        self.assertEqual(0, current_mem_collected_metric.value)
-
-        max_mem_collected_metric = metrics[1]
-
-        self.assertEqual("memory", max_mem_collected_metric.controller)
-        self.assertEqual("Max Memory Usage", max_mem_collected_metric.metric_name)
-        self.assertEqual(0, max_mem_collected_metric.value)
+        max_memory_usage = test_mem_cg.get_max_memory_usage()
+        self.assertEqual(0, max_memory_usage)

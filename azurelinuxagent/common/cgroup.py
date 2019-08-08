@@ -95,9 +95,6 @@ class CGroup(object):
             raise CGroupsException("Exception while attempting to read {0}".format(parameter_filename), e)
         return result
 
-    def collect(self):
-        raise NotImplementedError()
-
     def is_active(self):
         try:
             tasks = self._get_parameters("tasks")
@@ -184,15 +181,14 @@ class CpuCgroup(CGroup):
 
         return round(float(cpu_delta * self._osutil.get_processor_cores() * 100) / float(system_delta), 3)
 
-    def collect(self):
+    def get_cpu_usage(self):
         """
-        Collect and return a list of all cpu metrics. If no metrics are collected, return an empty list.
+        Collects and return the cpu usage.
 
-        :rtype: [(str, str, float)]
+        :rtype: float
         """
         self._update_cpu_data()
-        usage = self._get_cpu_percent()
-        return [CollectedMetrics("cpu", "% Processor Time", usage)]
+        return self._get_cpu_percent()
 
 
 class MemoryCgroup(CGroup):
@@ -209,7 +205,7 @@ class MemoryCgroup(CGroup):
             self.name, self.path, self.controller
         )
 
-    def _get_memory_usage(self):
+    def get_memory_usage(self):
         """
         Collect memory.usage_in_bytes from the cgroup.
 
@@ -231,7 +227,7 @@ class MemoryCgroup(CGroup):
             usage = "0"
         return int(usage)
 
-    def _get_memory_max_usage(self):
+    def get_max_memory_usage(self):
         """
         Collect memory.usage_in_bytes from the cgroup.
 
@@ -250,21 +246,3 @@ class MemoryCgroup(CGroup):
         if not usage:
             usage = "0"
         return int(usage)
-
-    def collect(self):
-        """
-        Collect and return a list of all memory metrics
-
-        :rtype: [(str, str, float)]
-        """
-        usage = self._get_memory_usage()
-        max_usage = self._get_memory_max_usage()
-        return [CollectedMetrics("memory", "Total Memory Usage", usage),
-                CollectedMetrics("memory", "Max Memory Usage", max_usage)]
-
-
-class CollectedMetrics(object):
-    def __init__(self, controller, metric_name, value):
-        self.controller = controller
-        self.metric_name = metric_name
-        self.value = value
