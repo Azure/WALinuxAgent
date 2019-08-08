@@ -162,20 +162,23 @@ class RunCommandTestCase(AgentTestCase):
 
             ex = context_manager.exception
             self.assertEquals(subprocess.CalledProcessError, type(ex))
-            self.assertEquals((expected_returncode, ["ls", "nonexistent_file"]), ex.args)
+            self.assertEquals(expected_returncode, ex.returncode)
+            self.assertEquals(command, ex.cmd)
 
             self.assertEquals(mock_logger.error.call_count, 2)
 
-            logged_error_first = "Command: [{0}], return code: [{1}], " \
-                                 "stdout: [] stderr: [{2}]".format(command, expected_returncode,
-                                                                   "ls: cannot access 'nonexistent_file': "
-                                                                   "No such file or directory\n")
+            logged_error_first = u"Command: [{0}], return code: [{1}], " \
+                                 u"stdout: [] stderr: [{2}]".format(command, expected_returncode,
+                                                                    "ls: cannot access 'nonexistent_file': "
+                                                                    "No such file or directory\n")
             self.assertEquals(mock_logger.error.call_args_list[0][0][0], logged_error_first)
 
-            logged_error_second = "Command [{0}] raised unexpected exception: " \
-                                  "[Command '{0}' returned non-zero exit status {1}.]".format(command,
+            logged_error_second = u"Command [{0}] raised unexpected exception: " \
+                                  u"[Command '{0}' returned non-zero exit status {1}]".format(command,
                                                                                               expected_returncode)
-            self.assertEquals(mock_logger.error.call_args_list[1][0][0], logged_error_second)
+            # The exception message has a "." at the end of the string, depending on the Python version,
+            # not using equals.
+            self.assertIn(logged_error_second, mock_logger.error.call_args_list[1][0][0])
 
 
 if __name__ == '__main__':
