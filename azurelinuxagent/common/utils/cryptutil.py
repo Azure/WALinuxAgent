@@ -20,7 +20,6 @@
 import base64
 import errno
 import struct
-import sys
 import os.path
 import subprocess
 
@@ -29,7 +28,7 @@ from azurelinuxagent.common.exception import CryptError
 
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.shellutil as shellutil
-import azurelinuxagent.common.utils.textutil as textutil
+
 
 DECRYPT_SECRET_CMD = "{0} cms -decrypt -inform DER -inkey {1} -in /dev/stdin"
 
@@ -53,24 +52,24 @@ class CryptUtil(object):
         if not os.path.exists(file_name):
             raise IOError(errno.ENOENT, "File not found", file_name)
         else:
-            cmd = "{0} pkey -in {1} -pubout".format(self.openssl_cmd, file_name)
-            pub = shellutil.run_command(cmd.split(" "))
+            cmd = [self.openssl_cmd, "pkey", "-in", file_name, "-pubout"]
+            pub = shellutil.run_command(cmd)
             return pub
 
     def get_pubkey_from_crt(self, file_name):
         if not os.path.exists(file_name):
             raise IOError(errno.ENOENT, "File not found", file_name)
         else:
-            cmd = "{0} x509 -in {1} -pubkey -noout".format(self.openssl_cmd, file_name)
-            pub = shellutil.run_command(cmd.split(" "))
+            cmd = [self.openssl_cmd, "x509", "-in", file_name, "-pubkey", "-noout"]
+            pub = shellutil.run_command(cmd)
             return pub
 
     def get_thumbprint_from_crt(self, file_name):
         if not os.path.exists(file_name):
             raise IOError(errno.ENOENT, "File not found", file_name)
         else:
-            cmd = "{0} x509 -in {1} -fingerprint -noout".format(self.openssl_cmd, file_name)
-            thumbprint = shellutil.run_command(cmd.split(" "))
+            cmd = [self.openssl_cmd, "x509", "-in", file_name, "-fingerprint", "-noout"]
+            thumbprint = shellutil.run_command(cmd)
             thumbprint = thumbprint.rstrip().split('=')[1].replace(':', '').upper()
             return thumbprint
 

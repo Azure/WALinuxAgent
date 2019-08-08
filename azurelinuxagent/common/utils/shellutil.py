@@ -79,6 +79,9 @@ def run_get_output(cmd, chk_err=True, log_cmd=True, expected_errors=[]):
     Execute 'cmd'.  Returns return code and STDOUT, trapping expected
     exceptions.
     Reports exceptions to Error if chk_err parameter is True
+
+    For new callers, consider using run_command instead as it separates stdout from stderr,
+    returns only stdout on success, logs both outputs and return code on error and raises an exception.
     """
     if log_cmd:
         logger.verbose(u"Command: [{0}]", cmd)
@@ -116,26 +119,29 @@ def _encode_command_output(output):
 
 def run_command(command):
     """
-    Wrapper for subprocess.Popen.
-    Executes the given command and returns its stdout. Logs any errors executing the command and raises an exception.
+    Wrapper for subprocess.Popen. Executes the given command and returns its stdout.
+    The command parameter is a list of strings, e.g. ["ps" "aux"].
+    Logs any errors executing the command and raises an exception.
     """
+    retcode = 0
+
     try:
         process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False)
         stdout, stderr = process.communicate()
         retcode = process.returncode
-
-        if retcode:
-            logger.error(u"Command: [{0}], return code: [{1}], "
-                         u"stdout: [{2}] stderr: [{3}]".format(command,
-                                                               retcode,
-                                                               _encode_command_output(stdout),
-                                                               _encode_command_output(stderr)))
-            raise subprocess.CalledProcessError(retcode, command)
     except Exception as e:
         logger.error(u"Command [{0}] raised unexpected exception: [{1}]".format(command, ustr(e)))
         raise
 
-    return _encode_command_output(stdout)
+    if retcode != 0:
+        logger.error(u"Command: [{0}], return code: [{1}], "
+                     u"stdout: [{2}] stderr: [{3}]".format(command,
+                                                           retcode,
+                                                           _encode_command_output(stdout),
+                                                           _encode_command_output(stderr)))
+        raise Exception(u"Command [{0}] failed with return code [{1}]".format(command, retcode))
+    else:
+        return _encode_command_output(stdout)
 
 
 def quote(word_list):

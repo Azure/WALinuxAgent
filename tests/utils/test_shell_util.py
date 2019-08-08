@@ -17,12 +17,8 @@
 #
 
 from tests.tools import *
-import uuid
 import unittest
-import os
 import azurelinuxagent.common.utils.shellutil as shellutil
-import subprocess
-import test
 
 
 class ShellQuoteTestCase(AgentTestCase):
@@ -145,40 +141,40 @@ class RunGetOutputTestCase(AgentTestCase):
 
 class RunCommandTestCase(AgentTestCase):
     def test_run_command_it_should_run_without_errors(self):
-        command = "echo 42".split(" ")
+        command = ["echo", "42"]
 
         with patch("azurelinuxagent.common.utils.shellutil.logger", autospec=True) as mock_logger:
             ret = shellutil.run_command(command)
             self.assertEquals(ret, "42\n")
             self.assertEquals(mock_logger.error.call_count, 0)
 
-    def test_run_command_it_should_raise_an_exception_file_not_found(self):
-        command = "ls nonexistent_file".split(" ")
+    def test_run_command_it_should_log_and_raise_an_exception_from_command(self):
+        command = ["ls", "nonexistent_file"]
         expected_returncode = 2
 
-        with patch("azurelinuxagent.common.utils.shellutil.logger") as mock_logger:
-            with self.assertRaises(subprocess.CalledProcessError) as context_manager:
+        with patch("azurelinuxagent.common.utils.shellutil.logger", autospec=True) as mock_logger:
+            with self.assertRaises(Exception):
                 shellutil.run_command(command)
 
-            ex = context_manager.exception
-            self.assertEquals(subprocess.CalledProcessError, type(ex))
-            self.assertEquals(expected_returncode, ex.returncode)
-            self.assertEquals(command, ex.cmd)
+            self.assertEquals(mock_logger.error.call_count, 1)
 
-            self.assertEquals(mock_logger.error.call_count, 2)
+            logged_error_message = u"Command: [{0}], return code: [{1}]".format(command, expected_returncode)
+            self.assertIn(logged_error_message, mock_logger.error.call_args_list[0][0][0])
 
-            logged_error_first = u"Command: [{0}], return code: [{1}], " \
-                                 u"stdout: [] stderr: [{2}]".format(command, expected_returncode,
-                                                                    "ls: cannot access 'nonexistent_file': "
-                                                                    "No such file or directory\n")
-            self.assertEquals(mock_logger.error.call_args_list[0][0][0], logged_error_first)
+    def test_run_command_it_should_log_and_raise_an_exception_from_subprocess_popen(self):
+        command = ["ls", "nonexistent_file"]
 
-            logged_error_second = u"Command [{0}] raised unexpected exception: " \
-                                  u"[Command '{0}' returned non-zero exit status {1}]".format(command,
-                                                                                              expected_returncode)
-            # The exception message has a "." at the end of the string, depending on the Python version,
-            # not using equals.
-            self.assertIn(logged_error_second, mock_logger.error.call_args_list[1][0][0])
+        with patch("azurelinuxagent.common.utils.shellutil.logger", autospec=True) as mock_logger:
+            with patch("azurelinuxagent.common.utils.shellutil.subprocess.Popen",
+                       side_effect=TypeError("bufsize must be an integer")):
+                with self.assertRaises(Exception):
+                    shellutil.run_command(command)
+
+            self.assertEquals(mock_logger.error.call_count, 1)
+
+            logged_error_message = u"Command [{0}] raised unexpected exception: " \
+                                   u"[{1}]".format(command, "bufsize must be an integer")
+            self.assertIn(logged_error_message, mock_logger.error.call_args_list[0][0][0])
 
 
 if __name__ == '__main__':
