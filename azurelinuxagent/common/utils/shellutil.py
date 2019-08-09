@@ -120,7 +120,6 @@ def _encode_command_output(output):
 def run_command(command):
     """
     Wrapper for subprocess.Popen. Executes the given command and returns its stdout.
-    The command parameter is a list of strings, e.g. ["ps" "aux"].
     Logs any errors executing the command and raises an exception.
     """
     retcode = 0
@@ -130,7 +129,7 @@ def run_command(command):
         stdout, stderr = process.communicate()
         retcode = process.returncode
     except Exception as e:
-        logger.error(u"Command [{0}] raised unexpected exception: [{1}]".format(command, ustr(e)))
+        logger.error(u"Cannot execute [{0}]. Error: [{1}]".format(command, ustr(e)))
         raise
 
     if retcode != 0:
