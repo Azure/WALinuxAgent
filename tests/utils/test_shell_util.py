@@ -17,11 +17,8 @@
 #
 
 from tests.tools import *
-import uuid
 import unittest
-import os
 import azurelinuxagent.common.utils.shellutil as shellutil
-import test
 
 
 class ShellQuoteTestCase(AgentTestCase):
@@ -140,6 +137,46 @@ class RunGetOutputTestCase(AgentTestCase):
         self.assertEquals(mock_logger.info.call_count, 0)
         self.assertEquals(mock_logger.verbose.call_count, 0)
         self.assertEquals(mock_logger.warn.call_count, 0)
+
+
+class RunCommandTestCase(AgentTestCase):
+    def test_run_command_it_should_run_without_errors(self):
+        command = ["echo", "42"]
+
+        with patch("azurelinuxagent.common.utils.shellutil.logger", autospec=True) as mock_logger:
+            ret = shellutil.run_command(command)
+            self.assertEquals(ret, "42\n")
+            self.assertEquals(mock_logger.error.call_count, 0)
+
+    def test_run_command_it_should_log_and_raise_an_exception_from_command(self):
+        command = ["ls", "nonexistent_file"]
+        expected_returncode = 2
+
+        with patch("azurelinuxagent.common.utils.shellutil.logger", autospec=True) as mock_logger:
+            with self.assertRaises(Exception) as context_manager:
+                shellutil.run_command(command)
+
+            ex = context_manager.exception
+            exception_message = u"Command [{0}] failed with return code [{1}]".format(command, expected_returncode)
+            self.assertEquals(exception_message, ex.args[0])
+
+            self.assertEquals(mock_logger.error.call_count, 1)
+
+            logged_error_message = u"Command: [{0}], return code: [{1}]".format(command, expected_returncode)
+            self.assertIn(logged_error_message, mock_logger.error.call_args_list[0][0][0])
+
+    def test_run_command_it_should_log_and_raise_an_exception_from_invoking_command(self):
+        command = "nonexistent_command"
+
+        with patch("azurelinuxagent.common.utils.shellutil.logger", autospec=True) as mock_logger:
+            with self.assertRaises(Exception):
+                shellutil.run_command(command)
+
+            self.assertEquals(mock_logger.error.call_count, 1)
+
+            logged_error_message = u"Cannot execute [{0}]. Error: [{1}".format(command,
+                                                                               "[Errno 2] No such file or directory")
+            self.assertIn(logged_error_message, mock_logger.error.call_args_list[0][0][0])
 
 
 if __name__ == '__main__':
