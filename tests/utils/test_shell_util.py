@@ -158,7 +158,7 @@ class RunCommandTestCase(AgentTestCase):
 
             ex = context_manager.exception
             exception_message = u"Command [{0}] failed with return code [{1}]".format(command, expected_returncode)
-            self.assertEquals(exception_message, ex.message)
+            self.assertEquals(exception_message, ex.args[0])
 
             self.assertEquals(mock_logger.error.call_count, 1)
 
@@ -174,8 +174,8 @@ class RunCommandTestCase(AgentTestCase):
 
             self.assertEquals(mock_logger.error.call_count, 1)
 
-            logged_error_message = u"Cannot execute [{0}]. Error: [{1}]".format(command,
-                                                                                "[Errno 2] No such file or directory")
+            logged_error_message = u"Cannot execute [{0}]. Error: [{1}".format(command,
+                                                                               "[Errno 2] No such file or directory")
             self.assertIn(logged_error_message, mock_logger.error.call_args_list[0][0][0])
 
 
