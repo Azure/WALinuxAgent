@@ -170,10 +170,10 @@ class UpdateHandler(object):
             # assume updates are likely available and poll every second.
             # This reduces the start-up impact of finding / launching agent updates on
             # fresh VMs.
-            if latest_agent is None and conf.get_autoupdate_enabled():
-                poll_interval = 1
-            else:
-                poll_interval = CHILD_POLL_INTERVAL
+            # if latest_agent is None and conf.get_autoupdate_enabled():
+            poll_interval = 1
+            # else:
+            #     poll_interval = CHILD_POLL_INTERVAL
 
             ret = None
             start_time = time.time()
