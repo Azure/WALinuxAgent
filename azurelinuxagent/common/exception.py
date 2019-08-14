@@ -85,6 +85,16 @@ class ExtensionOperationError(ExtensionError):
         super(ExtensionOperationError, self).__init__(msg, inner, code)
 
 
+class OldExtensionUpdateError(ExtensionOperationError):
+    """
+    When the older extension version failed to execute a command during an update
+    """
+
+    def __init__(self, msg=None, inner=None, code=-1, ext_handler=None):
+        super(OldExtensionUpdateError, self).__init__(msg, inner, code)
+        self.ext_handler = ext_handler
+
+
 class ProvisionError(AgentError):
     """
     When provision failed
