@@ -41,7 +41,7 @@ from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.errorstate import ErrorState, ERROR_STATE_DELTA_INSTALL
 from azurelinuxagent.common.event import add_event, WALAEventOperation, elapsed_milliseconds, report_event
 from azurelinuxagent.common.exception import ExtensionError, ProtocolError, ProtocolNotFoundError, \
-    ExtensionDownloadError, ExtensionOperationError, ExtensionErrorCodes, OldExtensionUpdateError
+    ExtensionDownloadError, ExtensionOperationError, ExtensionErrorCodes
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol import get_protocol_util
 from azurelinuxagent.common.protocol.restapi import ExtHandlerStatus, \
@@ -436,10 +436,6 @@ class ExtHandlersHandler(object):
             else:
                 message = u"Unknown ext handler state:{0}".format(state)
                 raise ExtensionError(message)
-        except OldExtensionUpdateError as e:
-            # Extension handler in this case would be set in the Exception itself
-            # as the error might be in the old handler incase of update
-            self.handle_ext_handler_error(e.ext_handler, e, e.code)
         except ExtensionOperationError as e:
             self.handle_ext_handler_error(ext_handler_i, e, e.code)
         except ExtensionDownloadError as e:
@@ -452,7 +448,8 @@ class ExtHandlersHandler(object):
     def handle_ext_handler_error(self, ext_handler_i, e, code=-1):
         msg = ustr(e)
         ext_handler_i.set_handler_status(message=msg, code=code)
-        ext_handler_i.report_event(message=msg, is_success=False, log_event=True)
+        log_event = e.log_event if hasattr(e, "log_event") else True
+        ext_handler_i.report_event(message=msg, is_success=False, log_event=log_event)
 
     def handle_ext_handler_download_error(self, ext_handler_i, e, code=-1):
         msg = ustr(e)
@@ -480,40 +477,40 @@ class ExtHandlersHandler(object):
             if old_ext_handler_i is None:
                 ext_handler_i.install()
             elif ext_handler_i.version_ne(old_ext_handler_i):
-                self.update_extension_handler(old_ext_handler_i, ext_handler_i)
+                ExtHandlersHandler._update_extension_handler(old_ext_handler_i, ext_handler_i)
         else:
             ext_handler_i.update_settings()
 
         ext_handler_i.enable()
 
     @staticmethod
-    def update_extension_handler(old_ext_handler_i, ext_handler_i):
+    def _update_extension_handler(old_ext_handler_i, ext_handler_i):
 
-        def execute_old_handler_command(ext_handler, op):
+        def execute_old_handler_command(ext_handler_i, op):
             """
             Created a common function to execute all commands that need to be executed from the old handler
             so that it can have a common exception handling mechanism
-            :param ext_handler: The extension handler to run the operation on
+            :param ext_handler_i: The extension handler to run the operation on
             :param op: Which operation to run
             """
             try:
                 if op == WALAEventOperation.Disable:
-                    ext_handler.disable()
+                    ext_handler_i.disable()
                 elif op == WALAEventOperation.UnInstall:
-                    ext_handler.uninstall()
-            except ExtensionOperationError as e:
-                # Raising a new OldExtensionUpdateError to signify the error was in the older handler
-                raise OldExtensionUpdateError(e, code=e.code, ext_handler=ext_handler)
-                # self.handle_ext_handler_error(ext_handler, e, e.code)
+                    # Currently uninstall failures swallows the exception so we wont catch anything here
+                    ext_handler_i.uninstall()
+            except ExtensionError as e:
+                # Reporting the event with the old handler and marking log_event as false to avoid redundant reporting
+                ext_handler_i.report_event(message=ustr(e), is_success=False)
+                e.log_event = False
+                raise
 
-        # old_ext_handler_i.disable()
         execute_old_handler_command(old_ext_handler_i, WALAEventOperation.Disable)
         ext_handler_i.copy_status_files(old_ext_handler_i)
         if ext_handler_i.version_gt(old_ext_handler_i):
             ext_handler_i.update()
         else:
             old_ext_handler_i.update(version=ext_handler_i.ext_handler.properties.version)
-        # old_ext_handler_i.uninstall()
         execute_old_handler_command(old_ext_handler_i, WALAEventOperation.UnInstall)
         old_ext_handler_i.remove_ext_handler()
         ext_handler_i.update_with_install()
