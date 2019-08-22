@@ -27,7 +27,7 @@ from datetime import datetime
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.utils.textutil as textutil
 from azurelinuxagent.common.exception import ProtocolNotFoundError, \
-    ResourceGoneError, ExtensionDownloadError
+    ResourceGoneError, ExtensionDownloadError, HostPluginConfigError
 from azurelinuxagent.common.future import httpclient, bytebuffer
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.restapi import *
@@ -158,14 +158,18 @@ class WireProtocol(Protocol):
         logger.verbose("Get In-VM Artifacts Profile")
         return self.client.get_artifacts_profile()
 
+    def download_ext_handler_pkg_through_host(self, uri, destination):
+        host = self.client.get_host_plugin()
+        uri, headers = host.get_artifact_request(uri, host.manifest_uri)
+        success = self.client.stream(uri, destination, headers=headers, use_proxy=False)
+        return success
+
     def download_ext_handler_pkg(self, uri, destination, headers=None, use_proxy=True):
         success = self.client.stream(uri, destination, headers=headers, use_proxy=use_proxy)
 
         if not success:
             logger.verbose("Download did not succeed, falling back to host plugin")
-            host = self.client.get_host_plugin()
-            uri, headers = host.get_artifact_request(uri, host.manifest_uri)
-            success = self.client.stream(uri, destination, headers=headers, use_proxy=False)
+            success = self.client.call_function_with_goal_state_refresh_and_retry(lambda: self.download_ext_handler_pkg_through_host(uri, destination))
 
         return success
 
@@ -590,6 +594,12 @@ class WireClient(object):
 
         return http_req(*args, **kwargs)
 
+    def fetch_manifest_through_host(self, uri):
+        host = self.get_host_plugin()
+        uri, headers = host.get_artifact_request(uri)
+        response = self.fetch(uri, headers, use_proxy=False)
+        return response
+
     def fetch_manifest(self, version_uris):
         logger.verbose("Fetch manifest")
         version_uris_shuffled = version_uris
@@ -616,8 +626,7 @@ class WireClient(object):
                                    "switching to host plugin")
 
                 try:
-                    uri, headers = host.get_artifact_request(version.uri)
-                    response = self.fetch(uri, headers, use_proxy=False)
+                    response = self.call_function_with_goal_state_refresh_and_retry(lambda: self.fetch_manifest_through_host(version.uri))
 
                 # If the HostPlugin rejects the request,
                 # let the error continue, but set to use the HostPlugin
@@ -756,9 +765,20 @@ class WireClient(object):
         self.save_cache(local_file, xml_text)
         self.ext_conf = ExtensionsConfig(xml_text)
 
+    def save_or_update_goal_state_file(self, incarnation, xml_text):
+        # It should create a new file if the incarnation number is new.
+        # It should overwrite the existing file if the incarnation number is the same.
+        file_name = GOAL_STATE_FILE_NAME.format(incarnation)
+        goal_state_file = os.path.join(conf.get_lib_dir(), file_name)
+        self.save_cache(goal_state_file, xml_text)
+
+    def update_host_plugin(self, container_id, role_config_name):
+        if self.host_plugin is not None:
+            self.host_plugin.container_id = container_id
+            self.host_plugin.role_config_name = role_config_name
+
     def update_goal_state(self, forced=False, max_retry=3):
-        incarnation_file = os.path.join(conf.get_lib_dir(),
-                                        INCARNATION_FILE_NAME)
+        incarnation_file = os.path.join(conf.get_lib_dir(), INCARNATION_FILE_NAME)
         uri = GOAL_STATE_URI.format(self.endpoint)
 
         current_goal_state_from_configuration = None
@@ -771,29 +791,31 @@ class WireClient(object):
                     if not forced:
                         last_incarnation = None
                         if os.path.isfile(incarnation_file):
-                            last_incarnation = fileutil.read_file(
-                                                    incarnation_file)
+                            last_incarnation = fileutil.read_file(incarnation_file)
                         new_incarnation = current_goal_state_from_configuration.incarnation
-                        if last_incarnation is not None and \
-                                        last_incarnation == new_incarnation:
-                            # Goalstate is not updated.
+
+                        if last_incarnation is not None and last_incarnation == new_incarnation:
+                            # Incarnation number is not updated, but role config file and container ID
+                            # can change without the incarnation number changing. Ensure they are updated in
+                            # the goal state file on disk, as well as in the HostGA plugin instance.
+                            self.goal_state = current_goal_state_from_configuration
+                            self.save_or_update_goal_state_file(new_incarnation, xml_text)
+                            self.update_host_plugin(current_goal_state_from_configuration.container_id,
+                                                    current_goal_state_from_configuration.role_config_name)
+
                             return                
                 self.goal_state_flusher.flush(datetime.utcnow())
 
                 self.goal_state = current_goal_state_from_configuration
-                file_name = GOAL_STATE_FILE_NAME.format(current_goal_state_from_configuration.incarnation)
-                goal_state_file = os.path.join(conf.get_lib_dir(), file_name)
-                self.save_cache(goal_state_file, xml_text)
+                self.save_or_update_goal_state_file(current_goal_state_from_configuration.incarnation, xml_text)
                 self.update_hosting_env(current_goal_state_from_configuration)
                 self.update_shared_conf(current_goal_state_from_configuration)
                 self.update_certs(current_goal_state_from_configuration)
                 self.update_ext_conf(current_goal_state_from_configuration)
                 self.update_remote_access_conf(current_goal_state_from_configuration)
                 self.save_cache(incarnation_file, current_goal_state_from_configuration.incarnation)
-
-                if self.host_plugin is not None:
-                    self.host_plugin.container_id = current_goal_state_from_configuration.container_id
-                    self.host_plugin.role_config_name = current_goal_state_from_configuration.role_config_name
+                self.update_host_plugin(current_goal_state_from_configuration.container_id,
+                                        current_goal_state_from_configuration.role_config_name)
 
                 return
 
@@ -998,6 +1020,28 @@ class WireClient(object):
                      "advised by Fabric.").format(PROTOCOL_VERSION)
             raise ProtocolNotFoundError(error)
 
+    def call_function_with_goal_state_refresh_and_retry(self, func):
+        # Acts as a wrapper for functions that call HostGAPlugin where either the container id or
+        # role config filename are found in the request header, as they can become stale. The mitigation is to
+        # force a refresh of the goal state and immediately retry issuing the request.
+        try:
+            return func()
+        except HostPluginConfigError as e:
+            msg = "HostGAPlugin is misconfigured. ContainerId: {0}, role config file: {1}." \
+                  "Fetching new parameters and retrying the call. Error: {2}".format(self.host_plugin.container_id,
+                                                                                     self.host_plugin.role_config_name,
+                                                                                     ustr(e))
+            logger.warn(msg)
+
+            self.update_goal_state(forced=True)
+            msg = "HostGAPlugin reconfigured with new parameters. " \
+                  "ContainerId: {0}, role config file: {1}.".format(self.host_plugin.container_id,
+                                                                    self.host_plugin.role_config_name)
+            logger.info(msg)
+            return func()
+        except Exception:
+            raise
+
     def upload_status_blob(self):
         self.update_goal_state()
         ext_conf = self.get_ext_conf()
@@ -1030,9 +1074,9 @@ class WireClient(object):
         # wrong.  This is why we try HostPlugin then direct.
         try:
             host = self.get_host_plugin()
-            host.put_vm_status(self.status_blob,
-                               ext_conf.status_upload_blob,
-                               ext_conf.status_upload_blob_type)
+            self.call_function_with_goal_state_refresh_and_retry(lambda: host.put_vm_status(self.status_blob,
+                                                                                            ext_conf.status_upload_blob,
+                                                                                            ext_conf.status_upload_blob_type))
             return
         except ResourceGoneError:
             # do not attempt direct, force goal state update and wait to try again
@@ -1193,6 +1237,12 @@ class WireClient(object):
         return self.ext_conf and not \
                textutil.is_str_none_or_whitespace(self.ext_conf.artifacts_profile_blob)
 
+    def get_artifacts_profile_through_host(self, blob):
+        host = self.get_host_plugin()
+        uri, headers = host.get_artifact_request(blob)
+        profile = self.fetch(uri, headers, use_proxy=False)
+        return profile
+
     def get_artifacts_profile(self):
         artifacts_profile = None
         for update_goal_state in [False, True]:
@@ -1215,9 +1265,7 @@ class WireClient(object):
                             logger.verbose("Failed to download artifacts profile, "
                                            "switching to host plugin")
 
-                        host = self.get_host_plugin()
-                        uri, headers = host.get_artifact_request(blob)
-                        profile = self.fetch(uri, headers, use_proxy=False)
+                        profile = self.call_function_with_goal_state_refresh_and_retry(lambda: self.get_artifacts_profile_through_host(blob))
 
                     if not textutil.is_str_empty(profile):
                         logger.verbose("Artifacts profile downloaded")

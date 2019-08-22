@@ -148,6 +148,15 @@ class HttpError(AgentError):
         super(HttpError, self).__init__(msg, inner)
 
 
+class HostPluginConfigError(AgentError):
+    """
+    Http request failure
+    """
+
+    def __init__(self, msg=None, inner=None):
+        super(HostPluginConfigError, self).__init__(msg, inner)
+
+
 class EventError(AgentError):
     """
     Event reporting error

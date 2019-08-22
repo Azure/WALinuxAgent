@@ -233,7 +233,6 @@ class TestWireProtocol(AgentTestCase):
         self.assertEqual(0, rc)
         self.assertEqual('1.3.5\n', stdout)
 
-
     @patch("azurelinuxagent.common.protocol.wire.WireClient.update_goal_state")
     def test_upload_status_blob_default(self, *args):
         """
@@ -564,6 +563,106 @@ class TestWireProtocol(AgentTestCase):
         client.report_event(event_list)
 
         self.assertEqual(patch_send_event.call_count, 0)
+
+
+class TestWireClient(AgentTestCase):
+
+    def test_save_or_update_goal_state_it_should_save_new_goal_state_file(self):
+        # Assert the file didn't exist before
+        incarnation = 42
+        goal_state_file = os.path.join(conf.get_lib_dir(), "GoalState.{0}.xml".format(incarnation))
+        self.assertFalse(os.path.exists(goal_state_file))
+
+        xml_text = WireProtocolData(DATA_FILE).goal_state
+        client = WireClient(wireserver_url)
+        client.save_or_update_goal_state_file(incarnation, xml_text)
+
+        # Assert the file exists and its contents
+        self.assertTrue(os.path.exists(goal_state_file))
+        with open(goal_state_file, "r") as f:
+            contents = f.readlines()
+            self.assertEquals("".join(contents), xml_text)
+
+    def test_save_or_update_goal_state_it_should_update_existing_goal_state_file(self):
+        incarnation = 42
+        goal_state_file = os.path.join(conf.get_lib_dir(), "GoalState.{0}.xml".format(incarnation))
+        xml_text = WireProtocolData(DATA_FILE).goal_state
+
+        with open(goal_state_file, "w") as f:
+            f.write(xml_text)
+
+        # Assert the file exists and its contents
+        self.assertTrue(os.path.exists(goal_state_file))
+        with open(goal_state_file, "r") as f:
+            contents = f.readlines()
+            self.assertEquals("".join(contents), xml_text)
+
+        # Update the container id
+        new_goal_state = WireProtocolData(DATA_FILE).goal_state.replace("c6d5526c-5ac2-4200-b6e2-56f2b70c5ab2",
+                                                                        "z6d5526c-5ac2-4200-b6e2-56f2b70c5ab2")
+        client = WireClient(wireserver_url)
+        client.save_or_update_goal_state_file(incarnation, new_goal_state)
+
+        # Assert the file exists and its contents
+        self.assertTrue(os.path.exists(goal_state_file))
+        with open(goal_state_file, "r") as f:
+            contents = f.readlines()
+            self.assertEquals("".join(contents), new_goal_state)
+
+    def test_save_or_update_goal_state_it_should_update_goal_state_and_container_id_when_not_forced(self):
+        incarnation = "1" # Match the incarnation number from dummy goal state file
+        incarnation_file = os.path.join(conf.get_lib_dir(), INCARNATION_FILE_NAME)
+        with open(incarnation_file, "w") as f:
+            f.write(incarnation)
+
+        xml_text = WireProtocolData(DATA_FILE).goal_state
+        goal_state_file = os.path.join(conf.get_lib_dir(), "GoalState.{0}.xml".format(incarnation))
+
+        with open(goal_state_file, "w") as f:
+            f.write(xml_text)
+
+        client = WireClient(wireserver_url)
+        host = client.get_host_plugin()
+        old_container_id = host.container_id
+
+        # Update the container id
+        new_goal_state = WireProtocolData(DATA_FILE).goal_state.replace("c6d5526c-5ac2-4200-b6e2-56f2b70c5ab2",
+                                                                        "z6d5526c-5ac2-4200-b6e2-56f2b70c5ab2")
+        with patch("azurelinuxagent.common.protocol.wire.WireClient.fetch_config", return_value=new_goal_state):
+            client.update_goal_state(forced=False)
+
+        self.assertNotEqual(old_container_id, host.container_id)
+        self.assertEquals(host.container_id, "z6d5526c-5ac2-4200-b6e2-56f2b70c5ab2")
+
+    @patch("azurelinuxagent.common.protocol.wire.WireClient.update_hosting_env")
+    @patch("azurelinuxagent.common.protocol.wire.WireClient.update_shared_conf")
+    @patch("azurelinuxagent.common.protocol.wire.WireClient.update_certs")
+    @patch("azurelinuxagent.common.protocol.wire.WireClient.update_ext_conf")
+    @patch("azurelinuxagent.common.protocol.wire.WireClient.update_remote_access_conf")
+    def test_call_function_with_goal_state_refresh_and_retry_call(self, *args):
+        incarnation = "1"  # Match the incarnation number from dummy goal state file
+        incarnation_file = os.path.join(conf.get_lib_dir(), INCARNATION_FILE_NAME)
+        with open(incarnation_file, "w") as f:
+            f.write(incarnation)
+
+        xml_text = WireProtocolData(DATA_FILE).goal_state
+        client = WireClient(wireserver_url)
+        client.goal_state = GoalState(xml_text)
+        client.save_or_update_goal_state_file("1", xml_text)
+        client.get_host_plugin()
+
+        def dummy_func():
+            dummy_func.counter += 1
+            if dummy_func.counter == 1:
+                raise HostPluginConfigError("Dummy exception")
+        dummy_func.counter = 0
+
+        # Update the container id
+        new_goal_state = WireProtocolData(DATA_FILE).goal_state.replace("<Incarnation>1</Incarnation>",
+                                                                        "<Incarnation>2</Incarnation>")
+        with patch("azurelinuxagent.common.protocol.wire.WireClient.fetch_config", return_value=new_goal_state):
+            client.call_function_with_goal_state_refresh_and_retry(lambda: dummy_func())
+            self.assertEquals(client.goal_state.incarnation, "2")
 
 
 class MockResponse:

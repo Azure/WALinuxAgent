@@ -29,7 +29,7 @@ import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.textutil as textutil
 
-from azurelinuxagent.common.exception import HttpError, ResourceGoneError
+from azurelinuxagent.common.exception import HttpError, ResourceGoneError, HostPluginConfigError
 from azurelinuxagent.common.future import httpclient, urlparse, ustr
 from azurelinuxagent.common.version import PY_VERSION_MAJOR, AGENT_NAME, GOAL_STATE_AGENT_VERSION
 
@@ -96,6 +96,7 @@ NO_PROXY_ENV = "no_proxy"
 HTTP_USER_AGENT = "{0}/{1}".format(AGENT_NAME, GOAL_STATE_AGENT_VERSION)
 HTTP_USER_AGENT_HEALTH = "{0}+health".format(HTTP_USER_AGENT)
 INVALID_CONTAINER_CONFIGURATION = "InvalidContainerConfiguration"
+REQUEST_ROLE_CONFIG_FILE_NOT_FOUND = "RequestRoleConfigFileNotFound"
 
 DEFAULT_PROTOCOL_ENDPOINT = '168.63.129.16'
 HOST_PLUGIN_PORT = 32526
@@ -153,12 +154,13 @@ def _is_throttle_status(status):
     return status in THROTTLE_CODES
 
 
-def _is_invalid_container_configuration(response):
+def _is_invalid_container_or_role_configuration(response):
+    error_detail = ""
     result = False
     if response is not None and response.status == httpclient.BAD_REQUEST:
         error_detail = read_response_error(response)
-        result = INVALID_CONTAINER_CONFIGURATION in error_detail
-    return result
+        result = INVALID_CONTAINER_CONFIGURATION in error_detail or REQUEST_ROLE_CONFIG_FILE_NOT_FOUND in error_detail
+    return result, error_detail
 
 
 def _parse_url(url):
@@ -434,12 +436,11 @@ def http_request(method,
             if resp.status in RESOURCE_GONE_CODES:
                 raise ResourceGoneError()
 
-            # Map invalid container configuration errors to resource gone in
-            # order to force a goal state refresh, which in turn updates the
-            # container-id header passed to HostGAPlugin.
-            # See #1294.
-            if _is_invalid_container_configuration(resp):
-                raise ResourceGoneError()
+            # Raise HostPluginConfigError if the container id or configuration file are wrong. The caller
+            # will handle this exception, force a goal state refresh, retrieve the new values and retry the call.
+            ret, error = _is_invalid_container_or_role_configuration(resp)
+            if ret:
+                raise HostPluginConfigError(error)
 
             return resp
 
@@ -543,8 +544,10 @@ def request_failed(resp, ok_codes=OK_CODES):
 def request_succeeded(resp, ok_codes=OK_CODES):
     return resp is not None and resp.status in ok_codes
 
+
 def request_not_modified(resp):
     return resp is not None and resp.status in NOT_MODIFIED_CODES
+
 
 def request_failed_at_hostplugin(resp, upstream_failure_codes=HOSTPLUGIN_UPSTREAM_FAILURE_CODES):
     """
