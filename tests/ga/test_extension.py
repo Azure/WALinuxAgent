@@ -1410,7 +1410,7 @@ class TestExtension(ExtensionTestCase):
                              "The first call to report event should be from the new version of the ext-handler "
                              "to report download succeeded")
 
-            self.assertEqual(new_version_args[1], "Download succeeded", "The message should be Download Succedded")
+            self.assertEqual(new_version_kwargs['message'], "Download succeeded", "The message should be Download Succedded")
 
             self.assertEqual(old_version_args[0].ext_handler.properties.version, old_version,
                              "The last report event call should be from the old version ext-handler "
