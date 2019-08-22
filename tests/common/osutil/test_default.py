@@ -19,6 +19,7 @@ import socket
 import glob
 import mock
 import traceback
+import re
 
 import azurelinuxagent.common.osutil.default as osutil
 import azurelinuxagent.common.utils.shellutil as shellutil
@@ -910,6 +911,31 @@ Chain OUTPUT (policy ACCEPT 104 packets, 43628 bytes)
         name = list(another_state.keys())[0]
         another_state[name].add_ipv4("xyzzy")
         self.assertNotEqual(state, another_state)
+
+    def test_get_dhcp_pid_should_return_a_pid(self):
+        osutil_get_dhcp_pid_should_return_a_pid(self, osutil.DefaultOSUtil())
+
+
+def osutil_get_dhcp_pid_should_return_a_pid(test_instance, osutil_instance):
+    """
+    This is a very basic test for osutil.get_dhcp_pid. It is simply meant to exercise the implementation of that method
+    in case there are any basic errors, such as a typos, etc. The test does not verify that the implementation returns
+    the PID for the actual dhcp client; in fact, it uses a mock that returns the PID of an arbitrary process (the pidof
+    process itself).
+    The test is defined as a global function to make it easily accessible from the test suites for each distro.
+    """
+    original_run_command = shellutil.run_command
+
+    def mock_run_command(cmd, *args, **kwargs):
+        if isinstance(cmd, list) and len(cmd) > 0 and cmd[0].endswith('pidof'):
+            return original_run_command(["pidof", "pidof"], *args, **kwargs)
+        else:
+            return original_run_command(cmd, *args, **kwargs)
+
+    with patch("azurelinuxagent.common.utils.shellutil.run_command", side_effect=mock_run_command):
+        pid = osutil_instance.get_dhcp_pid()
+
+    test_instance.assertTrue(re.match(r"\d+", pid), "{0} is not a PID".format(pid))
 
 
 if __name__ == '__main__':

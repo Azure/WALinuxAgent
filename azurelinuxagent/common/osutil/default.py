@@ -1107,8 +1107,7 @@ class DefaultOSUtil(object):
         return shellutil.run(cmd, chk_err=False)
 
     def get_dhcp_pid(self):
-        ret = shellutil.run_get_output("pidof dhclient", chk_err=False)
-        return ret[1] if ret[0] == 0 else None
+        return  shellutil.run_command(["pidof", "dhclient"]).strip()
 
     def set_hostname(self, hostname):
         fileutil.write_file('/etc/hostname', hostname)

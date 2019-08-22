@@ -22,9 +22,6 @@ import os
 import socket
 import time
 import threading
-
-import operator
-
 import datetime
 
 import azurelinuxagent.common.conf as conf
@@ -32,10 +29,10 @@ import azurelinuxagent.common.logger as logger
 
 from azurelinuxagent.common.dhcp import get_dhcp_handler
 from azurelinuxagent.common.event import add_periodic, WALAEventOperation
+from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
+from azurelinuxagent.common.utils.shellutil import CommandError
 from azurelinuxagent.common.protocol import get_protocol_util
-from azurelinuxagent.common.protocol.wire import INCARNATION_FILE_NAME
-from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.archive import StateArchiver
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 
@@ -68,7 +65,7 @@ class EnvHandler(object):
         self.protocol_util = get_protocol_util()
         self.stopped = True
         self.hostname = None
-        self.dhcp_id = None
+        self.dhcp_id_list = None
         self.server_thread = None
         self.dhcp_warning_enabled = True
         self.last_archive = None
@@ -83,7 +80,7 @@ class EnvHandler(object):
         logger.info("Start env monitor service.")
         self.dhcp_handler.conf_routes()
         self.hostname = self.osutil.get_hostname_record()
-        self.dhcp_id = self.osutil.get_dhcp_pid()
+        self.dhcp_id_list = get_dhcp_client_pid()
         self.start()
 
     def is_alive(self):
@@ -107,7 +104,6 @@ class EnvHandler(object):
             self.osutil.remove_rules_files()
 
             if conf.enable_firewall():
-
                 # If the rules ever change we must reset all rules and start over again.
                 #
                 # There was a rule change at 2.2.26, which started dropping non-root traffic
@@ -117,9 +113,8 @@ class EnvHandler(object):
                     self.osutil.remove_firewall(dst_ip=protocol.endpoint, uid=os.getuid())
                     reset_firewall_fules = True
 
-                success = self.osutil.enable_firewall(
-                                dst_ip=protocol.endpoint,
-                                uid=os.getuid())
+                success = self.osutil.enable_firewall(dst_ip=protocol.endpoint, uid=os.getuid())
+
                 add_periodic(
                     logger.EVERY_HOUR,
                     AGENT_NAME,
@@ -151,25 +146,33 @@ class EnvHandler(object):
             self.osutil.publish_hostname(curr_hostname)
             self.hostname = curr_hostname
 
-    def handle_dhclient_restart(self):
-        if self.dhcp_id is None:
+    def get_dhcp_client_pid(self):
+        pid = None
+        try:
+            # get_dhcp_pid may return multiple PIDs; we split them and return an (alphabetically) sorted list
+            pid = sorted(self.osutil.get_dhcp_pid().split())
+        except CommandError as exception:
             if self.dhcp_warning_enabled:
-                logger.warn("Dhcp client is not running. ")
-            self.dhcp_id = self.osutil.get_dhcp_pid()
-            # disable subsequent error logging
-            self.dhcp_warning_enabled = self.dhcp_id is not None
+                logger.warn("Dhcp client is not running.")
+        except Exception as exception:
+            if self.dhcp_warning_enabled:
+                logger.error("Failed to get the PID of the DHCP client: {0}", ustr(exception))
+        self.dhcp_warning_enabled = pid is not None
+        return pid
+
+    def handle_dhclient_restart(self):
+        if self.dhcp_id_list is None:
+            self.dhcp_id_list = self.get_dhcp_client_pid()
             return
 
-        # the dhcp process has not changed since the last check
-        if self.osutil.check_pid_alive(self.dhcp_id.strip()):
+        if all(self.osutil.check_pid_alive(pid) for pid in self.dhcp_id_list):
             return
 
-        new_pid = self.osutil.get_dhcp_pid()
-        if new_pid is not None and new_pid != self.dhcp_id:
-            logger.info("EnvMonitor: Detected dhcp client restart. "
-                        "Restoring routing table.")
+        new_pid = self.get_dhcp_client_pid()
+        if new_pid is not None and new_pid != self.dhcp_id_list:
+            logger.info("EnvMonitor: Detected dhcp client restart. Restoring routing table.")
             self.dhcp_handler.conf_routes()
-            self.dhcp_id = new_pid
+            self.dhcp_id_list = new_pid
 
     def archive_history(self):
         """
