@@ -1403,18 +1403,12 @@ class TestExtension(ExtensionTestCase):
             exthandlers_handler.run()  # Download the new update the first time, and then we patch the download method.
             self.assertEqual(1, patch_get_disable_command.call_count)
 
-            new_version_args, new_version_kwargs = patch_report_event.call_args
-            self.assertFalse(new_version_kwargs['log_event'],
-                             "The final call to report_events should not log event")
-            self.assertEqual(new_version_args[0].ext_handler.properties.version, new_version,
-                             "The final report event call should be from the new version ext-handler "
-                             "as we want to report failure for the new version in the status blob")
-
-            old_version_args, old_version_kwargs = patch_report_event.call_args_list[1]
+            old_version_args, old_version_kwargs = patch_report_event.call_args
             self.assertEqual(old_version_args[0].ext_handler.properties.version, old_version,
-                             "The previous report event call should be from the old version ext-handler "
+                             "The last report event call should be from the old version ext-handler "
                              "to report the event from the previous version")
 
+        # This is ensuring that the error is being reported from the new version
         self._assert_handler_status(protocol.report_vm_status, "NotReady", expected_ext_count=0, version=new_version)
 
     @patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_disable_command')
