@@ -246,8 +246,10 @@ class ExtHandlersHandler(object):
             logger.verbose(msg)
             # Log status report success on new config
             self.log_report = True
-            self.handle_ext_handlers(etag)
-            self.last_etag = etag
+
+            if self.extension_processing_allowed():
+                self.handle_ext_handlers(etag)
+                self.last_etag = etag
 
             self.report_ext_handlers_status()
             self.cleanup_outdated_handlers()
@@ -320,15 +322,10 @@ class ExtHandlersHandler(object):
                 except OSError as e:
                     logger.warn("Failed to remove extension package {0}: {1}".format(pkg, e.strerror))
 
-    def handle_ext_handlers(self, etag=None):
+    def extension_processing_allowed(self):
         if not conf.get_extensions_enabled():
             logger.verbose("Extension handling is disabled")
-            return
-
-        if self.ext_handlers.extHandlers is None or \
-                len(self.ext_handlers.extHandlers) == 0:
-            logger.verbose("No extension handler config found")
-            return
+            return False
 
         if conf.get_enable_overprovisioning():
             if not self.protocol.supports_overprovisioning():
@@ -337,7 +334,15 @@ class ExtHandlersHandler(object):
                 artifacts_profile = self.protocol.get_artifacts_profile()
                 if artifacts_profile and artifacts_profile.is_on_hold():
                     logger.info("Extension handling is on hold")
-                    return
+                    return False
+
+        return True
+
+    def handle_ext_handlers(self, etag=None):
+        if self.ext_handlers.extHandlers is None or \
+                len(self.ext_handlers.extHandlers) == 0:
+            logger.verbose("No extension handler config found")
+            return
 
         wait_until = datetime.datetime.utcnow() + datetime.timedelta(minutes=DEFAULT_EXT_TIMEOUT_MINUTES)
         max_dep_level = max([handler.sort_key() for handler in self.ext_handlers.extHandlers])

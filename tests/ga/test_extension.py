@@ -717,6 +717,39 @@ class TestExtension(ExtensionTestCase):
         mock_fileutil.write_file.return_value = IOError("Mock IO Error")
         exthandlers_handler.run()
 
+    def test_extension_processing_allowed(self, *args):
+        exthandlers_handler = get_exthandlers_handler()
+        exthandlers_handler.protocol = Mock()
+
+        # disable extension handling in configuration
+        with patch.object(conf, 'get_extensions_enabled',  return_value=False):
+            self.assertFalse(exthandlers_handler.extension_processing_allowed())
+
+        # enable extension handling in configuration
+        with patch.object(conf, "get_extensions_enabled", return_value=True):
+
+            # disable overprovisioning in configuration
+            with patch.object(conf, 'get_enable_overprovisioning', return_value=False):
+                self.assertTrue(exthandlers_handler.extension_processing_allowed())
+
+            # enable overprovisioning in configuration
+            with patch.object(conf, "get_enable_overprovisioning", return_value=True):
+
+                # disable protocol support for over-provisioning
+                with patch.object(exthandlers_handler.protocol, 'supports_overprovisioning', return_value=False):
+                    self.assertTrue(exthandlers_handler.extension_processing_allowed())
+
+                # enable protocol support for over-provisioning
+                with patch.object(exthandlers_handler.protocol, "supports_overprovisioning", return_value=True):
+
+                    with patch.object(exthandlers_handler.protocol.get_artifacts_profile(), "is_on_hold",
+                                      side_effect=[True, False]):
+                        # Enable on_hold property in artifact_blob
+                        self.assertFalse(exthandlers_handler.extension_processing_allowed())
+
+                        # Disable on_hold property in artifact_blob
+                        self.assertTrue(exthandlers_handler.extension_processing_allowed())
+
     def test_handle_ext_handlers_on_hold_true(self, *args):
         test_data = WireProtocolData(DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
@@ -725,16 +758,16 @@ class TestExtension(ExtensionTestCase):
         exthandlers_handler.protocol = protocol
 
         # Disable extension handling blocking
-        conf.get_enable_overprovisioning = Mock(return_value=False)
-        with patch.object(ExtHandlersHandler, 'handle_ext_handler') as patch_handle_ext_handler:
-            exthandlers_handler.handle_ext_handlers()
-            self.assertEqual(1, patch_handle_ext_handler.call_count)
+        exthandlers_handler.extension_processing_allowed = Mock(return_value=False)
+        with patch.object(ExtHandlersHandler, 'handle_ext_handlers') as patch_handle_ext_handlers:
+            exthandlers_handler.run()
+            self.assertEqual(0, patch_handle_ext_handlers.call_count)
 
         # enable extension handling blocking
-        conf.get_enable_overprovisioning = Mock(return_value=True)
-        with patch.object(ExtHandlersHandler, 'handle_ext_handler') as patch_handle_ext_handler:
-            exthandlers_handler.handle_ext_handlers()
-            self.assertEqual(0, patch_handle_ext_handler.call_count)
+        exthandlers_handler.extension_processing_allowed = Mock(return_value=True)
+        with patch.object(ExtHandlersHandler, 'handle_ext_handlers') as patch_handle_ext_handlers:
+            exthandlers_handler.run()
+            self.assertEqual(1, patch_handle_ext_handlers.call_count)
 
     def test_handle_ext_handlers_on_hold_false(self, *args):
         test_data = WireProtocolData(DATA_FILE)
@@ -759,6 +792,25 @@ class TestExtension(ExtensionTestCase):
         with patch.object(ExtHandlersHandler, 'handle_ext_handler') as patch_handle_ext_handler:
             exthandlers_handler.handle_ext_handlers()
             self.assertEqual(1, patch_handle_ext_handler.call_count)
+
+    def test_last_etag_on_extension_processing(self, *args):
+        test_data = WireProtocolData(DATA_FILE)
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+        exthandlers_handler.ext_handlers, etag = protocol.get_ext_handlers()
+        exthandlers_handler.protocol = protocol
+
+        # Disable extension handling blocking in the first run and enable in the 2nd run
+        with patch.object(exthandlers_handler, 'extension_processing_allowed', side_effect=[False, True]):
+            exthandlers_handler.run()
+            self.assertIsNone(exthandlers_handler.last_etag,
+                              "The last etag should be None initially as extension_processing is False")
+            self.assertNotEqual(etag, exthandlers_handler.last_etag,
+                                "Last etag and etag should not be same if extension processing is disabled")
+            exthandlers_handler.run()
+            self.assertIsNotNone(exthandlers_handler.last_etag,
+                                 "Last etag should not be none if extension processing is allowed")
+            self.assertEqual(etag, exthandlers_handler.last_etag,
+                             "Last etag and etag should be same if extension processing is enabled")
 
     def _assert_ext_status(self, report_ext_status, expected_status,
                            expected_seq_no):
