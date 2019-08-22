@@ -1404,11 +1404,19 @@ class TestExtension(ExtensionTestCase):
             self.assertEqual(1, patch_get_disable_command.call_count)
 
             old_version_args, old_version_kwargs = patch_report_event.call_args
+            new_version_args, new_version_kwargs = patch_report_event.call_args_list[0]
+
+            self.assertEqual(new_version_args[0].ext_handler.properties.version, new_version,
+                             "The first call to report event should be from the new version of the ext-handler "
+                             "to report download succeeded")
+
+            self.assertEqual(new_version_args[1], "Download succeeded", "The message should be Download Succedded")
+
             self.assertEqual(old_version_args[0].ext_handler.properties.version, old_version,
                              "The last report event call should be from the old version ext-handler "
                              "to report the event from the previous version")
 
-        # This is ensuring that the error is being reported from the new version
+        # This is ensuring that the error status is being written to the new version
         self._assert_handler_status(protocol.report_vm_status, "NotReady", expected_ext_count=0, version=new_version)
 
     @patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_disable_command')
