@@ -65,9 +65,6 @@ class ExtensionError(AgentError):
     def __init__(self, msg=None, inner=None, code=-1):
         super(ExtensionError, self).__init__(msg, inner)
         self.code = code
-        # Setting log_event to always log by default
-        self.log_event = True
-
 
 class ExtensionDownloadError(ExtensionError):
     """
@@ -76,6 +73,15 @@ class ExtensionDownloadError(ExtensionError):
 
     def __init__(self, msg=None, inner=None, code=-1):
         super(ExtensionDownloadError, self).__init__(msg, inner, code)
+
+
+class ExtensionUpdateError(ExtensionError):
+    """
+    When failed to update an extension
+    """
+
+    def __init__(self, msg=None, inner=None, code=-1):
+        super(ExtensionUpdateError, self).__init__(msg, inner, code)
 
 
 class ExtensionOperationError(ExtensionError):
