@@ -20,6 +20,7 @@
 import base64
 import errno
 import struct
+import sys
 import os.path
 import subprocess
 
@@ -28,7 +29,7 @@ from azurelinuxagent.common.exception import CryptError
 
 import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.shellutil as shellutil
-
+import azurelinuxagent.common.utils.textutil as textutil
 
 DECRYPT_SECRET_CMD = "{0} cms -decrypt -inform DER -inkey {1} -in /dev/stdin"
 
@@ -46,30 +47,34 @@ class CryptUtil(object):
                "-out {2}").format(self.openssl_cmd, prv_file, crt_file)
         rc = shellutil.run(cmd)
         if rc != 0:
-            logger.error("Failed to create {0} and {1} certificates".format(prv_file, crt_file))
+            logger.error("Failed to create {0} and {1} certificates".format(
+                prv_file, crt_file))
 
     def get_pubkey_from_prv(self, file_name):
         if not os.path.exists(file_name):
             raise IOError(errno.ENOENT, "File not found", file_name)
         else:
-            cmd = [self.openssl_cmd, "pkey", "-in", file_name, "-pubout"]
-            pub = shellutil.run_command(cmd)
+            cmd = "{0} pkey -in {1} -pubout 2>/dev/null".format(self.openssl_cmd,
+                                                                file_name)
+            pub = shellutil.run_get_output(cmd)[1]
             return pub
 
     def get_pubkey_from_crt(self, file_name):
         if not os.path.exists(file_name):
             raise IOError(errno.ENOENT, "File not found", file_name)
         else:
-            cmd = [self.openssl_cmd, "x509", "-in", file_name, "-pubkey", "-noout"]
-            pub = shellutil.run_command(cmd)
+            cmd = "{0} x509 -in {1} -pubkey -noout".format(self.openssl_cmd,
+                                                           file_name)
+            pub = shellutil.run_get_output(cmd)[1]
             return pub
 
     def get_thumbprint_from_crt(self, file_name):
         if not os.path.exists(file_name):
             raise IOError(errno.ENOENT, "File not found", file_name)
         else:
-            cmd = [self.openssl_cmd, "x509", "-in", file_name, "-fingerprint", "-noout"]
-            thumbprint = shellutil.run_command(cmd)
+            cmd = "{0} x509 -in {1} -fingerprint -noout".format(self.openssl_cmd,
+                                                                file_name)
+            thumbprint = shellutil.run_get_output(cmd)[1]
             thumbprint = thumbprint.rstrip().split('=')[1].replace(':', '').upper()
             return thumbprint
 

@@ -79,9 +79,6 @@ def run_get_output(cmd, chk_err=True, log_cmd=True, expected_errors=[]):
     Execute 'cmd'.  Returns return code and STDOUT, trapping expected
     exceptions.
     Reports exceptions to Error if chk_err parameter is True
-
-    For new callers, consider using run_command instead as it separates stdout from stderr,
-    returns only stdout on success, logs both outputs and return code on error and raises an exception.
     """
     if log_cmd:
         logger.verbose(u"Command: [{0}]", cmd)
@@ -111,36 +108,6 @@ def run_get_output(cmd, chk_err=True, log_cmd=True, expected_errors=[]):
                          .format(cmd, ustr(e)))
         return -1, ustr(e)
     return 0, output
-
-
-def _encode_command_output(output):
-    return ustr(output, encoding='utf-8', errors="backslashreplace")
-
-
-def run_command(command):
-    """
-    Wrapper for subprocess.Popen. Executes the given command and returns its stdout.
-    Logs any errors executing the command and raises an exception.
-    """
-    retcode = 0
-
-    try:
-        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False)
-        stdout, stderr = process.communicate()
-        retcode = process.returncode
-    except Exception as e:
-        logger.error(u"Cannot execute [{0}]. Error: [{1}]".format(command, ustr(e)))
-        raise
-
-    if retcode != 0:
-        logger.error(u"Command: [{0}], return code: [{1}], "
-                     u"stdout: [{2}] stderr: [{3}]".format(command,
-                                                           retcode,
-                                                           _encode_command_output(stdout),
-                                                           _encode_command_output(stderr)))
-        raise Exception(u"Command [{0}] failed with return code [{1}]".format(command, retcode))
-    else:
-        return _encode_command_output(stdout)
 
 
 def quote(word_list):
