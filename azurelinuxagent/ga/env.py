@@ -149,7 +149,9 @@ class EnvHandler(object):
     def get_dhcp_client_pid(self):
         pid = None
         try:
-            # get_dhcp_pid may return multiple PIDs; we split them and return an (alphabetically) sorted list
+            # get_dhcp_pid may return multiple PIDs; we split them and return a sorted list.
+            # (we sort the list because handle_dhclient_restart needs to compare the previous value with the new
+            # value and the comparison should not be affected by the order of the items in the list)
             pid = sorted(self.osutil.get_dhcp_pid().split())
         except CommandError as exception:
             if self.dhcp_warning_enabled:

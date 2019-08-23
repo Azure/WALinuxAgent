@@ -183,7 +183,7 @@ class RunCommandTestCase(AgentTestCase):
             self.assertEquals(mock_log_error.call_count, 1)
 
             args, kwargs = mock_log_error.call_args
-            self.assertIn(command, args, msg="The command was not logged")
+            self.assertIn("ls -d /etc nonexistent_file", args, msg="The command was not logged")
             self.assertIn(2, args, msg="The command's return code was not logged")
             self.assertIn("/etc\n", args, msg="The command's stdout was not logged")
             self.assertTrue(any("No such file or directory" in str(a) for a in args), msg="The command's stderr was not logged")

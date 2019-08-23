@@ -153,9 +153,10 @@ def run_command(command, log_error=False):
         encoded_stdout = _encode_command_output(stdout)
         encoded_stderr = _encode_command_output(stderr)
         if log_error:
+            formatted_command = " ".join(command) if isinstance(command, list) else command
             logger.error(
                 "Command: [{0}], return code: [{1}], stdout: [{2}] stderr: [{3}]",
-                command,
+                formatted_command,
                 returncode,
                 encoded_stdout,
                 encoded_stderr)

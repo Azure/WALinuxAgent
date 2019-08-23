@@ -19,7 +19,7 @@ from azurelinuxagent.ga.env import EnvHandler
 from tests.tools import *
 
 
-class TestMonitor(AgentTestCase):
+class TestEnvHandler(AgentTestCase):
     def setUp(self):
         AgentTestCase.setUp(self)
 
@@ -44,7 +44,7 @@ class TestMonitor(AgentTestCase):
             pids = EnvHandler().get_dhcp_client_pid()
             self.assertEquals(pids, ["11", "22", "4", "5", "6", "9"])
 
-    def test_get_dhcp_client_pid_should_return_none_nad_log_a_warning_when_dhcp_client_is_not_running(self):
+    def test_get_dhcp_client_pid_should_return_none_and_log_a_warning_when_dhcp_client_is_not_running(self):
         with patch("azurelinuxagent.common.osutil.default.shellutil.run_command", side_effect=lambda _: self.shellutil_run_command(["pidof", "non-existing-process"])):
             with patch('azurelinuxagent.common.logger.Logger.warn') as mock_warn:
                 pids = EnvHandler().get_dhcp_client_pid()
@@ -56,7 +56,7 @@ class TestMonitor(AgentTestCase):
         message = args[0]
         self.assertEquals("Dhcp client is not running.", message)
 
-    def test_get_dhcp_client_pid_should_return_none_nad_log_an_error_when_an_invalid_command_is_used(self):
+    def test_get_dhcp_client_pid_should_return_none_and_log_an_error_when_an_invalid_command_is_used(self):
         with patch("azurelinuxagent.common.osutil.default.shellutil.run_command", side_effect=lambda _: self.shellutil_run_command(["non-existing-command"])):
             with patch('azurelinuxagent.common.logger.Logger.error') as mock_error:
                 pids = EnvHandler().get_dhcp_client_pid()
