@@ -69,7 +69,7 @@ class ExtensionError(AgentError):
 
 class ExtensionUpdateError(ExtensionError):
     """
-    When failed to download and setup an extension
+    When failed to update an extension
     """
 
     def __init__(self, msg=None, inner=None, code=-1):
