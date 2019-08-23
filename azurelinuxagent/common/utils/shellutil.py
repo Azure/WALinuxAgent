@@ -101,9 +101,9 @@ def run_get_output(cmd, chk_err=True, log_cmd=True, expected_errors=[]):
                   u"return code: [{1}], " \
                   u"result: [{2}]".format(cmd, e.returncode, output)
             if e.returncode in expected_errors:
-                logger.periodic_info(logger.EVERY_FIFTEEN_MINUTES, msg)
+                logger.info(msg)
             else:
-                logger.periodic_error(logger.EVERY_FIFTEEN_MINUTES, msg)
+                logger.error(msg)
         return e.returncode, output
     except Exception as e:
         if chk_err:
@@ -117,30 +117,54 @@ def _encode_command_output(output):
     return ustr(output, encoding='utf-8', errors="backslashreplace")
 
 
-def run_command(command):
+class CommandError(Exception):
     """
-    Wrapper for subprocess.Popen. Executes the given command and returns its stdout.
-    Logs any errors executing the command and raises an exception.
+    Exception raised by run_command when the command returns an error
     """
-    retcode = 0
+    @staticmethod
+    def _get_message(command, returncode):
+        command_name = command[0] if isinstance(command, list) and len(command) > 0 else command
+        return "'{0}' failed: {1}".format(command_name, returncode)
+
+    def __init__(self, command, returncode, stdout, stderr):
+        super(Exception, self).__init__(CommandError._get_message(command, returncode))
+        self.command = command
+        self.returncode = returncode
+        self.stdout = stdout
+        self.stderr = stderr
+
+
+def run_command(command, log_error=False):
+    """
+    Executes the given command and returns its stdout as a string.
+    If there are any errors executing the command it logs details about the failure and raises a RunCommandException;
+    if 'log_error' is True, it also logs details about the error.
+    """
+    def format_command(cmd):
+        return " ".join(cmd) if isinstance(cmd, list) else command
 
     try:
         process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False)
         stdout, stderr = process.communicate()
-        retcode = process.returncode
+        returncode = process.returncode
     except Exception as e:
-        logger.error(u"Cannot execute [{0}]. Error: [{1}]".format(command, ustr(e)))
+        if log_error:
+            logger.error(u"Command [{0}] raised unexpected exception: [{1}]", format_command(command), ustr(e))
         raise
 
-    if retcode != 0:
-        logger.error(u"Command: [{0}], return code: [{1}], "
-                     u"stdout: [{2}] stderr: [{3}]".format(command,
-                                                           retcode,
-                                                           _encode_command_output(stdout),
-                                                           _encode_command_output(stderr)))
-        raise Exception(u"Command [{0}] failed with return code [{1}]".format(command, retcode))
-    else:
-        return _encode_command_output(stdout)
+    if returncode != 0:
+        encoded_stdout = _encode_command_output(stdout)
+        encoded_stderr = _encode_command_output(stderr)
+        if log_error:
+            logger.error(
+                "Command: [{0}], return code: [{1}], stdout: [{2}] stderr: [{3}]",
+                format_command(command),
+                returncode,
+                encoded_stdout,
+                encoded_stderr)
+        raise CommandError(command=command, returncode=returncode, stdout=encoded_stdout, stderr=encoded_stderr)
+
+    return _encode_command_output(stdout)
 
 
 def quote(word_list):

@@ -53,7 +53,7 @@ class CryptUtil(object):
             raise IOError(errno.ENOENT, "File not found", file_name)
         else:
             cmd = [self.openssl_cmd, "pkey", "-in", file_name, "-pubout"]
-            pub = shellutil.run_command(cmd)
+            pub = shellutil.run_command(cmd, log_error=True)
             return pub
 
     def get_pubkey_from_crt(self, file_name):
@@ -61,7 +61,7 @@ class CryptUtil(object):
             raise IOError(errno.ENOENT, "File not found", file_name)
         else:
             cmd = [self.openssl_cmd, "x509", "-in", file_name, "-pubkey", "-noout"]
-            pub = shellutil.run_command(cmd)
+            pub = shellutil.run_command(cmd, log_error=True)
             return pub
 
     def get_thumbprint_from_crt(self, file_name):
