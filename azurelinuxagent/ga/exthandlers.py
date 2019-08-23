@@ -41,7 +41,7 @@ from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.errorstate import ErrorState, ERROR_STATE_DELTA_INSTALL
 from azurelinuxagent.common.event import add_event, WALAEventOperation, elapsed_milliseconds, report_event
 from azurelinuxagent.common.exception import ExtensionError, ProtocolError, ProtocolNotFoundError, \
-    ExtensionDownloadError, ExtensionOperationError, ExtensionErrorCodes
+    ExtensionDownloadError, ExtensionOperationError, ExtensionErrorCodes, ExtensionUpdateError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol import get_protocol_util
 from azurelinuxagent.common.protocol.restapi import ExtHandlerStatus, \
@@ -436,6 +436,9 @@ class ExtHandlersHandler(object):
             else:
                 message = u"Unknown ext handler state:{0}".format(state)
                 raise ExtensionError(message)
+        except ExtensionUpdateError as e:
+            # Only setting the handler status here as the error has already been reported from the old version
+            ext_handler_i.set_handler_status(message=ustr(e), code=e.code)
         except ExtensionOperationError as e:
             self.handle_ext_handler_error(ext_handler_i, e, e.code)
         except ExtensionDownloadError as e:
@@ -476,19 +479,44 @@ class ExtHandlersHandler(object):
             if old_ext_handler_i is None:
                 ext_handler_i.install()
             elif ext_handler_i.version_ne(old_ext_handler_i):
-                old_ext_handler_i.disable()
-                ext_handler_i.copy_status_files(old_ext_handler_i)
-                if ext_handler_i.version_gt(old_ext_handler_i):
-                    ext_handler_i.update()
-                else:
-                    old_ext_handler_i.update(version=ext_handler_i.ext_handler.properties.version)
-                old_ext_handler_i.uninstall()
-                old_ext_handler_i.remove_ext_handler()
-                ext_handler_i.update_with_install()
+                ExtHandlersHandler._update_extension_handler(old_ext_handler_i, ext_handler_i)
         else:
             ext_handler_i.update_settings()
 
         ext_handler_i.enable()
+
+    @staticmethod
+    def _update_extension_handler(old_ext_handler_i, ext_handler_i):
+
+        def execute_old_handler_command(ext_handler_i, op):
+            """
+            Created a common function to execute all commands that need to be executed from the old handler
+            so that it can have a common exception handling mechanism
+            :param ext_handler_i: The extension handler instance to run the operation on
+            :param op: Which operation to run
+            """
+            try:
+                if op == WALAEventOperation.Disable:
+                    ext_handler_i.disable()
+                elif op == WALAEventOperation.UnInstall:
+                    # Currently uninstall failures swallows the exception so we wont catch anything here
+                    ext_handler_i.uninstall()
+            except ExtensionError as e:
+                # Reporting the event with the old handler and raising a new ExtensionUpdateError to set the
+                # handler status on the new version
+                msg = ustr(e)
+                ext_handler_i.report_event(message=msg, is_success=False)
+                raise ExtensionUpdateError(msg)
+
+        execute_old_handler_command(old_ext_handler_i, WALAEventOperation.Disable)
+        ext_handler_i.copy_status_files(old_ext_handler_i)
+        if ext_handler_i.version_gt(old_ext_handler_i):
+            ext_handler_i.update()
+        else:
+            old_ext_handler_i.update(version=ext_handler_i.ext_handler.properties.version)
+        execute_old_handler_command(old_ext_handler_i, WALAEventOperation.UnInstall)
+        old_ext_handler_i.remove_ext_handler()
+        ext_handler_i.update_with_install()
 
     def handle_disable(self, ext_handler_i):
         self.log_process = True
