@@ -1499,6 +1499,10 @@ class TestExtension(ExtensionTestCase):
                              "The last report event call should be from the old version ext-handler "
                              "to report the event from the previous version")
 
+            self.assertFalse(old_version_kwargs['is_success'], "The last call to report event should be for a failure")
+
+            self.assertTrue(old_version_kwargs['message'].startswith('[ExtensionError]'), "No error reported")
+
             # This is ensuring that the error status is being written to the new version
         self._assert_handler_status(protocol.report_vm_status, "NotReady", expected_ext_count=0, version=new_version)
 
