@@ -140,23 +140,25 @@ def run_command(command, log_error=False):
     If there are any errors executing the command it logs details about the failure and raises a RunCommandException;
     if 'log_error' is True, it also logs details about the error.
     """
+    def format_command(cmd):
+        return " ".join(cmd) if isinstance(cmd, list) else command
+
     try:
         process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False)
         stdout, stderr = process.communicate()
         returncode = process.returncode
     except Exception as e:
         if log_error:
-            logger.error(u"Command [{0}] raised unexpected exception: [{1}]", command, ustr(e))
+            logger.error(u"Command [{0}] raised unexpected exception: [{1}]", format_command(command), ustr(e))
         raise
 
     if returncode != 0:
         encoded_stdout = _encode_command_output(stdout)
         encoded_stderr = _encode_command_output(stderr)
         if log_error:
-            formatted_command = " ".join(command) if isinstance(command, list) else command
             logger.error(
                 "Command: [{0}], return code: [{1}], stdout: [{2}] stderr: [{3}]",
-                formatted_command,
+                format_command(command),
                 returncode,
                 encoded_stdout,
                 encoded_stderr)
