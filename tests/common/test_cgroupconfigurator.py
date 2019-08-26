@@ -148,25 +148,32 @@ class CGroupConfiguratorTestCase(AgentTestCase):
         configurator = CGroupConfigurator.get_instance()
         configurator.disable()
 
-        with patch("azurelinuxagent.common.cgroupconfigurator.subprocess.Popen") as mock_popen:
-            configurator.start_extension_command(
-                extension_name="Microsoft.Compute.TestExtension-1.2.3",
-                command="date",
-                shell=False,
-                cwd=self.tmp_dir,
-                env={},
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE)
+        with patch("azurelinuxagent.common.cgroupapi.FileSystemCgroupsApi.start_extension_command") as mock_fs:
+            with patch("azurelinuxagent.common.cgroupapi.SystemdCgroupsApi.start_extension_command") as mock_systemd:
+                with patch("azurelinuxagent.common.cgroupconfigurator.start_subprocess_and_wait_for_completion") as mock_popen:
+                    configurator.start_extension_command(
+                        extension_name="Microsoft.Compute.TestExtension-1.2.3",
+                        command="date",
+                        timeout=300,
+                        shell=False,
+                        cwd=self.tmp_dir,
+                        env={},
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE)
 
-            self.assertEqual(mock_popen.call_count, 1)
+                    self.assertEqual(mock_popen.call_count, 1)
+                    self.assertEqual(mock_fs.call_count, 0)
+                    self.assertEqual(mock_systemd.call_count, 0)
 
     def test_start_extension_command_should_forward_to_cgroups_api_when_groups_are_enabled(self):
         configurator = CGroupConfigurator.get_instance()
 
-        with patch("azurelinuxagent.common.cgroupapi.FileSystemCgroupsApi.start_extension_command", return_value=[None, []]) as mock_start_extension_command:
+        with patch("azurelinuxagent.common.cgroupapi.FileSystemCgroupsApi.start_extension_command",
+                   return_value=[[], None]) as mock_start_extension_command:
             configurator.start_extension_command(
                 extension_name="Microsoft.Compute.TestExtension-1.2.3",
                 command="date",
+                timeout=300,
                 shell=False,
                 cwd=self.tmp_dir,
                 env={},
@@ -179,6 +186,7 @@ class CGroupConfiguratorTestCase(AgentTestCase):
         CGroupConfigurator.get_instance().start_extension_command(
             extension_name="Microsoft.Compute.TestExtension-1.2.3",
             command="date",
+            timeout=300,
             shell=False,
             cwd=self.tmp_dir,
             env={},
@@ -201,6 +209,7 @@ class CGroupConfiguratorTestCase(AgentTestCase):
                 configurator.start_extension_command(
                     extension_name="Microsoft.Compute.TestExtension-1.2.3",
                     command="date",
+                    timeout=300,
                     shell=False,
                     cwd=self.tmp_dir,
                     env={},

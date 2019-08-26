@@ -17,9 +17,56 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
+from azurelinuxagent.common.exception import ExtensionError, ExtensionErrorCodes
 from azurelinuxagent.common.future import ustr
+import os
+import signal
+import subprocess
+import time
 
 TELEMETRY_MESSAGE_MAX_LEN = 3200
+
+
+def wait_for_process_completion_or_timeout(process, timeout):
+    while timeout > 0 and process.poll() is None:
+        time.sleep(1)
+        timeout -= 1
+
+    return_code = None
+
+    if timeout == 0:
+        os.killpg(os.getpgid(process.pid), signal.SIGKILL)
+    else:
+        # process completed or forked; sleep 1 sec to give the child process (if any) a chance to start
+        time.sleep(1)
+        return_code = process.wait()
+
+    return timeout == 0, return_code
+
+
+def start_subprocess_and_wait_for_completion(command, timeout, shell, cwd, env, stdout, stderr, preexec_fn, error_code):
+    process = subprocess.Popen(
+        command,
+        shell=shell,
+        cwd=cwd,
+        env=env,
+        stdout=stdout,
+        stderr=stderr,
+        preexec_fn=preexec_fn)
+
+    # Wait for process completion or timeout
+    timed_out, return_code = wait_for_process_completion_or_timeout(process, timeout)
+    process_output = read_output(stdout, stderr)
+
+    if timed_out:
+        raise ExtensionError("Timeout({0}): {1}\n{2}".format(timeout, command, process_output),
+                             code=ExtensionErrorCodes.PluginHandlerScriptTimedout)
+
+    if return_code != 0:
+        raise ExtensionError("Non-zero exit code: {0}, {1}\n{2}".format(return_code, command, process_output),
+                             code=error_code)
+
+    return process_output
 
 
 def read_output(stdout, stderr):
