@@ -1460,6 +1460,52 @@ class TestExtension(ExtensionTestCase):
         # On the next iteration, update should not be retried
         self._assert_handler_status(protocol.report_vm_status, "NotReady", expected_ext_count=0, version="1.0.1")
 
+    @patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_disable_command')
+    def test__old_handler_reports_failure_on_disable_fail_on_update(self, patch_get_disable_command, *args):
+        test_data = WireProtocolData(DATA_FILE_EXT_SINGLE)
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+        old_version, new_version = "1.0.0", "1.0.1"
+
+        # Ensure initial install and enable is successful
+        exthandlers_handler.run()
+
+        self.assertEqual(0, patch_get_disable_command.call_count)
+
+        self._assert_handler_status(protocol.report_vm_status, "Ready", expected_ext_count=1, version=old_version)
+        self._assert_ext_status(protocol.report_ext_status, "success", 0)
+
+        # Next incarnation, update version
+        test_data.goal_state = test_data.goal_state.replace("<Incarnation>1<", "<Incarnation>2<")
+        test_data.ext_conf = test_data.ext_conf.replace('version="%s"' % old_version, 'version="%s"' % new_version)
+        test_data.manifest = test_data.manifest.replace(old_version, new_version)
+
+        with patch.object(ExtHandlerInstance, "report_event", autospec=True) as patch_report_event:
+            # Disable of the old extn fails
+            patch_get_disable_command.return_value = "exit 1"
+            exthandlers_handler.run()  # Download the new update the first time, and then we patch the download method.
+            self.assertEqual(1, patch_get_disable_command.call_count)
+
+            old_version_args, old_version_kwargs = patch_report_event.call_args
+            new_version_args, new_version_kwargs = patch_report_event.call_args_list[0]
+
+            self.assertEqual(new_version_args[0].ext_handler.properties.version, new_version,
+                             "The first call to report event should be from the new version of the ext-handler "
+                             "to report download succeeded")
+
+            self.assertEqual(new_version_kwargs['message'], "Download succeeded",
+                             "The message should be Download Succedded")
+
+            self.assertEqual(old_version_args[0].ext_handler.properties.version, old_version,
+                             "The last report event call should be from the old version ext-handler "
+                             "to report the event from the previous version")
+
+            self.assertFalse(old_version_kwargs['is_success'], "The last call to report event should be for a failure")
+
+            self.assertTrue(old_version_kwargs['message'].startswith('[ExtensionError]'), "No error reported")
+
+            # This is ensuring that the error status is being written to the new version
+        self._assert_handler_status(protocol.report_vm_status, "NotReady", expected_ext_count=0, version=new_version)
+
     @patch('azurelinuxagent.ga.exthandlers.ExtHandlersHandler.handle_ext_handler_error')
     @patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_update_command')
     def test_upgrade_failure_with_exception_handling(self, patch_get_update_command,
