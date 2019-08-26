@@ -80,7 +80,7 @@ class EnvHandler(object):
         logger.info("Start env monitor service.")
         self.dhcp_handler.conf_routes()
         self.hostname = self.osutil.get_hostname_record()
-        self.dhcp_id_list = get_dhcp_client_pid()
+        self.dhcp_id_list = self.get_dhcp_client_pid()
         self.start()
 
     def is_alive(self):
