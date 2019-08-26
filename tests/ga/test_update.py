@@ -1104,13 +1104,12 @@ class TestUpdate(UpdateTestCase):
         self._test_run_latest(mock_time=mock_time)
         self.assertEqual(1, mock_time.sleep_interval)
 
-    def test_run_latest_polls_moderately_if_installed_not_latest(self):
+    def test_run_latest_polls_every_second_if_installed_not_latest(self):
         self.prepare_agents()
 
-        mock_child = ChildMock(return_value=0)
         mock_time = TimeMock(time_increment=CHILD_HEALTH_INTERVAL/2)
         self._test_run_latest(mock_time=mock_time)
-        self.assertNotEqual(1, mock_time.sleep_interval)
+        self.assertEqual(1, mock_time.sleep_interval)
 
     def test_run_latest_defaults_to_current(self):
         self.assertEqual(None, self.update_handler.get_latest_agent())

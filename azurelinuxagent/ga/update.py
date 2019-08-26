@@ -166,14 +166,9 @@ class UpdateHandler(object):
 
             logger.verbose(u"Agent {0} launched with command '{1}'", agent_name, agent_cmd)
 
-            # If the most current agent is the installed agent and update is enabled,
-            # assume updates are likely available and poll every second.
-            # This reduces the start-up impact of finding / launching agent updates on
-            # fresh VMs.
-            # if latest_agent is None and conf.get_autoupdate_enabled():
+            # Changing the poll interval to poll every second to reduce the agent provisioning time in the scenarios
+            # where the installed agent version > daemon version and there's another updated version available in PIR
             poll_interval = 1
-            # else:
-            #     poll_interval = CHILD_POLL_INTERVAL
 
             ret = None
             start_time = time.time()
