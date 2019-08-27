@@ -72,6 +72,7 @@ def set_openbsd_rc_files(data_files, dest="/etc/rc.d/",
 
 def set_udev_files(data_files, dest="/etc/udev/rules.d/",
                    src=["config/66-azure-storage.rules",
+                        "config/68-azure-sriov-nm-unmanaged.rules",
                         "config/99-azure-product-uuid.rules"]):
     data_files.append((dest, src))
 
