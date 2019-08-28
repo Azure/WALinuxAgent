@@ -166,8 +166,9 @@ class UpdateHandler(object):
 
             logger.verbose(u"Agent {0} launched with command '{1}'", agent_name, agent_cmd)
 
-            # Changing the poll interval to poll every second to reduce the agent provisioning time in the scenarios
-            # where the installed agent version > daemon version and there's another updated version available in PIR
+            # Setting the poll interval to poll every second to reduce the agent provisioning time;
+            # The daemon shouldn't wait for 60secs before starting the ext-handler in case the
+            # ext-handler kills itself during agent-update during the first 15 mins (CHILD_HEALTH_INTERVAL)
             poll_interval = 1
 
             ret = None
