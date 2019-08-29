@@ -175,15 +175,6 @@ class CGroupConfigurator(object):
                                                                                               stderr=stderr,
                                                                                               error_code=error_code)
 
-                try:
-                    for cgroup in extension_cgroups:
-                        CGroupsTelemetry.track_cgroup(cgroup)
-                except Exception as e:
-                    logger.warn("Cannot add cgroup '{0}' to tracking list; resource usage will not be tracked. "
-                                "Error: {1}".format(cgroup.path, ustr(e)))
-                    if isinstance(e, ExtensionError):
-                        raise e
-
             return process_output
 
     # unique instance for the singleton (TODO: find a better pattern for a singleton)

@@ -22,6 +22,7 @@ import uuid
 
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.cgroup import CGroup
+from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.conf import get_agent_pid_file_path
 from azurelinuxagent.common.event import add_event, WALAEventOperation
 from azurelinuxagent.common.exception import CGroupsException, ExtensionError, ExtensionErrorCodes
@@ -62,6 +63,15 @@ class CGroupsApi(object):
 
     def cleanup_old_cgroups(self):
         raise NotImplementedError()
+
+    @staticmethod
+    def track_cgroups(extension_cgroups):
+        try:
+            for cgroup in extension_cgroups:
+                CGroupsTelemetry.track_cgroup(cgroup)
+        except Exception as e:
+            logger.warn("Cannot add cgroup '{0}' to tracking list; resource usage will not be tracked. "
+                        "Error: {1}".format(cgroup.path, ustr(e)))
 
     @staticmethod
     def _get_extension_cgroup_name(extension_name):
@@ -338,6 +348,7 @@ class FileSystemCgroupsApi(CGroupsApi):
                 logger.warn("Failed to add extension {0} to its cgroup. Resource usage will not be tracked. "
                             "Error: {1}".format(extension_name, ustr(e)))
 
+        self.track_cgroups(extension_cgroups)
         process_output = start_subprocess_and_wait_for_completion(command=command,
                                                                   timeout=timeout,
                                                                   shell=shell,
@@ -469,24 +480,24 @@ After=system-{1}.slice""".format(extension_name, EXTENSIONS_ROOT_CGROUP_NAME)
             env=env,
             preexec_fn=os.setsid)
 
+        logger.info("Started extension using scope '{0}'", scope_name)
+        extension_cgroups = []
+
+        def create_cgroup(controller):
+            cgroup_path = os.path.join(CGROUPS_FILE_SYSTEM_ROOT, controller, 'system.slice', scope_name + ".scope")
+            extension_cgroups.append(CGroup.create(cgroup_path, controller, extension_name))
+
+        self._foreach_controller(create_cgroup, 'Cannot create cgroup for extension {0}; '
+                                                'resource usage will not be tracked.'.format(extension_name))
+        self.track_cgroups(extension_cgroups)
+
         # Wait for process completion or timeout
         timed_out, return_code = wait_for_process_completion_or_timeout(process, timeout)
         process_output = read_output(stdout, stderr)
 
         if not timed_out and return_code == 0:
             # The process terminated in time and successfully
-            cgroups = []
-
-            logger.info("Started extension using scope '{0}'", scope_name)
-
-            def create_cgroup(controller):
-                cgroup_path = os.path.join(CGROUPS_FILE_SYSTEM_ROOT, controller, 'system.slice', scope_name + ".scope")
-                cgroups.append(CGroup.create(cgroup_path, controller, extension_name))
-
-            self._foreach_controller(create_cgroup, 'Cannot create cgroup for extension {0}; '
-                                                    'resource usage will not be tracked.'.format(extension_name))
-
-            return cgroups, process_output
+            return extension_cgroups, process_output
 
         systemd_failure = self.is_systemd_failure(scope_name, process_output)
 
