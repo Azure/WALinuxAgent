@@ -499,10 +499,7 @@ class UpdateHandler(object):
 
     def _get_host_plugin(self, protocol=None):
         return protocol.client.get_host_plugin() \
-                                if protocol and \
-                                    type(protocol) is WireProtocol and \
-                                    protocol.client \
-                                else None
+            if protocol and type(protocol) is WireProtocol and protocol.client else None
 
     def _get_pid_parts(self):
         pid_file = conf.get_agent_pid_file_path()
@@ -648,57 +645,47 @@ class UpdateHandler(object):
         self.last_attempt_time = now
         protocol = self.protocol_util.get_protocol()
 
-        for update_goal_state in [False, True]:
-            try:
-                if update_goal_state:
-                    protocol.update_goal_state(forced=True)
+        try:
+            manifest_list, etag = protocol.get_vmagent_manifests()
 
-                manifest_list, etag = protocol.get_vmagent_manifests()
-
-                manifests = [m for m in manifest_list.vmAgentManifests \
-                                if m.family == family and \
-                                    len(m.versionsManifestUris) > 0]
-                if len(manifests) == 0:
-                    logger.verbose(u"Incarnation {0} has no {1} agent updates",
-                                    etag, family)
-                    return False
-
-                pkg_list = protocol.get_vmagent_pkgs(manifests[0])
-
-                # Set the agents to those available for download at least as
-                # current as the existing agent and remove from disk any agent
-                # no longer reported to the VM.
-                # Note:
-                #  The code leaves on disk available, but blacklisted, agents
-                #  so as to preserve the state. Otherwise, those agents could be
-                #  again downloaded and inappropriately retried.
-                host = self._get_host_plugin(protocol=protocol)
-                self._set_agents([GuestAgent(pkg=pkg, host=host) \
-                                     for pkg in pkg_list.versions])
-
-                self._purge_agents()
-                self._filter_blacklisted_agents()
-
-                # Return True if current agent is no longer available or an
-                # agent with a higher version number is available
-                return not self._is_version_eligible(base_version) \
-                    or (len(self.agents) > 0 \
-                        and self.agents[0].version > base_version)
-
-            except Exception as e:
-                if isinstance(e, ResourceGoneError):
-                    continue
-
-                msg = u"Exception retrieving agent manifests: {0}".format(
-                            ustr(traceback.format_exc()))
-                logger.warn(msg)
-                add_event(
-                    AGENT_NAME,
-                    op=WALAEventOperation.Download,
-                    version=CURRENT_VERSION,
-                    is_success=False,
-                    message=msg)
+            manifests = [m for m in manifest_list.vmAgentManifests \
+                            if m.family == family and len(m.versionsManifestUris) > 0]
+            if len(manifests) == 0:
+                logger.verbose(u"Incarnation {0} has no {1} agent updates",
+                                etag, family)
                 return False
+
+            pkg_list = protocol.get_vmagent_pkgs(manifests[0])
+
+            # Set the agents to those available for download at least as
+            # current as the existing agent and remove from disk any agent
+            # no longer reported to the VM.
+            # Note:
+            #  The code leaves on disk available, but blacklisted, agents
+            #  so as to preserve the state. Otherwise, those agents could be
+            #  again downloaded and inappropriately retried.
+            host = self._get_host_plugin(protocol=protocol)
+            self._set_agents([GuestAgent(pkg=pkg, host=host) for pkg in pkg_list.versions])
+
+            self._purge_agents()
+            self._filter_blacklisted_agents()
+
+            # Return True if current agent is no longer available or an
+            # agent with a higher version number is available
+            return not self._is_version_eligible(base_version) \
+                or (len(self.agents) > 0 and self.agents[0].version > base_version)
+
+        except Exception as e:
+            msg = u"Exception retrieving agent manifests: {0}".format(
+                        ustr(traceback.format_exc()))
+            logger.warn(msg)
+            add_event(
+                AGENT_NAME,
+                op=WALAEventOperation.Download,
+                version=CURRENT_VERSION,
+                is_success=False,
+                message=msg)
+            return False
 
     def _write_pid_file(self):
         pid_files = self._get_pid_files()

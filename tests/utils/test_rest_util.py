@@ -15,7 +15,7 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-from azurelinuxagent.common.exception import HttpError, ResourceGoneError, HostPluginConfigError
+from azurelinuxagent.common.exception import HttpError, ResourceGoneError, InvalidContainerError
 import azurelinuxagent.common.utils.restutil as restutil
 from azurelinuxagent.common.utils.restutil import HTTP_USER_AGENT
 from azurelinuxagent.common.future import httpclient, ustr
@@ -657,7 +657,7 @@ class TestHttpOperations(AgentTestCase):
             Mock(status=httpclient.BAD_REQUEST, reason='Bad Request', read=read)
         ]
 
-        self.assertRaises(HostPluginConfigError, restutil.http_get, "https://foo.bar")
+        self.assertRaises(InvalidContainerError, restutil.http_get, "https://foo.bar")
         self.assertEqual(1, _http_request.call_count)
 
     @patch("time.sleep")
@@ -667,10 +667,10 @@ class TestHttpOperations(AgentTestCase):
             return b'{ "errorCode": "RequestRoleConfigFileNotFound", "message": "Invalid request." }'
 
         _http_request.side_effect = [
-            Mock(status=httpclient.BAD_REQUEST, reason='Bad Request', read=read)
+            Mock(status=httpclient.GONE, reason='Resource Gone', read=read)
         ]
 
-        self.assertRaises(HostPluginConfigError, restutil.http_get, "https://foo.bar")
+        self.assertRaises(ResourceGoneError, restutil.http_get, "https://foo.bar")
         self.assertEqual(1, _http_request.call_count)
 
     @patch("time.sleep")

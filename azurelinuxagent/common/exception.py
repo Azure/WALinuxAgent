@@ -148,13 +148,13 @@ class HttpError(AgentError):
         super(HttpError, self).__init__(msg, inner)
 
 
-class HostPluginConfigError(AgentError):
+class InvalidContainerError(HttpError):
     """
-    Http request failure
+    Container id sent in the header is invalid
     """
 
     def __init__(self, msg=None, inner=None):
-        super(HostPluginConfigError, self).__init__(msg, inner)
+        super(InvalidContainerError, self).__init__(msg, inner)
 
 
 class EventError(AgentError):
