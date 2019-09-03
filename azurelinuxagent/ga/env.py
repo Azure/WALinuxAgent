@@ -31,7 +31,6 @@ from azurelinuxagent.common.dhcp import get_dhcp_handler
 from azurelinuxagent.common.event import add_periodic, WALAEventOperation
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
-from azurelinuxagent.common.utils.shellutil import CommandError
 from azurelinuxagent.common.protocol import get_protocol_util
 from azurelinuxagent.common.utils.archive import StateArchiver
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
@@ -65,7 +64,7 @@ class EnvHandler(object):
         self.protocol_util = get_protocol_util()
         self.stopped = True
         self.hostname = None
-        self.dhcp_id_list = None
+        self.dhcp_id_list = []
         self.server_thread = None
         self.dhcp_warning_enabled = True
         self.last_archive = None
@@ -147,23 +146,25 @@ class EnvHandler(object):
             self.hostname = curr_hostname
 
     def get_dhcp_client_pid(self):
-        pid = None
+        pid = []
+
         try:
-            # get_dhcp_pid may return multiple PIDs; we split them and return a sorted list.
-            # (we sort the list because handle_dhclient_restart needs to compare the previous value with the new
-            # value and the comparison should not be affected by the order of the items in the list)
-            pid = sorted(self.osutil.get_dhcp_pid().split())
-        except CommandError as exception:
-            if self.dhcp_warning_enabled:
+            # return a sorted list since handle_dhclient_restart needs to compare the previous value with
+            # the new value and the comparison should not be affected by the order of the items in the list
+            pid = sorted(self.osutil.get_dhcp_pid())
+
+            if len(pid) == 0 and self.dhcp_warning_enabled:
                 logger.warn("Dhcp client is not running.")
         except Exception as exception:
             if self.dhcp_warning_enabled:
                 logger.error("Failed to get the PID of the DHCP client: {0}", ustr(exception))
-        self.dhcp_warning_enabled = pid is not None
+
+        self.dhcp_warning_enabled = len(pid) != 0
+
         return pid
 
     def handle_dhclient_restart(self):
-        if self.dhcp_id_list is None:
+        if len(self.dhcp_id_list) == 0:
             self.dhcp_id_list = self.get_dhcp_client_pid()
             return
 
@@ -171,7 +172,7 @@ class EnvHandler(object):
             return
 
         new_pid = self.get_dhcp_client_pid()
-        if new_pid is not None and new_pid != self.dhcp_id_list:
+        if len(new_pid) != 0 and new_pid != self.dhcp_id_list:
             logger.info("EnvMonitor: Detected dhcp client restart. Restoring routing table.")
             self.dhcp_handler.conf_routes()
             self.dhcp_id_list = new_pid

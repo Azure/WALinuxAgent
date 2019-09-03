@@ -23,7 +23,7 @@ import azurelinuxagent.common.utils.shellutil as shellutil
 
 from azurelinuxagent.common.exception import OSUtilError
 from azurelinuxagent.common.osutil.bigip import BigIpOSUtil
-from .test_default import osutil_get_dhcp_pid_should_return_a_pid
+from .test_default import osutil_get_dhcp_pid_should_return_a_list_of_pids
 from tests.tools import *
 
 
@@ -313,8 +313,8 @@ class TestBigIpOSUtil(AgentTestCase):
     def tearDown(self):
         AgentTestCase.tearDown(self)
 
-    def test_get_dhcp_pid_should_return_a_pid(self):
-        osutil_get_dhcp_pid_should_return_a_pid(self, BigIpOSUtil())
+    def test_get_dhcp_pid_should_return_a_list_of_pids(self):
+        osutil_get_dhcp_pid_should_return_a_list_of_pids(self, BigIpOSUtil())
 
 
 if __name__ == '__main__':

@@ -226,9 +226,7 @@ class OpenBSDOSUtil(DefaultOSUtil):
                       "{0}".format(ifname), chk_err=False)
 
     def get_dhcp_pid(self):
-        ret, output = shellutil.run_get_output("pgrep -n dhclient",
-                                               chk_err=False)
-        return output if ret == 0 else None
+        return self._get_dhcp_pid(["pgrep", "-n", "dhclient"])
 
     def get_dvd_device(self, dev_dir='/dev'):
         pattern = r'cd[0-9]c'

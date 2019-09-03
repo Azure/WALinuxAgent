@@ -15,8 +15,9 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 from azurelinuxagent.common.osutil.ubuntu import Ubuntu12OSUtil, Ubuntu18OSUtil
-from .test_default import osutil_get_dhcp_pid_should_return_a_pid
+from .test_default import osutil_get_dhcp_pid_should_return_a_list_of_pids
 from tests.tools import *
+
 
 class TestUbuntu12OSUtil(AgentTestCase):
     def setUp(self):
@@ -25,8 +26,8 @@ class TestUbuntu12OSUtil(AgentTestCase):
     def tearDown(self):
         AgentTestCase.tearDown(self)
 
-    def test_get_dhcp_pid_should_return_a_pid(self):
-        osutil_get_dhcp_pid_should_return_a_pid(self, Ubuntu12OSUtil())
+    def test_get_dhcp_pid_should_return_a_list_of_pids(self):
+        osutil_get_dhcp_pid_should_return_a_list_of_pids(self, Ubuntu12OSUtil())
 
 
 class TestUbuntu18OSUtil(AgentTestCase):
@@ -36,8 +37,8 @@ class TestUbuntu18OSUtil(AgentTestCase):
     def tearDown(self):
         AgentTestCase.tearDown(self)
 
-    def test_get_dhcp_pid_should_return_a_pid(self):
-        osutil_get_dhcp_pid_should_return_a_pid(self, Ubuntu18OSUtil())
+    def test_get_dhcp_pid_should_return_a_list_of_pids(self):
+        osutil_get_dhcp_pid_should_return_a_list_of_pids(self, Ubuntu18OSUtil())
 
 
 if __name__ == '__main__':

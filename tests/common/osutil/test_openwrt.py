@@ -15,8 +15,9 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 from azurelinuxagent.common.osutil.openwrt import OpenWRTOSUtil
-from .test_default import osutil_get_dhcp_pid_should_return_a_pid
+from .test_default import osutil_get_dhcp_pid_should_return_a_list_of_pids
 from tests.tools import *
+
 
 class TestOpenWRTOSUtil(AgentTestCase):
     def setUp(self):
@@ -25,8 +26,8 @@ class TestOpenWRTOSUtil(AgentTestCase):
     def tearDown(self):
         AgentTestCase.tearDown(self)
 
-    def test_get_dhcp_pid_should_return_a_pid(self):
-        osutil_get_dhcp_pid_should_return_a_pid(self, OpenWRTOSUtil())
+    def test_get_dhcp_pid_should_return_a_list_of_pids(self):
+        osutil_get_dhcp_pid_should_return_a_list_of_pids(self, OpenWRTOSUtil())
 
 
 if __name__ == '__main__':

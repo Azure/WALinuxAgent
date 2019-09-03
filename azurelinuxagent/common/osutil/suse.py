@@ -45,7 +45,7 @@ class SUSE11OSUtil(DefaultOSUtil):
         shellutil.run("hostname {0}".format(hostname), chk_err=False)
 
     def get_dhcp_pid(self):
-        return shellutil.run_command(["pidof", self.dhclient_name]).strip()
+        return self._get_dhcp_pid(["pidof", self.dhclient_name])
 
     def is_dhcp_enabled(self):
         return True
