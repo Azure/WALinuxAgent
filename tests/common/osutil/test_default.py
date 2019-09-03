@@ -912,30 +912,38 @@ Chain OUTPUT (policy ACCEPT 104 packets, 43628 bytes)
         another_state[name].add_ipv4("xyzzy")
         self.assertNotEqual(state, another_state)
 
-    def test_get_dhcp_pid_should_return_a_pid(self):
-        osutil_get_dhcp_pid_should_return_a_pid(self, osutil.DefaultOSUtil())
+    def test_get_dhcp_pid_should_return_a_list_of_pids(self):
+        osutil_get_dhcp_pid_should_return_a_list_of_pids(self, osutil.DefaultOSUtil())
 
+    def test_get_dhcp_pid_should_return_an_empty_list_when_the_dhcp_client_is_not_running(self):
+        original_run_command = shellutil.run_command
 
-def osutil_get_dhcp_pid_should_return_a_pid(test_instance, osutil_instance):
+        def mock_run_command(cmd):
+            return original_run_command(["pidof", "non-existing-process"])
+
+        with patch("azurelinuxagent.common.utils.shellutil.run_command", side_effect=mock_run_command):
+            pid_list = osutil.DefaultOSUtil().get_dhcp_pid()
+
+        self.assertTrue(len(pid_list) == 0, "the return value is not an empty list: {0}".format(pid_list))
+
+def osutil_get_dhcp_pid_should_return_a_list_of_pids(test_instance, osutil_instance):
     """
     This is a very basic test for osutil.get_dhcp_pid. It is simply meant to exercise the implementation of that method
     in case there are any basic errors, such as a typos, etc. The test does not verify that the implementation returns
-    the PID for the actual dhcp client; in fact, it uses a mock that returns the PID of an arbitrary process (the pidof
-    process itself).
+    the PID for the actual dhcp client; in fact, it uses a mock that invokes pidof to return the PID of an arbitrary
+    process (the pidof process itself). Most implementations of get_dhcp_pid use pidof with the appropriate name for
+    the dhcp client.
     The test is defined as a global function to make it easily accessible from the test suites for each distro.
     """
     original_run_command = shellutil.run_command
 
-    def mock_run_command(cmd, *args, **kwargs):
-        if isinstance(cmd, list) and len(cmd) > 0 and cmd[0].endswith('pidof'):
-            return original_run_command(["pidof", "pidof"], *args, **kwargs)
-        else:
-            return original_run_command(cmd, *args, **kwargs)
+    def mock_run_command(cmd):
+        return original_run_command(["pidof", "pidof"])
 
     with patch("azurelinuxagent.common.utils.shellutil.run_command", side_effect=mock_run_command):
         pid = osutil_instance.get_dhcp_pid()
 
-    test_instance.assertTrue(re.match(r"\d+", pid), "{0} is not a PID".format(pid))
+    test_instance.assertTrue(len(pid) != 0, "get_dhcp_pid did not return a PID")
 
 
 if __name__ == '__main__':

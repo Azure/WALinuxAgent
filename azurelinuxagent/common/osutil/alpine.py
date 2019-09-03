@@ -32,7 +32,7 @@ class AlpineOSUtil(DefaultOSUtil):
         return True
 
     def get_dhcp_pid(self):
-        return shellutil.run_command(["pidof", "dhcpcd"]).strip()
+        return self._get_dhcp_pid(["pidof", "dhcpcd"])
 
     def restart_if(self, ifname):
         logger.info('restarting {} (sort of, actually SIGHUPing dhcpcd)'.format(ifname))
