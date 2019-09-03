@@ -505,7 +505,7 @@ class ExtHandlersHandler(object):
             """
             continue_on_update_failure = False
             try:
-                continue_on_update_failure = ext_handler_i.get_manifest_file().is_continue_on_update_failure()
+                continue_on_update_failure = ext_handler_i.load_manifest().is_continue_on_update_failure()
                 func()
             except ExtensionError as e:
                 # Reporting the event with the old handler and raising a new ExtensionUpdateError to set the
