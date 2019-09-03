@@ -32,6 +32,7 @@ import tempfile
 import time
 import traceback
 import zipfile
+from collections import Mapping, Iterable
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
@@ -75,6 +76,9 @@ DEFAULT_EXT_TIMEOUT_MINUTES = 90
 AGENT_STATUS_FILE = "waagent_status.json"
 
 NUMBER_OF_DOWNLOAD_RETRIES = 5
+
+DISABLE_FAILED = "DISABLE_FAILED"
+UNINSTALL_FAILED = "UNINSTALL_FAILED"
 
 def get_traceback(e):
     if sys.version_info[0] == 3:
@@ -486,33 +490,44 @@ class ExtHandlersHandler(object):
             ext_handler_i.update_settings()
 
         ext_handler_i.enable()
+        # Remove the UNINSTALL_FAILED from env variables list after calling Install and Enable
+        ext_handler_i.remove_keys_from_env(UNINSTALL_FAILED)
 
     @staticmethod
     def _update_extension_handler(old_ext_handler_i, ext_handler_i):
 
-        def execute_old_handler_command(func):
+        def execute_old_handler_command(op, func):
             """
             Created a common wrapper to execute all commands that need to be executed from the old handler
             so that it can have a common exception handling mechanism
+            :param op: The current running operation
             :param func: The command to be executed on the old handler
             """
+            continue_on_update_failure = False
             try:
+                continue_on_update_failure = ext_handler_i.get_manifest_file().is_continue_on_update_failure()
                 func()
             except ExtensionError as e:
                 # Reporting the event with the old handler and raising a new ExtensionUpdateError to set the
                 # handler status on the new version
                 msg = ustr(e)
                 old_ext_handler_i.report_event(message=msg, is_success=False)
-                raise ExtensionUpdateError(msg)
+                if not continue_on_update_failure:
+                    raise ExtensionUpdateError(msg)
 
-        execute_old_handler_command(lambda: old_ext_handler_i.disable())
+                logger.info("Continue on Update failure flag is set, proceeding with update")
+                error_env_name = DISABLE_FAILED if op == WALAEventOperation.Disable else UNINSTALL_FAILED
+                ext_handler_i.set_env_variable({error_env_name: True})
+
+        execute_old_handler_command(op=WALAEventOperation.Disable, func=lambda: old_ext_handler_i.disable())
         ext_handler_i.copy_status_files(old_ext_handler_i)
         if ext_handler_i.version_gt(old_ext_handler_i):
             ext_handler_i.update()
+            # Remove the DISABLE_FAILED from env variables list after calling Update
+            ext_handler_i.remove_keys_from_env(DISABLE_FAILED)
         else:
             old_ext_handler_i.update(version=ext_handler_i.ext_handler.properties.version)
-        # Currently uninstall failures swallows the exception so we wont catch anything here
-        execute_old_handler_command(lambda: old_ext_handler_i.uninstall())
+        execute_old_handler_command(op=WALAEventOperation.UnInstall, func=lambda: old_ext_handler_i.uninstall())
         old_ext_handler_i.remove_ext_handler()
         ext_handler_i.update_with_install()
 
@@ -652,6 +667,8 @@ class ExtHandlerInstance(object):
         self.is_upgrade = False
         self.logger = None
         self.set_logger()
+        self.handler_env = {'EXTENSION_PATH': self.get_base_dir(),
+                            'EXTENSION_VERSION': self.ext_handler.properties.version}
 
         try:
             fileutil.mkdir(self.get_log_dir(), mode=0o755)
@@ -788,6 +805,17 @@ class ExtHandlerInstance(object):
 
     def set_operation(self, op):
         self.operation = op
+
+    def set_env_variable(self, env: Mapping):
+        self.handler_env.update(env)
+
+    def remove_keys_from_env(self, keys):
+        if isinstance(keys, str):
+            self.handler_env.pop(keys, None)
+
+        if isinstance(keys, Iterable):
+            for key in keys:
+                self.handler_env.pop(key, None)
 
     def report_event(self, message="", is_success=True, duration=0, log_event=True):
         ext_handler_version = self.ext_handler.properties.version
@@ -956,6 +984,10 @@ class ExtHandlerInstance(object):
             self.logger.info("Uninstall extension [{0}]".format(uninstall_cmd))
             self.launch_command(uninstall_cmd)
         except ExtensionError as e:
+            # Plan of action -
+            # 1- Identify all extensions where uninstall is failing
+            # 2- Notify them of this and warn them to fix this asap
+            # 3- Don't swallow exception on update failure, we would still swallow on extension removal calls
             self.report_event(message=ustr(e), is_success=False)
 
     def remove_ext_handler(self):
@@ -1176,6 +1208,7 @@ class ExtHandlerInstance(object):
                 if env is None:
                     env = {}
                 env.update(os.environ)
+                env.update(self.handler_env)
 
                 try:
                     # Some extensions erroneously begin cmd with a slash; don't interpret those
@@ -1436,3 +1469,6 @@ class HandlerManifest(object):
         if update_mode is None:
             return True
         return update_mode.lower() == "updatewithinstall"
+
+    def is_continue_on_update_failure(self):
+        return self.data['handlerManifest'].get('continueOnUpdateFailure', False)
