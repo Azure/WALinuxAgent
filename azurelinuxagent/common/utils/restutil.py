@@ -154,15 +154,6 @@ def _is_throttle_status(status):
     return status in THROTTLE_CODES
 
 
-def _is_invalid_container_or_role_configuration(response):
-    error_detail = ""
-    result = False
-    if response is not None and response.status == httpclient.BAD_REQUEST:
-        error_detail = read_response_error(response)
-        result = INVALID_CONTAINER_CONFIGURATION in error_detail or REQUEST_ROLE_CONFIG_FILE_NOT_FOUND in error_detail
-    return result, error_detail
-
-
 def _parse_url(url):
     """
     Parse URL to get the components of the URL broken down to host, port
@@ -433,17 +424,18 @@ def http_request(method,
                         max_retry = max(max_retry, THROTTLE_RETRIES)
                     continue
 
-            response_error = read_response_error(resp)
-
             # If we got a 410 (resource gone) for any reason, raise an exception. The caller will handle it by
             # forcing a goal state refresh and retrying the call.
             if resp.status in RESOURCE_GONE_CODES:
+                response_error = read_response_error(resp)
                 raise ResourceGoneError(response_error)
 
             # If we got a 400 (bad request) because the container id is invalid, it could indicate a stale goal
             # state. The caller will handle this exception by forcing a goal state refresh and retrying the call.
-            if resp.status == httpclient.BAD_REQUEST and INVALID_CONTAINER_CONFIGURATION in response_error:
-                raise InvalidContainerError(response_error)
+            if resp.status == httpclient.BAD_REQUEST:
+                response_error = read_response_error(resp)
+                if INVALID_CONTAINER_CONFIGURATION in response_error:
+                    raise InvalidContainerError(response_error)
 
             return resp
 
