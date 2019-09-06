@@ -650,12 +650,10 @@ class TestWireClient(AgentTestCase):
         host_func.counter = 0
 
         # Assert we've only called the direct channel functions and that it succeeded.
-        with patch('azurelinuxagent.common.protocol.wire.logger.verbose') as mock_logger_verbose:
-            ret = client.send_request_using_appropriate_channel(direct_func, host_func)
-            self.assertEquals(42, ret)
-            self.assertEquals(1, direct_func.counter)
-            self.assertEquals(0, host_func.counter)
-            self.assertEquals(1, mock_logger_verbose.call_count)
+        ret = client.send_request_using_appropriate_channel(direct_func, host_func)
+        self.assertEquals(42, ret)
+        self.assertEquals(1, direct_func.counter)
+        self.assertEquals(0, host_func.counter)
 
     def test_send_request_using_appropriate_channel_host_channel_is_default(self, *args):
         xml_text = WireProtocolData(DATA_FILE).goal_state
@@ -675,12 +673,10 @@ class TestWireClient(AgentTestCase):
         host_func.counter = 0
 
         # Assert we've only called the host channel function since it's the default channel
-        with patch('azurelinuxagent.common.protocol.wire.logger.verbose') as mock_logger_verbose:
-            ret = client.send_request_using_appropriate_channel(direct_func, host_func)
-            self.assertEquals(43, ret)
-            self.assertEquals(0, direct_func.counter)
-            self.assertEquals(1, host_func.counter)
-            self.assertEquals(1, mock_logger_verbose.call_count)
+        ret = client.send_request_using_appropriate_channel(direct_func, host_func)
+        self.assertEquals(43, ret)
+        self.assertEquals(0, direct_func.counter)
+        self.assertEquals(1, host_func.counter)
 
     def test_send_request_using_appropriate_channel_direct_func_fails_host_func_works_first_time(self, *args):
         xml_text = WireProtocolData(DATA_FILE).goal_state

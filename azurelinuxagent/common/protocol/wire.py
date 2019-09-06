@@ -998,28 +998,33 @@ class WireClient(object):
 
         if not HostPluginProtocol.is_default_channel():
             ret = None
+            logged_failure = False
             try:
-                logger.verbose("Using the direct channel")
                 ret = direct_func()
             except (ResourceGoneError, InvalidContainerError) as e:
-                logger.warn("Failed to get a response using the direct channel, switching to host plugin."
+                logger.info("Request failed using the direct channel, switching to host plugin."
                             "Error: {0}".format(ustr(e)))
+                logged_failure = True
 
-            # If the return value is not None and is not False, the request succeeded
+            # Different direct channel functions report failure in different ways: by returning None, False,
+            # or raising ResourceGone or InvalidContainer exceptions. If these exceptions haven't been raised
+            # and the return value is not None or False, the request succeeded.
             if ret:
                 return ret
-            else:
-                logger.warn("Failed to get a response using the direct channel, switching to host plugin.")
+            elif not logged_failure:
+                # Prevent double-logging when direct_func raised an exception which we caught and logged.
+                # We wouldn't have logged the failure yet if the return value was None or False.
+                logger.info("Request failed using the direct channel, switching to host plugin.")
         else:
-            logger.verbose("Using host plugin as default channel")
+            logger.info("Using host plugin as default channel")
 
         try:
             ret = host_func()
         except (ResourceGoneError, InvalidContainerError) as e:
-            msg = "Failed to get a response with the current host plugin configuration." \
-                  "ContainerId: {0}, role config file: {1}. Fetching new parameters and retrying the call." \
+            msg = "Request failed with the current host plugin configuration." \
+                  "ContainerId: {0}, role config file: {1}. Fetching new goal state and retrying the call." \
                   "Error: {2}".format(self.host_plugin.container_id, self.host_plugin.role_config_name, ustr(e))
-            logger.warn(msg)
+            logger.info(msg)
 
             self.update_goal_state(forced=True)
             msg = "Host plugin reconfigured with new parameters. " \
@@ -1031,10 +1036,11 @@ class WireClient(object):
         except Exception:
             raise
 
-        logger.info("Got a response using the host plugin channel.")
+        logger.info("Request succeeded using the host plugin channel.")
 
         if not HostPluginProtocol.is_default_channel():
-            logger.info("Setting host plugin as default channel")
+            logger.info("Setting host plugin as default channel from now on. "
+                        "Restart the agent to reset the default channel.")
             HostPluginProtocol.set_default_channel(True)
 
         return ret
