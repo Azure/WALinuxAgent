@@ -165,7 +165,7 @@ class WireProtocol(Protocol):
         return success
 
     def download_ext_handler_pkg(self, uri, destination, headers=None, use_proxy=True):
-        direct_func = lambda: self.client.stream(uri, destination, headers=headers, use_proxy=use_proxy)
+        direct_func = lambda: self.client.stream(uri, destination, headers=None, use_proxy=True)
         host_func = lambda: self.download_ext_handler_pkg_through_host(uri, destination)
 
         try:
@@ -998,23 +998,19 @@ class WireClient(object):
 
         if not HostPluginProtocol.is_default_channel():
             ret = None
-            logged_failure = False
             try:
                 ret = direct_func()
+
+                # Different direct channel functions report failure in different ways: by returning None, False,
+                # or raising ResourceGone or InvalidContainer exceptions.
+                if not ret:
+                    logger.info("Request failed using the direct channel, switching to host plugin.")
             except (ResourceGoneError, InvalidContainerError) as e:
                 logger.info("Request failed using the direct channel, switching to host plugin."
                             "Error: {0}".format(ustr(e)))
-                logged_failure = True
 
-            # Different direct channel functions report failure in different ways: by returning None, False,
-            # or raising ResourceGone or InvalidContainer exceptions. If these exceptions haven't been raised
-            # and the return value is not None or False, the request succeeded.
             if ret:
                 return ret
-            elif not logged_failure:
-                # Prevent double-logging when direct_func raised an exception which we caught and logged.
-                # We wouldn't have logged the failure yet if the return value was None or False.
-                logger.info("Request failed using the direct channel, switching to host plugin.")
         else:
             logger.info("Using host plugin as default channel")
 
