@@ -166,6 +166,8 @@ class WireProtocol(Protocol):
 
     def download_ext_handler_pkg(self, uri, destination, headers=None, use_proxy=True):
         direct_func = lambda: self.client.stream(uri, destination, headers=None, use_proxy=True)
+        # NOTE: the host_func may be called after refreshing the goal state, be careful about any goal state data
+        # in the lambda.
         host_func = lambda: self.download_ext_handler_pkg_through_host(uri, destination)
 
         try:
@@ -615,6 +617,8 @@ class WireClient(object):
                 continue
 
             direct_func = lambda: self.fetch(version.uri)
+            # NOTE: the host_func may be called after refreshing the goal state, be careful about any goal state data
+            # in the lambda.
             host_func = lambda: self.fetch_manifest_through_host(version.uri)
 
             try:
@@ -996,6 +1000,9 @@ class WireClient(object):
         # refresh the goal state and try again. If successful, set the host plugin channel as default. If failed,
         # raise the exception.
 
+        # NOTE: direct_func and host_func are passed as lambdas. Be careful about capturing goal state data in them as
+        # they will not be refreshed even if a goal state refresh is called before retrying the host_func.
+
         if not HostPluginProtocol.is_default_channel():
             ret = None
             try:
@@ -1246,6 +1253,8 @@ class WireClient(object):
         if self.has_artifacts_profile_blob():
             blob = self.ext_conf.artifacts_profile_blob
             direct_func = lambda: self.fetch(blob)
+            # NOTE: the host_func may be called after refreshing the goal state, be careful about any goal state data
+            # in the lambda.
             host_func = lambda: self.get_artifacts_profile_through_host(blob)
 
             logger.verbose("Retrieving the artifacts profile")
