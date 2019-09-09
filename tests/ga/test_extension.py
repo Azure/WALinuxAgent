@@ -1504,14 +1504,12 @@ class TestExtension(ExtensionTestCase):
         test_data, exthandlers_handler, protocol = self._setup_update_test_and_update_gs(patch_get_uninstall_command,
                                                                                          *args)
 
-        with patch.object(ExtHandlerInstance, 'set_env_variable', autospec=True) as patch_set_env_variable:
+        with patch('azurelinuxagent.ga.exthandlers.HandlerManifest.is_continue_on_update_failure', return_value=True) \
+                as mock_continue_on_update_failure:
             exthandlers_handler.run()
             self.assertEqual(1, patch_get_uninstall_command.call_count)
-            self.assertEqual(1, patch_set_env_variable.call_count,
-                             "This should be called once to set Uninstall failed cmd")
-            args, kwargs = patch_set_env_variable.call_args
-            self.assertEqual(args[1], {UNINSTALL_FAILED: "True"},
-                             "This environment var is set when Uninstall Command fails")
+            self.assertEqual(2, mock_continue_on_update_failure.call_count,
+                             "This should be called twice, for both disable and uninstall")
 
         self._assert_handler_status(protocol.report_vm_status, "Ready", expected_ext_count=1, version="1.0.1")
 
@@ -1569,7 +1567,7 @@ class TestExtension(ExtensionTestCase):
         test_data, exthandlers_handler, protocol = self._setup_update_test_and_update_gs(patch_get_uninstall_command,
                                                                                          *args)
 
-        with patch.object(ExtHandlerInstance, 'remove_key_from_env', autospec=True) as patch_remove_env_variable:
+        with patch.object(ExtHandlerInstance, 'remove_key_from_handler_env', autospec=True) as patch_remove_env_variable:
             exthandlers_handler.run()
             disable_args, disable_kwargs = patch_remove_env_variable.call_args_list[0]
             uninstall_args, uninstall_kwargs = patch_remove_env_variable.call_args_list[1]
@@ -2136,7 +2134,7 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
         old_handler_i = self._get_ext_handler_instance('foo', '1.0.0')
         new_handler_i = self._get_ext_handler_instance('foo', '1.0.1', continue_on_update_failure=False)
 
-        with patch.object(ExtHandlerInstance, "set_env_variable") as patch_set_env:
+        with patch.object(ExtHandlerInstance, "set_handler_env_variable") as patch_set_env:
 
             # When Disable Fails
             with patch.object(ExtHandlerInstance, "disable", side_effect=ExtensionError("Disable Failed")):
@@ -2160,15 +2158,15 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
         initial_value = "test_value"
         changed_value = "new_test_value"
 
-        handler_i.set_env_variable({name: initial_value})
-        handler_i.set_env_variable({another_var: changed_value})
+        handler_i.set_handler_env_variable({name: initial_value})
+        handler_i.set_handler_env_variable({another_var: changed_value})
         self.assertTrue(name in handler_i.handler_env and another_var in handler_i.handler_env,
                         "The variables not there in handler_environment")
         self.assertEqual(initial_value, handler_i.handler_env[name], "The value for env variable doesn't match")
         self.assertEqual(changed_value, handler_i.handler_env[another_var], "The value for env variable doesn't match")
 
         # Changing the value with the same name should update the value
-        handler_i.set_env_variable({name: changed_value})
+        handler_i.set_handler_env_variable({name: changed_value})
         self.assertEqual(changed_value, handler_i.handler_env[name], "The new value is not set")
 
     def test_remove_key_from_env_should_remove_handler_env_variable(self, *args):
@@ -2178,8 +2176,8 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
         value_to_delete = "test_value"
         name_to_keep = "keep_variable"
         value_to_keep = "keep_value"
-        handler_i.set_env_variable({name_to_delete: value_to_delete})
-        handler_i.set_env_variable({name_to_keep: value_to_keep})
+        handler_i.set_handler_env_variable({name_to_delete: value_to_delete})
+        handler_i.set_handler_env_variable({name_to_keep: value_to_keep})
 
         self.assertTrue(name_to_delete in handler_i.handler_env and name_to_keep in handler_i.handler_env,
                         "The variable not there in handler_environments")
@@ -2187,12 +2185,12 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
                         value_to_keep == handler_i.handler_env[name_to_keep],
                         "The value for env variable doesn't match")
 
-        handler_i.remove_key_from_env(name_to_delete)
+        handler_i.remove_key_from_handler_env(name_to_delete)
         self.assertTrue(name_to_delete not in handler_i.handler_env, "The variable not removed from handler_env list")
 
         # Retrying the removal operation to ensure that no exception is thrown if key not found
         try:
-            handler_i.remove_key_from_env(name_to_delete)
+            handler_i.remove_key_from_handler_env(name_to_delete)
         except:
             self.fail("Removing a key that's not present shouldn't throw an error")
 

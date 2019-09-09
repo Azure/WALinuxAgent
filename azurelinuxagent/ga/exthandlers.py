@@ -32,7 +32,6 @@ import tempfile
 import time
 import traceback
 import zipfile
-from collections import Mapping, Iterable
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
@@ -493,7 +492,7 @@ class ExtHandlersHandler(object):
 
         ext_handler_i.enable()
         # Remove the UNINSTALL_FAILED from env variables list after calling Install and Enable
-        ext_handler_i.remove_key_from_env(UNINSTALL_FAILED)
+        ext_handler_i.remove_key_from_handler_env(UNINSTALL_FAILED)
 
     @staticmethod
     def _update_extension_handler(old_ext_handler_i, ext_handler_i):
@@ -512,21 +511,21 @@ class ExtHandlersHandler(object):
             except ExtensionError as e:
                 # Reporting the event with the old handler and raising a new ExtensionUpdateError to set the
                 # handler status on the new version
-                msg = ustr(e)
+                msg = "%s; ContinueOnUpdate: %s" % (ustr(e), continue_on_update_failure)
                 old_ext_handler_i.report_event(message=msg, is_success=False)
                 if not continue_on_update_failure:
                     raise ExtensionUpdateError(msg)
 
                 logger.info("Continue on Update failure flag is set, proceeding with update")
                 error_env_name = DISABLE_FAILED if op == WALAEventOperation.Disable else UNINSTALL_FAILED
-                ext_handler_i.set_env_variable({error_env_name: 'True'})
+                ext_handler_i.set_handler_env_variable({error_env_name: 'True'})
 
         execute_old_handler_command(op=WALAEventOperation.Disable, func=lambda: old_ext_handler_i.disable())
         ext_handler_i.copy_status_files(old_ext_handler_i)
         if ext_handler_i.version_gt(old_ext_handler_i):
             ext_handler_i.update()
             # Remove the DISABLE_FAILED from env variables list after calling Update
-            ext_handler_i.remove_key_from_env(DISABLE_FAILED)
+            ext_handler_i.remove_key_from_handler_env(DISABLE_FAILED)
         else:
             old_ext_handler_i.update(version=ext_handler_i.ext_handler.properties.version)
         execute_old_handler_command(op=WALAEventOperation.UnInstall, func=lambda: old_ext_handler_i.uninstall())
@@ -814,10 +813,11 @@ class ExtHandlerInstance(object):
     def set_operation(self, op):
         self.operation = op
 
-    def set_env_variable(self, env: Mapping):
+    def set_handler_env_variable(self, env):
         self.handler_env.update(env)
 
-    def remove_key_from_env(self, key):
+    def remove_key_from_handler_env(self, key):
+        # Remove key if exists or do nothing
         self.handler_env.pop(key, None)
 
     def report_event(self, message="", is_success=True, duration=0, log_event=True):
@@ -1204,6 +1204,7 @@ class ExtHandlerInstance(object):
                 if env is None:
                     env = {}
                 env.update(os.environ)
+                # Add all the handler_env variables to the current launch_command
                 env.update(self.handler_env)
 
                 try:
