@@ -79,6 +79,8 @@ NUMBER_OF_DOWNLOAD_RETRIES = 5
 
 DISABLE_FAILED = "DISABLE_FAILED"
 UNINSTALL_FAILED = "UNINSTALL_FAILED"
+EXTENSION_PATH = "EXTENSION_PATH"
+EXTENSION_VERSION = "EXTENSION_VERSION"
 
 def get_traceback(e):
     if sys.version_info[0] == 3:
@@ -491,7 +493,7 @@ class ExtHandlersHandler(object):
 
         ext_handler_i.enable()
         # Remove the UNINSTALL_FAILED from env variables list after calling Install and Enable
-        ext_handler_i.remove_keys_from_env(UNINSTALL_FAILED)
+        ext_handler_i.remove_key_from_env(UNINSTALL_FAILED)
 
     @staticmethod
     def _update_extension_handler(old_ext_handler_i, ext_handler_i):
@@ -517,14 +519,14 @@ class ExtHandlersHandler(object):
 
                 logger.info("Continue on Update failure flag is set, proceeding with update")
                 error_env_name = DISABLE_FAILED if op == WALAEventOperation.Disable else UNINSTALL_FAILED
-                ext_handler_i.set_env_variable({error_env_name: True})
+                ext_handler_i.set_env_variable({error_env_name: 'True'})
 
         execute_old_handler_command(op=WALAEventOperation.Disable, func=lambda: old_ext_handler_i.disable())
         ext_handler_i.copy_status_files(old_ext_handler_i)
         if ext_handler_i.version_gt(old_ext_handler_i):
             ext_handler_i.update()
             # Remove the DISABLE_FAILED from env variables list after calling Update
-            ext_handler_i.remove_keys_from_env(DISABLE_FAILED)
+            ext_handler_i.remove_key_from_env(DISABLE_FAILED)
         else:
             old_ext_handler_i.update(version=ext_handler_i.ext_handler.properties.version)
         execute_old_handler_command(op=WALAEventOperation.UnInstall, func=lambda: old_ext_handler_i.uninstall())
@@ -547,7 +549,13 @@ class ExtHandlersHandler(object):
         if handler_state != ExtHandlerState.NotInstalled:
             if handler_state == ExtHandlerState.Enabled:
                 ext_handler_i.disable()
-            ext_handler_i.uninstall()
+
+            # Try uninstalling the extension and swallow any exceptions incase of failures after logging them
+            try:
+                ext_handler_i.uninstall()
+            except ExtensionError as e:
+                ext_handler_i.report_event(message=ustr(e), is_success=False)
+
         ext_handler_i.remove_ext_handler()
 
     def report_ext_handlers_status(self):
@@ -667,8 +675,8 @@ class ExtHandlerInstance(object):
         self.is_upgrade = False
         self.logger = None
         self.set_logger()
-        self.handler_env = {'EXTENSION_PATH': self.get_base_dir(),
-                            'EXTENSION_VERSION': self.ext_handler.properties.version}
+        self.handler_env = {EXTENSION_PATH: self.get_base_dir(),
+                            EXTENSION_VERSION: self.ext_handler.properties.version}
 
         try:
             fileutil.mkdir(self.get_log_dir(), mode=0o755)
@@ -809,13 +817,8 @@ class ExtHandlerInstance(object):
     def set_env_variable(self, env: Mapping):
         self.handler_env.update(env)
 
-    def remove_keys_from_env(self, keys):
-        if isinstance(keys, str):
-            self.handler_env.pop(keys, None)
-
-        if isinstance(keys, Iterable):
-            for key in keys:
-                self.handler_env.pop(key, None)
+    def remove_key_from_env(self, key):
+        self.handler_env.pop(key, None)
 
     def report_event(self, message="", is_success=True, duration=0, log_event=True):
         ext_handler_version = self.ext_handler.properties.version
@@ -977,18 +980,11 @@ class ExtHandlerInstance(object):
         self.set_handler_state(ExtHandlerState.Installed)
 
     def uninstall(self):
-        try:
-            self.set_operation(WALAEventOperation.UnInstall)
-            man = self.load_manifest()
-            uninstall_cmd = man.get_uninstall_command()
-            self.logger.info("Uninstall extension [{0}]".format(uninstall_cmd))
-            self.launch_command(uninstall_cmd)
-        except ExtensionError as e:
-            # Plan of action -
-            # 1- Identify all extensions where uninstall is failing
-            # 2- Notify them of this and warn them to fix this asap
-            # 3- Don't swallow exception on update failure, we would still swallow on extension removal calls
-            self.report_event(message=ustr(e), is_success=False)
+        self.set_operation(WALAEventOperation.UnInstall)
+        man = self.load_manifest()
+        uninstall_cmd = man.get_uninstall_command()
+        self.logger.info("Uninstall extension [{0}]".format(uninstall_cmd))
+        self.launch_command(uninstall_cmd)
 
     def remove_ext_handler(self):
         try:
