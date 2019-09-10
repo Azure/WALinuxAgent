@@ -87,7 +87,7 @@ of supported systems on the Microsoft Azure Platform as described [here](http://
 
 Waagent depends on some system packages in order to function properly:
 
-* Python 2.6+
+* Python (2.6+,3.0+)
 * OpenSSL 1.0+
 * OpenSSH 5.3+
 * Filesystem utilities: sfdisk, fdisk, mkfs, parted
