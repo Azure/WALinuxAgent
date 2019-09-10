@@ -76,10 +76,10 @@ AGENT_STATUS_FILE = "waagent_status.json"
 
 NUMBER_OF_DOWNLOAD_RETRIES = 5
 
-DISABLE_FAILED = "DISABLE_FAILED"
-UNINSTALL_FAILED = "UNINSTALL_FAILED"
-EXTENSION_PATH = "EXTENSION_PATH"
-EXTENSION_VERSION = "EXTENSION_VERSION"
+DISABLE_FAILED = "AZURE_GUEST_AGENT_DISABLE_FAILED"
+UNINSTALL_FAILED = "AZURE_GUEST_AGENT_UNINSTALL_FAILED"
+EXTENSION_PATH = "AZURE_GUEST_AGENT_EXTENSION_PATH"
+EXTENSION_VERSION = "AZURE_GUEST_AGENT_EXTENSION_VERSION"
 
 def get_traceback(e):
     if sys.version_info[0] == 3:
@@ -549,7 +549,7 @@ class ExtHandlersHandler(object):
             if handler_state == ExtHandlerState.Enabled:
                 ext_handler_i.disable()
 
-            # Try uninstalling the extension and swallow any exceptions incase of failures after logging them
+            # Try uninstalling the extension and swallow any exceptions in case of failures after logging them
             try:
                 ext_handler_i.uninstall()
             except ExtensionError as e:
