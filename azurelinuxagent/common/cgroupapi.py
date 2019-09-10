@@ -495,42 +495,50 @@ After=system-{1}.slice""".format(extension_name, EXTENSIONS_ROOT_CGROUP_NAME)
         timed_out, return_code = wait_for_process_completion_or_timeout(process, timeout)
         process_output = read_output(stdout, stderr)
 
-        if not timed_out and return_code == 0:
+        if return_code == 0:
             # The process terminated in time and successfully
             return extension_cgroups, process_output
+        else:
+            # The extension didn't terminate successfully. Determine whether it was due to systemd errors or
+            # extension errors.
+            systemd_failure = self.is_systemd_failure(scope_name, process_output)
 
-        systemd_failure = self.is_systemd_failure(scope_name, process_output)
+            if not systemd_failure:
+                # There was an extension error; it either timed out or returned a non-zero exit code.
+                if timed_out:
+                    raise ExtensionError("Timeout({0}): {1}\n{2}".format(timeout, command, process_output),
+                                         code=ExtensionErrorCodes.PluginHandlerScriptTimedout)
+                else:
+                    raise ExtensionError("Non-zero exit code: {0}, {1}\n{2}".format(return_code,
+                                                                                    command,
+                                                                                    process_output),
+                                         code=error_code)
+            else:
+                # There was an issue with systemd-run. We need to log it and retry the extension without systemd.
+                add_event(AGENT_NAME,
+                          version=CURRENT_VERSION,
+                          op=WALAEventOperation.InvokeCommandUsingSystemd,
+                          is_success=False,
+                          message='Failed to run systemd-run for unit {0}.scope. '
+                                  'Process exited with code {1} and output {2}'.format(scope_name,
+                                                                                       return_code,
+                                                                                       process_output))
+                # Reset the stdout and stderr
+                stdout.truncate(0)
+                stderr.truncate(0)
 
-        if timed_out and not systemd_failure:
-            raise ExtensionError("Timeout({0}): {1}\n{2}".format(timeout, command, process_output),
-                                 code=ExtensionErrorCodes.PluginHandlerScriptTimedout)
+                # Try invoking the process again, this time without systemd-run
+                process_output = start_subprocess_and_wait_for_completion(command=command,
+                                                                          timeout=timeout,
+                                                                          shell=shell,
+                                                                          cwd=cwd,
+                                                                          env=env,
+                                                                          stdout=stdout,
+                                                                          stderr=stderr,
+                                                                          preexec_fn=os.setsid,
+                                                                          error_code=error_code)
 
-        if systemd_failure:
-            # Report event and log that systemd-run failed
-            add_event(AGENT_NAME,
-                      version=CURRENT_VERSION,
-                      op=WALAEventOperation.InvokeCommandUsingSystemd,
-                      is_success=False,
-                      message='Failed to run systemd-run for unit {0}.scope. '
-                              'Process exited with code {1} and output {2}'.format(scope_name,
-                                                                                   return_code,
-                                                                                   process_output))
-            # Reset the stdout and stderr
-            stdout.truncate(0)
-            stderr.truncate(0)
-
-            # Try invoking the process again, this time without systemd-run
-            process_output = start_subprocess_and_wait_for_completion(command=command,
-                                                                      timeout=timeout,
-                                                                      shell=shell,
-                                                                      cwd=cwd,
-                                                                      env=env,
-                                                                      stdout=stdout,
-                                                                      stderr=stderr,
-                                                                      preexec_fn=os.setsid,
-                                                                      error_code=error_code)
-
-            return [], process_output
+                return [], process_output
 
     def cleanup_old_cgroups(self):
         # No cleanup needed from the old daemon in the systemd case.
