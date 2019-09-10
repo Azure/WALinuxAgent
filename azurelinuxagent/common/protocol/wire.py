@@ -840,6 +840,12 @@ class WireClient(object):
             self.goal_state = GoalState(xml_text)
         return self.goal_state
 
+    def get_container_id_from_goal_state(self):
+        if self.goal_state is None:
+            return None
+
+        return self.goal_state.container_id
+
     def get_hosting_env(self):
         if self.hosting_env is None:
             local_file = os.path.join(conf.get_lib_dir(),
