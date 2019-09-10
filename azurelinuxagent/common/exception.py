@@ -157,6 +157,15 @@ class HttpError(AgentError):
         super(HttpError, self).__init__(msg, inner)
 
 
+class InvalidContainerError(HttpError):
+    """
+    Container id sent in the header is invalid
+    """
+
+    def __init__(self, msg=None, inner=None):
+        super(InvalidContainerError, self).__init__(msg, inner)
+
+
 class EventError(AgentError):
     """
     Event reporting error

@@ -27,7 +27,7 @@ from datetime import datetime
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.utils.textutil as textutil
 from azurelinuxagent.common.exception import ProtocolNotFoundError, \
-    ResourceGoneError, ExtensionDownloadError
+    ResourceGoneError, ExtensionDownloadError, InvalidContainerError
 from azurelinuxagent.common.future import httpclient, bytebuffer
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.restapi import *
@@ -62,7 +62,7 @@ ENDPOINT_FINE_NAME = "WireServer"
 
 SHORT_WAITING_INTERVAL = 1  # 1 second
 
-MAX_EVENT_BUFFER_SIZE = 2**16 - 2**10
+MAX_EVENT_BUFFER_SIZE = 2 ** 16 - 2 ** 10
 
 
 class UploadError(HttpError):
@@ -158,14 +158,22 @@ class WireProtocol(Protocol):
         logger.verbose("Get In-VM Artifacts Profile")
         return self.client.get_artifacts_profile()
 
-    def download_ext_handler_pkg(self, uri, destination, headers=None, use_proxy=True):
-        success = self.client.stream(uri, destination, headers=headers, use_proxy=use_proxy)
+    def download_ext_handler_pkg_through_host(self, uri, destination):
+        host = self.client.get_host_plugin()
+        uri, headers = host.get_artifact_request(uri, host.manifest_uri)
+        success = self.client.stream(uri, destination, headers=headers, use_proxy=False)
+        return success
 
-        if not success:
-            logger.verbose("Download did not succeed, falling back to host plugin")
-            host = self.client.get_host_plugin()
-            uri, headers = host.get_artifact_request(uri, host.manifest_uri)
-            success = self.client.stream(uri, destination, headers=headers, use_proxy=False)
+    def download_ext_handler_pkg(self, uri, destination, headers=None, use_proxy=True):
+        direct_func = lambda: self.client.stream(uri, destination, headers=None, use_proxy=True)
+        # NOTE: the host_func may be called after refreshing the goal state, be careful about any goal state data
+        # in the lambda.
+        host_func = lambda: self.download_ext_handler_pkg_through_host(uri, destination)
+
+        try:
+            success = self.client.send_request_using_appropriate_channel(direct_func, host_func)
+        except Exception:
+            success = False
 
         return success
 
@@ -255,10 +263,10 @@ def ga_status_to_guest_info(ga_status):
     Convert VMStatus object to status blob format
     """
     v1_ga_guest_info = {
-        "computerName" : ga_status.hostname,
-        "osName" : ga_status.osname,
-        "osVersion" : ga_status.osversion,
-        "version" : ga_status.version,
+        "computerName": ga_status.hostname,
+        "osName": ga_status.osname,
+        "osVersion": ga_status.osversion,
+        "version": ga_status.version,
     }
     return v1_ga_guest_info
 
@@ -269,9 +277,9 @@ def ga_status_to_v1(ga_status):
         'message': ga_status.message
     }
     v1_ga_status = {
-        "version" : ga_status.version,
-        "status" : ga_status.status,
-        "formattedMessage" : formatted_msg
+        "version": ga_status.version,
+        "status": ga_status.status,
+        "formattedMessage": formatted_msg
     }
     return v1_ga_status
 
@@ -590,6 +598,12 @@ class WireClient(object):
 
         return http_req(*args, **kwargs)
 
+    def fetch_manifest_through_host(self, uri):
+        host = self.get_host_plugin()
+        uri, headers = host.get_artifact_request(uri)
+        response = self.fetch(uri, headers, use_proxy=False)
+        return response
+
     def fetch_manifest(self, version_uris):
         logger.verbose("Fetch manifest")
         version_uris_shuffled = version_uris
@@ -602,37 +616,20 @@ class WireClient(object):
                 logger.verbose('The specified manifest URL is empty, ignored.')
                 continue
 
-            response = None
-            host = self.get_host_plugin()
+            direct_func = lambda: self.fetch(version.uri)
+            # NOTE: the host_func may be called after refreshing the goal state, be careful about any goal state data
+            # in the lambda.
+            host_func = lambda: self.fetch_manifest_through_host(version.uri)
 
-            if not HostPluginProtocol.is_default_channel():
-                response = self.fetch(version.uri)
+            try:
+                response = self.send_request_using_appropriate_channel(direct_func, host_func)
 
-            if not response:
-                if HostPluginProtocol.is_default_channel():
-                    logger.verbose("Using host plugin as default channel")
-                else:
-                    logger.verbose("Failed to download manifest, "
-                                   "switching to host plugin")
-
-                try:
-                    uri, headers = host.get_artifact_request(version.uri)
-                    response = self.fetch(uri, headers, use_proxy=False)
-
-                # If the HostPlugin rejects the request,
-                # let the error continue, but set to use the HostPlugin
-                except ResourceGoneError:
-                    HostPluginProtocol.set_default_channel(True)
-                    raise
-
-                logger.verbose("Manifest downloaded successfully from host plugin")
-                if not HostPluginProtocol.is_default_channel():
-                    logger.info("Setting host plugin as default channel")
-                    HostPluginProtocol.set_default_channel(True)
-
-            if response:
-                host.manifest_uri = version.uri
-                return response
+                if response:
+                    host = self.get_host_plugin()
+                    host.manifest_uri = version.uri
+                    return response
+            except Exception as e:
+                logger.warn("Exception when fetching manifest. Error: {0}".format(ustr(e)))
 
         raise ExtensionDownloadError("Failed to fetch manifest from all sources")
 
@@ -669,10 +666,10 @@ class WireClient(object):
         resp = None
         try:
             resp = self.call_storage_service(
-                        restutil.http_get,
-                        uri,
-                        headers=headers,
-                        use_proxy=use_proxy)
+                restutil.http_get,
+                uri,
+                headers=headers,
+                use_proxy=use_proxy)
 
             if restutil.request_failed(resp):
                 error_response = restutil.read_response_error(resp)
@@ -690,7 +687,7 @@ class WireClient(object):
 
         except (HttpError, ProtocolError, IOError) as e:
             logger.verbose("Fetch failed from [{0}]: {1}", uri, e)
-            if isinstance(e, ResourceGoneError):
+            if isinstance(e, ResourceGoneError) or isinstance(e, InvalidContainerError):
                 raise
         return resp
 
@@ -725,7 +722,7 @@ class WireClient(object):
         if goal_state.remote_access_uri is None:
             # Nothing in accounts data.  Just return, nothing to do.
             return
-        xml_text = self.fetch_config(goal_state.remote_access_uri, 
+        xml_text = self.fetch_config(goal_state.remote_access_uri,
                                      self.get_header_for_cert())
         self.remote_access = RemoteAccess(xml_text)
         local_file = os.path.join(conf.get_lib_dir(), REMOTE_ACCESS_FILE_NAME.format(self.remote_access.incarnation))
@@ -743,7 +740,7 @@ class WireClient(object):
         xml_text = self.fetch_cache(remote_access_file)
         remote_access = RemoteAccess(xml_text)
         return remote_access
-        
+
     def update_ext_conf(self, goal_state):
         if goal_state.ext_uri is None:
             logger.info("ExtensionsConfig.xml uri is empty")
@@ -756,9 +753,20 @@ class WireClient(object):
         self.save_cache(local_file, xml_text)
         self.ext_conf = ExtensionsConfig(xml_text)
 
+    def save_or_update_goal_state_file(self, incarnation, xml_text):
+        # It should create a new file if the incarnation number is new.
+        # It should overwrite the existing file if the incarnation number is the same.
+        file_name = GOAL_STATE_FILE_NAME.format(incarnation)
+        goal_state_file = os.path.join(conf.get_lib_dir(), file_name)
+        self.save_cache(goal_state_file, xml_text)
+
+    def update_host_plugin(self, container_id, role_config_name):
+        if self.host_plugin is not None:
+            self.host_plugin.container_id = container_id
+            self.host_plugin.role_config_name = role_config_name
+
     def update_goal_state(self, forced=False, max_retry=3):
-        incarnation_file = os.path.join(conf.get_lib_dir(),
-                                        INCARNATION_FILE_NAME)
+        incarnation_file = os.path.join(conf.get_lib_dir(), INCARNATION_FILE_NAME)
         uri = GOAL_STATE_URI.format(self.endpoint)
 
         current_goal_state_from_configuration = None
@@ -771,29 +779,31 @@ class WireClient(object):
                     if not forced:
                         last_incarnation = None
                         if os.path.isfile(incarnation_file):
-                            last_incarnation = fileutil.read_file(
-                                                    incarnation_file)
+                            last_incarnation = fileutil.read_file(incarnation_file)
                         new_incarnation = current_goal_state_from_configuration.incarnation
-                        if last_incarnation is not None and \
-                                        last_incarnation == new_incarnation:
-                            # Goalstate is not updated.
-                            return                
+
+                        if last_incarnation is not None and last_incarnation == new_incarnation:
+                            # Incarnation number is not updated, but role config file and container ID
+                            # can change without the incarnation number changing. Ensure they are updated in
+                            # the goal state file on disk, as well as in the HostGA plugin instance.
+                            self.goal_state = current_goal_state_from_configuration
+                            self.save_or_update_goal_state_file(new_incarnation, xml_text)
+                            self.update_host_plugin(current_goal_state_from_configuration.container_id,
+                                                    current_goal_state_from_configuration.role_config_name)
+
+                            return
                 self.goal_state_flusher.flush(datetime.utcnow())
 
                 self.goal_state = current_goal_state_from_configuration
-                file_name = GOAL_STATE_FILE_NAME.format(current_goal_state_from_configuration.incarnation)
-                goal_state_file = os.path.join(conf.get_lib_dir(), file_name)
-                self.save_cache(goal_state_file, xml_text)
+                self.save_or_update_goal_state_file(current_goal_state_from_configuration.incarnation, xml_text)
                 self.update_hosting_env(current_goal_state_from_configuration)
                 self.update_shared_conf(current_goal_state_from_configuration)
                 self.update_certs(current_goal_state_from_configuration)
                 self.update_ext_conf(current_goal_state_from_configuration)
                 self.update_remote_access_conf(current_goal_state_from_configuration)
                 self.save_cache(incarnation_file, current_goal_state_from_configuration.incarnation)
-
-                if self.host_plugin is not None:
-                    self.host_plugin.container_id = current_goal_state_from_configuration.container_id
-                    self.host_plugin.role_config_name = current_goal_state_from_configuration.role_config_name
+                self.update_host_plugin(current_goal_state_from_configuration.container_id,
+                                        current_goal_state_from_configuration.role_config_name)
 
                 return
 
@@ -811,7 +821,7 @@ class WireClient(object):
                     logger.error("ProtocolError processing goal state, giving up [{0}]", ustr(e))
 
             except Exception as e:
-                if retry < max_retry-1:
+                if retry < max_retry - 1:
                     logger.verbose("Exception processing goal state, retrying: [{0}]", ustr(e))
                 else:
                     logger.error("Exception processing goal state, giving up: [{0}]", ustr(e))
@@ -881,27 +891,18 @@ class WireClient(object):
                 local_file = os.path.join(conf.get_lib_dir(), local_file)
                 xml_text = self.fetch_cache(local_file)
                 self.ext_conf = ExtensionsConfig(xml_text)
-        return self.ext_conf      
+        return self.ext_conf
 
     def get_ext_manifest(self, ext_handler, goal_state):
-        for update_goal_state in [False, True]:
-            try:
-                if update_goal_state:
-                    self.update_goal_state(forced=True)
-                    goal_state = self.get_goal_state()
+        local_file = MANIFEST_FILE_NAME.format(ext_handler.name, goal_state.incarnation)
+        local_file = os.path.join(conf.get_lib_dir(), local_file)
 
-                local_file = MANIFEST_FILE_NAME.format(
-                                ext_handler.name,
-                                goal_state.incarnation)
-                local_file = os.path.join(conf.get_lib_dir(), local_file)
-                xml_text = self.fetch_manifest(ext_handler.versionUris)
-                self.save_cache(local_file, xml_text)
-                return ExtensionManifest(xml_text)
-
-            except ResourceGoneError:
-                continue
-
-        raise ExtensionDownloadError("Failed to retrieve extension manifest")
+        try:
+            xml_text = self.fetch_manifest(ext_handler.versionUris)
+            self.save_cache(local_file, xml_text)
+            return ExtensionManifest(xml_text)
+        except Exception as e:
+            raise ExtensionDownloadError("Failed to retrieve extension manifest. Error: {0}".format(ustr(e)))
 
     def filter_package_list(self, family, ga_manifest, goal_state):
         complete_list = ga_manifest.pkg_list
@@ -939,29 +940,17 @@ class WireClient(object):
             return allowed_list
 
     def get_gafamily_manifest(self, vmagent_manifest, goal_state):
-        for update_goal_state in [False, True]:
-            try:
-                if update_goal_state:
-                    self.update_goal_state(forced=True)
-                    goal_state = self.get_goal_state()
+        self._remove_stale_agent_manifest(vmagent_manifest.family, goal_state.incarnation)
 
-                self._remove_stale_agent_manifest(
-                    vmagent_manifest.family,
-                    goal_state.incarnation)
+        local_file = MANIFEST_FILE_NAME.format(vmagent_manifest.family, goal_state.incarnation)
+        local_file = os.path.join(conf.get_lib_dir(), local_file)
 
-                local_file = MANIFEST_FILE_NAME.format(
-                                vmagent_manifest.family,
-                                goal_state.incarnation)
-                local_file = os.path.join(conf.get_lib_dir(), local_file)
-                xml_text = self.fetch_manifest(
-                            vmagent_manifest.versionsManifestUris)
-                fileutil.write_file(local_file, xml_text)
-                return ExtensionManifest(xml_text)
-
-            except ResourceGoneError:
-                continue
-
-        raise ProtocolError("Failed to retrieve GAFamily manifest")
+        try:
+            xml_text = self.fetch_manifest(vmagent_manifest.versionsManifestUris)
+            fileutil.write_file(local_file, xml_text)
+            return ExtensionManifest(xml_text)
+        except Exception as e:
+            raise ProtocolError("Failed to retrieve GAFamily manifest. Error: {0}".format(ustr(e)))
 
     def _remove_stale_agent_manifest(self, family, incarnation):
         """
@@ -998,6 +987,67 @@ class WireClient(object):
                      "advised by Fabric.").format(PROTOCOL_VERSION)
             raise ProtocolNotFoundError(error)
 
+    def send_request_using_appropriate_channel(self, direct_func, host_func):
+        # A wrapper method for all function calls that send HTTP requests. The purpose of the method is to
+        # define which channel to use, direct or through the host plugin. For the host plugin channel,
+        # also implement a retry mechanism.
+
+        # By default, the direct channel is the default channel. If that is the case, try getting a response
+        # through that channel. On failure, fall back to the host plugin channel.
+
+        # When using the host plugin channel, regardless if it's set as default or not, try sending the request first.
+        # On specific failures that indicate a stale goal state (such as resource gone or invalid container parameter),
+        # refresh the goal state and try again. If successful, set the host plugin channel as default. If failed,
+        # raise the exception.
+
+        # NOTE: direct_func and host_func are passed as lambdas. Be careful about capturing goal state data in them as
+        # they will not be refreshed even if a goal state refresh is called before retrying the host_func.
+
+        if not HostPluginProtocol.is_default_channel():
+            ret = None
+            try:
+                ret = direct_func()
+
+                # Different direct channel functions report failure in different ways: by returning None, False,
+                # or raising ResourceGone or InvalidContainer exceptions.
+                if not ret:
+                    logger.info("Request failed using the direct channel, switching to host plugin.")
+            except (ResourceGoneError, InvalidContainerError) as e:
+                logger.info("Request failed using the direct channel, switching to host plugin."
+                            "Error: {0}".format(ustr(e)))
+
+            if ret:
+                return ret
+        else:
+            logger.info("Using host plugin as default channel")
+
+        try:
+            ret = host_func()
+        except (ResourceGoneError, InvalidContainerError) as e:
+            msg = "Request failed with the current host plugin configuration." \
+                  "ContainerId: {0}, role config file: {1}. Fetching new goal state and retrying the call." \
+                  "Error: {2}".format(self.host_plugin.container_id, self.host_plugin.role_config_name, ustr(e))
+            logger.info(msg)
+
+            self.update_goal_state(forced=True)
+            msg = "Host plugin reconfigured with new parameters. " \
+                  "ContainerId: {0}, role config file: {1}.".format(self.host_plugin.container_id,
+                                                                    self.host_plugin.role_config_name)
+            logger.info(msg)
+
+            ret = host_func()
+        except Exception:
+            raise
+
+        logger.info("Request succeeded using the host plugin channel.")
+
+        if not HostPluginProtocol.is_default_channel():
+            logger.info("Setting host plugin as default channel from now on. "
+                        "Restart the agent to reset the default channel.")
+            HostPluginProtocol.set_default_channel(True)
+
+        return ret
+
     def upload_status_blob(self):
         self.update_goal_state()
         ext_conf = self.get_ext_conf()
@@ -1024,15 +1074,13 @@ class WireClient(object):
         # direct route.
         #
         # The code previously preferred the "direct" route always, and only fell back
-        # to the HostPlugin *if* there was an error.  We would like to move to
+        # to the HostPlugin *if* there was an error. We would like to move to
         # the HostPlugin for all traffic, but this is a big change.  We would like
         # to see how this behaves at scale, and have a fallback should things go
-        # wrong.  This is why we try HostPlugin then direct.
+        # wrong. This is why we try HostPlugin then direct.
         try:
             host = self.get_host_plugin()
-            host.put_vm_status(self.status_blob,
-                               ext_conf.status_upload_blob,
-                               ext_conf.status_upload_blob_type)
+            host.put_vm_status(self.status_blob, ext_conf.status_upload_blob, ext_conf.status_upload_blob_type)
             return
         except ResourceGoneError:
             # do not attempt direct, force goal state update and wait to try again
@@ -1149,7 +1197,7 @@ class WireClient(object):
 
     def report_status_event(self, message, is_success):
         from azurelinuxagent.common.event import report_event, \
-                WALAEventOperation
+            WALAEventOperation
 
         report_event(op=WALAEventOperation.ReportStatus,
                      is_success=is_success,
@@ -1191,59 +1239,48 @@ class WireClient(object):
 
     def has_artifacts_profile_blob(self):
         return self.ext_conf and not \
-               textutil.is_str_none_or_whitespace(self.ext_conf.artifacts_profile_blob)
+            textutil.is_str_none_or_whitespace(self.ext_conf.artifacts_profile_blob)
+
+    def get_artifacts_profile_through_host(self, blob):
+        host = self.get_host_plugin()
+        uri, headers = host.get_artifact_request(blob)
+        profile = self.fetch(uri, headers, use_proxy=False)
+        return profile
 
     def get_artifacts_profile(self):
         artifacts_profile = None
-        for update_goal_state in [False, True]:
+
+        if self.has_artifacts_profile_blob():
+            blob = self.ext_conf.artifacts_profile_blob
+            direct_func = lambda: self.fetch(blob)
+            # NOTE: the host_func may be called after refreshing the goal state, be careful about any goal state data
+            # in the lambda.
+            host_func = lambda: self.get_artifacts_profile_through_host(blob)
+
+            logger.verbose("Retrieving the artifacts profile")
+
             try:
-                if update_goal_state:
-                    self.update_goal_state(forced=True)
-
-                if self.has_artifacts_profile_blob():
-                    blob = self.ext_conf.artifacts_profile_blob
-
-                    profile = None
-                    if not HostPluginProtocol.is_default_channel():
-                        logger.verbose("Retrieving the artifacts profile")
-                        profile = self.fetch(blob)
-
-                    if profile is None:
-                        if HostPluginProtocol.is_default_channel():
-                            logger.verbose("Using host plugin as default channel")
-                        else:
-                            logger.verbose("Failed to download artifacts profile, "
-                                           "switching to host plugin")
-
-                        host = self.get_host_plugin()
-                        uri, headers = host.get_artifact_request(blob)
-                        profile = self.fetch(uri, headers, use_proxy=False)
-
-                    if not textutil.is_str_empty(profile):
-                        logger.verbose("Artifacts profile downloaded")
-                        try:
-                            artifacts_profile = InVMArtifactsProfile(profile)
-                        except Exception:
-                            logger.warn("Could not parse artifacts profile blob")
-                            msg = "Content: [{0}]".format(profile)
-                            logger.verbose(msg)
-
-                            from azurelinuxagent.common.event import report_event, WALAEventOperation
-                            report_event(op=WALAEventOperation.ArtifactsProfileBlob,
-                                         is_success=False,
-                                         message=msg,
-                                         log_event=False)
-
-                return artifacts_profile
-
-            except ResourceGoneError:
-                HostPluginProtocol.set_default_channel(True)
-                continue
-
+                profile = self.send_request_using_appropriate_channel(direct_func, host_func)
             except Exception as e:
                 logger.warn("Exception retrieving artifacts profile: {0}".format(ustr(e)))
+                return None
 
-        return None
+            if not textutil.is_str_empty(profile):
+                logger.verbose("Artifacts profile downloaded")
+                try:
+                    artifacts_profile = InVMArtifactsProfile(profile)
+                except Exception:
+                    logger.warn("Could not parse artifacts profile blob")
+                    msg = "Content: [{0}]".format(profile)
+                    logger.verbose(msg)
+
+                    from azurelinuxagent.common.event import report_event, WALAEventOperation
+                    report_event(op=WALAEventOperation.ArtifactsProfileBlob,
+                                 is_success=False,
+                                 message=msg,
+                                 log_event=False)
+
+        return artifacts_profile
 
 
 class VersionInfo(object):
@@ -1373,6 +1410,7 @@ class RemoteAccess(object):
     """
     Object containing information about user accounts
     """
+
     #
     # <RemoteAccess>
     #   <Version/>
@@ -1421,10 +1459,12 @@ class RemoteAccess(object):
         remote_access_user = RemoteAccessUser(name, encrypted_password, expiration)
         return remote_access_user
 
+
 class UserAccount(object):
     """
     Stores information about single user account
     """
+
     def __init__(self):
         self.Name = None
         self.EncryptedPassword = None
@@ -1452,7 +1492,7 @@ class Certificates(object):
         data = findtext(xml_doc, "Data")
         if data is None:
             return
-    
+
         # if the certificates format is not Pkcs7BlobWithPfxContents do not parse it
         certificateFormat = findtext(xml_doc, "Format")
         if certificateFormat and certificateFormat != "Pkcs7BlobWithPfxContents":
@@ -1723,6 +1763,7 @@ class InVMArtifactsProfile(object):
     * encryptedHealthChecks (optional)
     * encryptedApplicationProfile (optional)
     """
+
     def __init__(self, artifacts_profile):
         if not textutil.is_str_empty(artifacts_profile):
             self.__dict__.update(parse_json(artifacts_profile))

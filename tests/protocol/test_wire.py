@@ -16,14 +16,11 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-import glob
-import stat
 import zipfile
 
-from azurelinuxagent.common import event
 from azurelinuxagent.common.protocol.wire import *
 from azurelinuxagent.common.utils.shellutil import run_get_output
-from tests.ga.test_monitor import get_event_message, random_generator
+from tests.ga.test_monitor import random_generator
 from tests.protocol.mockwiredata import *
 
 data_with_bom = b'\xef\xbb\xbfhehe'
@@ -44,6 +41,7 @@ def get_event(message, duration=30000, evt_type="", is_internal=False, is_succes
     event.parameters.append(TelemetryEventParam('Duration', duration))
     event.parameters.append(TelemetryEventParam('ExtensionType', evt_type))
     return event
+
 
 @patch("time.sleep")
 @patch("azurelinuxagent.common.protocol.wire.CryptUtil")
@@ -162,7 +160,7 @@ class TestWireProtocol(AgentTestCase):
                                             use_proxy=True)
             # assert
             self.assertTrue(http_patch.call_count == 5)
-            for i in range(0,5):
+            for i in range(0, 5):
                 c = http_patch.call_args_list[i][-1]['use_proxy']
                 self.assertTrue(c == (True if i != 3 else False))
 
@@ -182,7 +180,7 @@ class TestWireProtocol(AgentTestCase):
         wire_protocol_client = WireProtocol(wireserver_url).client
         goal_state = GoalState(WireProtocolData(DATA_FILE).goal_state)
 
-        with patch.object(WireClient, "get_goal_state", return_value = goal_state) as patch_get_goal_state:
+        with patch.object(WireClient, "get_goal_state", return_value=goal_state) as patch_get_goal_state:
             host_plugin = wire_protocol_client.get_host_plugin()
             self.assertEqual(goal_state.container_id, host_plugin.container_id)
             self.assertEqual(goal_state.role_config_name, host_plugin.role_config_name)
@@ -232,7 +230,6 @@ class TestWireProtocol(AgentTestCase):
         rc, stdout = run_get_output(packer_version)
         self.assertEqual(0, rc)
         self.assertEqual('1.3.5\n', stdout)
-
 
     @patch("azurelinuxagent.common.protocol.wire.WireClient.update_goal_state")
     def test_upload_status_blob_default(self, *args):
@@ -326,7 +323,7 @@ class TestWireProtocol(AgentTestCase):
         # Test when artifacts_profile_blob is null/None
         self.assertEqual(None, wire_protocol_client.get_artifacts_profile())
 
-        #Test when artifacts_profile_blob is whitespace
+        # Test when artifacts_profile_blob is whitespace
         wire_protocol_client.ext_conf.artifacts_profile_blob = "  "
         self.assertEqual(None, wire_protocol_client.get_artifacts_profile())
 
@@ -338,18 +335,18 @@ class TestWireProtocol(AgentTestCase):
         wire_protocol_client.get_goal_state = Mock(return_value=goal_state)
 
         with patch.object(HostPluginProtocol, "get_artifact_request",
-                          return_value = ['dummy_url', {}]) as host_plugin_get_artifact_url_and_headers:
-            #Test when response body is None
+                          return_value=['dummy_url', {}]) as host_plugin_get_artifact_url_and_headers:
+            # Test when response body is None
             wire_protocol_client.call_storage_service = Mock(return_value=MockResponse(None, 200))
             in_vm_artifacts_profile = wire_protocol_client.get_artifacts_profile()
             self.assertTrue(in_vm_artifacts_profile is None)
 
-            #Test when response body is None
+            # Test when response body is None
             wire_protocol_client.call_storage_service = Mock(return_value=MockResponse('   '.encode('utf-8'), 200))
             in_vm_artifacts_profile = wire_protocol_client.get_artifacts_profile()
             self.assertTrue(in_vm_artifacts_profile is None)
 
-            #Test when response body is None
+            # Test when response body is None
             wire_protocol_client.call_storage_service = Mock(return_value=MockResponse('{ }'.encode('utf-8'), 200))
             in_vm_artifacts_profile = wire_protocol_client.get_artifacts_profile()
             self.assertEqual(dict(), in_vm_artifacts_profile.__dict__,
@@ -386,7 +383,8 @@ class TestWireProtocol(AgentTestCase):
         goal_state = GoalState(WireProtocolData(DATA_FILE).goal_state)
         wire_protocol_client.get_goal_state = Mock(return_value=goal_state)
 
-        wire_protocol_client.call_storage_service = Mock(return_value=MockResponse('{"onHold": "true"}'.encode('utf-8'), 200))
+        wire_protocol_client.call_storage_service = Mock(
+            return_value=MockResponse('{"onHold": "true"}'.encode('utf-8'), 200))
         in_vm_artifacts_profile = wire_protocol_client.get_artifacts_profile()
         self.assertEqual(dict(onHold='true'), in_vm_artifacts_profile.__dict__)
         self.assertTrue(in_vm_artifacts_profile.is_on_hold())
@@ -401,15 +399,10 @@ class TestWireProtocol(AgentTestCase):
                                        'container_id',
                                        'role_config')
         client = WireProtocol(wireserver_url).client
-        with patch.object(WireClient,
-                          "fetch",
-                          return_value=None) as patch_fetch:
-            with patch.object(WireClient,
-                              "get_host_plugin",
-                              return_value=mock_host):
-                with patch.object(HostPluginProtocol,
-                                  "get_artifact_request",
-                                  return_value=[host_uri, {}]):
+
+        with patch.object(WireClient, "fetch", return_value=None) as patch_fetch:
+            with patch.object(WireClient, "get_host_plugin", return_value=mock_host):
+                with patch.object(HostPluginProtocol, "get_artifact_request", return_value=[host_uri, {}]):
                     HostPluginProtocol.set_default_channel(False)
                     self.assertRaises(ExtensionDownloadError, client.fetch_manifest, uris)
                     self.assertEqual(patch_fetch.call_count, 2)
@@ -438,7 +431,8 @@ class TestWireProtocol(AgentTestCase):
                 self.assertEqual(patch_fetch.call_count, 1)
                 self.assertEqual(mock_host.manifest_uri, uri1.uri)
 
-            # Second test tries to download from the HostGA (by failing the direct download) and asserts manifest_uri is set
+            # Second test tries to download from the HostGA (by failing the direct download)
+            # and asserts manifest_uri is set
             with patch.object(WireClient, "fetch") as patch_fetch:
                 patch_fetch.side_effect = [None, manifest_return]
                 fetch_manifest_mock = client.fetch_manifest(uris)
@@ -497,7 +491,7 @@ class TestWireProtocol(AgentTestCase):
             'version': '1.1',
             'timestampUTC': timestamp,
             'aggregateStatus': v1_agg_status,
-            'guestOSInfo' : v1_ga_guest_info
+            'guestOSInfo': v1_ga_guest_info
         }
         self.assertEqual(json.dumps(v1_vm_status), actual.to_json())
 
@@ -546,7 +540,7 @@ class TestWireProtocol(AgentTestCase):
         event_list = TelemetryEventList()
         client = WireProtocol(wireserver_url).client
 
-        event_str = random_generator(2**15)
+        event_str = random_generator(2 ** 15)
         event_list.events.append(get_event(message=event_str))
         event_list.events.append(get_event(message=event_str))
 
@@ -566,12 +560,527 @@ class TestWireProtocol(AgentTestCase):
         self.assertEqual(patch_send_event.call_count, 0)
 
 
+class TestWireClient(AgentTestCase):
+
+    def test_save_or_update_goal_state_should_save_new_goal_state_file(self):
+        # Assert the file didn't exist before
+        incarnation = 42
+        goal_state_file = os.path.join(conf.get_lib_dir(), "GoalState.{0}.xml".format(incarnation))
+        self.assertFalse(os.path.exists(goal_state_file))
+
+        xml_text = WireProtocolData(DATA_FILE).goal_state
+        client = WireClient(wireserver_url)
+        client.save_or_update_goal_state_file(incarnation, xml_text)
+
+        # Assert the file exists and its contents
+        self.assertTrue(os.path.exists(goal_state_file))
+        with open(goal_state_file, "r") as f:
+            contents = f.readlines()
+            self.assertEquals("".join(contents), xml_text)
+
+    def test_save_or_update_goal_state_should_update_existing_goal_state_file(self):
+        incarnation = 42
+        goal_state_file = os.path.join(conf.get_lib_dir(), "GoalState.{0}.xml".format(incarnation))
+        xml_text = WireProtocolData(DATA_FILE).goal_state
+
+        with open(goal_state_file, "w") as f:
+            f.write(xml_text)
+
+        # Assert the file exists and its contents
+        self.assertTrue(os.path.exists(goal_state_file))
+        with open(goal_state_file, "r") as f:
+            contents = f.readlines()
+            self.assertEquals("".join(contents), xml_text)
+
+        # Update the container id
+        new_goal_state = WireProtocolData(DATA_FILE).goal_state.replace("c6d5526c-5ac2-4200-b6e2-56f2b70c5ab2",
+                                                                        "z6d5526c-5ac2-4200-b6e2-56f2b70c5ab2")
+        client = WireClient(wireserver_url)
+        client.save_or_update_goal_state_file(incarnation, new_goal_state)
+
+        # Assert the file exists and its contents
+        self.assertTrue(os.path.exists(goal_state_file))
+        with open(goal_state_file, "r") as f:
+            contents = f.readlines()
+            self.assertEquals("".join(contents), new_goal_state)
+
+    def test_save_or_update_goal_state_should_update_goal_state_and_container_id_when_not_forced(self):
+        incarnation = "1"  # Match the incarnation number from dummy goal state file
+        incarnation_file = os.path.join(conf.get_lib_dir(), INCARNATION_FILE_NAME)
+        with open(incarnation_file, "w") as f:
+            f.write(incarnation)
+
+        xml_text = WireProtocolData(DATA_FILE).goal_state
+        goal_state_file = os.path.join(conf.get_lib_dir(), "GoalState.{0}.xml".format(incarnation))
+
+        with open(goal_state_file, "w") as f:
+            f.write(xml_text)
+
+        client = WireClient(wireserver_url)
+        host = client.get_host_plugin()
+        old_container_id = host.container_id
+
+        # Update the container id
+        new_goal_state = WireProtocolData(DATA_FILE).goal_state.replace("c6d5526c-5ac2-4200-b6e2-56f2b70c5ab2",
+                                                                        "z6d5526c-5ac2-4200-b6e2-56f2b70c5ab2")
+        with patch("azurelinuxagent.common.protocol.wire.WireClient.fetch_config", return_value=new_goal_state):
+            client.update_goal_state(forced=False)
+
+        self.assertNotEqual(old_container_id, host.container_id)
+        self.assertEquals(host.container_id, "z6d5526c-5ac2-4200-b6e2-56f2b70c5ab2")
+
+    @patch("azurelinuxagent.common.protocol.wire.WireClient.get_goal_state")
+    @patch("azurelinuxagent.common.protocol.hostplugin.HostPluginProtocol.get_artifact_request")
+    def test_download_ext_handler_pkg_should_not_invoke_host_channel_when_direct_channel_succeeds(self, mock_get_artifact_request, *args):
+        mock_get_artifact_request.return_value = "dummy_url", "dummy_header"
+        protocol = WireProtocol("foo.bar")
+        HostPluginProtocol.set_default_channel(False)
+
+        mock_successful_response = MockResponse(body=b"OK", status_code=200)
+        destination = os.path.join(self.tmp_dir, "tmp_file")
+
+        # Direct channel succeeds
+        with patch("azurelinuxagent.common.utils.restutil._http_request", return_value=mock_successful_response):
+            with patch("azurelinuxagent.common.protocol.wire.WireClient.update_goal_state") as mock_update_goal_state:
+                with patch("azurelinuxagent.common.protocol.wire.WireClient.stream", wraps=protocol.client.stream) \
+                        as patch_direct:
+                    with patch("azurelinuxagent.common.protocol.wire.WireProtocol.download_ext_handler_pkg_through_host",
+                               wraps=protocol.download_ext_handler_pkg_through_host) as patch_host:
+                        ret = protocol.download_ext_handler_pkg("uri", destination)
+                        self.assertEquals(ret, True)
+
+                        self.assertEquals(patch_host.call_count, 0)
+                        self.assertEquals(patch_direct.call_count, 1)
+                        self.assertEquals(mock_update_goal_state.call_count, 0)
+
+                        self.assertEquals(HostPluginProtocol.is_default_channel(), False)
+
+    @patch("azurelinuxagent.common.protocol.wire.WireClient.get_goal_state")
+    @patch("azurelinuxagent.common.protocol.hostplugin.HostPluginProtocol.get_artifact_request")
+    def test_download_ext_handler_pkg_should_use_host_channel_when_direct_channel_fails(self, mock_get_artifact_request, *args):
+        mock_get_artifact_request.return_value = "dummy_url", "dummy_header"
+        protocol = WireProtocol("foo.bar")
+        HostPluginProtocol.set_default_channel(False)
+
+        mock_failed_response = MockResponse(body=b"", status_code=httpclient.GONE)
+        mock_successful_response = MockResponse(body=b"OK", status_code=200)
+        destination = os.path.join(self.tmp_dir, "tmp_file")
+
+        # Direct channel fails, host channel succeeds. Goal state should not have been updated and host channel
+        # should have been set as default.
+        with patch("azurelinuxagent.common.utils.restutil._http_request",
+                   side_effect=[mock_failed_response, mock_successful_response]):
+            with patch("azurelinuxagent.common.protocol.wire.WireClient.update_goal_state") as mock_update_goal_state:
+                with patch("azurelinuxagent.common.protocol.wire.WireClient.stream", wraps=protocol.client.stream) \
+                        as patch_direct:
+                    with patch("azurelinuxagent.common.protocol.wire.WireProtocol.download_ext_handler_pkg_through_host",
+                               wraps=protocol.download_ext_handler_pkg_through_host) as patch_host:
+                        ret = protocol.download_ext_handler_pkg("uri", destination)
+                        self.assertEquals(ret, True)
+
+                        self.assertEquals(patch_host.call_count, 1)
+                        # The host channel calls the direct function under the covers
+                        self.assertEquals(patch_direct.call_count, 1 + patch_host.call_count)
+                        self.assertEquals(mock_update_goal_state.call_count, 0)
+
+                        self.assertEquals(HostPluginProtocol.is_default_channel(), True)
+
+    @patch("azurelinuxagent.common.protocol.wire.WireClient.get_goal_state")
+    @patch("azurelinuxagent.common.protocol.hostplugin.HostPluginProtocol.get_artifact_request")
+    def test_download_ext_handler_pkg_should_retry_the_host_channel_after_reloading_goal_state(self, mock_get_artifact_request, *args):
+        mock_get_artifact_request.return_value = "dummy_url", "dummy_header"
+        protocol = WireProtocol("foo.bar")
+        HostPluginProtocol.set_default_channel(False)
+
+        mock_failed_response = MockResponse(body=b"", status_code=httpclient.GONE)
+        mock_successful_response = MockResponse(body=b"OK", status_code=200)
+        destination = os.path.join(self.tmp_dir, "tmp_file")
+
+        # Direct channel fails, host channel fails due to stale goal state, host channel succeeds after refresh.
+        # As a consequence, goal state should have been updated and host channel should have been set as default.
+        with patch("azurelinuxagent.common.utils.restutil._http_request",
+                   side_effect=[mock_failed_response, mock_failed_response, mock_successful_response]):
+            with patch("azurelinuxagent.common.protocol.wire.WireClient.update_goal_state") as mock_update_goal_state:
+                with patch("azurelinuxagent.common.protocol.wire.WireClient.stream", wraps=protocol.client.stream) \
+                        as patch_direct:
+                    with patch("azurelinuxagent.common.protocol.wire.WireProtocol.download_ext_handler_pkg_through_host",
+                               wraps=protocol.download_ext_handler_pkg_through_host) as patch_host:
+                        ret = protocol.download_ext_handler_pkg("uri", destination)
+                        self.assertEquals(ret, True)
+
+                        self.assertEquals(patch_host.call_count, 2)
+                        # The host channel calls the direct function under the covers
+                        self.assertEquals(patch_direct.call_count, 1 + patch_host.call_count)
+                        self.assertEquals(mock_update_goal_state.call_count, 1)
+
+                        self.assertEquals(HostPluginProtocol.is_default_channel(), True)
+
+    @patch("azurelinuxagent.common.protocol.wire.WireClient.get_goal_state")
+    @patch("azurelinuxagent.common.protocol.hostplugin.HostPluginProtocol.get_artifact_request")
+    def test_download_ext_handler_pkg_should_update_goal_state_and_not_change_default_channel_if_host_fails(self, mock_get_artifact_request, *args):
+        mock_get_artifact_request.return_value = "dummy_url", "dummy_header"
+        protocol = WireProtocol("foo.bar")
+        HostPluginProtocol.set_default_channel(False)
+
+        mock_failed_response = MockResponse(body=b"", status_code=httpclient.GONE)
+        destination = os.path.join(self.tmp_dir, "tmp_file")
+
+        # Everything fails. Goal state should have been updated and host channel should not have been set as default.
+        with patch("azurelinuxagent.common.utils.restutil._http_request", return_value=mock_failed_response):
+            with patch("azurelinuxagent.common.protocol.wire.WireClient.update_goal_state") as mock_update_goal_state:
+                with patch("azurelinuxagent.common.protocol.wire.WireClient.stream", wraps=protocol.client.stream) \
+                        as patch_direct:
+                    with patch("azurelinuxagent.common.protocol.wire.WireProtocol.download_ext_handler_pkg_through_host",
+                               wraps=protocol.download_ext_handler_pkg_through_host) as patch_host:
+                        ret = protocol.download_ext_handler_pkg("uri", destination)
+                        self.assertEquals(ret, False)
+
+                        self.assertEquals(patch_host.call_count, 2)
+                        # The host channel calls the direct function under the covers
+                        self.assertEquals(patch_direct.call_count, 1 + patch_host.call_count)
+                        self.assertEquals(mock_update_goal_state.call_count, 1)
+
+                        self.assertEquals(HostPluginProtocol.is_default_channel(), False)
+
+    @patch("azurelinuxagent.common.protocol.wire.WireClient.get_goal_state")
+    @patch("azurelinuxagent.common.protocol.hostplugin.HostPluginProtocol.get_artifact_request")
+    def test_fetch_manifest_should_not_invoke_host_channel_when_direct_channel_succeeds(self, mock_get_artifact_request, *args):
+        mock_get_artifact_request.return_value = "dummy_url", "dummy_header"
+        client = WireClient("foo.bar")
+
+        HostPluginProtocol.set_default_channel(False)
+        mock_successful_response = MockResponse(body=b"OK", status_code=200)
+
+        # Direct channel succeeds
+        with patch("azurelinuxagent.common.utils.restutil._http_request", return_value=mock_successful_response):
+            with patch("azurelinuxagent.common.protocol.wire.WireClient.update_goal_state") as mock_update_goal_state:
+                with patch("azurelinuxagent.common.protocol.wire.WireClient.fetch", wraps=client.fetch) as patch_direct:
+                    with patch("azurelinuxagent.common.protocol.wire.WireClient.fetch_manifest_through_host",
+                               wraps=client.fetch_manifest_through_host) as patch_host:
+                        ret = client.fetch_manifest([VMAgentManifestUri(uri="uri1")])
+                        self.assertEquals(ret, "OK")
+
+                        self.assertEquals(patch_host.call_count, 0)
+                        # The host channel calls the direct function under the covers
+                        self.assertEquals(patch_direct.call_count, 1)
+                        self.assertEquals(mock_update_goal_state.call_count, 0)
+
+                        self.assertEquals(HostPluginProtocol.is_default_channel(), False)
+
+    @patch("azurelinuxagent.common.protocol.wire.WireClient.get_goal_state")
+    @patch("azurelinuxagent.common.protocol.hostplugin.HostPluginProtocol.get_artifact_request")
+    def test_fetch_manifest_should_use_host_channel_when_direct_channel_fails(self, mock_get_artifact_request, *args):
+        mock_get_artifact_request.return_value = "dummy_url", "dummy_header"
+        client = WireClient("foo.bar")
+
+        HostPluginProtocol.set_default_channel(False)
+
+        mock_failed_response = MockResponse(body=b"", status_code=httpclient.GONE)
+        mock_successful_response = MockResponse(body=b"OK", status_code=200)
+
+        # Direct channel fails, host channel succeeds. Goal state should not have been updated and host channel
+        # should have been set as default
+        with patch("azurelinuxagent.common.utils.restutil._http_request",
+                   side_effect=[mock_failed_response, mock_successful_response]):
+            with patch("azurelinuxagent.common.protocol.wire.WireClient.update_goal_state") as mock_update_goal_state:
+                with patch("azurelinuxagent.common.protocol.wire.WireClient.fetch", wraps=client.fetch) as patch_direct:
+                    with patch("azurelinuxagent.common.protocol.wire.WireClient.fetch_manifest_through_host",
+                               wraps=client.fetch_manifest_through_host) as patch_host:
+                        ret = client.fetch_manifest([VMAgentManifestUri(uri="uri1")])
+                        self.assertEquals(ret, "OK")
+
+                        self.assertEquals(patch_host.call_count, 1)
+                        # The host channel calls the direct function under the covers
+                        self.assertEquals(patch_direct.call_count, 1 + patch_host.call_count)
+                        self.assertEquals(mock_update_goal_state.call_count, 0)
+
+                        self.assertEquals(HostPluginProtocol.is_default_channel(), True)
+
+        # Reset default channel
+        HostPluginProtocol.set_default_channel(False)
+
+    @patch("azurelinuxagent.common.protocol.wire.WireClient.get_goal_state")
+    @patch("azurelinuxagent.common.protocol.hostplugin.HostPluginProtocol.get_artifact_request")
+    def test_fetch_manifest_should_retry_the_host_channel_after_reloading_goal_state(self, mock_get_artifact_request, *args):
+        mock_get_artifact_request.return_value = "dummy_url", "dummy_header"
+        client = WireClient("foo.bar")
+
+        HostPluginProtocol.set_default_channel(False)
+
+        mock_failed_response = MockResponse(body=b"", status_code=httpclient.GONE)
+        mock_successful_response = MockResponse(body=b"OK", status_code=200)
+
+        # Direct channel fails, host channel fails due to stale goal state, host channel succeeds after refresh.
+        # As a consequence, goal state should have been updated and host channel should have been set as default.
+        with patch("azurelinuxagent.common.utils.restutil._http_request",
+                   side_effect=[mock_failed_response, mock_failed_response, mock_successful_response]):
+            with patch("azurelinuxagent.common.protocol.wire.WireClient.update_goal_state") as mock_update_goal_state:
+                with patch("azurelinuxagent.common.protocol.wire.WireClient.fetch", wraps=client.fetch) as patch_direct:
+                    with patch("azurelinuxagent.common.protocol.wire.WireClient.fetch_manifest_through_host",
+                               wraps=client.fetch_manifest_through_host) as patch_host:
+                        ret = client.fetch_manifest([VMAgentManifestUri(uri="uri1")])
+                        self.assertEquals(ret, "OK")
+
+                        self.assertEquals(patch_host.call_count, 2)
+                        # The host channel calls the direct function under the covers
+                        self.assertEquals(patch_direct.call_count, 1 + patch_host.call_count)
+                        self.assertEquals(mock_update_goal_state.call_count, 1)
+
+                        self.assertEquals(HostPluginProtocol.is_default_channel(), True)
+
+    @patch("azurelinuxagent.common.protocol.wire.WireClient.get_goal_state")
+    @patch("azurelinuxagent.common.protocol.hostplugin.HostPluginProtocol.get_artifact_request")
+    def test_fetch_manifest_should_update_goal_state_and_not_change_default_channel_if_host_fails(self, mock_get_artifact_request, *args):
+        mock_get_artifact_request.return_value = "dummy_url", "dummy_header"
+        client = WireClient("foo.bar")
+
+        HostPluginProtocol.set_default_channel(False)
+        mock_failed_response = MockResponse(body=b"", status_code=httpclient.GONE)
+
+        # Everything fails. Goal state should have been updated and host channel should not have been set as default.
+        with patch("azurelinuxagent.common.utils.restutil._http_request", return_value=mock_failed_response):
+            with patch("azurelinuxagent.common.protocol.wire.WireClient.update_goal_state") as mock_update_goal_state:
+                with patch("azurelinuxagent.common.protocol.wire.WireClient.fetch", wraps=client.fetch) as patch_direct:
+                    with patch("azurelinuxagent.common.protocol.wire.WireClient.fetch_manifest_through_host",
+                               wraps=client.fetch_manifest_through_host) as patch_host:
+                        with self.assertRaises(ExtensionDownloadError):
+                            client.fetch_manifest([VMAgentManifestUri(uri="uri1")])
+
+                            self.assertEquals(patch_host.call_count, 2)
+                            # The host channel calls the direct function under the covers
+                            self.assertEquals(patch_direct.call_count, 1 + patch_host.call_count)
+                            self.assertEquals(mock_update_goal_state.call_count, 1)
+
+                            self.assertEquals(HostPluginProtocol.is_default_channel(), False)
+
+    @patch("azurelinuxagent.common.protocol.wire.WireClient.get_goal_state")
+    @patch("azurelinuxagent.common.protocol.hostplugin.HostPluginProtocol.get_artifact_request")
+    def test_get_artifacts_profile_should_not_invoke_host_channel_when_direct_channel_succeeds(self, mock_get_artifact_request, *args):
+        mock_get_artifact_request.return_value = "dummy_url", "dummy_header"
+        client = WireClient("foo.bar")
+        client.ext_conf = ExtensionsConfig(None)
+        client.ext_conf.artifacts_profile_blob = "testurl"
+        json_profile = b'{ "onHold": true }'
+
+        HostPluginProtocol.set_default_channel(False)
+        mock_successful_response = MockResponse(body=json_profile, status_code=200)
+
+        # Direct channel succeeds
+        with patch("azurelinuxagent.common.utils.restutil._http_request", return_value=mock_successful_response):
+            with patch("azurelinuxagent.common.protocol.wire.WireClient.update_goal_state") as mock_update_goal_state:
+                with patch("azurelinuxagent.common.protocol.wire.WireClient.fetch", wraps=client.fetch) as patch_direct:
+                    with patch("azurelinuxagent.common.protocol.wire.WireClient.get_artifacts_profile_through_host",
+                               wraps=client.get_artifacts_profile_through_host) as patch_host:
+                        ret = client.get_artifacts_profile()
+                        self.assertIsInstance(ret, InVMArtifactsProfile)
+
+                        self.assertEquals(patch_host.call_count, 0)
+                        self.assertEquals(patch_direct.call_count, 1)
+                        self.assertEquals(mock_update_goal_state.call_count, 0)
+
+                        self.assertEquals(HostPluginProtocol.is_default_channel(), False)
+
+    @patch("azurelinuxagent.common.protocol.wire.WireClient.get_goal_state")
+    @patch("azurelinuxagent.common.protocol.hostplugin.HostPluginProtocol.get_artifact_request")
+    def test_get_artifacts_profile_should_use_host_channel_when_direct_channel_fails(self, mock_get_artifact_request, *args):
+        mock_get_artifact_request.return_value = "dummy_url", "dummy_header"
+        client = WireClient("foo.bar")
+        client.ext_conf = ExtensionsConfig(None)
+        client.ext_conf.artifacts_profile_blob = "testurl"
+        json_profile = b'{ "onHold": true }'
+
+        HostPluginProtocol.set_default_channel(False)
+
+        mock_failed_response = MockResponse(body=b"", status_code=httpclient.GONE)
+        mock_successful_response = MockResponse(body=json_profile, status_code=200)
+
+        # Direct channel fails, host channel succeeds. Goal state should not have been updated and host channel
+        # should have been set as default
+        with patch("azurelinuxagent.common.utils.restutil._http_request",
+                   side_effect=[mock_failed_response, mock_successful_response]):
+            with patch("azurelinuxagent.common.protocol.wire.WireClient.update_goal_state") as mock_update_goal_state:
+                with patch("azurelinuxagent.common.protocol.wire.WireClient.fetch", wraps=client.fetch) as patch_direct:
+                    with patch("azurelinuxagent.common.protocol.wire.WireClient.get_artifacts_profile_through_host",
+                               wraps=client.get_artifacts_profile_through_host) as patch_host:
+                        ret = client.get_artifacts_profile()
+                        self.assertIsInstance(ret, InVMArtifactsProfile)
+
+                        self.assertEquals(patch_host.call_count, 1)
+                        # The host channel calls the direct function under the covers
+                        self.assertEquals(patch_direct.call_count, 1 + patch_host.call_count)
+                        self.assertEquals(mock_update_goal_state.call_count, 0)
+
+                        self.assertEquals(HostPluginProtocol.is_default_channel(), True)
+
+    @patch("azurelinuxagent.common.protocol.wire.WireClient.get_goal_state")
+    @patch("azurelinuxagent.common.protocol.hostplugin.HostPluginProtocol.get_artifact_request")
+    def test_get_artifacts_profile_should_retry_the_host_channel_after_reloading_goal_state(self, mock_get_artifact_request, *args):
+        mock_get_artifact_request.return_value = "dummy_url", "dummy_header"
+        client = WireClient("foo.bar")
+        client.ext_conf = ExtensionsConfig(None)
+        client.ext_conf.artifacts_profile_blob = "testurl"
+        json_profile = b'{ "onHold": true }'
+
+        HostPluginProtocol.set_default_channel(False)
+
+        mock_failed_response = MockResponse(body=b"", status_code=httpclient.GONE)
+        mock_successful_response = MockResponse(body=json_profile, status_code=200)
+
+        # Direct channel fails, host channel fails due to stale goal state, host channel succeeds after refresh.
+        # As a consequence, goal state should have been updated and host channel should have been set as default.
+        with patch("azurelinuxagent.common.utils.restutil._http_request",
+                   side_effect=[mock_failed_response, mock_failed_response, mock_successful_response]):
+            with patch("azurelinuxagent.common.protocol.wire.WireClient.update_goal_state") as mock_update_goal_state:
+                with patch("azurelinuxagent.common.protocol.wire.WireClient.fetch", wraps=client.fetch) as patch_direct:
+                    with patch("azurelinuxagent.common.protocol.wire.WireClient.get_artifacts_profile_through_host",
+                               wraps=client.get_artifacts_profile_through_host) as patch_host:
+                        ret = client.get_artifacts_profile()
+                        self.assertIsInstance(ret, InVMArtifactsProfile)
+
+                        self.assertEquals(patch_host.call_count, 2)
+                        # The host channel calls the direct function under the covers
+                        self.assertEquals(patch_direct.call_count, 1 + patch_host.call_count)
+                        self.assertEquals(mock_update_goal_state.call_count, 1)
+
+                        self.assertEquals(HostPluginProtocol.is_default_channel(), True)
+
+    @patch("azurelinuxagent.common.protocol.wire.WireClient.get_goal_state")
+    @patch("azurelinuxagent.common.protocol.hostplugin.HostPluginProtocol.get_artifact_request")
+    def test_get_artifacts_profile_should_update_goal_state_and_not_change_default_channel_if_host_fails(self, mock_get_artifact_request, *args):
+        mock_get_artifact_request.return_value = "dummy_url", "dummy_header"
+        client = WireClient("foo.bar")
+        client.ext_conf = ExtensionsConfig(None)
+        client.ext_conf.artifacts_profile_blob = "testurl"
+        json_profile = b'{ "onHold": true }'
+
+        HostPluginProtocol.set_default_channel(False)
+
+        mock_failed_response = MockResponse(body=b"", status_code=httpclient.GONE)
+
+        # Everything fails. Goal state should have been updated and host channel should not have been set as default.
+        with patch("azurelinuxagent.common.utils.restutil._http_request", return_value=mock_failed_response):
+            with patch("azurelinuxagent.common.protocol.wire.WireClient.update_goal_state") as mock_update_goal_state:
+                with patch("azurelinuxagent.common.protocol.wire.WireClient.fetch", wraps=client.fetch) as patch_direct:
+                    with patch("azurelinuxagent.common.protocol.wire.WireClient.get_artifacts_profile_through_host",
+                               wraps=client.get_artifacts_profile_through_host) as patch_host:
+                        ret = client.get_artifacts_profile()
+                        self.assertEquals(ret, None)
+
+                        self.assertEquals(patch_host.call_count, 2)
+                        # The host channel calls the direct function under the covers
+                        self.assertEquals(patch_direct.call_count, 1 + patch_host.call_count)
+                        self.assertEquals(mock_update_goal_state.call_count, 1)
+
+                        self.assertEquals(HostPluginProtocol.is_default_channel(), False)
+
+    def test_send_request_using_appropriate_channel_should_not_invoke_host_channel_when_direct_channel_succeeds(self, *args):
+        xml_text = WireProtocolData(DATA_FILE).goal_state
+        client = WireClient(wireserver_url)
+        client.goal_state = GoalState(xml_text)
+        client.get_host_plugin().set_default_channel(False)
+
+        def direct_func(*args):
+            direct_func.counter += 1
+            return 42
+
+        def host_func(*args):
+            host_func.counter += 1
+            return None
+
+        direct_func.counter = 0
+        host_func.counter = 0
+
+        # Assert we've only called the direct channel functions and that it succeeded.
+        ret = client.send_request_using_appropriate_channel(direct_func, host_func)
+        self.assertEquals(42, ret)
+        self.assertEquals(1, direct_func.counter)
+        self.assertEquals(0, host_func.counter)
+
+    def test_send_request_using_appropriate_channel_should_not_use_direct_channel_when_host_channel_is_default(self, *args):
+        xml_text = WireProtocolData(DATA_FILE).goal_state
+        client = WireClient(wireserver_url)
+        client.goal_state = GoalState(xml_text)
+        client.get_host_plugin().set_default_channel(True)
+
+        def direct_func(*args):
+            direct_func.counter += 1
+            return 42
+
+        def host_func(*args):
+            host_func.counter += 1
+            return 43
+
+        direct_func.counter = 0
+        host_func.counter = 0
+
+        # Assert we've only called the host channel function since it's the default channel
+        ret = client.send_request_using_appropriate_channel(direct_func, host_func)
+        self.assertEquals(43, ret)
+        self.assertEquals(0, direct_func.counter)
+        self.assertEquals(1, host_func.counter)
+
+    def test_send_request_using_appropriate_channel_should_use_host_channel_when_direct_channel_fails(self, *args):
+        xml_text = WireProtocolData(DATA_FILE).goal_state
+        client = WireClient(wireserver_url)
+        client.goal_state = GoalState(xml_text)
+        host = client.get_host_plugin()
+        host.set_default_channel(False)
+
+        def direct_func(*args):
+            direct_func.counter += 1
+            raise InvalidContainerError()
+
+        def host_func(*args):
+            host_func.counter += 1
+            return 42
+
+        direct_func.counter = 0
+        host_func.counter = 0
+
+        # Assert we've called both the direct channel function and the host channel function, which succeeded.
+        # After the host channel succeeds, the host plugin should have been set as the default channel.
+        ret = client.send_request_using_appropriate_channel(direct_func, host_func)
+        self.assertEquals(42, ret)
+        self.assertEquals(1, direct_func.counter)
+        self.assertEquals(1, host_func.counter)
+        self.assertEquals(True, host.is_default_channel())
+
+    def test_send_request_using_appropriate_channel_should_retry_the_host_channel_after_reloading_goal_state(self, *args):
+        xml_text = WireProtocolData(DATA_FILE).goal_state
+        client = WireClient(wireserver_url)
+        client.goal_state = GoalState(xml_text)
+        client.get_host_plugin().set_default_channel(False)
+
+        def direct_func(*args):
+            direct_func.counter += 1
+            raise InvalidContainerError()
+
+        def host_func(*args):
+            host_func.counter += 1
+            if host_func.counter == 1:
+                raise ResourceGoneError("Resource is gone")
+            return 42
+
+        direct_func.counter = 0
+        host_func.counter = 0
+
+        # Assert we've called both the direct channel function (once) and the host channel function (twice).
+        # After the host channel succeeds, the host plugin should have been set as the default channel.
+        with patch('azurelinuxagent.common.protocol.wire.WireClient.update_goal_state') as mock_update_goal_state:
+            ret = client.send_request_using_appropriate_channel(direct_func, host_func)
+            self.assertEquals(42, ret)
+            self.assertEquals(1, direct_func.counter)
+            self.assertEquals(2, host_func.counter)
+            self.assertEquals(1, mock_update_goal_state.call_count)
+            self.assertEquals(True, client.get_host_plugin().is_default_channel())
+
+
 class MockResponse:
     def __init__(self, body, status_code):
         self.body = body
         self.status = status_code
 
-    def read(self):
+    def read(self, *_):
         return self.body
 
 
