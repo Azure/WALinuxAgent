@@ -747,10 +747,6 @@ class TestWireClient(AgentTestCase):
     def test_fetch_manifest_should_not_invoke_host_channel_when_direct_channel_succeeds(self, mock_get_artifact_request, *args):
         mock_get_artifact_request.return_value = "dummy_url", "dummy_header"
         client = WireClient("foo.bar")
-        uri1 = ExtHandlerVersionUri()
-        uri1.uri = 'ext_uri1'
-        uri2 = ExtHandlerVersionUri()
-        uri2.uri = 'ext_uri2'
 
         HostPluginProtocol.set_default_channel(False)
         mock_successful_response = MockResponse(body=b"OK", status_code=200)
@@ -776,10 +772,6 @@ class TestWireClient(AgentTestCase):
     def test_fetch_manifest_should_use_host_channel_when_direct_channel_fails(self, mock_get_artifact_request, *args):
         mock_get_artifact_request.return_value = "dummy_url", "dummy_header"
         client = WireClient("foo.bar")
-        uri1 = ExtHandlerVersionUri()
-        uri1.uri = 'ext_uri1'
-        uri2 = ExtHandlerVersionUri()
-        uri2.uri = 'ext_uri2'
 
         HostPluginProtocol.set_default_channel(False)
 
@@ -812,10 +804,6 @@ class TestWireClient(AgentTestCase):
     def test_fetch_manifest_should_retry_the_host_channel_after_reloading_goal_state(self, mock_get_artifact_request, *args):
         mock_get_artifact_request.return_value = "dummy_url", "dummy_header"
         client = WireClient("foo.bar")
-        uri1 = ExtHandlerVersionUri()
-        uri1.uri = 'ext_uri1'
-        uri2 = ExtHandlerVersionUri()
-        uri2.uri = 'ext_uri2'
 
         HostPluginProtocol.set_default_channel(False)
 
@@ -845,10 +833,6 @@ class TestWireClient(AgentTestCase):
     def test_fetch_manifest_should_update_goal_state_and_not_change_default_channel_if_host_fails(self, mock_get_artifact_request, *args):
         mock_get_artifact_request.return_value = "dummy_url", "dummy_header"
         client = WireClient("foo.bar")
-        uri1 = ExtHandlerVersionUri()
-        uri1.uri = 'ext_uri1'
-        uri2 = ExtHandlerVersionUri()
-        uri2.uri = 'ext_uri2'
 
         HostPluginProtocol.set_default_channel(False)
         mock_failed_response = MockResponse(body=b"", status_code=httpclient.GONE)
