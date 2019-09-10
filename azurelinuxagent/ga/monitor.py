@@ -245,6 +245,7 @@ class MonitorHandler(object):
                     try:
                         event = parse_event(data_str)
                         self.add_sysinfo(event)
+                        self.update_container_id(event)
                         event_list.events.append(event)
                     except (ValueError, ProtocolError) as e:
                         logger.warn("Failed to decode event file: {0}", ustr(e))
@@ -286,6 +287,19 @@ class MonitorHandler(object):
                 logger.verbose("Remove existing event parameter: [{0}:{1}]", param.name, param.value)
                 event.parameters.remove(param)
         event.parameters.extend(self.sysinfo)
+
+    def update_container_id(self, event):
+        last_known_container_id = self.protocol.client.get_container_id_from_goal_state()
+        if last_known_container_id is None:
+            return
+
+        for i, param in enumerate(event.parameters):
+            if param.name == "ContainerId":
+                if param.value == last_known_container_id:
+                    # No update needed
+                    return
+                updated_parameter = TelemetryEventParam("ContainerId", last_known_container_id)
+                event.parameters[i] = updated_parameter
 
     def send_imds_heartbeat(self):
         """

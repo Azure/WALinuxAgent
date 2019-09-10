@@ -136,6 +136,31 @@ class TestMonitor(AgentTestCase):
 
         self.assertEqual(5, counter)
 
+    def test_update_container_id(self, *args):
+        old_container_id = "old_container_id"
+        new_container_id = "new_container_id"
+
+        event = TelemetryEvent()
+        event.parameters.append(TelemetryEventParam("ContainerId", old_container_id))
+        event.parameters.append(TelemetryEventParam("Message", "dummy message"))
+
+        monitor_handler = get_monitor_handler()
+        monitor_handler.protocol = WireProtocol("foo.bar")
+
+        with patch("azurelinuxagent.common.protocol.wire.WireClient.get_container_id_from_goal_state",
+                   return_value=None):
+            monitor_handler.update_container_id(event)
+            for p in event.parameters:
+                if p.name == "ContainerId":
+                    self.assertEquals(p.value, old_container_id)
+
+        with patch("azurelinuxagent.common.protocol.wire.WireClient.get_container_id_from_goal_state",
+                   return_value=new_container_id):
+            monitor_handler.update_container_id(event)
+            for p in event.parameters:
+                if p.name == "ContainerId":
+                    self.assertEquals(p.value, new_container_id)
+
     @patch("azurelinuxagent.ga.monitor.MonitorHandler.send_telemetry_heartbeat")
     @patch("azurelinuxagent.ga.monitor.MonitorHandler.collect_and_send_events")
     @patch("azurelinuxagent.ga.monitor.MonitorHandler.send_host_plugin_heartbeat")
