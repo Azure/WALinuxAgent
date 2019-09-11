@@ -11,6 +11,7 @@ from azurelinuxagent.common.protocol.restapi import DataContract, set_properties
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 
 IMDS_ENDPOINT = '169.254.169.254'
+IMDS_ENDPOINT_BACKUP = '168.63.129.16'
 APIVERSION = '2018-02-01'
 BASE_URI = "http://{0}/metadata/instance/{1}?api-version={2}"
 
@@ -249,8 +250,16 @@ class ImdsClient(object):
         return BASE_URI.format(IMDS_ENDPOINT, 'compute', self._api_version)
 
     @property
+    def compute_url_backup(self):
+        return BASE_URI.format(IMDS_ENDPOINT_BACKUP, 'compute', self._api_version)
+
+    @property
     def instance_url(self):
         return BASE_URI.format(IMDS_ENDPOINT, '', self._api_version)
+
+    @property
+    def instance_url_backup(self):
+        return BASE_URI.format(IMDS_ENDPOINT_BACKUP, '', self._api_version)
 
     def get_compute(self):
         """
@@ -263,7 +272,9 @@ class ImdsClient(object):
         resp = restutil.http_get(self.compute_url, headers=self._headers)
 
         if restutil.request_failed(resp):
-            raise HttpError("{0} - GET: {1}".format(resp.status, self.compute_url))
+            resp = restutil.http_get(self.compute_url_backup, headers=self._headers)
+            if restutil.request_failed(resp):
+                raise HttpError("{0} - GET: {1}".format(resp.status, self.compute_url))
 
         data = resp.read()
         data = json.loads(ustr(data, encoding="utf-8"))
@@ -286,7 +297,9 @@ class ImdsClient(object):
         # ensure we get a 200
         resp = restutil.http_get(self.instance_url, headers=self._health_headers)
         if restutil.request_failed(resp):
-            return False, "{0}".format(restutil.read_response_error(resp))
+            resp = restutil.http_get(self.instance_url_backup, headers=self._health_headers)
+            if restutil.request_failed(resp):
+                return False, "{0}".format(restutil.read_response_error(resp))
 
         # ensure the response is valid json
         data = resp.read()
