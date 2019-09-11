@@ -52,7 +52,7 @@ class CryptUtil(object):
         if not os.path.exists(file_name):
             raise IOError(errno.ENOENT, "File not found", file_name)
         else:
-            cmd = [self.openssl_cmd, "pkey", "-in", file_name, "-pubout"]
+            cmd = [self.openssl_cmd, "rsa", "-in", file_name, "-pubout"]
             pub = shellutil.run_command(cmd, log_error=True)
             return pub
 
