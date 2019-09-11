@@ -113,10 +113,11 @@ class TestProvision(AgentTestCase):
         self.assertEqual(1, deprovision_handler.run_changed_unique_id.call_count)
 
     @distros()
+    @patch('azurelinuxagent.common.conf.get_provisioning_agent', return_value='waagent')
     def test_provision_telemetry_pga_false(self,
                                            distro_name,
                                            distro_version,
-                                           distro_full_name):
+                                           distro_full_name, _):
         """
         ProvisionGuestAgent flag is 'false'
         """
@@ -128,10 +129,11 @@ class TestProvision(AgentTestCase):
                              True)
 
     @distros()
+    @patch('azurelinuxagent.common.conf.get_provisioning_agent', return_value='waagent')
     def test_provision_telemetry_pga_true(self,
                                           distro_name,
                                           distro_version,
-                                          distro_full_name):
+                                          distro_full_name, _):
         """
         ProvisionGuestAgent flag is 'true'
         """
@@ -143,10 +145,11 @@ class TestProvision(AgentTestCase):
                              True)
 
     @distros()
+    @patch('azurelinuxagent.common.conf.get_provisioning_agent', return_value='waagent')
     def test_provision_telemetry_pga_empty(self,
                                            distro_name,
                                            distro_version,
-                                           distro_full_name):
+                                           distro_full_name, _):
         """
         ProvisionGuestAgent flag is ''
         """
@@ -158,10 +161,11 @@ class TestProvision(AgentTestCase):
                              False)
 
     @distros()
+    @patch('azurelinuxagent.common.conf.get_provisioning_agent', return_value='waagent')
     def test_provision_telemetry_pga_bad(self,
                                          distro_name,
                                          distro_version,
-                                         distro_full_name):
+                                         distro_full_name, _):
         """
         ProvisionGuestAgent flag is 'bad data'
         """
@@ -238,11 +242,12 @@ class TestProvision(AgentTestCase):
     @patch(
         'azurelinuxagent.common.osutil.default.DefaultOSUtil.get_instance_id',
         return_value='B9F3C233-9913-9F42-8EB3-BA656DF32502')
+    @patch('azurelinuxagent.common.conf.get_provisioning_agent', return_value='waagent')
     def test_provision_telemetry_fail(self,
                                       mock_util,
                                       distro_name,
                                       distro_version,
-                                      distro_full_name):
+                                      distro_full_name, _):
         """
         Assert that the agent issues one telemetry message as part of a
         failed provisioning.

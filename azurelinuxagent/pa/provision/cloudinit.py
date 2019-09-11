@@ -19,6 +19,7 @@
 
 import os
 import os.path
+import subprocess
 import time
 
 from datetime import datetime
@@ -41,13 +42,6 @@ class CloudInitProvisionHandler(ProvisionHandler):
         super(CloudInitProvisionHandler, self).__init__()
 
     def run(self):
-        # If provision is enabled, run default provision handler
-        if conf.get_provision_enabled():
-            logger.warn("Provisioning flag is enabled, which overrides using "
-                        "cloud-init; running the default provisioning code")
-            super(CloudInitProvisionHandler, self).run()
-            return
-
         try:
             if super(CloudInitProvisionHandler, self).is_provisioned():
                 logger.info("Provisioning already completed, skipping.")
@@ -132,3 +126,29 @@ class CloudInitProvisionHandler(ProvisionHandler):
         raise ProvisionError("Giving up, ssh host key was not found at {0} "
                              "after {1}s".format(path,
                                                  max_retry * sleep_time))
+
+def cloud_init_is_enabled():
+    """
+    Determine whether or not cloud-init is enabled.
+
+    Args:
+        None
+
+    Returns:
+        bool - True if cloud-init is enabled, False if otherwise.
+    """
+
+    try:
+        systemctl_output = subprocess.check_output([
+            'systemctl',
+            'is-enabled',
+            'cloud-init-local.service'
+        ], stderr=subprocess.STDOUT).decode('utf-8').replace('\n', '')
+
+        unit_is_enabled = systemctl_output == 'enabled'
+    except Exception as exc:
+        logger.info('Error getting cloud-init enabled status: {0}'.format(exc))
+        unit_is_enabled = False
+
+    logger.info('cloud-init is enabled: {0}'.format(unit_is_enabled))
+    return unit_is_enabled
