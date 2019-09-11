@@ -491,17 +491,14 @@ class ExtHandlersHandler(object):
             ext_handler_i.update_settings()
 
         ext_handler_i.enable()
-        # Remove the UNINSTALL_FAILED from env variables list after calling Install and Enable
-        ext_handler_i.remove_key_from_handler_env(UNINSTALL_FAILED)
 
     @staticmethod
     def _update_extension_handler(old_ext_handler_i, ext_handler_i):
 
-        def execute_old_handler_command(op, func):
+        def execute_old_handler_command(func):
             """
             Created a common wrapper to execute all commands that need to be executed from the old handler
             so that it can have a common exception handling mechanism
-            :param op: The current running operation
             :param func: The command to be executed on the old handler
             """
             continue_on_update_failure = False
@@ -517,10 +514,11 @@ class ExtHandlersHandler(object):
                     raise ExtensionUpdateError(msg)
 
                 logger.info("Continue on Update failure flag is set, proceeding with update")
-                error_env_name = DISABLE_FAILED if op == WALAEventOperation.Disable else UNINSTALL_FAILED
+                error_env_name = DISABLE_FAILED if old_ext_handler_i.operation == WALAEventOperation.Disable \
+                    else UNINSTALL_FAILED
                 ext_handler_i.set_handler_env_variable({error_env_name: 'True'})
 
-        execute_old_handler_command(op=WALAEventOperation.Disable, func=lambda: old_ext_handler_i.disable())
+        execute_old_handler_command(func=lambda: old_ext_handler_i.disable())
         ext_handler_i.copy_status_files(old_ext_handler_i)
         if ext_handler_i.version_gt(old_ext_handler_i):
             ext_handler_i.update()
@@ -528,7 +526,7 @@ class ExtHandlersHandler(object):
             ext_handler_i.remove_key_from_handler_env(DISABLE_FAILED)
         else:
             old_ext_handler_i.update(version=ext_handler_i.ext_handler.properties.version)
-        execute_old_handler_command(op=WALAEventOperation.UnInstall, func=lambda: old_ext_handler_i.uninstall())
+        execute_old_handler_command(func=lambda: old_ext_handler_i.uninstall())
         old_ext_handler_i.remove_ext_handler()
         ext_handler_i.update_with_install()
 
@@ -674,8 +672,8 @@ class ExtHandlerInstance(object):
         self.is_upgrade = False
         self.logger = None
         self.set_logger()
-        self.handler_env = {EXTENSION_PATH: self.get_base_dir(),
-                            EXTENSION_VERSION: self.ext_handler.properties.version}
+        self.__handler_env = {EXTENSION_PATH: self.get_base_dir(),
+                              EXTENSION_VERSION: self.ext_handler.properties.version}
 
         try:
             fileutil.mkdir(self.get_log_dir(), mode=0o755)
@@ -814,11 +812,11 @@ class ExtHandlerInstance(object):
         self.operation = op
 
     def set_handler_env_variable(self, env):
-        self.handler_env.update(env)
+        self.__handler_env.update(env)
 
     def remove_key_from_handler_env(self, key):
         # Remove key if exists or do nothing
-        self.handler_env.pop(key, None)
+        self.__handler_env.pop(key, None)
 
     def report_event(self, message="", is_success=True, duration=0, log_event=True):
         ext_handler_version = self.ext_handler.properties.version
@@ -1205,7 +1203,7 @@ class ExtHandlerInstance(object):
                     env = {}
                 env.update(os.environ)
                 # Add all the handler_env variables to the current launch_command
-                env.update(self.handler_env)
+                env.update(self.__handler_env)
 
                 try:
                     # Some extensions erroneously begin cmd with a slash; don't interpret those
