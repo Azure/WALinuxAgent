@@ -17,6 +17,7 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
+import dbus
 import os
 import os.path
 import time
@@ -41,13 +42,6 @@ class CloudInitProvisionHandler(ProvisionHandler):
         super(CloudInitProvisionHandler, self).__init__()
 
     def run(self):
-        # If provision is enabled, run default provision handler
-        if conf.get_provision_enabled():
-            logger.warn("Provisioning flag is enabled, which overrides using "
-                        "cloud-init; running the default provisioning code")
-            super(CloudInitProvisionHandler, self).run()
-            return
-
         try:
             if super(CloudInitProvisionHandler, self).is_provisioned():
                 logger.info("Provisioning already completed, skipping.")
@@ -132,3 +126,43 @@ class CloudInitProvisionHandler(ProvisionHandler):
         raise ProvisionError("Giving up, ssh host key was not found at {0} "
                              "after {1}s".format(path,
                                                  max_retry * sleep_time))
+
+def cloud_init_is_enabled():
+    """
+    Determine whether or not cloud-init is enabled.
+
+    Args:
+        None
+
+    Returns:
+        bool - True if cloud-init is enabled, False if otherwise.
+    """
+
+    unit_name = 'cloud-init-local.service'
+
+    bus = dbus.SystemBus()
+    systemd_dbus = bus.get_object(
+        'org.freedesktop.systemd1',
+        '/org/freedesktop/systemd1'
+    )
+    systemd_manager = dbus.Interface(
+        systemd_dbus,
+        'org.freedesktop.systemd1.Manager'
+    )
+
+    try:
+        unit_is_enabled = systemd_manager.GetUnitFileState(unit_name).lower() == 'enabled'
+    except dbus.DBusException as exc:
+        # If the unit does not exist, then take that as a falsy
+        # condition. We don't want to throw an exception in this
+        # case because waagent should be able to handle the situation
+        # where there is no cloud-init installed.
+        if exc.get_dbus_name() == 'org.freedesktop.DBus.Error.FileNotFound':
+            unit_is_enabled = False
+        else:
+            # Any other dbus exception should be bubbled up though.
+            logger.error('Unexpected dbus error: {}'.format(exc))
+            raise
+
+    logger.info('cloud-init is enabled: {}'.format(unit_is_enabled))
+    return unit_is_enabled

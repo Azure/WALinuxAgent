@@ -184,7 +184,7 @@ A sample configuration file is shown below:
 ```yml
 Extensions.Enabled=y
 Provisioning.Enabled=y
-Provisioning.UseCloudInit=n
+Provisioning.Force=n
 Provisioning.DeleteRootPassword=n
 Provisioning.RegenerateSshHostKeyPair=y
 Provisioning.SshHostKeyPairType=rsa
@@ -237,6 +237,14 @@ without the agent. In order to do that, the `provisionVMAgent` flag must be set 
 provisioning time, via whichever API is being used. We will provide more details on
 this on our wiki when it is generally available. 
 
+#### __Provisioning.Force__
+
+_Type: Boolean_
+_Default: n_
+
+Override the behavior of cloud-init auto-detection and force the usage of waagent
+as the provisioning agent.
+
 #### __Provisioning.Enabled__
 
 _Type: Boolean_  
@@ -247,7 +255,7 @@ agent. Valid values are "y" or "n". If provisioning is disabled, SSH host and
 user keys in the image are preserved and any configuration specified in the
 Azure provisioning API is ignored.
 
-#### __Provisioning.UseCloudInit__
+#### __Provisioning.UseCloudInit__ (*deprecated*)
   
 _Type: Boolean_  
 _Default: n_
@@ -257,6 +265,9 @@ When true ("y"), the agent will wait for cloud-init to complete before installin
 extensions and processing the latest goal state. _Provisioning.Enabled_ must be
 disabled ("n") for this option to have an effect. Setting _Provisioning.Enabled_ to
 true ("y") overrides this option and runs the built-in agent provisioning code.
+
+_Note_: This configuration option has been deprecated and has no effect. waagent
+now auto-detects cloud-init as a provisioning agent.
 
 #### __Provisioning.DeleteRootPassword__  
 

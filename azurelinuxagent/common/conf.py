@@ -98,8 +98,8 @@ __SWITCH_OPTIONS__ = {
     "Logs.Verbose": False,
     "Logs.Console": True,
     "Extensions.Enabled": True,
+    "Provisioning.Force": False,
     "Provisioning.Enabled": True,
-    "Provisioning.UseCloudInit": False,
     "Provisioning.AllowResetSysUser": False,
     "Provisioning.RegenerateSshHostKeyPair": False,
     "Provisioning.DeleteRootPassword": False,
@@ -268,16 +268,16 @@ def get_ssh_host_keypair_mode(conf=__conf__):
     return conf.get("Provisioning.SshHostKeyPairType", "rsa")
 
 
-def get_provision_enabled(conf=__conf__):
-    return conf.get_switch("Provisioning.Enabled", True)
-
-
 def get_extensions_enabled(conf=__conf__):
     return conf.get_switch("Extensions.Enabled", True)
 
 
-def get_provision_cloudinit(conf=__conf__):
-    return conf.get_switch("Provisioning.UseCloudInit", False)
+def get_provision_enabled(conf=__conf__):
+    return conf.get_switch("Provisioning.Enabled", True)
+
+
+def get_provision_force(conf=__conf__):
+    return conf.get_switch("Provisioning.Force", False)
 
 
 def get_allow_reset_sys_user(conf=__conf__):
