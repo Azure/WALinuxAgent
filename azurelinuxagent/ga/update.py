@@ -307,6 +307,7 @@ class UpdateHandler(object):
                 utc_start = datetime.utcnow()
 
                 last_etag = exthandlers_handler.last_etag
+                last_vm_artifacts_seqno = exthandlers_handler.last_vm_artifacts_seqno
                 exthandlers_handler.run()
 
                 remote_access_handler.run()
@@ -322,7 +323,17 @@ class UpdateHandler(object):
                         op=WALAEventOperation.ProcessGoalState,
                         duration=duration,
                         message="Incarnation {0}".format(exthandlers_handler.last_etag))
-
+                if last_vm_artifacts_seqno != exthandlers_handler.last_vm_artifacts_seqno
+                    self._ensure_readonly_files()
+                    duration = elapsed_milliseconds(utc_start)
+                    logger.info('ProcessGoalState completed [seqno {0}; {1} ms]',
+                                exthandlers_handler.last_vm_artifacts_seqno,
+                                duration)
+                    add_event(
+                        AGENT_NAME,
+                        op=WALAEventOperation.ProcessGoalState,
+                        duration=duration,
+                        message="SeqNo {0}".format(exthandlers_handler.last_vm_artifacts_seqno))
                 time.sleep(goal_state_interval)
 
         except Exception as e:

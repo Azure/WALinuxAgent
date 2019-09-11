@@ -204,6 +204,7 @@ class ExtHandlersHandler(object):
         self.protocol = None
         self.ext_handlers = None
         self.last_etag = None
+        self.last_vm_artifacts_seqno = None
         self.log_report = False
         self.log_etag = True
         self.log_process = False

@@ -364,6 +364,10 @@ def vm_status_to_v1(vm_status, ext_statuses):
         if v1_handler_status is not None:
             v1_handler_status_list.append(v1_handler_status)
 
+    # Inform CRP that we support FastTrack, which allows us to retrieve goal state
+    # from the VMArtifactsProfile blob instead of from wire server
+    v1_supported_features = {'FastTrack': '1'}
+    
     v1_agg_status = {
         'guestAgentStatus': v1_ga_status,
         'handlerAggregateStatus': v1_handler_status_list
@@ -372,7 +376,8 @@ def vm_status_to_v1(vm_status, ext_statuses):
         'version': '1.1',
         'timestampUTC': timestamp,
         'aggregateStatus': v1_agg_status,
-        'guestOSInfo': v1_ga_guest_info
+        'guestOSInfo': v1_ga_guest_info,
+        'supportedFeatures': v1_supported_features
     }
     return v1_vm_status
 
@@ -1762,6 +1767,7 @@ class InVMArtifactsProfile(object):
     * certificateThumbprint (optional)
     * encryptedHealthChecks (optional)
     * encryptedApplicationProfile (optional)
+    * inVMExtensionHandlers (optional)
     """
 
     def __init__(self, artifacts_profile):
@@ -1773,3 +1779,68 @@ class InVMArtifactsProfile(object):
         if 'onHold' in self.__dict__:
             return str(self.onHold).lower() == 'true'
         return False
+
+    def get_sequence_number(self):
+        if 'inVMArtifactsProfileBlobSeqNo' in self.__dict__:
+            return int(self.inVMArtifactsProfileBlobSeqNo)
+        return -1
+
+    """
+    We need to convert the json from the InVmArtifactsProfile blob to the following
+    format for the ExtensionsConfig:
+    <Extensions version="1.0.0.0" goalStateIncarnation="9">
+    <Plugins>
+        <Plugin name="MyExtension.Blah" version="1.0.0"
+                location="http://somewhere.xml"
+                config="" state="enabled" autoUpgrade="false"
+                failoverlocation="http://somewherelese.xml"
+                runAsStartupTask="false" isJson="true"/>
+        <Plugin name="Microsoft.Flipperdoodle" version="1.0.0"
+                location="https://somewhere_two.xml"
+                state="enabled" autoUpgrade="true"
+                failoverlocation="https://somewhereelse_two.xml"
+                runAsStartupTask="false" isJson="true" useExactVersion="false"/>
+    </Plugins>
+    <PluginSettings>
+        <Plugin name="MyExtension.Blah" version="1.0.0">
+            <RuntimeSettings seqNo="0">{"runtimeSettings":[{"handlerSettings":{"protectedSettingsCertThumbprint":"4037FBF5F1F3014F99B5D6C7799E9B20E6871CB3","protectedSettings":"MIICWgYJK","publicSettings":{"foo":"bar"}}}]}</RuntimeSettings>
+        </Plugin>
+        <Plugin name="Microsoft.Flipperdoodle" version="1.0.0">
+            <RuntimeSettings seqNo="0">{"runtimeSettings":[{"handlerSettings":{"protectedSettingsCertThumbprint":"4037FBF5F1F3014F99B5D6C7799E9B20E6871CB3","protectedSettings":"MIICWgYJK","publicSettings":{"foo":"bar"}}}]}</RuntimeSettings>
+        </Plugin>
+    </PluginSettings>
+    <StatusUploadBlob statusBlobType="BlockBlob">https://putblobhere</StatusUploadBlob>
+    </Extensions>
+    """
+    def transform_to_extensions_config(self):
+        if 'inVMExtensionHandlers' in self.__dict__:
+            import xml.etree.ElementTree as xml
+            root = xml.Element("Extensions")
+            root.set('version', '1.0.0.0')
+            root.set('goalStateIncarnation', self.inVMArtifactsProfileBlobSeqNo)
+
+            plugins = xml.SubElement(root, 'Plugins')
+            for inVMExtensionHandler in self.inVMExtensionHandlers:
+                plugin = xml.SubElement(plugins, 'Plugin')
+                plugin.set('name', inVMExtensionHandler.name)
+                plugin.set('version', inVMExtensionHandler.version)
+                plugin.set('location', inVMExtensionHandler.location)
+                plugin.set('state', inVMExtensionHandler.state)
+                plugin.set('autoUpgrade', inVMExtensionHandler.autoUpgrade)
+                plugin.set('failoverlocation', inVMExtensionHandler.failoverlocation)
+                plugin.set('runAsStartupTask', inVMExtensionHandler.runAsStartupTask)
+                plugin.set('isJson', inVMExtensionHandler.isJson)
+                plugin.set('useExactVersion', inVMExtensionHandler.useExactVersion)
+
+            plugin_settings = xml.SubElement(root, 'PluginSettings')
+            for inVMExtensionHandler in self.inVMExtensionHandlers:
+                plugin = xml.SubElement(plugin_settings, 'Plugin')
+                plugin.set('name', inVMExtensionHandler.name)
+                plugin.set('version', inVMExtensionHandler.version)
+                runtime_settings = xml.SubElement(plugin, 'RuntimeSettings')
+                runtime_settings.set('seqNo', inVMExtensionHandler.settingsSeqNo)
+                json_settings = json.dumps({})
+                json_settings["runtimeSettings"] = inVMExtensionHandler.settings
+                runtime_settings.text = json_settings
+            return root
+        return None
