@@ -3292,7 +3292,7 @@ class Certificates(object):
         index = 1
         filename = str(index) + ".prv"
         while os.path.isfile(filename):
-            pubkey = RunGetOutput(Openssl + " pkey -in " + filename + " -pubout 2> /dev/null ")[1]
+            pubkey = RunGetOutput(Openssl + " rsa -in " + filename + " -pubout 2> /dev/null ")[1]
             os.rename(filename, keys[pubkey] + ".prv")
             os.chmod(keys[pubkey] + ".prv", 0600)
             MyDistro.setSelinuxContext( keys[pubkey] + '.prv','unconfined_u:object_r:ssh_home_t:s0')
