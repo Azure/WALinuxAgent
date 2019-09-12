@@ -267,7 +267,7 @@ class LaunchCommandTestCase(AgentTestCase):
         stdout = "stdout" * 5
         stderr = "stderr" * 5
 
-        command = self._create_script("produce_output.py", '''
+        command = self.create_script("produce_output.py", '''
 import sys
 
 sys.stdout.write("{0}")
@@ -298,7 +298,7 @@ sys.stderr.write("{1}")
         signal_file = os.path.join(self.tmp_dir, "signal_file.txt")
 
         # the test command produces some output then goes into an infinite loop
-        command = self._create_script("produce_output_then_hang.py", '''
+        command = self.create_script("produce_output_then_hang.py", '''
 import sys
 import time
 
@@ -353,7 +353,7 @@ with open("{2}", "w") as file:
         stderr = "stderr" * 3
         exit_code = 99
 
-        command = self._create_script("fail.py", '''
+        command = self.create_script("fail.py", '''
 import sys
 
 sys.stdout.write("{0}")
@@ -375,7 +375,7 @@ exit({2})
         stdout = "stdout"
         stderr = "stderr"
 
-        command = self._create_script("start_child_process.py", '''
+        command = self.create_script("start_child_process.py", '''
 import os
 import sys
 import time
@@ -410,7 +410,7 @@ else:
         # the child process uses the signal file to indicate it has produced output
         signal_file = os.path.join(self.tmp_dir, "signal_file.txt")
 
-        command = self._create_script("start_child_with_output.py", '''
+        command = self.create_script("start_child_with_output.py", '''
 import os
 import sys
 import time
@@ -451,7 +451,7 @@ else:
         child_stdout = "CHILD STDOUT"
         child_stderr = "CHILD STDERR"
 
-        command = self._create_script("start_child_that_fails.py", '''
+        command = self.create_script("start_child_that_fails.py", '''
 import os
 import sys
 import time
@@ -480,7 +480,7 @@ else:
         # file used to verify the command completed successfully
         signal_file = os.path.join(self.tmp_dir, "signal_file.txt")
 
-        command = self._create_script("create_file.py", '''
+        command = self.create_script("create_file.py", '''
 open("{0}", "w").close()
 
 '''.format(signal_file))
@@ -497,7 +497,7 @@ open("{0}", "w").close()
         stderr = "STDERR"
 
         # the test script mimics the redirection done by the Custom Script extension
-        command = self._create_script("produce_output", '''
+        command = self.create_script("produce_output", '''
 exec &> {0}
 echo {1}
 >&2 echo {2}
@@ -516,7 +516,7 @@ echo {1}
         stdout = "STDOUT"
         stderr = "STDERR"
 
-        command = self._create_script("produce_long_output.py", '''
+        command = self.create_script("produce_long_output.py", '''
 import sys
 
 sys.stdout.write( "{0}" * {1})
@@ -530,7 +530,7 @@ sys.stderr.write( "{2}" * {3})
         self.assertIn(stderr, output)
 
     def test_it_should_read_only_the_head_of_large_outputs(self):
-        command = self._create_script("produce_long_output.py", '''
+        command = self.create_script("produce_long_output.py", '''
 import sys
 
 sys.stdout.write("O" * 5 * 1024 * 1024)
@@ -558,7 +558,7 @@ sys.stderr.write("E" * 5 * 1024 * 1024)
         self.assertLessEqual(len(stderr), TELEMETRY_MESSAGE_MAX_LEN)
 
     def test_it_should_handle_errors_while_reading_the_command_output(self):
-        command = self._create_script("produce_output.py", '''
+        command = self.create_script("produce_output.py", '''
 import sys
 
 sys.stdout.write("STDOUT")

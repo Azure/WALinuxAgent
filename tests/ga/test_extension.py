@@ -2085,16 +2085,6 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
         fileutil.mkdir(ext_handler_i.get_base_dir())
         return ext_handler_i
 
-    @staticmethod
-    def _create_test_script(path, content, mode=777):
-
-        dir_name = os.path.dirname(path)
-        if not os.path.exists(dir_name):
-            fileutil.mkdir(dir_name)
-
-        fileutil.write_file(path, content)
-        fileutil.chmod(path, mode)
-
     @patch('azurelinuxagent.ga.exthandlers.ExtHandlerInstance._capture_process_output',
            side_effect="Process Successful")
     def test_disable_failed_env_variable_should_be_set_for_update_cmd_when_continue_on_update_failure_is_true(
@@ -2283,11 +2273,11 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
 
         # Script prints env variables passed to this process and prints all starting with AZURE_
         test_file = """
-            #!/bin/bash
             printenv | grep AZURE_
             """
 
-        self._create_test_script(os.path.join(new_handler_i.get_base_dir(), test_file_name), test_file, mode=700)
+        self.create_script(file_name=test_file_name, contents=test_file,
+                           file_path=os.path.join(new_handler_i.get_base_dir(), test_file_name))
 
         with patch.object(new_handler_i.logger, 'verbose') as mock_verbose:
             # Since we're not mocking the ExtHandlerInstance._capture_process_output, both disable.cmd and uninstall.cmd
