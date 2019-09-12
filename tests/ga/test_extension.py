@@ -2086,14 +2086,14 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
         return ext_handler_i
 
     @staticmethod
-    def _create_test_script(path, content):
+    def _create_test_script(path, content, mode=777):
 
         dir_name = os.path.dirname(path)
         if not os.path.exists(dir_name):
             fileutil.mkdir(dir_name)
 
         fileutil.write_file(path, content)
-        fileutil.chmod(path, 777)
+        fileutil.chmod(path, mode)
 
     @patch('azurelinuxagent.ga.exthandlers.ExtHandlerInstance._capture_process_output',
            side_effect="Process Successful")
@@ -2264,6 +2264,7 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
         except:
             self.fail("Removing a key that's not present shouldn't throw an error")
 
+    @attr('requires_sudo')
     @patch('time.sleep', side_effect=lambda _: mock_sleep(0.001))
     def test_failed_env_variables_should_be_set_from_within_extension_commands(self, *args):
         """
@@ -2309,6 +2310,53 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
             self.assertIn(UNINSTALL_FAILED, install_args[0])
             self.assertTrue(EXTENSION_PATH in install_args[0] and EXTENSION_VERSION in install_args[0])
             self.assertNotIn(DISABLE_FAILED, install_args[0])
+
+        # @attr('requires_sudo')
+        @patch('time.sleep', side_effect=lambda _: mock_sleep(0.001))
+        def test_failed_env_variables_should_be_set_from_within_extension_commands_nosudo(self, *args):
+            """
+            This test will test from the perspective of the extensions command weather the env variables are
+            being set for those processes
+            """
+
+            test_file_name = "testfile.sh"
+            update_file_name = test_file_name + " -update"
+            install_file_name = test_file_name + " -install"
+            old_handler_i = TestExtensionUpdateOnFailure._get_ext_handler_instance('foo', '1.0.0')
+            new_handler_i = TestExtensionUpdateOnFailure._get_ext_handler_instance(
+                'foo', '1.0.1',
+                handler={"updateCommand": update_file_name, "installCommand": install_file_name},
+                continue_on_update_failure=True
+            )
+
+            # Script prints env variables passed to this process and prints all starting with AZURE_
+            test_file = """
+                    #!/bin/bash
+                    printenv | grep AZURE_
+                    """
+
+            self._create_test_script(os.path.join(new_handler_i.get_base_dir(), test_file_name), test_file, 700)
+
+            with patch.object(new_handler_i.logger, 'verbose') as mock_verbose:
+                # Since we're not mocking the ExtHandlerInstance._capture_process_output, both disable.cmd and uninstall.cmd
+                # would raise ExtensionError exceptions and set the DISABLE_FAILED and UNINSTALL_FAILED env variables.
+                # For update and install we're running the script above to print all the env variables starting with AZURE_
+                # and verify accordingly if the corresponding env variables are set properly or not
+                ExtHandlersHandler._update_extension_handler(old_handler_i, new_handler_i)
+                update_args = mock_verbose.call_args_list[1][0]
+                install_args = mock_verbose.call_args_list[3][0]
+
+                # Ensure we're checking variables for update scenario
+                self.assertEqual(update_file_name, mock_verbose.call_args_list[0].args[1])
+                self.assertIn(DISABLE_FAILED, update_args[0])
+                self.assertTrue(EXTENSION_PATH in update_args[0] and EXTENSION_VERSION in update_args[0])
+                self.assertNotIn(UNINSTALL_FAILED, update_args[0])
+
+                # Ensure we're checking variables for install scenario
+                self.assertEqual(install_file_name, mock_verbose.call_args_list[2].args[1])
+                self.assertIn(UNINSTALL_FAILED, install_args[0])
+                self.assertTrue(EXTENSION_PATH in install_args[0] and EXTENSION_VERSION in install_args[0])
+                self.assertNotIn(DISABLE_FAILED, install_args[0])
 
 
 if __name__ == '__main__':
