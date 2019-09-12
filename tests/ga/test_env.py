@@ -42,26 +42,26 @@ class TestEnvHandler(AgentTestCase):
     def test_get_dhcp_client_pid_should_return_a_sorted_list_of_pids(self):
         with patch("azurelinuxagent.common.utils.shellutil.run_command", return_value="11 9 5 22 4 6"):
             pids = EnvHandler().get_dhcp_client_pid()
-            self.assertEquals(pids, ["11", "22", "4", "5", "6", "9"])
+            self.assertEquals(pids, [4, 5, 6, 9, 11, 22])
 
-    def test_get_dhcp_client_pid_should_return_none_and_log_a_warning_when_dhcp_client_is_not_running(self):
+    def test_get_dhcp_client_pid_should_return_an_empty_list_and_log_a_warning_when_dhcp_client_is_not_running(self):
         with patch("azurelinuxagent.common.osutil.default.shellutil.run_command", side_effect=lambda _: self.shellutil_run_command(["pidof", "non-existing-process"])):
             with patch('azurelinuxagent.common.logger.Logger.warn') as mock_warn:
                 pids = EnvHandler().get_dhcp_client_pid()
 
-        self.assertIsNone(pids)
+        self.assertEquals(pids, [])
 
         self.assertEquals(mock_warn.call_count, 1)
         args, kwargs = mock_warn.call_args
         message = args[0]
         self.assertEquals("Dhcp client is not running.", message)
 
-    def test_get_dhcp_client_pid_should_return_none_and_log_an_error_when_an_invalid_command_is_used(self):
+    def test_get_dhcp_client_pid_should_return_and_empty_list_and_log_an_error_when_an_invalid_command_is_used(self):
         with patch("azurelinuxagent.common.osutil.default.shellutil.run_command", side_effect=lambda _: self.shellutil_run_command(["non-existing-command"])):
             with patch('azurelinuxagent.common.logger.Logger.error') as mock_error:
                 pids = EnvHandler().get_dhcp_client_pid()
 
-        self.assertIsNone(pids)
+        self.assertEquals(pids, [])
 
         self.assertEquals(mock_error.call_count, 1)
         args, kwargs = mock_error.call_args
@@ -82,31 +82,31 @@ class TestEnvHandler(AgentTestCase):
             with patch("azurelinuxagent.common.osutil.default.shellutil.run_command", side_effect=lambda _: self.shellutil_run_command(["pidof", "non-existing-process"])):
                 # it should log the first error
                 pids = env_handler.get_dhcp_client_pid()
-                self.assertIsNone(pids)
+                self.assertEquals(pids, [])
                 assert_warnings(1)
 
                 # it should not log subsequent errors
                 for i in range(0, 3):
                     pids = env_handler.get_dhcp_client_pid()
-                    self.assertIsNone(pids)
+                    self.assertEquals(pids, [])
                     self.assertEquals(mock_warn.call_count, 1)
 
             with patch("azurelinuxagent.common.osutil.default.shellutil.run_command", return_value="123"):
                 # now it should succeed
                 pids = env_handler.get_dhcp_client_pid()
-                self.assertEquals(pids, ["123"])
+                self.assertEquals(pids, [123])
                 assert_warnings(1)
 
             with patch("azurelinuxagent.common.osutil.default.shellutil.run_command", side_effect=lambda _: self.shellutil_run_command(["pidof", "non-existing-process"])):
                 # it should log the new error
                 pids = env_handler.get_dhcp_client_pid()
-                self.assertIsNone(pids)
+                self.assertEquals(pids, [])
                 assert_warnings(2)
 
                 # it should not log subsequent errors
                 for i in range(0, 3):
                     pids = env_handler.get_dhcp_client_pid()
-                    self.assertIsNone(pids)
+                    self.assertEquals(pids, [])
                     self.assertEquals(mock_warn.call_count, 2)
 
     def test_handle_dhclient_restart_should_reconfigure_network_routes_when_dhcp_client_restarts(self):
@@ -116,7 +116,7 @@ class TestEnvHandler(AgentTestCase):
             #
             # before the first call to handle_dhclient_restart, EnvHandler configures the network routes and initializes the DHCP PIDs
             #
-            with patch.object(env_handler, "get_dhcp_client_pid", return_value=["123"]):
+            with patch.object(env_handler, "get_dhcp_client_pid", return_value=[123]):
                 env_handler.dhcp_handler.conf_routes()
                 env_handler.dhcp_id_list = env_handler.get_dhcp_client_pid()
                 self.assertEquals(mock_conf_routes.call_count, 1)
@@ -125,7 +125,7 @@ class TestEnvHandler(AgentTestCase):
             # if the dhcp client has not been restarted then it should not reconfigure the network routes
             #
             def mock_check_pid_alive(pid):
-                if pid == "123":
+                if pid == 123:
                     return True
                 raise Exception("Unexpected PID: {0}".format(pid))
 
@@ -138,12 +138,12 @@ class TestEnvHandler(AgentTestCase):
             # if the process was restarted then it should reconfigure the network routes
             #
             def mock_check_pid_alive(pid):
-                if pid == "123":
+                if pid == 123:
                     return False
                 raise Exception("Unexpected PID: {0}".format(pid))
 
             with patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.check_pid_alive", side_effect=mock_check_pid_alive):
-                with patch.object(env_handler, "get_dhcp_client_pid", return_value=["456", "789"]):
+                with patch.object(env_handler, "get_dhcp_client_pid", return_value=[456, 789]):
                     env_handler.handle_dhclient_restart()
                     self.assertEquals(mock_conf_routes.call_count, 2)  # count increased
 
@@ -151,7 +151,7 @@ class TestEnvHandler(AgentTestCase):
             # if the new dhcp client has not been restarted then it should not reconfigure the network routes
             #
             def mock_check_pid_alive(pid):
-                if pid in ["456", "789"]:
+                if pid in [456, 789]:
                     return True
                 raise Exception("Unexpected PID: {0}".format(pid))
 

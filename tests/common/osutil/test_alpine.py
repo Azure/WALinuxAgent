@@ -14,10 +14,10 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 #
-import azurelinuxagent.common.osutil.default as osutil
 from azurelinuxagent.common.osutil.alpine import AlpineOSUtil
-from .test_default import osutil_get_dhcp_pid_should_return_a_pid
+from .test_default import osutil_get_dhcp_pid_should_return_a_list_of_pids
 from tests.tools import *
+
 
 class TestAlpineOSUtil(AgentTestCase):
     def setUp(self):
@@ -26,8 +26,8 @@ class TestAlpineOSUtil(AgentTestCase):
     def tearDown(self):
         AgentTestCase.tearDown(self)
 
-    def test_get_dhcp_pid_should_return_a_pid(self):
-        osutil_get_dhcp_pid_should_return_a_pid(self, AlpineOSUtil())
+    def test_get_dhcp_pid_should_return_a_list_of_pids(self):
+        osutil_get_dhcp_pid_should_return_a_list_of_pids(self, AlpineOSUtil())
 
 
 if __name__ == '__main__':

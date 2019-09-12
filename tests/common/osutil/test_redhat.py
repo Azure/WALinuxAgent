@@ -15,8 +15,9 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 from azurelinuxagent.common.osutil.redhat import Redhat6xOSUtil
-from .test_default import osutil_get_dhcp_pid_should_return_a_pid
+from .test_default import osutil_get_dhcp_pid_should_return_a_list_of_pids
 from tests.tools import *
+
 
 class TestRedhat6xOSUtil(AgentTestCase):
     def setUp(self):
@@ -25,8 +26,8 @@ class TestRedhat6xOSUtil(AgentTestCase):
     def tearDown(self):
         AgentTestCase.tearDown(self)
 
-    def test_get_dhcp_pid_should_return_a_pid(self):
-        osutil_get_dhcp_pid_should_return_a_pid(self, Redhat6xOSUtil())
+    def test_get_dhcp_pid_should_return_a_list_of_pids(self):
+        osutil_get_dhcp_pid_should_return_a_list_of_pids(self, Redhat6xOSUtil())
 
 
 if __name__ == '__main__':

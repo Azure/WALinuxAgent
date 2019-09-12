@@ -1340,15 +1340,6 @@ class TestUpdate(UpdateTestCase):
     def test_upgrade_available_returns_true_on_first_use(self):
         self.assertTrue(self._test_upgrade_available())
 
-    def test_upgrade_available_will_refresh_goal_state(self):
-        protocol = self._create_protocol()
-        protocol.emulate_stale_goal_state()
-        self.assertTrue(self._test_upgrade_available(protocol=protocol))
-        self.assertEqual(2, protocol.call_counts["get_vmagent_manifests"])
-        self.assertEqual(1, protocol.call_counts["get_vmagent_pkgs"])
-        self.assertEqual(1, protocol.call_counts["update_goal_state"])
-        self.assertTrue(protocol.goal_state_forced)
-
     def test_upgrade_available_handles_missing_family(self):
         extensions_config = ExtensionsConfig(load_data("wire/ext_conf_missing_family.xml"))
         protocol = ProtocolMock()

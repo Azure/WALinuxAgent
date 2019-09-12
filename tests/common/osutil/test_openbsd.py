@@ -14,12 +14,12 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 #
-from azurelinuxagent.common.osutil.clearlinux import ClearLinuxUtil
+from azurelinuxagent.common.osutil.openbsd import OpenBSDOSUtil
 from .test_default import osutil_get_dhcp_pid_should_return_a_list_of_pids
 from tests.tools import *
 
 
-class TestClearLinuxUtil(AgentTestCase):
+class TestAlpineOSUtil(AgentTestCase):
     def setUp(self):
         AgentTestCase.setUp(self)
 
@@ -27,7 +27,7 @@ class TestClearLinuxUtil(AgentTestCase):
         AgentTestCase.tearDown(self)
 
     def test_get_dhcp_pid_should_return_a_list_of_pids(self):
-        osutil_get_dhcp_pid_should_return_a_list_of_pids(self, ClearLinuxUtil())
+        osutil_get_dhcp_pid_should_return_a_list_of_pids(self, OpenBSDOSUtil())
 
 
 if __name__ == '__main__':

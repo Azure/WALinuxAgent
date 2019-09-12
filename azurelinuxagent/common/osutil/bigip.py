@@ -97,7 +97,7 @@ class BigIpOSUtil(DefaultOSUtil):
         return shellutil.run("/sbin/chkconfig --del {0}".format(self.service_name), chk_err=False)
 
     def get_dhcp_pid(self):
-        return shellutil.run_command(["/sbin/pidof", "dhclient"]).strip()
+        return self._get_dhcp_pid(["/sbin/pidof", "dhclient"])
 
     def set_hostname(self, hostname):
         """Set the static hostname of the device

@@ -72,7 +72,7 @@ class Redhat6xOSUtil(DefaultOSUtil):
 
     # Override
     def get_dhcp_pid(self):
-        return shellutil.run_command(["pidof", "dhclient"]).strip()
+        return self._get_dhcp_pid(["pidof", "dhclient"])
 
     def set_hostname(self, hostname):
         """

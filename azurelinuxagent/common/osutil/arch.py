@@ -52,7 +52,7 @@ class ArchUtil(DefaultOSUtil):
         return shellutil.run("systemctl stop {0}".format(self.service_name), chk_err=False)
 
     def get_dhcp_pid(self):
-        return shellutil.run_command(["pidof", "systemd-networkd"]).strip()
+        return self._get_dhcp_pid(["pidof", "systemd-networkd"])
 
     def conf_sshd(self, disable_password):
         # Don't whack the system default sshd conf
