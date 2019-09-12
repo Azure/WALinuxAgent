@@ -2057,11 +2057,10 @@ class TestExtensionWithCGroupsEnabled(AgentTestCase):
         self._assert_no_handler_status(protocol.report_vm_status)
 
 
-@patch('azurelinuxagent.ga.exthandlers.ExtHandlerInstance._capture_process_output', side_effect="Process Successful")
 class TestExtensionUpdateOnFailure(ExtensionTestCase):
 
     @staticmethod
-    def _get_ext_handler_instance(name, version, continue_on_update_failure=False):
+    def _get_ext_handler_instance(name, version, handler=None, continue_on_update_failure=False):
 
         handler_json = {
             "installCommand": "sample.py -install",
@@ -2074,6 +2073,9 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
             "continueOnUpdateFailure": continue_on_update_failure
         }
 
+        if handler:
+            handler_json.update(handler)
+
         ext_handler_properties = ExtHandlerProperties()
         ext_handler_properties.version = version
         ext_handler = ExtHandler(name=name)
@@ -2083,6 +2085,18 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
         fileutil.mkdir(ext_handler_i.get_base_dir())
         return ext_handler_i
 
+    @staticmethod
+    def _create_test_script(path, content):
+
+        dir_name = os.path.dirname(path)
+        if not os.path.exists(dir_name):
+            fileutil.mkdir(dir_name)
+
+        fileutil.write_file(path, content)
+        fileutil.chmod(path, 777)
+
+    @patch('azurelinuxagent.ga.exthandlers.ExtHandlerInstance._capture_process_output',
+           side_effect="Process Successful")
     def test_disable_failed_env_variable_should_be_set_for_update_cmd_when_continue_on_update_failure_is_true(
             self, *args):
         old_handler_i = self._get_ext_handler_instance('foo', '1.0.0')
@@ -2098,6 +2112,8 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
             self.assertTrue('-update' in kwargs['command'] and DISABLE_FAILED in kwargs['env'],
                             "The update command should have Disable Failed in env variable")
 
+    @patch('azurelinuxagent.ga.exthandlers.ExtHandlerInstance._capture_process_output',
+           side_effect="Process Successful")
     def test_uninstall_failed_env_variable_should_set_for_install_when_continue_on_update_failure_is_true(
             self, *args):
         old_handler_i = self._get_ext_handler_instance('foo', '1.0.0')
@@ -2113,6 +2129,8 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
             self.assertTrue('-install' in kwargs['command'] and UNINSTALL_FAILED in kwargs['env'],
                             "The install command should have Uninstall Failed in env variable")
 
+    @patch('azurelinuxagent.ga.exthandlers.ExtHandlerInstance._capture_process_output',
+           side_effect="Process Successful")
     def test_extension_error_should_be_raised_when_continue_on_update_failure_is_false_on_disable_failure(self, *args):
         old_handler_i = self._get_ext_handler_instance('foo', '1.0.0')
         new_handler_i = self._get_ext_handler_instance('foo', '1.0.1', continue_on_update_failure=False)
@@ -2125,6 +2143,8 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
             self.assertIn("Disable Failed", msg, "Update should fail with Disable Failed error")
             self.assertIn("ExtensionError", msg, "The Exception should be initially ExtensionError")
 
+    @patch('azurelinuxagent.ga.exthandlers.ExtHandlerInstance._capture_process_output',
+           side_effect="Process Successful")
     def test_extension_error_should_be_raised_when_continue_on_update_failure_is_false_on_uninstall_failure(self, *args):
         old_handler_i = self._get_ext_handler_instance('foo', '1.0.0')
         new_handler_i = self._get_ext_handler_instance('foo', '1.0.1', continue_on_update_failure=False)
@@ -2137,6 +2157,8 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
             self.assertIn("Uninstall Failed", msg, "Update should fail with Uninstall Failed error")
             self.assertIn("ExtensionError", msg, "The Exception should be initially ExtensionError")
 
+    @patch('azurelinuxagent.ga.exthandlers.ExtHandlerInstance._capture_process_output',
+           side_effect="Process Successful")
     def test_extension_error_should_be_raised_when_continue_on_update_failure_is_true_on_command_failure(self, *args):
         old_handler_i = self._get_ext_handler_instance('foo', '1.0.0')
         new_handler_i = self._get_ext_handler_instance('foo', '1.0.1', continue_on_update_failure=True)
@@ -2159,6 +2181,8 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
                 self.assertIn("Install Failed", msg, "Update should fail with Install Failed error")
                 self.assertNotIn("ExtensionUpdateError", msg, "The exception should not be ExtensionUpdateError")
 
+    @patch('azurelinuxagent.ga.exthandlers.ExtHandlerInstance._capture_process_output',
+           side_effect="Process Successful")
     def test_env_variable_should_not_set_when_continue_on_update_failure_is_false(self, *args):
         old_handler_i = self._get_ext_handler_instance('foo', '1.0.0')
         new_handler_i = self._get_ext_handler_instance('foo', '1.0.1', continue_on_update_failure=False)
@@ -2179,6 +2203,8 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
 
                 self.assertEqual(0, patch_set_env.call_count, "No Env should be set for uninstall failures")
 
+    @patch('azurelinuxagent.ga.exthandlers.ExtHandlerInstance._capture_process_output',
+           side_effect="Process Successful")
     def test_set_env_variable_should_set_handler_env_variable(self, *args):
         handler_i = self._get_ext_handler_instance('foo', '1.0.0')
 
@@ -2208,6 +2234,8 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
 
             self.assertEqual(changed_value, kwargs['env'][name], "The new value is not set")
 
+    @patch('azurelinuxagent.ga.exthandlers.ExtHandlerInstance._capture_process_output',
+           side_effect="Process Successful")
     def test_remove_key_from_env_should_remove_handler_env_variable(self, *args):
         handler_i = self._get_ext_handler_instance('foo', '1.0.0')
 
@@ -2235,6 +2263,52 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
             handler_i.remove_key_from_handler_env(name_to_delete)
         except:
             self.fail("Removing a key that's not present shouldn't throw an error")
+
+    @patch('time.sleep', side_effect=lambda _: mock_sleep(0.001))
+    def test_failed_env_variables_should_be_set_from_within_extension_commands(self, *args):
+        """
+        This test will test from the perspective of the extensions command weather the env variables are
+        being set for those processes
+        """
+
+        test_file_name = "testfile.sh"
+        update_file_name = test_file_name + " -update"
+        install_file_name = test_file_name + " -install"
+        old_handler_i = TestExtensionUpdateOnFailure._get_ext_handler_instance('foo', '1.0.0')
+        new_handler_i = TestExtensionUpdateOnFailure._get_ext_handler_instance(
+            'foo', '1.0.1',
+            handler={"updateCommand": update_file_name, "installCommand": install_file_name},
+            continue_on_update_failure=True
+        )
+
+        # Script prints env variables passed to this process and prints all starting with AZURE_
+        test_file = """
+            #!/bin/bash
+            printenv | grep AZURE_
+            """
+
+        self._create_test_script(os.path.join(new_handler_i.get_base_dir(), test_file_name), test_file)
+
+        with patch.object(new_handler_i.logger, 'verbose') as mock_verbose:
+            # Since we're not mocking the ExtHandlerInstance._capture_process_output, both disable.cmd and uninstall.cmd
+            # would raise ExtensionError exceptions and set the DISABLE_FAILED and UNINSTALL_FAILED env variables.
+            # For update and install we're running the script above to print all the env variables starting with AZURE_
+            # and verify accordingly if the corresponding env variables are set properly or not
+            ExtHandlersHandler._update_extension_handler(old_handler_i, new_handler_i)
+            update_args = mock_verbose.call_args_list[1][0]
+            install_args = mock_verbose.call_args_list[3][0]
+
+            # Ensure we're checking variables for update scenario
+            self.assertEqual(update_file_name, mock_verbose.call_args_list[0].args[1])
+            self.assertIn(DISABLE_FAILED, update_args[0])
+            self.assertTrue(EXTENSION_PATH in update_args[0] and EXTENSION_VERSION in update_args[0])
+            self.assertNotIn(UNINSTALL_FAILED, update_args[0])
+
+            # Ensure we're checking variables for install scenario
+            self.assertEqual(install_file_name, mock_verbose.call_args_list[2].args[1])
+            self.assertIn(UNINSTALL_FAILED, install_args[0])
+            self.assertTrue(EXTENSION_PATH in install_args[0] and EXTENSION_VERSION in install_args[0])
+            self.assertNotIn(DISABLE_FAILED, install_args[0])
 
 
 if __name__ == '__main__':
