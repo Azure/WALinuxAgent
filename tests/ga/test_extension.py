@@ -2279,23 +2279,25 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
         self.create_script(file_name=test_file_name, contents=test_file,
                            file_path=os.path.join(new_handler_i.get_base_dir(), test_file_name))
 
-        with patch.object(new_handler_i.logger, 'verbose') as mock_verbose:
+        with patch.object(new_handler_i.logger, 'verbose', autospec=True) as mock_verbose:
             # Since we're not mocking the ExtHandlerInstance._capture_process_output, both disable.cmd and uninstall.cmd
             # would raise ExtensionError exceptions and set the DISABLE_FAILED and UNINSTALL_FAILED env variables.
             # For update and install we're running the script above to print all the env variables starting with AZURE_
             # and verify accordingly if the corresponding env variables are set properly or not
             ExtHandlersHandler._update_extension_handler(old_handler_i, new_handler_i)
+            update_command_args = mock_verbose.call_args_list[0][0]
             update_args = mock_verbose.call_args_list[1][0]
+            install_command_args = mock_verbose.call_args_list[2][0]
             install_args = mock_verbose.call_args_list[3][0]
 
             # Ensure we're checking variables for update scenario
-            self.assertEqual(update_file_name, mock_verbose.call_args_list[0].args[1])
+            self.assertEqual(update_file_name, update_command_args[1])
             self.assertIn(DISABLE_FAILED, update_args[0])
             self.assertTrue(EXTENSION_PATH in update_args[0] and EXTENSION_VERSION in update_args[0])
             self.assertNotIn(UNINSTALL_FAILED, update_args[0])
 
             # Ensure we're checking variables for install scenario
-            self.assertEqual(install_file_name, mock_verbose.call_args_list[2].args[1])
+            self.assertEqual(install_file_name, install_command_args[1])
             self.assertIn(UNINSTALL_FAILED, install_args[0])
             self.assertTrue(EXTENSION_PATH in install_args[0] and EXTENSION_VERSION in install_args[0])
             self.assertNotIn(DISABLE_FAILED, install_args[0])
