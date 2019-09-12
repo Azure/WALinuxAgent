@@ -25,7 +25,6 @@ import os
 import random
 import re
 import shutil
-import signal
 import stat
 import sys
 import tempfile
@@ -51,7 +50,6 @@ from azurelinuxagent.common.protocol.restapi import ExtHandlerStatus, \
     get_properties, \
     set_properties
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
-from azurelinuxagent.common.utils.processutil import read_output
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION, GOAL_STATE_AGENT_VERSION, \
     DISTRO_NAME, DISTRO_VERSION, PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO
 
@@ -75,6 +73,7 @@ DEFAULT_EXT_TIMEOUT_MINUTES = 90
 AGENT_STATUS_FILE = "waagent_status.json"
 
 NUMBER_OF_DOWNLOAD_RETRIES = 5
+
 
 def get_traceback(e):
     if sys.version_info[0] == 3:
@@ -1182,54 +1181,28 @@ class ExtHandlerInstance(object):
                     # as root-relative. (Issue #1170)
                     full_path = os.path.join(base_dir, cmd.lstrip(os.path.sep))
 
-                    process = CGroupConfigurator.get_instance().start_extension_command(
+                    process_output = CGroupConfigurator.get_instance().start_extension_command(
                         extension_name=self.get_full_name(),
                         command=full_path,
+                        timeout=timeout,
                         shell=True,
                         cwd=base_dir,
                         env=env,
                         stdout=stdout,
-                        stderr=stderr)
+                        stderr=stderr,
+                        error_code=extension_error_code)
 
                 except OSError as e:
                     raise ExtensionOperationError("Failed to launch '{0}': {1}".format(full_path, e.strerror),
                                                   code=extension_error_code)
 
-                msg = ExtHandlerInstance._capture_process_output(process, stdout, stderr, cmd, timeout,
-                                                                 extension_error_code)
-
                 duration = elapsed_milliseconds(begin_utc)
-                log_msg = "{0}\n{1}".format(cmd, "\n".join([line for line in msg.split('\n') if line != ""]))
+                log_msg = "{0}\n{1}".format(cmd, "\n".join([line for line in process_output.split('\n') if line != ""]))
+
                 self.logger.verbose(log_msg)
                 self.report_event(message=log_msg, duration=duration, log_event=False)
 
-                return msg
-
-    @staticmethod
-    def _capture_process_output(process, stdout_file, stderr_file, cmd, timeout,
-                                code=ExtensionErrorCodes.PluginUnknownFailure):
-        retry = timeout
-        while retry > 0 and process.poll() is None:
-            time.sleep(1)
-            retry -= 1
-
-        # timeout expired
-        if retry == 0:
-            os.killpg(os.getpgid(process.pid), signal.SIGKILL)
-            raise ExtensionError("Timeout({0}): {1}\n{2}".format(timeout, cmd, read_output(stdout_file, stderr_file)),
-                                 code=ExtensionErrorCodes.PluginHandlerScriptTimedout)
-
-        # process completed or forked; sleep 1 sec to give the child process (if any) a chance to start
-        time.sleep(1)
-
-        return_code = process.wait()
-        if return_code != 0:
-            raise ExtensionError("Non-zero exit code: {0}, {1}\n{2}".format(return_code,
-                                                                            cmd,
-                                                                            read_output(stdout_file, stderr_file)),
-                                 code=code)
-
-        return read_output(stdout_file, stderr_file)
+                return process_output
 
     def load_manifest(self):
         man_file = self.get_manifest_file()

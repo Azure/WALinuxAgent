@@ -20,8 +20,9 @@ from __future__ import print_function
 import subprocess
 
 from azurelinuxagent.common.cgroupapi import CGroupsApi, FileSystemCgroupsApi, SystemdCgroupsApi, VM_AGENT_CGROUP_NAME
+from azurelinuxagent.common.exception import ExtensionError, ExtensionErrorCodes
+from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.utils import shellutil
-from azurelinuxagent.common.utils.processutil import read_output
 from nose.plugins.attrib import attr
 from tests.tools import *
 
@@ -300,24 +301,36 @@ class FileSystemCgroupsApiTestCase(AgentTestCase):
         api = FileSystemCgroupsApi()
         api.create_extension_cgroups_root()
 
-        process, extension_cgroups = api.start_extension_command(
-            extension_name="Microsoft.Compute.TestExtension-1.2.3",
-            command="date",
-            shell=False,
-            cwd=self.tmp_dir,
-            env={},
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE)
+        with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stdout:
+            with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stderr:
+                extension_cgroups, process_output = api.start_extension_command(
+                    extension_name="Microsoft.Compute.TestExtension-1.2.3",
+                    command="echo $$",
+                    timeout=300,
+                    shell=True,
+                    cwd=self.tmp_dir,
+                    env={},
+                    stdout=stdout,
+                    stderr=stderr)
 
-        process.wait()
+        # The expected format of the process output is [stdout]\n{PID}\n\n\n[stderr]\n"
+        pattern = re.compile(r"\[stdout\]\n(\d+)\n\n\n\[stderr\]\n")
+        m = pattern.match(process_output)
+
+        try:
+            pid_from_output = int(m.group(1))
+        except Exception as e:
+            self.fail("No PID could be extracted from the process output! Error: {0}".format(ustr(e)))
 
         for cgroup in extension_cgroups:
             cgroups_procs_path = os.path.join(cgroup.path, "cgroup.procs")
             with open(cgroups_procs_path, "r") as f:
                 contents = f.read()
-            pid = int(contents)
+            pid_from_cgroup = int(contents)
 
-            self.assertEquals(pid, process.pid, "The PID of the command was not added to {0}. Expected: {1}, got: {2}".format(cgroups_procs_path, process.pid, pid))
+            self.assertEquals(pid_from_output, pid_from_cgroup,
+                              "The PID from the process output ({0}) does not match the PID found in the"
+                              "process cgroup {1} ({2})".format(pid_from_output, cgroups_procs_path, pid_from_cgroup))
 
 
 @skip_if_predicate_false(is_systemd_present, "Systemd cgroups API doesn't manage cgroups on systems not using systemd.")
@@ -410,45 +423,37 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
         # we mock subprocess.Popen to execute a dummy command (date), so no actual cgroups are created; their paths
         # should be computed properly, though
         with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", mock_popen):
-            process, extension_cgroups = SystemdCgroupsApi().start_extension_command(
+            extension_cgroups, process_output = SystemdCgroupsApi().start_extension_command(
                 extension_name="Microsoft.Compute.TestExtension-1.2.3",
                 command="date",
                 shell=False,
+                timeout=300,
                 cwd=self.tmp_dir,
                 env={},
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE)
 
-            process.wait()
             self.assert_cgroups_created(extension_cgroups)
 
     @attr('requires_sudo')
-    def test_start_extension_command_should_use_systemd_if_not_failing(self):
+    def test_start_extension_command_should_use_systemd_and_not_the_fallback_option_if_successful(self):
         self.assertTrue(i_am_root(), "Test does not run when non-root")
-
-        original_popen = subprocess.Popen
-
-        def mock_popen(*args, **kwargs):
-            return original_popen(*args, **kwargs)
 
         with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stdout:
             with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stderr:
-                with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", side_effect=mock_popen) as patch_mock_popen:
-                    process, extension_cgroups = SystemdCgroupsApi().start_extension_command(
+                with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", wraps=subprocess.Popen) \
+                        as patch_mock_popen:
+                    extension_cgroups, process_output = SystemdCgroupsApi().start_extension_command(
                         extension_name="Microsoft.Compute.TestExtension-1.2.3",
                         command="date",
+                        timeout=300,
                         shell=True,
                         cwd=self.tmp_dir,
                         env={},
                         stdout=stdout,
                         stderr=stderr)
 
-                    process.wait()
-
-                    ret = process.poll()
-
                     # We should have invoked the extension command only once and succeeded
-                    self.assertEquals(0, ret)
                     self.assertEquals(1, patch_mock_popen.call_count)
 
                     args = patch_mock_popen.call_args[0][0]
@@ -456,7 +461,7 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
 
                     self.assert_cgroups_created(extension_cgroups)
 
-    def test_start_extension_command_should_not_use_systemd_if_failing(self):
+    def test_start_extension_command_should_use_fallback_option_if_systemd_fails(self):
         original_popen = subprocess.Popen
 
         def mock_popen(*args, **kwargs):
@@ -468,19 +473,18 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
         with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stdout:
             with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stderr:
                 with patch("azurelinuxagent.common.cgroupapi.add_event") as mock_add_event:
-                    with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", side_effect=mock_popen) as patch_mock_popen:
-
+                    with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", side_effect=mock_popen) \
+                            as patch_mock_popen:
                         # We expect this call to fail because of the syntax error
-                        process, extension_cgroups = SystemdCgroupsApi().start_extension_command(
+                        extension_cgroups, process_output = SystemdCgroupsApi().start_extension_command(
                             extension_name="Microsoft.Compute.TestExtension-1.2.3",
                             command="date",
+                            timeout=300,
                             shell=True,
                             cwd=self.tmp_dir,
                             env={},
                             stdout=stdout,
                             stderr=stderr)
-
-                        process.wait()
 
                         args, kwargs = mock_add_event.call_args
                         self.assertIn("Failed to run systemd-run for unit Microsoft.Compute.TestExtension_1.2.3",
@@ -489,10 +493,6 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
                                       kwargs['message'])
                         self.assertEquals(False, kwargs['is_success'])
                         self.assertEquals('InvokeCommandUsingSystemd', kwargs['op'])
-
-                        # We expect the process to ultimately succeed since the fallback option worked
-                        ret = process.poll()
-                        self.assertEquals(0, ret)
 
                         # We expect two calls to Popen, first for the systemd-run call, second for the fallback option
                         self.assertEquals(2, patch_mock_popen.call_count)
@@ -505,6 +505,95 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
                         # No cgroups should have been created
                         self.assertEquals(extension_cgroups, [])
 
+    @patch("azurelinuxagent.common.cgroupapi.add_event")
+    def test_start_extension_command_should_use_fallback_option_if_systemd_times_out(self, *args):
+        # Mock systemd timeout and make sure the failure is only attributed to the extension if the command fails
+        # using the fallback option
+        original_popen = subprocess.Popen
+
+        def mock_popen(*args, **kwargs):
+            # Inject a syntax error to the call
+            if "systemd-run" in args[0]:
+                return
+            else:
+                return original_popen(*args, **kwargs)
+
+        expected_output = "[stdout]\n{0}\n\n\n[stderr]\n"
+
+        with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stdout:
+            with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stderr:
+                with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", side_effect=mock_popen):
+                    with patch("azurelinuxagent.common.cgroupapi.wait_for_process_completion_or_timeout",
+                               return_value=[True, None]):
+                        with patch("azurelinuxagent.common.cgroupapi.SystemdCgroupsApi._is_systemd_failure",
+                                   return_value=True):
+                            extension_cgroups, process_output = SystemdCgroupsApi().start_extension_command(
+                                extension_name="Microsoft.Compute.TestExtension-1.2.3",
+                                command="echo 'success'",
+                                timeout=300,
+                                shell=True,
+                                cwd=self.tmp_dir,
+                                env={},
+                                stdout=stdout,
+                                stderr=stderr)
+
+                            self.assertEquals(extension_cgroups, [])
+                            self.assertEquals(expected_output.format("success"), process_output)
+
+    @attr('requires_sudo')
+    @patch("azurelinuxagent.common.cgroupapi.add_event")
+    def test_start_extension_command_should_not_use_fallback_option_if_extension_fails(self, *args):
+        self.assertTrue(i_am_root(), "Test does not run when non-root")
+
+        with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stdout:
+            with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stderr:
+                with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", wraps=subprocess.Popen) \
+                        as patch_mock_popen:
+                    with self.assertRaises(ExtensionError) as context_manager:
+                        SystemdCgroupsApi().start_extension_command(
+                            extension_name="Microsoft.Compute.TestExtension-1.2.3",
+                            command="ls folder_does_not_exist",
+                            timeout=300,
+                            shell=True,
+                            cwd=self.tmp_dir,
+                            env={},
+                            stdout=stdout,
+                            stderr=stderr)
+
+                        # We should have invoked the extension command only once, in the systemd-run case
+                        self.assertEquals(1, patch_mock_popen.call_count)
+                        args = patch_mock_popen.call_args[0][0]
+                        self.assertIn("systemd-run --unit", args)
+
+                        self.assertEquals(context_manager.exception.code, ExtensionErrorCodes.PluginUnknownFailure)
+                        self.assertIn("Non-zero exit code", ustr(context_manager.exception))
+
+    @attr('requires_sudo')
+    @patch("azurelinuxagent.common.cgroupapi.add_event")
+    def test_start_extension_command_should_not_use_fallback_option_if_extension_times_out(self, *args):
+        self.assertTrue(i_am_root(), "Test does not run when non-root")
+
+        with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stdout:
+            with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stderr:
+                with patch("azurelinuxagent.common.cgroupapi.wait_for_process_completion_or_timeout",
+                           return_value=[True, None]):
+                    with patch("azurelinuxagent.common.cgroupapi.SystemdCgroupsApi._is_systemd_failure",
+                               return_value=False):
+                        with self.assertRaises(ExtensionError) as context_manager:
+                            SystemdCgroupsApi().start_extension_command(
+                                extension_name="Microsoft.Compute.TestExtension-1.2.3",
+                                command="date",
+                                timeout=300,
+                                shell=True,
+                                cwd=self.tmp_dir,
+                                env={},
+                                stdout=stdout,
+                                stderr=stderr)
+
+                        self.assertEquals(context_manager.exception.code,
+                                          ExtensionErrorCodes.PluginHandlerScriptTimedout)
+                        self.assertIn("Timeout", ustr(context_manager.exception))
+
     def test_start_extension_command_should_capture_only_the_last_subprocess_output(self):
         original_popen = subprocess.Popen
 
@@ -514,24 +603,25 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
             new_args = (systemd_command,)
             return original_popen(new_args, **kwargs)
 
+        expected_output = "[stdout]\n{0}\n\n\n[stderr]\n"
+
         with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stdout:
             with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stderr:
-                with patch("azurelinuxagent.common.cgroupapi.add_event") as mock_add_event:
-                    with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen",
-                               side_effect=mock_popen) as patch_mock_popen:
+                with patch("azurelinuxagent.common.cgroupapi.add_event"):
+                    with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", side_effect=mock_popen):
                         # We expect this call to fail because of the syntax error
-                        process, extension_cgroups = SystemdCgroupsApi().start_extension_command(
+                        extension_cgroups, process_output = SystemdCgroupsApi().start_extension_command(
                             extension_name="Microsoft.Compute.TestExtension-1.2.3",
                             command="echo 'very specific test message'",
+                            timeout=300,
                             shell=True,
                             cwd=self.tmp_dir,
                             env={},
                             stdout=stdout,
                             stderr=stderr)
 
-                        process.wait()
-                        process_output = read_output(stdout, stderr)
-                        self.assertEquals("[stdout]\nvery specific test message\n\n\n[stderr]\n", process_output)
+                        self.assertEquals(expected_output.format("very specific test message"), process_output)
+                        self.assertEquals(extension_cgroups, [])
 
     @patch("azurelinuxagent.common.utils.fileutil.read_file")
     def test_create_agent_cgroups_should_create_cgroups_on_all_controllers(self, patch_read_file):

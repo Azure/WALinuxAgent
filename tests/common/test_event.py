@@ -24,7 +24,7 @@ from azurelinuxagent.common.event import add_event, \
     WALAEventOperation, elapsed_milliseconds
 from azurelinuxagent.common.exception import EventError
 from azurelinuxagent.common.future import ustr
-from azurelinuxagent.common.utils.processutil import read_output
+from azurelinuxagent.common.utils.extensionprocessutil import read_output
 from azurelinuxagent.common.version import CURRENT_VERSION
 from azurelinuxagent.ga.monitor import MonitorHandler
 
