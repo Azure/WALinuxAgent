@@ -313,16 +313,24 @@ class FileSystemCgroupsApiTestCase(AgentTestCase):
                     stdout=stdout,
                     stderr=stderr)
 
-        expected_output = "[stdout]\n{0}\n\n\n[stderr]\n"
+        # The expected format of the process output is [stdout]\n{PID}\n\n\n[stderr]\n"
+        pattern = re.compile(r"\[stdout\]\n(\d+)\n\n\n\[stderr\]\n")
+        m = pattern.match(process_output)
+
+        try:
+            pid_from_output = int(m.group(1))
+        except Exception as e:
+            self.fail("No PID could be extracted from the process output! Error: {0}".format(ustr(e)))
 
         for cgroup in extension_cgroups:
             cgroups_procs_path = os.path.join(cgroup.path, "cgroup.procs")
             with open(cgroups_procs_path, "r") as f:
                 contents = f.read()
-            pid = int(contents)
+            pid_from_cgroup = int(contents)
 
-            self.assertEquals(process_output, expected_output.format(pid),
-                              "The PID of the command was not added to {0}. Expected:\n{1}\ngot:\n{2}".format(cgroups_procs_path, expected_output.format(pid), process_output))
+            self.assertEquals(pid_from_output, pid_from_cgroup,
+                              "The PID from the process output ({0}) does not match the PID found in the"
+                              "process cgroup {1} ({2})".format(pid_from_output, cgroups_procs_path, pid_from_cgroup))
 
 
 @skip_if_predicate_false(is_systemd_present, "Systemd cgroups API doesn't manage cgroups on systems not using systemd.")
@@ -517,7 +525,7 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
                 with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", side_effect=mock_popen):
                     with patch("azurelinuxagent.common.cgroupapi.wait_for_process_completion_or_timeout",
                                return_value=[True, None]):
-                        with patch("azurelinuxagent.common.cgroupapi.SystemdCgroupsApi.is_systemd_failure",
+                        with patch("azurelinuxagent.common.cgroupapi.SystemdCgroupsApi._is_systemd_failure",
                                    return_value=True):
                             extension_cgroups, process_output = SystemdCgroupsApi().start_extension_command(
                                 extension_name="Microsoft.Compute.TestExtension-1.2.3",
@@ -539,19 +547,26 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
 
         with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stdout:
             with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stderr:
-                with self.assertRaises(ExtensionError) as context_manager:
-                    SystemdCgroupsApi().start_extension_command(
-                        extension_name="Microsoft.Compute.TestExtension-1.2.3",
-                        command="ls folder_does_not_exist",
-                        timeout=300,
-                        shell=True,
-                        cwd=self.tmp_dir,
-                        env={},
-                        stdout=stdout,
-                        stderr=stderr)
+                with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", wraps=subprocess.Popen) \
+                        as patch_mock_popen:
+                    with self.assertRaises(ExtensionError) as context_manager:
+                        SystemdCgroupsApi().start_extension_command(
+                            extension_name="Microsoft.Compute.TestExtension-1.2.3",
+                            command="ls folder_does_not_exist",
+                            timeout=300,
+                            shell=True,
+                            cwd=self.tmp_dir,
+                            env={},
+                            stdout=stdout,
+                            stderr=stderr)
 
-                    self.assertEquals(context_manager.exception.code, ExtensionErrorCodes.PluginUnknownFailure)
-                    self.assertIn("Non-zero exit code", ustr(context_manager.exception))
+                        # We should have invoked the extension command only once, in the systemd-run case
+                        self.assertEquals(1, patch_mock_popen.call_count)
+                        args = patch_mock_popen.call_args[0][0]
+                        self.assertIn("systemd-run --unit", args)
+
+                        self.assertEquals(context_manager.exception.code, ExtensionErrorCodes.PluginUnknownFailure)
+                        self.assertIn("Non-zero exit code", ustr(context_manager.exception))
 
     @attr('requires_sudo')
     @patch("azurelinuxagent.common.cgroupapi.add_event")
@@ -562,7 +577,7 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
             with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stderr:
                 with patch("azurelinuxagent.common.cgroupapi.wait_for_process_completion_or_timeout",
                            return_value=[True, None]):
-                    with patch("azurelinuxagent.common.cgroupapi.SystemdCgroupsApi.is_systemd_failure",
+                    with patch("azurelinuxagent.common.cgroupapi.SystemdCgroupsApi._is_systemd_failure",
                                return_value=False):
                         with self.assertRaises(ExtensionError) as context_manager:
                             SystemdCgroupsApi().start_extension_command(

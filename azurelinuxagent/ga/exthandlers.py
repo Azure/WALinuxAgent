@@ -50,7 +50,6 @@ from azurelinuxagent.common.protocol.restapi import ExtHandlerStatus, \
     get_properties, \
     set_properties
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
-from azurelinuxagent.common.utils.processutil import read_output
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION, GOAL_STATE_AGENT_VERSION, \
     DISTRO_NAME, DISTRO_VERSION, PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO
 

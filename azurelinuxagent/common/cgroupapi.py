@@ -28,7 +28,7 @@ from azurelinuxagent.common.event import add_event, WALAEventOperation
 from azurelinuxagent.common.exception import CGroupsException, ExtensionError, ExtensionErrorCodes
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.utils import fileutil, shellutil
-from azurelinuxagent.common.utils.processutil import read_output, start_subprocess_and_wait_for_completion, \
+from azurelinuxagent.common.utils.extensionprocessutil import read_output, handle_process_completion, \
                                                      wait_for_process_completion_or_timeout
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 
@@ -348,16 +348,21 @@ class FileSystemCgroupsApi(CGroupsApi):
                 logger.warn("Failed to add extension {0} to its cgroup. Resource usage will not be tracked. "
                             "Error: {1}".format(extension_name, ustr(e)))
 
+        process = subprocess.Popen(command,
+                                   shell=shell,
+                                   cwd=cwd,
+                                   env=env,
+                                   stdout=stdout,
+                                   stderr=stderr,
+                                   preexec_fn=pre_exec_function)
+
         self.track_cgroups(extension_cgroups)
-        process_output = start_subprocess_and_wait_for_completion(command=command,
-                                                                  timeout=timeout,
-                                                                  shell=shell,
-                                                                  cwd=cwd,
-                                                                  env=env,
-                                                                  stdout=stdout,
-                                                                  stderr=stderr,
-                                                                  preexec_fn=pre_exec_function,
-                                                                  error_code=error_code)
+        process_output = handle_process_completion(process=process,
+                                                   command=command,
+                                                   timeout=timeout,
+                                                   stdout=stdout,
+                                                   stderr=stderr,
+                                                   error_code=error_code)
 
         return extension_cgroups, process_output
 
@@ -463,7 +468,7 @@ After=system-{1}.slice""".format(extension_name, EXTENSIONS_ROOT_CGROUP_NAME)
         return cgroups
 
     @staticmethod
-    def is_systemd_failure(scope_name, process_output):
+    def _is_systemd_failure(scope_name, process_output):
         unit_not_found = "Unit {0} not found.".format(scope_name)
         return unit_not_found in process_output or scope_name not in process_output
 
@@ -501,7 +506,7 @@ After=system-{1}.slice""".format(extension_name, EXTENSIONS_ROOT_CGROUP_NAME)
         else:
             # The extension didn't terminate successfully. Determine whether it was due to systemd errors or
             # extension errors.
-            systemd_failure = self.is_systemd_failure(scope_name, process_output)
+            systemd_failure = self._is_systemd_failure(scope_name, process_output)
 
             if not systemd_failure:
                 # There was an extension error; it either timed out or returned a non-zero exit code.
@@ -528,15 +533,20 @@ After=system-{1}.slice""".format(extension_name, EXTENSIONS_ROOT_CGROUP_NAME)
                 stderr.truncate(0)
 
                 # Try invoking the process again, this time without systemd-run
-                process_output = start_subprocess_and_wait_for_completion(command=command,
-                                                                          timeout=timeout,
-                                                                          shell=shell,
-                                                                          cwd=cwd,
-                                                                          env=env,
-                                                                          stdout=stdout,
-                                                                          stderr=stderr,
-                                                                          preexec_fn=os.setsid,
-                                                                          error_code=error_code)
+                process = subprocess.Popen(command,
+                                           shell=shell,
+                                           cwd=cwd,
+                                           env=env,
+                                           stdout=stdout,
+                                           stderr=stderr,
+                                           preexec_fn=os.setsid)
+
+                process_output = handle_process_completion(process=process,
+                                                           command=command,
+                                                           timeout=timeout,
+                                                           stdout=stdout,
+                                                           stderr=stderr,
+                                                           error_code=error_code)
 
                 return [], process_output
 

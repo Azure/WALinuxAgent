@@ -150,7 +150,7 @@ class CGroupConfiguratorTestCase(AgentTestCase):
 
         with patch("azurelinuxagent.common.cgroupapi.FileSystemCgroupsApi.start_extension_command") as mock_fs:
             with patch("azurelinuxagent.common.cgroupapi.SystemdCgroupsApi.start_extension_command") as mock_systemd:
-                with patch("azurelinuxagent.common.cgroupconfigurator.start_subprocess_and_wait_for_completion") as mock_popen:
+                with patch("azurelinuxagent.common.cgroupconfigurator.handle_process_completion") as mock_popen:
                     configurator.start_extension_command(
                         extension_name="Microsoft.Compute.TestExtension-1.2.3",
                         command="date",

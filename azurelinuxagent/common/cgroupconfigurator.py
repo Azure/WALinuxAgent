@@ -15,14 +15,15 @@
 # Requires Python 2.6+ and Openssl 1.0+
 
 import os
+import subprocess
 
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.cgroupapi import CGroupsApi
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
-from azurelinuxagent.common.exception import CGroupsException, ExtensionError, ExtensionErrorCodes
+from azurelinuxagent.common.exception import CGroupsException, ExtensionErrorCodes
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
-from azurelinuxagent.common.utils.processutil import start_subprocess_and_wait_for_completion
+from azurelinuxagent.common.utils.extensionprocessutil import handle_process_completion
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 from azurelinuxagent.common.event import add_event, WALAEventOperation
 
@@ -155,15 +156,20 @@ class CGroupConfigurator(object):
             :param error_code: Extension error code to raise in case of error
             """
             if not self.enabled():
-                process_output = start_subprocess_and_wait_for_completion(command=command,
-                                                                          timeout=timeout,
-                                                                          shell=shell,
-                                                                          cwd=cwd,
-                                                                          env=env,
-                                                                          stdout=stdout,
-                                                                          stderr=stderr,
-                                                                          preexec_fn=os.setsid,
-                                                                          error_code=error_code)
+                process = subprocess.Popen(command,
+                                           shell=shell,
+                                           cwd=cwd,
+                                           env=env,
+                                           stdout=stdout,
+                                           stderr=stderr,
+                                           preexec_fn=os.setsid)
+
+                process_output = handle_process_completion(process=process,
+                                                           command=command,
+                                                           timeout=timeout,
+                                                           stdout=stdout,
+                                                           stderr=stderr,
+                                                           error_code=error_code)
             else:
                 extension_cgroups, process_output = self._cgroups_api.start_extension_command(extension_name,
                                                                                               command,

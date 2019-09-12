@@ -6,7 +6,7 @@ from azurelinuxagent.common.protocol.restapi import ExtensionStatus, Extension, 
 from azurelinuxagent.ga.exthandlers import parse_ext_status, ExtHandlerInstance, get_exthandlers_handler
 from azurelinuxagent.common.exception import ProtocolError, ExtensionError, ExtensionErrorCodes
 from azurelinuxagent.common.event import WALAEventOperation
-from azurelinuxagent.common.utils.processutil import TELEMETRY_MESSAGE_MAX_LEN, format_stdout_stderr, read_output
+from azurelinuxagent.common.utils.extensionprocessutil import TELEMETRY_MESSAGE_MAX_LEN, format_stdout_stderr, read_output
 from tests.tools import *
 
 
@@ -539,7 +539,7 @@ sys.stderr.write("E" * 5 * 1024 * 1024)
         # Mocking the call to file.read() is difficult, so instead we mock the call to format_stdout_stderr, which takes the
         # return value of the calls to file.read(). The intention of the test is to verify we never read (and load in memory)
         # more than a few KB of data from the files used to capture stdout/stderr
-        with patch('azurelinuxagent.common.utils.processutil.format_stdout_stderr', side_effect=format_stdout_stderr) as mock_format:
+        with patch('azurelinuxagent.common.utils.extensionprocessutil.format_stdout_stderr', side_effect=format_stdout_stderr) as mock_format:
             output = self.ext_handler_instance.launch_command(command)
 
         self.assertGreaterEqual(len(output), 1024)
@@ -571,7 +571,7 @@ sys.stderr.write("STDERR")
         def capture_process_output(stdout_file, stderr_file):
             return original_capture_process_output(None, None)
 
-        with patch('azurelinuxagent.common.utils.processutil.read_output', side_effect=capture_process_output):
+        with patch('azurelinuxagent.common.utils.extensionprocessutil.read_output', side_effect=capture_process_output):
             output = self.ext_handler_instance.launch_command(command)
 
         self.assertIn("[stderr]\nCannot read stdout/stderr:", output)

@@ -21,13 +21,19 @@ from azurelinuxagent.common.exception import ExtensionError, ExtensionErrorCodes
 from azurelinuxagent.common.future import ustr
 import os
 import signal
-import subprocess
 import time
 
 TELEMETRY_MESSAGE_MAX_LEN = 3200
 
 
 def wait_for_process_completion_or_timeout(process, timeout):
+    """
+    Utility function that waits for the process to complete within the given time frame. This function will terminate
+    the process if when the given time frame elapses.
+    :param process: Reference to a running process
+    :param timeout: Number of seconds to wait for the process to complete before killing it
+    :return: Two parameters: boolean for if the process timed out and the return code of the process (None if timed out)
+    """
     while timeout > 0 and process.poll() is None:
         time.sleep(1)
         timeout -= 1
@@ -44,16 +50,19 @@ def wait_for_process_completion_or_timeout(process, timeout):
     return timeout == 0, return_code
 
 
-def start_subprocess_and_wait_for_completion(command, timeout, shell, cwd, env, stdout, stderr, preexec_fn, error_code):
-    process = subprocess.Popen(
-        command,
-        shell=shell,
-        cwd=cwd,
-        env=env,
-        stdout=stdout,
-        stderr=stderr,
-        preexec_fn=preexec_fn)
-
+def handle_process_completion(process, command, timeout, stdout, stderr, error_code):
+    """
+    Utility function that waits for process completion and retrieves its output (stdout and stderr) if it completed
+    before the timeout period. Otherwise, the process will get killed and an ExtensionError will be raised.
+    In case the return code is non-zero, ExtensionError will be raised.
+    :param process: Reference to a running process
+    :param command: The extension command to run
+    :param timeout: Number of seconds to wait before killing the process
+    :param stdout: Must be a file since we seek on it when parsing the subprocess output
+    :param stderr: Must be a file since we seek on it when parsing the subprocess outputs
+    :param error_code: The error code to set if we raise an ExtensionError
+    :return:
+    """
     # Wait for process completion or timeout
     timed_out, return_code = wait_for_process_completion_or_timeout(process, timeout)
     process_output = read_output(stdout, stderr)
@@ -70,6 +79,12 @@ def start_subprocess_and_wait_for_completion(command, timeout, shell, cwd, env, 
 
 
 def read_output(stdout, stderr):
+    """
+    Read the output of the process sent to stdout and stderr and trim them to the max appropriate length.
+    :param stdout: File containing the stdout of the process
+    :param stderr: File containing the stderr of the process
+    :return: Returns the formatted concatenated stdout and stderr of the process
+    """
     try:
         stdout.seek(0)
         stderr.seek(0)
@@ -124,4 +139,3 @@ def format_stdout_stderr(stdout, stderr, max_len=TELEMETRY_MESSAGE_MAX_LEN):
         return to_s(stdout, -1*stdout_len, stderr, 0)
     else:
         return to_s(stdout, -1*max_len_each, stderr, -1*max_len_each)
-

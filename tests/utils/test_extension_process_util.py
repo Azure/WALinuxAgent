@@ -16,8 +16,8 @@
 #
 from azurelinuxagent.common.exception import ExtensionError, ExtensionErrorCodes
 from azurelinuxagent.common.future import ustr
-from azurelinuxagent.common.utils.processutil import format_stdout_stderr, read_output, \
-    wait_for_process_completion_or_timeout, start_subprocess_and_wait_for_completion
+from azurelinuxagent.common.utils.extensionprocessutil import format_stdout_stderr, read_output, \
+    wait_for_process_completion_or_timeout, handle_process_completion
 from tests.tools import *
 import subprocess
 
@@ -45,13 +45,14 @@ class TestProcessUtils(AgentTestCase):
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE)
 
-        timed_out, ret = wait_for_process_completion_or_timeout(process, 5)
+        timed_out, ret = wait_for_process_completion_or_timeout(process=process, timeout=5)
         self.assertEquals(timed_out, False)
         self.assertEquals(ret, 0)
 
     def test_wait_for_process_completion_or_timeout_should_kill_process_on_timeout(self):
+        timeout = 5
         process = subprocess.Popen(
-            "sleep 4s",
+            "sleep 1m",
             shell=True,
             cwd=self.tmp_dir,
             env={},
@@ -59,14 +60,20 @@ class TestProcessUtils(AgentTestCase):
             stderr=subprocess.PIPE,
             preexec_fn=os.setsid)
 
-        with patch('azurelinuxagent.common.utils.processutil.os.killpg') as mock_kill:
-            timed_out, ret = wait_for_process_completion_or_timeout(process, 2)
+        # We don't actually mock the kill, just wrap it so we can assert its call count
+        with patch('azurelinuxagent.common.utils.extensionprocessutil.os.killpg', wraps=os.killpg) as patch_kill:
+            with patch('time.sleep') as mock_sleep:
+                timed_out, ret = wait_for_process_completion_or_timeout(process=process, timeout=timeout)
 
-            self.assertEquals(mock_kill.call_count, 1)
-            self.assertEquals(timed_out, True)
-            self.assertEquals(ret, None)
+                # We're mocking sleep to avoid prolonging the test execution time, but we still want to make sure
+                # we're "waiting" the correct amount of time before killing the process
+                self.assertEquals(mock_sleep.call_count, timeout)
 
-    def test_wait_for_process_completion_or_timeout_should_return_nonzero_return_code(self):
+                self.assertEquals(patch_kill.call_count, 1)
+                self.assertEquals(timed_out, True)
+                self.assertEquals(ret, None)
+
+    def test_handle_process_completion_should_return_nonzero_when_process_fails(self):
         process = subprocess.Popen(
             "ls folder_does_not_exist",
             shell=True,
@@ -75,83 +82,106 @@ class TestProcessUtils(AgentTestCase):
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE)
 
-        timed_out, ret = wait_for_process_completion_or_timeout(process, 5)
+        timed_out, ret = wait_for_process_completion_or_timeout(process=process, timeout=5)
         self.assertEquals(timed_out, False)
         self.assertEquals(ret, 2)
 
-    def test_start_subprocess_and_wait_for_completion_should_return_process_output(self):
-        command = "echo 'dummy output'"
+    def test_handle_process_completion_should_return_process_output(self):
+        command = "echo 'dummy stdout' && 1>&2 echo 'dummy stderr'"
         with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stdout:
             with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stderr:
-                process_output = start_subprocess_and_wait_for_completion(command=command,
-                                                                          timeout=5,
-                                                                          shell=True,
-                                                                          cwd=self.tmp_dir,
-                                                                          env={},
-                                                                          stdout=stdout,
-                                                                          stderr=stderr,
-                                                                          preexec_fn=os.setsid,
-                                                                          error_code=42)
-        expected_output = "[stdout]\ndummy output\n\n\n[stderr]\n"
+                process = subprocess.Popen(command,
+                                           shell=True,
+                                           cwd=self.tmp_dir,
+                                           env={},
+                                           stdout=stdout,
+                                           stderr=stderr,
+                                           preexec_fn=os.setsid)
+
+                process_output = handle_process_completion(process=process,
+                                                           command=command,
+                                                           timeout=5,
+                                                           stdout=stdout,
+                                                           stderr=stderr,
+                                                           error_code=42)
+
+        expected_output = "[stdout]\ndummy stdout\n\n\n[stderr]\ndummy stderr\n"
         self.assertEquals(process_output, expected_output)
 
-    def test_start_subprocess_and_wait_for_completion_should_raise_on_timeout(self):
-        command = "sleep 4s"
-        timeout = 2
+    def test_handle_process_completion_should_raise_on_timeout(self):
+        command = "sleep 1m"
+        timeout = 5
         with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stdout:
             with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stderr:
-                with self.assertRaises(ExtensionError) as context_manager:
-                    start_subprocess_and_wait_for_completion(command=command,
-                                                             timeout=timeout,
-                                                             shell=True,
-                                                             cwd=self.tmp_dir,
-                                                             env={},
-                                                             stdout=stdout,
-                                                             stderr=stderr,
-                                                             preexec_fn=os.setsid,
-                                                             error_code=42)
-                self.assertEquals(context_manager.exception.code, ExtensionErrorCodes.PluginHandlerScriptTimedout)
-                self.assertIn("Timeout({0})".format(timeout), ustr(context_manager.exception))
+                with patch('time.sleep') as mock_sleep:
+                    with self.assertRaises(ExtensionError) as context_manager:
+                        process = subprocess.Popen(command,
+                                                   shell=True,
+                                                   cwd=self.tmp_dir,
+                                                   env={},
+                                                   stdout=stdout,
+                                                   stderr=stderr,
+                                                   preexec_fn=os.setsid)
 
-    def test_start_subprocess_and_wait_for_completion_should_raise_on_nonzero_exit_code(self):
+                        handle_process_completion(process=process,
+                                                  command=command,
+                                                  timeout=timeout,
+                                                  stdout=stdout,
+                                                  stderr=stderr,
+                                                  error_code=42)
+
+                    # We're mocking sleep to avoid prolonging the test execution time, but we still want to make sure
+                    # we're "waiting" the correct amount of time before killing the process and raising an exception
+                    self.assertEquals(mock_sleep.call_count, timeout)
+
+                    self.assertEquals(context_manager.exception.code, ExtensionErrorCodes.PluginHandlerScriptTimedout)
+                    self.assertIn("Timeout({0})".format(timeout), ustr(context_manager.exception))
+
+    def test_handle_process_completion_should_raise_on_nonzero_exit_code(self):
         command = "ls folder_does_not_exist"
         error_code = 42
         with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stdout:
             with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stderr:
                 with self.assertRaises(ExtensionError) as context_manager:
-                    start_subprocess_and_wait_for_completion(command=command,
-                                                             timeout=4,
-                                                             shell=True,
-                                                             cwd=self.tmp_dir,
-                                                             env={},
-                                                             stdout=stdout,
-                                                             stderr=stderr,
-                                                             preexec_fn=os.setsid,
-                                                             error_code=error_code)
+                    process = subprocess.Popen(command,
+                                               shell=True,
+                                               cwd=self.tmp_dir,
+                                               env={},
+                                               stdout=stdout,
+                                               stderr=stderr,
+                                               preexec_fn=os.setsid)
+
+                    handle_process_completion(process=process,
+                                              command=command,
+                                              timeout=4,
+                                              stdout=stdout,
+                                              stderr=stderr,
+                                              error_code=error_code)
+
                 self.assertEquals(context_manager.exception.code, error_code)
                 self.assertIn("Non-zero exit code:", ustr(context_manager.exception))
 
     def test_read_output_it_should_return_no_content(self):
-        with patch('azurelinuxagent.common.utils.processutil.TELEMETRY_MESSAGE_MAX_LEN', 0):
+        with patch('azurelinuxagent.common.utils.extensionprocessutil.TELEMETRY_MESSAGE_MAX_LEN', 0):
             expected = "[stdout]\n\n\n[stderr]\n"
             actual = read_output(self.stdout, self.stderr)
             self.assertEqual(expected, actual)
 
     def test_read_output_it_should_truncate_the_content(self):
-        with patch('azurelinuxagent.common.utils.processutil.TELEMETRY_MESSAGE_MAX_LEN', 10):
+        with patch('azurelinuxagent.common.utils.extensionprocessutil.TELEMETRY_MESSAGE_MAX_LEN', 10):
             expected = "[stdout]\nThe quick \n\n[stderr]\nThe five b"
             actual = read_output(self.stdout, self.stderr)
             self.assertEqual(expected, actual)
 
     def test_read_output_it_should_return_all_content(self):
-        with patch('azurelinuxagent.common.utils.processutil.TELEMETRY_MESSAGE_MAX_LEN', 50):
+        with patch('azurelinuxagent.common.utils.extensionprocessutil.TELEMETRY_MESSAGE_MAX_LEN', 50):
             expected = "[stdout]\nThe quick brown fox jumps over the lazy dog.\n\n" \
                        "[stderr]\nThe five boxing wizards jump quickly."
             actual = read_output(self.stdout, self.stderr)
             self.assertEqual(expected, actual)
 
     def test_read_output_it_should_handle_exceptions(self):
-        with patch('azurelinuxagent.common.utils.processutil.TELEMETRY_MESSAGE_MAX_LEN', "type error"):
+        with patch('azurelinuxagent.common.utils.extensionprocessutil.TELEMETRY_MESSAGE_MAX_LEN', "type error"):
             actual = read_output(self.stdout, self.stderr)
             self.assertIn("Cannot read stdout/stderr", actual)
 
