@@ -25,6 +25,7 @@ import xml.sax.saxutils as saxutils
 from datetime import datetime
 
 import azurelinuxagent.common.conf as conf
+from azurelinuxagent.common.event import add_event, WALAEventOperation
 import azurelinuxagent.common.utils.textutil as textutil
 from azurelinuxagent.common.exception import ProtocolNotFoundError, \
     ResourceGoneError, ExtensionDownloadError, InvalidContainerError
@@ -35,6 +36,7 @@ from azurelinuxagent.common.utils.archive import StateFlusher
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, \
     findtext, getattrib, gettext, remove_bom, get_bytes_from_pem, parse_json
+from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 
 VERSION_INFO_URI = "http://{0}/?comp=versions"
 GOAL_STATE_URI = "http://{0}/machine/?comp=goalstate"
@@ -1024,18 +1026,45 @@ class WireClient(object):
         try:
             ret = host_func()
         except (ResourceGoneError, InvalidContainerError) as e:
+            old_container_id = self.host_plugin.container_id
+            old_role_config_name = self.host_plugin.role_config_name
+
             msg = "Request failed with the current host plugin configuration." \
                   "ContainerId: {0}, role config file: {1}. Fetching new goal state and retrying the call." \
-                  "Error: {2}".format(self.host_plugin.container_id, self.host_plugin.role_config_name, ustr(e))
+                  "Error: {2}".format(old_container_id, old_role_config_name, ustr(e))
             logger.info(msg)
 
             self.update_goal_state(forced=True)
+
+            new_container_id = self.host_plugin.container_id
+            new_role_config_name = self.host_plugin.role_config_name
             msg = "Host plugin reconfigured with new parameters. " \
-                  "ContainerId: {0}, role config file: {1}.".format(self.host_plugin.container_id,
-                                                                    self.host_plugin.role_config_name)
+                  "ContainerId: {0}, role config file: {1}.".format(new_container_id, new_role_config_name)
             logger.info(msg)
 
-            ret = host_func()
+            try:
+                ret = host_func()
+                if ret:
+                    msg = "Request succeeded using the host plugin channel after goal state refresh." \
+                          "ContainerId changed from {0} to {1}, " \
+                          "role config file changed from {2} to {3}.".format(old_container_id, new_container_id,
+                                                                             old_role_config_name, new_role_config_name)
+                    add_event(name=AGENT_NAME,
+                              version=CURRENT_VERSION,
+                              op=WALAEventOperation.HostPlugin,
+                              is_success=True,
+                              message=msg,
+                              log_event=False)
+
+            except Exception as e:
+                add_event(name=AGENT_NAME,
+                          version=CURRENT_VERSION,
+                          op=WALAEventOperation.HostPlugin,
+                          is_success=False,
+                          message=ustr(e),
+                          log_event=False)
+                raise e
+
         except Exception:
             raise
 
