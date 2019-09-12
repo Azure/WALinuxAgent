@@ -1842,5 +1842,9 @@ class InVMArtifactsProfile(object):
                 json_settings = json.dumps({})
                 json_settings["runtimeSettings"] = inVMExtensionHandler.settings
                 runtime_settings.text = json_settings
-            return root
+
+            extensions_config = ExtensionsConfig()
+            extensions_config.parse(root)
+
+            return extensions_config
         return None

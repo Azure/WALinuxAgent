@@ -203,7 +203,8 @@ class ExtHandlersHandler(object):
         self.protocol_util = get_protocol_util()
         self.protocol = None
         self.ext_handlers = None
-        self.last_etag = None
+        self.last_instantiation = None
+        self.artifacts_profile = None
         self.last_vm_artifacts_seqno = None
         self.log_report = False
         self.log_etag = True
@@ -243,14 +244,39 @@ class ExtHandlersHandler(object):
             return
 
         try:
+            # For extensions FastTrack, we can receive goal state through the VMArtifactsProfile blob
+            # For now, failing to read it isn't a critical failure. Even if storage is completely down
+            # we'll eventually receive it through Fabric goal state
+            self.artifacts_profile = self.protocol.get_artifacts_profile()
+        except Exception as e:
+            msg = u"Exception retrieving VmArtifactsProfile blob: {0}".format(ustr(e))
+            detailed_msg = '{0} {1}'.format(msg, traceback.extract_tb(get_traceback(e)))
+            logger.warn(msg)
+
+            add_event(AGENT_NAME,
+                      version=CURRENT_VERSION,
+                      op=WALAEventOperation.ExtensionProcessing,
+                      is_success=False,
+                      message=detailed_msg)
+
+        try:
             msg = u"Handle extensions updates for incarnation {0}".format(etag)
             logger.verbose(msg)
             # Log status report success on new config
             self.log_report = True
 
             if self.extension_processing_allowed():
+                # Fabric goal state takes precedence over VMArtifactsProfile blob goal state
+                # So, process the Fabric goal state first (when we process each extension handler
+                # it will check whether its instantiation/etag has changed
                 self.handle_ext_handlers(etag)
-                self.last_etag = etag
+                self.last_instantiation = etag
+
+                # Now process the VMArtifactsProfile blob goal state if it changed
+                if self.last_vm_artifacts_seqno != self.artifacts_profile.get_sequence_number():
+                    self.ext_handlers = self.artifacts_profile.transform_to_extensions_config()
+                    self.handle_ext_handlers(etag)
+                    self.last_vm_artifacts_seqno = self.artifacts_profile.get_sequence_number()
 
             self.report_ext_handlers_status()
             self.cleanup_outdated_handlers()
@@ -332,7 +358,11 @@ class ExtHandlersHandler(object):
             if not self.protocol.supports_overprovisioning():
                 logger.verbose("Overprovisioning is enabled but protocol does not support it.")
             else:
-                artifacts_profile = self.protocol.get_artifacts_profile()
+                if self.artifacts_profile is None:
+                    artifacts_profile = self.protocol.get_artifacts_profile()
+                else:
+                    artifacts_profile = self.artifacts_profile
+
                 if artifacts_profile and artifacts_profile.is_on_hold():
                     logger.info("Extension handling is on hold")
                     return False
@@ -402,7 +432,7 @@ class ExtHandlersHandler(object):
 
         return True
 
-    def handle_ext_handler(self, ext_handler, etag):
+    def handle_ext_handler(self, ext_handler, instantiation):
         ext_handler_i = ExtHandlerInstance(ext_handler, self.protocol)
 
         try:
@@ -417,11 +447,11 @@ class ExtHandlersHandler(object):
                 return
 
             self.get_artifact_error_state.reset()
-            if not ext_handler_i.is_upgrade and self.last_etag == etag:
+            if not ext_handler_i.is_upgrade and self.last_instantiation == instantiation:
                 if self.log_etag:
                     ext_handler_i.logger.verbose("Version {0} is current for etag {1}",
                                                  ext_handler_i.pkg.version,
-                                                 etag)
+                                                 instantiation)
                     self.log_etag = False
                 return
 
