@@ -302,7 +302,8 @@ class TestImds(AgentTestCase):
         self._assert_validation(http_status_code=200,
                                 http_response=altered_response,
                                 expected_valid=False,
-                                expected_response='Empty field: [{0}]'.format(fields[-1]))
+                                expected_response='Empty field: [{0}]'.format(fields[-1]),
+                                expected_fallback=False)
 
         # assert missing value
         self._update_field(response_obj, fields, None)
@@ -310,7 +311,8 @@ class TestImds(AgentTestCase):
         self._assert_validation(http_status_code=200,
                                 http_response=altered_response,
                                 expected_valid=False,
-                                expected_response='Missing field: [{0}]'.format(fields[-1]))
+                                expected_response='Missing field: [{0}]'.format(fields[-1]),
+                                expected_fallback=False)
 
     def _update_field(self, obj, fields, val):
         if isinstance(obj, list):
