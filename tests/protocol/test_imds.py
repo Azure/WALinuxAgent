@@ -235,44 +235,53 @@ class TestImds(AgentTestCase):
         return compute_info.image_origin
 
     def test_response_validation(self):
+        # expect extra "fallback" calls on error status codes
+
         # invalid json or empty response
         self._assert_validation(http_status_code=200,
                                 http_response='',
                                 expected_valid=False,
-                                expected_response='JSON parsing failed')
+                                expected_response='JSON parsing failed',
+                                expected_fallback=False)
 
         self._assert_validation(http_status_code=200,
                                 http_response=None,
                                 expected_valid=False,
-                                expected_response='JSON parsing failed')
+                                expected_response='JSON parsing failed',
+                                expected_fallback=False)
 
         self._assert_validation(http_status_code=200,
                                 http_response='{ bad json ',
                                 expected_valid=False,
-                                expected_response='JSON parsing failed')
+                                expected_response='JSON parsing failed',
+                                expected_fallback=False)
 
         # 500 response
         self._assert_validation(http_status_code=500,
                                 http_response='error response',
                                 expected_valid=False,
-                                expected_response='[HTTP Failed] [500: reason] error response')
+                                expected_response='[HTTP Failed] [500: reason] error response',
+                                expected_fallback=True)
 
         # 429 response
         self._assert_validation(http_status_code=429,
                                 http_response='server busy',
                                 expected_valid=False,
-                                expected_response='[HTTP Failed] [429: reason] server busy')
+                                expected_response='[HTTP Failed] [429: reason] server busy',
+                                expected_fallback=True)
 
         # valid json
         self._assert_validation(http_status_code=200,
                                 http_response=self._imds_response('valid'),
                                 expected_valid=True,
-                                expected_response='')
+                                expected_response='',
+                                expected_fallback=False)
         # unicode
         self._assert_validation(http_status_code=200,
                                 http_response=self._imds_response('unicode'),
                                 expected_valid=True,
-                                expected_response='')
+                                expected_response='',
+                                expected_fallback=False)
 
     def test_field_validation(self):
         # TODO: compute fields (#1249)
@@ -322,7 +331,7 @@ class TestImds(AgentTestCase):
         with open(path, "rb") as fh:
             return fh.read()
 
-    def _assert_validation(self, http_status_code, http_response, expected_valid, expected_response):
+    def _assert_validation(self, http_status_code, http_response, expected_valid, expected_response, expected_fallback):
         test_subject = imds.ImdsClient()
         with patch("azurelinuxagent.common.utils.restutil.http_get") as mock_http_get:
             mock_http_get.return_value = ResponseMock(status=http_status_code,
@@ -330,15 +339,22 @@ class TestImds(AgentTestCase):
                                                       response=http_response)
             validate_response = test_subject.validate()
 
-        self.assertEqual(1, mock_http_get.call_count)
+        if expected_fallback:
+            self.assertEqual(2, mock_http_get.call_count)
+        else:
+            self.assertEqual(1, mock_http_get.call_count)
         positional_args, kw_args = mock_http_get.call_args
 
         self.assertTrue('User-Agent' in kw_args['headers'])
         self.assertEqual(restutil.HTTP_USER_AGENT_HEALTH, kw_args['headers']['User-Agent'])
         self.assertTrue('Metadata' in kw_args['headers'])
         self.assertEqual(True, kw_args['headers']['Metadata'])
-        self.assertEqual('http://169.254.169.254/metadata/instance/?api-version=2018-02-01',
-                         positional_args[0])
+        if expected_fallback:
+            self.assertEqual('http://168.63.129.16/metadata/instance/?api-version=2018-02-01',
+                             positional_args[0])
+        else:
+            self.assertEqual('http://169.254.169.254/metadata/instance/?api-version=2018-02-01',
+                             positional_args[0])
         self.assertEqual(expected_valid, validate_response[0])
         self.assertTrue(expected_response in validate_response[1],
                         "Expected: '{0}', Actual: '{1}'"
