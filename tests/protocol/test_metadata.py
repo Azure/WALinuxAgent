@@ -15,16 +15,16 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-import json
-
-from azurelinuxagent.common.future import ustr
-
-from azurelinuxagent.common.utils.restutil import httpclient
+from azurelinuxagent.common.datacontract import get_properties, set_properties
+from azurelinuxagent.common.exception import ProtocolError
 from azurelinuxagent.common.protocol.metadata import *
 from azurelinuxagent.common.protocol.restapi import *
+from azurelinuxagent.common.telemetryevent import TelemetryEventList, TelemetryEvent
+from azurelinuxagent.common.utils import restutil
 
 from tests.protocol.mockmetadata import *
 from tests.tools import *
+
 
 class TestMetadataProtocolGetters(AgentTestCase):
     def load_json(self, path):
@@ -48,7 +48,6 @@ class TestMetadataProtocolGetters(AgentTestCase):
     def test_getters_no(self, *args):
         test_data = MetadataProtocolData(DATA_FILE_NO_EXT)
         self._test_getters(test_data, *args)
-
 
     @patch("azurelinuxagent.common.protocol.metadata.MetadataProtocol.update_goal_state")
     @patch("azurelinuxagent.common.protocol.metadata.MetadataProtocol._get_data")

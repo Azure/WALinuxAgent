@@ -15,6 +15,7 @@
 # limitations under the License.
 #
 # Requires Python 2.6+ and Openssl 1.0+
+
 import datetime
 import json
 import os
@@ -25,13 +26,17 @@ import xml.sax.saxutils as saxutils
 from datetime import datetime
 
 import azurelinuxagent.common.conf as conf
+from azurelinuxagent.common.datacontract import validate_param, set_properties
 from azurelinuxagent.common.event import add_event, WALAEventOperation
 import azurelinuxagent.common.utils.textutil as textutil
 from azurelinuxagent.common.exception import ProtocolNotFoundError, \
-    ResourceGoneError, ExtensionDownloadError, InvalidContainerError
+    ResourceGoneError, ExtensionDownloadError, InvalidContainerError, ProtocolError, HttpError
 from azurelinuxagent.common.future import httpclient, bytebuffer
+import azurelinuxagent.common.logger as logger
+from azurelinuxagent.common.utils import fileutil, restutil
 from azurelinuxagent.common.protocol.hostplugin import HostPluginProtocol
 from azurelinuxagent.common.protocol.restapi import *
+from azurelinuxagent.common.telemetryevent import TelemetryEventList
 from azurelinuxagent.common.utils.archive import StateFlusher
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, \

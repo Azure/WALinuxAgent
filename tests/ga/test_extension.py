@@ -27,6 +27,12 @@ from azurelinuxagent.common.protocol.restapi import Extension
 from azurelinuxagent.ga.exthandlers import *
 from azurelinuxagent.common.protocol.wire import WireProtocol, InVMArtifactsProfile
 
+SLEEP = time.sleep
+
+
+def mock_sleep(sec=0.01):
+    SLEEP(sec)
+
 
 def do_not_run_test():
     return True
@@ -294,6 +300,7 @@ class ExtensionTestCase(AgentTestCase):
             CGroupConfigurator.get_instance().disable()
 
 
+@patch('time.sleep', side_effect=lambda _: mock_sleep(0.001))
 @patch("azurelinuxagent.common.protocol.wire.CryptUtil")
 @patch("azurelinuxagent.common.utils.restutil.http_get")
 class TestExtension(ExtensionTestCase):
@@ -320,7 +327,7 @@ class TestExtension(ExtensionTestCase):
         self.assertEquals(0, len(vm_status.vmAgent.extensionHandlers))
         return
 
-    def _create_mock(self, test_data, mock_http_get, MockCryptUtil):
+    def _create_mock(self, test_data, mock_http_get, MockCryptUtil, *args):
         """Test enable/disable/uninstall of an extension"""
         handler = get_exthandlers_handler()
 
