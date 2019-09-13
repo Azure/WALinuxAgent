@@ -21,7 +21,7 @@ from azurelinuxagent.common.exception import ProtocolError
 import azurelinuxagent.common.logger as logger
 
 """
-Data contract between guest and host
+Base class for data contracts between guest and host and utilities to manipulate the properties in those contracts
 """
 
 

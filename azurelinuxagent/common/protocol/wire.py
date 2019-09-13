@@ -1061,14 +1061,14 @@ class WireClient(object):
                               message=msg,
                               log_event=False)
 
-            except Exception as e:
+            except (ResourceGoneError, InvalidContainerError) as e:
                 add_event(name=AGENT_NAME,
                           version=CURRENT_VERSION,
                           op=WALAEventOperation.HostPlugin,
                           is_success=False,
                           message=ustr(e),
                           log_event=False)
-                raise e
+                raise
 
         except Exception:
             raise
