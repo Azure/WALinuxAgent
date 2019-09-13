@@ -2090,7 +2090,7 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
         with patch.object(CGroupConfigurator.get_instance(), "start_extension_command",
                           side_effect=ExtensionError('disable Failed')) as patch_start_cmd:
             with self.assertRaises(ExtensionError):
-                ExtHandlersHandler._update_extension_handler(old_handler_i, new_handler_i)
+                ExtHandlersHandler._update_extension_handler_and_return_if_failed(old_handler_i, new_handler_i)
 
             args, kwargs = patch_start_cmd.call_args
 
@@ -2105,7 +2105,7 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
         with patch.object(CGroupConfigurator.get_instance(), "start_extension_command",
                           side_effect=['ok', 'ok', ExtensionError('uninstall Failed'), 'ok']) as patch_start_cmd:
 
-            ExtHandlersHandler._update_extension_handler(old_handler_i, new_handler_i)
+            ExtHandlersHandler._update_extension_handler_and_return_if_failed(old_handler_i, new_handler_i)
 
             args, kwargs = patch_start_cmd.call_args
 
@@ -2119,7 +2119,7 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
         with patch.object(ExtHandlerInstance, "disable", side_effect=ExtensionError("Disable Failed")):
             with self.assertRaises(ExtensionUpdateError) as error:
                 # Ensure the error is of type ExtensionUpdateError
-                ExtHandlersHandler._update_extension_handler(old_handler_i, new_handler_i)
+                ExtHandlersHandler._update_extension_handler_and_return_if_failed(old_handler_i, new_handler_i)
 
             msg = str(error.exception)
             self.assertIn("Disable Failed", msg, "Update should fail with Disable Failed error")
@@ -2133,7 +2133,7 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
         with patch.object(ExtHandlerInstance, "uninstall", side_effect=ExtensionError("Uninstall Failed")):
             with self.assertRaises(ExtensionUpdateError) as error:
                 # Ensure the error is of type ExtensionUpdateError
-                ExtHandlersHandler._update_extension_handler(old_handler_i, new_handler_i)
+                ExtHandlersHandler._update_extension_handler_and_return_if_failed(old_handler_i, new_handler_i)
 
             msg = str(error.exception)
             self.assertIn("Uninstall Failed", msg, "Update should fail with Uninstall Failed error")
@@ -2148,7 +2148,7 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
         with patch.object(ExtHandlerInstance, "disable", side_effect=ExtensionError("Disable Failed")):
             with patch.object(ExtHandlerInstance, "update", side_effect=ExtensionError("Update Failed")):
                 with self.assertRaises(ExtensionError) as error:
-                    ExtHandlersHandler._update_extension_handler(old_handler_i, new_handler_i)
+                    ExtHandlersHandler._update_extension_handler_and_return_if_failed(old_handler_i, new_handler_i)
                 msg = str(error.exception)
                 self.assertIn("Update Failed", msg, "Update should fail with Update Failed error")
                 self.assertNotIn("ExtensionUpdateError", msg, "The exception should not be ExtensionUpdateError")
@@ -2157,7 +2157,7 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
         with patch.object(ExtHandlerInstance, "uninstall", side_effect=ExtensionError("Uninstall Failed")):
             with patch.object(ExtHandlerInstance, "install", side_effect=ExtensionError("Install Failed")):
                 with self.assertRaises(ExtensionError) as error:
-                    ExtHandlersHandler._update_extension_handler(old_handler_i, new_handler_i)
+                    ExtHandlersHandler._update_extension_handler_and_return_if_failed(old_handler_i, new_handler_i)
                 msg = str(error.exception)
                 self.assertIn("Install Failed", msg, "Update should fail with Install Failed error")
                 self.assertNotIn("ExtensionUpdateError", msg, "The exception should not be ExtensionUpdateError")
@@ -2172,14 +2172,14 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
             # When Disable Fails
             with patch.object(ExtHandlerInstance, "disable", side_effect=ExtensionError("Disable Failed")):
                 with self.assertRaises(ExtensionUpdateError):
-                    ExtHandlersHandler._update_extension_handler(old_handler_i, new_handler_i)
+                    ExtHandlersHandler._update_extension_handler_and_return_if_failed(old_handler_i, new_handler_i)
 
                 self.assertEqual(0, patch_set_env.call_count, "No Env should be set for disable failures")
 
             # When Uninstall Fails
             with patch.object(ExtHandlerInstance, "uninstall", side_effect=ExtensionError("Uninstall Failed")):
                 with self.assertRaises(ExtensionUpdateError):
-                    ExtHandlersHandler._update_extension_handler(old_handler_i, new_handler_i)
+                    ExtHandlersHandler._update_extension_handler_and_return_if_failed(old_handler_i, new_handler_i)
 
                 self.assertEqual(0, patch_set_env.call_count, "No Env should be set for uninstall failures")
 
@@ -2271,7 +2271,7 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
             # UNINSTALL_FAILED env variables.
             # For update and install we're running the script above to print all the env variables starting with AZURE_
             # and verify accordingly if the corresponding env variables are set properly or not
-            ExtHandlersHandler._update_extension_handler(old_handler_i, new_handler_i)
+            ExtHandlersHandler._update_extension_handler_and_return_if_failed(old_handler_i, new_handler_i)
 
             # Mocking the verbose logger as we log the output of the command in the verbose logs
             # (We also send out a telemetry event for it and log it as info logs too)
