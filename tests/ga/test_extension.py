@@ -2266,8 +2266,9 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
                            file_path=os.path.join(new_handler_i.get_base_dir(), test_file_name))
 
         with patch.object(new_handler_i.logger, 'verbose', autospec=True) as mock_verbose:
-            # Since we're not mocking the ExtHandlerInstance._capture_process_output, both disable.cmd and uninstall.cmd
-            # would raise ExtensionError exceptions and set the DISABLE_FAILED and UNINSTALL_FAILED env variables.
+            # Since we're not mocking the azurelinuxagent.common.cgroupconfigurator..handle_process_completion,
+            # both disable.cmd and uninstall.cmd would raise ExtensionError exceptions and set the DISABLE_FAILED and
+            # UNINSTALL_FAILED env variables.
             # For update and install we're running the script above to print all the env variables starting with AZURE_
             # and verify accordingly if the corresponding env variables are set properly or not
             ExtHandlersHandler._update_extension_handler(old_handler_i, new_handler_i)
