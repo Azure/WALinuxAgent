@@ -2,6 +2,8 @@
 os: linux
 dist: xenial
 language: python
+virtualenv:
+  system_site_packages: true
 env:
   - NOSEOPTS="--verbose" SETUPOPTS=""
   # Add SETUPOPTS="check flake8" to enable flake8 checks
