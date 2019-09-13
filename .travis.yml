@@ -29,6 +29,10 @@ matrix:
           --cover-package=azurelinuxagent --cover-xml"
           SETUPOPTS=""
 
+before_install:
+  - sudo apt-get update
+  - sudo apt-get install -y python3-dbus python-dbus
+
 install:
   - pip install -r requirements.txt
   - pip install -r test-requirements.txt
