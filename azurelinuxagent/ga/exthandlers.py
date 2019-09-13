@@ -520,10 +520,10 @@ class ExtHandlersHandler(object):
         ext_handler_i.copy_status_files(old_ext_handler_i)
         if ext_handler_i.version_gt(old_ext_handler_i):
             ext_handler_i.update()
-            # Remove the DISABLE_FAILED from env variables list after calling Update
-            ext_handler_i.remove_key_from_handler_env(DISABLE_FAILED)
         else:
             old_ext_handler_i.update(version=ext_handler_i.ext_handler.properties.version)
+        # Remove the DISABLE_FAILED from env variables list after calling Update
+        ext_handler_i.remove_key_from_handler_env(DISABLE_FAILED)
         execute_old_handler_command(func=lambda: old_ext_handler_i.uninstall())
         old_ext_handler_i.remove_ext_handler()
         ext_handler_i.update_with_install()

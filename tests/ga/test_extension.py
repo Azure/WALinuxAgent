@@ -2272,6 +2272,9 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
             # For update and install we're running the script above to print all the env variables starting with AZURE_
             # and verify accordingly if the corresponding env variables are set properly or not
             ExtHandlersHandler._update_extension_handler(old_handler_i, new_handler_i)
+
+            # Mocking the verbose logger as we log the output of the command in the verbose logs
+            # (We also send out a telemetry event for it and log it as info logs too)
             update_command_args = mock_verbose.call_args_list[0][0]
             update_args = mock_verbose.call_args_list[1][0]
             install_command_args = mock_verbose.call_args_list[2][0]

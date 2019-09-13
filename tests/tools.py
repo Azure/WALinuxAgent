@@ -442,6 +442,10 @@ class AgentTestCase(unittest.TestCase):
         """
         Creates an executable script with the given contents.
         If file_name ends with ".py", it creates a Python3 script, otherwise it creates a bash script
+        :param file_name: The name of the file to create the script with
+        :param contents: Contents of the script file
+        :param file_path: The path of the file where to create it in (we use /tmp/ by default)
+        :return:
         """
         if not file_path:
             file_path = os.path.join(self.tmp_dir, file_name)
