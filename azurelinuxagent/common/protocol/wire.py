@@ -1070,9 +1070,6 @@ class WireClient(object):
                           log_event=False)
                 raise
 
-        except Exception:
-            raise
-
         logger.info("Request succeeded using the host plugin channel.")
 
         if not HostPluginProtocol.is_default_channel():
