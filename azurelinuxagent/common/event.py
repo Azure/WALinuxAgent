@@ -68,6 +68,7 @@ class WALAEventOperation:
     InitializeHostPlugin = "InitializeHostPlugin"
     InvokeCommandUsingSystemd = "InvokeCommandUsingSystemd"
     Log = "Log"
+    OSInfo = "OSInfo"
     Partition = "Partition"
     ProcessGoalState = "ProcessGoalState"
     Provision = "Provision"

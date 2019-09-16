@@ -56,7 +56,7 @@ from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import AGENT_NAME, AGENT_VERSION, AGENT_LONG_VERSION, \
                                             AGENT_DIR_GLOB, AGENT_PKG_GLOB, \
                                             AGENT_PATTERN, AGENT_NAME_PATTERN, AGENT_DIR_PATTERN, \
-                                            CURRENT_AGENT, CURRENT_VERSION, \
+                                            CURRENT_AGENT, CURRENT_VERSION, DISTRO_NAME, DISTRO_VERSION, \
                                             is_current_agent_installed
 
 from azurelinuxagent.ga.exthandlers import HandlerManifest
@@ -250,6 +250,15 @@ class UpdateHandler(object):
         try:
             logger.info(u"Agent {0} is running as the goal state agent",
                         CURRENT_AGENT)
+
+            # Log OS-specific info, locally and as a telemetry event.
+            msg = u"Distro info: {0}:{1}, osutil class being used: {2}, " \
+                  u"agent service name: {3}".format(DISTRO_NAME, DISTRO_VERSION,
+                                                    type(self.osutil).__name__, self.osutil.service_name)
+            add_event(AGENT_NAME,
+                      op=WALAEventOperation.OSInfo,
+                      message=msg)
+            logger.info(msg)
 
             # Launch monitoring threads
             from azurelinuxagent.ga.monitor import get_monitor_handler
