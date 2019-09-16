@@ -2167,78 +2167,27 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
         old_handler_i = self._get_ext_handler_instance('foo', '1.0.0')
         new_handler_i = self._get_ext_handler_instance('foo', '1.0.1', continue_on_update_failure=False)
 
-        with patch.object(ExtHandlerInstance, "set_handler_env_variable") as patch_set_env:
-
-            # When Disable Fails
+        # When Disable Fails
+        with patch.object(ExtHandlerInstance, "launch_command") as patch_launch_command:
             with patch.object(ExtHandlerInstance, "disable", side_effect=ExtensionError("Disable Failed")):
                 with self.assertRaises(ExtensionUpdateError):
                     ExtHandlersHandler._update_extension_handler_and_return_if_failed(old_handler_i, new_handler_i)
 
-                self.assertEqual(0, patch_set_env.call_count, "No Env should be set for disable failures")
+                self.assertEqual(0, patch_launch_command.call_count, "Launch command shouldn't be called even once for"
+                                                                     " disable failures")
 
-            # When Uninstall Fails
+        # When Uninstall Fails
+        with patch.object(ExtHandlerInstance, "launch_command") as patch_launch_command:
             with patch.object(ExtHandlerInstance, "uninstall", side_effect=ExtensionError("Uninstall Failed")):
                 with self.assertRaises(ExtensionUpdateError):
                     ExtHandlersHandler._update_extension_handler_and_return_if_failed(old_handler_i, new_handler_i)
 
-                self.assertEqual(0, patch_set_env.call_count, "No Env should be set for uninstall failures")
-
-    def test_set_env_variable_should_set_handler_env_variable(self, *args):
-        handler_i = self._get_ext_handler_instance('foo', '1.0.0')
-
-        name = "test_variable"
-        another_var = "another_variable"
-        initial_value = "test_value"
-        changed_value = "new_test_value"
-
-        handler_i.set_handler_env_variable({name: initial_value})
-        handler_i.set_handler_env_variable({another_var: changed_value})
-
-        with patch.object(CGroupConfigurator.get_instance(), "start_extension_command", return_value='ok')\
-                as patch_start_cmd:
-
-            handler_i.enable()
-            _, kwargs = patch_start_cmd.call_args
-
-            self.assertTrue(name in kwargs['env'] and another_var in kwargs['env'],
-                            "The variables not there in handler_environment")
-            self.assertEqual(initial_value, kwargs['env'][name], "The value for env variable doesn't match")
-            self.assertEqual(changed_value, kwargs['env'][another_var], "The value for env variable doesn't match")
-
-            # Changing the value with the same name should update the value
-            handler_i.set_handler_env_variable({name: changed_value})
-            handler_i.enable()
-            _, kwargs = patch_start_cmd.call_args
-
-            self.assertEqual(changed_value, kwargs['env'][name], "The new value is not set")
-
-    def test_remove_key_from_env_should_remove_handler_env_variable(self, *args):
-        handler_i = self._get_ext_handler_instance('foo', '1.0.0')
-
-        name_to_delete = "test_variable"
-        value_to_delete = "test_value"
-        name_to_keep = "keep_variable"
-        value_to_keep = "keep_value"
-
-        handler_i.set_handler_env_variable({name_to_delete: value_to_delete})
-        handler_i.set_handler_env_variable({name_to_keep: value_to_keep})
-
-        with patch.object(CGroupConfigurator.get_instance(), "start_extension_command", return_value='ok') \
-                as patch_start_cmd:
-
-            handler_i.remove_key_from_handler_env(name_to_delete)
-            handler_i.enable()
-            _, kwargs = patch_start_cmd.call_args
-
-            self.assertTrue(name_to_delete not in kwargs['env'], "The variable should be removed from handler_env list")
-            self.assertIn(name_to_keep, kwargs['env'], "Variable missing from handler_env")
-            self.assertEqual(value_to_keep, kwargs['env'][name_to_keep], "Env Variable Value mismatch")
-
-        # Retrying the removal operation to ensure that no exception is thrown if key not found
-        try:
-            handler_i.remove_key_from_handler_env(name_to_delete)
-        except:
-            self.fail("Removing a key that's not present shouldn't throw an error")
+                self.assertEqual(2, patch_launch_command.call_count, "Launch command should be called 2 times for "
+                                                                     "Disable->Update")
+                for args, kwargs in patch_launch_command.call_args_list:
+                    # Disable wont have any env variables, and Update would have only 'Version' in env param
+                    self.assertTrue(('env' not in kwargs and '-disable' in args[0]) or
+                                    ('-update' in args[0] and DISABLE_FAILED not in kwargs['env']))
 
     @patch('time.sleep', side_effect=lambda _: mock_sleep(0.001))
     def test_failed_env_variables_should_be_set_from_within_extension_commands(self, *args):

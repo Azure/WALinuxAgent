@@ -495,11 +495,12 @@ class ExtHandlersHandler(object):
     @staticmethod
     def _update_extension_handler_and_return_if_failed(old_ext_handler_i, ext_handler_i):
 
-        def execute_old_handler_command_and_return_if_failed(func):
+        def execute_old_handler_command_and_return_if_succeeds(func):
             """
             Created a common wrapper to execute all commands that need to be executed from the old handler
             so that it can have a common exception handling mechanism
             :param func: The command to be executed on the old handler
+            :return: True if command execution succeeds and False if it fails
             """
             continue_on_update_failure = False
             try:
@@ -514,16 +515,17 @@ class ExtHandlersHandler(object):
                     raise ExtensionUpdateError(msg)
 
                 logger.info("Continue on Update failure flag is set, proceeding with update")
-                return True
-            return False
+                return False
+            return True
 
-        disable_failed = execute_old_handler_command_and_return_if_failed(func=lambda: old_ext_handler_i.disable())
+        disable_failed = not execute_old_handler_command_and_return_if_succeeds(func=lambda: old_ext_handler_i.disable())
         ext_handler_i.copy_status_files(old_ext_handler_i)
         if ext_handler_i.version_gt(old_ext_handler_i):
             ext_handler_i.update(disable_failed=disable_failed)
         else:
             old_ext_handler_i.update(version=ext_handler_i.ext_handler.properties.version, disable_failed=disable_failed)
-        uninstall_failed = execute_old_handler_command_and_return_if_failed(func=lambda: old_ext_handler_i.uninstall())
+        uninstall_failed = not execute_old_handler_command_and_return_if_succeeds(
+            func=lambda: old_ext_handler_i.uninstall())
         old_ext_handler_i.remove_ext_handler()
         ext_handler_i.update_with_install(uninstall_failed=uninstall_failed)
         return uninstall_failed
@@ -670,8 +672,6 @@ class ExtHandlerInstance(object):
         self.is_upgrade = False
         self.logger = None
         self.set_logger()
-        self.__handler_env = {EXTENSION_PATH: self.get_base_dir(),
-                              EXTENSION_VERSION: self.ext_handler.properties.version}
 
         try:
             fileutil.mkdir(self.get_log_dir(), mode=0o755)
@@ -809,12 +809,6 @@ class ExtHandlerInstance(object):
     def set_operation(self, op):
         self.operation = op
 
-    def set_handler_env_variable(self, env):
-        self.__handler_env.update(env)
-
-    def remove_key_from_handler_env(self, key):
-        # Remove key if exists or do nothing
-        self.__handler_env.pop(key, None)
 
     def report_event(self, message="", is_success=True, duration=0, log_event=True):
         ext_handler_version = self.ext_handler.properties.version
@@ -949,7 +943,7 @@ class ExtHandlerInstance(object):
     def enable(self, uninstall_failed=False):
         env = {}
         if uninstall_failed:
-            env.update({UNINSTALL_FAILED: 'true'})
+            env.update({UNINSTALL_FAILED: '1'})
 
         self.set_operation(WALAEventOperation.Enable)
         man = self.load_manifest()
@@ -973,7 +967,7 @@ class ExtHandlerInstance(object):
     def install(self, uninstall_failed=False):
         env = {}
         if uninstall_failed:
-            env.update({UNINSTALL_FAILED: 'true'})
+            env.update({UNINSTALL_FAILED: '1'})
 
         man = self.load_manifest()
         install_cmd = man.get_install_command()
@@ -1024,7 +1018,7 @@ class ExtHandlerInstance(object):
         env = {'VERSION': version}
 
         if disable_failed:
-            env.update({DISABLE_FAILED: "true"})
+            env.update({DISABLE_FAILED: "1"})
 
         try:
             self.set_operation(WALAEventOperation.Update)
@@ -1212,8 +1206,9 @@ class ExtHandlerInstance(object):
                 if env is None:
                     env = {}
                 env.update(os.environ)
-                # Add all the handler_env variables to the current launch_command
-                env.update(self.__handler_env)
+                # Always add Extension Path and version to the current launch_command (Ask from publishers)
+                env.update({EXTENSION_PATH: self.get_base_dir(),
+                            EXTENSION_VERSION: self.ext_handler.properties.version})
 
                 try:
                     # Some extensions erroneously begin cmd with a slash; don't interpret those
