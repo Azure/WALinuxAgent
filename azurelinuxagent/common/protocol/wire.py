@@ -1038,6 +1038,12 @@ class WireClient(object):
                   "ContainerId: {0}, role config file: {1}. Fetching new goal state and retrying the call." \
                   "Error: {2}".format(old_container_id, old_role_config_name, ustr(e))
             logger.info(msg)
+            add_event(name=AGENT_NAME,
+                      version=CURRENT_VERSION,
+                      op=WALAEventOperation.HostPlugin,
+                      is_success=False,
+                      message=msg,
+                      log_event=False)
 
             self.update_goal_state(forced=True)
 
@@ -1071,6 +1077,12 @@ class WireClient(object):
                 raise
 
         logger.info("Request succeeded using the host plugin channel.")
+        add_event(name=AGENT_NAME,
+                  version=CURRENT_VERSION,
+                  op=WALAEventOperation.HostPlugin,
+                  is_success=True,
+                  message="Request succeeded using the host plugin channel.",
+                  log_event=False)
 
         if not HostPluginProtocol.is_default_channel():
             logger.info("Setting host plugin as default channel from now on. "
