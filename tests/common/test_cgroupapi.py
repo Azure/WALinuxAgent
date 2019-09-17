@@ -209,8 +209,9 @@ class FileSystemCgroupsApiTestCase(AgentTestCase):
         fileutil.write_file(os.path.join(new_cpu_cgroup, "cgroup.procs"), "999\n")
         fileutil.write_file(os.path.join(new_memory_cgroup, "cgroup.procs"), "999\n")
 
-        with patch("azurelinuxagent.common.cgroupapi.get_agent_pid_file_path", return_value=daemon_pid_file_tmp):
-            FileSystemCgroupsApi().cleanup_old_cgroups()
+        with patch("azurelinuxagent.common.cgroupapi.add_event") as mock_add_event:
+            with patch("azurelinuxagent.common.cgroupapi.get_agent_pid_file_path", return_value=daemon_pid_file_tmp):
+                FileSystemCgroupsApi().cleanup_old_cgroups()
 
         # The method should have added the daemon PID to the new controllers and deleted the old ones
         new_cpu_contents = fileutil.read_file(os.path.join(new_cpu_cgroup, "cgroup.procs"))
@@ -221,6 +222,12 @@ class FileSystemCgroupsApiTestCase(AgentTestCase):
 
         self.assertFalse(os.path.exists(old_cpu_cgroup))
         self.assertFalse(os.path.exists(old_memory_cgroup))
+
+        # Assert the event parameters that were sent out
+        _, kwargs = mock_add_event.call_args_list[0]
+        self.assertEquals(kwargs['op'], 'CGroupsCleanUp')
+        self.assertEquals(kwargs['is_success'], True)
+        self.assertEquals(kwargs['message'], 'Successfully cleaned up old cgroups in WALinuxAgent/WALinuxAgent.')
 
     def test_create_agent_cgroups_should_create_cgroups_on_all_controllers(self):
         agent_cgroups = FileSystemCgroupsApi().create_agent_cgroups()
