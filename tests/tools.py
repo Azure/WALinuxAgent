@@ -438,12 +438,17 @@ class AgentTestCase(unittest.TestCase):
             fileutil.write_file(f, "faux content")
             time.sleep(with_sleep)
 
-    def _create_script(self, file_name, contents):
+    def create_script(self, file_name, contents, file_path=None):
         """
         Creates an executable script with the given contents.
         If file_name ends with ".py", it creates a Python3 script, otherwise it creates a bash script
+        :param file_name: The name of the file to create the script with
+        :param contents: Contents of the script file
+        :param file_path: The path of the file where to create it in (we use /tmp/ by default)
+        :return:
         """
-        file_path = os.path.join(self.tmp_dir, file_name)
+        if not file_path:
+            file_path = os.path.join(self.tmp_dir, file_name)
 
         with open(file_path, "w") as script:
             if file_name.endswith(".py"):
