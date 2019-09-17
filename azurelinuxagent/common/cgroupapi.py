@@ -132,9 +132,7 @@ class CGroupsApi(object):
         for controller in CGROUP_CONTROLLERS:
             try:
                 if controller not in mounted_controllers:
-                    msg = 'Cgroup controller "{0}" is not mounted. {1}'.format(controller, message)
-                    logger.warn(msg)
-                    errors.append(msg)
+                    logger.warn('Cgroup controller "{0}" is not mounted. {1}'.format(controller, message))
                 else:
                     operation(controller)
             except Exception as e:
