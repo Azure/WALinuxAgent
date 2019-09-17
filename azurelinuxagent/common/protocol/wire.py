@@ -1068,11 +1068,15 @@ class WireClient(object):
                               log_event=False)
 
             except (ResourceGoneError, InvalidContainerError) as e:
+                msg = "Request failed using the host plugin channel after goal state refresh." \
+                      "ContainerId changed from {0} to {1}, role config file changed from {2} to {3}." \
+                      "Exception type: {4}.".format(old_container_id, new_container_id, old_role_config_name,
+                                                    new_role_config_name, type(e).__name__)
                 add_event(name=AGENT_NAME,
                           version=CURRENT_VERSION,
                           op=WALAEventOperation.HostPlugin,
                           is_success=False,
-                          message=ustr(e),
+                          message=msg,
                           log_event=False)
                 raise
 
