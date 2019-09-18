@@ -229,7 +229,7 @@ class FileSystemCgroupsApiTestCase(AgentTestCase):
         self.assertEquals(kwargs['is_success'], True)
         self.assertEquals(kwargs['message'], 'Successfully cleaned up old cgroups in WALinuxAgent/WALinuxAgent.')
 
-    def test_cleanup_old_cgroups_should_fail_to_move_daemon_pid_on_all_controllers(self):
+    def test_cleanup_old_cgroups_should_report_errors_from_all_controllers_that_failed(self):
         # Set up the mock /var/run/waagent.pid file
         daemon_pid = "42"
         daemon_pid_file_tmp = os.path.join(self.tmp_dir, "waagent.pid")
