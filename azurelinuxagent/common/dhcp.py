@@ -86,9 +86,8 @@ class DhcpHandler(object):
         route_exists = False
         logger.info("Test for route to {0}".format(KNOWN_WIRESERVER_IP))
         try:
-            route_file = '/proc/net/route'
-            if os.path.exists(route_file) and \
-                    KNOWN_WIRESERVER_IP_ENTRY in open(route_file).read():
+            route_table = self.osutil.read_route_table()
+            if any([(KNOWN_WIRESERVER_IP_ENTRY in route) for route in route_table]):
                 # reset self.gateway and self.routes
                 # we do not need to alter the routing table
                 self.endpoint = KNOWN_WIRESERVER_IP
@@ -102,7 +101,7 @@ class DhcpHandler(object):
             logger.error(
                 "Could not determine whether route exists to {0}: {1}".format(
                     KNOWN_WIRESERVER_IP, e))
-
+                    
         return route_exists
 
     @property
