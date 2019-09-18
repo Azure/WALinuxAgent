@@ -252,7 +252,7 @@ class UpdateHandler(object):
                         CURRENT_AGENT)
 
             # Log OS-specific info, locally and as a telemetry event.
-            msg = u"Distro info: {0}:{1}, osutil class being used: {2}, " \
+            msg = u"Distro info: {0} {1}, osutil class being used: {2}, " \
                   u"agent service name: {3}".format(DISTRO_NAME, DISTRO_VERSION,
                                                     type(self.osutil).__name__, self.osutil.service_name)
             add_event(AGENT_NAME,

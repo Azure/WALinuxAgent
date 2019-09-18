@@ -61,9 +61,17 @@ class DaemonHandler(object):
 
     def run(self, child_args=None):
         logger.info("{0} Version:{1}", AGENT_LONG_NAME, AGENT_VERSION)
-        logger.info("OS: {0} {1}", DISTRO_NAME, DISTRO_VERSION)
         logger.info("Python: {0}.{1}.{2}", PY_VERSION_MAJOR, PY_VERSION_MINOR,
                     PY_VERSION_MICRO)
+
+        # Log OS-specific info, locally and as a telemetry event.
+        msg = u"Distro info: {0} {1}, osutil class being used: {2}, " \
+              u"agent service name: {3}".format(DISTRO_NAME, DISTRO_VERSION,
+                                                type(self.osutil).__name__, self.osutil.service_name)
+        add_event(AGENT_NAME,
+                  op=WALAEventOperation.OSInfo,
+                  message=msg)
+        logger.info(msg)
 
         self.check_pid()
         self.initialize_environment()
