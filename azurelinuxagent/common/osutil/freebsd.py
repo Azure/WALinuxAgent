@@ -16,9 +16,12 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 
+import socket
+import binascii
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.shellutil as shellutil
 import azurelinuxagent.common.utils.textutil as textutil
+from azurelinuxagent.common.utils.networkutil import RouteEntry
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.exception import OSUtilError
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
@@ -92,6 +95,171 @@ class FreeBSDOSUtil(DefaultOSUtil):
 
     def get_first_if(self):
         return self._get_net_info()[:2]
+    
+    @staticmethod
+    def _build_route_list(netstat_routes):
+        """
+        Construct a list of network route entries
+        :param list(str) netstat_routes: `netstat -rn` lines, including headers, containing at least one route
+        :return: List of network route objects
+        :rtype: list(RouteEntry)
+        """
+        idx = 0
+        column_index = {}
+        header_line = netstat_routes[0]
+        for header in [h for h in header_line.split() if len(h) > 0]:
+            column_index[header] = idx
+            idx += 1
+        try:
+            idx_iface = column_index["Netif"]
+            idx_dest = column_index["Destination"]
+            idx_gw = column_index["Gateway"]
+            idx_flags = column_index["Flags"]
+        except KeyError:
+            msg = "netstat -rn is missing key information; headers are [{0}]".format(header_line)
+            logger.error(msg)
+            return []
+        route_list = []
+        n_routes = len(netstat_routes)
+        for i in range(1, n_routes-1):
+            route = netstat_routes[i].split()
+            if len(route) != idx:
+                continue
+            dest = route[idx_dest]
+            gw = route[idx_gw]
+            mask = 32
+            if dest == "default":
+                dest = "0.0.0.0"
+            elif dest == "localhost":
+                dest = "127.0.0.1"
+            elif "/" in dest:
+                dest = dest.split("/")
+                dest = dest[0]
+                mask = int(dest[1])
+            if gw == "localhost":
+                gw = "127.0.0.1"
+            # Convert IP Addresses to Hex Notation like in the Linux Route Table
+            try:
+                dest = int(binascii.hexlify(socket.inet_pton(socket.AF_INET, dest)), 16)
+                dest = "%08X" % dest
+            except socket.error:
+                try:
+                    dest = int(binascii.hexlify(socket.inet_pton(socket.AF_INET6, dest)), 16)
+                    dest = "%032X" % dest
+                except socket.error:
+                    # Not an IPv4 or v6 address, ignore
+                    pass
+            try:
+                gw = int(binascii.hexlify(socket.inet_pton(socket.AF_INET, gw)), 16)
+                gw = "%08X" % gw
+            except socket.error:
+                try:
+                    gw = int(binascii.hexlify(socket.inet_pton(socket.AF_INET6, gw)), 16)
+                    gw = "%032X" % gw
+                except socket.error:
+                    # Not an IPv4 or v6 address, ignore
+                    pass
+            flags = 0
+            if "U" in route[idx_flags]:
+                flags += 0x0001 # RTF_UP
+            if "G" in route[idx_flags]:
+                flags += 0x0002 # RTF_GATEWAY
+            if "H" in route[idx_flags]:
+                flags += 0x0004 # RTF_HOST
+            if "S" not in route[idx_flags]:
+                flags += 0x0010 # RTF_DYNAMIC
+            flags = str(flags)
+            if len(route) > 0:
+                route_obj = RouteEntry(route[idx_iface], dest, gw, mask, flags, n_routes - i)
+                route_list.append(route_obj)
+        return route_list
+
+    @staticmethod
+    def read_route_table():
+        """
+        Return a list of strings comprising the route table, including column headers. Each line is stripped of leading
+        or trailing whitespace but is otherwise unmolested.
+
+        :return: Entries in the route priority table from `netstat -rn`
+        :rtype: list(str)
+        """
+        cmd = "netstat -rn"
+        ret, output = shellutil.run_get_output(cmd)
+        if ret:
+            raise OSUtilError("Cannot read route table [{0}]".format(output))
+        return output.split("\n")[3:]
+
+    @staticmethod
+    def get_list_of_routes(route_table):
+        """
+        Construct a list of all network routes known to this system.
+
+        :param list(str) route_table: List of text entries from route table, including headers
+        :return: a list of network routes
+        :rtype: list(RouteEntry)
+        """
+        route_list = []
+        count = len(route_table)
+
+        if count < 1:
+            logger.error("netstat -rn is missing headers")
+        elif count == 1:
+            logger.error("netstat -rn contains no routes")
+        else:
+            route_list = FreeBSDOSUtil._build_route_list(route_table)
+        return route_list
+
+    def get_primary_interface(self):
+        """
+        Get the name of the primary interface, which is the one with the
+        default route attached to it; if there are multiple default routes,
+        the primary has the lowest Metric.
+        :return: the interface which has the default route
+        """
+        RTF_GATEWAY = 0x0002
+        primary_interface = None
+
+        if not self.disable_route_warning:
+            logger.info("Examine netstat -rn for primary interface")
+
+        route_table = self.read_route_table()
+
+        def is_default(route):
+            return ((route.destination == "00000000") or (route.destination == "default")) and (RTF_GATEWAY & route.flags)
+
+        candidates = list(filter(is_default, self.get_list_of_routes(route_table)))
+
+        if len(candidates) > 0:
+            def get_metric(route):
+                return int(route.metric)
+            primary_route = min(candidates, key=get_metric)
+            primary_interface = primary_route.interface
+
+        if primary_interface is None:
+            primary_interface = ''
+            if not self.disable_route_warning:
+                logger.warn('Could not determine primary interface, '
+                            'please ensure routes are correct')
+                logger.warn('Primary interface examination will retry silently')
+                self.disable_route_warning = True
+        else:
+            logger.info('Primary interface is [{0}]'.format(primary_interface))
+            self.disable_route_warning = False
+        return primary_interface
+
+    def is_primary_interface(self, ifname):
+        """
+        Indicate whether the specified interface is the primary.
+        :param ifname: the name of the interface - eth0, lo, etc.
+        :return: True if this interface binds the default route
+        """
+        return self.get_primary_interface() == ifname
+
+    def is_loopback(self, ifname):
+        """
+        Determine if a named interface is loopback.
+        """
+        return ifname.startswith("lo")
 
     def route_add(self, net, mask, gateway):
         cmd = 'route add {0} {1} {2}'.format(net, gateway, mask)
@@ -103,6 +271,12 @@ class FreeBSDOSUtil(DefaultOSUtil):
         specify the route manually to get it work in a VNET environment.
         SEE ALSO: man ip(4) IP_ONESBCAST,
         """
+        RTF_GATEWAY = 0x0002
+        route_table = self.read_route_table()
+        routes = self.get_list_of_routes(route_table)
+        for route in routes:
+            if ((route.destination == "00000000") or (route.destination == "default")) and (RTF_GATEWAY & route.flags):
+               return False
         return True
 
     def is_dhcp_enabled(self):
