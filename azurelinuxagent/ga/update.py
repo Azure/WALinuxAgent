@@ -256,7 +256,7 @@ class UpdateHandler(object):
                   u"agent service name: {3}".format(DISTRO_NAME, DISTRO_VERSION,
                                                     type(self.osutil).__name__, self.osutil.service_name)
             add_event(AGENT_NAME,
-                      op=WALAEventOperation.OSInfo,
+                      op=WALAEventOperation.Release43PR1580,
                       message=msg)
             logger.info(msg)
 
