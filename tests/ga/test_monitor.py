@@ -20,7 +20,7 @@ from datetime import timedelta
 
 from azurelinuxagent.common.cgroup import CGroup
 from azurelinuxagent.common.event import EventLogger
-from azurelinuxagent.common.protocol.restapi import get_properties
+from azurelinuxagent.common.datacontract import get_properties
 from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.common.utils import restutil
 from azurelinuxagent.ga.monitor import *
