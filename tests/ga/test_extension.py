@@ -28,11 +28,11 @@ from azurelinuxagent.ga.exthandlers import *
 from azurelinuxagent.common.protocol.wire import WireProtocol, InVMArtifactsProfile
 
 # Mock sleep to reduce test execution time
-SLEEP = time.sleep
+MOCK_SLEEP = time.sleep
 
 
 def mock_sleep(sec=0.01):
-    SLEEP(sec)
+    MOCK_SLEEP(sec)
 
 
 def do_not_run_test():

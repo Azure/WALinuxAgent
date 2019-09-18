@@ -46,13 +46,17 @@ class TestEvent(AgentTestCase):
             os.environ.pop(event.CONTAINER_ID_ENV_VARIABLE, None)
             event.add_event(name='dummy_name')
             data = fileutil.read_file(tmp_file)
-            self.assertIn('{"name": "ContainerId", "value": "UNINITIALIZED"}', data)
+            self.assertTrue('{"name": "ContainerId", "value": "UNINITIALIZED"}' in data or
+                            '{"value": "UNINITIALIZED", "name": "ContainerId"}' in data)
 
             # Container id is set as an environment variable explicitly
             os.environ[event.CONTAINER_ID_ENV_VARIABLE] = '424242'
             event.add_event(name='dummy_name')
             data = fileutil.read_file(tmp_file)
-            self.assertIn('{{"name": "ContainerId", "value": "{0}"}}'.format(os.environ[event.CONTAINER_ID_ENV_VARIABLE]), data)
+            self.assertTrue('{{"name": "ContainerId", "value": "{0}"}}'.format(
+                                os.environ[event.CONTAINER_ID_ENV_VARIABLE]) in data or
+                            '{{"value": "{0}", "name": "ContainerId"}}'.format(
+                                os.environ[event.CONTAINER_ID_ENV_VARIABLE]) in data)
 
             # Container id is set as an environment variable when parsing the goal state
             xml_text = load_data("wire/goal_state.xml")
@@ -61,7 +65,8 @@ class TestEvent(AgentTestCase):
             container_id = goal_state.container_id
             event.add_event(name='dummy_name')
             data = fileutil.read_file(tmp_file)
-            self.assertIn('{{"name": "ContainerId", "value": "{0}"}}'.format(container_id), data)
+            self.assertTrue('{{"name": "ContainerId", "value": "{0}"}}'.format(container_id) in data or
+                            '{{"value": "{0}", "name": "ContainerId"}}'.format(container_id), data)
 
             # Container id is updated as the goal state changes, both in telemetry event and in environment variables
             new_container_id = "z6d5526c-5ac2-4200-b6e2-56f2b70c5ab2"
@@ -74,7 +79,8 @@ class TestEvent(AgentTestCase):
 
             # Assert both the environment variable and telemetry event got updated
             self.assertEquals(os.environ[event.CONTAINER_ID_ENV_VARIABLE], new_container_id)
-            self.assertIn('{{"name": "ContainerId", "value": "{0}"}}'.format(new_container_id), data)
+            self.assertTrue('{{"name": "ContainerId", "value": "{0}"}}'.format(new_container_id) in data or
+                            '{{"value": "{0}", "name": "ContainerId"}}'.format(new_container_id), data)
 
         os.environ.pop(event.CONTAINER_ID_ENV_VARIABLE)
 
