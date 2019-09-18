@@ -1767,7 +1767,7 @@ class InVMArtifactsProfile(object):
     * certificateThumbprint (optional)
     * encryptedHealthChecks (optional)
     * encryptedApplicationProfile (optional)
-    * inVMExtensionHandlers (optional)
+    * extensionGoalStates (optional)
     """
 
     def __init__(self, artifacts_profile):
@@ -1813,34 +1813,34 @@ class InVMArtifactsProfile(object):
     </Extensions>
     """
     def transform_to_extensions_config(self):
-        if 'inVMExtensionHandlers' in self.__dict__:
+        if 'extensionGoalStates' in self.__dict__:
             import xml.etree.ElementTree as xml
             root = xml.Element("Extensions")
             root.set('version', '1.0.0.0')
             root.set('goalStateIncarnation', self.inVMArtifactsProfileBlobSeqNo)
 
             plugins = xml.SubElement(root, 'Plugins')
-            for inVMExtensionHandler in self.inVMExtensionHandlers:
+            for extensionGoalState in self.extensionGoalStates:
                 plugin = xml.SubElement(plugins, 'Plugin')
-                plugin.set('name', inVMExtensionHandler.name)
-                plugin.set('version', inVMExtensionHandler.version)
-                plugin.set('location', inVMExtensionHandler.location)
-                plugin.set('state', inVMExtensionHandler.state)
-                plugin.set('autoUpgrade', inVMExtensionHandler.autoUpgrade)
-                plugin.set('failoverlocation', inVMExtensionHandler.failoverlocation)
-                plugin.set('runAsStartupTask', inVMExtensionHandler.runAsStartupTask)
-                plugin.set('isJson', inVMExtensionHandler.isJson)
-                plugin.set('useExactVersion', inVMExtensionHandler.useExactVersion)
+                plugin.set('name', extensionGoalState.name)
+                plugin.set('version', extensionGoalState.version)
+                plugin.set('location', extensionGoalState.location)
+                plugin.set('state', extensionGoalState.state)
+                plugin.set('autoUpgrade', extensionGoalState.autoUpgrade)
+                plugin.set('failoverlocation', extensionGoalState.failoverlocation)
+                plugin.set('runAsStartupTask', extensionGoalState.runAsStartupTask)
+                plugin.set('isJson', extensionGoalState.isJson)
+                plugin.set('useExactVersion', extensionGoalState.useExactVersion)
 
             plugin_settings = xml.SubElement(root, 'PluginSettings')
-            for inVMExtensionHandler in self.inVMExtensionHandlers:
+            for extensionGoalState in self.extensionGoalStates:
                 plugin = xml.SubElement(plugin_settings, 'Plugin')
-                plugin.set('name', inVMExtensionHandler.name)
-                plugin.set('version', inVMExtensionHandler.version)
+                plugin.set('name', extensionGoalState.name)
+                plugin.set('version', extensionGoalState.version)
                 runtime_settings = xml.SubElement(plugin, 'RuntimeSettings')
-                runtime_settings.set('seqNo', inVMExtensionHandler.settingsSeqNo)
+                runtime_settings.set('seqNo', extensionGoalState.settingsSeqNo)
                 json_settings = json.dumps({})
-                json_settings["runtimeSettings"] = inVMExtensionHandler.settings
+                json_settings["runtimeSettings"] = extensionGoalState.settings
                 runtime_settings.text = json_settings
 
             extensions_config = ExtensionsConfig()

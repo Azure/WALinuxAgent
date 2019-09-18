@@ -1,0 +1,79 @@
+{
+  "inVMArtifactsProfileBlobSeqNo": 3,
+  "inVMMetadata": {
+    "subscriptionId": "00000000-0000-0000-0000-000000000000",
+    "resourceGroupName": "TestRG",
+    "vmName": "vm1",
+    "location": "location",
+    "vmId": "00000000-0000-0000-0000-000000000000",
+    "vmSize": "Standard_A3",
+    "osType": "Windows",
+    "vmImage": {
+      "publisher": "publisher",
+      "offer": "offer",
+      "sku": "sku",
+      "version": "version"
+    },
+    "placement": {
+      "platformUpdateDomain": 1,
+      "platformFaultDomain": 1
+    },
+    "tags": {
+      "tag_key": "tag_value"
+    }
+  },
+  "extensionGoalStates": [
+    {
+      "name": "publisher.handler1.type.handler1",
+      "version": "1.0",
+      "location": "http://www.publisher.handler1.type.handler1.com/",
+      "state": "enabled",
+      "autoUpgrade": false,
+      "failoverlocation": "http://www.publisher.handler1.type.handler1.failover.com/",
+      "runAsStartupTask": false,
+      "useExactVersion": false,
+      "settingsSeqNo": 0,
+      "settings": [
+        {
+          "publicSettings": { "key": "value_floop" }
+        }
+      ]
+    },
+    {
+      "name": "publisher.handler2.type.handler2",
+      "version": "1.0",
+      "location": "http://www.publisher.handler2.type.handler2.com/",
+      "state": "enabled",
+      "autoUpgrade": false,
+      "failoverlocation": "http://www.publisher.handler2.type.handler2.failover.com/",
+      "runAsStartupTask": false,
+      "useExactVersion": false,
+      "settingsSeqNo": 0,
+      "settings": [
+        {
+          "publicSettings": { "key": "value_yaba" }
+        },
+        {
+          "publicSettings": { "key": "value_flipper" }
+        },
+        {
+          "publicSettings": { "key": "value_flopper" }
+        }
+      ]
+    }
+  ],
+  "VM": {
+    "id": "resourceId",
+    "properties": {
+      "sourceVirtualMachine": "sourceVirtualMachine",
+      "storageProfile": {
+        "osDisk": {
+          "osState": "osState",
+          "osType": "osType"
+        },
+        "dataDisks": []
+      },
+      "provisioningState": "provisioningState"
+    }
+  }
+}

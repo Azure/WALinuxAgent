@@ -336,6 +336,9 @@ class TestExtension(ExtensionTestCase):
         handler.protocol_util.get_protocol = Mock(return_value=protocol)
         return handler, protocol
 
+    def test_ext_handler_profile_blob(self, *args):
+        test_data = WireProtocolData(DATA_FILE)
+
     def test_ext_handler(self, *args):
         test_data = WireProtocolData(DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
@@ -838,14 +841,14 @@ class TestExtension(ExtensionTestCase):
         # Disable extension handling blocking in the first run and enable in the 2nd run
         with patch.object(exthandlers_handler, 'extension_processing_allowed', side_effect=[False, True]):
             exthandlers_handler.run()
-            self.assertIsNone(exthandlers_handler.last_etag,
+            self.assertIsNone(exthandlers_handler.last_instantiation,
                               "The last etag should be None initially as extension_processing is False")
-            self.assertNotEqual(etag, exthandlers_handler.last_etag,
+            self.assertNotEqual(etag, exthandlers_handler.last_instantiation,
                                 "Last etag and etag should not be same if extension processing is disabled")
             exthandlers_handler.run()
-            self.assertIsNotNone(exthandlers_handler.last_etag,
+            self.assertIsNotNone(exthandlers_handler.last_instantiation,
                                  "Last etag should not be none if extension processing is allowed")
-            self.assertEqual(etag, exthandlers_handler.last_etag,
+            self.assertEqual(etag, exthandlers_handler.last_instantiation,
                              "Last etag and etag should be same if extension processing is enabled")
 
     def _assert_ext_status(self, report_ext_status, expected_status,

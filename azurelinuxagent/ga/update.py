@@ -323,7 +323,7 @@ class UpdateHandler(object):
                         op=WALAEventOperation.ProcessGoalState,
                         duration=duration,
                         message="Incarnation {0}".format(exthandlers_handler.last_etag))
-                if last_vm_artifacts_seqno != exthandlers_handler.last_vm_artifacts_seqno
+                if last_vm_artifacts_seqno != exthandlers_handler.last_vm_artifacts_seqno:
                     self._ensure_readonly_files()
                     duration = elapsed_milliseconds(utc_start)
                     logger.info('ProcessGoalState completed [seqno {0}; {1} ms]',

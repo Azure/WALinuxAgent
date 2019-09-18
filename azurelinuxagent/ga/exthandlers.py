@@ -207,17 +207,17 @@ class ExtHandlersHandler(object):
         self.artifacts_profile = None
         self.last_vm_artifacts_seqno = None
         self.log_report = False
-        self.log_etag = True
+        self.log_instantiation = True
         self.log_process = False
 
         self.report_status_error_state = ErrorState()
         self.get_artifact_error_state = ErrorState(min_timedelta=ERROR_STATE_DELTA_INSTALL)
 
     def run(self):
-        self.ext_handlers, etag = None, None
+        self.ext_handlers, instantiation = None, None
         try:
             self.protocol = self.protocol_util.get_protocol()
-            self.ext_handlers, etag = self.protocol.get_ext_handlers()
+            self.ext_handlers, instantiation = self.protocol.get_ext_handlers()
             self.get_artifact_error_state.reset()
         except Exception as e:
             msg = u"Exception retrieving extension handlers: {0}".format(ustr(e))
@@ -243,40 +243,22 @@ class ExtHandlersHandler(object):
                       message=detailed_msg)
             return
 
-        try:
-            # For extensions FastTrack, we can receive goal state through the VMArtifactsProfile blob
-            # For now, failing to read it isn't a critical failure. Even if storage is completely down
-            # we'll eventually receive it through Fabric goal state
-            self.artifacts_profile = self.protocol.get_artifacts_profile()
-        except Exception as e:
-            msg = u"Exception retrieving VmArtifactsProfile blob: {0}".format(ustr(e))
-            detailed_msg = '{0} {1}'.format(msg, traceback.extract_tb(get_traceback(e)))
-            logger.warn(msg)
-
-            add_event(AGENT_NAME,
-                      version=CURRENT_VERSION,
-                      op=WALAEventOperation.ExtensionProcessing,
-                      is_success=False,
-                      message=detailed_msg)
+        # For extensions FastTrack, we can receive goal state through the VMArtifactsProfile blob
+        # For now, failing to read it isn't a critical failure. Even if storage is completely down
+        # we'll eventually receive it through Fabric goal state
+        self.get_artifacts_profile()
 
         try:
-            msg = u"Handle extensions updates for incarnation {0}".format(etag)
+            msg = u"Handle extensions updates for incarnation {0}".format(instantiation)
             logger.verbose(msg)
             # Log status report success on new config
             self.log_report = True
 
             if self.extension_processing_allowed():
-                # Fabric goal state takes precedence over VMArtifactsProfile blob goal state
-                # So, process the Fabric goal state first (when we process each extension handler
-                # it will check whether its instantiation/etag has changed
-                self.handle_ext_handlers(etag)
-                self.last_instantiation = etag
-
-                # Now process the VMArtifactsProfile blob goal state if it changed
-                if self.last_vm_artifacts_seqno != self.artifacts_profile.get_sequence_number():
-                    self.ext_handlers = self.artifacts_profile.transform_to_extensions_config()
-                    self.handle_ext_handlers(etag)
-                    self.last_vm_artifacts_seqno = self.artifacts_profile.get_sequence_number()
+                seqno = None
+                if self.artifacts_profile is not None:
+                    seqno = self.artifacts_profile.get_sequence_number()
+                self.process_goal_state(instantiation, seqno)
 
             self.report_ext_handlers_status()
             self.cleanup_outdated_handlers()
@@ -290,6 +272,47 @@ class ExtHandlersHandler(object):
                       is_success=False,
                       message=detailed_msg)
             return
+
+    def get_artifacts_profile(self):
+        try:
+            self.artifacts_profile = self.protocol.get_artifacts_profile()
+        except Exception as e:
+            msg = u"Exception retrieving VmArtifactsProfile blob: {0}".format(ustr(e))
+            detailed_msg = '{0} {1}'.format(msg, traceback.extract_tb(get_traceback(e)))
+            logger.warn(msg)
+
+            add_event(AGENT_NAME,
+                      version=CURRENT_VERSION,
+                      op=WALAEventOperation.ExtensionProcessing,
+                      is_success=False,
+                      message=detailed_msg)
+
+    def process_goal_state(self, instantiation, seqno):
+        goal_state_changed = False
+        if self.last_instantiation != instantiation or self.last_vm_artifacts_seqno != seqno:
+            logger.info('Goal state changed with instantiation={0}(last:{1}) and seqno={2}(last:{3})',
+                        instantiation,
+                        self.last_instantiation,
+                        seqno,
+                        self.last_vm_artifacts_seqno)
+            goal_state_changed = True
+
+        # Fabric goal state takes precedence over VMArtifactsProfile blob goal state
+        # So, process the Fabric goal state first
+        self.handle_ext_handlers(goal_state_changed)
+        self.last_instantiation = instantiation
+
+        # Now process the VMArtifactsProfile blob goal state if it changed
+        if self.last_vm_artifacts_seqno != seqno and self.artifacts_profile is not None:
+            vm_artifacts_ext_handlers = self.artifacts_profile.transform_to_extensions_config()
+            if vm_artifacts_ext_handlers is not None:
+                # We need to add the status upload blob from Fabric goal state because we don't receive this
+                # from the VMArtifactsProfile blob
+                vm_artifacts_ext_handlers.status_upload_blob = self.ext_handlers.status_upload_blob
+                vm_artifacts_ext_handlers.status_upload_blob_type = self.ext_handlers.status_upload_blob_type
+                self.ext_handlers = vm_artifacts_ext_handlers
+                self.handle_ext_handlers(goal_state_changed)
+            self.last_vm_artifacts_seqno = seqno
 
     def cleanup_outdated_handlers(self):
         handlers = []
@@ -369,7 +392,7 @@ class ExtHandlersHandler(object):
 
         return True
 
-    def handle_ext_handlers(self, etag=None):
+    def handle_ext_handlers(self, goal_state_changed=False):
         if self.ext_handlers.extHandlers is None or \
                 len(self.ext_handlers.extHandlers) == 0:
             logger.verbose("No extension handler config found")
@@ -380,7 +403,7 @@ class ExtHandlersHandler(object):
 
         self.ext_handlers.extHandlers.sort(key=operator.methodcaller('sort_key'))
         for ext_handler in self.ext_handlers.extHandlers:
-            self.handle_ext_handler(ext_handler, etag)
+            self.handle_ext_handler(ext_handler, goal_state_changed)
 
             # Wait for the extension installation until it is handled.
             # This is done for the install and enable. Not for the uninstallation.
@@ -432,7 +455,7 @@ class ExtHandlersHandler(object):
 
         return True
 
-    def handle_ext_handler(self, ext_handler, instantiation):
+    def handle_ext_handler(self, ext_handler, goal_state_changed):
         ext_handler_i = ExtHandlerInstance(ext_handler, self.protocol)
 
         try:
@@ -447,15 +470,14 @@ class ExtHandlersHandler(object):
                 return
 
             self.get_artifact_error_state.reset()
-            if not ext_handler_i.is_upgrade and self.last_instantiation == instantiation:
-                if self.log_etag:
-                    ext_handler_i.logger.verbose("Version {0} is current for etag {1}",
-                                                 ext_handler_i.pkg.version,
-                                                 instantiation)
-                    self.log_etag = False
+            if not ext_handler_i.is_upgrade and not goal_state_changed:
+                if self.log_instantiation:
+                    ext_handler_i.logger.verbose("Version {0} is current",
+                                                 ext_handler_i.pkg.version)
+                    self.log_instantiation = False
                 return
 
-            self.log_etag = True
+            self.log_instantiation = True
 
             ext_handler_i.logger.info("Target handler state: {0}", state)
             if state == u"enabled":

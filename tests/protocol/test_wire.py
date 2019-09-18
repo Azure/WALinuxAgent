@@ -491,7 +491,8 @@ class TestWireProtocol(AgentTestCase):
             'version': '1.1',
             'timestampUTC': timestamp,
             'aggregateStatus': v1_agg_status,
-            'guestOSInfo': v1_ga_guest_info
+            'guestOSInfo': v1_ga_guest_info,
+            'supportedFeatures': { 'FastTrack': '1'}
         }
         self.assertEqual(json.dumps(v1_vm_status), actual.to_json())
 
