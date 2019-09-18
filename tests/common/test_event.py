@@ -43,16 +43,16 @@ class TestEvent(AgentTestCase):
 
         with patch("azurelinuxagent.common.event.EventLogger.save_event", side_effect=patch_save_event):
             # No container id is set
-            os.environ.pop(event.CONTAINER_ID, None)
+            os.environ.pop(event.CONTAINER_ID_ENV_VARIABLE, None)
             event.add_event(name='dummy_name')
             data = fileutil.read_file(tmp_file)
-            self.assertIn('{"name": "ContainerId", "value": null}', data)
+            self.assertIn('{"name": "ContainerId", "value": "UNINITIALIZED"}', data)
 
             # Container id is set as an environment variable explicitly
-            os.environ[event.CONTAINER_ID] = '424242'
+            os.environ[event.CONTAINER_ID_ENV_VARIABLE] = '424242'
             event.add_event(name='dummy_name')
             data = fileutil.read_file(tmp_file)
-            self.assertIn('{{"name": "ContainerId", "value": "{0}"}}'.format(os.environ[event.CONTAINER_ID]), data)
+            self.assertIn('{{"name": "ContainerId", "value": "{0}"}}'.format(os.environ[event.CONTAINER_ID_ENV_VARIABLE]), data)
 
             # Container id is set as an environment variable when parsing the goal state
             xml_text = load_data("wire/goal_state.xml")
@@ -63,7 +63,20 @@ class TestEvent(AgentTestCase):
             data = fileutil.read_file(tmp_file)
             self.assertIn('{{"name": "ContainerId", "value": "{0}"}}'.format(container_id), data)
 
-        os.environ.pop(event.CONTAINER_ID)
+            # Container id is updated as the goal state changes, both in telemetry event and in environment variables
+            new_container_id = "z6d5526c-5ac2-4200-b6e2-56f2b70c5ab2"
+            xml_text = load_data("wire/goal_state.xml")
+            xml_text_updated = xml_text.replace("c6d5526c-5ac2-4200-b6e2-56f2b70c5ab2", new_container_id)
+            goal_state = GoalState(xml_text_updated)
+
+            event.add_event(name='dummy_name')
+            data = fileutil.read_file(tmp_file)
+
+            # Assert both the environment variable and telemetry event got updated
+            self.assertEquals(os.environ[event.CONTAINER_ID_ENV_VARIABLE], new_container_id)
+            self.assertIn('{{"name": "ContainerId", "value": "{0}"}}'.format(new_container_id), data)
+
+        os.environ.pop(event.CONTAINER_ID_ENV_VARIABLE)
 
     def test_event_status_event_marked(self):
         es = event.__event_status__
