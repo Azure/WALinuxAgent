@@ -72,6 +72,7 @@ class WALAEventOperation:
     ProcessGoalState = "ProcessGoalState"
     Provision = "Provision"
     ProvisionGuestAgent = "ProvisionGuestAgent"
+    Release43PR1580 = "Release43PR1580"
     RemoteAccessHandling = "RemoteAccessHandling"
     ReportStatus = "ReportStatus"
     ReportStatusExtended = "ReportStatusExtended"
