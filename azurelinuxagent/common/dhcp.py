@@ -87,18 +87,16 @@ class DhcpHandler(object):
         logger.info("Test for route to {0}".format(KNOWN_WIRESERVER_IP))
         try:
             route_table = self.osutil.read_route_table()
-            routes = self.osutil.get_list_of_routes(route_table)
-            for route in routes:
-                if route.destination == KNOWN_WIRESERVER_IP_ENTRY:
-                    # reset self.gateway and self.routes
-                    # we do not need to alter the routing table
-                    self.endpoint = KNOWN_WIRESERVER_IP
-                    self.gateway = None
-                    self.routes = None
-                    route_exists = True
-                    logger.info("Route to {0} exists".format(KNOWN_WIRESERVER_IP))
-                else:
-                    logger.warn("No route exists to {0}".format(KNOWN_WIRESERVER_IP))
+            if any([(KNOWN_WIRESERVER_IP_ENTRY in route) for route in route_table]):
+                # reset self.gateway and self.routes
+                # we do not need to alter the routing table
+                self.endpoint = KNOWN_WIRESERVER_IP
+                self.gateway = None
+                self.routes = None
+                route_exists = True
+                logger.info("Route to {0} exists".format(KNOWN_WIRESERVER_IP))
+            else:
+                logger.warn("No route exists to {0}".format(KNOWN_WIRESERVER_IP))
         except Exception as e:
             logger.error(
                 "Could not determine whether route exists to {0}: {1}".format(

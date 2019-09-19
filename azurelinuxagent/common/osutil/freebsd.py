@@ -95,84 +95,6 @@ class FreeBSDOSUtil(DefaultOSUtil):
 
     def get_first_if(self):
         return self._get_net_info()[:2]
-    
-    @staticmethod
-    def _build_route_list(netstat_routes):
-        """
-        Construct a list of network route entries
-        :param list(str) netstat_routes: `netstat -rn` lines, including headers, containing at least one route
-        :return: List of network route objects
-        :rtype: list(RouteEntry)
-        """
-        idx = 0
-        column_index = {}
-        header_line = netstat_routes[0]
-        for header in [h for h in header_line.split() if len(h) > 0]:
-            column_index[header] = idx
-            idx += 1
-        try:
-            idx_iface = column_index["Netif"]
-            idx_dest = column_index["Destination"]
-            idx_gw = column_index["Gateway"]
-            idx_flags = column_index["Flags"]
-        except KeyError:
-            msg = "netstat -rn is missing key information; headers are [{0}]".format(header_line)
-            logger.error(msg)
-            return []
-        route_list = []
-        n_routes = len(netstat_routes)
-        for i in range(1, n_routes-1):
-            route = netstat_routes[i].split()
-            if len(route) != idx:
-                continue
-            dest = route[idx_dest]
-            gw = route[idx_gw]
-            mask = 32
-            if dest == "default":
-                dest = "0.0.0.0"
-            elif dest == "localhost":
-                dest = "127.0.0.1"
-            elif "/" in dest:
-                dest = dest.split("/")
-                dest = dest[0]
-                mask = int(dest[1])
-            if gw == "localhost":
-                gw = "127.0.0.1"
-            # Convert IP Addresses to Hex Notation like in the Linux Route Table
-            try:
-                dest = int(binascii.hexlify(socket.inet_pton(socket.AF_INET, dest)), 16)
-                dest = "%08X" % dest
-            except socket.error:
-                try:
-                    dest = int(binascii.hexlify(socket.inet_pton(socket.AF_INET6, dest)), 16)
-                    dest = "%032X" % dest
-                except socket.error:
-                    # Not an IPv4 or v6 address, ignore
-                    pass
-            try:
-                gw = int(binascii.hexlify(socket.inet_pton(socket.AF_INET, gw)), 16)
-                gw = "%08X" % gw
-            except socket.error:
-                try:
-                    gw = int(binascii.hexlify(socket.inet_pton(socket.AF_INET6, gw)), 16)
-                    gw = "%032X" % gw
-                except socket.error:
-                    # Not an IPv4 or v6 address, ignore
-                    pass
-            flags = 0
-            if "U" in route[idx_flags]:
-                flags += 0x0001 # RTF_UP
-            if "G" in route[idx_flags]:
-                flags += 0x0002 # RTF_GATEWAY
-            if "H" in route[idx_flags]:
-                flags += 0x0004 # RTF_HOST
-            if "S" not in route[idx_flags]:
-                flags += 0x0010 # RTF_DYNAMIC
-            flags = str(flags)
-            if len(route) > 0:
-                route_obj = RouteEntry(route[idx_iface], dest, gw, mask, flags, n_routes - i)
-                route_list.append(route_obj)
-        return route_list
 
     @staticmethod
     def read_route_table():
@@ -184,10 +106,99 @@ class FreeBSDOSUtil(DefaultOSUtil):
         :rtype: list(str)
         """
         cmd = "netstat -rn"
-        ret, output = shellutil.run_get_output(cmd)
+        ret, netstat_output = shellutil.run_get_output(cmd)
         if ret:
-            raise OSUtilError("Cannot read route table [{0}]".format(output))
-        return output.split("\n")[3:]
+            raise OSUtilError("Cannot read route table [{0}]".format(netstat_output))
+        netstat_output = netstat_output.split("\n")[3:]
+        linux_style_route_file = [ "Iface\tDestination\tGateway\tFlags\tRefCnt\tUse\tMetric\tMask\tMTU\tWindow\tIRTT" ]
+        # Parse the Netstat -RN header line
+        n_columns = 0
+        column_index = {}
+        header_line = netstat_routes[0]
+        for header in [h for h in header_line.split() if len(h) > 0]:
+            column_index[header] = n_columns
+            n_columns += 1
+        try:
+            column_iface = column_index["Netif"]
+            column_dest = column_index["Destination"]
+            column_gw = column_index["Gateway"]
+            column_flags = column_index["Flags"]
+        except KeyError:
+            msg = "netstat -rn is missing key information; headers are [{0}]".format(header_line)
+            logger.error(msg)
+            return linux_style_route_file
+        # Parse the Routes
+        n_routes = len(netstat_routes)
+        for i in range(1, n_routes-1):
+            route = netstat_routes[i].split()
+            if len(route) != n_columns:
+                # Skip
+                continue
+            # Network Interface
+            netif = route[idx_iface]
+            # Destination IP (in HEX)
+            if route[column_dest] == "default":
+                route[column_dest] = "0.0.0.0/32"
+            elif route[column_dest] == "localhost":
+                route[column_dest] = "127.0.0.1/32"
+            _dest = route[column_dest].split("/")
+            dest = ""
+            try:
+                # IPv4
+                dest = "%08X" % int(binascii.hexlify(socket.inet_pton(socket.AF_INET, _dest[0])), 16)
+            except socket.error:
+                dest = ""
+            if dest == "":
+                # Not an IPv4 or v6 address, skip
+                continue
+            # Route Gateway (IN HEX)
+            if route[column_gw] == "default":
+                route[column_gw] = "0.0.0.0"
+            elif route[column_gw] == "localhost":
+                route[column_gw] = "127.0.0.1"
+            gw = ""
+            try:
+                # IPv4
+                gw = "%08X" % int(binascii.hexlify(socket.inet_pton(socket.AF_INET, route[column_gw])), 16)
+            except socket.error:
+                gw = ""
+            if gw == "":
+                gw = "0.0.0.0"
+            # Route Flags
+            flags = 0
+            RTF_UP = 0x0001
+            RTF_GATEWAY = 0x0002
+            RTF_HOST = 0x0004
+            RTF_DYNAMIC = 0x0010
+            if "U" in route[idx_flags]:
+                flags |= RTF_UP
+            if "G" in route[idx_flags]:
+                flags |= RTF_GATEWAY
+            if "H" in route[idx_flags]:
+                flags |= RTF_HOST
+            if "S" not in route[idx_flags]:
+                flags |= RTF_DYNAMIC
+            # Reference Count
+            refcount = 0
+            # Use
+            use = 0
+            # Route Metric (priority list ordering is metric)
+            metric = n_routes - i
+            # Subnet Mask
+            mask = 32
+            if len(_dest) > 1:
+                mask = int(_dest[1])
+            mask = "{:08x}".format((2 ** mask) - 1)[::-1].upper()
+            # MTU
+            mtu = 0
+            # Window
+            window = 0
+            # Initial Round Trip Time
+            irtt = 0
+            # Add the route
+            linux_style_route_file.append("{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}".format(
+                    netif, dest, gw, flags, refcount, use, metric, mask, mtu, window, irtt))
+        return linux_style_route_file
 
     @staticmethod
     def get_list_of_routes(route_table):
@@ -206,7 +217,7 @@ class FreeBSDOSUtil(DefaultOSUtil):
         elif count == 1:
             logger.error("netstat -rn contains no routes")
         else:
-            route_list = FreeBSDOSUtil._build_route_list(route_table)
+            route_list = DefaultOSUtil._build_route_list(route_table)
         return route_list
 
     def get_primary_interface(self):
@@ -217,6 +228,8 @@ class FreeBSDOSUtil(DefaultOSUtil):
         :return: the interface which has the default route
         """
         RTF_GATEWAY = 0x0002
+        DEFAULT_DEST = "00000000"
+        
         primary_interface = None
 
         if not self.disable_route_warning:
@@ -225,7 +238,7 @@ class FreeBSDOSUtil(DefaultOSUtil):
         route_table = self.read_route_table()
 
         def is_default(route):
-            return ((route.destination == "00000000") or (route.destination == "default")) and (RTF_GATEWAY & route.flags)
+            return (route.destination == DEFAULT_DEST) and (RTF_GATEWAY & route.flags)
 
         candidates = list(filter(is_default, self.get_list_of_routes(route_table)))
 
@@ -272,10 +285,12 @@ class FreeBSDOSUtil(DefaultOSUtil):
         SEE ALSO: man ip(4) IP_ONESBCAST,
         """
         RTF_GATEWAY = 0x0002
+        DEFAULT_DEST = "00000000"
+
         route_table = self.read_route_table()
         routes = self.get_list_of_routes(route_table)
         for route in routes:
-            if ((route.destination == "00000000") or (route.destination == "default")) and (RTF_GATEWAY & route.flags):
+            if (route.destination == DEFAULT_DEST) and (RTF_GATEWAY & route.flags):
                return False
         return True
 
