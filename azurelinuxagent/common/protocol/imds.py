@@ -8,10 +8,10 @@ from azurelinuxagent.common.exception import HttpError
 from azurelinuxagent.common.future import ustr
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.protocol.restapi import DataContract, set_properties
+from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 
 IMDS_ENDPOINT = '169.254.169.254'
-IMDS_ENDPOINT_BACKUP = '168.63.129.16'
 APIVERSION = '2018-02-01'
 BASE_URI = "http://{0}/metadata/instance/{1}?api-version={2}"
 
@@ -243,7 +243,7 @@ class ImdsClient(object):
             'User-Agent': restutil.HTTP_USER_AGENT_HEALTH,
             'Metadata': True,
         }
-        pass
+        self.protocol_util = get_protocol_util()
 
     @property
     def compute_url(self):
@@ -251,7 +251,7 @@ class ImdsClient(object):
 
     @property
     def compute_url_backup(self):
-        return BASE_URI.format(IMDS_ENDPOINT_BACKUP, 'compute', self._api_version)
+        return BASE_URI.format(self.protocol_util.get_wireserver_endpoint(), 'compute', self._api_version)
 
     @property
     def instance_url(self):
@@ -259,7 +259,7 @@ class ImdsClient(object):
 
     @property
     def instance_url_backup(self):
-        return BASE_URI.format(IMDS_ENDPOINT_BACKUP, '', self._api_version)
+        return BASE_URI.format(self.protocol_util.get_wireserver_endpoint(), '', self._api_version)
 
     def get_compute(self):
         """

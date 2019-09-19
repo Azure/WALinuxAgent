@@ -8,6 +8,7 @@ from azurelinuxagent.common.exception import HttpError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.restapi import set_properties
 from azurelinuxagent.common.utils import restutil
+from azurelinuxagent.common.protocol.util import ProtocolUtil, get_protocol_util
 from tests.ga.test_update import ResponseMock
 from tests.tools import *
 
@@ -45,8 +46,12 @@ class TestImds(AgentTestCase):
         self.assertEqual(True, kw_args['headers']['Metadata'])
 
     @patch("azurelinuxagent.ga.update.restutil.http_get")
-    def test_get_bad_request(self, mock_http_get):
+    @patch("azurelinuxagent.common.protocol.util.ProtocolUtil")
+    def test_get_bad_request(self, mock_http_get, ProtocolUtil):
         mock_http_get.return_value = ResponseMock(status=restutil.httpclient.BAD_REQUEST)
+
+        ProtocolUtil = get_protocol_util()
+        ProtocolUtil.get_wireserver_endpoint = MagicMock()
 
         test_subject = imds.ImdsClient()
         self.assertRaises(HttpError, test_subject.get_compute)
@@ -234,8 +239,9 @@ class TestImds(AgentTestCase):
 
         return compute_info.image_origin
 
-    def test_response_validation(self):
-        # expect extra "fallback" calls on error status codes
+    @patch("azurelinuxagent.common.protocol.util.ProtocolUtil")
+    def test_response_validation(self, ProtocolUtil):
+        ProtocolUtil().get_wireserver_endpoint.return_value = "foo.bar"
 
         # invalid json or empty response
         self._assert_validation(http_status_code=200,
@@ -352,7 +358,7 @@ class TestImds(AgentTestCase):
         self.assertTrue('Metadata' in kw_args['headers'])
         self.assertEqual(True, kw_args['headers']['Metadata'])
         if expected_fallback:
-            self.assertEqual('http://168.63.129.16/metadata/instance/?api-version=2018-02-01',
+            self.assertEqual('http://foo.bar/metadata/instance/?api-version=2018-02-01',
                              positional_args[0])
         else:
             self.assertEqual('http://169.254.169.254/metadata/instance/?api-version=2018-02-01',
