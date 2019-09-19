@@ -25,6 +25,7 @@ from azurelinuxagent.common.event import add_event, \
 from azurelinuxagent.common.exception import EventError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.utils.extensionprocessutil import read_output
+from azurelinuxagent.common.protocol.wire import GoalState
 from azurelinuxagent.common.version import CURRENT_VERSION
 from azurelinuxagent.ga.monitor import MonitorHandler
 
@@ -34,6 +35,55 @@ import azurelinuxagent.common.event as event
 
 
 class TestEvent(AgentTestCase):
+    def test_add_event_should_read_container_id_from_process_environment(self):
+        tmp_file = os.path.join(self.tmp_dir, "tmp_file")
+
+        def patch_save_event(json_data):
+            fileutil.write_file(tmp_file, json_data)
+
+        with patch("azurelinuxagent.common.event.EventLogger.save_event", side_effect=patch_save_event):
+            # No container id is set
+            os.environ.pop(event.CONTAINER_ID_ENV_VARIABLE, None)
+            event.add_event(name='dummy_name')
+            data = fileutil.read_file(tmp_file)
+            self.assertTrue('{"name": "ContainerId", "value": "UNINITIALIZED"}' in data or
+                            '{"value": "UNINITIALIZED", "name": "ContainerId"}' in data)
+
+            # Container id is set as an environment variable explicitly
+            os.environ[event.CONTAINER_ID_ENV_VARIABLE] = '424242'
+            event.add_event(name='dummy_name')
+            data = fileutil.read_file(tmp_file)
+            self.assertTrue('{{"name": "ContainerId", "value": "{0}"}}'.format(
+                                os.environ[event.CONTAINER_ID_ENV_VARIABLE]) in data or
+                            '{{"value": "{0}", "name": "ContainerId"}}'.format(
+                                os.environ[event.CONTAINER_ID_ENV_VARIABLE]) in data)
+
+            # Container id is set as an environment variable when parsing the goal state
+            xml_text = load_data("wire/goal_state.xml")
+            goal_state = GoalState(xml_text)
+
+            container_id = goal_state.container_id
+            event.add_event(name='dummy_name')
+            data = fileutil.read_file(tmp_file)
+            self.assertTrue('{{"name": "ContainerId", "value": "{0}"}}'.format(container_id) in data or
+                            '{{"value": "{0}", "name": "ContainerId"}}'.format(container_id), data)
+
+            # Container id is updated as the goal state changes, both in telemetry event and in environment variables
+            new_container_id = "z6d5526c-5ac2-4200-b6e2-56f2b70c5ab2"
+            xml_text = load_data("wire/goal_state.xml")
+            xml_text_updated = xml_text.replace("c6d5526c-5ac2-4200-b6e2-56f2b70c5ab2", new_container_id)
+            goal_state = GoalState(xml_text_updated)
+
+            event.add_event(name='dummy_name')
+            data = fileutil.read_file(tmp_file)
+
+            # Assert both the environment variable and telemetry event got updated
+            self.assertEquals(os.environ[event.CONTAINER_ID_ENV_VARIABLE], new_container_id)
+            self.assertTrue('{{"name": "ContainerId", "value": "{0}"}}'.format(new_container_id) in data or
+                            '{{"value": "{0}", "name": "ContainerId"}}'.format(new_container_id), data)
+
+        os.environ.pop(event.CONTAINER_ID_ENV_VARIABLE)
+
     def test_event_status_event_marked(self):
         es = event.__event_status__
 
@@ -239,7 +289,7 @@ class TestEvent(AgentTestCase):
             event_str = MonitorHandler.collect_event(os.path.join(self.tmp_dir, tld_file))
             event_json = json.loads(event_str)
 
-            self.assertEqual(len(event_json["parameters"]), 8)
+            self.assertEqual(len(event_json["parameters"]), 9)
 
             for i in event_json["parameters"]:
                 if i["name"] == "Name":

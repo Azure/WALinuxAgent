@@ -28,6 +28,7 @@ import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.exception import EventError
 from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.protocol.wire import CONTAINER_ID_ENV_VARIABLE
 from azurelinuxagent.common.protocol.restapi import TelemetryEventParam, \
     TelemetryEvent, \
     get_properties
@@ -93,6 +94,7 @@ SHOULD_ENCODE_MESSAGE_OP = [
     WALAEventOperation.Install,
     WALAEventOperation.UnInstall,
 ]
+
 
 class EventStatus(object):
     EVENT_STATUS_FILE = "event_status.json"
@@ -277,6 +279,8 @@ class EventLogger(object):
         event.parameters.append(TelemetryEventParam('Message', message))
         event.parameters.append(TelemetryEventParam('Duration', duration))
         event.parameters.append(TelemetryEventParam('ExtensionType', evt_type))
+        event.parameters.append(TelemetryEventParam('ContainerId',
+                                                    os.environ.get(CONTAINER_ID_ENV_VARIABLE, "UNINITIALIZED")))
 
         data = get_properties(event)
         try:

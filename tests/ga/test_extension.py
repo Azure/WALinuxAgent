@@ -27,6 +27,7 @@ from azurelinuxagent.common.protocol.restapi import Extension, ExtHandlerPropert
 from azurelinuxagent.ga.exthandlers import *
 from azurelinuxagent.common.protocol.wire import WireProtocol, InVMArtifactsProfile
 
+# Mock sleep to reduce test execution time
 SLEEP = time.sleep
 
 
