@@ -114,7 +114,7 @@ class FreeBSDOSUtil(DefaultOSUtil):
         # Parse the Netstat -RN header line
         n_columns = 0
         column_index = {}
-        header_line = netstat_routes[0]
+        header_line = netstat_output[0]
         for header in [h for h in header_line.split() if len(h) > 0]:
             column_index[header] = n_columns
             n_columns += 1
@@ -128,14 +128,14 @@ class FreeBSDOSUtil(DefaultOSUtil):
             logger.error(msg)
             return linux_style_route_file
         # Parse the Routes
-        n_routes = len(netstat_routes)
+        n_routes = len(netstat_output)
         for i in range(1, n_routes-1):
-            route = netstat_routes[i].split()
-            if len(route) != n_columns:
+            route = netstat_output[i].split()
+            if (len(route) - 1) != n_columns:
                 # Skip
                 continue
             # Network Interface
-            netif = route[idx_iface]
+            netif = route[column_iface]
             # Destination IP (in HEX)
             if route[column_dest] == "default":
                 route[column_dest] = "0.0.0.0/32"
@@ -170,13 +170,13 @@ class FreeBSDOSUtil(DefaultOSUtil):
             RTF_GATEWAY = 0x0002
             RTF_HOST = 0x0004
             RTF_DYNAMIC = 0x0010
-            if "U" in route[idx_flags]:
+            if "U" in route[column_flags]:
                 flags |= RTF_UP
-            if "G" in route[idx_flags]:
+            if "G" in route[column_flags]:
                 flags |= RTF_GATEWAY
-            if "H" in route[idx_flags]:
+            if "H" in route[column_flags]:
                 flags |= RTF_HOST
-            if "S" not in route[idx_flags]:
+            if "S" not in route[column_flags]:
                 flags |= RTF_DYNAMIC
             # Reference Count
             refcount = 0
