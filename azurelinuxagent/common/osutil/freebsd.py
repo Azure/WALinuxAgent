@@ -131,8 +131,12 @@ class FreeBSDOSUtil(DefaultOSUtil):
         n_routes = len(netstat_output)
         for i in range(1, n_routes-1):
             route = netstat_output[i].split()
-            if (len(route) - 1) != n_columns:
-                # Skip
+            n_columns = len(route)
+            if n_columns == 0:
+                # End of IPv4 Routes
+                break
+            elif n_columns < 4:
+                # Skip, Invalid/Incomplete Route
                 continue
             # Network Interface
             netif = route[column_iface]
