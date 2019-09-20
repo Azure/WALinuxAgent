@@ -1627,7 +1627,7 @@ class TestExtension(ExtensionTestCase):
 
         self._assert_handler_status(protocol.report_vm_status, "Ready", expected_ext_count=1, version="1.0.0")
 
-    def test_ext_sequence_no_should_set_for_ever_command_call(self, *args):
+    def test_ext_sequence_no_should_be_set_for_every_command_call(self, *args):
         test_data = WireProtocolData(DATA_FILE_MULTIPLE_EXT)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
 
