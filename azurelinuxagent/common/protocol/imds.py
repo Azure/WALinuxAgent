@@ -269,11 +269,13 @@ class ImdsClient(object):
         :rtype: ComputeInfo
         """
 
+        # ensure we get a 200
         resp = restutil.http_get(self.compute_url, headers=self._headers)
-
         if restutil.request_failed(resp):
+            logger.warn("Unable to connect to primary IMDS endpoint at {0}", self.compute_url)
             resp = restutil.http_get(self.compute_url_backup, headers=self._headers)
             if restutil.request_failed(resp):
+                logger.warn("Unable to connect to backup IMDS endpoint at {0}", self.compute_url_backup)
                 raise HttpError("{0} - GET: {1}".format(resp.status, self.compute_url))
 
         data = resp.read()
@@ -297,8 +299,10 @@ class ImdsClient(object):
         # ensure we get a 200
         resp = restutil.http_get(self.instance_url, headers=self._health_headers)
         if restutil.request_failed(resp):
+            logger.warn("Unable to connect to primary IMDS endpoint at {0}", self.instance_url)
             resp = restutil.http_get(self.instance_url_backup, headers=self._health_headers)
             if restutil.request_failed(resp):
+                logger.warn("Unable to connect to backup IMDS endpoint at {0}", self.instance_url_backup)
                 return False, "{0}".format(restutil.read_response_error(resp))
 
         # ensure the response is valid json
