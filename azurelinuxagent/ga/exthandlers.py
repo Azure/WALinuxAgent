@@ -74,10 +74,13 @@ AGENT_STATUS_FILE = "waagent_status.json"
 
 NUMBER_OF_DOWNLOAD_RETRIES = 5
 
-DISABLE_FAILED = "AZURE_GUEST_AGENT_DISABLE_FAILED"
-UNINSTALL_FAILED = "AZURE_GUEST_AGENT_UNINSTALL_FAILED"
-EXTENSION_PATH = "AZURE_GUEST_AGENT_EXTENSION_PATH"
-EXTENSION_VERSION = "AZURE_GUEST_AGENT_EXTENSION_VERSION"
+
+class ExtCommandEnvVariable(object):
+    DisableFailed = "AZURE_GUEST_AGENT_DISABLE_FAILED"
+    UninstallFailed = "AZURE_GUEST_AGENT_UNINSTALL_FAILED"
+    ExtensionPath = "AZURE_GUEST_AGENT_EXTENSION_PATH"
+    ExtensionVersion = "AZURE_GUEST_AGENT_EXTENSION_VERSION"
+    ExtensionSeqNumber = "ConfigSequenceNumber"  # At par with Windows Guest Agent
 
 def get_traceback(e):
     if sys.version_info[0] == 3:
@@ -943,7 +946,7 @@ class ExtHandlerInstance(object):
     def enable(self, uninstall_failed=False):
         env = {}
         if uninstall_failed:
-            env.update({UNINSTALL_FAILED: '1'})
+            env.update({ExtCommandEnvVariable.UninstallFailed: '1'})
 
         self.set_operation(WALAEventOperation.Enable)
         man = self.load_manifest()
@@ -967,7 +970,7 @@ class ExtHandlerInstance(object):
     def install(self, uninstall_failed=False):
         env = {}
         if uninstall_failed:
-            env.update({UNINSTALL_FAILED: '1'})
+            env.update({ExtCommandEnvVariable.UninstallFailed: '1'})
 
         man = self.load_manifest()
         install_cmd = man.get_install_command()
@@ -1018,7 +1021,7 @@ class ExtHandlerInstance(object):
         env = {'VERSION': version}
 
         if disable_failed:
-            env.update({DISABLE_FAILED: "1"})
+            env.update({ExtCommandEnvVariable.DisableFailed: "1"})
 
         try:
             self.set_operation(WALAEventOperation.Update)
@@ -1207,8 +1210,9 @@ class ExtHandlerInstance(object):
                     env = {}
                 env.update(os.environ)
                 # Always add Extension Path and version to the current launch_command (Ask from publishers)
-                env.update({EXTENSION_PATH: self.get_base_dir(),
-                            EXTENSION_VERSION: self.ext_handler.properties.version})
+                env.update({ExtCommandEnvVariable.ExtensionPath: base_dir,
+                            ExtCommandEnvVariable.ExtensionVersion: self.ext_handler.properties.version,
+                            ExtCommandEnvVariable.ExtensionSeqNumber: str(self.get_seq_no())})
 
                 try:
                     # Some extensions erroneously begin cmd with a slash; don't interpret those
@@ -1386,6 +1390,16 @@ class ExtHandlerInstance(object):
 
     def get_log_dir(self):
         return os.path.join(conf.get_ext_log_dir(), self.ext_handler.name)
+
+    def get_seq_no(self):
+        runtime_settings = self.ext_handler.properties.extensions
+        # If no runtime_settings available for this ext_handler, then return the largest {x}.settings number
+        if not runtime_settings or len(runtime_settings) == 0:
+            return self.get_largest_seq_no()
+        # Currently for every runtime settings we use the same sequence number
+        # (Check : def parse_plugin_settings(self, ext_handler, plugin_settings) in wire.py)
+        # Will have to revisit once the feature to enable multiple runtime settings is rolled out by CRP
+        return self.ext_handler.properties.extensions[0].sequenceNumber
 
 
 class HandlerEnvironment(object):
