@@ -2083,7 +2083,6 @@ class TestExtensionWithCGroupsEnabled(AgentTestCase):
         self._assert_no_handler_status(protocol.report_vm_status)
 
 
-@patch('azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_seq_no', return_value="12")
 class TestExtensionUpdateOnFailure(ExtensionTestCase):
 
     @staticmethod

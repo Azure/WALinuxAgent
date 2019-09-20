@@ -1393,9 +1393,10 @@ class ExtHandlerInstance(object):
 
     def get_seq_no(self):
         runtime_settings = self.ext_handler.properties.extensions
-        # If no runtime_settings available for this ext_handler, then return the largest {x}.settings number
+        # If no runtime_settings available for this ext_handler, then return 0 (this is the behavior we follow
+        # for update_settings)
         if not runtime_settings or len(runtime_settings) == 0:
-            return self.get_largest_seq_no()
+            return "0"
         # Currently for every runtime settings we use the same sequence number
         # (Check : def parse_plugin_settings(self, ext_handler, plugin_settings) in wire.py)
         # Will have to revisit once the feature to enable multiple runtime settings is rolled out by CRP
