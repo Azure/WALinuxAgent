@@ -13,7 +13,7 @@ from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 
 IMDS_ENDPOINT = '169.254.169.254'
 APIVERSION = '2018-02-01'
-BASE_URI = "http://{0}/metadata/instance/{1}?api-version={2}"
+BASE_URI = "http://{0}/metadata/{1}?api-version={2}"
 
 IMDS_IMAGE_ORIGIN_UNKNOWN = 0
 IMDS_IMAGE_ORIGIN_CUSTOM = 1
@@ -243,23 +243,41 @@ class ImdsClient(object):
             'User-Agent': restutil.HTTP_USER_AGENT_HEALTH,
             'Metadata': True,
         }
+        self._regex_imds_ioerror = re.compile(r".*HTTP Failed. GET http://[^ ]+ -- IOError timed out -- [0-9]+ attempts made")
         self.protocol_util = get_protocol_util()
 
-    @property
-    def compute_url(self):
-        return BASE_URI.format(IMDS_ENDPOINT, 'compute', self._api_version)
+    def _get_metadata_url(self, endpoint, resource_path):
+        return BASE_URI.format(endpoint, resource_path, self._api_version)
 
-    @property
-    def compute_url_backup(self):
-        return BASE_URI.format(self.protocol_util.get_wireserver_endpoint(), 'compute', self._api_version)
+    def get_metadata(self, resource_path, is_health):
+        """
+        Get metadata from IMDS, falling back to Wireserver endpoint if necessary.
 
-    @property
-    def instance_url(self):
-        return BASE_URI.format(IMDS_ENDPOINT, '', self._api_version)
-
-    @property
-    def instance_url_backup(self):
-        return BASE_URI.format(self.protocol_util.get_wireserver_endpoint(), '', self._api_version)
+        :param str resource_path: path of IMDS resource
+        :param bool is_health: True if for health/heartbeat, False otherwise
+        :return: Tuple<is_request_success:bool, response:str>
+            is_request_success: True when connection succeeds, False otherwise
+            response: response from IMDS on request success, failure message otherwise
+        """
+        headers = self._health_headers if is_health else self._headers
+        try:
+            url = self._get_metadata_url(IMDS_ENDPOINT, resource_path)
+            resp = restutil.http_get(url, headers=headers, use_proxy=False)
+        except HttpError as e:
+            logger.warn("Unable to connect to primary IMDS endpoint at {0}", url)
+            if not self._regex_imds_ioerror.match(str(e)):
+                raise e
+            try:
+                url = self._get_metadata_url(self.protocol_util.get_wireserver_endpoint(), resource_path)
+                resp = restutil.http_get(url, headers=headers, use_proxy=False)
+            except HttpError as e:
+                logger.warn("Unable to connect to backup IMDS endpoint at {0}", url)
+                if not self._regex_imds_ioerror.match(str(e)):
+                    raise e
+                return False, "IMDS {0}: Unable to connect to endpoint".format(resource_path)
+        if restutil.request_failed(resp):
+            return False, "IMDS {0} [{1}]: {2}".format(resource_path, resp.status, restutil.read_response_error(resp))
+        return True, resp.read()
 
     def get_compute(self):
         """
@@ -270,16 +288,11 @@ class ImdsClient(object):
         """
 
         # ensure we get a 200
-        resp = restutil.http_get(self.compute_url, headers=self._headers, use_proxy=False)
-        if restutil.request_failed(resp):
-            logger.warn("Unable to connect to primary IMDS endpoint at {0}", self.compute_url)
-            resp = restutil.http_get(self.compute_url_backup, headers=self._headers, use_proxy=False)
-            if restutil.request_failed(resp):
-                logger.warn("Unable to connect to backup IMDS endpoint at {0}", self.compute_url_backup)
-                raise HttpError("{0} - GET: {1}".format(resp.status, self.compute_url))
+        success, resp = self.get_metadata('instance/compute', is_health=False)
+        if not success:
+            raise HttpError(resp)
 
-        data = resp.read()
-        data = json.loads(ustr(data, encoding="utf-8"))
+        data = json.loads(ustr(resp, encoding="utf-8"))
 
         compute_info = ComputeInfo()
         set_properties('compute', compute_info, data)
@@ -297,18 +310,13 @@ class ImdsClient(object):
         """
 
         # ensure we get a 200
-        resp = restutil.http_get(self.instance_url, headers=self._health_headers, use_proxy=False)
-        if restutil.request_failed(resp):
-            logger.warn("Unable to connect to primary IMDS endpoint at {0}", self.instance_url)
-            resp = restutil.http_get(self.instance_url_backup, headers=self._health_headers, use_proxy=False)
-            if restutil.request_failed(resp):
-                logger.warn("Unable to connect to backup IMDS endpoint at {0}", self.instance_url_backup)
-                return False, "{0}".format(restutil.read_response_error(resp))
+        success, resp = self.get_metadata('instance', is_health=True)
+        if not success:
+            return False, resp
 
         # ensure the response is valid json
-        data = resp.read()
         try:
-            json_data = json.loads(ustr(data, encoding="utf-8"))
+            json_data = json.loads(ustr(resp, encoding="utf-8"))
         except Exception as e:
             return False, "JSON parsing failed: {0}".format(ustr(e))
 

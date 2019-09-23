@@ -5,10 +5,9 @@ import json
 import azurelinuxagent.common.protocol.imds as imds
 
 from azurelinuxagent.common.exception import HttpError
-from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.future import ustr, httpclient
 from azurelinuxagent.common.protocol.restapi import set_properties
 from azurelinuxagent.common.utils import restutil
-from azurelinuxagent.common.protocol.util import ProtocolUtil, get_protocol_util
 from tests.ga.test_update import ResponseMock
 from tests.tools import *
 
@@ -46,12 +45,8 @@ class TestImds(AgentTestCase):
         self.assertEqual(True, kw_args['headers']['Metadata'])
 
     @patch("azurelinuxagent.ga.update.restutil.http_get")
-    @patch("azurelinuxagent.common.protocol.util.ProtocolUtil")
-    def test_get_bad_request(self, mock_http_get, ProtocolUtil):
+    def test_get_bad_request(self, mock_http_get):
         mock_http_get.return_value = ResponseMock(status=restutil.httpclient.BAD_REQUEST)
-
-        ProtocolUtil = get_protocol_util()
-        ProtocolUtil.get_wireserver_endpoint = MagicMock()
 
         test_subject = imds.ImdsClient()
         self.assertRaises(HttpError, test_subject.get_compute)
@@ -239,55 +234,106 @@ class TestImds(AgentTestCase):
 
         return compute_info.image_origin
 
-    @patch("azurelinuxagent.common.protocol.util.ProtocolUtil")
-    def test_response_validation(self, ProtocolUtil):
-        ProtocolUtil().get_wireserver_endpoint.return_value = "foo.bar"
-
+    def test_response_validation(self):
         # invalid json or empty response
         self._assert_validation(http_status_code=200,
                                 http_response='',
                                 expected_valid=False,
-                                expected_response='JSON parsing failed',
-                                expected_fallback=False)
+                                expected_response='JSON parsing failed')
 
         self._assert_validation(http_status_code=200,
                                 http_response=None,
                                 expected_valid=False,
-                                expected_response='JSON parsing failed',
-                                expected_fallback=False)
+                                expected_response='JSON parsing failed')
 
         self._assert_validation(http_status_code=200,
                                 http_response='{ bad json ',
                                 expected_valid=False,
-                                expected_response='JSON parsing failed',
-                                expected_fallback=False)
+                                expected_response='JSON parsing failed')
 
         # 500 response
         self._assert_validation(http_status_code=500,
                                 http_response='error response',
                                 expected_valid=False,
-                                expected_response='[HTTP Failed] [500: reason] error response',
-                                expected_fallback=True)
+                                expected_response='[HTTP Failed] [500: reason] error response')
 
         # 429 response
         self._assert_validation(http_status_code=429,
                                 http_response='server busy',
                                 expected_valid=False,
-                                expected_response='[HTTP Failed] [429: reason] server busy',
-                                expected_fallback=True)
+                                expected_response='[HTTP Failed] [429: reason] server busy')
 
         # valid json
         self._assert_validation(http_status_code=200,
                                 http_response=self._imds_response('valid'),
                                 expected_valid=True,
-                                expected_response='',
-                                expected_fallback=False)
+                                expected_response='')
         # unicode
         self._assert_validation(http_status_code=200,
                                 http_response=self._imds_response('unicode'),
                                 expected_valid=True,
-                                expected_response='',
-                                expected_fallback=False)
+                                expected_response='')
+
+    @patch("azurelinuxagent.common.protocol.util.ProtocolUtil")
+    @patch("azurelinuxagent.common.utils.restutil._http_request")
+    def test_endpoint_fallback(self, ProtocolUtil, mock_http_req):
+        # http error status codes are tested in test_response_validation, none of which
+        # should trigger a fallback. This is confirmed as _assert_validation will count
+        # http GET calls and enforces a single GET call (fallback would cause 2) and
+        # checks the url called.
+
+        test_subject = imds.ImdsClient()
+        test_conn = MockHttpConn()
+
+        ProtocolUtil().get_wireserver_endpoint.return_value = "foo.bar"
+        mock_http_req.side_effect = self.mock_http_req_no_imds_endpoint
+
+        conn_success, response = test_subject.get_metadata('something', False)
+        #self.assertTrue(conn_success)
+        self.assertEqual('Mock response', response)
+
+        # calls when both endpoints are unreachable
+        #with patch("azurelinuxagent.common.utils.restutil.http_get") as mock_http_get:
+        #    mock_http_get.side_effect = self.mock_http_get_no_imds_endpoint
+        # with patch("azurelinuxagent.common.future.httpclient.HTTPConnection") as mock_conn:
+        #
+        #     mock_conn.getresponse.side_effect = httpclient.NotConnected()
+        #     self.assertRaises(HttpError, test_subject.validate)
+        #     self.assertEqual(2, mock_conn.getresponse.call_count)
+        #
+        #     positional_args, kw_args = mock_conn.getresponse.call_args
+        #     self.assertTrue('User-Agent' in kw_args['headers'])
+        #     self.assertEqual(restutil.HTTP_USER_AGENT_HEALTH, kw_args['headers']['User-Agent'])
+        #     self.assertTrue('Metadata' in kw_args['headers'])
+        #     self.assertEqual(True, kw_args['headers']['Metadata'])
+        #     self.assertEqual('http://169.254.169.254/metadata/instance?api-version=2018-02-01',
+        #                      positional_args[0])
+        #
+        # # calls when both endpoints are unreachable
+        # with patch("azurelinuxagent.common.future.httpclient.getresponse") as mock_http_get:
+        #     mock_http_get.side_effect = httpclient.NotConnected()
+        #     self.assertRaises(HttpError, test_subject.get_compute)
+        #     self.assertEqual(2, mock_http_get.call_count)
+        #
+        #     positional_args, kw_args = mock_http_get.call_args
+
+        #     self.assertTrue('User-Agent' in kw_args['headers'])
+        #     self.assertEqual(restutil.HTTP_USER_AGENT, kw_args['headers']['User-Agent'])
+        #     self.assertTrue('Metadata' in kw_args['headers'])
+        #     self.assertEqual(True, kw_args['headers']['Metadata'])
+        #     self.assertEqual('http://169.254.169.254/metadata/instance/compute?api-version=2018-02-01',
+        #                      positional_args[0])
+
+    def mock_http_req_no_imds_endpoint(self, *args, **kwargs):
+        resp = MagicMock()
+        resp.status = httpclient.OK
+        resp.read = 'Mock response'
+
+        if "169.254.169.254" in kwargs['host']:
+            raise httpclient.NotConnected()
+        elif "foo.bar" in kwargs['host']:
+            return resp
+        raise Exception("Unexpected url called")
 
     def test_field_validation(self):
         # TODO: compute fields (#1249)
@@ -308,8 +354,7 @@ class TestImds(AgentTestCase):
         self._assert_validation(http_status_code=200,
                                 http_response=altered_response,
                                 expected_valid=False,
-                                expected_response='Empty field: [{0}]'.format(fields[-1]),
-                                expected_fallback=False)
+                                expected_response='Empty field: [{0}]'.format(fields[-1]))
 
         # assert missing value
         self._update_field(response_obj, fields, None)
@@ -317,8 +362,7 @@ class TestImds(AgentTestCase):
         self._assert_validation(http_status_code=200,
                                 http_response=altered_response,
                                 expected_valid=False,
-                                expected_response='Missing field: [{0}]'.format(fields[-1]),
-                                expected_fallback=False)
+                                expected_response='Missing field: [{0}]'.format(fields[-1]))
 
     def _update_field(self, obj, fields, val):
         if isinstance(obj, list):
@@ -339,7 +383,7 @@ class TestImds(AgentTestCase):
         with open(path, "rb") as fh:
             return fh.read()
 
-    def _assert_validation(self, http_status_code, http_response, expected_valid, expected_response, expected_fallback):
+    def _assert_validation(self, http_status_code, http_response, expected_valid, expected_response):
         test_subject = imds.ImdsClient()
         with patch("azurelinuxagent.common.utils.restutil.http_get") as mock_http_get:
             mock_http_get.return_value = ResponseMock(status=http_status_code,
@@ -347,27 +391,52 @@ class TestImds(AgentTestCase):
                                                       response=http_response)
             validate_response = test_subject.validate()
 
-        if expected_fallback:
-            self.assertEqual(2, mock_http_get.call_count)
-        else:
-            self.assertEqual(1, mock_http_get.call_count)
+        self.assertEqual(1, mock_http_get.call_count)
         positional_args, kw_args = mock_http_get.call_args
 
         self.assertTrue('User-Agent' in kw_args['headers'])
         self.assertEqual(restutil.HTTP_USER_AGENT_HEALTH, kw_args['headers']['User-Agent'])
         self.assertTrue('Metadata' in kw_args['headers'])
         self.assertEqual(True, kw_args['headers']['Metadata'])
-        if expected_fallback:
-            self.assertEqual('http://foo.bar/metadata/instance/?api-version=2018-02-01',
-                             positional_args[0])
-        else:
-            self.assertEqual('http://169.254.169.254/metadata/instance/?api-version=2018-02-01',
-                             positional_args[0])
+        self.assertEqual('http://169.254.169.254/metadata/instance?api-version=2018-02-01',
+                         positional_args[0])
         self.assertEqual(expected_valid, validate_response[0])
         self.assertTrue(expected_response in validate_response[1],
                         "Expected: '{0}', Actual: '{1}'"
                         .format(expected_response, validate_response[1]))
 
+class MockHttpConn:
+    def __init__(self):
+        self.method = 'method'
+        self.url = 'url'
+        self.body = 'body'
+        self.headers = 'headers'
+
+    def request(self, method, url, body=None, headers=None):
+        self.method = method
+        self.url = url
+        self.body = body
+        self.headers = headers
+        raise Exception('inside request()')
+
+    def getresponse(self):
+        raise Exception('inside getresponse({0})'.format(self.url))
+        if "169.254.169.254" in self.url:
+            raise httpclient.RemoteDisconnected()
+        elif "foo.bar" in self.url:
+            resp = MagicMock()
+            resp.status = httpclient.OK
+            resp.reason = 'reason'
+            resp.response = 'Mock response'
+            return resp
+        else:
+            raise Exception("Unexpected url requested")
+
+    @staticmethod
+    def _imds_response(f):
+        path = os.path.join(data_dir, "imds", "{0}.json".format(f))
+        with open(path, "rb") as fh:
+            return fh.read()
 
 if __name__ == '__main__':
     unittest.main()
