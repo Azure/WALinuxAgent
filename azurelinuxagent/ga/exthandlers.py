@@ -526,6 +526,7 @@ class ExtHandlersHandler(object):
             old_ext_handler_i.update(version=ext_handler_i.ext_handler.properties.version, disable_failed=disable_failed)
         uninstall_failed = not execute_old_handler_command_and_return_if_succeeds(
             func=lambda: old_ext_handler_i.uninstall())
+        old_ext_handler_i.decide_version()
         old_ext_handler_i.remove_ext_handler()
         ext_handler_i.update_with_install(uninstall_failed=uninstall_failed)
         return uninstall_failed
@@ -986,16 +987,20 @@ class ExtHandlerInstance(object):
 
     def remove_ext_handler(self):
         try:
-            zip_filename = "__".join(os.path.basename(self.get_base_dir()).split("-")) + ".zip"
-            destination = os.path.join(conf.get_lib_dir(), zip_filename)
-            if os.path.exists(destination):
-                self.pkg_file = destination
-                os.remove(self.pkg_file)
+            if not self.pkg:
+                # This would be None in the update case for the old extension instance.
+                # Fetch the info again.
+                self.pkg = self.decide_version()
 
-            base_dir = self.get_base_dir()
+            zip_filename = os.path.join(conf.get_lib_dir(), os.path.basename(self.pkg.uris[0].uri) + ".zip")
+
+            if os.path.exists(zip_filename):
+                os.remove(zip_filename)
+                self.logger.verbose("Deleted the extension zip at path {0}", zip_filename)
+
+            base_dir = self.get_base_dir()  
             if os.path.isdir(base_dir):
-                self.logger.info("Remove extension handler directory: {0}",
-                                 base_dir)
+                self.logger.info("Remove extension handler directory: {0}", base_dir)
 
                 # some extensions uninstall asynchronously so ignore error 2 while removing them
                 def on_rmtree_error(_, __, exc_info):
