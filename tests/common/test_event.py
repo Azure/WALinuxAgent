@@ -86,15 +86,15 @@ class TestEvent(AgentTestCase):
 
     def test_add_event_should_handle_event_errors(self):
         with patch("azurelinuxagent.common.utils.fileutil.mkdir", side_effect=OSError):
-            with patch('azurelinuxagent.common.logger.error') as mock_logger_error:
+            with patch('azurelinuxagent.common.logger.periodic_error') as mock_logger_periodic_error:
                 add_event('test', message='test event')
 
                 # The event shouldn't have been created
                 self.assertTrue(len(os.listdir(self.tmp_dir)) == 0)
 
                 # The exception should have been caught and logged
-                args, _ = mock_logger_error.call_args
-                exception_message = args[1].args[0]
+                args = mock_logger_periodic_error.call_args
+                exception_message = args[0][1]
                 self.assertIn("[EventError] Failed to create events folder", exception_message)
 
     def test_event_status_event_marked(self):

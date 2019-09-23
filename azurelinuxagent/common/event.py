@@ -290,7 +290,7 @@ class EventLogger(object):
         try:
             self.save_event(json.dumps(data))
         except EventError as e:
-            logger.error("{0}", e)
+            logger.periodic_error(logger.EVERY_FIFTEEN_MINUTES, ustr(e))
 
     def add_log_event(self, level, message):
         # By the time the message has gotten to this point it is formatted as
