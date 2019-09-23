@@ -473,29 +473,41 @@ class TestHostPlugin(AgentTestCase):
 
         exp_method = 'PUT'
         exp_url = hostplugin_status_url
-        exp_data = self._hostplugin_data(
-            status_blob.get_block_blob_headers(len(faux_status)),
-            bytearray(faux_status, encoding='utf-8'))
 
-        with patch.object(restutil, "http_request") as patch_http:
-            patch_http.return_value = Mock(status=httpclient.OK)
+        original_strftime = time.strftime
 
-            with patch.object(wire.HostPluginProtocol,
-                              "get_api_versions") as patch_get:
-                patch_get.return_value = api_versions
-                host_client.put_vm_status(status_blob, sas_url)
+        def mock_strftime(old_formatting, timestamp):
+            # Remove seconds from timestamp for the purpose of this test; it was failing intermittently if it took
+            # longer than 1 second between populating the expected data and comparing it to the actual data because
+            # we are using a strict string comparison
+            new_formatting = "%Y-%m-%dT%H:%M"
+            return original_strftime(new_formatting, timestamp)
 
-                self.assertTrue(patch_http.call_count == 2)
+        with patch("time.strftime", side_effect=mock_strftime):
+            exp_data = self._hostplugin_data(
+                status_blob.get_block_blob_headers(len(faux_status)),
+                bytearray(faux_status, encoding='utf-8'))
 
-                # first call is to host plugin
-                self._validate_hostplugin_args(
-                    patch_http.call_args_list[0],
-                    test_goal_state,
-                    exp_method, exp_url, exp_data)
+        with patch("time.strftime", side_effect=mock_strftime):
+            with patch.object(restutil, "http_request") as patch_http:
+                patch_http.return_value = Mock(status=httpclient.OK)
 
-                # second call is to health service
-                self.assertEqual('POST', patch_http.call_args_list[1][0][0])
-                self.assertEqual(health_service_url, patch_http.call_args_list[1][0][1])
+                with patch.object(wire.HostPluginProtocol,
+                                  "get_api_versions") as patch_get:
+                    patch_get.return_value = api_versions
+                    host_client.put_vm_status(status_blob, sas_url)
+
+                    self.assertTrue(patch_http.call_count == 2)
+    
+                    # first call is to host plugin
+                    self._validate_hostplugin_args(
+                        patch_http.call_args_list[0],
+                        test_goal_state,
+                        exp_method, exp_url, exp_data)
+
+                    # second call is to health service
+                    self.assertEqual('POST', patch_http.call_args_list[1][0][0])
+                    self.assertEqual(health_service_url, patch_http.call_args_list[1][0][1])
 
     def test_validate_page_blobs(self):
         """Validate correct set of data is sent for page blobs"""
