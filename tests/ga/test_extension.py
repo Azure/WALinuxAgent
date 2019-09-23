@@ -1588,13 +1588,13 @@ class TestExtension(ExtensionTestCase):
 
             # Ensure that the env variables were present in the first run when failures were thrown
             self.assertEqual(2, patch_continue_on_update.call_count)
-            self.assertTrue('-update' in update_kwargs['command'] and DISABLE_FAILED in update_kwargs['env'],
+            self.assertTrue('-update' in update_kwargs['command'] and ExtCommandEnvVariable.DisableFailed in update_kwargs['env'],
                             "The update command call should have Disable Failed in env variable")
-            self.assertTrue('-install' in install_kwargs['command'] and DISABLE_FAILED not in install_kwargs['env'],
+            self.assertTrue('-install' in install_kwargs['command'] and ExtCommandEnvVariable.DisableFailed not in install_kwargs['env'],
                             "The Disable Failed env variable should be removed from install command")
-            self.assertTrue('-install' in install_kwargs['command'] and UNINSTALL_FAILED in install_kwargs['env'],
+            self.assertTrue('-install' in install_kwargs['command'] and ExtCommandEnvVariable.UninstallFailed in install_kwargs['env'],
                             "The install command call should have Uninstall Failed in env variable")
-            self.assertTrue('-enable' in enable_kwargs['command'] and UNINSTALL_FAILED in enable_kwargs['env'],
+            self.assertTrue('-enable' in enable_kwargs['command'] and ExtCommandEnvVariable.UninstallFailed in enable_kwargs['env'],
                             "The enable command call should have Uninstall Failed in env variable")
 
             # Initiating another run which shouldn't have any failed env variables in it if no failures
@@ -1604,8 +1604,8 @@ class TestExtension(ExtensionTestCase):
             _, new_enable_kwargs = patch_start_cmd.call_args
 
             # Ensure the new run didn't have any failed env variables
-            self.assertNotIn(DISABLE_FAILED, new_enable_kwargs['env'])
-            self.assertNotIn(UNINSTALL_FAILED, new_enable_kwargs['env'])
+            self.assertNotIn(ExtCommandEnvVariable.DisableFailed, new_enable_kwargs['env'])
+            self.assertNotIn(ExtCommandEnvVariable.UninstallFailed, new_enable_kwargs['env'])
 
         # Ensure the handler status and ext_status is successful
         self._assert_handler_status(protocol.report_vm_status, "Ready", expected_ext_count=1, version="1.0.1")
@@ -1620,12 +1620,105 @@ class TestExtension(ExtensionTestCase):
 
             # Extension Path and Version should be set for all launch_command calls
             for args, kwargs in patch_start_cmd.call_args_list:
-                self.assertIn(EXTENSION_PATH, kwargs['env'])
-                self.assertIn('OSTCExtensions.ExampleHandlerLinux-1.0.0', kwargs['env'][EXTENSION_PATH])
-                self.assertIn(EXTENSION_VERSION, kwargs['env'])
-                self.assertEqual("1.0.0", kwargs['env'][EXTENSION_VERSION])
+                self.assertIn(ExtCommandEnvVariable.ExtensionPath, kwargs['env'])
+                self.assertIn('OSTCExtensions.ExampleHandlerLinux-1.0.0', kwargs['env'][ExtCommandEnvVariable.ExtensionPath])
+                self.assertIn(ExtCommandEnvVariable.ExtensionVersion, kwargs['env'])
+                self.assertEqual("1.0.0", kwargs['env'][ExtCommandEnvVariable.ExtensionVersion])
 
         self._assert_handler_status(protocol.report_vm_status, "Ready", expected_ext_count=1, version="1.0.0")
+
+    @patch("azurelinuxagent.common.cgroupconfigurator.handle_process_completion", side_effect="Process Successful")
+    def test_ext_sequence_no_should_be_set_for_every_command_call(self, _, *args):
+        test_data = WireProtocolData(DATA_FILE_MULTIPLE_EXT)
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+
+        with patch("subprocess.Popen") as patch_popen:
+            exthandlers_handler.run()
+
+            for _, kwargs in patch_popen.call_args_list:
+                self.assertIn(ExtCommandEnvVariable.ExtensionSeqNumber, kwargs['env'])
+                self.assertEqual(kwargs['env'][ExtCommandEnvVariable.ExtensionSeqNumber], "0")
+
+        self._assert_handler_status(protocol.report_vm_status, "Ready", expected_ext_count=1, version="1.0.0")
+
+        # Next incarnation and seq for extensions, update version
+        test_data.goal_state = test_data.goal_state.replace("<Incarnation>1<", "<Incarnation>2<")
+        test_data.ext_conf = test_data.ext_conf.replace('version="1.0.0"', 'version="1.0.1"')
+        test_data.ext_conf = test_data.ext_conf.replace('seqNo="0"', 'seqNo="1"')
+        test_data.manifest = test_data.manifest.replace('1.0.0', '1.0.1')
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+
+        with patch("subprocess.Popen") as patch_popen:
+            exthandlers_handler.run()
+
+            for _, kwargs in patch_popen.call_args_list:
+                self.assertIn(ExtCommandEnvVariable.ExtensionSeqNumber, kwargs['env'])
+                self.assertEqual(kwargs['env'][ExtCommandEnvVariable.ExtensionSeqNumber], "1")
+
+        self._assert_handler_status(protocol.report_vm_status, "Ready", expected_ext_count=1, version="1.0.1")
+
+    def test_ext_sequence_no_should_be_set_from_within_extension(self, *args):
+
+        def create_test_dir_and_script(base_dir, test_file_name, test_file):
+            if not os.path.exists(base_dir):
+                os.mkdir(base_dir)
+            self.create_script(file_name=test_file_name, contents=test_file,
+                               file_path=os.path.join(base_dir, test_file_name))
+
+        test_file_name = "testfile.sh"
+        handler_json = {
+            "installCommand": test_file_name,
+            "uninstallCommand": test_file_name,
+            "updateCommand": test_file_name,
+            "enableCommand": test_file_name,
+            "disableCommand": test_file_name,
+            "rebootAfterInstall": False,
+            "reportHeartbeat": False,
+            "continueOnUpdateFailure": False
+        }
+        manifest = HandlerManifest({'handlerManifest': handler_json})
+
+        # Script prints env variables passed to this process and prints all starting with ConfigSequenceNumber
+        test_file = """
+                printenv | grep ConfigSequenceNumber
+                """
+
+        base_dir = os.path.join(conf.get_lib_dir(), 'OSTCExtensions.ExampleHandlerLinux-1.0.0')
+        create_test_dir_and_script(base_dir, test_file_name, test_file)
+
+        test_data = WireProtocolData(DATA_FILE_EXT_SINGLE)
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+        expected_seq_no = 0
+
+        with patch.object(ExtHandlerInstance, "load_manifest", return_value=manifest):
+            with patch.object(ExtHandlerInstance, 'report_event') as mock_report_event:
+                exthandlers_handler.run()
+
+                for _, kwargs in mock_report_event.call_args_list:
+                    # The output is of the format - 'testfile.sh\n[stdout]ConfigSequenceNumber=N\n[stderr]'
+                    if test_file_name not in kwargs['message']:
+                        continue
+                    self.assertIn("{0}={1}".format(ExtCommandEnvVariable.ExtensionSeqNumber, expected_seq_no),
+                                  kwargs['message'])
+
+            # Update goal state, extension version and seq no
+            test_data.goal_state = test_data.goal_state.replace("<Incarnation>1<", "<Incarnation>2<")
+            test_data.ext_conf = test_data.ext_conf.replace('version="1.0.0"', 'version="1.0.1"')
+            test_data.ext_conf = test_data.ext_conf.replace('seqNo="0"', 'seqNo="1"')
+            test_data.manifest = test_data.manifest.replace('1.0.0', '1.0.1')
+            expected_seq_no = 1
+            base_dir = os.path.join(conf.get_lib_dir(), 'OSTCExtensions.ExampleHandlerLinux-1.0.1')
+            create_test_dir_and_script(base_dir, test_file_name, test_file)
+
+            with patch.object(ExtHandlerInstance, 'report_event') as mock_report_event:
+                exthandlers_handler.run()
+
+                for _, kwargs in mock_report_event.call_args_list:
+                    # The output is of the format - 'testfile.sh\n[stdout]ConfigSequenceNumber=N\n[stderr]'
+                    if test_file_name not in kwargs['message']:
+                        continue
+                    self.assertIn("{0}={1}".format(ExtCommandEnvVariable.ExtensionSeqNumber, expected_seq_no),
+                                  kwargs['message'])
 
 
 @patch("azurelinuxagent.common.protocol.wire.CryptUtil")
@@ -2095,7 +2188,7 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
 
             args, kwargs = patch_start_cmd.call_args
 
-            self.assertTrue('-update' in kwargs['command'] and DISABLE_FAILED in kwargs['env'],
+            self.assertTrue('-update' in kwargs['command'] and ExtCommandEnvVariable.DisableFailed in kwargs['env'],
                             "The update command should have Disable Failed in env variable")
 
     def test_uninstall_failed_env_variable_should_set_for_install_when_continue_on_update_failure_is_true(
@@ -2110,7 +2203,7 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
 
             args, kwargs = patch_start_cmd.call_args
 
-            self.assertTrue('-install' in kwargs['command'] and UNINSTALL_FAILED in kwargs['env'],
+            self.assertTrue('-install' in kwargs['command'] and ExtCommandEnvVariable.UninstallFailed in kwargs['env'],
                             "The install command should have Uninstall Failed in env variable")
 
     def test_extension_error_should_be_raised_when_continue_on_update_failure_is_false_on_disable_failure(self, *args):
@@ -2188,7 +2281,7 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
                 for args, kwargs in patch_launch_command.call_args_list:
                     # Disable wont have any env variables, and Update would have only 'Version' in env param
                     self.assertTrue(('env' not in kwargs and '-disable' in args[0]) or
-                                    ('-update' in args[0] and DISABLE_FAILED not in kwargs['env']))
+                                    ('-update' in args[0] and ExtCommandEnvVariable.DisableFailed not in kwargs['env']))
 
     @patch('time.sleep', side_effect=lambda _: mock_sleep(0.001))
     def test_failed_env_variables_should_be_set_from_within_extension_commands(self, *args):
@@ -2217,8 +2310,8 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
 
         with patch.object(new_handler_i.logger, 'verbose', autospec=True) as mock_verbose:
             # Since we're not mocking the azurelinuxagent.common.cgroupconfigurator..handle_process_completion,
-            # both disable.cmd and uninstall.cmd would raise ExtensionError exceptions and set the DISABLE_FAILED and
-            # UNINSTALL_FAILED env variables.
+            # both disable.cmd and uninstall.cmd would raise ExtensionError exceptions and set the
+            # ExtCommandEnvVariable.DisableFailed and ExtCommandEnvVariable.UninstallFailed env variables.
             # For update and install we're running the script above to print all the env variables starting with AZURE_
             # and verify accordingly if the corresponding env variables are set properly or not
             ExtHandlersHandler._update_extension_handler_and_return_if_failed(old_handler_i, new_handler_i)
@@ -2232,15 +2325,17 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
 
             # Ensure we're checking variables for update scenario
             self.assertEqual(update_file_name, update_command_args[1])
-            self.assertIn(DISABLE_FAILED, update_args[0])
-            self.assertTrue(EXTENSION_PATH in update_args[0] and EXTENSION_VERSION in update_args[0])
-            self.assertNotIn(UNINSTALL_FAILED, update_args[0])
+            self.assertIn(ExtCommandEnvVariable.DisableFailed, update_args[0])
+            self.assertTrue(ExtCommandEnvVariable.ExtensionPath in update_args[0] and
+                            ExtCommandEnvVariable.ExtensionVersion in update_args[0])
+            self.assertNotIn(ExtCommandEnvVariable.UninstallFailed, update_args[0])
 
             # Ensure we're checking variables for install scenario
             self.assertEqual(install_file_name, install_command_args[1])
-            self.assertIn(UNINSTALL_FAILED, install_args[0])
-            self.assertTrue(EXTENSION_PATH in install_args[0] and EXTENSION_VERSION in install_args[0])
-            self.assertNotIn(DISABLE_FAILED, install_args[0])
+            self.assertIn(ExtCommandEnvVariable.UninstallFailed, install_args[0])
+            self.assertTrue(ExtCommandEnvVariable.ExtensionPath in install_args[0] and
+                            ExtCommandEnvVariable.ExtensionVersion in install_args[0])
+            self.assertNotIn(ExtCommandEnvVariable.DisableFailed, install_args[0])
 
 
 if __name__ == '__main__':

@@ -231,6 +231,10 @@ class LaunchCommandTestCase(AgentTestCase):
         self.mock_get_log_dir = patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_log_dir", lambda *_: self.log_dir)
         self.mock_get_log_dir.start()
 
+        mock_sleep = time.sleep
+        self.mock_sleep = patch("time.sleep", lambda *_: mock_sleep(0.01))
+        self.mock_sleep.start()
+
         self.cgroups_enabled = CGroupConfigurator.get_instance().enabled()
         CGroupConfigurator.get_instance().disable()
 
@@ -242,6 +246,7 @@ class LaunchCommandTestCase(AgentTestCase):
 
         self.mock_get_log_dir.stop()
         self.mock_get_base_dir.stop()
+        self.mock_sleep.stop()
 
         AgentTestCase.tearDown(self)
 
