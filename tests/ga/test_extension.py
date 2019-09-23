@@ -1627,15 +1627,16 @@ class TestExtension(ExtensionTestCase):
 
         self._assert_handler_status(protocol.report_vm_status, "Ready", expected_ext_count=1, version="1.0.0")
 
-    def test_ext_sequence_no_should_be_set_for_every_command_call(self, *args):
+    @patch("azurelinuxagent.common.cgroupconfigurator.handle_process_completion", side_effect="Process Successful")
+    def test_ext_sequence_no_should_be_set_for_every_command_call(self, _, *args):
         test_data = WireProtocolData(DATA_FILE_MULTIPLE_EXT)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
 
-        with patch.object(CGroupConfigurator.get_instance(), "start_extension_command") as patch_start_cmd:
+        with patch("subprocess.Popen") as patch_popen:
             exthandlers_handler.run()
 
-            for args, kwargs in patch_start_cmd.call_args_list:
-                self.assertIn(ExtCommandEnvVariable.ExtensionPath, kwargs['env'])
+            for _, kwargs in patch_popen.call_args_list:
+                self.assertIn(ExtCommandEnvVariable.ExtensionSeqNumber, kwargs['env'])
                 self.assertEqual(kwargs['env'][ExtCommandEnvVariable.ExtensionSeqNumber], "0")
 
         self._assert_handler_status(protocol.report_vm_status, "Ready", expected_ext_count=1, version="1.0.0")
@@ -1645,15 +1646,79 @@ class TestExtension(ExtensionTestCase):
         test_data.ext_conf = test_data.ext_conf.replace('version="1.0.0"', 'version="1.0.1"')
         test_data.ext_conf = test_data.ext_conf.replace('seqNo="0"', 'seqNo="1"')
         test_data.manifest = test_data.manifest.replace('1.0.0', '1.0.1')
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)
 
-        with patch.object(CGroupConfigurator.get_instance(), "start_extension_command") as patch_start_cmd:
+        with patch("subprocess.Popen") as patch_popen:
             exthandlers_handler.run()
 
-            for args, kwargs in patch_start_cmd.call_args_list:
-                self.assertIn(ExtCommandEnvVariable.ExtensionPath, kwargs['env'])
+            for _, kwargs in patch_popen.call_args_list:
+                self.assertIn(ExtCommandEnvVariable.ExtensionSeqNumber, kwargs['env'])
                 self.assertEqual(kwargs['env'][ExtCommandEnvVariable.ExtensionSeqNumber], "1")
 
         self._assert_handler_status(protocol.report_vm_status, "Ready", expected_ext_count=1, version="1.0.1")
+
+    def test_ext_sequence_no_should_be_set_from_within_extension(self, *args):
+
+        def create_test_dir_and_script(base_dir, test_file_name, test_file):
+            if not os.path.exists(base_dir):
+                os.mkdir(base_dir)
+            self.create_script(file_name=test_file_name, contents=test_file,
+                               file_path=os.path.join(base_dir, test_file_name))
+
+        test_file_name = "testfile.sh"
+        handler_json = {
+            "installCommand": test_file_name,
+            "uninstallCommand": test_file_name,
+            "updateCommand": test_file_name,
+            "enableCommand": test_file_name,
+            "disableCommand": test_file_name,
+            "rebootAfterInstall": False,
+            "reportHeartbeat": False,
+            "continueOnUpdateFailure": False
+        }
+        manifest = HandlerManifest({'handlerManifest': handler_json})
+
+        # Script prints env variables passed to this process and prints all starting with ConfigSequenceNumber
+        test_file = """
+                printenv | grep ConfigSequenceNumber
+                """
+
+        base_dir = os.path.join(conf.get_lib_dir(), 'OSTCExtensions.ExampleHandlerLinux-1.0.0')
+        create_test_dir_and_script(base_dir, test_file_name, test_file)
+
+        test_data = WireProtocolData(DATA_FILE_EXT_SINGLE)
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+        expected_seq_no = 0
+
+        with patch.object(ExtHandlerInstance, "load_manifest", return_value=manifest):
+            with patch.object(ExtHandlerInstance, 'report_event') as mock_report_event:
+                exthandlers_handler.run()
+
+                for _, kwargs in mock_report_event.call_args_list:
+                    # The output is of the format - 'testfile.sh\n[stdout]ConfigSequenceNumber=N\n[stderr]'
+                    if test_file_name not in kwargs['message']:
+                        continue
+                    self.assertIn("{0}={1}".format(ExtCommandEnvVariable.ExtensionSeqNumber, expected_seq_no),
+                                  kwargs['message'])
+
+            # Update goal state, extension version and seq no
+            test_data.goal_state = test_data.goal_state.replace("<Incarnation>1<", "<Incarnation>2<")
+            test_data.ext_conf = test_data.ext_conf.replace('version="1.0.0"', 'version="1.0.1"')
+            test_data.ext_conf = test_data.ext_conf.replace('seqNo="0"', 'seqNo="1"')
+            test_data.manifest = test_data.manifest.replace('1.0.0', '1.0.1')
+            expected_seq_no = 1
+            base_dir = os.path.join(conf.get_lib_dir(), 'OSTCExtensions.ExampleHandlerLinux-1.0.1')
+            create_test_dir_and_script(base_dir, test_file_name, test_file)
+
+            with patch.object(ExtHandlerInstance, 'report_event') as mock_report_event:
+                exthandlers_handler.run()
+
+                for _, kwargs in mock_report_event.call_args_list:
+                    # The output is of the format - 'testfile.sh\n[stdout]ConfigSequenceNumber=N\n[stderr]'
+                    if test_file_name not in kwargs['message']:
+                        continue
+                    self.assertIn("{0}={1}".format(ExtCommandEnvVariable.ExtensionSeqNumber, expected_seq_no),
+                                  kwargs['message'])
 
 
 @patch("azurelinuxagent.common.protocol.wire.CryptUtil")
@@ -2245,8 +2310,8 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
 
         with patch.object(new_handler_i.logger, 'verbose', autospec=True) as mock_verbose:
             # Since we're not mocking the azurelinuxagent.common.cgroupconfigurator..handle_process_completion,
-            # both disable.cmd and uninstall.cmd would raise ExtensionError exceptions and set the ExtCommandEnvVariable.DisableFailed and
-            # ExtCommandEnvVariable.UninstallFailed env variables.
+            # both disable.cmd and uninstall.cmd would raise ExtensionError exceptions and set the
+            # ExtCommandEnvVariable.DisableFailed and ExtCommandEnvVariable.UninstallFailed env variables.
             # For update and install we're running the script above to print all the env variables starting with AZURE_
             # and verify accordingly if the corresponding env variables are set properly or not
             ExtHandlersHandler._update_extension_handler_and_return_if_failed(old_handler_i, new_handler_i)
@@ -2261,13 +2326,15 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
             # Ensure we're checking variables for update scenario
             self.assertEqual(update_file_name, update_command_args[1])
             self.assertIn(ExtCommandEnvVariable.DisableFailed, update_args[0])
-            self.assertTrue(ExtCommandEnvVariable.ExtensionPath in update_args[0] and ExtCommandEnvVariable.ExtensionVersion in update_args[0])
+            self.assertTrue(ExtCommandEnvVariable.ExtensionPath in update_args[0] and
+                            ExtCommandEnvVariable.ExtensionVersion in update_args[0])
             self.assertNotIn(ExtCommandEnvVariable.UninstallFailed, update_args[0])
 
             # Ensure we're checking variables for install scenario
             self.assertEqual(install_file_name, install_command_args[1])
             self.assertIn(ExtCommandEnvVariable.UninstallFailed, install_args[0])
-            self.assertTrue(ExtCommandEnvVariable.ExtensionPath in install_args[0] and ExtCommandEnvVariable.ExtensionVersion in install_args[0])
+            self.assertTrue(ExtCommandEnvVariable.ExtensionPath in install_args[0] and
+                            ExtCommandEnvVariable.ExtensionVersion in install_args[0])
             self.assertNotIn(ExtCommandEnvVariable.DisableFailed, install_args[0])
 
 
