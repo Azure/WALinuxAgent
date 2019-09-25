@@ -354,55 +354,60 @@ class TestImds(AgentTestCase):
         test_subject = imds.ImdsClient()
         ProtocolUtil().get_wireserver_endpoint.return_value = "foo.bar"
 
-        # both endpoints unreachable
-        test_subject._http_get = Mock(side_effect=self.mock_http_get_unreachable_both)
-        conn_success, response = test_subject.get_metadata('something', False)
-        self.assertFalse(conn_success)
-        self.assertEqual('IMDS error in /metadata/something: Unable to connect to endpoint', response)
-        self.assertEqual(2, test_subject._http_get.call_count)
+        # ensure user-agent gets set correctly
+        for is_health, expected_useragent in [(False, 'guestagent'), (True, 'guestagent+health')]:
+            # set a different resource path for health query to make debugging unit test easier
+            resource_path = 'something/health' if is_health else 'something'
 
-        # primary IMDS endpoint unreachable and success in secondary IMDS endpoint
-        test_subject._http_get = Mock(side_effect=self.mock_http_get_unreachable_primary_with_ok)
-        conn_success, response = test_subject.get_metadata('something', False)
-        self.assertTrue(conn_success)
-        self.assertEqual('Mock success response', response)
-        self.assertEqual(2, test_subject._http_get.call_count)
-
-        # primary IMDS endpoint unreachable and http error in secondary IMDS endpoint
-        test_subject._http_get = Mock(side_effect=self.mock_http_get_unreachable_primary_with_fail)
-        conn_success, response = test_subject.get_metadata('something', False)
-        self.assertFalse(conn_success)
-        self.assertEqual('IMDS error in /metadata/something: [HTTP Failed] [404: reason] Mock not found', response)
-        self.assertEqual(2, test_subject._http_get.call_count)
-
-        # primary IMDS endpoint unreachable and http error in secondary IMDS endpoint
-        test_subject._http_get = Mock(side_effect=self.mock_http_get_unreachable_primary_with_fail)
-        conn_success, response = test_subject.get_metadata('something', False)
-        self.assertFalse(conn_success)
-        self.assertEqual('IMDS error in /metadata/something: [HTTP Failed] [404: reason] Mock not found', response)
-        self.assertEqual(2, test_subject._http_get.call_count)
-
-        # primary IMDS endpoint with non-fallback HTTPError
-        test_subject._http_get = Mock(side_effect=self.mock_http_get_nonfallback_primary)
-        try:
-            test_subject.get_metadata('something', False)
-            self.assertTrue(False, 'Expected HttpError but no except raised')
-        except HttpError as e:
-            self.assertEqual('[HttpError] HTTP Failed. GET http://169.254.169.254/metadata/something -- IOError incomplete read -- 6 attempts made', str(e))
-            self.assertEqual(1, test_subject._http_get.call_count)
-        except Exception as e:
-            self.assertTrue(False, 'Expected HttpError but got {0}'.format(str(e)))
-
-        # primary IMDS endpoint unreachable and non-timeout HTTPError in secondary IMDS endpoint
-        test_subject._http_get = Mock(side_effect=self.mock_http_get_unreachable_primary_with_except)
-        try:
-            test_subject.get_metadata('something', False)
-            self.assertTrue(False, 'Expected HttpError but no except raised')
-        except HttpError as e:
-            self.assertEqual('[HttpError] HTTP Failed. GET http://foo.bar/metadata/something -- IOError incomplete read -- 6 attempts made', str(e))
+            # both endpoints unreachable
+            test_subject._http_get = Mock(side_effect=self.mock_http_get_unreachable_both)
+            conn_success, response = test_subject.get_metadata(resource_path=resource_path, is_health=is_health)
+            self.assertFalse(conn_success)
+            self.assertEqual('IMDS error in /metadata/{0}: Unable to connect to endpoint'.format(resource_path), response)
             self.assertEqual(2, test_subject._http_get.call_count)
-        except Exception as e:
-            self.assertTrue(False, 'Expected HttpError but got {0}'.format(str(e)))
+
+            # primary IMDS endpoint unreachable and success in secondary IMDS endpoint
+            test_subject._http_get = Mock(side_effect=self.mock_http_get_unreachable_primary_with_ok)
+            conn_success, response = test_subject.get_metadata(resource_path=resource_path, is_health=is_health)
+            self.assertTrue(conn_success)
+            self.assertEqual('Mock success response', response)
+            self.assertEqual(2, test_subject._http_get.call_count)
+
+            # primary IMDS endpoint unreachable and http error in secondary IMDS endpoint
+            test_subject._http_get = Mock(side_effect=self.mock_http_get_unreachable_primary_with_fail)
+	    conn_success, response = test_subject.get_metadata(resource_path=resource_path, is_health=is_health)
+            self.assertFalse(conn_success)
+            self.assertEqual('IMDS error in /metadata/{0}: [HTTP Failed] [404: reason] Mock not found'.format(resource_path), response)
+            self.assertEqual(2, test_subject._http_get.call_count)
+
+            # primary IMDS endpoint unreachable and http error in secondary IMDS endpoint
+            test_subject._http_get = Mock(side_effect=self.mock_http_get_unreachable_primary_with_fail)
+            conn_success, response = test_subject.get_metadata(resource_path=resource_path, is_health=is_health)
+            self.assertFalse(conn_success)
+            self.assertEqual('IMDS error in /metadata/{0}: [HTTP Failed] [404: reason] Mock not found'.format(resource_path), response)
+            self.assertEqual(2, test_subject._http_get.call_count)
+
+            # primary IMDS endpoint with non-fallback HTTPError
+            test_subject._http_get = Mock(side_effect=self.mock_http_get_nonfallback_primary)
+            try:
+                test_subject.get_metadata(resource_path=resource_path, is_health=is_health)
+                self.assertTrue(False, 'Expected HttpError but no except raised')
+            except HttpError as e:
+                self.assertEqual('[HttpError] HTTP Failed. GET http://169.254.169.254/metadata/{0} -- IOError incomplete read -- 6 attempts made'.format(resource_path), str(e))
+                self.assertEqual(1, test_subject._http_get.call_count)
+            except Exception as e:
+                self.assertTrue(False, 'Expected HttpError but got {0}'.format(str(e)))
+
+            # primary IMDS endpoint unreachable and non-timeout HTTPError in secondary IMDS endpoint
+            test_subject._http_get = Mock(side_effect=self.mock_http_get_unreachable_primary_with_except)
+            try:
+                test_subject.get_metadata(resource_path=resource_path, is_health=is_health)
+                self.assertTrue(False, 'Expected HttpError but no except raised')
+            except HttpError as e:
+                self.assertEqual('[HttpError] HTTP Failed. GET http://foo.bar/metadata/{0} -- IOError incomplete read -- 6 attempts made'.format(resource_path), str(e))
+                self.assertEqual(2, test_subject._http_get.call_count)
+            except Exception as e:
+                self.assertTrue(False, 'Expected HttpError but got {0}'.format(str(e)))
 
     def mock_http_get_unreachable_both(self, *_, **kwargs):
         raise HttpError("HTTP Failed. GET http://{0}/metadata/{1} -- IOError timed out -- 6 attempts made"

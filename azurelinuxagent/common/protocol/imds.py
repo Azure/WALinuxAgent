@@ -249,9 +249,8 @@ class ImdsClient(object):
     def _get_metadata_url(self, endpoint, resource_path):
         return BASE_URI.format(endpoint, resource_path, self._api_version)
 
-    def _http_get(self, endpoint, resource_path, is_health):
+    def _http_get(self, endpoint, resource_path, headers):
         url = self._get_metadata_url(endpoint, resource_path)
-        headers = self._health_headers if is_health else self._headers
         return restutil.http_get(url, headers=headers, use_proxy=False)
 
     def get_metadata(self, resource_path, is_health):
@@ -264,16 +263,17 @@ class ImdsClient(object):
             is_request_success: True when connection succeeds, False otherwise
             response: response from IMDS on request success, failure message otherwise
         """
+        headers = self._health_headers if is_health else self._headers
         endpoint = IMDS_ENDPOINT
         try:
-            resp = self._http_get(endpoint=endpoint, resource_path=resource_path, is_health=is_health)
+            resp = self._http_get(endpoint=endpoint, resource_path=resource_path, headers=headers)
         except HttpError as e:
             logger.warn("Unable to connect to primary IMDS endpoint {0}", endpoint)
             if not self._regex_imds_ioerror.match(str(e)):
                 raise e
             endpoint = self.protocol_util.get_wireserver_endpoint()
             try:
-                resp = self._http_get(endpoint=endpoint, resource_path=resource_path, is_health=is_health)
+                resp = self._http_get(endpoint=endpoint, resource_path=resource_path, headers=headers)
             except HttpError as e:
                 logger.warn("Unable to connect to backup IMDS endpoint {0}", endpoint)
                 if not self._regex_imds_ioerror.match(str(e)):
