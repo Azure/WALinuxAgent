@@ -1205,6 +1205,7 @@ class ExtHandlerInstance(object):
     def launch_command(self, cmd, timeout=300, extension_error_code=ExtensionErrorCodes.PluginProcessingError,
                        env=None):
         begin_utc = datetime.datetime.utcnow()
+        self.logger.verbose("Launch command: [{0}]", cmd)
 
         base_dir = self.get_base_dir()
 
@@ -1222,13 +1223,6 @@ class ExtHandlerInstance(object):
                     # Some extensions erroneously begin cmd with a slash; don't interpret those
                     # as root-relative. (Issue #1170)
                     full_path = os.path.join(base_dir, cmd.lstrip(os.path.sep))
-
-                    self.report_event(
-                        message="Launching command : '%s' with timeout of : %s sec.\nAgent Environment Variables= %s" %
-                                (full_path, timeout, ' , '.join(["%s:%s" % (key, env[key]) for key in env.keys() if
-                                                                key.startswith(ExtCommandEnvVariable.Prefix) or
-                                                                key == ExtCommandEnvVariable.ExtensionSeqNumber])),
-                        is_success=True, log_event=True)
 
                     process_output = CGroupConfigurator.get_instance().start_extension_command(
                         extension_name=self.get_full_name(),

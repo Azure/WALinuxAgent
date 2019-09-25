@@ -711,7 +711,6 @@ class TestExtension(ExtensionTestCase):
 
         mock_error_state.return_value = True
         exthandlers_handler.run()
-        clean_mocked_event_call_arg_list_as_per_kwargs_msg(mock_add_event)
         self.assertEquals(5, mock_add_event.call_count)
         args, kw = mock_add_event.call_args
         self.assertEquals(False, kw['is_success'])
@@ -725,7 +724,6 @@ class TestExtension(ExtensionTestCase):
         protocol.report_vm_status = Mock(side_effect=ResourceGoneError)
 
         exthandlers_handler.run()
-        clean_mocked_event_call_arg_list_as_per_kwargs_msg(mock_add_event)
         self.assertEquals(4, mock_add_event.call_count)
         args, kw = mock_add_event.call_args
         self.assertEquals(False, kw['is_success'])
@@ -1698,7 +1696,6 @@ class TestExtension(ExtensionTestCase):
         with patch.object(ExtHandlerInstance, "load_manifest", return_value=manifest):
             with patch.object(ExtHandlerInstance, 'report_event') as mock_report_event:
                 exthandlers_handler.run()
-                clean_mocked_event_call_arg_list_as_per_kwargs_msg(mock_report_event)
 
                 for _, kwargs in mock_report_event.call_args_list:
                     # The output is of the format - 'testfile.sh\n[stdout]ConfigSequenceNumber=N\n[stderr]'
@@ -1718,7 +1715,6 @@ class TestExtension(ExtensionTestCase):
 
             with patch.object(ExtHandlerInstance, 'report_event') as mock_report_event:
                 exthandlers_handler.run()
-                clean_mocked_event_call_arg_list_as_per_kwargs_msg(mock_report_event)
 
                 for _, kwargs in mock_report_event.call_args_list:
                     # The output is of the format - 'testfile.sh\n[stdout]ConfigSequenceNumber=N\n[stderr]'
@@ -1763,8 +1759,6 @@ class TestExtension(ExtensionTestCase):
         with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.load_manifest", return_value=manifest):
             with patch.object(ExtHandlerInstance, 'report_event') as mock_report_event:
                 exthandlers_handler.run()
-
-                clean_mocked_event_call_arg_list_as_per_kwargs_msg(mock_report_event)
 
                 _, disable_kwargs = mock_report_event.call_args_list[1]
                 _, update_kwargs = mock_report_event.call_args_list[2]
@@ -2114,7 +2108,6 @@ class TestExtensionWithCGroupsEnabled(AgentTestCase):
 
         # Test enable scenario.
         exthandlers_handler.run()
-        clean_mocked_event_call_arg_list_as_per_kwargs_msg(patch_add_event)
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
         self._assert_ext_status(protocol.report_ext_status, "success", 0)
 
@@ -2368,7 +2361,6 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
             # For update and install we're running the script above to print all the env variables starting with AZURE_
             # and verify accordingly if the corresponding env variables are set properly or not
             ExtHandlersHandler._update_extension_handler_and_return_if_failed(old_handler_i, new_handler_i)
-            clean_mocked_event_call_arg_list_as_per_kwargs_msg(mock_report)
 
             _, update_kwargs = mock_report.call_args_list[0]
             _, install_kwargs = mock_report.call_args_list[1]
@@ -2455,7 +2447,6 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
         with patch.object(new_handler_i, 'report_event', autospec=True) as mock_report:
             uninstall_rc = ExtHandlersHandler._update_extension_handler_and_return_if_failed(old_handler_i,
                                                                                              new_handler_i)
-            clean_mocked_event_call_arg_list_as_per_kwargs_msg(mock_report)
             _, update_kwargs = mock_report.call_args_list[0]
             _, install_kwargs = mock_report.call_args_list[1]
 
@@ -2498,7 +2489,6 @@ class TestExtensionUpdateOnFailure(ExtensionTestCase):
         with patch.object(new_handler_i, 'report_event', autospec=True) as mock_report:
             uninstall_rc = ExtHandlersHandler._update_extension_handler_and_return_if_failed(old_handler_i,
                                                                                              new_handler_i)
-            clean_mocked_event_call_arg_list_as_per_kwargs_msg(mock_report)
             _, update_kwargs = mock_report.call_args_list[0]
             _, install_kwargs = mock_report.call_args_list[1]
 
