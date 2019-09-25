@@ -381,7 +381,7 @@ class TestImds(AgentTestCase):
 
             # primary IMDS endpoint unreachable and http error in secondary IMDS endpoint
             test_subject._http_get = Mock(side_effect=self.mock_http_get_unreachable_primary_with_fail)
-	    conn_success, response = test_subject.get_metadata(resource_path=resource_path, is_health=is_health)
+            conn_success, response = test_subject.get_metadata(resource_path=resource_path, is_health=is_health)
             self.assertFalse(conn_success)
             self.assertEqual('IMDS error in /metadata/{0}: [HTTP Failed] [404: reason] Mock not found'.format(resource_path), response)
             self.assertEqual(2, test_subject._http_get.call_count)
