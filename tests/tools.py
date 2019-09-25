@@ -450,6 +450,10 @@ class AgentTestCase(unittest.TestCase):
         if not file_path:
             file_path = os.path.join(self.tmp_dir, file_name)
 
+        directory = os.path.dirname(file_path)
+        if not os.path.exists(directory):
+            os.mkdir(directory)
+
         with open(file_path, "w") as script:
             if file_name.endswith(".py"):
                 script.write("#!/usr/bin/env python3\n")
@@ -527,5 +531,18 @@ def distros(distro_name=".*", distro_version=".*", distro_full_name=".*"):
                     self.setUp()
         return wrapper
     return decorator
+
+
+def clean_mocked_event_call_arg_list_as_per_kwargs_msg(mock_obj, remove_string="Launching command : "):
+    """
+    This function removes all call objects from the mock_obj.call_args_list by filtering out the remove_string from the
+    kwargs['message'] parameter. It also modifies the call count of the mock object
+    :param mock_obj: The mock object to clean
+    :param remove_string: The string to remove
+    """
+
+    mock_obj.call_args_list = [obj for obj in mock_obj.call_args_list if
+                               remove_string not in obj.kwargs['message']]
+    mock_obj.call_count = len(mock_obj.call_args_list)
 
 

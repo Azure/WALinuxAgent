@@ -40,7 +40,7 @@ from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.errorstate import ErrorState, ERROR_STATE_DELTA_INSTALL
 from azurelinuxagent.common.event import add_event, WALAEventOperation, elapsed_milliseconds, report_event
 from azurelinuxagent.common.exception import ExtensionError, ProtocolError, ProtocolNotFoundError, \
-    ExtensionDownloadError, ExtensionOperationError, ExtensionErrorCodes, ExtensionUpdateError
+    ExtensionDownloadError, ExtensionOperationError, ExtensionErrorCodes, ExtensionUpdateError, LaunchCommandError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol import get_protocol_util
 from azurelinuxagent.common.protocol.restapi import ExtHandlerStatus, \
@@ -76,11 +76,14 @@ NUMBER_OF_DOWNLOAD_RETRIES = 5
 
 
 class ExtCommandEnvVariable(object):
-    DisableFailed = "AZURE_GUEST_AGENT_DISABLE_FAILED"
-    UninstallFailed = "AZURE_GUEST_AGENT_UNINSTALL_FAILED"
-    ExtensionPath = "AZURE_GUEST_AGENT_EXTENSION_PATH"
-    ExtensionVersion = "AZURE_GUEST_AGENT_EXTENSION_VERSION"
+    Prefix = "AZURE_GUEST_AGENT"
+    DisableReturnCode = "%s_DISABLE_CMD_EXIT_CODE" % Prefix
+    UninstallReturnCode = "%s_UNINSTALL_CMD_EXIT_CODE" % Prefix
+    ExtensionPath = "%s_EXTENSION_PATH" % Prefix
+    ExtensionVersion = "%s_EXTENSION_VERSION" % Prefix
     ExtensionSeqNumber = "ConfigSequenceNumber"  # At par with Windows Guest Agent
+    NotRun = "NotRun"
+
 
 def get_traceback(e):
     if sys.version_info[0] == 3:
@@ -474,7 +477,7 @@ class ExtHandlersHandler(object):
 
     def handle_enable(self, ext_handler_i):
         self.log_process = True
-        uninstall_failed = False
+        uninstall_exit_code = None
         old_ext_handler_i = ext_handler_i.get_installed_ext_handler()
 
         handler_state = ext_handler_i.get_handler_state()
@@ -488,12 +491,12 @@ class ExtHandlersHandler(object):
             if old_ext_handler_i is None:
                 ext_handler_i.install()
             elif ext_handler_i.version_ne(old_ext_handler_i):
-                uninstall_failed = ExtHandlersHandler._update_extension_handler_and_return_if_failed(
+                uninstall_exit_code = ExtHandlersHandler._update_extension_handler_and_return_if_failed(
                     old_ext_handler_i, ext_handler_i)
         else:
             ext_handler_i.update_settings()
 
-        ext_handler_i.enable(uninstall_failed=uninstall_failed)
+        ext_handler_i.enable(uninstall_exit_code=uninstall_exit_code)
 
     @staticmethod
     def _update_extension_handler_and_return_if_failed(old_ext_handler_i, ext_handler_i):
@@ -506,6 +509,7 @@ class ExtHandlersHandler(object):
             :return: True if command execution succeeds and False if it fails
             """
             continue_on_update_failure = False
+            exit_code = 0
             try:
                 continue_on_update_failure = ext_handler_i.load_manifest().is_continue_on_update_failure()
                 func()
@@ -517,21 +521,25 @@ class ExtHandlersHandler(object):
                 if not continue_on_update_failure:
                     raise ExtensionUpdateError(msg)
 
-                logger.info("Continue on Update failure flag is set, proceeding with update")
-                return False
-            return True
+                if isinstance(e, LaunchCommandError):
+                    exit_code = e.exit_code
 
-        disable_failed = not execute_old_handler_command_and_return_if_succeeds(func=lambda: old_ext_handler_i.disable())
+                logger.info("Continue on Update failure flag is set, proceeding with update")
+            return exit_code
+
+        disable_exit_code = execute_old_handler_command_and_return_if_succeeds(
+            func=lambda: old_ext_handler_i.disable())
         ext_handler_i.copy_status_files(old_ext_handler_i)
         if ext_handler_i.version_gt(old_ext_handler_i):
-            ext_handler_i.update(disable_failed=disable_failed)
+            ext_handler_i.update(disable_exit_code=disable_exit_code)
         else:
-            old_ext_handler_i.update(version=ext_handler_i.ext_handler.properties.version, disable_failed=disable_failed)
-        uninstall_failed = not execute_old_handler_command_and_return_if_succeeds(
+            old_ext_handler_i.update(version=ext_handler_i.ext_handler.properties.version,
+                                     disable_exit_code=disable_exit_code)
+        uninstall_exit_code = execute_old_handler_command_and_return_if_succeeds(
             func=lambda: old_ext_handler_i.uninstall())
         old_ext_handler_i.remove_ext_handler()
-        ext_handler_i.update_with_install(uninstall_failed=uninstall_failed)
-        return uninstall_failed
+        ext_handler_i.update_with_install(uninstall_exit_code=uninstall_exit_code)
+        return uninstall_exit_code
 
     def handle_disable(self, ext_handler_i):
         self.log_process = True
@@ -943,10 +951,9 @@ class ExtHandlerInstance(object):
         # Save HandlerEnvironment.json
         self.create_handler_env()
 
-    def enable(self, uninstall_failed=False):
-        env = {}
-        if uninstall_failed:
-            env.update({ExtCommandEnvVariable.UninstallFailed: '1'})
+    def enable(self, uninstall_exit_code=None):
+        uninstall_exit_code = str(uninstall_exit_code) if uninstall_exit_code is not None else ExtCommandEnvVariable.NotRun
+        env = {ExtCommandEnvVariable.UninstallReturnCode: uninstall_exit_code}
 
         self.set_operation(WALAEventOperation.Enable)
         man = self.load_manifest()
@@ -967,10 +974,9 @@ class ExtHandlerInstance(object):
         self.set_handler_state(ExtHandlerState.Installed)
         self.set_handler_status(status="NotReady", message="Plugin disabled")
 
-    def install(self, uninstall_failed=False):
-        env = {}
-        if uninstall_failed:
-            env.update({ExtCommandEnvVariable.UninstallFailed: '1'})
+    def install(self, uninstall_exit_code=None):
+        uninstall_exit_code = str(uninstall_exit_code) if uninstall_exit_code is not None else ExtCommandEnvVariable.NotRun
+        env = {ExtCommandEnvVariable.UninstallReturnCode: uninstall_exit_code}
 
         man = self.load_manifest()
         install_cmd = man.get_install_command()
@@ -1015,13 +1021,12 @@ class ExtHandlerInstance(object):
         # Also remove the cgroups for the extension
         CGroupConfigurator.get_instance().remove_extension_cgroups(self.get_full_name())
 
-    def update(self, version=None, disable_failed=False):
+    def update(self, version=None, disable_exit_code=None):
         if version is None:
             version = self.ext_handler.properties.version
-        env = {'VERSION': version}
 
-        if disable_failed:
-            env.update({ExtCommandEnvVariable.DisableFailed: "1"})
+        disable_exit_code = str(disable_exit_code) if disable_exit_code is not None else ExtCommandEnvVariable.NotRun
+        env = {'VERSION': version, ExtCommandEnvVariable.DisableReturnCode: disable_exit_code}
 
         try:
             self.set_operation(WALAEventOperation.Update)
@@ -1037,10 +1042,10 @@ class ExtHandlerInstance(object):
             self.set_handler_state(ExtHandlerState.Failed)
             raise
 
-    def update_with_install(self, uninstall_failed=False):
+    def update_with_install(self, uninstall_exit_code=None):
         man = self.load_manifest()
         if man.is_update_with_install():
-            self.install(uninstall_failed=uninstall_failed)
+            self.install(uninstall_exit_code=uninstall_exit_code)
         else:
             self.logger.info("UpdateWithInstall not set. "
                              "Skip install during upgrade.")
@@ -1200,7 +1205,6 @@ class ExtHandlerInstance(object):
     def launch_command(self, cmd, timeout=300, extension_error_code=ExtensionErrorCodes.PluginProcessingError,
                        env=None):
         begin_utc = datetime.datetime.utcnow()
-        self.logger.verbose("Launch command: [{0}]", cmd)
 
         base_dir = self.get_base_dir()
 
@@ -1218,6 +1222,13 @@ class ExtHandlerInstance(object):
                     # Some extensions erroneously begin cmd with a slash; don't interpret those
                     # as root-relative. (Issue #1170)
                     full_path = os.path.join(base_dir, cmd.lstrip(os.path.sep))
+
+                    self.report_event(
+                        message="Launching command : '%s' with timeout of : %s sec.\nAgent Environment Variables= %s" %
+                                (full_path, timeout, ' , '.join(["%s:%s" % (key, env[key]) for key in env.keys() if
+                                                                key.startswith(ExtCommandEnvVariable.Prefix) or
+                                                                key == ExtCommandEnvVariable.ExtensionSeqNumber])),
+                        is_success=True, log_event=True)
 
                     process_output = CGroupConfigurator.get_instance().start_extension_command(
                         extension_name=self.get_full_name(),

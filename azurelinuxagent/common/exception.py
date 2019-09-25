@@ -67,6 +67,17 @@ class ExtensionError(AgentError):
         self.code = code
 
 
+class LaunchCommandError(ExtensionError):
+    """
+    When failed to execute an extension
+    """
+
+    def __init__(self, msg=None, inner=None, code=-1, exit_code=-1):
+        super(LaunchCommandError, self).__init__(msg, inner)
+        self.code = code
+        self.exit_code = exit_code
+
+
 class ExtensionUpdateError(ExtensionError):
     """
     When failed to update an extension

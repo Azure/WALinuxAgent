@@ -580,3 +580,14 @@ sys.stderr.write("STDERR")
             output = self.ext_handler_instance.launch_command(command)
 
         self.assertIn("[stderr]\nCannot read stdout/stderr:", output)
+
+    def test_it_should_report_command_details_before_launching(self):
+        command = self.create_script("hello.sh", '''
+        echo 'Hello'
+        ''')
+
+        with patch.object(self.ext_handler_instance, 'report_event') as mock_report:
+            output = self.ext_handler_instance.launch_command(command)
+            self.assertEqual(2, mock_report.call_count)
+            self.assertIn("Launching command : ", mock_report.call_args_list[0].kwargs['message'])
+            self.assertRegex(output, LaunchCommandTestCase._output_regex("Hello", ""))
