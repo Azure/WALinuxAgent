@@ -355,7 +355,7 @@ class TestImds(AgentTestCase):
         ProtocolUtil().get_wireserver_endpoint.return_value = "foo.bar"
 
         # ensure user-agent gets set correctly
-        for is_health, expected_useragent in [(False, 'guestagent'), (True, 'guestagent+health')]:
+        for is_health, expected_useragent in [(False, restutil.HTTP_USER_AGENT), (True, restutil.HTTP_USER_AGENT_HEALTH)]:
             # set a different resource path for health query to make debugging unit test easier
             resource_path = 'something/health' if is_health else 'something'
 
@@ -365,6 +365,9 @@ class TestImds(AgentTestCase):
             self.assertFalse(conn_success)
             self.assertEqual('IMDS error in /metadata/{0}: Unable to connect to endpoint'.format(resource_path), response)
             self.assertEqual(2, test_subject._http_get.call_count)
+            for _, kwargs in test_subject._http_get.call_args_list:
+                self.assertTrue('User-Agent' in kwargs['headers'])
+                self.assertEqual(expected_useragent, kwargs['headers']['User-Agent'])
 
             # primary IMDS endpoint unreachable and success in secondary IMDS endpoint
             test_subject._http_get = Mock(side_effect=self.mock_http_get_unreachable_primary_with_ok)
@@ -372,6 +375,9 @@ class TestImds(AgentTestCase):
             self.assertTrue(conn_success)
             self.assertEqual('Mock success response', response)
             self.assertEqual(2, test_subject._http_get.call_count)
+            for _, kwargs in test_subject._http_get.call_args_list:
+                self.assertTrue('User-Agent' in kwargs['headers'])
+                self.assertEqual(expected_useragent, kwargs['headers']['User-Agent'])
 
             # primary IMDS endpoint unreachable and http error in secondary IMDS endpoint
             test_subject._http_get = Mock(side_effect=self.mock_http_get_unreachable_primary_with_fail)
@@ -379,6 +385,9 @@ class TestImds(AgentTestCase):
             self.assertFalse(conn_success)
             self.assertEqual('IMDS error in /metadata/{0}: [HTTP Failed] [404: reason] Mock not found'.format(resource_path), response)
             self.assertEqual(2, test_subject._http_get.call_count)
+            for _, kwargs in test_subject._http_get.call_args_list:
+                self.assertTrue('User-Agent' in kwargs['headers'])
+                self.assertEqual(expected_useragent, kwargs['headers']['User-Agent'])
 
             # primary IMDS endpoint unreachable and http error in secondary IMDS endpoint
             test_subject._http_get = Mock(side_effect=self.mock_http_get_unreachable_primary_with_fail)
@@ -386,6 +395,9 @@ class TestImds(AgentTestCase):
             self.assertFalse(conn_success)
             self.assertEqual('IMDS error in /metadata/{0}: [HTTP Failed] [404: reason] Mock not found'.format(resource_path), response)
             self.assertEqual(2, test_subject._http_get.call_count)
+            for _, kwargs in test_subject._http_get.call_args_list:
+                self.assertTrue('User-Agent' in kwargs['headers'])
+                self.assertEqual(expected_useragent, kwargs['headers']['User-Agent'])
 
             # primary IMDS endpoint with non-fallback HTTPError
             test_subject._http_get = Mock(side_effect=self.mock_http_get_nonfallback_primary)
@@ -395,6 +407,9 @@ class TestImds(AgentTestCase):
             except HttpError as e:
                 self.assertEqual('[HttpError] HTTP Failed. GET http://169.254.169.254/metadata/{0} -- IOError incomplete read -- 6 attempts made'.format(resource_path), str(e))
                 self.assertEqual(1, test_subject._http_get.call_count)
+                for _, kwargs in test_subject._http_get.call_args_list:
+                    self.assertTrue('User-Agent' in kwargs['headers'])
+                    self.assertEqual(expected_useragent, kwargs['headers']['User-Agent'])
             except Exception as e:
                 self.assertTrue(False, 'Expected HttpError but got {0}'.format(str(e)))
 
@@ -406,6 +421,9 @@ class TestImds(AgentTestCase):
             except HttpError as e:
                 self.assertEqual('[HttpError] HTTP Failed. GET http://foo.bar/metadata/{0} -- IOError incomplete read -- 6 attempts made'.format(resource_path), str(e))
                 self.assertEqual(2, test_subject._http_get.call_count)
+                for _, kwargs in test_subject._http_get.call_args_list:
+                    self.assertTrue('User-Agent' in kwargs['headers'])
+                    self.assertEqual(expected_useragent, kwargs['headers']['User-Agent'])
             except Exception as e:
                 self.assertTrue(False, 'Expected HttpError but got {0}'.format(str(e)))
 
