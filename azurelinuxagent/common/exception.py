@@ -69,7 +69,7 @@ class ExtensionError(AgentError):
 
 class LaunchCommandError(ExtensionError):
     """
-    When failed to execute an extension
+    When the command times out or returns with a non-zero exit_code
     """
 
     def __init__(self, msg=None, inner=None, code=-1, exit_code=-1):
