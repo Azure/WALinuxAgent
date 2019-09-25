@@ -208,7 +208,11 @@ class EventLogger(object):
             logger.warn("Cannot save event -- Event reporter is not initialized.")
             return
 
-        fileutil.mkdir(self.event_dir, mode=0o700)
+        try:
+            fileutil.mkdir(self.event_dir, mode=0o700)
+        except (IOError, OSError) as e:
+            msg = "Failed to create events folder {0}. Error: {1}".format(self.event_dir, ustr(e))
+            raise EventError(msg)
 
         existing_events = os.listdir(self.event_dir)
         if len(existing_events) >= 1000:
@@ -228,7 +232,7 @@ class EventLogger(object):
                 hfile.write(data.encode("utf-8"))
             os.rename(filename + ".tmp", filename + ".tld")
         except IOError as e:
-            msg = "Failed to write events to file:{0}".format(e)
+            msg = "Failed to write events to file: {0}".format(e)
             raise EventError(msg)
 
     def reset_periodic(self):
@@ -286,7 +290,7 @@ class EventLogger(object):
         try:
             self.save_event(json.dumps(data))
         except EventError as e:
-            logger.error("{0}", e)
+            logger.periodic_error(logger.EVERY_FIFTEEN_MINUTES, "[PERIODIC] {0}".format(ustr(e)))
 
     def add_log_event(self, level, message):
         # By the time the message has gotten to this point it is formatted as
