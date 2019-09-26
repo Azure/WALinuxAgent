@@ -217,7 +217,8 @@ class ExtHandlersHandler(object):
         self.ext_handlers, instantiation = None, None
         try:
             self.protocol = self.protocol_util.get_protocol()
-            self.ext_handlers, instantiation = self.protocol.get_ext_handlers()
+            self.ext_conf, instantiation = self.protocol.get_ext_conf()
+            self.ext_handlers = ext_conf.ext_handlers
             self.get_artifact_error_state.reset()
         except Exception as e:
             msg = u"Exception retrieving extension handlers: {0}".format(ustr(e))
@@ -288,30 +289,36 @@ class ExtHandlersHandler(object):
                       message=detailed_msg)
 
     def process_goal_state(self, instantiation, seqno):
-        goal_state_changed = False
-        if self.last_instantiation != instantiation or self.last_vm_artifacts_seqno != seqno:
-            logger.info('Goal state changed with instantiation={0}(last:{1}) and seqno={2}(last:{3})',
+        fabric_goal_state_changed = False
+        profile_goal_state_changed = False
+
+        if self.last_instantiation != instantiation:
+            logger.info('Goal state changed with instantiation={0}(last:{1})',
                         instantiation,
-                        self.last_instantiation,
+                        self.last_instantiation)
+            fabric_goal_state_changed = True
+
+        if self.last_vm_artifacts_seqno != seqno:
+            logger.info('FastTrack goal state changed with seqno={0}(last:{1})',
                         seqno,
                         self.last_vm_artifacts_seqno)
-            goal_state_changed = True
+            profile_goal_state_changed = True
 
         # Fabric goal state takes precedence over VMArtifactsProfile blob goal state
         # So, process the Fabric goal state first
-        self.handle_ext_handlers(goal_state_changed)
+        self.handle_ext_handlers(fabric_goal_state_changed)
         self.last_instantiation = instantiation
 
         # Now process the VMArtifactsProfile blob goal state if it changed
-        if self.last_vm_artifacts_seqno != seqno and self.artifacts_profile is not None:
-            vm_artifacts_ext_handlers = self.artifacts_profile.transform_to_extensions_config()
+        if profile_goal_state_changed and self.artifacts_profile is not None:
+            vm_artifacts_ext_handlers = self.artifacts_profile.transform_to_extensions_config(self.ext_conf)
             if vm_artifacts_ext_handlers is not None:
                 # We need to add the status upload blob from Fabric goal state because we don't receive this
                 # from the VMArtifactsProfile blob
                 vm_artifacts_ext_handlers.status_upload_blob = self.ext_handlers.status_upload_blob
                 vm_artifacts_ext_handlers.status_upload_blob_type = self.ext_handlers.status_upload_blob_type
                 self.ext_handlers = vm_artifacts_ext_handlers
-                self.handle_ext_handlers(goal_state_changed)
+                self.handle_ext_handlers(profile_goal_state_changed)
             self.last_vm_artifacts_seqno = seqno
 
     def cleanup_outdated_handlers(self):

@@ -1,5 +1,5 @@
 {
-  "inVMArtifactsProfileBlobSeqNo": 3,
+  "inVMArtifactsProfileBlobSeqNo": 1,
   "inVMMetadata": {
     "subscriptionId": "00000000-0000-0000-0000-000000000000",
     "resourceGroupName": "TestRG",
@@ -23,41 +23,21 @@
     }
   },
   "extensionGoalStates": [
-    {
-      "name": "publisher.handler1.type.handler1",
-      "version": "1.0",
-      "location": "http://www.publisher.handler1.type.handler1.com/",
+  {
+      "name": "OSTCExtensions.ExampleHandlerLinux",
+      "version": "1.0.0",
+      "location": "http://rdfepirv2hknprdstr03.blob.core.windows.net/b01058962be54ceca550a390fa5ff064/Microsoft.OSTCExtensions_ExampleHandlerLinux_asiaeast_manifest.xml",
       "state": "enabled",
       "autoUpgrade": false,
-      "failoverlocation": "http://www.publisher.handler1.type.handler1.failover.com/",
+      "failoverlocation": "http://rdfepirv2hknprdstr04.blob.core.windows.net/b01058962be54ceca550a390fa5ff064/Microsoft.OSTCExtensions_ExampleHandlerLinux_asiaeast_manifest.xml",
       "runAsStartupTask": false,
       "useExactVersion": false,
       "settingsSeqNo": 0,
       "settings": [
         {
-          "publicSettings": { "key": "value_floop" }
-        }
-      ]
-    },
-    {
-      "name": "publisher.handler2.type.handler2",
-      "version": "1.0",
-      "location": "http://www.publisher.handler2.type.handler2.com/",
-      "state": "enabled",
-      "autoUpgrade": false,
-      "failoverlocation": "http://www.publisher.handler2.type.handler2.failover.com/",
-      "runAsStartupTask": false,
-      "useExactVersion": false,
-      "settingsSeqNo": 0,
-      "settings": [
-        {
-          "publicSettings": { "key": "value_yaba" }
-        },
-        {
-          "publicSettings": { "key": "value_flipper" }
-        },
-        {
-          "publicSettings": { "key": "value_flopper" }
+          "protectedSettingsCertThumbprint": "4037FBF5F1F3014F99B5D6C7799E9B20E6871CB3",
+          "protectedSettings": "MIICWgYJK",
+          "publicSettings": { "foo": "bar" }
         }
       ]
     }

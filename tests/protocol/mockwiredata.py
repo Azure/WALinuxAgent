@@ -32,7 +32,8 @@ DATA_FILE = {
         "trans_prv": "wire/trans_prv",
         "trans_cert": "wire/trans_cert",
         "test_ext": "ext/sample_ext-1.3.0.zip",
-        "vm_artifacts_profile": "write/in_vm_artifacts_profile_blob.json"
+        "vm_artifacts_profile": "wire/in_vm_artifacts_profile_blob.json",
+        "vm_artifacts_profile_install": "wire/in_vm_artifacts_profile_blob_install.json"
 }
 
 DATA_FILE_NO_EXT = DATA_FILE.copy()
@@ -74,24 +75,21 @@ DATA_FILE_NO_CERT_FORMAT["certs"] = "wire/certs_no_format_specified.xml"
 DATA_FILE_CERT_FORMAT_NOT_PFX = DATA_FILE.copy()
 DATA_FILE_CERT_FORMAT_NOT_PFX["certs"] = "wire/certs_format_not_pfx.xml"
 
-DATA_FILE_VM_ARTIFACTS_PROFILE = DATA_FILE.copy()
-DATA_FILE_VM_ARTIFACTS_PROFILE["vm_artifacts_profile"] = "wire/in_vm_artifacts_profile_blob.json"
-
 class WireProtocolData(object):
     def __init__(self, data_files=DATA_FILE):
         self.emulate_stale_goal_state = False
         self.call_counts = {
-            "comp=versions" : 0,
-            "/versions" : 0,
-            "goalstate" : 0,
-            "hostingenvuri" : 0,
-            "sharedconfiguri" : 0,
-            "certificatesuri" : 0,
-            "extensionsconfiguri" : 0,
-            "extensionArtifact" : 0,
-            "manifest.xml" : 0,
-            "manifest_of_ga.xml" : 0,
-            "ExampleHandlerLinux" : 0
+            "comp=versions": 0,
+            "/versions": 0,
+            "goalstate": 0,
+            "hostingenvuri": 0,
+            "sharedconfiguri": 0,
+            "certificatesuri": 0,
+            "extensionsconfiguri": 0,
+            "extensionArtifact": 0,
+            "manifest.xml": 0,
+            "manifest_of_ga.xml": 0,
+            "ExampleHandlerLinux": 0
         }
         self.version_info = load_data(data_files.get("version_info"))
         self.goal_state = load_data(data_files.get("goal_state"))
@@ -105,6 +103,7 @@ class WireProtocolData(object):
         self.trans_cert = load_data(data_files.get("trans_cert"))
         self.ext = load_bin_data(data_files.get("test_ext"))
         self.vm_artifacts_profile = load_data(data_files.get("vm_artifacts_profile"))
+        self.vm_artifacts_profile_install = load_data(data_files.get("vm_artifacts_profile_install"))
 
     def mock_http_get(self, url, *args, **kwargs):
         content = None

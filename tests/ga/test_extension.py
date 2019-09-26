@@ -338,6 +338,56 @@ class TestExtension(ExtensionTestCase):
 
     def test_ext_handler_profile_blob(self, *args):
         test_data = WireProtocolData(DATA_FILE)
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+
+        # First goal state will be through Fabric.
+        exthandlers_handler.run()
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
+        self._assert_ext_status(protocol.report_ext_status, "success", 0)
+
+        # Now send a goal state through the VMArtifactsProfile blob
+        from azurelinuxagent.common.protocol.wire import InVMArtifactsProfile
+        mock_in_vm_artifacts_profile = InVMArtifactsProfile(test_data.vm_artifacts_profile)
+        protocol.get_artifacts_profile = Mock(return_value=mock_in_vm_artifacts_profile)
+        exthandlers_handler.run()
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
+        self._assert_ext_status(protocol.report_ext_status, "success", 1)
+
+        # Test VMArtifactsProfile blob goal state not changed
+        exthandlers_handler.run()
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
+
+        # Test the goal state is now changed
+        mock_in_vm_artifacts_profile.inVMArtifactsProfileBlobSeqNo = "2"
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
+        self._assert_ext_status(protocol.report_ext_status, "success", 1)
+
+        # Test install
+        mock_in_vm_artifacts_profile = InVMArtifactsProfile(test_data.vm_artifacts_profile_install)
+        protocol.get_artifacts_profile = Mock(return_value=mock_in_vm_artifacts_profile)
+        exthandlers_handler.run()
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
+        self._assert_ext_status(protocol.report_ext_status, "success", 2)
+
+        # Test upgrade
+        mock_in_vm_artifacts_profile.inVMArtifactsProfileBlobSeqNo = "4"
+        mock_in_vm_artifacts_profile.extensionGoalStates[0].version = "1.2.3"
+        exthandlers_handler.run()
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.2.3")
+        self._assert_ext_status(protocol.report_ext_status, "success", 2)
+
+        # Test uninstall
+        mock_in_vm_artifacts_profile.inVMArtifactsProfileBlobSeqNo = "5"
+        mock_in_vm_artifacts_profile.extensionGoalStates.remove(0)
+        exthandlers_handler.run()
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.2.3")
+        self._assert_ext_status(protocol.report_ext_status, "success", 1)
+
+        # Test uninstall again
+        mock_in_vm_artifacts_profile.inVMArtifactsProfileBlobSeqNo = "6"
+        exthandlers_handler.run()
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.2.3")
+        self._assert_ext_status(protocol.report_ext_status, "success", 1)
 
     def test_ext_handler(self, *args):
         test_data = WireProtocolData(DATA_FILE)
@@ -792,7 +842,8 @@ class TestExtension(ExtensionTestCase):
     def test_handle_ext_handlers_on_hold_true(self, *args):
         test_data = WireProtocolData(DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
-        exthandlers_handler.ext_handlers, exthandlers_handler.last_etag = protocol.get_ext_handlers()
+        ext_conf, exthandlers_handler.last_etag = protocol.get_ext_conf()
+        exthandlers_handler.ext_handlers = ext_conf.ext_handlers
         protocol.get_artifacts_profile = MagicMock()
         exthandlers_handler.protocol = protocol
 
@@ -811,7 +862,8 @@ class TestExtension(ExtensionTestCase):
     def test_handle_ext_handlers_on_hold_false(self, *args):
         test_data = WireProtocolData(DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
-        exthandlers_handler.ext_handlers, exthandlers_handler.last_etag = protocol.get_ext_handlers()
+        ext_conf, exthandlers_handler.ext_handlers, exthandlers_handler.last_etag = protocol.get_ext_conf()
+        exthandlers_handler.ext_handlers = ext_conf.ext_handlers
         exthandlers_handler.protocol = protocol
 
         # enable extension handling blocking
@@ -835,7 +887,8 @@ class TestExtension(ExtensionTestCase):
     def test_last_etag_on_extension_processing(self, *args):
         test_data = WireProtocolData(DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
-        exthandlers_handler.ext_handlers, etag = protocol.get_ext_handlers()
+        ext_conf, etag = protocol.get_ext_conf()
+        exthandlers_handler.ext_handlers = ext_conf.ext_handlers
         exthandlers_handler.protocol = protocol
 
         # Disable extension handling blocking in the first run and enable in the 2nd run
@@ -1053,7 +1106,8 @@ class TestExtension(ExtensionTestCase):
                         datafile = DATA_FILE
 
                 _, protocol = self._create_mock(WireProtocolData(datafile), *args)
-                ext_handlers, _ = protocol.get_ext_handlers()
+                ext_conf, _ = protocol.get_ext_conf()
+                ext_handlers = ext_conf.ext_handlers
                 self.assertEqual(1, len(ext_handlers.extHandlers))
                 ext_handler = ext_handlers.extHandlers[0]
                 self.assertEqual('OSTCExtensions.ExampleHandlerLinux', ext_handler.name)
@@ -1557,7 +1611,8 @@ class TestExtensionSequencing(AgentTestCase):
 
         handler = get_exthandlers_handler()
         handler.protocol_util.get_protocol = Mock(return_value=protocol)
-        handler.ext_handlers, handler.last_etag = protocol.get_ext_handlers()
+        ext_conf, handler.last_etag = protocol.get_ext_conf()
+        handler.ext_handlers = ext_conf.ext_handlers
         conf.get_enable_overprovisioning = Mock(return_value=False)
 
         def wait_for_handler_successful_completion(prev_handler, wait_until):

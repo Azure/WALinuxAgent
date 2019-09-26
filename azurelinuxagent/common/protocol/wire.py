@@ -139,14 +139,14 @@ class WireProtocol(Protocol):
         valid_pkg_list = self.client.filter_package_list(vmagent_manifest.family, ga_manifest, goal_state)
         return valid_pkg_list
 
-    def get_ext_handlers(self):
+    def get_ext_conf(self):
         logger.verbose("Get extension handler config")
         # Update goal state to get latest extensions config
         self.update_goal_state()
         goal_state = self.client.get_goal_state()
         ext_conf = self.client.get_ext_conf()
         # In wire protocol, incarnation is equivalent to ETag
-        return ext_conf.ext_handlers, goal_state.incarnation
+        return ext_conf, goal_state.incarnation
 
     def get_ext_handler_pkgs(self, ext_handler):
         logger.verbose("Get extension handler package")
@@ -1812,39 +1812,46 @@ class InVMArtifactsProfile(object):
     <StatusUploadBlob statusBlobType="BlockBlob">https://putblobhere</StatusUploadBlob>
     </Extensions>
     """
-    def transform_to_extensions_config(self):
+    def transform_to_extensions_config(self, fabric_extension_config):
         if 'extensionGoalStates' in self.__dict__:
             import xml.etree.ElementTree as xml
             root = xml.Element("Extensions")
             root.set('version', '1.0.0.0')
-            root.set('goalStateIncarnation', self.inVMArtifactsProfileBlobSeqNo)
+            root.set('goalStateIncarnation', str(self.inVMArtifactsProfileBlobSeqNo))
 
+            # Some properties such as state are required and will generate an exception if not there
+            # Others such as autoUpgrade are optional so we'll check first
             plugins = xml.SubElement(root, 'Plugins')
             for extensionGoalState in self.extensionGoalStates:
                 plugin = xml.SubElement(plugins, 'Plugin')
-                plugin.set('name', extensionGoalState.name)
-                plugin.set('version', extensionGoalState.version)
-                plugin.set('location', extensionGoalState.location)
-                plugin.set('state', extensionGoalState.state)
-                plugin.set('autoUpgrade', extensionGoalState.autoUpgrade)
-                plugin.set('failoverlocation', extensionGoalState.failoverlocation)
-                plugin.set('runAsStartupTask', extensionGoalState.runAsStartupTask)
-                plugin.set('isJson', extensionGoalState.isJson)
-                plugin.set('useExactVersion', extensionGoalState.useExactVersion)
+                plugin.set('name', extensionGoalState['name'])
+                plugin.set('version', extensionGoalState['version'])
+                plugin.set('location', extensionGoalState['location'])
+                plugin.set('state', extensionGoalState['state'])
+                plugin.set('autoUpgrade', str(extensionGoalState.get('autoUpgrade')))
+                plugin.set('failoverlocation', str(extensionGoalState.get('failoverlocation')))
+                plugin.set('runAsStartupTask', str(extensionGoalState.get('runAsStartupTask')))
+                plugin.set('isJson', 'true')
+                plugin.set('useExactVersion', str(extensionGoalState.get('useExactVersion')))
 
             plugin_settings = xml.SubElement(root, 'PluginSettings')
             for extensionGoalState in self.extensionGoalStates:
                 plugin = xml.SubElement(plugin_settings, 'Plugin')
-                plugin.set('name', extensionGoalState.name)
-                plugin.set('version', extensionGoalState.version)
+                plugin.set('name', extensionGoalState['name'])
+                plugin.set('version', extensionGoalState['version'])
                 runtime_settings = xml.SubElement(plugin, 'RuntimeSettings')
-                runtime_settings.set('seqNo', extensionGoalState.settingsSeqNo)
-                json_settings = json.dumps({})
-                json_settings["runtimeSettings"] = extensionGoalState.settings
+                runtime_settings.set('seqNo', str(extensionGoalState['settingsSeqNo']))
+
+                # CRP may send multiple settings but this agent only supports one
+                handler_settings = extensionGoalState['settings'][0]
+                json_settings = json.dumps({"runtimeSettings": [{"handlerSettings": handler_settings}]})
                 runtime_settings.text = json_settings
 
-            extensions_config = ExtensionsConfig()
-            extensions_config.parse(root)
+            config_xml = xml.tostring(root, encoding='unicode', method='xml')
+            extensions_config = ExtensionsConfig(config_xml)
+
+            # The VMArtifactsProfile blob doesn't contains the StatusUploadBlob, so take it from the fabric goal state
+            extensions_config.status_upload_blob = fabric_extension_config.status_upload_blob
 
             return extensions_config
         return None
