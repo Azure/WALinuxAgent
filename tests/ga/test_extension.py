@@ -313,6 +313,17 @@ class TestExtension(ExtensionTestCase):
         self.assertEquals(expected_ext_count, len(handler_status.extensions))
         return
 
+    def _assert_extension_status(self, report_vm_status, handler_index, expected_handler_name,
+                                 expected_handler_status, expected_handler_version):
+        args, kw = report_vm_status.call_args
+        vm_status = args[0]
+        self.assertLess(handler_index, len(vm_status.vmAgent.extensionHandlers))
+        handler_status = vm_status.vmAgent.extensionHandlers[handler_index]
+        self.assertEquals(expected_handler_name, handler_status.name)
+        self.assertEquals(expected_handler_version, handler_status.version)
+        self.assertEquals(expected_handler_status, handler_status.status)
+        return
+
     def _assert_no_handler_status(self, report_vm_status):
         self.assertTrue(report_vm_status.called)
         args, kw = report_vm_status.call_args
@@ -358,7 +369,8 @@ class TestExtension(ExtensionTestCase):
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
 
         # Test the goal state is now changed
-        mock_in_vm_artifacts_profile.inVMArtifactsProfileBlobSeqNo = "2"
+        mock_in_vm_artifacts_profile.inVMArtifactsProfileBlobSeqNo = 2
+        exthandlers_handler.run()
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
         self._assert_ext_status(protocol.report_ext_status, "success", 1)
 
@@ -366,27 +378,35 @@ class TestExtension(ExtensionTestCase):
         mock_in_vm_artifacts_profile = InVMArtifactsProfile(test_data.vm_artifacts_profile_install)
         protocol.get_artifacts_profile = Mock(return_value=mock_in_vm_artifacts_profile)
         exthandlers_handler.run()
-        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
-        self._assert_ext_status(protocol.report_ext_status, "success", 2)
+        self._assert_extension_status(protocol.report_vm_status, 0,
+                                      "OSTCExtensions.ExampleHandlerLinux", "Ready", "1.0.0")
+        self._assert_extension_status(protocol.report_vm_status, 1,
+                                      "Microsoft.CPlat.Core.ExampleExtensionLinux", "Ready", "1.1.1")
+        self._assert_ext_status(protocol.report_ext_status, "success", 1)
 
         # Test upgrade
-        mock_in_vm_artifacts_profile.inVMArtifactsProfileBlobSeqNo = "4"
-        mock_in_vm_artifacts_profile.extensionGoalStates[0].version = "1.2.3"
+        mock_in_vm_artifacts_profile.inVMArtifactsProfileBlobSeqNo = 4
+        mock_in_vm_artifacts_profile.extensionGoalStates[0]['version'] = "1.2.0"
         exthandlers_handler.run()
-        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.2.3")
-        self._assert_ext_status(protocol.report_ext_status, "success", 2)
+        self._assert_extension_status(protocol.report_vm_status, 0,
+                                     "OSTCExtensions.ExampleHandlerLinux", "Ready", "1.2.0")
+        self._assert_extension_status(protocol.report_vm_status, 1,
+                                      "Microsoft.CPlat.Core.ExampleExtensionLinux", "Ready", "1.1.1")
+        self._assert_ext_status(protocol.report_ext_status, "success", 1)
 
         # Test uninstall
-        mock_in_vm_artifacts_profile.inVMArtifactsProfileBlobSeqNo = "5"
-        mock_in_vm_artifacts_profile.extensionGoalStates.remove(0)
+        mock_in_vm_artifacts_profile.inVMArtifactsProfileBlobSeqNo = 5
+        mock_in_vm_artifacts_profile.extensionGoalStates.pop(0)
         exthandlers_handler.run()
-        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.2.3")
+        self._assert_extension_status(protocol.report_vm_status, 0,
+                                      "Microsoft.CPlat.Core.ExampleExtensionLinux", "Ready", "1.1.1")
         self._assert_ext_status(protocol.report_ext_status, "success", 1)
 
         # Test uninstall again
-        mock_in_vm_artifacts_profile.inVMArtifactsProfileBlobSeqNo = "6"
+        mock_in_vm_artifacts_profile.inVMArtifactsProfileBlobSeqNo = 6
         exthandlers_handler.run()
-        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.2.3")
+        self._assert_extension_status(protocol.report_vm_status, 0,
+                                      "Microsoft.CPlat.Core.ExampleExtensionLinux", "Ready", "1.1.1")
         self._assert_ext_status(protocol.report_ext_status, "success", 1)
 
     def test_ext_handler(self, *args):

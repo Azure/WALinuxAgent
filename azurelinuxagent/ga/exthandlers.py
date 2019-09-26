@@ -218,7 +218,7 @@ class ExtHandlersHandler(object):
         try:
             self.protocol = self.protocol_util.get_protocol()
             self.ext_conf, instantiation = self.protocol.get_ext_conf()
-            self.ext_handlers = ext_conf.ext_handlers
+            self.ext_handlers = self.ext_conf.ext_handlers
             self.get_artifact_error_state.reset()
         except Exception as e:
             msg = u"Exception retrieving extension handlers: {0}".format(ustr(e))
@@ -311,13 +311,13 @@ class ExtHandlersHandler(object):
 
         # Now process the VMArtifactsProfile blob goal state if it changed
         if profile_goal_state_changed and self.artifacts_profile is not None:
-            vm_artifacts_ext_handlers = self.artifacts_profile.transform_to_extensions_config(self.ext_conf)
+            vm_artifacts_ext_handlers = self.artifacts_profile.transform_to_extensions_config()
             if vm_artifacts_ext_handlers is not None:
                 # We need to add the status upload blob from Fabric goal state because we don't receive this
                 # from the VMArtifactsProfile blob
-                vm_artifacts_ext_handlers.status_upload_blob = self.ext_handlers.status_upload_blob
-                vm_artifacts_ext_handlers.status_upload_blob_type = self.ext_handlers.status_upload_blob_type
-                self.ext_handlers = vm_artifacts_ext_handlers
+                vm_artifacts_ext_handlers.status_upload_blob = self.ext_conf.status_upload_blob
+                vm_artifacts_ext_handlers.status_upload_blob_type = self.ext_conf.status_upload_blob_type
+                self.ext_handlers = vm_artifacts_ext_handlers.ext_handlers
                 self.handle_ext_handlers(profile_goal_state_changed)
             self.last_vm_artifacts_seqno = seqno
 

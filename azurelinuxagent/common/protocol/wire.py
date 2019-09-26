@@ -1812,7 +1812,7 @@ class InVMArtifactsProfile(object):
     <StatusUploadBlob statusBlobType="BlockBlob">https://putblobhere</StatusUploadBlob>
     </Extensions>
     """
-    def transform_to_extensions_config(self, fabric_extension_config):
+    def transform_to_extensions_config(self):
         if 'extensionGoalStates' in self.__dict__:
             import xml.etree.ElementTree as xml
             root = xml.Element("Extensions")
@@ -1849,9 +1849,6 @@ class InVMArtifactsProfile(object):
 
             config_xml = xml.tostring(root, encoding='unicode', method='xml')
             extensions_config = ExtensionsConfig(config_xml)
-
-            # The VMArtifactsProfile blob doesn't contains the StatusUploadBlob, so take it from the fabric goal state
-            extensions_config.status_upload_blob = fabric_extension_config.status_upload_blob
 
             return extensions_config
         return None

@@ -32,7 +32,7 @@
       "failoverlocation": "http://rdfepirv2hknprdstr04.blob.core.windows.net/b01058962be54ceca550a390fa5ff064/Microsoft.OSTCExtensions_ExampleHandlerLinux_asiaeast_manifest.xml",
       "runAsStartupTask": false,
       "useExactVersion": false,
-      "settingsSeqNo": 0,
+      "settingsSeqNo": 1,
       "settings": [
         {
           "protectedSettingsCertThumbprint": "4037FBF5F1F3014F99B5D6C7799E9B20E6871CB3",
