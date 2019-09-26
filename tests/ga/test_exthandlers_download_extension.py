@@ -86,7 +86,7 @@ class DownloadExtensionTestCase(AgentTestCase):
             file.write("An invalid ZIP file\n")
 
     def _get_extension_package_file(self):
-        return os.path.join(self.agent_dir, os.path.basename(self.pkg.uris[0].uri) + ".zip")
+        return os.path.join(self.agent_dir, self.ext_handler_instance.get_extension_package_zipfile_name())
 
     def _get_extension_command_file(self):
         return os.path.join(self.extension_dir, DownloadExtensionTestCase._extension_command)
