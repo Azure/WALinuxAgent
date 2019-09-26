@@ -13,7 +13,7 @@ from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 
 IMDS_ENDPOINT = '169.254.169.254'
 APIVERSION = '2018-02-01'
-BASE_URI = "http://{0}/metadata/{1}?api-version={2}"
+BASE_METADATA_URI = "http://{0}/metadata/{1}?api-version={2}"
 
 IMDS_IMAGE_ORIGIN_UNKNOWN = 0
 IMDS_IMAGE_ORIGIN_CUSTOM = 1
@@ -244,10 +244,10 @@ class ImdsClient(object):
             'Metadata': True,
         }
         self._regex_imds_ioerror = re.compile(r".*HTTP Failed. GET http://[^ ]+ -- IOError timed out -- [0-9]+ attempts made")
-        self.protocol_util = get_protocol_util()
+        self._protocol_util = get_protocol_util()
 
     def _get_metadata_url(self, endpoint, resource_path):
-        return BASE_URI.format(endpoint, resource_path, self._api_version)
+        return BASE_METADATA_URI.format(endpoint, resource_path, self._api_version)
 
     def _http_get(self, endpoint, resource_path, headers):
         url = self._get_metadata_url(endpoint, resource_path)
@@ -270,14 +270,14 @@ class ImdsClient(object):
         except HttpError as e:
             logger.warn("Unable to connect to primary IMDS endpoint {0}", endpoint)
             if not self._regex_imds_ioerror.match(str(e)):
-                raise e
-            endpoint = self.protocol_util.get_wireserver_endpoint()
+                raise
+            endpoint = self._protocol_util.get_wireserver_endpoint()
             try:
                 resp = self._http_get(endpoint=endpoint, resource_path=resource_path, headers=headers)
             except HttpError as e:
                 logger.warn("Unable to connect to backup IMDS endpoint {0}", endpoint)
                 if not self._regex_imds_ioerror.match(str(e)):
-                    raise e
+                    raise
                 return False, "IMDS error in /metadata/{0}: Unable to connect to endpoint".format(resource_path)
         if restutil.request_failed(resp):
             return False, "IMDS error in /metadata/{0}: {1}".format(
