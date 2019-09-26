@@ -1783,7 +1783,7 @@ class InVMArtifactsProfile(object):
     def get_sequence_number(self):
         if 'inVMArtifactsProfileBlobSeqNo' in self.__dict__:
             return int(self.inVMArtifactsProfileBlobSeqNo)
-        return -1
+        return None
 
     """
     We need to convert the json from the InVmArtifactsProfile blob to the following

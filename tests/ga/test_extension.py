@@ -864,7 +864,9 @@ class TestExtension(ExtensionTestCase):
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
         ext_conf, exthandlers_handler.last_etag = protocol.get_ext_conf()
         exthandlers_handler.ext_handlers = ext_conf.ext_handlers
-        protocol.get_artifacts_profile = MagicMock()
+        mock_in_vm_artifacts_profile = InVMArtifactsProfile(MagicMock())
+        mock_in_vm_artifacts_profile.get_sequence_number = Mock(return_value=None)
+        protocol.get_artifacts_profile = Mock(return_value=mock_in_vm_artifacts_profile)
         exthandlers_handler.protocol = protocol
 
         # Disable extension handling blocking
@@ -882,7 +884,7 @@ class TestExtension(ExtensionTestCase):
     def test_handle_ext_handlers_on_hold_false(self, *args):
         test_data = WireProtocolData(DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
-        ext_conf, exthandlers_handler.ext_handlers, exthandlers_handler.last_etag = protocol.get_ext_conf()
+        ext_conf, exthandlers_handler.last_etag = protocol.get_ext_conf()
         exthandlers_handler.ext_handlers = ext_conf.ext_handlers
         exthandlers_handler.protocol = protocol
 
