@@ -57,6 +57,8 @@ AGENTS_MANIFEST_FILE_NAME = "{0}.{1}.agentsManifest"
 TRANSPORT_CERT_FILE_NAME = "TransportCert.pem"
 TRANSPORT_PRV_FILE_NAME = "TransportPrivate.pem"
 
+HEADER_ETAG = "etag"
+
 PROTOCOL_VERSION = "2012-11-30"
 ENDPOINT_FINE_NAME = "WireServer"
 
@@ -542,6 +544,7 @@ class WireClient(object):
         self.certs = None
         self.ext_conf = None
         self.host_plugin = None
+        self.vm_artifacts_profile_etag = None
         self.status_blob = StatusBlob(self)
         self.goal_state_flusher = StateFlusher(conf.get_lib_dir())
 
@@ -606,7 +609,7 @@ class WireClient(object):
     def fetch_manifest_through_host(self, uri):
         host = self.get_host_plugin()
         uri, headers = host.get_artifact_request(uri)
-        response = self.fetch(uri, headers, use_proxy=False)
+        response, _ = self.fetch(uri, headers, use_proxy=False)
         return response
 
     def fetch_manifest(self, version_uris):
@@ -621,7 +624,7 @@ class WireClient(object):
                 logger.verbose('The specified manifest URL is empty, ignored.')
                 continue
 
-            direct_func = lambda: self.fetch(version.uri)
+            direct_func, _ = lambda func, etag: self.fetch(version.uri)
             # NOTE: the host_func may be called after refreshing the goal state, be careful about any goal state data
             # in the lambda.
             host_func = lambda: self.fetch_manifest_through_host(version.uri)
@@ -661,11 +664,13 @@ class WireClient(object):
     def fetch(self, uri, headers=None, use_proxy=None, decode=True):
         logger.verbose("Fetch [{0}] with headers [{1}]", uri, headers)
         content = None
+        etag = None
         response = self._fetch_response(uri, headers, use_proxy)
-        if response is not None:
+        if response is not None and not restutil.request_not_modified(response):
+            etag = response.getheader(HEADER_ETAG, None)
             response_content = response.read()
             content = self.decode_config(response_content) if decode else response_content
-        return content
+        return content, etag
 
     def _fetch_response(self, uri, headers=None, use_proxy=None):
         resp = None
@@ -676,7 +681,10 @@ class WireClient(object):
                 headers=headers,
                 use_proxy=use_proxy)
 
-            if restutil.request_failed(resp):
+            if restutil.request_not_modified(resp):
+                if self.host_plugin is not None:
+                    self.host_plugin.report_fetch_health(uri, source='WireClient')
+            elif restutil.request_failed(resp):
                 error_response = restutil.read_response_error(resp)
                 msg = "Fetch failed from [{0}]: {1}".format(uri, error_response)
                 logger.warn(msg)
@@ -1246,21 +1254,22 @@ class WireClient(object):
         return self.ext_conf and not \
             textutil.is_str_none_or_whitespace(self.ext_conf.artifacts_profile_blob)
 
-    def get_artifacts_profile_through_host(self, blob):
+    def get_artifacts_profile_through_host(self, blob, etag=None):
         host = self.get_host_plugin()
-        uri, headers = host.get_artifact_request(blob)
-        profile = self.fetch(uri, headers, use_proxy=False)
-        return profile
+        uri, headers = host.get_artifact_request(blob, etag=etag)
+        profile, etag = self.fetch(uri, headers, use_proxy=False)
+        return profile, etag
 
     def get_artifacts_profile(self):
         artifacts_profile = None
 
         if self.has_artifacts_profile_blob():
             blob = self.ext_conf.artifacts_profile_blob
-            direct_func = lambda: self.fetch(blob)
+            direct_func = lambda fu, et: self.fetch(blob)
             # NOTE: the host_func may be called after refreshing the goal state, be careful about any goal state data
             # in the lambda.
-            host_func = lambda: self.get_artifacts_profile_through_host(blob)
+            host_func = lambda fu, et: self.get_artifacts_profile_through_host(
+                blob, self.vm_artifacts_profile_etag)
 
             logger.verbose("Retrieving the artifacts profile")
 
@@ -1273,7 +1282,7 @@ class WireClient(object):
             if not textutil.is_str_empty(profile):
                 logger.verbose("Artifacts profile downloaded")
                 try:
-                    artifacts_profile = InVMArtifactsProfile(profile)
+                    artifacts_profile, etag = InVMArtifactsProfile(profile)
                 except Exception:
                     logger.warn("Could not parse artifacts profile blob")
                     msg = "Content: [{0}]".format(profile)
@@ -1285,6 +1294,9 @@ class WireClient(object):
                                  message=msg,
                                  log_event=False)
 
+                if etag is None:
+                    logger.info("Received a new etag for the VMArtifactsProfile blob: {0}", etag)
+                    self.vm_artifacts_profile_etag = etag
         return artifacts_profile
 
 

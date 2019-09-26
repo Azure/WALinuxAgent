@@ -43,6 +43,7 @@ HEADER_VERSION = "x-ms-version"
 HEADER_HOST_CONFIG_NAME = "x-ms-host-config-name"
 HEADER_ARTIFACT_LOCATION = "x-ms-artifact-location"
 HEADER_ARTIFACT_MANIFEST_LOCATION = "x-ms-artifact-manifest-location"
+HEADER_IF_NONE_MATCH = "if-none-match"
 MAXIMUM_PAGEBLOB_PAGE_SIZE = 4 * 1024 * 1024  # Max page size: 4MB
 
 
@@ -124,7 +125,7 @@ class HostPluginProtocol(object):
 
         return return_val
 
-    def get_artifact_request(self, artifact_url, artifact_manifest_url=None):
+    def get_artifact_request(self, artifact_url, artifact_manifest_url=None, etag=None):
         if not self.ensure_initialized():
             raise ProtocolError("HostGAPlugin: Host plugin channel is not available")
 
@@ -140,6 +141,9 @@ class HostPluginProtocol(object):
 
         if artifact_manifest_url is not None:
             headers[HEADER_ARTIFACT_MANIFEST_LOCATION] = artifact_manifest_url
+
+        if etag is not None:
+            headers[HEADER_IF_NONE_MATCH] = etag
 
         return url, headers
 
