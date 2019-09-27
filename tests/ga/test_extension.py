@@ -27,8 +27,6 @@ from azurelinuxagent.common.protocol.restapi import Extension, ExtHandlerPropert
 from azurelinuxagent.ga.exthandlers import *
 from azurelinuxagent.common.protocol.wire import WireProtocol, InVMArtifactsProfile
 
-from tests.tools import *
-
 
 def do_not_run_test():
     return True
@@ -689,8 +687,7 @@ class TestExtension(ExtensionTestCase):
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
         protocol.download_ext_handler_pkg = Mock(side_effect=ProtocolError)
 
-        with patch("time.sleep", side_effect=mock_sleep(0.1)):
-            exthandlers_handler.run()
+        exthandlers_handler.run()
 
         self.assertEquals(0, mock_add_event.call_count)
 
