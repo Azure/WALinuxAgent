@@ -27,7 +27,7 @@ from azurelinuxagent.common.protocol.restapi import Extension, ExtHandlerPropert
 from azurelinuxagent.ga.exthandlers import *
 from azurelinuxagent.common.protocol.wire import WireProtocol, InVMArtifactsProfile
 
-from tests.tools import mock_sleep
+from tests.tools import *
 
 
 def do_not_run_test():
