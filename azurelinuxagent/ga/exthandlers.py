@@ -40,7 +40,7 @@ from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
 from azurelinuxagent.common.errorstate import ErrorState, ERROR_STATE_DELTA_INSTALL
 from azurelinuxagent.common.event import add_event, WALAEventOperation, elapsed_milliseconds, report_event
 from azurelinuxagent.common.exception import ExtensionError, ProtocolError, ProtocolNotFoundError, \
-    ExtensionDownloadError, ExtensionOperationError, ExtensionErrorCodes, ExtensionUpdateError, LaunchCommandError
+    ExtensionDownloadError, ExtensionErrorCodes, ExtensionUpdateError, ExtensionOperationError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol import get_protocol_util
 from azurelinuxagent.common.protocol.restapi import ExtHandlerStatus, \
@@ -74,6 +74,10 @@ AGENT_STATUS_FILE = "waagent_status.json"
 
 NUMBER_OF_DOWNLOAD_RETRIES = 5
 
+# This is the default value for the env variables, whenever we call a command which is not an update scenario, we
+# set the env variable value to NOT_RUN to reduce ambiguity for the extension publishers
+NOT_RUN = "NOT_RUN"
+
 
 class ExtCommandEnvVariable(object):
     Prefix = "AZURE_GUEST_AGENT"
@@ -82,7 +86,6 @@ class ExtCommandEnvVariable(object):
     ExtensionPath = "%s_EXTENSION_PATH" % Prefix
     ExtensionVersion = "%s_EXTENSION_VERSION" % Prefix
     ExtensionSeqNumber = "ConfigSequenceNumber"  # At par with Windows Guest Agent
-    NotRun = "NotRun"
 
 
 def get_traceback(e):
@@ -448,8 +451,6 @@ class ExtHandlersHandler(object):
         except ExtensionUpdateError as e:
             # Not reporting the error as it has already been reported from the old version
             self.handle_ext_handler_error(ext_handler_i, e, e.code, report_telemetry_event=False)
-        except ExtensionOperationError as e:
-            self.handle_ext_handler_error(ext_handler_i, e, e.code)
         except ExtensionDownloadError as e:
             self.handle_ext_handler_download_error(ext_handler_i, e, e.code)
         except ExtensionError as e:
@@ -521,7 +522,8 @@ class ExtHandlersHandler(object):
                 if not continue_on_update_failure:
                     raise ExtensionUpdateError(msg)
 
-                if isinstance(e, LaunchCommandError):
+                exit_code = e.code
+                if isinstance(e, ExtensionOperationError):
                     exit_code = e.exit_code
 
                 logger.info("Continue on Update failure flag is set, proceeding with update")
@@ -952,7 +954,7 @@ class ExtHandlerInstance(object):
         self.create_handler_env()
 
     def enable(self, uninstall_exit_code=None):
-        uninstall_exit_code = str(uninstall_exit_code) if uninstall_exit_code is not None else ExtCommandEnvVariable.NotRun
+        uninstall_exit_code = str(uninstall_exit_code) if uninstall_exit_code is not None else NOT_RUN
         env = {ExtCommandEnvVariable.UninstallReturnCode: uninstall_exit_code}
 
         self.set_operation(WALAEventOperation.Enable)
@@ -975,7 +977,7 @@ class ExtHandlerInstance(object):
         self.set_handler_status(status="NotReady", message="Plugin disabled")
 
     def install(self, uninstall_exit_code=None):
-        uninstall_exit_code = str(uninstall_exit_code) if uninstall_exit_code is not None else ExtCommandEnvVariable.NotRun
+        uninstall_exit_code = str(uninstall_exit_code) if uninstall_exit_code is not None else NOT_RUN
         env = {ExtCommandEnvVariable.UninstallReturnCode: uninstall_exit_code}
 
         man = self.load_manifest()
@@ -1025,7 +1027,7 @@ class ExtHandlerInstance(object):
         if version is None:
             version = self.ext_handler.properties.version
 
-        disable_exit_code = str(disable_exit_code) if disable_exit_code is not None else ExtCommandEnvVariable.NotRun
+        disable_exit_code = str(disable_exit_code) if disable_exit_code is not None else NOT_RUN
         env = {'VERSION': version, ExtCommandEnvVariable.DisableReturnCode: disable_exit_code}
 
         try:
@@ -1236,8 +1238,8 @@ class ExtHandlerInstance(object):
                         error_code=extension_error_code)
 
                 except OSError as e:
-                    raise ExtensionOperationError("Failed to launch '{0}': {1}".format(full_path, e.strerror),
-                                                  code=extension_error_code)
+                    raise ExtensionError("Failed to launch '{0}': {1}".format(full_path, e.strerror),
+                                         code=extension_error_code)
 
                 duration = elapsed_milliseconds(begin_utc)
                 log_msg = "{0}\n{1}".format(cmd, "\n".join([line for line in process_output.split('\n') if line != ""]))

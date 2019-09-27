@@ -27,13 +27,6 @@ from azurelinuxagent.common.protocol.restapi import Extension, ExtHandlerPropert
 from azurelinuxagent.ga.exthandlers import *
 from azurelinuxagent.common.protocol.wire import WireProtocol, InVMArtifactsProfile
 
-# Mock sleep to reduce test execution time
-SLEEP = time.sleep
-
-
-def mock_sleep(sec=0.01):
-    SLEEP(sec)
-
 
 def do_not_run_test():
     return True
@@ -690,14 +683,11 @@ class TestExtension(ExtensionTestCase):
     def test_ext_handler_download_failure_transient(self, mock_add_event, *args):
         original_sleep = time.sleep
 
-        def mock_sleep(*args, **kwargs):
-            return original_sleep(0.1)
-
         test_data = WireProtocolData(DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
         protocol.download_ext_handler_pkg = Mock(side_effect=ProtocolError)
 
-        with patch("time.sleep", side_effect=mock_sleep):
+        with patch("time.sleep", side_effect=mock_sleep(0.1)):
             exthandlers_handler.run()
 
         self.assertEquals(0, mock_add_event.call_count)
@@ -1610,10 +1600,10 @@ class TestExtension(ExtensionTestCase):
             # Ensure the new run didn't have Disable Return Code env variable
             self.assertNotIn(ExtCommandEnvVariable.DisableReturnCode, new_enable_kwargs['env'])
 
-            # Ensure the new run had Uninstall Return Code env variable == NotRun
+            # Ensure the new run had Uninstall Return Code env variable == NOT_RUN
             self.assertIn(ExtCommandEnvVariable.UninstallReturnCode, new_enable_kwargs['env'])
             self.assertTrue(
-                new_enable_kwargs['env'][ExtCommandEnvVariable.UninstallReturnCode] == ExtCommandEnvVariable.NotRun)
+                new_enable_kwargs['env'][ExtCommandEnvVariable.UninstallReturnCode] == NOT_RUN)
 
         # Ensure the handler status and ext_status is successful
         self._assert_handler_status(protocol.report_vm_status, "Ready", expected_ext_count=1, version="1.0.1")

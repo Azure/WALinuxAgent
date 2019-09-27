@@ -17,7 +17,7 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-from azurelinuxagent.common.exception import ExtensionErrorCodes, LaunchCommandError
+from azurelinuxagent.common.exception import ExtensionErrorCodes, ExtensionOperationError, ExtensionError
 from azurelinuxagent.common.future import ustr
 import os
 import signal
@@ -68,13 +68,12 @@ def handle_process_completion(process, command, timeout, stdout, stderr, error_c
     process_output = read_output(stdout, stderr)
 
     if timed_out:
-        raise LaunchCommandError("Timeout({0}): {1}\n{2}".format(timeout, command, process_output),
-                                 code=ExtensionErrorCodes.PluginHandlerScriptTimedout,
-                                 exit_code=ExtensionErrorCodes.PluginHandlerScriptTimedout)
+        raise ExtensionError("Timeout({0}): {1}\n{2}".format(timeout, command, process_output),
+                             code=ExtensionErrorCodes.PluginHandlerScriptTimedout)
 
     if return_code != 0:
-        raise LaunchCommandError("Non-zero exit code: {0}, {1}\n{2}".format(return_code, command, process_output),
-                                 code=error_code, exit_code=return_code)
+        raise ExtensionOperationError("Non-zero exit code: {0}, {1}\n{2}".format(return_code, command, process_output),
+                                      code=error_code, exit_code=return_code)
 
     return process_output
 
