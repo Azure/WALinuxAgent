@@ -86,6 +86,7 @@ class ExtCommandEnvVariable(object):
     ExtensionPath = "%s_EXTENSION_PATH" % Prefix
     ExtensionVersion = "%s_EXTENSION_VERSION" % Prefix
     ExtensionSeqNumber = "ConfigSequenceNumber"  # At par with Windows Guest Agent
+    UpdatingFromVersion = "%s_UPDATING_FROM_VERSION" % Prefix
 
 
 def get_traceback(e):
@@ -533,10 +534,12 @@ class ExtHandlersHandler(object):
             func=lambda: old_ext_handler_i.disable())
         ext_handler_i.copy_status_files(old_ext_handler_i)
         if ext_handler_i.version_gt(old_ext_handler_i):
-            ext_handler_i.update(disable_exit_code=disable_exit_code)
+            ext_handler_i.update(disable_exit_code=disable_exit_code,
+                                 updating_from_version=old_ext_handler_i.ext_handler.properties.version)
         else:
-            old_ext_handler_i.update(version=ext_handler_i.ext_handler.properties.version,
-                                     disable_exit_code=disable_exit_code)
+            updating_from_version = ext_handler_i.ext_handler.properties.version
+            old_ext_handler_i.update(version=updating_from_version,
+                                     disable_exit_code=disable_exit_code, updating_from_version=updating_from_version)
         uninstall_exit_code = execute_old_handler_command_and_return_if_succeeds(
             func=lambda: old_ext_handler_i.uninstall())
         old_ext_handler_i.remove_ext_handler()
@@ -1023,12 +1026,13 @@ class ExtHandlerInstance(object):
         # Also remove the cgroups for the extension
         CGroupConfigurator.get_instance().remove_extension_cgroups(self.get_full_name())
 
-    def update(self, version=None, disable_exit_code=None):
+    def update(self, version=None, disable_exit_code=None, updating_from_version=None):
         if version is None:
             version = self.ext_handler.properties.version
 
         disable_exit_code = str(disable_exit_code) if disable_exit_code is not None else NOT_RUN
-        env = {'VERSION': version, ExtCommandEnvVariable.DisableReturnCode: disable_exit_code}
+        env = {'VERSION': version, ExtCommandEnvVariable.DisableReturnCode: disable_exit_code,
+               ExtCommandEnvVariable.UpdatingFromVersion: updating_from_version}
 
         try:
             self.set_operation(WALAEventOperation.Update)
