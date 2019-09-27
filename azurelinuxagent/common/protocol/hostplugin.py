@@ -43,6 +43,7 @@ HEADER_VERSION = "x-ms-version"
 HEADER_HOST_CONFIG_NAME = "x-ms-host-config-name"
 HEADER_ARTIFACT_LOCATION = "x-ms-artifact-location"
 HEADER_ARTIFACT_MANIFEST_LOCATION = "x-ms-artifact-manifest-location"
+HEADER_VERIFY_FROM_ARTIFACTS_BLOB = "x-ms-verify-from-artifacts-blob"
 HEADER_IF_NONE_MATCH = "if-none-match"
 MAXIMUM_PAGEBLOB_PAGE_SIZE = 4 * 1024 * 1024  # Max page size: 4MB
 
@@ -137,7 +138,8 @@ class HostPluginProtocol(object):
         headers = {HEADER_VERSION: API_VERSION,
                    HEADER_CONTAINER_ID: self.container_id,
                    HEADER_HOST_CONFIG_NAME: self.role_config_name,
-                   HEADER_ARTIFACT_LOCATION: artifact_url}
+                   HEADER_ARTIFACT_LOCATION: artifact_url,
+                   HEADER_VERIFY_FROM_ARTIFACTS_BLOB: "true"}
 
         if artifact_manifest_url is not None:
             headers[HEADER_ARTIFACT_MANIFEST_LOCATION] = artifact_manifest_url

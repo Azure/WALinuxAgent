@@ -624,7 +624,7 @@ class WireClient(object):
                 logger.verbose('The specified manifest URL is empty, ignored.')
                 continue
 
-            direct_func, _ = lambda func, etag: self.fetch(version.uri)
+            direct_func = lambda: self.fetch(version.uri)
             # NOTE: the host_func may be called after refreshing the goal state, be careful about any goal state data
             # in the lambda.
             host_func = lambda: self.fetch_manifest_through_host(version.uri)
@@ -661,7 +661,7 @@ class WireClient(object):
 
         return success
 
-    def fetch(self, uri, headers=None, use_proxy=None, decode=True):
+    def fetch_content_and_etag(self, uri, headers=None, use_proxy=None, decode=True):
         logger.verbose("Fetch [{0}] with headers [{1}]", uri, headers)
         content = None
         etag = None
@@ -671,6 +671,15 @@ class WireClient(object):
             response_content = response.read()
             content = self.decode_config(response_content) if decode else response_content
         return content, etag
+
+    def fetch(self, uri, headers=None, use_proxy=None, decode=True):
+        logger.verbose("Fetch [{0}] with headers [{1}]", uri, headers)
+        content = None
+        response = self._fetch_response(uri, headers, use_proxy)
+        if response is not None and not restutil.request_not_modified(response):
+            response_content = response.read()
+            content = self.decode_config(response_content) if decode else response_content
+        return content
 
     def _fetch_response(self, uri, headers=None, use_proxy=None):
         resp = None
@@ -1000,6 +1009,37 @@ class WireClient(object):
                      "advised by Fabric.").format(PROTOCOL_VERSION)
             raise ProtocolNotFoundError(error)
 
+    def send_request_hostplugin_first(self, direct_func, host_func):
+        # For certain calls we want them to go through the HostGAPlugin first, since it
+        # supports the If-None-Match header that reduces how often we need to parse
+
+        # note that this method requires a lambda that returns two values
+        ret = None
+        etag = None
+        try:
+            ret, etag = direct_func()
+
+            # Different direct channel functions report failure in different ways: by returning None, False,
+            # or raising ResourceGone or InvalidContainer exceptions.
+            if not ret:
+                logger.info("Request failed using the HostGAPlugin. switching to direct.")
+        except (ResourceGoneError, InvalidContainerError) as e:
+            msg = "Request failed with the current host plugin configuration." \
+                  "ContainerId: {0}, role config file: {1}." \
+                  "Error: {2}".format(self.host_plugin.container_id, self.host_plugin.role_config_name, ustr(e))
+            logger.info(msg)
+
+        if ret:
+            return ret, etag
+
+        try:
+            ret, etag = host_func()
+        except (ResourceGoneError, InvalidContainerError) as e:
+            logger.info("Request failed with direct. Error: {0}".format(ustr(e)))
+            raise
+
+        return ret, etag
+
     def send_request_using_appropriate_channel(self, direct_func, host_func):
         # A wrapper method for all function calls that send HTTP requests. The purpose of the method is to
         # define which channel to use, direct or through the host plugin. For the host plugin channel,
@@ -1262,10 +1302,11 @@ class WireClient(object):
 
     def get_artifacts_profile(self):
         artifacts_profile = None
+        etag = None
 
         if self.has_artifacts_profile_blob():
             blob = self.ext_conf.artifacts_profile_blob
-            direct_func = lambda fu, et: self.fetch(blob)
+            direct_func = lambda fu, et: self.fetch_content_and_etag(blob)
             # NOTE: the host_func may be called after refreshing the goal state, be careful about any goal state data
             # in the lambda.
             host_func = lambda fu, et: self.get_artifacts_profile_through_host(
@@ -1274,7 +1315,7 @@ class WireClient(object):
             logger.verbose("Retrieving the artifacts profile")
 
             try:
-                profile = self.send_request_using_appropriate_channel(direct_func, host_func)
+                profile, etag = self.send_request_hostplugin_first(direct_func, host_func)
             except Exception as e:
                 logger.warn("Exception retrieving artifacts profile: {0}".format(ustr(e)))
                 return None
@@ -1282,7 +1323,7 @@ class WireClient(object):
             if not textutil.is_str_empty(profile):
                 logger.verbose("Artifacts profile downloaded")
                 try:
-                    artifacts_profile, etag = InVMArtifactsProfile(profile)
+                    artifacts_profile = InVMArtifactsProfile(profile)
                 except Exception:
                     logger.warn("Could not parse artifacts profile blob")
                     msg = "Content: [{0}]".format(profile)
