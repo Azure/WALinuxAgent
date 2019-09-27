@@ -439,7 +439,7 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
             self.assert_cgroups_created(extension_cgroups)
 
     @attr('requires_sudo')
-    @patch('time.sleep', side_effect=lambda _: mock_sleep)
+    @patch('time.sleep', side_effect=lambda _: mock_sleep(0.2))
     def test_start_extension_command_should_use_systemd_and_not_the_fallback_option_if_successful(self, _):
         self.assertTrue(i_am_root(), "Test does not run when non-root")
 

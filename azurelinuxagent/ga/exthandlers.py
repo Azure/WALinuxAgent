@@ -1224,7 +1224,7 @@ class ExtHandlerInstance(object):
                 # Always add Extension Path and version to the current launch_command (Ask from publishers)
                 env.update({ExtCommandEnvVariable.ExtensionPath: base_dir,
                             ExtCommandEnvVariable.ExtensionVersion: self.ext_handler.properties.version,
-                            ExtCommandEnvVariable.CurrentAgentVersion: GOAL_STATE_AGENT_VERSION,
+                            ExtCommandEnvVariable.CurrentAgentVersion: str(GOAL_STATE_AGENT_VERSION),
                             ExtCommandEnvVariable.ExtensionSeqNumber: str(self.get_seq_no())})
 
                 try:
