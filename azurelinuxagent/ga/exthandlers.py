@@ -87,6 +87,7 @@ class ExtCommandEnvVariable(object):
     ExtensionVersion = "%s_EXTENSION_VERSION" % Prefix
     ExtensionSeqNumber = "ConfigSequenceNumber"  # At par with Windows Guest Agent
     UpdatingFromVersion = "%s_UPDATING_FROM_VERSION" % Prefix
+    CurrentAgentVersion = "%s_CURRENT_VERSION" % Prefix
 
 
 def get_traceback(e):
@@ -1223,6 +1224,7 @@ class ExtHandlerInstance(object):
                 # Always add Extension Path and version to the current launch_command (Ask from publishers)
                 env.update({ExtCommandEnvVariable.ExtensionPath: base_dir,
                             ExtCommandEnvVariable.ExtensionVersion: self.ext_handler.properties.version,
+                            ExtCommandEnvVariable.CurrentAgentVersion: GOAL_STATE_AGENT_VERSION,
                             ExtCommandEnvVariable.ExtensionSeqNumber: str(self.get_seq_no())})
 
                 try:
