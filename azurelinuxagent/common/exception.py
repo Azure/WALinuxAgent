@@ -67,6 +67,17 @@ class ExtensionError(AgentError):
         self.code = code
 
 
+class ExtensionOperationError(ExtensionError):
+    """
+    When the command times out or returns with a non-zero exit_code
+    """
+
+    def __init__(self, msg=None, inner=None, code=-1, exit_code=-1):
+        super(ExtensionOperationError, self).__init__(msg, inner)
+        self.code = code
+        self.exit_code = exit_code
+
+
 class ExtensionUpdateError(ExtensionError):
     """
     When failed to update an extension
@@ -83,15 +94,6 @@ class ExtensionDownloadError(ExtensionError):
 
     def __init__(self, msg=None, inner=None, code=-1):
         super(ExtensionDownloadError, self).__init__(msg, inner, code)
-
-
-class ExtensionOperationError(ExtensionError):
-    """
-    When failed to execute an extension
-    """
-
-    def __init__(self, msg=None, inner=None, code=-1):
-        super(ExtensionOperationError, self).__init__(msg, inner, code)
 
 
 class ProvisionError(AgentError):

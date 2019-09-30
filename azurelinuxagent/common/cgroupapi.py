@@ -25,11 +25,11 @@ from azurelinuxagent.common.cgroup import CGroup
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.conf import get_agent_pid_file_path
 from azurelinuxagent.common.event import add_event, WALAEventOperation
-from azurelinuxagent.common.exception import CGroupsException, ExtensionError, ExtensionErrorCodes
+from azurelinuxagent.common.exception import CGroupsException, ExtensionErrorCodes, ExtensionError, \
+    ExtensionOperationError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.utils import fileutil, shellutil
-from azurelinuxagent.common.utils.extensionprocessutil import read_output, handle_process_completion, \
-                                                     wait_for_process_completion_or_timeout
+from azurelinuxagent.common.utils.extensionprocessutil import handle_process_completion, read_output
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 
 CGROUPS_FILE_SYSTEM_ROOT = '/sys/fs/cgroup'
@@ -497,37 +497,32 @@ After=system-{1}.slice""".format(extension_name, EXTENSIONS_ROOT_CGROUP_NAME)
         self.track_cgroups(extension_cgroups)
 
         # Wait for process completion or timeout
-        timed_out, return_code = wait_for_process_completion_or_timeout(process, timeout)
-        process_output = read_output(stdout, stderr)
-
-        if return_code == 0:
-            # The process terminated in time and successfully
-            return extension_cgroups, process_output
-        else:
+        try:
+            process_output = handle_process_completion(process=process,
+                                                       command=command,
+                                                       timeout=timeout,
+                                                       stdout=stdout,
+                                                       stderr=stderr,
+                                                       error_code=error_code)
+        except ExtensionError as e:
             # The extension didn't terminate successfully. Determine whether it was due to systemd errors or
             # extension errors.
+            process_output = read_output(stdout, stderr)
             systemd_failure = self._is_systemd_failure(scope_name, process_output)
 
             if not systemd_failure:
-                # There was an extension error; it either timed out or returned a non-zero exit code.
-                if timed_out:
-                    raise ExtensionError("Timeout({0}): {1}\n{2}".format(timeout, command, process_output),
-                                         code=ExtensionErrorCodes.PluginHandlerScriptTimedout)
-                else:
-                    raise ExtensionError("Non-zero exit code: {0}, {1}\n{2}".format(return_code,
-                                                                                    command,
-                                                                                    process_output),
-                                         code=error_code)
+                # There was an extension error; it either timed out or returned a non-zero exit code. Re-raise the error
+                raise
             else:
                 # There was an issue with systemd-run. We need to log it and retry the extension without systemd.
+                err_msg = 'Systemd process exited with code %s and output %s' % (e.exit_code, process_output) \
+                    if isinstance(e, ExtensionOperationError) else "Systemd timed-out, output: %s" % process_output
                 add_event(AGENT_NAME,
                           version=CURRENT_VERSION,
                           op=WALAEventOperation.InvokeCommandUsingSystemd,
                           is_success=False,
-                          message='Failed to run systemd-run for unit {0}.scope. '
-                                  'Process exited with code {1} and output {2}'.format(scope_name,
-                                                                                       return_code,
-                                                                                       process_output))
+                          message='Failed to run systemd-run for unit {0}.scope. {1}'
+                                  .format(scope_name, err_msg))
                 # Reset the stdout and stderr
                 stdout.truncate(0)
                 stderr.truncate(0)
@@ -549,6 +544,9 @@ After=system-{1}.slice""".format(extension_name, EXTENSIONS_ROOT_CGROUP_NAME)
                                                            error_code=error_code)
 
                 return [], process_output
+
+        # The process terminated in time and successfully
+        return extension_cgroups, process_output
 
     def cleanup_old_cgroups(self):
         # No cleanup needed from the old daemon in the systemd case.
