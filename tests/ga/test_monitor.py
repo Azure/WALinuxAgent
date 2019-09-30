@@ -97,19 +97,16 @@ class TestMonitor(AgentTestCase):
         tenant_name = 'dummy_tenant'
         role_name = 'dummy_role'
         role_instance_name = 'dummy_role_instance'
-        container_id = 'dummy_container_id'
 
         vm_name_param = "VMName"
         tenant_name_param = "TenantName"
         role_name_param = "RoleName"
         role_instance_name_param = "RoleInstanceName"
-        container_id_param = "ContainerId"
 
         sysinfo = [TelemetryEventParam(vm_name_param, vm_name),
                    TelemetryEventParam(tenant_name_param, tenant_name),
                    TelemetryEventParam(role_name_param, role_name),
-                   TelemetryEventParam(role_instance_name_param, role_instance_name),
-                   TelemetryEventParam(container_id_param, container_id)]
+                   TelemetryEventParam(role_instance_name_param, role_instance_name)]
         monitor_handler.sysinfo = sysinfo
         monitor_handler.add_sysinfo(event)
 
@@ -130,11 +127,8 @@ class TestMonitor(AgentTestCase):
             elif p.name == role_instance_name_param:
                 self.assertEqual(role_instance_name, p.value)
                 counter += 1
-            elif p.name == container_id_param:
-                self.assertEqual(container_id, p.value)
-                counter += 1
 
-        self.assertEqual(5, counter)
+        self.assertEqual(4, counter)
 
     @patch("azurelinuxagent.ga.monitor.MonitorHandler.send_telemetry_heartbeat")
     @patch("azurelinuxagent.ga.monitor.MonitorHandler.collect_and_send_events")

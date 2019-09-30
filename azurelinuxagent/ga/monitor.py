@@ -188,8 +188,6 @@ class MonitorHandler(object):
                                                     vminfo.roleName))
             self.sysinfo.append(TelemetryEventParam("RoleInstanceName",
                                                     vminfo.roleInstanceName))
-            self.sysinfo.append(TelemetryEventParam("ContainerId",
-                                                    vminfo.containerId))
         except ProtocolError as e:
             logger.warn("Failed to get system info: {0}", ustr(e))
 

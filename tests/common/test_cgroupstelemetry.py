@@ -593,7 +593,7 @@ class TestCGroupsTelemetry(AgentTestCase):
         self.ext_handler.properties = ext_handler_properties
         self.ext_handler_instance = ExtHandlerInstance(ext_handler=self.ext_handler, protocol=None)
 
-        command = self._create_script("keep_cpu_busy_and_consume_memory_for_5_seconds", '''
+        command = self.create_script("keep_cpu_busy_and_consume_memory_for_5_seconds", '''
 nohup python -c "import time
 
 for i in range(5):

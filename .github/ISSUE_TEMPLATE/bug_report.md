@@ -3,7 +3,7 @@ name: Bug report
 about: Create a report to help us improve
 title: "[BUG]"
 labels: triage
-assignees: narrieta, pgombar, vrdmr, roiyz-msft
+assignees: narrieta, pgombar, vrdmr, larohra
 
 ---
 
