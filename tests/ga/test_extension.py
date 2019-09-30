@@ -321,6 +321,14 @@ class TestExtension(ExtensionTestCase):
         self.assertEquals(expected_ext_count, len(handler_status.extensions))
         return
 
+    def _assert_ext_pkg_file_status(self, expected_to_be_present=True, extension_version="1.0.0",
+                                    extension_handler_name="OSTCExtensions.ExampleHandlerLinux"):
+        zip_file_format = "{0}__{1}.zip"
+        if expected_to_be_present:
+            self.assertIn(zip_file_format.format(extension_handler_name, extension_version), os.listdir(conf.get_lib_dir()))
+        else:
+            self.assertNotIn(zip_file_format.format(extension_handler_name, extension_version), os.listdir(conf.get_lib_dir()))
+
     def _assert_no_handler_status(self, report_vm_status):
         self.assertTrue(report_vm_status.called)
         args, kw = report_vm_status.call_args
@@ -434,6 +442,114 @@ class TestExtension(ExtensionTestCase):
                                                             "<Incarnation>7<")
         exthandlers_handler.run()
         self._assert_no_handler_status(protocol.report_vm_status)
+
+    def test_ext_zip_file_packages_removed_in_update_case(self, *args):
+        test_data = WireProtocolData(DATA_FILE)
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+
+        # Test enable scenario.
+        exthandlers_handler.run()
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
+        self._assert_ext_status(protocol.report_ext_status, "success", 0)
+        self._assert_ext_pkg_file_status(expected_to_be_present=True,
+                                         extension_version="1.0.0")
+
+        # Update the package
+        test_data.goal_state = test_data.goal_state.replace("<Incarnation>1<",
+                                                            "<Incarnation>2<")
+        test_data.ext_conf = test_data.ext_conf.replace("seqNo=\"0\"",
+                                                        "seqNo=\"1\"")
+        test_data.ext_conf = test_data.ext_conf.replace("1.0.0", "1.1.0")
+        exthandlers_handler.run()
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.1.0")
+        self._assert_ext_status(protocol.report_ext_status, "success", 1)
+        self._assert_ext_pkg_file_status(expected_to_be_present=False,
+                                         extension_version="1.0.0")
+        self._assert_ext_pkg_file_status(expected_to_be_present=True,
+                                         extension_version="1.1.0")
+
+        # Update the package second time
+        test_data.goal_state = test_data.goal_state.replace("<Incarnation>2<",
+                                                            "<Incarnation>3<")
+        test_data.ext_conf = test_data.ext_conf.replace("seqNo=\"1\"",
+                                                        "seqNo=\"2\"")
+        test_data.ext_conf = test_data.ext_conf.replace("1.1.0", "1.2.0")
+        exthandlers_handler.run()
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.2.0")
+        self._assert_ext_status(protocol.report_ext_status, "success", 2)
+        self._assert_ext_pkg_file_status(expected_to_be_present=False,
+                                         extension_version="1.1.0")
+        self._assert_ext_pkg_file_status(expected_to_be_present=True,
+                                         extension_version="1.2.0")
+
+    def test_ext_zip_file_packages_removed_in_uninstall_case(self, *args):
+        test_data = WireProtocolData(DATA_FILE)
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+        extension_version = "1.0.0"
+
+        # Test enable scenario.
+        exthandlers_handler.run()
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, extension_version)
+        self._assert_ext_status(protocol.report_ext_status, "success", 0)
+        self._assert_ext_pkg_file_status(expected_to_be_present=True,
+                                         extension_version=extension_version)
+
+        # Test uninstall
+        test_data.goal_state = test_data.goal_state.replace("<Incarnation>1<",
+                                                            "<Incarnation>2<")
+        test_data.ext_conf = test_data.ext_conf.replace("enabled", "uninstall")
+        exthandlers_handler.run()
+        self._assert_no_handler_status(protocol.report_vm_status)
+        self._assert_ext_pkg_file_status(expected_to_be_present=False,
+                                         extension_version=extension_version)
+
+    def test_ext_zip_file_packages_removed_in_update_and_uninstall_case(self, *args):
+        test_data = WireProtocolData(DATA_FILE)
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+
+        # Test enable scenario.
+        exthandlers_handler.run()
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
+        self._assert_ext_status(protocol.report_ext_status, "success", 0)
+        self._assert_ext_pkg_file_status(expected_to_be_present=True,
+                                         extension_version="1.0.0")
+
+        # Update the package
+        test_data.goal_state = test_data.goal_state.replace("<Incarnation>1<",
+                                                            "<Incarnation>2<")
+        test_data.ext_conf = test_data.ext_conf.replace("seqNo=\"0\"",
+                                                        "seqNo=\"1\"")
+        test_data.ext_conf = test_data.ext_conf.replace("1.0.0", "1.1.0")
+        exthandlers_handler.run()
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.1.0")
+        self._assert_ext_status(protocol.report_ext_status, "success", 1)
+        self._assert_ext_pkg_file_status(expected_to_be_present=False,
+                                         extension_version="1.0.0")
+        self._assert_ext_pkg_file_status(expected_to_be_present=True,
+                                         extension_version="1.1.0")
+
+        # Update the package second time
+        test_data.goal_state = test_data.goal_state.replace("<Incarnation>2<",
+                                                            "<Incarnation>3<")
+        test_data.ext_conf = test_data.ext_conf.replace("seqNo=\"1\"",
+                                                        "seqNo=\"2\"")
+        test_data.ext_conf = test_data.ext_conf.replace("1.1.0", "1.2.0")
+        exthandlers_handler.run()
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.2.0")
+        self._assert_ext_status(protocol.report_ext_status, "success", 2)
+        self._assert_ext_pkg_file_status(expected_to_be_present=False,
+                                         extension_version="1.1.0")
+        self._assert_ext_pkg_file_status(expected_to_be_present=True,
+                                         extension_version="1.2.0")
+
+        # Test uninstall
+        test_data.goal_state = test_data.goal_state.replace("<Incarnation>3<",
+                                                            "<Incarnation>4<")
+        test_data.ext_conf = test_data.ext_conf.replace("enabled", "uninstall")
+        exthandlers_handler.run()
+        self._assert_no_handler_status(protocol.report_vm_status)
+        self._assert_ext_pkg_file_status(expected_to_be_present=False,
+                                         extension_version="1.2.0")
 
     def test_ext_handler_no_settings(self, *args):
         test_data = WireProtocolData(DATA_FILE_EXT_NO_SETTINGS)

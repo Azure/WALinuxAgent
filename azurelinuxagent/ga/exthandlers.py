@@ -82,6 +82,7 @@ class ExtCommandEnvVariable(object):
     ExtensionVersion = "AZURE_GUEST_AGENT_EXTENSION_VERSION"
     ExtensionSeqNumber = "ConfigSequenceNumber"  # At par with Windows Guest Agent
 
+
 def get_traceback(e):
     if sys.version_info[0] == 3:
         return e.__traceback__
@@ -849,7 +850,7 @@ class ExtHandlerInstance(object):
         if self.pkg is None or self.pkg.uris is None or len(self.pkg.uris) == 0:
             raise ExtensionDownloadError("No package uri found")
 
-        destination = os.path.join(conf.get_lib_dir(), os.path.basename(self.pkg.uris[0].uri) + ".zip")
+        destination = os.path.join(conf.get_lib_dir(), self.get_extension_package_zipfile_name())
 
         package_exists = False
         if os.path.exists(destination):
@@ -989,16 +990,14 @@ class ExtHandlerInstance(object):
 
     def remove_ext_handler(self):
         try:
-            zip_filename = "__".join(os.path.basename(self.get_base_dir()).split("-")) + ".zip"
-            destination = os.path.join(conf.get_lib_dir(), zip_filename)
-            if os.path.exists(destination):
-                self.pkg_file = destination
-                os.remove(self.pkg_file)
+            zip_filename = os.path.join(conf.get_lib_dir(), self.get_extension_package_zipfile_name())
+            if os.path.exists(zip_filename):
+                os.remove(zip_filename)
+                self.logger.verbose("Deleted the extension zip at path {0}", zip_filename)
 
             base_dir = self.get_base_dir()
             if os.path.isdir(base_dir):
-                self.logger.info("Remove extension handler directory: {0}",
-                                 base_dir)
+                self.logger.info("Remove extension handler directory: {0}", base_dir)
 
                 # some extensions uninstall asynchronously so ignore error 2 while removing them
                 def on_rmtree_error(_, __, exc_info):
@@ -1365,6 +1364,11 @@ class ExtHandlerInstance(object):
             return handler_status
         except (IOError, ValueError) as e:
             self.logger.error("Failed to get handler status: {0}", e)
+
+    def get_extension_package_zipfile_name(self):
+        return "{0}__{1}{2}".format(self.ext_handler.name,
+                                    self.ext_handler.properties.version,
+                                    HANDLER_PKG_EXT)
 
     def get_full_name(self):
         return "{0}-{1}".format(self.ext_handler.name,
