@@ -503,7 +503,7 @@ class TestExtension(ExtensionTestCase):
         self._assert_ext_pkg_file_status(expected_to_be_present=False,
                                          extension_version=extension_version)
 
-    def test_ext_zip_file_packages_removed_in_updates_and_uninstall_case(self, *args):
+    def test_ext_zip_file_packages_removed_in_update_and_uninstall_case(self, *args):
         test_data = WireProtocolData(DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
 

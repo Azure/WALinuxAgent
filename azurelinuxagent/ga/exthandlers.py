@@ -992,7 +992,7 @@ class ExtHandlerInstance(object):
                 os.remove(zip_filename)
                 self.logger.verbose("Deleted the extension zip at path {0}", zip_filename)
 
-            base_dir = self.get_base_dir()  
+            base_dir = self.get_base_dir()
             if os.path.isdir(base_dir):
                 self.logger.info("Remove extension handler directory: {0}", base_dir)
 
