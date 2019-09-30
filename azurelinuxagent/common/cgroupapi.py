@@ -516,7 +516,7 @@ After=system-{1}.slice""".format(extension_name, EXTENSIONS_ROOT_CGROUP_NAME)
             else:
                 # There was an issue with systemd-run. We need to log it and retry the extension without systemd.
                 err_msg = 'Systemd process exited with code %s and output %s' % (e.exit_code, process_output) \
-                    if isinstance(e, ExtensionOperationError) else "Systemd Timed-out, output: %s" % process_output
+                    if isinstance(e, ExtensionOperationError) else "Systemd timed-out, output: %s" % process_output
                 add_event(AGENT_NAME,
                           version=CURRENT_VERSION,
                           op=WALAEventOperation.InvokeCommandUsingSystemd,
