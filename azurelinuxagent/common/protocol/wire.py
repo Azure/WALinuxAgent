@@ -354,9 +354,10 @@ def ext_handler_status_to_v1(handler_status, ext_statuses, timestamp):
     return v1_handler_status
 
 
-def vm_status_to_v1(vm_status, ext_statuses):
+def vm_status_to_v1(vm_status, ext_statuses, extensions_fast_track_enabled):
     timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
+    v1_supported_features = None
     v1_ga_guest_info = ga_status_to_guest_info(vm_status.vmAgent)
     v1_ga_status = ga_status_to_v1(vm_status.vmAgent)
     v1_handler_status_list = []
@@ -368,7 +369,8 @@ def vm_status_to_v1(vm_status, ext_statuses):
 
     # Inform CRP that we support FastTrack, which allows us to retrieve goal state
     # from the VMArtifactsProfile blob instead of from wire server
-    v1_supported_features = {'FastTrack': '1'}
+    if extensions_fast_track_enabled:
+        v1_supported_features = {'FastTrack': '1'}
     
     v1_agg_status = {
         'guestAgentStatus': v1_ga_status,
@@ -400,15 +402,15 @@ class StatusBlob(object):
         validate_param("extensionStatus", ext_status, ExtensionStatus)
         self.ext_statuses[ext_handler_name] = ext_status
 
-    def to_json(self):
-        report = vm_status_to_v1(self.vm_status, self.ext_statuses)
+    def to_json(self, extensions_fast_track_enabled):
+        report = vm_status_to_v1(self.vm_status, self.ext_statuses, extensions_fast_track_enabled)
         return json.dumps(report)
 
     __storage_version__ = "2014-02-14"
 
-    def prepare(self, blob_type):
+    def prepare(self, blob_type, extensions_fast_track_enabled):
         logger.verbose("Prepare status blob")
-        self.data = self.to_json()
+        self.data = self.to_json(extensions_fast_track_enabled)
         self.type = blob_type
 
     def upload(self, url):
@@ -665,18 +667,22 @@ class WireClient(object):
         logger.verbose("Fetch [{0}] with headers [{1}]", uri, headers)
         content = None
         etag = None
+        not_modified = False
         response = self._fetch_response(uri, headers, use_proxy)
         if response is not None and not restutil.request_not_modified(response):
-            etag = response.getheader(HEADER_ETAG, None)
-            response_content = response.read()
-            content = self.decode_config(response_content) if decode else response_content
-        return content, etag
+            if restutil.request_not_modified(response):
+                not_modified = True
+            else:
+                etag = response.getheader(HEADER_ETAG, None)
+                response_content = response.read()
+                content = self.decode_config(response_content) if decode else response_content
+        return content, etag, not_modified
 
     def fetch(self, uri, headers=None, use_proxy=None, decode=True):
         logger.verbose("Fetch [{0}] with headers [{1}]", uri, headers)
         content = None
         response = self._fetch_response(uri, headers, use_proxy)
-        if response is not None and not restutil.request_not_modified(response):
+        if response is not None:
             response_content = response.read()
             content = self.decode_config(response_content) if decode else response_content
         return content
@@ -1016,12 +1022,13 @@ class WireClient(object):
         # note that this method requires a lambda that returns two values
         ret = None
         etag = None
+        not_modified = False
         try:
-            ret, etag = direct_func()
+            ret, etag, not_modified = host_func()
 
             # Different direct channel functions report failure in different ways: by returning None, False,
             # or raising ResourceGone or InvalidContainer exceptions.
-            if not ret:
+            if not ret and not not_modified:
                 logger.info("Request failed using the HostGAPlugin. switching to direct.")
         except (ResourceGoneError, InvalidContainerError) as e:
             msg = "Request failed with the current host plugin configuration." \
@@ -1029,11 +1036,11 @@ class WireClient(object):
                   "Error: {2}".format(self.host_plugin.container_id, self.host_plugin.role_config_name, ustr(e))
             logger.info(msg)
 
-        if ret:
+        if ret or not_modified:
             return ret, etag
 
         try:
-            ret, etag = host_func()
+            ret = direct_func()
         except (ResourceGoneError, InvalidContainerError) as e:
             logger.info("Request failed with direct. Error: {0}".format(ustr(e)))
             raise
@@ -1118,7 +1125,7 @@ class WireClient(object):
             logger.verbose("Status Blob type is unspecified, assuming BlockBlob")
 
         try:
-            self.status_blob.prepare(blob_type)
+            self.status_blob.prepare(blob_type, conf.get_extensions_fast_track_enabled())
         except Exception as e:
             raise ProtocolError("Exception creating status blob: {0}", ustr(e))
 
@@ -1297,8 +1304,8 @@ class WireClient(object):
     def get_artifacts_profile_through_host(self, blob, etag=None):
         host = self.get_host_plugin()
         uri, headers = host.get_artifact_request(blob, etag=etag)
-        profile, etag = self.fetch(uri, headers, use_proxy=False)
-        return profile, etag
+        profile, etag, not_modified = self.fetch_content_and_etag(uri, headers, use_proxy=False)
+        return profile, etag, not_modified
 
     def get_artifacts_profile(self):
         artifacts_profile = None
@@ -1306,10 +1313,10 @@ class WireClient(object):
 
         if self.has_artifacts_profile_blob():
             blob = self.ext_conf.artifacts_profile_blob
-            direct_func = lambda fu, et: self.fetch_content_and_etag(blob)
+            direct_func = lambda: self.fetch(blob)
             # NOTE: the host_func may be called after refreshing the goal state, be careful about any goal state data
             # in the lambda.
-            host_func = lambda fu, et: self.get_artifacts_profile_through_host(
+            host_func = lambda: self.get_artifacts_profile_through_host(
                 blob, self.vm_artifacts_profile_etag)
 
             logger.verbose("Retrieving the artifacts profile")
@@ -1335,7 +1342,7 @@ class WireClient(object):
                                  message=msg,
                                  log_event=False)
 
-                if etag is None:
+                if etag is not None:
                     logger.info("Received a new etag for the VMArtifactsProfile blob: {0}", etag)
                     self.vm_artifacts_profile_etag = etag
         return artifacts_profile

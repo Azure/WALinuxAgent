@@ -347,6 +347,28 @@ class TestExtension(ExtensionTestCase):
         handler.protocol_util.get_protocol = Mock(return_value=protocol)
         return handler, protocol
 
+    def test_ext_handler_profile_blob_not_modified(self, *args):
+        test_data = WireProtocolData(DATA_FILE)
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+
+        # First goal state will be through Fabric.
+        exthandlers_handler.run()
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
+        self._assert_ext_status(protocol.report_ext_status, "success", 0)
+
+        # Now send a goal state through the VMArtifactsProfile blob
+        from azurelinuxagent.common.protocol.wire import InVMArtifactsProfile
+        mock_in_vm_artifacts_profile = InVMArtifactsProfile(test_data.vm_artifacts_profile)
+        protocol.get_artifacts_profile = Mock(return_value=mock_in_vm_artifacts_profile)
+        exthandlers_handler.run()
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
+        self._assert_ext_status(protocol.report_ext_status, "success", 1)
+
+        # For the next run, the artifacts profile didn't change
+        protocol.get_artifacts_profile = Mock(return_value=None)
+        exthandlers_handler.run()
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
+
     def test_ext_handler_profile_blob(self, *args):
         test_data = WireProtocolData(DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)

@@ -495,7 +495,46 @@ class TestWireProtocol(AgentTestCase):
             'guestOSInfo': v1_ga_guest_info,
             'supportedFeatures': { 'FastTrack': '1'}
         }
-        self.assertEqual(json.dumps(v1_vm_status), actual.to_json())
+        self.assertEqual(json.dumps(v1_vm_status), actual.to_json(extensions_fast_track_enabled=True))
+
+    @patch("socket.gethostname", return_value="hostname")
+    @patch("time.gmtime", return_value=time.localtime(1485543256))
+    def test_report_vm_status_no_fast_track(self, *args):
+        status = 'status'
+        message = 'message'
+
+        client = WireProtocol(wireserver_url).client
+        actual = StatusBlob(client=client)
+        actual.set_vm_status(VMStatus(status=status, message=message))
+        timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+        formatted_msg = {
+            'lang': 'en-US',
+            'message': message
+        }
+        v1_ga_status = {
+            'version': str(CURRENT_VERSION),
+            'status': status,
+            'formattedMessage': formatted_msg
+        }
+        v1_ga_guest_info = {
+            'computerName': socket.gethostname(),
+            'osName': DISTRO_NAME,
+            'osVersion': DISTRO_VERSION,
+            'version': str(CURRENT_VERSION),
+        }
+        v1_agg_status = {
+            'guestAgentStatus': v1_ga_status,
+            'handlerAggregateStatus': []
+        }
+        v1_vm_status = {
+            'version': '1.1',
+            'timestampUTC': timestamp,
+            'aggregateStatus': v1_agg_status,
+            'guestOSInfo': v1_ga_guest_info,
+            'supportedFeatures': None
+        }
+        self.assertEqual(json.dumps(v1_vm_status), actual.to_json(extensions_fast_track_enabled=False))
 
     @patch("azurelinuxagent.common.utils.restutil.http_request")
     def test_send_event(self, mock_http_request, *args):
@@ -746,6 +785,21 @@ class TestWireClient(AgentTestCase):
 
     @patch("azurelinuxagent.common.protocol.wire.WireClient.get_goal_state")
     @patch("azurelinuxagent.common.protocol.hostplugin.HostPluginProtocol.get_artifact_request")
+    def test_fetch_artifacts_profile_returns_empty_when_not_modified(self, mock_get_artifact_request, *args):
+        mock_get_artifact_request.return_value = "dummy_url", "dummy_header"
+        client = WireProtocol("foo.bar")
+        client.client.ext_conf = ExtensionsConfig(None)
+        client.client.ext_conf.artifacts_profile_blob = "testurl"
+
+        mock_not_modified_response = MockResponse(body="b", status_code=304)
+
+        with patch("azurelinuxagent.common.utils.restutil._http_request", return_value=mock_not_modified_response):
+            with patch("azurelinuxagent.common.protocol.wire.WireClient.has_artifacts_profile_blob", return_value=True):
+                ret = client.get_artifacts_profile()
+                self.assertEquals(ret, None)
+
+    @patch("azurelinuxagent.common.protocol.wire.WireClient.get_goal_state")
+    @patch("azurelinuxagent.common.protocol.hostplugin.HostPluginProtocol.get_artifact_request")
     def test_fetch_manifest_should_not_invoke_host_channel_when_direct_channel_succeeds(self, mock_get_artifact_request, *args):
         mock_get_artifact_request.return_value = "dummy_url", "dummy_header"
         client = WireClient("foo.bar")
@@ -975,9 +1029,33 @@ class TestWireClient(AgentTestCase):
 
                         self.assertEquals(HostPluginProtocol.is_default_channel(), False)
 
-    def test_send_request_using_appropriate_channel_should_not_invoke_host_channel_when_direct_channel_succeeds(self, *args):
+    def test_send_request_hostplugin_first_should_invoke_hostplugin_when_not_default(self, *args):
         xml_text = WireProtocolData(DATA_FILE).goal_state
         client = WireClient(wireserver_url)
+
+        client.goal_state = GoalState(xml_text)
+        client.get_host_plugin().set_default_channel(False)
+        def direct_func(*args):
+            direct_func.counter += 1
+            return 42
+
+        def host_func(*args):
+            host_func.counter += 1
+            return 43, None, False
+
+        direct_func.counter = 0
+        host_func.counter = 0
+
+        # Assert we've only called the host channel function since it succeeds
+        ret, _ = client.send_request_hostplugin_first(direct_func, host_func)
+        self.assertEquals(43, ret)
+        self.assertEquals(0, direct_func.counter)
+        self.assertEquals(1, host_func.counter)
+
+    def test_send_request_hostplugin_first_no_direct_on_not_modified(self, *args):
+        xml_text = WireProtocolData(DATA_FILE).goal_state
+        client = WireClient(wireserver_url)
+
         client.goal_state = GoalState(xml_text)
         client.get_host_plugin().set_default_channel(False)
 
@@ -987,16 +1065,61 @@ class TestWireClient(AgentTestCase):
 
         def host_func(*args):
             host_func.counter += 1
-            return None
+            return None, None, True
 
         direct_func.counter = 0
         host_func.counter = 0
 
-        # Assert we've only called the direct channel functions and that it succeeded.
-        ret = client.send_request_using_appropriate_channel(direct_func, host_func)
+        # Assert we've only called the host channel function since it succeeds
+        ret, _ = client.send_request_hostplugin_first(direct_func, host_func)
+        self.assertEquals(None, ret)
+        self.assertEquals(0, direct_func.counter)
+        self.assertEquals(1, host_func.counter)
+
+    def test_send_request_hostplugin_first_should_go_direct_when_hostplugin_fails(self, *args):
+        xml_text = WireProtocolData(DATA_FILE).goal_state
+        client = WireClient(wireserver_url)
+
+        client.goal_state = GoalState(xml_text)
+        client.get_host_plugin().set_default_channel(False)
+        def direct_func(*args):
+            direct_func.counter += 1
+            return 42
+
+        def host_func(*args):
+            host_func.counter += 1
+            return 43, None, False
+
+        direct_func.counter = 0
+        host_func.counter = 0
+
+        # Assert we've only called the host channel function since it succeeds
+        ret, _ = client.send_request_hostplugin_first(direct_func, host_func)
+        self.assertEquals(43, ret)
+        self.assertEquals(0, direct_func.counter)
+        self.assertEquals(1, host_func.counter)
+
+    def test_send_request_using_appropriate_channel_should_not_invoke_host_channel_when_direct_channel_succeeds(self, *args):
+        xml_text = WireProtocolData(DATA_FILE).goal_state
+        client = WireClient(wireserver_url)
+        client.goal_state = GoalState(xml_text)
+
+        def direct_func(*args):
+            direct_func.counter += 1
+            return 42, None
+
+        def host_func(*args):
+            host_func.counter += 1
+            raise InvalidContainerError()
+
+        direct_func.counter = 0
+        host_func.counter = 0
+
+        # Assert we've only called the host channel function since it succeeds
+        ret = client.send_request_hostplugin_first(direct_func, host_func)
         self.assertEquals(42, ret)
         self.assertEquals(1, direct_func.counter)
-        self.assertEquals(0, host_func.counter)
+        self.assertEquals(1, host_func.counter)
 
     def test_send_request_using_appropriate_channel_should_not_use_direct_channel_when_host_channel_is_default(self, *args):
         xml_text = WireProtocolData(DATA_FILE).goal_state

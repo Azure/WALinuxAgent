@@ -257,7 +257,7 @@ class ExtHandlersHandler(object):
 
             if self.extension_processing_allowed():
                 seqno = None
-                if self.artifacts_profile is not None:
+                if self.artifacts_profile is not None and conf.get_extensions_fast_track_enabled():
                     seqno = self.artifacts_profile.get_sequence_number()
                 self.process_goal_state(instantiation, seqno)
 
@@ -298,7 +298,7 @@ class ExtHandlersHandler(object):
                         self.last_instantiation)
             fabric_goal_state_changed = True
 
-        if self.last_vm_artifacts_seqno != seqno:
+        if self.last_vm_artifacts_seqno != seqno and conf.get_extensions_fast_track_enabled():
             logger.info('FastTrack goal state changed with seqno={0}(last:{1})',
                         seqno,
                         self.last_vm_artifacts_seqno)

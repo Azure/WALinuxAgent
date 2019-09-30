@@ -276,6 +276,10 @@ def get_extensions_enabled(conf=__conf__):
     return conf.get_switch("Extensions.Enabled", True)
 
 
+def get_extensions_fast_track_enabled(conf=__conf__):
+    return conf.get_switch("Extensions.FastTrackEnabled")
+
+
 def get_provision_cloudinit(conf=__conf__):
     return conf.get_switch("Provisioning.UseCloudInit", False)
 
