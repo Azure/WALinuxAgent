@@ -299,7 +299,7 @@ class TestWireProtocol(AgentTestCase):
                     HostPluginProtocol.set_default_channel(False)
                     wire_protocol_client.upload_status_blob()
 
-                    patch_prepare.assert_called_once_with("BlockBlob")
+                    patch_prepare.assert_called_once_with("BlockBlob", True)
                     patch_default_upload.assert_called_once_with(testurl)
                     patch_get_goal_state.assert_called_once_with()
 
@@ -354,7 +354,7 @@ class TestWireProtocol(AgentTestCase):
                              'If artifacts_profile_blob has empty json dictionary, in_vm_artifacts_profile '
                              'should contain nothing')
 
-            host_plugin_get_artifact_url_and_headers.assert_called_with(testurl)
+            host_plugin_get_artifact_url_and_headers.assert_called_with(testurl, etag=None)
 
     @patch("azurelinuxagent.common.event.add_event")
     def test_artifacts_profile_json_parsing(self, patch_event, *args):
@@ -363,6 +363,7 @@ class TestWireProtocol(AgentTestCase):
         wire_protocol_client.ext_conf.artifacts_profile_blob = testurl
         goal_state = GoalState(WireProtocolData(DATA_FILE).goal_state)
         wire_protocol_client.get_goal_state = Mock(return_value=goal_state)
+        wire_protocol_client.get_artifacts_profile_through_host = Mock(return_value=(None, None, False))
 
         # response is invalid json
         wire_protocol_client.call_storage_service = Mock(return_value=MockResponse("invalid json".encode('utf-8'), 200))
@@ -383,7 +384,7 @@ class TestWireProtocol(AgentTestCase):
         wire_protocol_client.ext_conf.artifacts_profile_blob = testurl
         goal_state = GoalState(WireProtocolData(DATA_FILE).goal_state)
         wire_protocol_client.get_goal_state = Mock(return_value=goal_state)
-
+        wire_protocol_client.get_artifacts_profile_through_host = Mock(return_value=(None, None, False))
         wire_protocol_client.call_storage_service = Mock(
             return_value=MockResponse('{"onHold": "true"}'.encode('utf-8'), 200))
         in_vm_artifacts_profile = wire_protocol_client.get_artifacts_profile()
@@ -448,7 +449,8 @@ class TestWireProtocol(AgentTestCase):
         wire_protocol_client.ext_conf.artifacts_profile_blob = testurl
         goal_state = GoalState(WireProtocolData(DATA_FILE).goal_state)
         wire_protocol_client.get_goal_state = Mock(return_value=goal_state)
-        wire_protocol_client.fetch = Mock(side_effect=[None, '{"onHold": "true"}'])
+        wire_protocol_client.call_storage_service = Mock(
+            return_value=MockResponse('{"onHold": "true"}'.encode('utf-8'), 200))
         with patch.object(HostPluginProtocol,
                           "get_artifact_request",
                           return_value=['dummy_url', {}]) as artifact_request:
@@ -456,7 +458,7 @@ class TestWireProtocol(AgentTestCase):
             self.assertTrue(in_vm_artifacts_profile is not None)
             self.assertEqual(dict(onHold='true'), in_vm_artifacts_profile.__dict__)
             self.assertTrue(in_vm_artifacts_profile.is_on_hold())
-            artifact_request.assert_called_once_with(testurl)
+            artifact_request.assert_called_once_with(testurl, etag=None)
 
     @patch("socket.gethostname", return_value="hostname")
     @patch("time.gmtime", return_value=time.localtime(1485543256))
@@ -911,7 +913,7 @@ class TestWireClient(AgentTestCase):
 
     @patch("azurelinuxagent.common.protocol.wire.WireClient.get_goal_state")
     @patch("azurelinuxagent.common.protocol.hostplugin.HostPluginProtocol.get_artifact_request")
-    def test_get_artifacts_profile_should_not_invoke_host_channel_when_direct_channel_succeeds(self, mock_get_artifact_request, *args):
+    def test_get_artifacts_profile_should_not_invoke_direct_channel_when_host_channel_succeeds(self, mock_get_artifact_request, *args):
         mock_get_artifact_request.return_value = "dummy_url", "dummy_header"
         client = WireClient("foo.bar")
         client.ext_conf = ExtensionsConfig(None)
@@ -930,15 +932,15 @@ class TestWireClient(AgentTestCase):
                         ret = client.get_artifacts_profile()
                         self.assertIsInstance(ret, InVMArtifactsProfile)
 
-                        self.assertEquals(patch_host.call_count, 0)
-                        self.assertEquals(patch_direct.call_count, 1)
+                        self.assertEquals(patch_host.call_count, 1)
+                        self.assertEquals(patch_direct.call_count, 0)
                         self.assertEquals(mock_update_goal_state.call_count, 0)
 
                         self.assertEquals(HostPluginProtocol.is_default_channel(), False)
 
     @patch("azurelinuxagent.common.protocol.wire.WireClient.get_goal_state")
     @patch("azurelinuxagent.common.protocol.hostplugin.HostPluginProtocol.get_artifact_request")
-    def test_get_artifacts_profile_should_use_host_channel_when_direct_channel_fails(self, mock_get_artifact_request, *args):
+    def test_get_artifacts_profile_should_use_direct_channel_when_host_channel_fails(self, mock_get_artifact_request, *args):
         mock_get_artifact_request.return_value = "dummy_url", "dummy_header"
         client = WireClient("foo.bar")
         client.ext_conf = ExtensionsConfig(None)
@@ -962,11 +964,10 @@ class TestWireClient(AgentTestCase):
                         self.assertIsInstance(ret, InVMArtifactsProfile)
 
                         self.assertEquals(patch_host.call_count, 1)
-                        # The host channel calls the direct function under the covers
-                        self.assertEquals(patch_direct.call_count, 1 + patch_host.call_count)
+                        self.assertEquals(patch_direct.call_count, 1)
                         self.assertEquals(mock_update_goal_state.call_count, 0)
 
-                        self.assertEquals(HostPluginProtocol.is_default_channel(), True)
+                        self.assertEquals(HostPluginProtocol.is_default_channel(), False)
 
     @patch("azurelinuxagent.common.protocol.wire.WireClient.get_goal_state")
     @patch("azurelinuxagent.common.protocol.hostplugin.HostPluginProtocol.get_artifact_request")
@@ -994,11 +995,10 @@ class TestWireClient(AgentTestCase):
                         self.assertIsInstance(ret, InVMArtifactsProfile)
 
                         self.assertEquals(patch_host.call_count, 2)
-                        # The host channel calls the direct function under the covers
-                        self.assertEquals(patch_direct.call_count, 1 + patch_host.call_count)
-                        self.assertEquals(mock_update_goal_state.call_count, 1)
+                        self.assertEquals(patch_direct.call_count, 1)
+                        self.assertEquals(mock_update_goal_state.call_count, 0)
 
-                        self.assertEquals(HostPluginProtocol.is_default_channel(), True)
+                        self.assertEquals(HostPluginProtocol.is_default_channel(), False)
 
     @patch("azurelinuxagent.common.protocol.wire.WireClient.get_goal_state")
     @patch("azurelinuxagent.common.protocol.hostplugin.HostPluginProtocol.get_artifact_request")
@@ -1023,9 +1023,8 @@ class TestWireClient(AgentTestCase):
                         self.assertEquals(ret, None)
 
                         self.assertEquals(patch_host.call_count, 2)
-                        # The host channel calls the direct function under the covers
-                        self.assertEquals(patch_direct.call_count, 1 + patch_host.call_count)
-                        self.assertEquals(mock_update_goal_state.call_count, 1)
+                        self.assertEquals(patch_direct.call_count, 1)
+                        self.assertEquals(mock_update_goal_state.call_count, 0)
 
                         self.assertEquals(HostPluginProtocol.is_default_channel(), False)
 
@@ -1106,7 +1105,7 @@ class TestWireClient(AgentTestCase):
 
         def direct_func(*args):
             direct_func.counter += 1
-            return 42, None
+            return 42
 
         def host_func(*args):
             host_func.counter += 1
@@ -1116,10 +1115,10 @@ class TestWireClient(AgentTestCase):
         host_func.counter = 0
 
         # Assert we've only called the host channel function since it succeeds
-        ret = client.send_request_hostplugin_first(direct_func, host_func)
+        ret = client.send_request_using_appropriate_channel(direct_func, host_func)
         self.assertEquals(42, ret)
         self.assertEquals(1, direct_func.counter)
-        self.assertEquals(1, host_func.counter)
+        self.assertEquals(0, host_func.counter)
 
     def test_send_request_using_appropriate_channel_should_not_use_direct_channel_when_host_channel_is_default(self, *args):
         xml_text = WireProtocolData(DATA_FILE).goal_state
@@ -1208,6 +1207,8 @@ class MockResponse:
     def read(self, *_):
         return self.body
 
+    def getheader(self, *_):
+        return None
 
 if __name__ == '__main__':
     unittest.main()

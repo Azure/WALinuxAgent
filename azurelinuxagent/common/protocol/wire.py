@@ -612,7 +612,7 @@ class WireClient(object):
     def fetch_manifest_through_host(self, uri):
         host = self.get_host_plugin()
         uri, headers = host.get_artifact_request(uri)
-        response, _ = self.fetch(uri, headers, use_proxy=False)
+        response = self.fetch(uri, headers, use_proxy=False)
         return response
 
     def fetch_manifest(self, version_uris):
@@ -1044,7 +1044,10 @@ class WireClient(object):
             ret = direct_func()
         except (ResourceGoneError, InvalidContainerError) as e:
             logger.info("Request failed with direct. Error: {0}".format(ustr(e)))
-            raise
+
+        if not ret:
+            # Try through the host one more time
+            ret, etag, not_modified = host_func()
 
         return ret, etag
 
