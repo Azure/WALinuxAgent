@@ -29,7 +29,7 @@ import azurelinuxagent.common.utils.networkutil as networkutil
 
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.errorstate import ErrorState
-from azurelinuxagent.common.event import add_event, WALAEventOperation
+from azurelinuxagent.common.event import add_event, WALAEventOperation, report_metric
 from azurelinuxagent.common.exception import EventError, ProtocolError, OSUtilError, HttpError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
@@ -415,8 +415,12 @@ class MonitorHandler(object):
 
         if time_now >= (self.last_cgroup_polling_telemetry +
                         MonitorHandler.CGROUP_TELEMETRY_POLLING_PERIOD):
-            CGroupsTelemetry.poll_all_tracked()
+            metrics = CGroupsTelemetry.poll_all_tracked()
             self.last_cgroup_polling_telemetry = time_now
+
+            if metrics:
+                for metric in metrics:
+                    report_metric(metric.category, metric.counter, metric.instance, metric.value)
 
     def send_telemetry_metrics(self):
         time_now = datetime.datetime.utcnow()

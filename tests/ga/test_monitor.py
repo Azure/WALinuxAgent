@@ -17,12 +17,15 @@
 import random
 import string
 from datetime import timedelta
+from collections import namedtuple
 
 from azurelinuxagent.common.cgroup import CGroup
 from azurelinuxagent.common.event import EventLogger
-from azurelinuxagent.common.protocol.restapi import get_properties
+from azurelinuxagent.common.osutil.default import BASE_CGROUPS
+from azurelinuxagent.common.protocol.restapi import get_properties, ExtHandlerProperties, ExtHandler
 from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.common.utils import restutil
+from azurelinuxagent.ga.exthandlers import ExtHandlerInstance
 from azurelinuxagent.ga.monitor import *
 from nose.plugins.attrib import attr
 from tests.common.test_cgroupstelemetry import make_new_cgroup, consume_cpu_time, consume_memory
@@ -479,11 +482,17 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
         AgentTestCase.setUp(self)
         CGroupsTelemetry.cleanup()
 
+    @patch('azurelinuxagent.common.event.EventLogger.add_metric')
     @patch('azurelinuxagent.common.event.EventLogger.add_event')
     @patch("azurelinuxagent.common.cgroupstelemetry.CGroupsTelemetry.poll_all_tracked")
     @patch("azurelinuxagent.common.cgroupstelemetry.CGroupsTelemetry.report_all_tracked")
     def test_send_extension_metrics_telemetry(self, patch_report_all_tracked, patch_poll_all_tracked, patch_add_event,
-                                              *args):
+                                              patch_add_metric, *args):
+        MetricValue = namedtuple('Metric', ['category', 'counter', 'instance', 'value'])
+        patch_poll_all_tracked.return_value = [MetricValue("Process", "% Processor Time", 1, 1),
+                                               MetricValue("Memory", "Total Memory Usage", 1, 1),
+                                               MetricValue("Memory", "Max Memory Usage", 1, 1)]
+
         patch_report_all_tracked.return_value = {
             "memory": {
                 "cur_mem": [1, 1, 1, 1, 1, str(datetime.datetime.utcnow()), str(datetime.datetime.utcnow())],
@@ -503,14 +512,17 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
         self.assertEqual(1, patch_poll_all_tracked.call_count)
         self.assertEqual(1, patch_report_all_tracked.call_count)
         self.assertEqual(1, patch_add_event.call_count)
+        self.assertEqual(3, patch_add_metric.call_count)  # Three metrics being sent.
         monitor_handler.stop()
 
+    @patch('azurelinuxagent.common.event.EventLogger.add_metric')
     @patch('azurelinuxagent.common.event.EventLogger.add_event')
     @patch("azurelinuxagent.common.cgroupstelemetry.CGroupsTelemetry.poll_all_tracked")
     @patch("azurelinuxagent.common.cgroupstelemetry.CGroupsTelemetry.report_all_tracked", return_value={})
     def test_send_extension_metrics_telemetry_for_empty_cgroup(self, patch_report_all_tracked, patch_poll_all_tracked,
-                                                               patch_add_event, *args):
+                                                               patch_add_event, patch_add_metric,*args):
         patch_report_all_tracked.return_value = {}
+        patch_poll_all_tracked.return_value = []
 
         monitor_handler = get_monitor_handler()
         monitor_handler.init_protocols()
@@ -521,36 +533,82 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
         self.assertEqual(1, patch_poll_all_tracked.call_count)
         self.assertEqual(1, patch_report_all_tracked.call_count)
         self.assertEqual(0, patch_add_event.call_count)
+        self.assertEqual(0, patch_add_metric.call_count)
         monitor_handler.stop()
 
     @skip_if_predicate_false(are_cgroups_enabled, "Does not run when Cgroups are not enabled")
+    @skip_if_predicate_true(is_trusty_in_travis, "Does not run on Trusty in Travis")
+    @patch('azurelinuxagent.common.event.EventLogger.add_metric')
     @patch('azurelinuxagent.common.event.EventLogger.add_event')
     @attr('requires_sudo')
-    def test_send_extension_metrics_telemetry_with_actual_cgroup(self, patch_add_event, *args):
+    def test_send_extension_metrics_telemetry_with_actual_cgroup(self, patch_add_event, patch_add_metric, *arg):
         self.assertTrue(i_am_root(), "Test does not run when non-root")
 
-        num_polls = 5
-        name = "test-cgroup"
+        max_num_polls = 5
+        time_to_wait = 3
+        extn_name = "foobar-1.0.0"
 
-        cgs = make_new_cgroup(name)
-
+        cgs = make_new_cgroup(extn_name)
         self.assertEqual(len(cgs), 2)
 
-        for cgroup in cgs:
-            CGroupsTelemetry.track_cgroup(cgroup)
-
-        for i in range(num_polls):
-            CGroupsTelemetry.poll_all_tracked()
-            consume_cpu_time()  # Eat some CPU
-            consume_memory()
+        ext_handler_properties = ExtHandlerProperties()
+        ext_handler_properties.version = "1.0.0"
+        ext_handler = ExtHandler(name='foobar')
+        ext_handler.properties = ext_handler_properties
+        ext_handler_instance = ExtHandlerInstance(ext_handler=ext_handler, protocol=None)
+        ext_handler_instance.set_operation("Enable")
 
         monitor_handler = get_monitor_handler()
         monitor_handler.init_protocols()
         monitor_handler.last_cgroup_polling_telemetry = datetime.datetime.utcnow() - timedelta(hours=1)
         monitor_handler.last_cgroup_report_telemetry = datetime.datetime.utcnow() - timedelta(hours=1)
+
+        command = self.create_script("keep_cpu_busy_and_consume_memory_for_5_seconds", '''
+nohup python -c "import time
+
+for i in range(5):
+    x = [1, 2, 3, 4, 5] * (i * 1000)
+    time.sleep({0})
+    x = [1, 2, 3, 4, 5] * (i * 1000)
+    x *= 0
+    print('Test loop')" &
+'''.format(time_to_wait))
+
+        self.log_dir = os.path.join(self.tmp_dir, "log")
+
+        with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_base_dir", lambda *_: self.tmp_dir) as \
+                patch_get_base_dir:
+            with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_log_dir", lambda *_: self.log_dir) as \
+                    patch_get_log_dir:
+                ext_handler_instance.launch_command(command)
+
+        self.assertTrue(CGroupsTelemetry.is_tracked(os.path.join(
+            BASE_CGROUPS, "cpu", "walinuxagent.extensions", "foobar_1.0.0")))
+        self.assertTrue(CGroupsTelemetry.is_tracked(os.path.join(
+            BASE_CGROUPS, "memory", "walinuxagent.extensions", "foobar_1.0.0")))
+
+        for i in range(max_num_polls):
+            metrics = CGroupsTelemetry.poll_all_tracked()
+            time.sleep(0.1)
+            self.assertEqual(len(metrics), 3)
+
         monitor_handler.poll_telemetry_metrics()
+        self.assertEqual(3, patch_add_metric.call_count)
+
+        for call_arg in patch_add_metric.call_args_list:
+            self.assertIn(call_arg[0][0], ["Process", "Memory"])
+            if call_arg[0][0] == "Process":
+                self.assertEqual(call_arg[0][1], "% Processor Time")
+                self.assertIsInstance(call_arg[0][3], float)
+            if call_arg[0][0] == "Memory":
+                self.assertIn(call_arg[0][1], ["Total Memory Usage", "Max Memory Usage"])
+                self.assertIsInstance(call_arg[0][3], int)
+
+            self.assertEqual(call_arg[0][2], extn_name)
+            self.assertFalse(call_arg[0][4])
+
         monitor_handler.send_telemetry_metrics()
-        self.assertEqual(1, patch_add_event.call_count)
+        self.assertEqual(2, patch_add_event.call_count)  # One for launch command and one for extension metrics data
 
         name = patch_add_event.call_args[0][0]
         fields = patch_add_event.call_args[1]
@@ -561,7 +619,6 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
         self.assertEqual(fields["log_event"], False)
         self.assertEqual(fields["is_internal"], False)
         self.assertIsInstance(fields["message"], ustr)
-
         monitor_handler.stop()
 
     @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil._get_proc_stat")

@@ -2200,9 +2200,11 @@ class TestExtensionWithCGroupsEnabled(AgentTestCase):
         exthandlers_handler.run()
         self._assert_no_handler_status(protocol.report_vm_status)
 
+    @skip_if_predicate_true(is_trusty_in_travis, "Does not run on Trusty in Travis as CPU cgroup is not mounted")
+    @patch('azurelinuxagent.common.event.EventLogger.add_metric')
     @patch('azurelinuxagent.common.event.EventLogger.add_event')
     @attr('requires_sudo')
-    def test_ext_handler_and_monitor_handler_with_cgroup_enabled(self, patch_add_event, *args):
+    def test_ext_handler_and_monitor_handler_with_cgroup_enabled(self, patch_add_event, patch_add_metric, *args):
         self.assertTrue(i_am_root(), "Test does not run when non-root")
 
         test_data = WireProtocolData(DATA_FILE)
@@ -2220,6 +2222,7 @@ class TestExtensionWithCGroupsEnabled(AgentTestCase):
         monitor_handler.send_telemetry_metrics()
 
         self.assertEqual(patch_add_event.call_count, 4)
+        self.assertEqual(patch_add_metric.call_count, 3)
 
         name = patch_add_event.call_args[0][0]
         fields = patch_add_event.call_args[1]

@@ -15,11 +15,12 @@
 # Requires Python 2.6+ and Openssl 1.0+
 import errno
 import threading
+from collections import namedtuple
 from datetime import datetime as dt
 
 from azurelinuxagent.common import logger
-from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.exception import CGroupsException
+from azurelinuxagent.common.future import ustr
 
 
 class CGroupsTelemetry(object):
@@ -114,17 +115,39 @@ class CGroupsTelemetry(object):
 
     @staticmethod
     def poll_all_tracked():
+        metrics = []
+        MetricValue = namedtuple('Metric', ['category', 'counter', 'instance', 'value'])
+
         with CGroupsTelemetry._rlock:
             for cgroup in CGroupsTelemetry._tracked[:]:
-
+                # noinspection PyBroadException
                 if cgroup.name not in CGroupsTelemetry._cgroup_metrics:
                     CGroupsTelemetry._cgroup_metrics[cgroup.name] = CgroupMetrics()
+                try:
+                    if cgroup.controller == "cpu":
+                        current_cpu_usage = cgroup.get_cpu_usage()
+                        CGroupsTelemetry._cgroup_metrics[cgroup.name].add_cpu_usage(current_cpu_usage)
+                        metrics.append(MetricValue("Process", "% Processor Time", cgroup.name, current_cpu_usage))
+                    elif cgroup.controller == "memory":
+                        current_memory_usage = cgroup.get_memory_usage()
+                        CGroupsTelemetry._cgroup_metrics[cgroup.name].add_memory_usage(current_memory_usage)
+                        metrics.append(MetricValue("Memory", "Total Memory Usage", cgroup.name, current_memory_usage))
 
-                CGroupsTelemetry._cgroup_metrics[cgroup.name].collect_data(cgroup)
-
+                        max_memory_usage = cgroup.get_max_memory_usage()
+                        CGroupsTelemetry._cgroup_metrics[cgroup.name].add_max_memory_usage(max_memory_usage)
+                        metrics.append(MetricValue("Memory", "Max Memory Usage", cgroup.name, max_memory_usage))
+                    else:
+                        raise CGroupsException('CGroup controller {0} is not supported'.format(cgroup.controller))
+                except Exception as e:
+                    if not isinstance(e, (IOError, OSError)) or e.errno != errno.ENOENT:
+                        logger.periodic_warn(logger.EVERY_HALF_HOUR,
+                                             'Could not collect metrics for cgroup {0}. Error : {1}'.format(cgroup.path,
+                                                                                                            ustr(e)))
                 if not cgroup.is_active():
                     CGroupsTelemetry.stop_tracking(cgroup)
                     CGroupsTelemetry._cgroup_metrics[cgroup.name].marked_for_delete = True
+
+        return metrics
 
     @staticmethod
     def prune_all_tracked():
@@ -147,19 +170,14 @@ class CgroupMetrics(object):
         self._cpu_usage = Metric()
         self.marked_for_delete = False
 
-    def collect_data(self, cgroup):
-        # noinspection PyBroadException
-        try:
-            if cgroup.controller == "cpu":
-                self._cpu_usage.append(cgroup.get_cpu_usage())
-            elif cgroup.controller == "memory":
-                self._memory_usage.append(cgroup.get_memory_usage())
-                self._max_memory_usage.append(cgroup.get_max_memory_usage())
-            else:
-                raise CGroupsException('CGroup controller {0} is not supported'.format(controller))
-        except Exception as e:
-            if not isinstance(e, (IOError, OSError)) or e.errno != errno.ENOENT:
-                logger.periodic_warn(logger.EVERY_HALF_HOUR, 'Could not collect metrics for cgroup {0}. Error : {1}'.format(cgroup.path, ustr(e)))
+    def add_memory_usage(self, usage):
+        self._memory_usage.append(usage)
+
+    def add_max_memory_usage(self, usage):
+        self._max_memory_usage.append(usage)
+
+    def add_cpu_usage(self, usage):
+        self._cpu_usage.append(usage)
 
     def get_memory_usage(self):
         return self._memory_usage
