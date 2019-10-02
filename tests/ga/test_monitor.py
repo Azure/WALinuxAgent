@@ -473,13 +473,14 @@ class TestEventMonitoring(AgentTestCase):
 
 @patch('azurelinuxagent.common.osutil.get_osutil')
 @patch('azurelinuxagent.common.protocol.get_protocol_util')
-@patch('azurelinuxagent.common.protocol.util.ProtocolUtil.get_protocol')
 @patch("azurelinuxagent.common.protocol.healthservice.HealthService._report")
+@patch('azurelinuxagent.common.protocol.util.ProtocolUtil.get_protocol', return_value=WireProtocol('endpoint'))
 @patch("azurelinuxagent.common.utils.restutil.http_get")
 class TestExtensionMetricsDataTelemetry(AgentTestCase):
 
     def setUp(self):
         AgentTestCase.setUp(self)
+        event.init_event_logger(os.path.join(self.tmp_dir, "events"))
         CGroupsTelemetry.cleanup()
 
     @patch('azurelinuxagent.common.event.EventLogger.add_metric')
@@ -619,6 +620,81 @@ for i in range(5):
         self.assertEqual(fields["log_event"], False)
         self.assertEqual(fields["is_internal"], False)
         self.assertIsInstance(fields["message"], ustr)
+        monitor_handler.stop()
+
+    @skip_if_predicate_false(are_cgroups_enabled, "Does not run when Cgroups are not enabled")
+    @skip_if_predicate_true(is_trusty_in_travis, "Does not run on Trusty in Travis")
+    @patch('azurelinuxagent.common.protocol.wire.WireClient.report_event')
+    @attr('requires_sudo')
+    def test_report_event_metrics_sent_for_actual_cgroup(self, patch_report_event, http_get, patch_get_protocol, *args):
+        self.assertTrue(i_am_root(), "Test does not run when non-root")
+
+        max_num_polls = 5
+        time_to_wait = 1
+        extn_name = "foobar-1.0.0"
+
+        cgs = make_new_cgroup(extn_name)
+        self.assertEqual(len(cgs), 2)
+
+        ext_handler_properties = ExtHandlerProperties()
+        ext_handler_properties.version = "1.0.0"
+        ext_handler = ExtHandler(name='foobar')
+        ext_handler.properties = ext_handler_properties
+        ext_handler_instance = ExtHandlerInstance(ext_handler=ext_handler, protocol=None)
+        ext_handler_instance.set_operation("Enable")
+
+        monitor_handler = get_monitor_handler()
+        monitor_handler.init_protocols()
+        monitor_handler.last_cgroup_polling_telemetry = datetime.datetime.utcnow() - timedelta(hours=1)
+        monitor_handler.last_cgroup_report_telemetry = datetime.datetime.utcnow() - timedelta(hours=1)
+
+        command = self.create_script("keep_cpu_busy_and_consume_memory_for_5_seconds", '''
+nohup python -c "import time
+
+for i in range(3):
+    x = [1, 2, 3, 4, 5] * (i * 1000)
+    time.sleep({0})
+    x *= 0
+    print('Test loop')" &
+'''.format(time_to_wait))
+
+        self.log_dir = os.path.join(self.tmp_dir, "log")
+
+        with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_base_dir", lambda *_: self.tmp_dir) as \
+                patch_get_base_dir:
+            with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_log_dir", lambda *_: self.log_dir) as \
+                    patch_get_log_dir:
+                ext_handler_instance.launch_command(command)
+
+        self.assertTrue(CGroupsTelemetry.is_tracked(os.path.join(
+            BASE_CGROUPS, "cpu", "walinuxagent.extensions", "foobar_1.0.0")))
+        self.assertTrue(CGroupsTelemetry.is_tracked(os.path.join(
+            BASE_CGROUPS, "memory", "walinuxagent.extensions", "foobar_1.0.0")))
+
+        for i in range(max_num_polls):
+            metrics = CGroupsTelemetry.poll_all_tracked()
+            time.sleep(0.1)
+            self.assertEqual(len(metrics), 3)
+        monitor_handler.poll_telemetry_metrics()
+        monitor_handler.send_telemetry_metrics()
+        monitor_handler.collect_and_send_events()
+
+        telemetry_event_list = patch_report_event.call_args_list[0][0][0]
+
+        for e in telemetry_event_list.events:
+            details_of_event = [x for x in e.parameters if x.name in
+                                ["Category", "Counter", "Instance", "Value"]]
+
+            for i in details_of_event:
+                if i.name == "Category":
+                    self.assertIn(i.value, ["Memory", "Process"])
+                if i.name == "Counter":
+                    self.assertIn(i.value, ["Max Memory Usage", "Total Memory Usage", "% Processor Time"])
+                if i.name == "Instance":
+                    self.assertEqual(i.value, extn_name)
+                if i.name == "Value":
+                    self.assertTrue(isinstance(i.value, int) or isinstance(i.value, float))
+
         monitor_handler.stop()
 
     @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil._get_proc_stat")
