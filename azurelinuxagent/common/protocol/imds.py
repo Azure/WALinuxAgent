@@ -228,7 +228,8 @@ class ComputeInfo(DataContract):
                 return IMDS_IMAGE_ORIGIN_PLATFORM
 
         except Exception as e:
-            logger.warn("Could not determine the image origin from IMDS: {0}", str(e))
+            logger.periodic_warn(logger.EVERY_FIFTEEN_MINUTES,
+                                 "[PERIODIC] Could not determine the image origin from IMDS: {0}".format(str(e)))
             return IMDS_IMAGE_ORIGIN_UNKNOWN
 
 
@@ -268,14 +269,16 @@ class ImdsClient(object):
         try:
             resp = self._http_get(endpoint=endpoint, resource_path=resource_path, headers=headers)
         except HttpError as e:
-            logger.warn("Unable to connect to primary IMDS endpoint {0}", endpoint)
+            logger.periodic_warn(logger.EVERY_FIFTEEN_MINUTES,
+                                 "[PERIODIC] Unable to connect to primary IMDS endpoint {0}".format(endpoint))
             if not self._regex_imds_ioerror.match(str(e)):
                 raise
             endpoint = self._protocol_util.get_wireserver_endpoint()
             try:
                 resp = self._http_get(endpoint=endpoint, resource_path=resource_path, headers=headers)
             except HttpError as e:
-                logger.warn("Unable to connect to backup IMDS endpoint {0}", endpoint)
+                logger.periodic_warn(logger.EVERY_FIFTEEN_MINUTES,
+                                     "[PERIODIC] Unable to connect to backup IMDS endpoint {0}".format(endpoint))
                 if not self._regex_imds_ioerror.match(str(e)):
                     raise
                 return False, "IMDS error in /metadata/{0}: Unable to connect to endpoint".format(resource_path)
