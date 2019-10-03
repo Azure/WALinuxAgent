@@ -32,13 +32,13 @@ class TestFreeBSDOSUtil(AgentTestCase):
         osutil_get_dhcp_pid_should_return_a_list_of_pids(self, FreeBSDOSUtil())
 
     def test_empty_proc_net_route(self):
-        with patch.object(shellutil, 'run_get_output', return_value=[0, '']):
+        with patch.object(shellutil, 'run_get_output', return_value=''):
             self.assertEqual(len(FreeBSDOSUtil().read_route_table()), 0)
 
     def test_no_routes(self):
         route_table = 'Iface\tDestination\tGateway\tFlags\tRefCnt\tUse\tMetric\tMask\tMTU\tWindow\tIRTT\n'
 
-        with patch.object(shellutil, 'run_get_output', return_value=[0, route_table]):
+        with patch.object(shellutil, 'run_get_output', return_value=route_table):
             raw_route_list = FreeBSDOSUtil().read_route_table()
 
         self.assertEqual(len(FreeBSDOSUtil().get_list_of_routes(raw_route_list)), 0)
@@ -47,7 +47,7 @@ class TestFreeBSDOSUtil(AgentTestCase):
         route_table = 'Iface\tDestination\tGateway\tFlags\tRefCnt\tUse\tMetric\tMask\tMTU\tWindow\tIRTT\n' \
             'em0\t00000000\t00000000\t0001\t\t0\t0\n'
 
-        with patch.object(shellutil, 'run_get_output', return_value=[0, route_table]):
+        with patch.object(shellutil, 'run_get_output', return_value=route_table):
             raw_route_list = FreeBSDOSUtil().read_route_table()
     
         self.assertEqual(len(FreeBSDOSUtil().get_list_of_routes(raw_route_list)), 0)
@@ -60,7 +60,7 @@ class TestFreeBSDOSUtil(AgentTestCase):
             'em0\tFEA9FEA9\tC1BB910A\t0007\t0\t0\t0\tFFFFFFFF\t0\t0\t0\n' \
             'vtbd0\t002BA8C0\t00000000\t0001\t0\t0\t10\t00FFFFFF\t0\t0\t0\n'
 
-        with patch.object(shellutil, 'run_get_output', return_value=[0, route_table]):
+        with patch.object(shellutil, 'run_get_output', return_value=route_table):
             raw_route_list = FreeBSDOSUtil().read_route_table()
 
         self.assertEqual(len(raw_route_list), 6)
