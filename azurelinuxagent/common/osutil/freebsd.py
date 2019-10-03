@@ -154,7 +154,7 @@ class FreeBSDOSUtil(DefaultOSUtil):
             dest = ""
             try:
                 # IPv4
-                dest = "%08X" % int(binascii.hexlify(struct.pack("!I", struct.unpack("=I", socket.inet_pton(socket.AF_INET, _dest[0]))[0]), 16))
+                dest = "%08X" % int(binascii.hexlify(struct.pack("!I", struct.unpack("=I", socket.inet_pton(socket.AF_INET, _dest[0]))[0])), 16)
             except socket.error:
                 dest = ""
             if dest == "":
@@ -168,7 +168,7 @@ class FreeBSDOSUtil(DefaultOSUtil):
             gw = ""
             try:
                 # IPv4
-                gw = "%08X" % int(binascii.hexlify(struct.pack("!I", struct.unpack("=I", socket.inet_pton(socket.AF_INET, route[column_gw]))[0]), 16))
+                gw = "%08X" % int(binascii.hexlify(struct.pack("!I", struct.unpack("=I", socket.inet_pton(socket.AF_INET, route[column_gw]))[0])), 16)
             except socket.error:
                 gw = ""
             if gw == "":

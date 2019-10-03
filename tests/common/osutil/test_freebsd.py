@@ -103,7 +103,7 @@ Destination                       Gateway                       Flags     Netif 
         self.assertEqual(route_list[0].interface, 'em0')
         self.assertEqual(route_list[4].interface, 'vtbd0')
 
-    def test_get_first_if(self, get_all_interfaces_mock, get_primary_interface_mock):
+    def test_get_first_if(self):
         """
         Validate that the agent can find the first active non-loopback
         interface.
