@@ -97,6 +97,7 @@ IP_COMMAND_OUTPUT = re.compile('^\d+:\s+(\w+):\s+(.*)$')
 
 BASE_CGROUPS = '/sys/fs/cgroup'
 
+GEN2_DEVICE_ID = 'f8b3781a-1e82-4818-a1c3-63d806ec15bb'
 
 class DefaultOSUtil(object):
     def __init__(self):
@@ -1204,10 +1205,9 @@ class DefaultOSUtil(object):
         device = None
         path = "/sys/bus/vmbus/devices/"
         # We have to try device IDs for both Gen1 and Gen2 VMs.
-        gen2_device_id = 'f8b3781a-1e82-4818-a1c3-63d806ec15bb'
         for device_id_or_prefix in [
                 '{0}-000{1}'.format(g0, port_id),
-                gen2_device_id]:
+                GEN2_DEVICE_ID]:
             logger.info('Looking for device ID with name or prefix {0}'.format(device_id_or_prefix))
             if os.path.exists(path):
                 try:
@@ -1225,7 +1225,7 @@ class DefaultOSUtil(object):
                                 #   1 - Resource disk
                                 #   2 - CDROM
                                 if root_path_parts[-1] == 'block' and (
-                                        device_id_or_prefix != gen2_device_id or
+                                        device_id_or_prefix != GEN2_DEVICE_ID or
                                         root_path_parts[-2].split(':')[-1] == '1'):
                                     device = dirs[0]
                                     break
