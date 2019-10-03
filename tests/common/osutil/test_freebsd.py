@@ -75,7 +75,7 @@ Destination                       Gateway                       Flags     Netif 
 Internet:
 Destination        Gateway            Flags     Netif Expire
 0.0.0.0            10.145.187.193     UGS         em0       
-10.145.187.192     0.0.0.0            US          em0       
+10.145.187.192/26  0.0.0.0            US          em0       
 168.63.129.16      10.145.187.193     UH          em0       
 169.254.169.254    10.145.187.193     UGHS        em0       
 192.168.43.0       0.0.0.0            US        vtbd0     
