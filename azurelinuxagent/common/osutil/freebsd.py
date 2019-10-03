@@ -17,6 +17,7 @@
 # Requires Python 2.6+ and Openssl 1.0+
 
 import socket
+import struct
 import binascii
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.shellutil as shellutil
@@ -153,7 +154,7 @@ class FreeBSDOSUtil(DefaultOSUtil):
             dest = ""
             try:
                 # IPv4
-                dest = "%08X" % int(binascii.hexlify(socket.inet_pton(socket.AF_INET, _dest[0])), 16)
+                dest = "%08X" % int(binascii.hexlify(socket.htonl(socket.inet_pton(socket.AF_INET, _dest[0])), 16))
             except socket.error:
                 dest = ""
             if dest == "":
@@ -167,7 +168,7 @@ class FreeBSDOSUtil(DefaultOSUtil):
             gw = ""
             try:
                 # IPv4
-                gw = "%08X" % int(binascii.hexlify(socket.inet_pton(socket.AF_INET, route[column_gw])), 16)
+                gw = "%08X" % int(binascii.hexlify(socket.htonl(socket.inet_pton(socket.AF_INET, route[column_gw])), 16))
             except socket.error:
                 gw = ""
             if gw == "":
@@ -196,7 +197,7 @@ class FreeBSDOSUtil(DefaultOSUtil):
             mask = 32
             if len(_dest) > 1:
                 mask = int(_dest[1])
-            mask = "{0:08x}".format((2 ** mask) - 1)[::-1].upper()
+            mask = "{0:08x}".format(struct.pack(">I", (0xffffffff << (32 - prefix)) & 0xffffffff)).upper()
             # MTU
             mtu = 0
             # Window
