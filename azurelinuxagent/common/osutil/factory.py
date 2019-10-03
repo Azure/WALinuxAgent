@@ -90,7 +90,7 @@ def _get_osutil(distro_name, distro_code_name, distro_version, distro_full_name)
             return SUSEOSUtil()
 
     if distro_name == "debian":
-        if Version(distro_version) > Version("7"):
+        if "sid" in distro_version or Version(distro_version) > Version("7"):
             return DebianOS8Util()
         else:
             return DebianOSUtil()
