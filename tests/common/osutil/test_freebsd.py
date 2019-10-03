@@ -77,7 +77,7 @@ Destination        Gateway            Flags     Netif Expire
 0.0.0.0            10.145.187.193     UGS         em0       
 10.145.187.192/26  0.0.0.0            US          em0       
 168.63.129.16      10.145.187.193     UH          em0       
-169.254.169.254    10.145.187.193     UGHS        em0       
+169.254.169.254    10.145.187.193     UHS         em0       
 192.168.43.0       0.0.0.0            US        vtbd0     
 
 Internet6:
@@ -97,8 +97,8 @@ Destination                       Gateway                       Flags     Netif 
         self.assertEqual(route_list[1].mask_quad(), '255.255.255.192')
         self.assertEqual(route_list[2].destination_quad(), '168.63.129.16')
         self.assertEqual(route_list[1].flags, 1)
-        self.assertEqual(route_list[2].flags, 15)
-        self.assertEqual(route_list[3].flags, 7)
+        self.assertEqual(route_list[2].flags, 33)
+        self.assertEqual(route_list[3].flags, 5)
         self.assertEqual((route_list[3].metric - route_list[4].metric), 1)
         self.assertEqual(route_list[0].interface, 'em0')
         self.assertEqual(route_list[4].interface, 'vtbd0')
