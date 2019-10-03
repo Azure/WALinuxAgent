@@ -952,14 +952,12 @@ Chain OUTPUT (policy ACCEPT 104 packets, 43628 bytes)
         dev = osutil.DefaultOSUtil().device_for_ide_port(1)
         self.assertEqual(dev, 'sdb', 'The returned device should be the resource disk')
 
-    @patch('azurelinuxagent.common.utils.fileutil.read_file', return_value='{f8b3781a-1e82-4818-a1c3-63d806ec15bb}')
     @patch('os.listdir', return_value=['00000000-0000-0000-0000-000000000000'])
     @patch('os.path.exists', return_value=True)
     def test_device_for_ide_port_none(
             self,
             os_path_exists,
-            os_listdir,
-            fileutil_read_file):
+            os_listdir):
         dev = osutil.DefaultOSUtil().device_for_ide_port(1)
         self.assertIsNone(dev, 'None should be returned if no resource disk found')
 
