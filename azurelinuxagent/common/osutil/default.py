@@ -1221,9 +1221,9 @@ class DefaultOSUtil(object):
                                 # current device. But for Gen2 VMs all of the disks (sda, sdb,
                                 # sr0) are presented in this device on the same SCSI controller.
                                 # Because of that we need to also read the LUN. It will be:
-                                #   0 - OS disk (sda)
-                                #   1 - Resource disk (sdb)
-                                #   2 - CDROM (sr0)
+                                #   0 - OS disk
+                                #   1 - Resource disk
+                                #   2 - CDROM
                                 if root_path_parts[-1] == 'block' and (
                                         device_id_or_prefix != gen2_device_id or
                                         root_path_parts[-2].split(':')[-1] == '1'):
