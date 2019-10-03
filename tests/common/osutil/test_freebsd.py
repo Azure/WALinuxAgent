@@ -32,35 +32,58 @@ class TestFreeBSDOSUtil(AgentTestCase):
         osutil_get_dhcp_pid_should_return_a_list_of_pids(self, FreeBSDOSUtil())
 
     def test_empty_proc_net_route(self):
-        with patch.object(shellutil, 'run_get_output', return_value=''):
+        route_table = ""
+
+        with patch.object(shellutil, 'run_get_output', return_value=[0, route_table]):
             self.assertEqual(len(FreeBSDOSUtil().read_route_table()), 0)
 
     def test_no_routes(self):
-        route_table = 'Iface\tDestination\tGateway\tFlags\tRefCnt\tUse\tMetric\tMask\tMTU\tWindow\tIRTT\n'
+        route_table = """Routing tables
 
-        with patch.object(shellutil, 'run_get_output', return_value=route_table):
+Internet:
+Destination        Gateway            Flags     Netif Expire
+
+Internet6:
+Destination                       Gateway                       Flags     Netif Expire
+"""
+
+        with patch.object(shellutil, 'run_get_output', return_value=[0, route_table]):
             raw_route_list = FreeBSDOSUtil().read_route_table()
 
         self.assertEqual(len(FreeBSDOSUtil().get_list_of_routes(raw_route_list)), 0)
 
     def test_bogus_proc_net_route(self):
-        route_table = 'Iface\tDestination\tGateway\tFlags\tRefCnt\tUse\tMetric\tMask\tMTU\tWindow\tIRTT\n' \
-            'em0\t00000000\t00000000\t0001\t\t0\t0\n'
+        route_table = """Routing tables
 
-        with patch.object(shellutil, 'run_get_output', return_value=route_table):
+Internet:
+Destination        Gateway            Flags     Netif Expire
+default            0.0.0.0            UGS         em0
+
+Internet6:
+Destination                       Gateway                       Flags     Netif Expire
+"""
+
+        with patch.object(shellutil, 'run_get_output', return_value=[0, route_table]):
             raw_route_list = FreeBSDOSUtil().read_route_table()
     
         self.assertEqual(len(FreeBSDOSUtil().get_list_of_routes(raw_route_list)), 0)
 
     def test_valid_routes(self):
-        route_table = 'Iface\tDestination\tGateway\tFlags\tRefCnt\tUse\tMetric\tMask\tMTU\tWindow\tIRTT\n' \
-            'em0\t00000000\tC1BB910A\t0003\t0\t0\t0\t00000000\t0\t0\t0\n' \
-            'em0\tC0BB910A\t00000000\t0001\t0\t0\t0\tC0FFFFFF\t0\t0\t0\n' \
-            'em0\t10813FA8\tC1BB910A\t000F\t0\t0\t0\tFFFFFFFF\t0\t0\t0\n' \
-            'em0\tFEA9FEA9\tC1BB910A\t0007\t0\t0\t0\tFFFFFFFF\t0\t0\t0\n' \
-            'vtbd0\t002BA8C0\t00000000\t0001\t0\t0\t10\t00FFFFFF\t0\t0\t0\n'
+        route_table = """Routing tables
 
-        with patch.object(shellutil, 'run_get_output', return_value=route_table):
+Internet:
+Destination        Gateway            Flags     Netif Expire
+0.0.0.0            10.145.187.193     UGS         em0       
+10.145.187.192     0.0.0.0            US          em0       
+168.63.129.16      10.145.187.193     UH          em0       
+169.254.169.254    10.145.187.193     UGHS        em0       
+192.168.43.0       0.0.0.0            US        vtbd0     
+
+Internet6:
+Destination                       Gateway                       Flags     Netif Expire
+"""
+
+        with patch.object(shellutil, 'run_get_output', return_value=[0, route_table]):
             raw_route_list = FreeBSDOSUtil().read_route_table()
 
         self.assertEqual(len(raw_route_list), 6)
@@ -75,8 +98,7 @@ class TestFreeBSDOSUtil(AgentTestCase):
         self.assertEqual(route_list[1].flags, 1)
         self.assertEqual(route_list[2].flags, 15)
         self.assertEqual(route_list[3].flags, 7)
-        self.assertEqual(route_list[3].metric, 0)
-        self.assertEqual(route_list[4].metric, 10)
+        self.assertEqual((route_list[3].metric - route_list[4].metric), 1)
         self.assertEqual(route_list[0].interface, 'em0')
         self.assertEqual(route_list[4].interface, 'vtbd0')
 

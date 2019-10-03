@@ -105,12 +105,16 @@ class FreeBSDOSUtil(DefaultOSUtil):
         :return: Entries in the route priority table from `netstat -rn`
         :rtype: list(str)
         """
+        linux_style_route_file = [ "Iface\tDestination\tGateway\tFlags\tRefCnt\tUse\tMetric\tMask\tMTU\tWindow\tIRTT" ]
+
         cmd = "netstat -rn"
         ret, netstat_output = shellutil.run_get_output(cmd)
         if ret:
             raise OSUtilError("Cannot read route table [{0}]".format(netstat_output))
-        netstat_output = netstat_output.split("\n")[3:]
-        linux_style_route_file = [ "Iface\tDestination\tGateway\tFlags\tRefCnt\tUse\tMetric\tMask\tMTU\tWindow\tIRTT" ]
+        netstat_output = netstat_output.split("\n")
+        if len(netstat_output) < 3:
+            return linux_style_route_file
+        netstat_output = netstat_output[3:]
         # Parse the Netstat -RN header line
         n_columns = 0
         column_index = {}
