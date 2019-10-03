@@ -196,7 +196,7 @@ class FreeBSDOSUtil(DefaultOSUtil):
             mask = 32
             if len(_dest) > 1:
                 mask = int(_dest[1])
-            mask = "{:08x}".format((2 ** mask) - 1)[::-1].upper()
+            mask = "{0:08x}".format((2 ** mask) - 1)[::-1].upper()
             # MTU
             mtu = 0
             # Window
@@ -204,7 +204,7 @@ class FreeBSDOSUtil(DefaultOSUtil):
             # Initial Round Trip Time
             irtt = 0
             # Add the route
-            linux_style_route_file.append("{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}".format(
+            linux_style_route_file.append("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\t{8}\t{9}\t{10}".format(
                     netif, dest, gw, flags, refcount, use, metric, mask, mtu, window, irtt))
         return linux_style_route_file
 
