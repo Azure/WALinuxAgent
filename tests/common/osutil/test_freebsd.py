@@ -31,53 +31,37 @@ class TestFreeBSDOSUtil(AgentTestCase):
     def test_get_dhcp_pid_should_return_a_list_of_pids(self):
         osutil_get_dhcp_pid_should_return_a_list_of_pids(self, FreeBSDOSUtil())
 
-    @patch(
-        'azurelinuxagent.common.utils.shellutil.run_get_output',
-        return_value=[
-            0,
-            ''
-        ]
-    )
     def test_empty_proc_net_route(self):
-        self.assertEqual(len(FreeBSDOSUtil().read_route_table()), 0)
+        with patch.object(shellutil, 'run_get_output', return_value=[0, '']):
+            self.assertEqual(len(FreeBSDOSUtil().read_route_table()), 0)
 
-    @patch(
-        'azurelinuxagent.common.utils.shellutil.run_get_output',
-        return_value=[
-            0,
-            'Iface\tDestination\tGateway\tFlags\tRefCnt\tUse\tMetric\tMask\tMTU\tWindow\tIRTT\n'
-        ]
-    )
     def test_no_routes(self):
-        raw_route_list = osutil.DefaultOSUtil().read_route_table()
+        route_table = 'Iface\tDestination\tGateway\tFlags\tRefCnt\tUse\tMetric\tMask\tMTU\tWindow\tIRTT\n'
+
+        with patch.object(shellutil, 'run_get_output', return_value=[0, route_table]):
+            raw_route_list = osutil.DefaultOSUtil().read_route_table()
+
         self.assertEqual(len(FreeBSDOSUtil().get_list_of_routes(raw_route_list)), 0)
 
-    @patch(
-        'azurelinuxagent.common.utils.shellutil.run_get_output',
-        return_value=[
-            0,
-            'Iface\tDestination\tGateway\tFlags\tRefCnt\tUse\tMetric\tMask\tMTU\tWindow\tIRTT\n' \
-            'em0\t00000000\t00000000\t0001\t\t0\t0\n'
-        ]
-    )
     def test_bogus_proc_net_route(self):
-        raw_route_list = osutil.DefaultOSUtil().read_route_table()
+        route_table = 'Iface\tDestination\tGateway\tFlags\tRefCnt\tUse\tMetric\tMask\tMTU\tWindow\tIRTT\n' \
+            'em0\t00000000\t00000000\t0001\t\t0\t0\n'
+
+        with patch.object(shellutil, 'run_get_output', return_value=[0, route_table]):
+            raw_route_list = osutil.DefaultOSUtil().read_route_table()
+    
         self.assertEqual(len(FreeBSDOSUtil().get_list_of_routes(raw_route_list)), 0)
 
-    @patch(
-        'azurelinuxagent.common.utils.shellutil.run_get_output',
-        return_value=[
-            0,
-            'Iface\tDestination\tGateway\tFlags\tRefCnt\tUse\tMetric\tMask\tMTU\tWindow\tIRTT\n' \
+    def test_valid_routes(self):
+        route_table = 'Iface\tDestination\tGateway\tFlags\tRefCnt\tUse\tMetric\tMask\tMTU\tWindow\tIRTT\n' \
             'em0\t00000000\tC1BB910A\t0003\t0\t0\t0\t00000000\t0\t0\t0\n' \
             'em0\tC0BB910A\t00000000\t0001\t0\t0\t0\tC0FFFFFF\t0\t0\t0\n' \
             'em0\t10813FA8\tC1BB910A\t000F\t0\t0\t0\tFFFFFFFF\t0\t0\t0\n' \
             'em0\tFEA9FEA9\tC1BB910A\t0007\t0\t0\t0\tFFFFFFFF\t0\t0\t0\n' \
             'vtbd0\t002BA8C0\t00000000\t0001\t0\t0\t10\t00FFFFFF\t0\t0\t0\n'
-        ]
-    )
-    def test_valid_routes(self):
-        raw_route_list = osutil.DefaultOSUtil().read_route_table()
+
+        with patch.object(shellutil, 'run_get_output', return_value=[0, route_table]):
+            raw_route_list = osutil.DefaultOSUtil().read_route_table()
 
         self.assertEqual(len(raw_route_list), 6)
 
@@ -96,10 +80,6 @@ class TestFreeBSDOSUtil(AgentTestCase):
         self.assertEqual(route_list[0].interface, 'em0')
         self.assertEqual(route_list[4].interface, 'vtbd0')
 
-    @patch(
-        'azurelinuxagent.common.osutil.default.DefaultOSUtil._get_net_info',
-        return_value=('em0', '10.0.0.1', 'e5:f0:38:aa:da:52')
-    )
     def test_get_first_if(self, get_all_interfaces_mock, get_primary_interface_mock):
         """
         Validate that the agent can find the first active non-loopback
@@ -108,20 +88,23 @@ class TestFreeBSDOSUtil(AgentTestCase):
         interface. It is perfectly valid to have a br*, but this test does not
         account for that.
         """
-        ifname, ipaddr = FreeBSDOSUtil().get_first_if()
+        freebsdosutil = FreeBSDOSUtil()
+
+        with patch.object(freebsdosutil, '_get_net_info', return_value=('em0', '10.0.0.1', 'e5:f0:38:aa:da:52')):
+            ifname, ipaddr = freebsdosutil.get_first_if()
+        
         self.assertEqual(ifname, 'em0')
         self.assertEqual(ipaddr, '10.0.0.1')
 
-    @patch(
-        'azurelinuxagent.common.osutil.default.DefaultOSUtil._get_net_info',
-        return_value=('', '', '')
-    )
     def test_no_primary_does_not_throw(self):
-        try:
-            FreeBSDOSUtil().get_first_if()[0]
-        except Exception as e:
-            print(traceback.format_exc())
-            exception = True
+        freebsdosutil = FreeBSDOSUtil()
+
+        with patch.object(freebsdosutil, '_get_net_info', return_value=('em0', '10.0.0.1', 'e5:f0:38:aa:da:52')):
+            try:
+                freebsdosutil.get_first_if()[0]
+            except Exception as e:
+                print(traceback.format_exc())
+                exception = True
 
 if __name__ == '__main__':
     unittest.main()
