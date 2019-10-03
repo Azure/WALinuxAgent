@@ -39,7 +39,7 @@ class TestFreeBSDOSUtil(AgentTestCase):
         route_table = 'Iface\tDestination\tGateway\tFlags\tRefCnt\tUse\tMetric\tMask\tMTU\tWindow\tIRTT\n'
 
         with patch.object(shellutil, 'run_get_output', return_value=[0, route_table]):
-            raw_route_list = osutil.DefaultOSUtil().read_route_table()
+            raw_route_list = FreeBSDOSUtil().read_route_table()
 
         self.assertEqual(len(FreeBSDOSUtil().get_list_of_routes(raw_route_list)), 0)
 
@@ -48,7 +48,7 @@ class TestFreeBSDOSUtil(AgentTestCase):
             'em0\t00000000\t00000000\t0001\t\t0\t0\n'
 
         with patch.object(shellutil, 'run_get_output', return_value=[0, route_table]):
-            raw_route_list = osutil.DefaultOSUtil().read_route_table()
+            raw_route_list = FreeBSDOSUtil().read_route_table()
     
         self.assertEqual(len(FreeBSDOSUtil().get_list_of_routes(raw_route_list)), 0)
 
@@ -61,7 +61,7 @@ class TestFreeBSDOSUtil(AgentTestCase):
             'vtbd0\t002BA8C0\t00000000\t0001\t0\t0\t10\t00FFFFFF\t0\t0\t0\n'
 
         with patch.object(shellutil, 'run_get_output', return_value=[0, route_table]):
-            raw_route_list = osutil.DefaultOSUtil().read_route_table()
+            raw_route_list = FreeBSDOSUtil().read_route_table()
 
         self.assertEqual(len(raw_route_list), 6)
 
