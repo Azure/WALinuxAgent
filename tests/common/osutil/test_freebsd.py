@@ -67,7 +67,7 @@ Destination                       Gateway                       Flags     Netif 
         with patch.object(shellutil, 'run_get_output', return_value=[0, route_table]):
             raw_route_list = FreeBSDOSUtil().read_route_table()
     
-        self.assertEqual(len(FreeBSDOSUtil().get_list_of_routes(raw_route_list)), 1)
+        self.assertEqual(len(FreeBSDOSUtil().get_list_of_routes(raw_route_list)), 0)
 
     def test_valid_routes(self):
         route_table = """Routing tables
@@ -75,7 +75,7 @@ Destination                       Gateway                       Flags     Netif 
 Internet:
 Destination        Gateway            Flags     Netif Expire
 0.0.0.0            193.187.145.10     UGS         em0       
-192.187.145.10     0.0.0.0            US          em0       
+192.187.145.10/26  0.0.0.0            US          em0       
 16.129.63.168      193.187.145.10     UH          em0       
 254.169.254.169    193.187.145.10     UGHS        em0       
 192.168.43.0       0.0.0.0            US        vtbd0     
