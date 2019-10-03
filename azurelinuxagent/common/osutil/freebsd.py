@@ -197,7 +197,7 @@ class FreeBSDOSUtil(DefaultOSUtil):
             mask = 32
             if len(_dest) > 1:
                 mask = int(_dest[1])
-            mask = "{0:08x}".format(struct.pack(">I", (0xffffffff << (32 - mask)) & 0xffffffff)).upper()
+            mask = "{0:08x}".format(struct.unpack("=I", struct.pack("!I", (0xffffffff << (32 - 21)) & 0xffffffff))[0]).upper()
             # MTU
             mtu = 0
             # Window
