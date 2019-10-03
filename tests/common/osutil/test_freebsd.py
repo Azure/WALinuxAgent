@@ -35,7 +35,8 @@ class TestFreeBSDOSUtil(AgentTestCase):
         route_table = ""
 
         with patch.object(shellutil, 'run_get_output', return_value=[0, route_table]):
-            self.assertEqual(len(FreeBSDOSUtil().read_route_table()), 0)
+            # Header line only
+            self.assertEqual(len(FreeBSDOSUtil().read_route_table()), 1)
 
     def test_no_routes(self):
         route_table = """Routing tables
@@ -57,7 +58,7 @@ Destination                       Gateway                       Flags     Netif 
 
 Internet:
 Destination        Gateway            Flags     Netif Expire
-default            0.0.0.0            UGS         em0
+default            0.0.0.0
 
 Internet6:
 Destination                       Gateway                       Flags     Netif Expire
@@ -66,17 +67,17 @@ Destination                       Gateway                       Flags     Netif 
         with patch.object(shellutil, 'run_get_output', return_value=[0, route_table]):
             raw_route_list = FreeBSDOSUtil().read_route_table()
     
-        self.assertEqual(len(FreeBSDOSUtil().get_list_of_routes(raw_route_list)), 0)
+        self.assertEqual(len(FreeBSDOSUtil().get_list_of_routes(raw_route_list)), 1)
 
     def test_valid_routes(self):
         route_table = """Routing tables
 
 Internet:
 Destination        Gateway            Flags     Netif Expire
-0.0.0.0            10.145.187.193     UGS         em0       
-10.145.187.192     0.0.0.0            US          em0       
-168.63.129.16      10.145.187.193     UH          em0       
-169.254.169.254    10.145.187.193     UGHS        em0       
+0.0.0.0            193.187.145.10     UGS         em0       
+192.187.145.10     0.0.0.0            US          em0       
+16.129.63.168      193.187.145.10     UH          em0       
+254.169.254.169    193.187.145.10     UGHS        em0       
 192.168.43.0       0.0.0.0            US        vtbd0     
 
 Internet6:
