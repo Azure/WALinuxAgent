@@ -926,6 +926,43 @@ Chain OUTPUT (policy ACCEPT 104 packets, 43628 bytes)
 
         self.assertTrue(len(pid_list) == 0, "the return value is not an empty list: {0}".format(pid_list))
 
+    @patch('os.walk', return_value=[('host3/target3:0:1/3:0:1:0/block', ['sdb'], [])])
+    @patch('azurelinuxagent.common.utils.fileutil.read_file', return_value='{00000000-0001-8899-0000-000000000000}')
+    @patch('os.listdir', return_value=['00000000-0001-8899-0000-000000000000'])
+    @patch('os.path.exists', return_value=True)
+    def test_device_for_ide_port_gen1_success(
+            self,
+            os_path_exists,
+            os_listdir,
+            fileutil_read_file,
+            os_walk):
+        dev = osutil.DefaultOSUtil().device_for_ide_port(1)
+        self.assertEqual(dev, 'sdb', 'The returned device should be the resource disk')
+
+    @patch('os.walk', return_value=[('host0/target0:0:0/0:0:0:1/block', ['sdb'], [])])
+    @patch('azurelinuxagent.common.utils.fileutil.read_file', return_value='{f8b3781a-1e82-4818-a1c3-63d806ec15bb}')
+    @patch('os.listdir', return_value=['f8b3781a-1e82-4818-a1c3-63d806ec15bb'])
+    @patch('os.path.exists', return_value=True)
+    def test_device_for_ide_port_gen2_success(
+            self,
+            os_path_exists,
+            os_listdir,
+            fileutil_read_file,
+            os_walk):
+        dev = osutil.DefaultOSUtil().device_for_ide_port(1)
+        self.assertEqual(dev, 'sdb', 'The returned device should be the resource disk')
+
+    @patch('azurelinuxagent.common.utils.fileutil.read_file', return_value='{f8b3781a-1e82-4818-a1c3-63d806ec15bb}')
+    @patch('os.listdir', return_value=['00000000-0000-0000-0000-000000000000'])
+    @patch('os.path.exists', return_value=True)
+    def test_device_for_ide_port_none(
+            self,
+            os_path_exists,
+            os_listdir,
+            fileutil_read_file):
+        dev = osutil.DefaultOSUtil().device_for_ide_port(1)
+        self.assertIsNone(dev, 'None should be returned if no resource disk found')
+
 def osutil_get_dhcp_pid_should_return_a_list_of_pids(test_instance, osutil_instance):
     """
     This is a very basic test for osutil.get_dhcp_pid. It is simply meant to exercise the implementation of that method
