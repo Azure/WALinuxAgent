@@ -1205,41 +1205,36 @@ class DefaultOSUtil(object):
         device = None
         path = "/sys/bus/vmbus/devices/"
         # We have to try device IDs for both Gen1 and Gen2 VMs.
-        for device_id_or_prefix in [
-                '{0}-000{1}'.format(g0, port_id),
-                GEN2_DEVICE_ID]:
-            logger.info('Looking for device ID with name or prefix {0}'.format(device_id_or_prefix))
-            if os.path.exists(path):
-                try:
-                    for vmbus in os.listdir(path):
-                        deviceid = fileutil.read_file(os.path.join(path, vmbus, "device_id"))
-                        guid = deviceid.strip('{}')
-                        if guid.startswith(device_id_or_prefix):
-                            for root, dirs, files in os.walk(path + vmbus):
-                                root_path_parts = root.split('/')
-                                # For Gen1 VMs we only have to check for the block dir in the
-                                # current device. But for Gen2 VMs all of the disks (sda, sdb,
-                                # sr0) are presented in this device on the same SCSI controller.
-                                # Because of that we need to also read the LUN. It will be:
-                                #   0 - OS disk
-                                #   1 - Resource disk
-                                #   2 - CDROM
-                                if root_path_parts[-1] == 'block' and (
-                                        device_id_or_prefix != GEN2_DEVICE_ID or
-                                        root_path_parts[-2].split(':')[-1] == '1'):
-                                    device = dirs[0]
-                                    break
-                                else:
-                                    # older distros
-                                    for d in dirs:
-                                        if ':' in d and "block" == d.split(':')[0]:
-                                            device = d.split(':')[1]
-                                            break
-                            break
-                    if device:
+        gen1_device_id_prefix = '{0}-000{1}'.format(g0, port_id)
+        if os.path.exists(path):
+            try:
+                for vmbus in os.listdir(path):
+                    deviceid = fileutil.read_file(os.path.join(path, vmbus, "device_id"))
+                    guid = deviceid.strip('{}')
+                    if guid.startswith(gen1_device_id_prefix) or guid == GEN2_DEVICE_ID:
+                        for root, dirs, files in os.walk(path + vmbus):
+                            root_path_parts = root.split('/')
+                            # For Gen1 VMs we only have to check for the block dir in the
+                            # current device. But for Gen2 VMs all of the disks (sda, sdb,
+                            # sr0) are presented in this device on the same SCSI controller.
+                            # Because of that we need to also read the LUN. It will be:
+                            #   0 - OS disk
+                            #   1 - Resource disk
+                            #   2 - CDROM
+                            if root_path_parts[-1] == 'block' and (
+                                    guid != GEN2_DEVICE_ID or
+                                    root_path_parts[-2].split(':')[-1] == '1'):
+                                device = dirs[0]
+                                break
+                            else:
+                                # older distros
+                                for d in dirs:
+                                    if ':' in d and "block" == d.split(':')[0]:
+                                        device = d.split(':')[1]
+                                        break
                         break
-                except OSError as oe:
-                    logger.warn('Could not obtain device for IDE port {0}: {1}', port_id, ustr(oe))
+            except OSError as oe:
+                logger.warn('Could not obtain device for IDE port {0}: {1}', port_id, ustr(oe))
         return device
 
     def set_hostname_record(self, hostname):
