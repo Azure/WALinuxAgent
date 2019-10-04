@@ -108,105 +108,108 @@ class FreeBSDOSUtil(DefaultOSUtil):
         """
         linux_style_route_file = [ "Iface\tDestination\tGateway\tFlags\tRefCnt\tUse\tMetric\tMask\tMTU\tWindow\tIRTT" ]
 
-        cmd = "netstat -rn"
-        ret, netstat_output = shellutil.run_get_output(cmd)
-        if ret:
-            raise OSUtilError("Cannot read route table [{0}]".format(netstat_output))
-        netstat_output = netstat_output.split("\n")
-        if len(netstat_output) < 3:
-            return linux_style_route_file
-        netstat_output = netstat_output[3:]
-        # Parse the Netstat -RN header line
-        n_columns = 0
-        column_index = {}
-        header_line = netstat_output[0]
-        for header in [h for h in header_line.split() if len(h) > 0]:
-            column_index[header] = n_columns
-            n_columns += 1
         try:
-            column_iface = column_index["Netif"]
-            column_dest = column_index["Destination"]
-            column_gw = column_index["Gateway"]
-            column_flags = column_index["Flags"]
-        except KeyError:
-            msg = "netstat -rn is missing key information; headers are [{0}]".format(header_line)
-            logger.error(msg)
-            return linux_style_route_file
-        # Parse the Routes
-        n_routes = len(netstat_output)
-        for i in range(1, n_routes-1):
-            route = netstat_output[i].split()
-            n_columns = len(route)
-            if n_columns == 0:
-                # End of IPv4 Routes
-                break
-            elif n_columns < 4:
-                # Skip, Invalid/Incomplete Route
-                continue
-            # Network Interface
-            netif = route[column_iface]
-            # Destination IP (in HEX)
-            if route[column_dest] == "default":
-                route[column_dest] = "0.0.0.0/32"
-            elif route[column_dest] == "localhost":
-                route[column_dest] = "127.0.0.1/32"
-            _dest = route[column_dest].split("/")
-            dest = ""
+            cmd = "netstat -rn"
+            ret, netstat_output = shellutil.run_get_output(cmd)
+            if ret:
+                raise OSUtilError("Failed to run netstat")
+            netstat_output = netstat_output.split("\n")
+            if len(netstat_output) < 3:
+                return linux_style_route_file
+            netstat_output = netstat_output[3:]
+            # Parse the Netstat -RN header line
+            n_columns = 0
+            column_index = {}
+            header_line = netstat_output[0]
+            for header in [h for h in header_line.split() if len(h) > 0]:
+                column_index[header] = n_columns
+                n_columns += 1
             try:
-                # IPv4
-                dest = "%08X" % int(binascii.hexlify(struct.pack("!I", struct.unpack("=I", socket.inet_pton(socket.AF_INET, _dest[0]))[0])), 16)
-            except socket.error:
+                column_iface = column_index["Netif"]
+                column_dest = column_index["Destination"]
+                column_gw = column_index["Gateway"]
+                column_flags = column_index["Flags"]
+            except KeyError:
+                msg = "netstat -rn is missing key information; headers are [{0}]".format(header_line)
+                logger.error(msg)
+                return linux_style_route_file
+            # Parse the Routes
+            n_routes = len(netstat_output)
+            for i in range(1, n_routes-1):
+                route = netstat_output[i].split()
+                n_columns = len(route)
+                if n_columns == 0:
+                    # End of IPv4 Routes
+                    break
+                elif n_columns < 4:
+                    # Skip, Invalid/Incomplete Route
+                    continue
+                # Network Interface
+                netif = route[column_iface]
+                # Destination IP (in HEX)
+                if route[column_dest] == "default":
+                    route[column_dest] = "0.0.0.0/32"
+                elif route[column_dest] == "localhost":
+                    route[column_dest] = "127.0.0.1/32"
+                _dest = route[column_dest].split("/")
                 dest = ""
-            if dest == "":
-                # Not an IPv4 or v6 address, skip
-                continue
-            # Route Gateway (IN HEX)
-            if route[column_gw] == "default":
-                route[column_gw] = "0.0.0.0"
-            elif route[column_gw] == "localhost":
-                route[column_gw] = "127.0.0.1"
-            gw = ""
-            try:
-                # IPv4
-                gw = "%08X" % int(binascii.hexlify(struct.pack("!I", struct.unpack("=I", socket.inet_pton(socket.AF_INET, route[column_gw]))[0])), 16)
-            except socket.error:
+                try:
+                    # IPv4
+                    dest = "%08X" % int(binascii.hexlify(struct.pack("!I", struct.unpack("=I", socket.inet_pton(socket.AF_INET, _dest[0]))[0])), 16)
+                except socket.error:
+                    dest = ""
+                if dest == "":
+                    # Not an IPv4 or v6 address, skip
+                    continue
+                # Route Gateway (IN HEX)
+                if route[column_gw] == "default":
+                    route[column_gw] = "0.0.0.0"
+                elif route[column_gw] == "localhost":
+                    route[column_gw] = "127.0.0.1"
                 gw = ""
-            if gw == "":
-                gw = "0.0.0.0"
-            # Route Flags
-            flags = 0
-            RTF_UP = 0x0001
-            RTF_GATEWAY = 0x0002
-            RTF_HOST = 0x0004
-            RTF_DYNAMIC = 0x0010
-            if "U" in route[column_flags]:
-                flags |= RTF_UP
-            if "G" in route[column_flags]:
-                flags |= RTF_GATEWAY
-            if "H" in route[column_flags]:
-                flags |= RTF_HOST
-            if "S" not in route[column_flags]:
-                flags |= RTF_DYNAMIC
-            # Reference Count
-            refcount = 0
-            # Use
-            use = 0
-            # Route Metric (priority list ordering is metric)
-            metric = n_routes - i
-            # Subnet Mask
-            mask = 32
-            if len(_dest) > 1:
-                mask = int(_dest[1])
-            mask = "{0:08x}".format(struct.unpack("=I", struct.pack("!I", (0xffffffff << (32 - mask)) & 0xffffffff))[0]).upper()
-            # MTU
-            mtu = 0
-            # Window
-            window = 0
-            # Initial Round Trip Time
-            irtt = 0
-            # Add the route
-            linux_style_route_file.append("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\t{8}\t{9}\t{10}".format(
-                    netif, dest, gw, flags, refcount, use, metric, mask, mtu, window, irtt))
+                try:
+                    # IPv4
+                    gw = "%08X" % int(binascii.hexlify(struct.pack("!I", struct.unpack("=I", socket.inet_pton(socket.AF_INET, route[column_gw]))[0])), 16)
+                except socket.error:
+                    gw = ""
+                if gw == "":
+                    gw = "0.0.0.0"
+                # Route Flags
+                flags = 0
+                RTF_UP = 0x0001
+                RTF_GATEWAY = 0x0002
+                RTF_HOST = 0x0004
+                RTF_DYNAMIC = 0x0010
+                if "U" in route[column_flags]:
+                    flags |= RTF_UP
+                if "G" in route[column_flags]:
+                    flags |= RTF_GATEWAY
+                if "H" in route[column_flags]:
+                    flags |= RTF_HOST
+                if "S" not in route[column_flags]:
+                    flags |= RTF_DYNAMIC
+                # Reference Count
+                refcount = 0
+                # Use
+                use = 0
+                # Route Metric (priority list ordering is metric)
+                metric = n_routes - i
+                # Subnet Mask
+                mask = 32
+                if len(_dest) > 1:
+                    mask = int(_dest[1])
+                mask = "{0:08x}".format(struct.unpack("=I", struct.pack("!I", (0xffffffff << (32 - mask)) & 0xffffffff))[0]).upper()
+                # MTU
+                mtu = 0
+                # Window
+                window = 0
+                # Initial Round Trip Time
+                irtt = 0
+                # Add the route
+                linux_style_route_file.append("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\t{8}\t{9}\t{10}".format(
+                        netif, dest, gw, flags, refcount, use, metric, mask, mtu, window, irtt))
+        except Exception as e:
+            logger.error("Cannot read route table [{0}]", ustr(e))
         return linux_style_route_file
 
     @staticmethod
