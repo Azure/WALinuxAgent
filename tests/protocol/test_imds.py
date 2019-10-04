@@ -5,7 +5,7 @@ import json
 import azurelinuxagent.common.protocol.imds as imds
 
 from azurelinuxagent.common.exception import HttpError
-from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.future import ustr, httpclient
 from azurelinuxagent.common.protocol.restapi import set_properties
 from azurelinuxagent.common.utils import restutil
 from tests.ga.test_update import ResponseMock
@@ -337,12 +337,137 @@ class TestImds(AgentTestCase):
         self.assertEqual(restutil.HTTP_USER_AGENT_HEALTH, kw_args['headers']['User-Agent'])
         self.assertTrue('Metadata' in kw_args['headers'])
         self.assertEqual(True, kw_args['headers']['Metadata'])
-        self.assertEqual('http://169.254.169.254/metadata/instance/?api-version=2018-02-01',
+        self.assertEqual('http://169.254.169.254/metadata/instance?api-version=2018-02-01',
                          positional_args[0])
         self.assertEqual(expected_valid, validate_response[0])
         self.assertTrue(expected_response in validate_response[1],
                         "Expected: '{0}', Actual: '{1}'"
                         .format(expected_response, validate_response[1]))
+
+    @patch("azurelinuxagent.common.protocol.util.ProtocolUtil")
+    def test_endpoint_fallback(self, ProtocolUtil):
+        # http error status codes are tested in test_response_validation, none of which
+        # should trigger a fallback. This is confirmed as _assert_validation will count
+        # http GET calls and enforces a single GET call (fallback would cause 2) and
+        # checks the url called.
+
+        test_subject = imds.ImdsClient()
+        ProtocolUtil().get_wireserver_endpoint.return_value = "foo.bar"
+
+        # ensure user-agent gets set correctly
+        for is_health, expected_useragent in [(False, restutil.HTTP_USER_AGENT), (True, restutil.HTTP_USER_AGENT_HEALTH)]:
+            # set a different resource path for health query to make debugging unit test easier
+            resource_path = 'something/health' if is_health else 'something'
+
+            # both endpoints unreachable
+            test_subject._http_get = Mock(side_effect=self._mock_http_get_unreachable_both)
+            conn_success, response = test_subject.get_metadata(resource_path=resource_path, is_health=is_health)
+            self.assertFalse(conn_success)
+            self.assertEqual('IMDS error in /metadata/{0}: Unable to connect to endpoint'.format(resource_path), response)
+            self.assertEqual(2, test_subject._http_get.call_count)
+            for _, kwargs in test_subject._http_get.call_args_list:
+                self.assertTrue('User-Agent' in kwargs['headers'])
+                self.assertEqual(expected_useragent, kwargs['headers']['User-Agent'])
+
+            # primary IMDS endpoint unreachable and success in secondary IMDS endpoint
+            test_subject._http_get = Mock(side_effect=self._mock_http_get_unreachable_primary_with_ok)
+            conn_success, response = test_subject.get_metadata(resource_path=resource_path, is_health=is_health)
+            self.assertTrue(conn_success)
+            self.assertEqual('Mock success response', response)
+            self.assertEqual(2, test_subject._http_get.call_count)
+            for _, kwargs in test_subject._http_get.call_args_list:
+                self.assertTrue('User-Agent' in kwargs['headers'])
+                self.assertEqual(expected_useragent, kwargs['headers']['User-Agent'])
+
+            # primary IMDS endpoint unreachable and http error in secondary IMDS endpoint
+            test_subject._http_get = Mock(side_effect=self._mock_http_get_unreachable_primary_with_fail)
+            conn_success, response = test_subject.get_metadata(resource_path=resource_path, is_health=is_health)
+            self.assertFalse(conn_success)
+            self.assertEqual('IMDS error in /metadata/{0}: [HTTP Failed] [404: reason] Mock not found'.format(resource_path), response)
+            self.assertEqual(2, test_subject._http_get.call_count)
+            for _, kwargs in test_subject._http_get.call_args_list:
+                self.assertTrue('User-Agent' in kwargs['headers'])
+                self.assertEqual(expected_useragent, kwargs['headers']['User-Agent'])
+
+            # primary IMDS endpoint unreachable and http error in secondary IMDS endpoint
+            test_subject._http_get = Mock(side_effect=self._mock_http_get_unreachable_primary_with_fail)
+            conn_success, response = test_subject.get_metadata(resource_path=resource_path, is_health=is_health)
+            self.assertFalse(conn_success)
+            self.assertEqual('IMDS error in /metadata/{0}: [HTTP Failed] [404: reason] Mock not found'.format(resource_path), response)
+            self.assertEqual(2, test_subject._http_get.call_count)
+            for _, kwargs in test_subject._http_get.call_args_list:
+                self.assertTrue('User-Agent' in kwargs['headers'])
+                self.assertEqual(expected_useragent, kwargs['headers']['User-Agent'])
+
+            # primary IMDS endpoint with non-fallback HTTPError
+            test_subject._http_get = Mock(side_effect=self._mock_http_get_nonfallback_primary)
+            try:
+                test_subject.get_metadata(resource_path=resource_path, is_health=is_health)
+                self.assertTrue(False, 'Expected HttpError but no except raised')
+            except HttpError as e:
+                self.assertEqual('[HttpError] HTTP Failed. GET http://169.254.169.254/metadata/{0} -- IOError incomplete read -- 6 attempts made'.format(resource_path), str(e))
+                self.assertEqual(1, test_subject._http_get.call_count)
+                for _, kwargs in test_subject._http_get.call_args_list:
+                    self.assertTrue('User-Agent' in kwargs['headers'])
+                    self.assertEqual(expected_useragent, kwargs['headers']['User-Agent'])
+            except Exception as e:
+                self.assertTrue(False, 'Expected HttpError but got {0}'.format(str(e)))
+
+            # primary IMDS endpoint unreachable and non-timeout HTTPError in secondary IMDS endpoint
+            test_subject._http_get = Mock(side_effect=self._mock_http_get_unreachable_primary_with_except)
+            try:
+                test_subject.get_metadata(resource_path=resource_path, is_health=is_health)
+                self.assertTrue(False, 'Expected HttpError but no except raised')
+            except HttpError as e:
+                self.assertEqual('[HttpError] HTTP Failed. GET http://foo.bar/metadata/{0} -- IOError incomplete read -- 6 attempts made'.format(resource_path), str(e))
+                self.assertEqual(2, test_subject._http_get.call_count)
+                for _, kwargs in test_subject._http_get.call_args_list:
+                    self.assertTrue('User-Agent' in kwargs['headers'])
+                    self.assertEqual(expected_useragent, kwargs['headers']['User-Agent'])
+            except Exception as e:
+                self.assertTrue(False, 'Expected HttpError but got {0}'.format(str(e)))
+
+    def _mock_http_get_unreachable_both(self, *_, **kwargs):
+        raise HttpError("HTTP Failed. GET http://{0}/metadata/{1} -- IOError timed out -- 6 attempts made"
+            .format(kwargs['endpoint'], kwargs['resource_path']))
+
+    def _mock_http_get_unreachable_primary_with_ok(self, *_, **kwargs):
+        if "169.254.169.254" == kwargs['endpoint']:
+            raise HttpError("HTTP Failed. GET http://{0}/metadata/{1} -- IOError timed out -- 6 attempts made"
+                            .format(kwargs['endpoint'], kwargs['resource_path']))
+        elif "foo.bar" == kwargs['endpoint']:
+            resp = MagicMock()
+            resp.status = httpclient.OK
+            resp.read.return_value = 'Mock success response'
+            return resp
+        raise Exception("Unexpected endpoint called")
+
+    def _mock_http_get_unreachable_primary_with_fail(self, *_, **kwargs):
+        if "169.254.169.254" == kwargs['endpoint']:
+            raise HttpError("HTTP Failed. GET http://{0}/metadata/{1} -- IOError timed out -- 6 attempts made"
+                            .format(kwargs['endpoint'], kwargs['resource_path']))
+        elif "foo.bar" == kwargs['endpoint']:
+            resp = MagicMock()
+            resp.status = httpclient.NOT_FOUND
+            resp.reason = 'reason'
+            resp.read.return_value = 'Mock not found'
+            return resp
+        raise Exception("Unexpected endpoint called")
+
+    def _mock_http_get_nonfallback_primary(self, *_, **kwargs):
+        if "169.254.169.254" == kwargs['endpoint']:
+            raise HttpError("HTTP Failed. GET http://{0}/metadata/{1} -- IOError incomplete read -- 6 attempts made"
+                            .format(kwargs['endpoint'], kwargs['resource_path']))
+        raise Exception("Unexpected endpoint called")
+
+    def _mock_http_get_unreachable_primary_with_except(self, *_, **kwargs):
+        if "169.254.169.254" == kwargs['endpoint']:
+            raise HttpError("HTTP Failed. GET http://{0}/metadata/{1} -- IOError timed out -- 6 attempts made"
+                            .format(kwargs['endpoint'], kwargs['resource_path']))
+        elif "foo.bar" == kwargs['endpoint']:
+            raise HttpError("HTTP Failed. GET http://{0}/metadata/{1} -- IOError incomplete read -- 6 attempts made"
+                            .format(kwargs['endpoint'], kwargs['resource_path']))
+        raise Exception("Unexpected endpoint called")
 
 
 if __name__ == '__main__':
