@@ -1026,7 +1026,7 @@ class WireClient(object):
             if ret:
                 return ret
         else:
-            logger.info("Using host plugin as default channel")
+            logger.periodic_info(logger.EVERY_HALF_DAY, "[PERIODIC] Using host plugin as default channel.")
 
         try:
             ret = host_func()
@@ -1080,7 +1080,6 @@ class WireClient(object):
                           log_event=False)
                 raise
 
-        logger.info("Request succeeded using the host plugin channel.")
         add_event(name=AGENT_NAME,
                   version=CURRENT_VERSION,
                   op=WALAEventOperation.HostPlugin,
