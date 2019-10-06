@@ -75,6 +75,47 @@ class TestProtocolUtil(AgentTestCase):
         protocol_util._detect_metadata_protocol.assert_any_call()
         protocol_util._detect_wire_protocol.assert_not_called()
 
+    @patch("azurelinuxagent.common.protocol.util.MetadataProtocol")
+    @patch("azurelinuxagent.common.protocol.util.WireProtocol")
+    def test_get_protocol(self, WireProtocol, MetadataProtocol, _):
+        WireProtocol.return_value = MagicMock()
+        MetadataProtocol.return_value = MagicMock()
+
+        protocol_util = get_protocol_util()
+        protocol_util.get_wireserver_endpoint = Mock()
+        protocol_util._detect_protocol = MagicMock()
+
+        # Test for wire protocol
+        protocol_util._save_protocol("WireProtocol")
+
+        protocol = protocol_util.get_protocol()
+        self.assertEquals(WireProtocol.return_value, protocol)
+        protocol_util.get_wireserver_endpoint.assert_any_call()
+
+        # Test to ensure protocol persists
+        protocol_util.get_wireserver_endpoint.reset_mock()
+        protocol_util._save_protocol("MetadataProtocol")
+
+        protocol = protocol_util.get_protocol()
+        self.assertEquals(WireProtocol.return_value, protocol)
+        protocol_util.get_wireserver_endpoint.assert_not_called()
+
+        # Test for metadata protocol
+        protocol_util.clear_protocol()
+        protocol_util._save_protocol("MetadataProtocol")
+
+        protocol = protocol_util.get_protocol()
+        self.assertEquals(MetadataProtocol.return_value, protocol)
+        protocol_util.get_wireserver_endpoint.assert_not_called()
+
+        # Test for unknown protocol
+        protocol_util.clear_protocol()
+        protocol_util._save_protocol("Not_a_Protocol")
+        protocol_util._detect_protocol.side_effect = NotImplementedError()
+
+        self.assertRaises(NotImplementedError, protocol_util.get_protocol)
+        protocol_util.get_wireserver_endpoint.assert_not_called()
+
 
 if __name__ == '__main__':
     unittest.main()
