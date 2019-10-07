@@ -100,114 +100,225 @@ class FreeBSDOSUtil(DefaultOSUtil):
     @staticmethod
     def read_route_table():
         """
-        Return a list of strings comprising the route table, including column headers. Each line is stripped of leading
-        or trailing whitespace but is otherwise unmolested.
+        Return a list of strings comprising the route table as in the Linux /proc/net/route format. The input taken is from FreeBSDs
+        `netstat -rn -f inet` command. Here is what the function does in detail:
 
-        :return: Entries in the route priority table from `netstat -rn`
+        1. Runs `netstat -rn -f inet` which outputs a column formatted list of ipv4 routes in priority order like so:
+
+            > Routing tables
+            > 
+            > Internet:
+            > Destination        Gateway            Flags    Refs      Use  Netif Expire
+            > default            61.221.xx.yy       UGS         0      247    em1
+            > 10                 10.10.110.5        UGS         0       50    em0
+            > 10.10.110/26       link#1             UC          0        0    em0
+            > 10.10.110.5        00:1b:0d:e6:58:40  UHLW        2        0    em0   1145
+            > 61.221.xx.yy/29    link#2             UC          0        0    em1
+            > 61.221.xx.yy       00:1b:0d:e6:57:c0  UHLW        2        0    em1   1055
+            > 61.221.xx/24       link#2             UC          0        0    em1
+            > 127.0.0.1          127.0.0.1          UH          0        0    lo0
+        
+        2. Convert it to an array of lines that resemble an equivalent /proc/net/route content on a Linux system like so:
+
+            > Iface   Destination Gateway     Flags   RefCnt  Use Metric  Mask        MTU Window  IRTT
+            > gre828  00000000    00000000    0001    0   0   0   000000F8    0   0   0
+            > ens160  00000000    FE04700A    0003    0   0   100 00000000    0   0   0
+            > gre828  00000008    00000000    0001    0   0   0   000000FE    0   0   0
+            > ens160  0004700A    00000000    0001    0   0   100 00FFFFFF    0   0   0
+            > gre828  2504700A    00000000    0005    0   0   0   FFFFFFFF    0   0   0
+            > gre828  3704700A    00000000    0005    0   0   0   FFFFFFFF    0   0   0
+            > gre828  4104700A    00000000    0005    0   0   0   FFFFFFFF    0   0   0
+
+        :return: Entries in the ipv4 route priority list from `netstat -rn -f inet` in the linux `/proc/net/route` style
         :rtype: list(str)
         """
+            
+        def _get_netstat_rn_ipv4_routes():
+            """
+            Runs `netstat -rn -f inet` and parses its output and returns a list of routes where the key is the column name
+            and the value is the value in the column, stripped of leading and trailing whitespace.
+
+            :return: List of dictionaries representing routes in the ipv4 route priority list from `netstat -rn -f inet`
+            :rtype: list(dict)
+            """
+            cmd = "netstat -rn -f inet"
+            ret, output = shellutil.run_get_output(cmd)
+            if ret:
+                raise OSUtilError("Failed to run netstat")
+            output_lines = output.split("\n")
+            if len(output_lines) < 3:
+                raise OSUtilError("`netstat -rn -f inet` output seems to be empty")
+            output_lines = [ line.strip() for line in output_lines if line ]
+            if "Internet:" not in output_lines:
+                raise OSUtilError("`netstat -rn -f inet` output seems to contain no ipv4 routes")
+            route_header_line = output_lines.index("Internet:") + 1
+            # Parse the file structure and left justify the routes
+            route_start_line = route_header_line + 1
+            route_line_length = max([len(line) for line in output_lines[route_header_line:]])
+            netstat_route_list = [line.ljust(route_line_length) for line in output_lines[route_start_line:]]
+            # Parse the headers
+            _route_headers = output_lines[route_header_line].split()
+            n_route_headers = len(_route_headers)
+            route_columns = {}
+            for i in range(0, n_route_headers - 1):
+                route_columns[_route_headers[i]] = (
+                    output_lines[route_header_line].index(_route_headers[i]),
+                    (output_lines[route_header_line].index(_route_headers[i+1]) - 1)
+                )
+            route_columns[_route_headers[n_route_headers - 1]] = (
+                output_lines[route_header_line].index(_route_headers[n_route_headers - 1]),
+                None
+            )
+            # Parse the routes
+            netstat_routes = []
+            n_netstat_routes = len(netstat_route_list)
+            for i in range(0, n_netstat_routes):
+                netstat_route = {}
+                for column in route_columns:
+                    netstat_route[column] = netstat_route_list[i][route_columns[column][0]:route_columns[column][1]].strip()
+                netstat_route["Metric"] = n_netstat_routes - i
+                netstat_routes.append(netstat_route)
+            # Return the Sections
+            return netstat_routes
+
+        def _ipv4_ascii_address_to_hex(ipv4_ascii_address):
+            """
+            Converts an IPv4 32bit address from its ASCII notation (ie. 127.0.0.1) to an 8 digit padded hex notation
+            (ie. "0100007F") string.
+
+            :return: 8 character long hex string representation of the IP
+            :rtype: string
+            """
+            # Raises socket.error if the IP is not a valid IPv4
+            return "%08X" % int(binascii.hexlify(struct.pack("!I", struct.unpack("=I", socket.inet_pton(socket.AF_INET, ipv4_ascii_address))[0])), 16)
+
+        def _ipv4_cidr_mask_to_hex(ipv4_cidr_mask):
+            """
+            Converts an subnet mask from its CIDR integer notation (ie. 32) to an 8 digit padded hex notation
+            (ie. "FFFFFFFF") string representing its bitmask form.
+
+            :return: 8 character long hex string representation of the IP
+            :rtype: string
+            """
+            return "{0:08x}".format(struct.unpack("=I", struct.pack("!I", (0xffffffff << (32 - ipv4_cidr_mask)) & 0xffffffff))[0]).upper()
+
+        def _ipv4_cidr_destination_to_hex(destination):
+            """
+            Converts an destination address from its CIDR notation (ie. 127.0.0.1/32 or default or localhost) to an 8
+            digit padded hex notation (ie. "0100007F" or "00000000" or "0100007F") string and its subnet bitmask
+            also in hex (FFFFFFFF).
+
+            :return: tuple of 8 character long hex string representation of the IP and 8 character long hex string representation of the subnet mask
+            :rtype: tuple(string, int)
+            """
+            destination_ip = "0.0.0.0"
+            destination_subnetmask = 32
+            if destination != "default":
+                if destination == "localhost":
+                    destination_ip = "127.0.0.1"
+                else:
+                    destination_ip = destination.split("/")
+                    if len(destination_ip) > 1:
+                        destination_subnetmask = int(destination_ip[1])
+                    destination_ip = destination_ip[0]
+            hex_destination_ip = _ipv4_ascii_address_to_hex(destination_ip)
+            hex_destination_subnetmask = _ipv4_cidr_mask_to_hex(destination_subnetmask)
+            return hex_destination_ip, hex_destination_subnetmask
+        
+        def _try_ipv4_gateway_to_hex(gateway):
+            """
+            If the gateway is an IPv4 address, return its IP in hex, else, return "00000000"
+
+            :return: 8 character long hex string representation of the IP of the gateway
+            :rtype: string
+            """
+            try:
+                return _ipv4_ascii_address_to_hex(gateway)
+            except socket.error:
+                return "00000000"
+
+        def _ascii_route_flags_to_bitmask(ascii_route_flags):
+            """
+            Converts route flags to a bitmask of their equivalent linux/route.h values.
+
+            :return: integer representation of a 16 bit mask
+            :rtype: int
+            """
+            bitmask_flags = 0
+            RTF_UP = 0x0001
+            RTF_GATEWAY = 0x0002
+            RTF_HOST = 0x0004
+            RTF_DYNAMIC = 0x0010
+            if "U" in ascii_route_flags:
+                bitmask_flags |= RTF_UP
+            if "G" in ascii_route_flags:
+                bitmask_flags |= RTF_GATEWAY
+            if "H" in ascii_route_flags:
+                bitmask_flags |= RTF_HOST
+            if "S" not in ascii_route_flags:
+                bitmask_flags |= RTF_DYNAMIC
+            return bitmask_flags
+
+        def _freebsd_netstat_rn_route_to_linux_proc_net_route(netstat_route):
+            """
+            Converts a single FreeBSD `netstat -rn -f inet` route to its equivalent /proc/net/route line. ie:
+            > default            0.0.0.0       UGS         0      247    em1
+            to
+            > em1  00000000    00000000    0003    0   0   0   FFFFFFFF    0   0   0
+
+            :return: string representation of the equivalent /proc/net/route line
+            :rtype: string
+            """
+            network_interface = netstat_route["Netif"]
+            hex_destination_ip, hex_destination_subnetmask = _ipv4_cidr_destination_to_hex(netstat_route["Destination"])
+            hex_gateway = _try_ipv4_gateway_to_hex(netstat_route["Gateway"])
+            bitmask_flags = _ascii_route_flags_to_bitmask(netstat_route["Flags"])
+            dummy_refcount = 0
+            dummy_use = 0
+            route_metric = netstat_route["Metric"]
+            dummy_mtu = 0
+            dummy_window = 0
+            dummy_irtt = 0
+            return "{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\t{8}\t{9}\t{10}".format(
+                network_interface,
+                hex_destination_ip,
+                hex_gateway,
+                bitmask_flags,
+                dummy_refcount,
+                dummy_use,
+                route_metric,
+                hex_destination_subnetmask,
+                dummy_mtu,
+                dummy_window,
+                dummy_irtt
+            )
+
         linux_style_route_file = [ "Iface\tDestination\tGateway\tFlags\tRefCnt\tUse\tMetric\tMask\tMTU\tWindow\tIRTT" ]
 
         try:
-            cmd = "netstat -rn"
-            ret, netstat_output = shellutil.run_get_output(cmd)
-            if ret:
-                raise OSUtilError("Failed to run netstat")
-            netstat_output = netstat_output.split("\n")
-            if len(netstat_output) < 3:
-                return linux_style_route_file
-            netstat_output = netstat_output[3:]
-            # Parse the Netstat -RN header line
-            n_columns = 0
-            column_index = {}
-            header_line = netstat_output[0]
-            for header in [h for h in header_line.split() if len(h) > 0]:
-                column_index[header] = n_columns
-                n_columns += 1
-            try:
-                column_iface = column_index["Netif"]
-                column_dest = column_index["Destination"]
-                column_gw = column_index["Gateway"]
-                column_flags = column_index["Flags"]
-            except KeyError:
-                msg = "netstat -rn is missing key information; headers are [{0}]".format(header_line)
-                logger.error(msg)
-                return linux_style_route_file
-            # Parse the Routes
-            n_routes = len(netstat_output)
-            for i in range(1, n_routes-1):
-                route = netstat_output[i].split()
-                n_columns = len(route)
-                if n_columns == 0:
-                    # End of IPv4 Routes
-                    break
-                elif n_columns < 4:
-                    # Skip, Invalid/Incomplete Route
-                    continue
-                # Network Interface
-                netif = route[column_iface]
-                # Destination IP (in HEX)
-                if route[column_dest] == "default":
-                    route[column_dest] = "0.0.0.0/32"
-                elif route[column_dest] == "localhost":
-                    route[column_dest] = "127.0.0.1/32"
-                _dest = route[column_dest].split("/")
-                dest = ""
-                try:
-                    # IPv4
-                    dest = "%08X" % int(binascii.hexlify(struct.pack("!I", struct.unpack("=I", socket.inet_pton(socket.AF_INET, _dest[0]))[0])), 16)
-                except socket.error:
-                    dest = ""
-                if dest == "":
-                    # Not an IPv4 or v6 address, skip
-                    continue
-                # Route Gateway (IN HEX)
-                if route[column_gw] == "default":
-                    route[column_gw] = "0.0.0.0"
-                elif route[column_gw] == "localhost":
-                    route[column_gw] = "127.0.0.1"
-                gw = ""
-                try:
-                    # IPv4
-                    gw = "%08X" % int(binascii.hexlify(struct.pack("!I", struct.unpack("=I", socket.inet_pton(socket.AF_INET, route[column_gw]))[0])), 16)
-                except socket.error:
-                    gw = ""
-                if gw == "":
-                    gw = "0.0.0.0"
-                # Route Flags
-                flags = 0
-                RTF_UP = 0x0001
-                RTF_GATEWAY = 0x0002
-                RTF_HOST = 0x0004
-                RTF_DYNAMIC = 0x0010
-                if "U" in route[column_flags]:
-                    flags |= RTF_UP
-                if "G" in route[column_flags]:
-                    flags |= RTF_GATEWAY
-                if "H" in route[column_flags]:
-                    flags |= RTF_HOST
-                if "S" not in route[column_flags]:
-                    flags |= RTF_DYNAMIC
-                # Reference Count
-                refcount = 0
-                # Use
-                use = 0
-                # Route Metric (priority list ordering is metric)
-                metric = n_routes - i
-                # Subnet Mask
-                mask = 32
-                if len(_dest) > 1:
-                    mask = int(_dest[1])
-                mask = "{0:08x}".format(struct.unpack("=I", struct.pack("!I", (0xffffffff << (32 - mask)) & 0xffffffff))[0]).upper()
-                # MTU
-                mtu = 0
-                # Window
-                window = 0
-                # Initial Round Trip Time
-                irtt = 0
-                # Add the route
-                linux_style_route_file.append("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\t{8}\t{9}\t{10}".format(
-                        netif, dest, gw, flags, refcount, use, metric, mask, mtu, window, irtt))
+            netstat_routes = _get_netstat_rn_ipv4_routes()
+            # Make sure the `netstat -rn -f inet` contains columns for Netif, Destination, Gateway and Flags which are needed to convert
+            # to the Linux Format
+            if len(netstat_routes) > 0:
+                missing_headers = []
+                if "Netif" not in netstat_routes[0]:
+                    missing_headers.append("Netif")
+                if "Destination" not in netstat_routes[0]:
+                    missing_headers.append("Destination")
+                if "Gateway" not in netstat_routes[0]:
+                    missing_headers.append("Gateway")
+                if "Flags" not in netstat_routes[0]:
+                    missing_headers.append("Flags")
+                if missing_headers:
+                    raise KeyError("`netstat -rn -f inet` output is missing columns required to convert to the Linux /proc/net/route format; columns are [{0}]".format(missing_headers))
+                # Parse the Netstat IPv4 Routes
+                for netstat_route in netstat_routes:
+                    try:
+                        linux_style_route = _freebsd_netstat_rn_route_to_linux_proc_net_route(netstat_route)
+                        linux_style_route_file.append(linux_style_route)
+                    except Exception:
+                        # Skip the route
+                        continue
         except Exception as e:
             logger.error("Cannot read route table [{0}]", ustr(e))
         return linux_style_route_file
@@ -225,9 +336,9 @@ class FreeBSDOSUtil(DefaultOSUtil):
         count = len(route_table)
 
         if count < 1:
-            logger.error("netstat -rn is missing headers")
+            logger.error("netstat -rn -f inet is missing headers")
         elif count == 1:
-            logger.error("netstat -rn contains no routes")
+            logger.error("netstat -rn -f inet contains no routes")
         else:
             route_list = DefaultOSUtil._build_route_list(route_table)
         return route_list
@@ -245,7 +356,7 @@ class FreeBSDOSUtil(DefaultOSUtil):
         primary_interface = None
 
         if not self.disable_route_warning:
-            logger.info("Examine netstat -rn for primary interface")
+            logger.info("Examine `netstat -rn -f inet` for primary interface")
 
         route_table = self.read_route_table()
 
