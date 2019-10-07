@@ -273,6 +273,7 @@ class ImdsClient(object):
                                  "[PERIODIC] Unable to connect to primary IMDS endpoint {0}".format(endpoint))
             if not self._regex_imds_ioerror.match(str(e)):
                 raise
+
             endpoint = self._protocol_util.get_wireserver_endpoint()
             try:
                 resp = self._http_get(endpoint=endpoint, resource_path=resource_path, headers=headers)

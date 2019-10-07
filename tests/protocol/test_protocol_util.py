@@ -19,6 +19,7 @@ from tests.tools import *
 from azurelinuxagent.common.exception import *
 from azurelinuxagent.common.protocol import get_protocol_util, \
                                             TAG_FILE_NAME
+from azurelinuxagent.common.utils.restutil import DEFAULT_PROTOCOL_ENDPOINT
 from azurelinuxagent.common.protocol.util import ENDPOINT_FILE_NAME
 
 @patch("time.sleep")
@@ -87,7 +88,7 @@ class TestProtocolUtil(AgentTestCase):
         protocol_util = get_protocol_util()
 
         protocol_util.osutil = MagicMock()
-        protocol_util.osutil.is_dhcp_available.side_effect = lambda: (False, "bar.baz")
+        protocol_util.osutil.is_dhcp_available.return_value = False
 
         protocol_util.dhcp_handler = MagicMock()
         protocol_util.dhcp_handler.endpoint = None
@@ -95,7 +96,7 @@ class TestProtocolUtil(AgentTestCase):
 
         # Test wire protocol when no endpoint file has been written
         protocol_util._detect_wire_protocol()
-        self.assertEqual("bar.baz", protocol_util.get_wireserver_endpoint())
+        self.assertEqual(DEFAULT_PROTOCOL_ENDPOINT, protocol_util.get_wireserver_endpoint())
 
         # Test wire protocol when endpoint was previously detected
         protocol_util.clear_protocol()
@@ -107,7 +108,7 @@ class TestProtocolUtil(AgentTestCase):
 
         # Test wire protocol on dhcp failure
         protocol_util.clear_protocol()
-        protocol_util.osutil.is_dhcp_available.side_effect = lambda: (True, "bar.baz")
+        protocol_util.osutil.is_dhcp_available.return_value = True
         protocol_util.dhcp_handler.run.side_effect = DhcpError()
 
         self.assertRaises(ProtocolError, protocol_util._detect_wire_protocol)
