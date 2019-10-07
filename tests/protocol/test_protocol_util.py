@@ -19,6 +19,7 @@ from tests.tools import *
 from azurelinuxagent.common.exception import *
 from azurelinuxagent.common.protocol import get_protocol_util, \
                                             TAG_FILE_NAME
+from azurelinuxagent.common.protocol.util import ENDPOINT_FILE_NAME
 
 @patch("time.sleep")
 class TestProtocolUtil(AgentTestCase):
@@ -48,8 +49,8 @@ class TestProtocolUtil(AgentTestCase):
         #Test no protocol is available
         protocol_util.clear_protocol()
         WireProtocol.return_value.detect.side_effect = ProtocolError()
-
         MetadataProtocol.return_value.detect.side_effect = ProtocolError()
+
         self.assertRaises(ProtocolError, protocol_util.get_protocol)
 
     def test_detect_protocol_by_file(self, _):
@@ -74,6 +75,42 @@ class TestProtocolUtil(AgentTestCase):
         protocol_util.get_protocol(by_file=True)
         protocol_util._detect_metadata_protocol.assert_any_call()
         protocol_util._detect_wire_protocol.assert_not_called()
+
+    @patch("azurelinuxagent.common.conf.get_lib_dir")
+    @patch("azurelinuxagent.common.protocol.util.WireProtocol")
+    def test_detect_wire_protocol_no_dhcp(self, WireProtocol, mock_get_lib_dir, _):
+        WireProtocol.return_value.detect = Mock()
+
+        endpoint_file = os.path.join(self.tmp_dir, ENDPOINT_FILE_NAME)
+        mock_get_lib_dir.return_value = self.tmp_dir
+
+        protocol_util = get_protocol_util()
+
+        protocol_util.osutil = MagicMock()
+        protocol_util.osutil.is_dhcp_available.side_effect = lambda: (False, "bar.baz")
+
+        protocol_util.dhcp_handler = MagicMock()
+        protocol_util.dhcp_handler.endpoint = None
+        protocol_util.dhcp_handler.run = Mock()
+
+        # Test wire protocol when no endpoint file has been written
+        protocol_util._detect_wire_protocol()
+        self.assertEqual("bar.baz", protocol_util.get_wireserver_endpoint())
+
+        # Test wire protocol when endpoint was previously detected
+        protocol_util.clear_protocol()
+        with open(endpoint_file, "w+") as endpoint_fd:
+            endpoint_fd.write("baz.qux")
+
+        protocol_util._detect_wire_protocol()
+        self.assertEqual("baz.qux", protocol_util.get_wireserver_endpoint())
+
+        # Test wire protocol on dhcp failure
+        protocol_util.clear_protocol()
+        protocol_util.osutil.is_dhcp_available.side_effect = lambda: (True, "bar.baz")
+        protocol_util.dhcp_handler.run.side_effect = DhcpError()
+
+        self.assertRaises(ProtocolError, protocol_util._detect_wire_protocol)
 
     @patch("azurelinuxagent.common.protocol.util.MetadataProtocol")
     @patch("azurelinuxagent.common.protocol.util.WireProtocol")

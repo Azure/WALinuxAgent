@@ -35,8 +35,7 @@ from azurelinuxagent.common.osutil import get_osutil
 from azurelinuxagent.common.dhcp import get_dhcp_handler
 from azurelinuxagent.common.protocol.ovfenv import OvfEnv
 from azurelinuxagent.common.protocol.wire import WireProtocol
-from azurelinuxagent.common.protocol.metadata import MetadataProtocol, \
-                                                     METADATA_ENDPOINT
+from azurelinuxagent.common.protocol.metadata import MetadataProtocol
 from azurelinuxagent.common.utils.restutil import IOErrorCounter
 
 OVF_FILE_NAME = "ovf-env.xml"
@@ -64,11 +63,11 @@ def get_protocol_util():
 
 
 class ProtocolUtil(object):
-
     """
     ProtocolUtil handles initialization for protocol instance. 2 protocol types
     are invoked, wire protocol and metadata protocols.
     """
+
     def __init__(self):
         self.lock = threading.Lock()
         self.protocol = None
@@ -157,7 +156,10 @@ class ProtocolUtil(object):
             file_path = os.path.join(conf.get_lib_dir(), ENDPOINT_FILE_NAME)
             return fileutil.read_file(file_path)
         except IOError as e:
-            raise OSUtilError(ustr(e))
+            logger.periodic_error(logger.EVERY_FIFTEEN_MINUTES,
+                                  "[PERIODIC][GetWireserverEndpoint] Error reading file {0}: {1}".format(file_path,
+                                                                                                         str(e)))
+            return None
 
     def _set_wireserver_endpoint(self, endpoint):
         try:
@@ -172,7 +174,7 @@ class ProtocolUtil(object):
             '''
             Check if DHCP can be used to get the wire protocol endpoint
             '''
-            (dhcp_available, conf_endpoint) =  self.osutil.is_dhcp_available()
+            (dhcp_available, conf_endpoint) = self.osutil.is_dhcp_available()
             if dhcp_available:
                 logger.info("WireServer endpoint is not found. Rerun dhcp handler")
                 try:
@@ -183,7 +185,7 @@ class ProtocolUtil(object):
             else:
                 logger.info("_detect_wire_protocol: DHCP not available")
                 endpoint = self.get_wireserver_endpoint()
-                if endpoint == None:
+                if endpoint is None:
                     endpoint = conf_endpoint
                     logger.info("Using hardcoded WireServer endpoint {0}", endpoint)
                 else:
