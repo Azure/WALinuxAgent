@@ -155,7 +155,7 @@ class TelemetryAppender(object):
         self.event_func = event_func
 
     def write(self, level, msg):
-        if self.level <= level:
+        if self.level >= level:
             try:
                 self.event_func(level, msg)
             except IOError:
@@ -186,7 +186,7 @@ class AppenderType(object):
     TELEMETRY = 3
 
 
-def add_logger_appender(appender_type, level=LogLevel.INFO, path=None):
+def add_logger_appender(appender_type, level=LogLevel.INFO, path=None, ):
     DEFAULT_LOGGER.add_appender(appender_type, level, path)
 
 

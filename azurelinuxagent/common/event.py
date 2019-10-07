@@ -416,9 +416,14 @@ def add_event(name, op=WALAEventOperation.Unknown, is_success=True, duration=0,
 
 def add_log_event(level, message, reporter=__event_logger__):
     if reporter.event_dir is None:
+        # See #1035 for not adding warning statements here.
         return
 
-    reporter.add_log_event(level, message)
+    if not conf.get_logs_to_telemetry():
+        return
+
+    if level >= logger.LogLevel.WARNING:
+        reporter.add_log_event(level, message)
 
 
 def add_periodic(
