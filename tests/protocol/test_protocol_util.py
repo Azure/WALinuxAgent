@@ -81,8 +81,6 @@ class TestProtocolUtil(AgentTestCase):
     @patch("azurelinuxagent.common.protocol.util.WireProtocol")
     def test_detect_wire_protocol_no_dhcp(self, WireProtocol, mock_get_lib_dir, _):
         WireProtocol.return_value.detect = Mock()
-
-        endpoint_file = os.path.join(self.tmp_dir, ENDPOINT_FILE_NAME)
         mock_get_lib_dir.return_value = self.tmp_dir
 
         protocol_util = get_protocol_util()
@@ -93,6 +91,8 @@ class TestProtocolUtil(AgentTestCase):
         protocol_util.dhcp_handler = MagicMock()
         protocol_util.dhcp_handler.endpoint = None
         protocol_util.dhcp_handler.run = Mock()
+
+        endpoint_file = protocol_util._get_wireserver_endpoint_file_path()
 
         # Test wire protocol when no endpoint file has been written
         protocol_util._detect_wire_protocol()

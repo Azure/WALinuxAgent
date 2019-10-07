@@ -71,7 +71,9 @@ class ProtocolUtil(object):
 
     def __init__(self):
         self.lock = threading.Lock()
+        self.lock_wireserver = threading.Lock()
         self.protocol = None
+        self.endpoint = None
         self.osutil = get_osutil()
         self.dhcp_handler = get_dhcp_handler()
 
@@ -147,27 +149,78 @@ class ProtocolUtil(object):
             conf.get_lib_dir(),
             PROTOCOL_FILE_NAME)
 
+    def _get_wireserver_endpoint_file_path(self):
+        return os.path.join(
+            conf.get_lib_dir(),
+            ENDPOINT_FILE_NAME)
+
     def _get_tag_file_path(self):
         return os.path.join(
             conf.get_lib_dir(),
             TAG_FILE_NAME)
 
     def get_wireserver_endpoint(self):
+        self.lock_wireserver.acquire()
+
         try:
-            file_path = os.path.join(conf.get_lib_dir(), ENDPOINT_FILE_NAME)
-            return fileutil.read_file(file_path)
-        except IOError as e:
-            logger.periodic_error(logger.EVERY_FIFTEEN_MINUTES,
-                                  "[PERIODIC][GetWireserverEndpoint] Error reading file {0}: {1}".format(file_path,
-                                                                                                         str(e)))
-            return DEFAULT_PROTOCOL_ENDPOINT
+            if self.endpoint:
+                return self.endpoint
+
+            file_path = self._get_wireserver_endpoint_file_path()
+            if os.path.isfile(file_path):
+                try:
+                    self.endpoint = fileutil.read_file(file_path)
+
+                    if self.endpoint:
+                        logger.info("WireServer endpoint {0} read from file", self.endpoint)
+                        return self.endpoint
+
+                    logger.error("[GetWireserverEndpoint] Unexpected empty file {0}: {1}", file_path, str(e))
+                except IOError as e:
+                    logger.error("[GetWireserverEndpoint] Error reading file {0}: {1}", file_path, str(e))
+            else:
+                logger.error("[GetWireserverEndpoint] Missing file {0}", file_path)
+
+            self.endpoint = DEFAULT_PROTOCOL_ENDPOINT
+            logger.info("Using hardcoded Wireserver endpoint {0}", self.endpoint)
+
+            return self.endpoint
+        finally:
+            self.lock_wireserver.release()
 
     def _set_wireserver_endpoint(self, endpoint):
+        self.lock_wireserver.acquire()
         try:
-            file_path = os.path.join(conf.get_lib_dir(), ENDPOINT_FILE_NAME)
+            self.endpoint = endpoint
+            file_path = self._get_wireserver_endpoint_file_path()
             fileutil.write_file(file_path, endpoint)
         except IOError as e:
             raise OSUtilError(ustr(e))
+        finally:
+            self.lock_wireserver.release()
+
+    def _clear_wireserver_endpoint(self):
+        """
+        Cleanup previous saved wireserver endpoint.
+        """
+        logger.info("Clean wireserver endpoint")
+        self.lock_wireserver.acquire()
+
+        try:
+            self.endpoint = None
+            endpoint_file_path = self._get_wireserver_endpoint_file_path()
+            if not os.path.isfile(endpoint_file_path):
+                return
+
+            try:
+                os.remove(endpoint_file_path)
+            except IOError as e:
+                # Ignore file-not-found errors (since the file is being removed)
+                if e.errno == errno.ENOENT:
+                    return
+                logger.error("Failed to clear wiresever endpoint: {0}", e)
+        finally:
+            self.lock_wireserver.release()
 
     def _detect_wire_protocol(self):
         endpoint = self.dhcp_handler.endpoint
@@ -186,7 +239,6 @@ class ProtocolUtil(object):
             else:
                 logger.info("_detect_wire_protocol: DHCP not available")
                 endpoint = self.get_wireserver_endpoint()
-                logger.info("WireServer endpoint {0}", endpoint)
 
         try:
             protocol = WireProtocol(endpoint)
@@ -194,7 +246,7 @@ class ProtocolUtil(object):
             self._set_wireserver_endpoint(endpoint)
             return protocol
         except ProtocolError as e:
-            logger.info("WireServer is not responding. Reset endpoint")
+            logger.info("WireServer is not responding. Reset dhcp endpoint")
             self.dhcp_handler.endpoint = None
             self.dhcp_handler.skip_cache = True
             raise e
@@ -258,8 +310,9 @@ class ProtocolUtil(object):
 
     def clear_protocol(self):
         """
-        Cleanup previous saved endpoint.
+        Cleanup previous saved protocol endpoint.
         """
+        self._clear_wireserver_endpoint()
         logger.info("Clean protocol")
         self.protocol = None
         protocol_file_path = self._get_protocol_file_path()
