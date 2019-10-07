@@ -135,6 +135,8 @@ AGENT_NAME_PATTERN = re.compile(AGENT_PATTERN)
 AGENT_PKG_PATTERN = re.compile(AGENT_PATTERN+"\.zip")
 AGENT_DIR_PATTERN = re.compile(".*/{0}".format(AGENT_PATTERN))
 
+AGENT_EXECUTION_MODE = "IAAS"
+
 EXT_HANDLER_PATTERN = b".*/WALinuxAgent-(\d+.\d+.\d+[.\d+]*).*-run-exthandlers"
 EXT_HANDLER_REGEX = re.compile(EXT_HANDLER_PATTERN)
 
