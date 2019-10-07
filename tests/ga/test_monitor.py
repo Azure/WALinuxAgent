@@ -332,22 +332,35 @@ class TestEventMonitoring(AgentTestCase):
                                containerId="DummyContainerId",
                                roleName="DummyRoleName",
                                roleInstanceName="DummyRoleInstanceName", tenantName="DummyTenant"))
-    @patch("azurelinuxagent.common.version.get_distro", return_value=['ubuntu', '18.04', 'Bionic', 'Ubuntu-18.04-Bionic'])
     @patch("platform.release", return_value="platform-release")
-    @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_processor_cores", return_value=4)
     @patch("platform.system", return_value="Linux")
+    @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_processor_cores", return_value=4)
     @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_total_mem", return_value=10000)
     @patch("azurelinuxagent.common.protocol.wire.WireClient.send_event")
     @patch("azurelinuxagent.common.conf.get_lib_dir")
-    def test_collect_and_send_events(self, mock_lib_dir, patch_send_event, patch_get_total_mem, patch_platform_system,
-                                     patch_os_cores, patch_platform_release, patch_get_distro, patch_get_vminfo,
-                                     patch_get_compute, *args):
+    def test_collect_and_send_events(self, mock_lib_dir, patch_send_event, patch_get_total_mem, patch_os_cores,
+                                     patch_platform_system, patch_platform_release, patch_get_vminfo, patch_get_compute,
+                                     *args):
         mock_lib_dir.return_value = self.lib_dir
+
+        # import azurelinuxagent.common.version
+        # common.version.DISTRO_VERSION = "DISTRO_VERSION"
+        # common.version.DISTRO_CODE_NAME = "DISTRO_CODENAME"
+        # common.version.DISTRO_FULL_NAME = "DISTRO_FULLNAME"
 
         test_data = WireProtocolData(DATA_FILE)
         monitor_handler, protocol = self._create_mock(test_data, *args)
         monitor_handler.init_protocols()
         monitor_handler.init_sysinfo()
+
+        # Replacing OSVersion to make it platform agnostic.
+        for i in monitor_handler.sysinfo:
+            if i.name == "OSVersion":
+                i.value = "{0}:{1}-{2}-{3}:{4}".format(platform.system(),
+                                                       "DISTRO_NAME",
+                                                       "DISTRO_VERSION",
+                                                       "DISTRO_CODE_NAME",
+                                                       platform.release())
 
         self.event_logger.save_event(create_event_message(message="Message-Test"))
         monitor_handler.collect_and_send_events()
@@ -364,7 +377,8 @@ class TestEventMonitoring(AgentTestCase):
                          '<Param Name="Message" Value="Message-Test" T="mt:wstr" />' \
                          '<Param Name="Duration" Value="0" T="mt:uint64" />' \
                          '<Param Name="ExtensionType" Value="" T="mt:wstr" />' \
-                         '<Param Name="OSVersion" Value="Linux:ubuntu-18.04-bionic:platform-release" T="mt:wstr" />' \
+                         '<Param Name="OSVersion" ' \
+                         'Value="Linux:DISTRO_NAME-DISTRO_VERSION-DISTRO_CODE_NAME:platform-release" T="mt:wstr" />' \
                          '<Param Name="GAVersion" Value="WALinuxAgent-{0}" T="mt:wstr" />' \
                          '<Param Name="ExecutionMode" Value="IAAS" T="mt:wstr" />' \
                          '<Param Name="RAM" Value="10000" T="mt:uint64" />' \
