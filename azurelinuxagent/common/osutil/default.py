@@ -1236,7 +1236,7 @@ class DefaultOSUtil(object):
                                         break
                         break
             except (OSError, IOError) as exc:
-                logger.warn('Error gettin device for {0} or {1}: {2}', gen1_device_prefix, gen2_device_id, ustr(exc))
+                logger.warn('Error getting device for {0} or {1}: {2}', gen1_device_prefix, gen2_device_id, ustr(exc))
         return device
 
     def device_for_ide_port(self, port_id):
