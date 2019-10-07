@@ -43,9 +43,6 @@ class TestFreeBSDOSUtil(AgentTestCase):
 
 Internet:
 Destination        Gateway            Flags     Netif Expire
-
-Internet6:
-Destination                       Gateway                       Flags     Netif Expire
 """
 
         with patch.object(shellutil, 'run_get_output', return_value=[0, route_table]):
@@ -58,10 +55,7 @@ Destination                       Gateway                       Flags     Netif 
 
 Internet:
 Destination        Gateway            Flags     Netif Expire
-default            0.0.0.0
-
-Internet6:
-Destination                       Gateway                       Flags     Netif Expire
+1.1.1              0.0.0
 """
 
         with patch.object(shellutil, 'run_get_output', return_value=[0, route_table]):
@@ -79,9 +73,6 @@ Destination        Gateway            Flags     Netif Expire
 168.63.129.16      10.145.187.193     UH          em0       
 169.254.169.254    10.145.187.193     UHS         em0       
 192.168.43.0       0.0.0.0            US        vtbd0     
-
-Internet6:
-Destination                       Gateway                       Flags     Netif Expire
 """
 
         with patch.object(shellutil, 'run_get_output', return_value=[0, route_table]):
