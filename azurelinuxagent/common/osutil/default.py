@@ -1192,26 +1192,28 @@ class DefaultOSUtil(object):
                     return tokens[2] if len(tokens) > 2 else None
         return None
 
-    def device_for_ide_port(self, port_id):
+    @staticmethod
+    def search_for_resource_disk(gen1_device_prefix, gen2_device_id):
         """
-        Return device name attached to ide port 'n'.
+        Search the filesystem for a device by ID or prefix.
+
+        Args:
+            gen1_device_prefix (str): Gen1 resource disk prefix.
+            gen2_device_id (str): Gen2 resource device ID.
+
+        Returns:
+            str: The found device.
         """
-        if port_id > 3:
-            return None
-        g0 = "00000000"
-        if port_id > 1:
-            g0 = "00000001"
-            port_id = port_id - 2
+
         device = None
         path = "/sys/bus/vmbus/devices/"
         # We have to try device IDs for both Gen1 and Gen2 VMs.
-        gen1_device_id_prefix = '{0}-000{1}'.format(g0, port_id)
         if os.path.exists(path):
             try:
                 for vmbus in os.listdir(path):
                     deviceid = fileutil.read_file(os.path.join(path, vmbus, "device_id"))
                     guid = deviceid.strip('{}')
-                    if guid.startswith(gen1_device_id_prefix) or guid == GEN2_DEVICE_ID:
+                    if guid.startswith(gen1_device_prefix) or guid == gen2_device_id:
                         for root, dirs, files in os.walk(path + vmbus):
                             root_path_parts = root.split('/')
                             # For Gen1 VMs we only have to check for the block dir in the
@@ -1222,7 +1224,7 @@ class DefaultOSUtil(object):
                             #   1 - Resource disk
                             #   2 - CDROM
                             if root_path_parts[-1] == 'block' and (
-                                    guid != GEN2_DEVICE_ID or
+                                    guid != gen2_device_id or
                                     root_path_parts[-2].split(':')[-1] == '1'):
                                 device = dirs[0]
                                 break
@@ -1234,7 +1236,25 @@ class DefaultOSUtil(object):
                                         break
                         break
             except (OSError, IOError) as exc:
-                logger.warn('Could not obtain device for IDE port {0}: {1}', port_id, ustr(exc))
+                logger.warn('Error gettin device for {0} or {1}: {2}', gen1_device_prefix, gen2_device_id, ustr(exc))
+        return device
+
+    def device_for_ide_port(self, port_id):
+        """
+        Return device name attached to ide port 'n'.
+        """
+        if port_id > 3:
+            return None
+        g0 = "00000000"
+        if port_id > 1:
+            g0 = "00000001"
+            port_id = port_id - 2
+
+        gen1_device_prefix = '{0}-000{1}'.format(g0, port_id)
+        device = DefaultOSUtil.search_for_resource_disk(
+            gen1_device_prefix=gen1_device_prefix,
+            gen2_device_id=GEN2_DEVICE_ID
+        )
         return device
 
     def set_hostname_record(self, hostname):
