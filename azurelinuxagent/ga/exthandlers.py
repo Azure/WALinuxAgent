@@ -87,8 +87,6 @@ class ExtCommandEnvVariable(object):
     ExtensionVersion = "%s_EXTENSION_VERSION" % Prefix
     ExtensionSeqNumber = "ConfigSequenceNumber"  # At par with Windows Guest Agent
     UpdatingFromVersion = "%s_UPDATING_FROM_VERSION" % Prefix
-    CurrentAgentVersion = "%s_CURRENT_VERSION" % Prefix
-
 
 
 def get_traceback(e):
