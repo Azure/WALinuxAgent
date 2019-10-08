@@ -19,6 +19,7 @@ from azurelinuxagent.common.exception import ProvisionError
 from azurelinuxagent.common.osutil.default import DefaultOSUtil
 from azurelinuxagent.common.protocol import OVF_FILE_NAME
 from azurelinuxagent.pa.provision import get_provision_handler
+from azurelinuxagent.pa.provision.cloudinit import CloudInitProvisionHandler
 from azurelinuxagent.pa.provision.default import ProvisionHandler
 from tests.tools import *
 
@@ -316,6 +317,60 @@ class TestProvision(AgentTestCase):
         ph.handle_provision_guest_agent(provision_guest_agent='TRUE')
         self.assertEqual(3, patch_write_agent_disabled.call_count)
 
+    @patch(
+        'azurelinuxagent.common.conf.get_provisioning_agent',
+        return_value='auto'
+    )
+    @patch(
+        'azurelinuxagent.pa.provision.factory.cloud_init_is_enabled',
+        return_value=False
+    )
+    def test_get_provision_handler_config_auto_no_cloudinit(
+            self,
+            patch_cloud_init_is_enabled,
+            patch_get_provisioning_agent):
+        provisioning_handler = get_provision_handler()
+        self.assertIsInstance(provisioning_handler, ProvisionHandler, 'Auto provisioning handler should be waagent if cloud-init is not enabled')
+
+    @patch(
+        'azurelinuxagent.common.conf.get_provisioning_agent',
+        return_value='waagent'
+    )
+    @patch(
+        'azurelinuxagent.pa.provision.factory.cloud_init_is_enabled',
+        return_value=True
+    )
+    def test_get_provision_handler_config_waagent(
+            self,
+            patch_cloud_init_is_enabled,
+            patch_get_provisioning_agent):
+        provisioning_handler = get_provision_handler()
+        self.assertIsInstance(provisioning_handler, ProvisionHandler, 'Provisioning handler should be waagent if agent is set to waagent')
+
+    @patch(
+        'azurelinuxagent.common.conf.get_provisioning_agent',
+        return_value='auto'
+    )
+    @patch(
+        'azurelinuxagent.pa.provision.factory.cloud_init_is_enabled',
+        return_value=True
+    )
+    def test_get_provision_handler_config_auto_cloudinit(
+            self,
+            patch_cloud_init_is_enabled,
+            patch_get_provisioning_agent):
+        provisioning_handler = get_provision_handler()
+        self.assertIsInstance(provisioning_handler, CloudInitProvisionHandler, 'Auto provisioning handler should be cloud-init if cloud-init is enabled')
+
+    @patch(
+        'azurelinuxagent.common.conf.get_provisioning_agent',
+        return_value='cloud-init'
+    )
+    def test_get_provision_handler_config_cloudinit(
+            self,
+            patch_get_provisioning_agent):
+        provisioning_handler = get_provision_handler()
+        self.assertIsInstance(provisioning_handler, CloudInitProvisionHandler, 'Provisioning handler should be cloud-init if agent is set to cloud-init')
 
 if __name__ == '__main__':
     unittest.main()
