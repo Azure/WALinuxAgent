@@ -3,7 +3,8 @@
 import json
 
 from azurelinuxagent.common.protocol.restapi import ExtensionStatus, Extension, ExtHandler, ExtHandlerProperties
-from azurelinuxagent.ga.exthandlers import parse_ext_status, ExtHandlerInstance, get_exthandlers_handler
+from azurelinuxagent.ga.exthandlers import parse_ext_status, ExtHandlerInstance, get_exthandlers_handler, \
+    ExtCommandEnvVariable
 from azurelinuxagent.common.exception import ProtocolError, ExtensionError, ExtensionErrorCodes
 from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.utils.extensionprocessutil import TELEMETRY_MESSAGE_MAX_LEN, format_stdout_stderr, read_output
@@ -580,3 +581,19 @@ sys.stderr.write("STDERR")
             output = self.ext_handler_instance.launch_command(command)
 
         self.assertIn("[stderr]\nCannot read stdout/stderr:", output)
+
+    def test_it_should_contain_all_helper_environment_variables(self):
+
+        helper_env_vars = {ExtCommandEnvVariable.ExtensionSeqNumber: self.ext_handler_instance.get_seq_no(),
+                           ExtCommandEnvVariable.ExtensionPath: self.tmp_dir,
+                           ExtCommandEnvVariable.ExtensionVersion: self.ext_handler_instance.ext_handler.properties.version}
+
+        command = """
+            printenv | grep -E '(%s)'
+        """ % '|'.join(helper_env_vars.keys())
+
+        test_file = self.create_script('printHelperEnvironments.sh', command)
+        output = self.ext_handler_instance.launch_command(test_file)
+
+        for helper_var in helper_env_vars:
+            self.assertIn("%s=%s" % (helper_var, helper_env_vars[helper_var]), output)
