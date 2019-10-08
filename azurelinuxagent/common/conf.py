@@ -188,7 +188,7 @@ def get_logs_console(conf=__conf__):
 
 
 def get_logs_to_telemetry(conf=__conf__):
-    return conf.get_switch("Logs.SendToTelemetryService", True)
+    return conf.get_switch("Logs.SendToTelemetryService", False)
 
 
 def get_lib_dir(conf=__conf__):

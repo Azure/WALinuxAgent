@@ -39,6 +39,9 @@ _EVENT_MSG = "Event: name={0}, op={1}, message={2}, duration={3}"
 TELEMETRY_EVENT_PROVIDER_ID = "69B669B9-4AF8-4C50-BDC4-6006FA76E975"
 
 
+TELEMETRY_LOG_PROVIDER_ID = "FFF0196F-EE4C-4EAF-9AA5-776F622DEB4F"
+TELEMETRY_LOG_EVENT_ID = 7
+
 class WALAEventOperation:
     ActivateResourceDisk = "ActivateResourceDisk"
     AgentBlacklisted = "AgentBlacklisted"
@@ -300,15 +303,15 @@ class EventLogger(object):
         # The timestamp and the level are redundant, and should be stripped.
         # The logging library does not schematize this data, so I am forced
         # to parse the message.  The format is regular, so the burden is low.
+        #
+        # parts = message.split(' ', 3)
+        # msg = parts[3] if len(parts) == 4 \
+        #     else message
 
-        parts = message.split(' ', 3)
-        msg = parts[3] if len(parts) == 4 \
-            else message
-
-        event = TelemetryEvent(7, "FFF0196F-EE4C-4EAF-9AA5-776F622DEB4F")
+        event = TelemetryEvent(TELEMETRY_LOG_EVENT_ID, TELEMETRY_LOG_PROVIDER_ID)
         event.parameters.append(TelemetryEventParam('EventName', WALAEventOperation.Log))
         event.parameters.append(TelemetryEventParam('CapabilityUsed', logger.LogLevel.STRINGS[level]))
-        event.parameters.append(TelemetryEventParam('Context1', msg))
+        event.parameters.append(TelemetryEventParam('Context1', message))
         event.parameters.append(TelemetryEventParam('Context2', ''))
         event.parameters.append(TelemetryEventParam('Context3', ''))
 

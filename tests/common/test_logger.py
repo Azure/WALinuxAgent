@@ -19,7 +19,7 @@ import json
 from datetime import datetime
 
 import azurelinuxagent.common.logger as logger
-from azurelinuxagent.common.event import add_log_event
+from azurelinuxagent.common.event import add_log_event, TELEMETRY_LOG_PROVIDER_ID, TELEMETRY_LOG_EVENT_ID
 from azurelinuxagent.common.version import CURRENT_AGENT, CURRENT_VERSION
 
 from tests.tools import *
@@ -153,30 +153,39 @@ class TestLogger(AgentTestCase):
 
         mock.assert_called_once_with(logger.LogLevel.WARNING, "--unit-test--")
 
+    @patch("azurelinuxagent.common.conf.get_logs_to_telemetry", return_value=True)
     @patch('azurelinuxagent.common.event.EventLogger.save_event')
-    def test_telemetry_logger1(self, mock_save):
+    def test_telemetry_logger_sending_correct_fields(self, mock_save, patch_conf_get_logs_to_telemetry):
         appender = logger.TelemetryAppender(logger.LogLevel.WARNING, add_log_event)
-        appender.write(logger.LogLevel.WARNING, "--unit-test--")
+        appender.write(logger.LogLevel.WARNING, 'Cgroup controller "memory" is not mounted. '
+                                                'Failed to create a cgroup for extension '
+                                                'Microsoft.OSTCExtensions.DummyExtension-1.2.3.4')
 
         self.assertEqual(1, mock_save.call_count)
         telemetry_json = json.loads(mock_save.call_args[0][0])
 
-        self.assertEqual('FFF0196F-EE4C-4EAF-9AA5-776F622DEB4F', telemetry_json['providerId'])
-        self.assertEqual(7, telemetry_json['eventId'])
+        self.assertEqual(TELEMETRY_LOG_PROVIDER_ID, telemetry_json['providerId'])
+        self.assertEqual(TELEMETRY_LOG_EVENT_ID, telemetry_json['eventId'])
 
         self.assertEqual(5, len(telemetry_json['parameters']))
         for x in telemetry_json['parameters']:
             if x['name'] == 'EventName':
                 self.assertEqual(x['value'], 'Log')
-
             elif x['name'] == 'CapabilityUsed':
                 self.assertEqual(x['value'], 'WARNING')
-
             elif x['name'] == 'Context1':
-                self.assertEqual(x['value'], '--unit-test--')
-
+                self.assertEqual(x['value'], 'Cgroup controller "memory" is not mounted. '
+                                             'Failed to create a cgroup for extension '
+                                             'Microsoft.OSTCExtensions.DummyExtension-1.2.3.4')
             elif x['name'] == 'Context2':
                 self.assertEqual(x['value'], '')
-
             elif x['name'] == 'Context3':
                 self.assertEqual(x['value'], '')
+
+    @patch('azurelinuxagent.common.event.EventLogger.save_event')
+    def test_telemetry_logger_not_on_by_default(self, mock_save):
+        appender = logger.TelemetryAppender(logger.LogLevel.WARNING, add_log_event)
+        appender.write(logger.LogLevel.WARNING, 'Cgroup controller "memory" is not mounted. '
+                                                'Failed to create a cgroup for extension '
+                                                'Microsoft.OSTCExtensions.DummyExtension-1.2.3.4')
+        self.assertEqual(0, mock_save.call_count)
