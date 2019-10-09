@@ -598,7 +598,8 @@ sys.stderr.write("STDERR")
             output = self.ext_handler_instance.launch_command(test_file)
 
             args, kwagrs = patch_popen.call_args
-            without_os_env = {k: v for k, v in kwagrs['env'].items() if k not in os.environ}
+            without_os_env = dict((k, v) for (k, v) in kwagrs['env'].items() if k not in os.environ)
+
             # This check will fail if any helper environment variables are added/removed later on
             self.assertEqual(helper_env_vars, without_os_env)
 
