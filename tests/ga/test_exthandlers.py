@@ -1,6 +1,7 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the Apache License.
 import json
+import subprocess
 
 from azurelinuxagent.common.protocol.restapi import ExtensionStatus, Extension, ExtHandler, ExtHandlerProperties
 from azurelinuxagent.ga.exthandlers import parse_ext_status, ExtHandlerInstance, get_exthandlers_handler, \
@@ -593,7 +594,14 @@ sys.stderr.write("STDERR")
         """ % '|'.join(helper_env_vars.keys())
 
         test_file = self.create_script('printHelperEnvironments.sh', command)
-        output = self.ext_handler_instance.launch_command(test_file)
 
-        for helper_var in helper_env_vars:
-            self.assertIn("%s=%s" % (helper_var, helper_env_vars[helper_var]), output)
+        with patch("os.environ", return_value={}):
+            with patch("subprocess.Popen", wraps=subprocess.Popen) as patch_popen:
+                output = self.ext_handler_instance.launch_command(test_file)
+
+                args, kwagrs = patch_popen.call_args
+
+                # This check will fail if any helper environment variables are added/removed later on
+                self.assertEqual(helper_env_vars, kwagrs['env'])
+                for helper_var in helper_env_vars:
+                    self.assertIn("%s=%s" % (helper_var, helper_env_vars[helper_var]), output)
