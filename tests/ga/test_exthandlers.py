@@ -233,7 +233,6 @@ class LaunchCommandTestCase(AgentTestCase):
         self.mock_get_log_dir = patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.get_log_dir", lambda *_: self.log_dir)
         self.mock_get_log_dir.start()
 
-        mock_sleep = time.sleep
         self.mock_sleep = patch("time.sleep", lambda *_: mock_sleep(0.01))
         self.mock_sleep.start()
 
@@ -595,13 +594,14 @@ sys.stderr.write("STDERR")
 
         test_file = self.create_script('printHelperEnvironments.sh', command)
 
-        with patch("os.environ", return_value={}):
-            with patch("subprocess.Popen", wraps=subprocess.Popen) as patch_popen:
-                output = self.ext_handler_instance.launch_command(test_file)
+        with patch("subprocess.Popen", wraps=subprocess.Popen) as patch_popen:
+            output = self.ext_handler_instance.launch_command(test_file)
 
-                args, kwagrs = patch_popen.call_args
+            args, kwagrs = patch_popen.call_args
+            without_os_env = {k: v for k, v in kwagrs['env'].items() if k not in os.environ}
+            # This check will fail if any helper environment variables are added/removed later on
+            self.assertEqual(helper_env_vars, without_os_env)
 
-                # This check will fail if any helper environment variables are added/removed later on
-                self.assertEqual(helper_env_vars, kwagrs['env'])
-                for helper_var in helper_env_vars:
-                    self.assertIn("%s=%s" % (helper_var, helper_env_vars[helper_var]), output)
+            # This check is checking if the expected values are set for the extension commands
+            for helper_var in helper_env_vars:
+                self.assertIn("%s=%s" % (helper_var, helper_env_vars[helper_var]), output)
