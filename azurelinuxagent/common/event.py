@@ -37,7 +37,6 @@ from azurelinuxagent.common.version import CURRENT_VERSION
 
 _EVENT_MSG = "Event: name={0}, op={1}, message={2}, duration={3}"
 TELEMETRY_EVENT_PROVIDER_ID = "69B669B9-4AF8-4C50-BDC4-6006FA76E975"
-TELEMETRY_METRICS_PROVIDER_ID = "69B669B9-4AF8-4C50-BDC4-6006FA76E975"
 TELEMETRY_METRICS_EVENT_ID = 4
 
 
@@ -276,6 +275,7 @@ class EventLogger(object):
 
     def _add_event(self, duration, evt_type, is_internal, is_success, message, name, op, version, event_id):
         event = TelemetryEvent(event_id, TELEMETRY_EVENT_PROVIDER_ID)
+
         event.parameters.append(TelemetryEventParam('Name', name))
         event.parameters.append(TelemetryEventParam('Version', str(version)))
         event.parameters.append(TelemetryEventParam('IsInternal', is_internal))
@@ -335,7 +335,7 @@ class EventLogger(object):
             message = "Metric {0}/{1} [{2}] = {3}".format(category, counter, instance, value)
             _log_event(AGENT_NAME, "METRIC", message, 0)
 
-        event = TelemetryEvent(TELEMETRY_METRICS_EVENT_ID, TELEMETRY_METRICS_PROVIDER_ID)
+        event = TelemetryEvent(TELEMETRY_METRICS_EVENT_ID, TELEMETRY_EVENT_PROVIDER_ID)
         event.parameters.append(TelemetryEventParam('Category', category))
         event.parameters.append(TelemetryEventParam('Counter', counter))
         event.parameters.append(TelemetryEventParam('Instance', instance))

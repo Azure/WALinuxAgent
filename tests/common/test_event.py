@@ -392,11 +392,11 @@ class TestMetrics(AgentTestCase):
         event.report_metric("cpu", "%idle", "_total", 10.0)
         self.assertEqual(1, mock_event.call_count)
         event_json = mock_event.call_args[0][0]
-        self.assertIn(event.TELEMETRY_METRICS_PROVIDER_ID, event_json)
+        self.assertIn(event.TELEMETRY_EVENT_PROVIDER_ID, event_json)
         self.assertIn("%idle", event_json)
         import json
         event_dictionary = json.loads(event_json)
-        self.assertEqual(event_dictionary['providerId'], event.TELEMETRY_METRICS_PROVIDER_ID)
+        self.assertEqual(event_dictionary['providerId'], event.TELEMETRY_EVENT_PROVIDER_ID)
         for parameter in event_dictionary["parameters"]:
             if parameter['name'] == 'Counter':
                 self.assertEqual(parameter['value'], '%idle')
@@ -414,7 +414,7 @@ class TestMetrics(AgentTestCase):
             self.assertEqual(".tld", filename[-4:])
             perf_metric_event = json.loads(fileutil.read_file(os.path.join(self.tmp_dir, filename)))
             self.assertEqual(perf_metric_event["eventId"], event.TELEMETRY_METRICS_EVENT_ID)
-            self.assertEqual(perf_metric_event["providerId"], event.TELEMETRY_METRICS_PROVIDER_ID)
+            self.assertEqual(perf_metric_event["providerId"], event.TELEMETRY_EVENT_PROVIDER_ID)
             for i in perf_metric_event["parameters"]:
                 self.assertIn(i["name"], ['Category', 'Counter', 'Instance', 'Value'])
                 if i["name"] == "Category":
@@ -430,4 +430,4 @@ class TestMetrics(AgentTestCase):
                     self.assertEqual(i["value"], 100)
                     value_present = True
             
-            self.assertTrue(category_present & counter_present & instance_present & value_present)
+            self.assertTrue(category_present and counter_present and instance_present and value_present)

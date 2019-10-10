@@ -564,7 +564,7 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
         monitor_handler.last_cgroup_polling_telemetry = datetime.datetime.utcnow() - timedelta(hours=1)
         monitor_handler.last_cgroup_report_telemetry = datetime.datetime.utcnow() - timedelta(hours=1)
 
-        command = self.create_script("keep_cpu_busy_and_consume_memory_for_5_seconds", '''
+        command = self.create_script("keep_cpu_busy_and_consume_memory_for_{0}_seconds".format(time_to_wait), '''
 nohup python -c "import time
 
 for i in range(5):
@@ -590,7 +590,6 @@ for i in range(5):
 
         for i in range(max_num_polls):
             metrics = CGroupsTelemetry.poll_all_tracked()
-            time.sleep(0.1)
             self.assertEqual(len(metrics), 3)
 
         monitor_handler.poll_telemetry_metrics()
@@ -648,7 +647,7 @@ for i in range(5):
         monitor_handler.last_cgroup_polling_telemetry = datetime.datetime.utcnow() - timedelta(hours=1)
         monitor_handler.last_cgroup_report_telemetry = datetime.datetime.utcnow() - timedelta(hours=1)
 
-        command = self.create_script("keep_cpu_busy_and_consume_memory_for_5_seconds", '''
+        command = self.create_script("keep_cpu_busy_and_consume_memory_for_{0}_seconds".format(time_to_wait), '''
 nohup python -c "import time
 
 for i in range(3):
@@ -673,8 +672,8 @@ for i in range(3):
 
         for i in range(max_num_polls):
             metrics = CGroupsTelemetry.poll_all_tracked()
-            time.sleep(0.1)
             self.assertEqual(len(metrics), 3)
+
         monitor_handler.poll_telemetry_metrics()
         monitor_handler.send_telemetry_metrics()
         monitor_handler.collect_and_send_events()

@@ -93,7 +93,7 @@ class TestCGroupsTelemetry(AgentTestCase):
             self.assertListEqual(cgroup_metric.get_max_memory_usage()._data, max_memory_usage)
             self.assertListEqual(cgroup_metric.get_cpu_usage()._data, cpu_usage)
 
-    def _cgroup_polling_metrics_equal(self, metrics, cpu_metric_value, memory_metric_value, max_memory_metric_value):
+    def _assert_cgroup_polling_metrics_equal(self, metrics, cpu_metric_value, memory_metric_value, max_memory_metric_value):
         for metric in metrics:
             self.assertIn(metric.category, ["Process", "Memory"])
             if metric.category == "Process":
@@ -143,7 +143,7 @@ class TestCGroupsTelemetry(AgentTestCase):
                                 memory_usage=[current_memory] * data_count,
                                 max_memory_usage=[current_max_memory] * data_count)
                             self.assertEqual(len(metrics), num_extensions * 3)
-                            self._cgroup_polling_metrics_equal(metrics, current_cpu, current_memory, current_max_memory)
+                            self._assert_cgroup_polling_metrics_equal(metrics, current_cpu, current_memory, current_max_memory)
 
                         CGroupsTelemetry.report_all_tracked()
 
@@ -194,7 +194,7 @@ class TestCGroupsTelemetry(AgentTestCase):
                             memory_usage=[current_memory] * data_count,
                             max_memory_usage=[current_max_memory] * data_count)
                         self.assertEqual(len(metrics), num_extensions * 3)
-                        self._cgroup_polling_metrics_equal(metrics, current_cpu, current_memory, current_max_memory)
+                        self._assert_cgroup_polling_metrics_equal(metrics, current_cpu, current_memory, current_max_memory)
 
                         CGroupsTelemetry.report_all_tracked()
 
@@ -376,8 +376,8 @@ class TestCGroupsTelemetry(AgentTestCase):
                             patch_get_memory_max_usage.return_value = max_memory_usage_values[i]  # example 450 MB
                             metrics = CGroupsTelemetry.poll_all_tracked()
                             self.assertEqual(len(metrics), 3 * num_extensions)
-                            self._cgroup_polling_metrics_equal(metrics, cpu_percent_values[i], memory_usage_values[i],
-                                                               max_memory_usage_values[i])
+                            self._assert_cgroup_polling_metrics_equal(metrics, cpu_percent_values[i], memory_usage_values[i],
+                                                                      max_memory_usage_values[i])
 
         collected_metrics = CGroupsTelemetry.report_all_tracked()
         for i in range(num_extensions):
@@ -528,7 +528,7 @@ class TestCGroupsTelemetry(AgentTestCase):
                         self.assertEqual(CGroupsTelemetry._cgroup_metrics.__len__(), num_extensions)
                         self._assert_cgroup_metrics_equal(cpu_usage=[current_cpu] * data_count, memory_usage=[], max_memory_usage=[])
                         self.assertEqual(len(metrics), num_extensions * 1)  # Only CPU populated
-                        self._cgroup_polling_metrics_equal(metrics, current_cpu, 0, 0)
+                        self._assert_cgroup_polling_metrics_equal(metrics, current_cpu, 0, 0)
 
                     CGroupsTelemetry.report_all_tracked()
 
@@ -572,7 +572,7 @@ class TestCGroupsTelemetry(AgentTestCase):
                                 max_memory_usage=[current_max_memory] * data_count)
                             # Memory is only populated, CPU is not. Thus 2 metrics per cgroup.
                             self.assertEqual(len(metrics), num_extensions * 2)
-                            self._cgroup_polling_metrics_equal(metrics, 0, current_memory, current_max_memory)
+                            self._assert_cgroup_polling_metrics_equal(metrics, 0, current_memory, current_max_memory)
 
                         CGroupsTelemetry.report_all_tracked()
 
@@ -628,7 +628,7 @@ class TestCGroupsTelemetry(AgentTestCase):
         self.ext_handler.properties = ext_handler_properties
         self.ext_handler_instance = ExtHandlerInstance(ext_handler=self.ext_handler, protocol=None)
 
-        command = self.create_script("keep_cpu_busy_and_consume_memory_for_5_seconds", '''
+        command = self.create_script("keep_cpu_busy_and_consume_memory_for_{0}_seconds".format(time_to_wait), '''
 nohup python -c "import time
 
 for i in range(5):
