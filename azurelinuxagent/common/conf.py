@@ -300,7 +300,7 @@ def get_provisioning_agent(conf=__conf__):
 
 
 def get_provision_enabled(conf=__conf__):
-    return get_provisioning_agent(conf) in ["auto", "waagent"]
+    return get_provisioning_agent(conf) in ("auto", "waagent")
 
 
 def get_password_crypt_salt_len(conf=__conf__):
