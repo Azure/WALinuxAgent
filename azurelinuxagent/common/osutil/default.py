@@ -1226,6 +1226,7 @@ class DefaultOSUtil(object):
 
         device = None
         # We have to try device IDs for both Gen1 and Gen2 VMs.
+        logger.info('Searching gen1 prefix {0} or gen2 {1}'.format(gen1_device_prefix, gen2_device_id))
         try:
             for vmbus, guid in DefaultOSUtil._enumerate_device_id():
                 if guid.startswith(gen1_device_prefix) or guid == gen2_device_id:
@@ -1242,17 +1243,16 @@ class DefaultOSUtil(object):
                                 guid != gen2_device_id or
                                 root_path_parts[-2].split(':')[-1] == '1'):
                             device = dirs[0]
-                            break
+                            return device
                         else:
                             # older distros
                             for d in dirs:
                                 if ':' in d and "block" == d.split(':')[0]:
                                     device = d.split(':')[1]
-                                    break
-                    break
+                                    return device
         except (OSError, IOError) as exc:
             logger.warn('Error getting device for {0} or {1}: {2}', gen1_device_prefix, gen2_device_id, ustr(exc))
-        return device
+        return None
 
     def device_for_ide_port(self, port_id):
         """
@@ -1270,6 +1270,7 @@ class DefaultOSUtil(object):
             gen1_device_prefix=gen1_device_prefix,
             gen2_device_id=GEN2_DEVICE_ID
         )
+        logger.info('Found device: {0}'.format(device))
         return device
 
     def set_hostname_record(self, hostname):
