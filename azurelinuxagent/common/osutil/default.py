@@ -1212,7 +1212,7 @@ class DefaultOSUtil(object):
             try:
                 for vmbus in os.listdir(path):
                     deviceid = fileutil.read_file(os.path.join(path, vmbus, "device_id"))
-                    guid = deviceid.strip('{}')
+                    guid = deviceid.strip('{}\n')
                     if guid.startswith(gen1_device_prefix) or guid == gen2_device_id:
                         for root, dirs, files in os.walk(path + vmbus):
                             root_path_parts = root.split('/')
