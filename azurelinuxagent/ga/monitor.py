@@ -283,10 +283,7 @@ class MonitorHandler(object):
 
         for param in event.parameters:
             if param.name not in sysinfo_names:
-                logger.verbose("Adding existing event parameter: [{0}:{1}]", param.name, param.value)
                 copy_param.append(param)
-            else:
-                logger.verbose("Removing existing event parameter: [{0}:{1}]", param.name, param.value)
 
         copy_param.extend(self.sysinfo)
         event.parameters = copy_param

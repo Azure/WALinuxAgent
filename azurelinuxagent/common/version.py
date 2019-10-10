@@ -135,6 +135,7 @@ AGENT_NAME_PATTERN = re.compile(AGENT_PATTERN)
 AGENT_PKG_PATTERN = re.compile(AGENT_PATTERN+"\.zip")
 AGENT_DIR_PATTERN = re.compile(".*/{0}".format(AGENT_PATTERN))
 
+# The execution mode of the VM - IAAS or PAAS. Linux VMs are only executed in IAAS mode.
 AGENT_EXECUTION_MODE = "IAAS"
 
 EXT_HANDLER_PATTERN = b".*/WALinuxAgent-(\d+.\d+.\d+[.\d+]*).*-run-exthandlers"
