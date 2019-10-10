@@ -343,17 +343,14 @@ class TestEventMonitoring(AgentTestCase):
                                      *args):
         mock_lib_dir.return_value = self.lib_dir
 
-        # import azurelinuxagent.common.version
-        # common.version.DISTRO_VERSION = "DISTRO_VERSION"
-        # common.version.DISTRO_CODE_NAME = "DISTRO_CODENAME"
-        # common.version.DISTRO_FULL_NAME = "DISTRO_FULLNAME"
-
         test_data = WireProtocolData(DATA_FILE)
         monitor_handler, protocol = self._create_mock(test_data, *args)
         monitor_handler.init_protocols()
         monitor_handler.init_sysinfo()
 
-        # Replacing OSVersion to make it platform agnostic.
+        # Replacing OSVersion to make it platform agnostic. We can't mock global constants (eg. DISTRO_NAME,
+        # DISTRO_VERSION, DISTRO_CODENAME), so to make them constant during the test-time, we need to replace the
+        # OSVersion field in the event object.
         for i in monitor_handler.sysinfo:
             if i.name == "OSVersion":
                 i.value = "{0}:{1}-{2}-{3}:{4}".format(platform.system(),
