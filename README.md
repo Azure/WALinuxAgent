@@ -245,7 +245,7 @@ Choose which provisioning agent to use (or allow waagent to figure it out by
 specifying "auto"). Possible options are "auto" (default), "waagent", "cloud-init",
 or "disabled".
 
-#### __Provisioning.Enabled__ (*deprecated*)
+#### __Provisioning.Enabled__ (*removed in VERSION*)
 
 _Type: Boolean_ 
 _Default: y_
@@ -255,11 +255,11 @@ agent. Valid values are "y" or "n". If provisioning is disabled, SSH host and
 user keys in the image are preserved and any configuration specified in the
 Azure provisioning API is ignored.
 
-_Note_: This configuration option has been deprecated and has no effect. waagent
+_Note_: This configuration option has been removed and has no effect. waagent
 now auto-detects cloud-init as a provisioning agent (with an option to override
 with `Provisioning.Agent`).
 
-#### __Provisioning.UseCloudInit__ (*deprecated*)
+#### __Provisioning.UseCloudInit__ (*removed in VERSION*)
 
 _Type: Boolean_ 
 _Default: n_
@@ -270,7 +270,7 @@ extensions and processing the latest goal state. _Provisioning.Enabled_ must be
 disabled ("n") for this option to have an effect. Setting _Provisioning.Enabled_ to
 true ("y") overrides this option and runs the built-in agent provisioning code.
 
-_Note_: This configuration option has been deprecated and has no effect. waagent
+_Note_: This configuration option has been removed and has no effect. waagent
 now auto-detects cloud-init as a provisioning agent (with an option to override
 with `Provisioning.Agent`).
 
