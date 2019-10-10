@@ -97,6 +97,7 @@ IP_COMMAND_OUTPUT = re.compile('^\d+:\s+(\w+):\s+(.*)$')
 
 BASE_CGROUPS = '/sys/fs/cgroup'
 
+STORAGE_DEVICE_PATH = '/sys/bus/vmbus/devices/'
 GEN2_DEVICE_ID = 'f8b3781a-1e82-4818-a1c3-63d806ec15bb'
 
 class DefaultOSUtil(object):
@@ -1193,6 +1194,24 @@ class DefaultOSUtil(object):
         return None
 
     @staticmethod
+    def _enumerate_device_id():
+        """
+        Enumerate all storage device IDs.
+
+        Args:
+            None
+
+        Returns:
+            Iterator[Tuple[str, str]]: VmBus and storage devices.
+        """
+
+        if os.path.exists(STORAGE_DEVICE_PATH):
+            for vmbus in os.listdir(STORAGE_DEVICE_PATH):
+                deviceid = fileutil.read_file(os.path.join(STORAGE_DEVICE_PATH, vmbus, "device_id"))
+                guid = deviceid.strip('{}\n')
+                yield vmbus, guid
+
+    @staticmethod
     def search_for_resource_disk(gen1_device_prefix, gen2_device_id):
         """
         Search the filesystem for a device by ID or prefix.
@@ -1206,37 +1225,33 @@ class DefaultOSUtil(object):
         """
 
         device = None
-        path = "/sys/bus/vmbus/devices/"
         # We have to try device IDs for both Gen1 and Gen2 VMs.
-        if os.path.exists(path):
-            try:
-                for vmbus in os.listdir(path):
-                    deviceid = fileutil.read_file(os.path.join(path, vmbus, "device_id"))
-                    guid = deviceid.strip('{}\n')
-                    if guid.startswith(gen1_device_prefix) or guid == gen2_device_id:
-                        for root, dirs, files in os.walk(path + vmbus):
-                            root_path_parts = root.split('/')
-                            # For Gen1 VMs we only have to check for the block dir in the
-                            # current device. But for Gen2 VMs all of the disks (sda, sdb,
-                            # sr0) are presented in this device on the same SCSI controller.
-                            # Because of that we need to also read the LUN. It will be:
-                            #   0 - OS disk
-                            #   1 - Resource disk
-                            #   2 - CDROM
-                            if root_path_parts[-1] == 'block' and (
-                                    guid != gen2_device_id or
-                                    root_path_parts[-2].split(':')[-1] == '1'):
-                                device = dirs[0]
-                                break
-                            else:
-                                # older distros
-                                for d in dirs:
-                                    if ':' in d and "block" == d.split(':')[0]:
-                                        device = d.split(':')[1]
-                                        break
-                        break
-            except (OSError, IOError) as exc:
-                logger.warn('Error getting device for {0} or {1}: {2}', gen1_device_prefix, gen2_device_id, ustr(exc))
+        try:
+            for vmbus, guid in DefaultOSUtil._enumerate_device_id():
+                if guid.startswith(gen1_device_prefix) or guid == gen2_device_id:
+                    for root, dirs, files in os.walk(STORAGE_DEVICE_PATH + vmbus):
+                        root_path_parts = root.split('/')
+                        # For Gen1 VMs we only have to check for the block dir in the
+                        # current device. But for Gen2 VMs all of the disks (sda, sdb,
+                        # sr0) are presented in this device on the same SCSI controller.
+                        # Because of that we need to also read the LUN. It will be:
+                        #   0 - OS disk
+                        #   1 - Resource disk
+                        #   2 - CDROM
+                        if root_path_parts[-1] == 'block' and (
+                                guid != gen2_device_id or
+                                root_path_parts[-2].split(':')[-1] == '1'):
+                            device = dirs[0]
+                            break
+                        else:
+                            # older distros
+                            for d in dirs:
+                                if ':' in d and "block" == d.split(':')[0]:
+                                    device = d.split(':')[1]
+                                    break
+                    break
+        except (OSError, IOError) as exc:
+            logger.warn('Error getting device for {0} or {1}: {2}', gen1_device_prefix, gen2_device_id, ustr(exc))
         return device
 
     def device_for_ide_port(self, port_id):
