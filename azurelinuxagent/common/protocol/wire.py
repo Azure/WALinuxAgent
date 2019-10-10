@@ -1080,13 +1080,6 @@ class WireClient(object):
                           log_event=False)
                 raise
 
-        add_event(name=AGENT_NAME,
-                  version=CURRENT_VERSION,
-                  op=WALAEventOperation.HostPlugin,
-                  is_success=True,
-                  message="Request succeeded using the host plugin channel.",
-                  log_event=False)
-
         if not HostPluginProtocol.is_default_channel():
             logger.info("Setting host plugin as default channel from now on. "
                         "Restart the agent to reset the default channel.")
