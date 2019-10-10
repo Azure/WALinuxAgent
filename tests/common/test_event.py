@@ -401,3 +401,36 @@ class TestEvent(AgentTestCase):
                 break
         else:
             self.fail("Counter '%idle' not found in event parameters: {0}".format(repr(event_dictionary)))
+
+    def test_cleanup_message(self):
+        ev_logger = event.EventLogger()
+        self.assertEqual(None,
+                         ev_logger._cleanup_message(None))
+        self.assertEqual("",
+                         ev_logger._cleanup_message(""))
+        self.assertEqual("Daemon Activate resource disk failure",
+                         ev_logger._cleanup_message("Daemon Activate resource disk failure"))
+        self.assertEqual("[M.A.E.CS-2.0.7] Target handler state",
+                         ev_logger._cleanup_message(
+                             '2019/10/07 21:54:16.629444 INFO [M.A.E.CS-2.0.7] Target handler state'))
+        self.assertEqual("[M.A.E.CS-2.0.7] Initializing extension M.A.E.CS-2.0.7",
+                         ev_logger._cleanup_message('2019/10/07 21:54:17.284385 INFO [M.A.E.CS-2.0.7] '
+                                                    'Initializing extension M.A.E.CS-2.0.7'))
+        self.assertEqual("ExtHandler ProcessGoalState completed [incarnation 4; 4197 ms]",
+                         ev_logger._cleanup_message("2019/10/07 21:55:38.474861 INFO "
+                                                    "ExtHandler ProcessGoalState completed [incarnation 4; 4197 ms]"))
+        self.assertEqual("Daemon Azure Linux Agent Version:2.2.43",
+                         ev_logger._cleanup_message(
+                             "2019/10/07 21:52:28.615720 INFO Daemon Azure Linux Agent Version:2.2.43"))
+        self.assertEqual('Daemon Cgroup controller "memory" is not mounted. '
+                         'Failed to create a cgroup for the VM Agent; resource usage will not be tracked',
+                         ev_logger._cleanup_message(
+                             'Daemon Cgroup controller "memory" is not mounted. Failed to create a cgroup'
+                             ' for the VM Agent; resource usage will not be tracked'))
+        self.assertEqual('ExtHandler Root directory /sys/fs/cgroup/memory/walinuxagent.extensions does not exist.',
+                         ev_logger._cleanup_message("2019/10/08 23:45:05.691037 WARNING ExtHandler Root directory "
+                                                    "/sys/fs/cgroup/memory/walinuxagent.extensions does not exist."))
+        self.assertEqual("LinuxAzureDiagnostic started to handle.",
+                         ev_logger._cleanup_message("2019/10/07 22:02:40 LinuxAzureDiagnostic started to handle."))
+        self.assertEqual("VMAccess started to handle.",
+                         ev_logger._cleanup_message("2019/10/07 21:56:58 VMAccess started to handle."))

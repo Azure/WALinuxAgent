@@ -19,6 +19,7 @@ import atexit
 import datetime
 import json
 import os
+import re
 import sys
 import time
 import traceback
@@ -296,22 +297,10 @@ class EventLogger(object):
             logger.periodic_error(logger.EVERY_FIFTEEN_MINUTES, "[PERIODIC] {0}".format(ustr(e)))
 
     def add_log_event(self, level, message):
-        # By the time the message has gotten to this point it is formatted as
-        #
-        #   YYYY/MM/DD HH:mm:ss.fffffff LEVEL <text>.
-        #
-        # The timestamp and the level are redundant, and should be stripped.
-        # The logging library does not schematize this data, so I am forced
-        # to parse the message.  The format is regular, so the burden is low.
-        #
-        # parts = message.split(' ', 3)
-        # msg = parts[3] if len(parts) == 4 \
-        #     else message
-
         event = TelemetryEvent(TELEMETRY_LOG_EVENT_ID, TELEMETRY_LOG_PROVIDER_ID)
         event.parameters.append(TelemetryEventParam('EventName', WALAEventOperation.Log))
         event.parameters.append(TelemetryEventParam('CapabilityUsed', logger.LogLevel.STRINGS[level]))
-        event.parameters.append(TelemetryEventParam('Context1', message))
+        event.parameters.append(TelemetryEventParam('Context1', self._cleanup_message(message)))
         event.parameters.append(TelemetryEventParam('Context2', ''))
         event.parameters.append(TelemetryEventParam('Context3', ''))
 
@@ -347,6 +336,30 @@ class EventLogger(object):
             self.save_event(json.dumps(data))
         except EventError as e:
             logger.error("{0}", e)
+
+    @staticmethod
+    def _cleanup_message(message):
+        # By the time the message has gotten to this point it is formatted as
+        #
+        #   YYYY/MM/DD HH:mm:ss.fffffff LEVEL <text>.
+        #   YYYY/MM/DD HH:mm:ss.fffffff <text>.
+        #   YYYY/MM/DD HH:mm:ss LEVEL <text>.
+        #   YYYY/MM/DD HH:mm:ss <text>.
+        #
+        # The timestamp and the level are redundant, and should be stripped. The logging library does not schematize
+        # this data, so I am forced to parse the message using a regex.  The format is regular, so the burden is low,
+        # and usability on the telemetry side is high.
+        #
+
+        if not message:
+            return message
+
+        log_format_parser = re.compile(r"^\d+/\d+/\d+\s\d+:\d+:\d+\.?\d*(\s[A-Z]*\s)?\s?(.*)$")
+        extract_message = log_format_parser.search(message)
+        if extract_message:
+            return extract_message.group(2) # The message bit
+        else:
+            return message
 
 
 __event_logger__ = EventLogger()
