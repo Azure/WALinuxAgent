@@ -41,7 +41,7 @@ from azurelinuxagent.common.protocol.restapi import TelemetryEventParam, \
 from azurelinuxagent.common.utils.restutil import IOErrorCounter
 from azurelinuxagent.common.utils.textutil import parse_doc, findall, find, getattrib, hash_strings
 from azurelinuxagent.common.version import DISTRO_NAME, DISTRO_VERSION, \
-    DISTRO_CODE_NAME, AGENT_NAME, CURRENT_AGENT, CURRENT_VERSION
+    DISTRO_CODE_NAME, AGENT_NAME, CURRENT_AGENT, CURRENT_VERSION, AGENT_EXECUTION_MODE
 
 
 def parse_event(data_str):
@@ -167,8 +167,8 @@ class MonitorHandler(object):
                                                  DISTRO_CODE_NAME,
                                                  platform.release())
         self.sysinfo.append(TelemetryEventParam("OSVersion", osversion))
-        self.sysinfo.append(
-            TelemetryEventParam("GAVersion", CURRENT_AGENT))
+        self.sysinfo.append(TelemetryEventParam("GAVersion", CURRENT_AGENT))
+        self.sysinfo.append(TelemetryEventParam("ExecutionMode", AGENT_EXECUTION_MODE))
 
         try:
             ram = self.osutil.get_total_mem()
@@ -279,11 +279,14 @@ class MonitorHandler(object):
 
     def add_sysinfo(self, event):
         sysinfo_names = [v.name for v in self.sysinfo]
+        copy_param = []
+
         for param in event.parameters:
-            if param.name in sysinfo_names:
-                logger.verbose("Remove existing event parameter: [{0}:{1}]", param.name, param.value)
-                event.parameters.remove(param)
-        event.parameters.extend(self.sysinfo)
+            if param.name not in sysinfo_names:
+                copy_param.append(param)
+
+        copy_param.extend(self.sysinfo)
+        event.parameters = copy_param
 
     def send_imds_heartbeat(self):
         """
