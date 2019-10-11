@@ -279,32 +279,16 @@ class TestMonitor(AgentTestCase):
         self.assertEqual(False, args[5].call_args[1]['is_success'])
         monitor_handler.stop()
 
-    @patch("azurelinuxagent.ga.monitor.MonitorHandler.send_telemetry_heartbeat")
-    @patch("azurelinuxagent.ga.monitor.MonitorHandler.poll_telemetry_metrics")
-    @patch("azurelinuxagent.ga.monitor.MonitorHandler.send_telemetry_metrics")
-    @patch("azurelinuxagent.ga.monitor.MonitorHandler.collect_and_send_events")
-    @patch("azurelinuxagent.ga.monitor.MonitorHandler.send_host_plugin_heartbeat")
-    @patch("azurelinuxagent.ga.monitor.MonitorHandler.send_imds_heartbeat")
-    @patch("azurelinuxagent.ga.monitor.MonitorHandler.log_altered_network_configuration")
-    @patch('azurelinuxagent.common.logger.Logger.verbose')
-    @patch('azurelinuxagent.common.logger.Logger.warn')
-    @patch('azurelinuxagent.common.logger.Logger.error')
     @patch('azurelinuxagent.common.logger.Logger.info')
-    def test_reset_loggers(self, mock_info, mock_error, mock_warn, mock_verbose, *args):
-
-        MonitorHandler.TELEMETRY_HEARTBEAT_PERIOD = timedelta(milliseconds=100)
-        MonitorHandler.EVENT_COLLECTION_PERIOD = timedelta(milliseconds=100)
-        MonitorHandler.HOST_PLUGIN_HEARTBEAT_PERIOD = timedelta(milliseconds=100)
-        MonitorHandler.IMDS_HEARTBEAT_PERIOD = timedelta(milliseconds=100)
-        MonitorHandler.CGROUP_TELEMETRY_POLLING_PERIOD = timedelta(milliseconds=100)
-        MonitorHandler.CGROUP_TELEMETRY_REPORTING_PERIOD = timedelta(milliseconds=100)
-
+    def test_reset_loggers(self, mock_info, *args):
         # Adding 100 different messages
         for i in range(100):
             event_message = "Test {0}".format(i)
             logger.periodic_info(logger.EVERY_DAY, event_message)
+
             self.assertIn(hash(event_message), logger.DEFAULT_LOGGER.periodic_messages)
             self.assertEqual(i + 1, mock_info.call_count)  # range starts from 0.
+
         self.assertEqual(100, len(logger.DEFAULT_LOGGER.periodic_messages))
 
         # Adding 1 message 100 times, but the same message. Mock Info should be called only once.
@@ -312,15 +296,15 @@ class TestMonitor(AgentTestCase):
             logger.periodic_info(logger.EVERY_DAY, "Test-Message")
 
         self.assertIn(hash("Test-Message"), logger.DEFAULT_LOGGER.periodic_messages)
-        self.assertEqual(101, mock_info.call_count)  # 100 calls from the previos section. Adding only 1.
-        self.assertEqual(101, len(logger.DEFAULT_LOGGER.periodic_messages))  # One new message in the hashmap.
+        self.assertEqual(101, mock_info.call_count)  # 100 calls from the previous section. Adding only 1.
+        self.assertEqual(101, len(logger.DEFAULT_LOGGER.periodic_messages))  # One new message in the hash map.
 
         # Resetting the logger time states.
         monitor_handler = get_monitor_handler()
         monitor_handler.last_reset_loggers_time = datetime.datetime.utcnow() - timedelta(hours=1)
         MonitorHandler.RESET_LOGGERS_PERIOD = timedelta(milliseconds=100)
 
-        monitor_handler.start()
+        monitor_handler.reset_loggers()
 
         # The hash map got cleaned up by the reset_loggers method
         self.assertEqual(0, len(logger.DEFAULT_LOGGER.periodic_messages))
