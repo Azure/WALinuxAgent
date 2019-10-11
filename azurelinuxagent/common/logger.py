@@ -24,6 +24,7 @@ from datetime import datetime, timedelta
 
 EVERY_DAY = timedelta(days=1)
 EVERY_HALF_DAY = timedelta(hours=12)
+EVERY_SIX_HOURS = timedelta(hours=6)
 EVERY_HOUR = timedelta(hours=1)
 EVERY_HALF_HOUR = timedelta(minutes=30)
 EVERY_FIFTEEN_MINUTES = timedelta(minutes=15)
