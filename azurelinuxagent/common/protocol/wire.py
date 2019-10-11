@@ -27,7 +27,7 @@ from datetime import datetime
 
 import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common.datacontract import validate_param, set_properties
-from azurelinuxagent.common.event import add_event, WALAEventOperation
+from azurelinuxagent.common.event import add_event, add_periodic, WALAEventOperation
 import azurelinuxagent.common.utils.textutil as textutil
 from azurelinuxagent.common.exception import ProtocolNotFoundError, \
     ResourceGoneError, ExtensionDownloadError, InvalidContainerError, ProtocolError, HttpError
@@ -1018,10 +1018,11 @@ class WireClient(object):
                 # Different direct channel functions report failure in different ways: by returning None, False,
                 # or raising ResourceGone or InvalidContainer exceptions.
                 if not ret:
-                    logger.info("Request failed using the direct channel, switching to host plugin.")
+                    logger.periodic_info(logger.EVERY_HOUR, "[PERIODIC] Request failed using the direct channel, "
+                                                            "switching to host plugin.")
             except (ResourceGoneError, InvalidContainerError) as e:
-                logger.info("Request failed using the direct channel, switching to host plugin."
-                            "Error: {0}".format(ustr(e)))
+                logger.periodic_info(logger.EVERY_HOUR, "[PERIODIC] Request failed using the direct channel, "
+                                                        "switching to host plugin. Error: {0}".format(ustr(e)))
 
             if ret:
                 return ret
@@ -1034,58 +1035,47 @@ class WireClient(object):
             old_container_id = self.host_plugin.container_id
             old_role_config_name = self.host_plugin.role_config_name
 
-            msg = "Request failed with the current host plugin configuration." \
+            msg = "[PERIODIC] Request failed with the current host plugin configuration. " \
                   "ContainerId: {0}, role config file: {1}. Fetching new goal state and retrying the call." \
                   "Error: {2}".format(old_container_id, old_role_config_name, ustr(e))
-            logger.info(msg)
-            add_event(name=AGENT_NAME,
-                      version=CURRENT_VERSION,
-                      op=WALAEventOperation.HostPlugin,
-                      is_success=False,
-                      message=msg,
-                      log_event=False)
+            logger.periodic_info(logger.EVERY_SIX_HOURS, msg)
 
             self.update_goal_state(forced=True)
 
             new_container_id = self.host_plugin.container_id
             new_role_config_name = self.host_plugin.role_config_name
-            msg = "Host plugin reconfigured with new parameters. " \
+            msg = "[PERIODIC] Host plugin reconfigured with new parameters. " \
                   "ContainerId: {0}, role config file: {1}.".format(new_container_id, new_role_config_name)
-            logger.info(msg)
+            logger.periodic_info(logger.EVERY_SIX_HOURS, msg)
 
             try:
                 ret = host_func()
                 if ret:
-                    msg = "Request succeeded using the host plugin channel after goal state refresh." \
+                    msg = "[PERIODIC] Request succeeded using the host plugin channel after goal state refresh. " \
                           "ContainerId changed from {0} to {1}, " \
                           "role config file changed from {2} to {3}.".format(old_container_id, new_container_id,
                                                                              old_role_config_name, new_role_config_name)
-                    add_event(name=AGENT_NAME,
-                              version=CURRENT_VERSION,
-                              op=WALAEventOperation.HostPlugin,
-                              is_success=True,
-                              message=msg,
-                              log_event=False)
+                    add_periodic(delta=logger.EVERY_SIX_HOURS,
+                                 name=AGENT_NAME,
+                                 version=CURRENT_VERSION,
+                                 op=WALAEventOperation.HostPlugin,
+                                 is_success=True,
+                                 message=msg,
+                                 log_event=True)
 
             except (ResourceGoneError, InvalidContainerError) as e:
-                msg = "Request failed using the host plugin channel after goal state refresh." \
-                      "ContainerId changed from {0} to {1}, role config file changed from {2} to {3}." \
+                msg = "[PERIODIC] Request failed using the host plugin channel after goal state refresh. " \
+                      "ContainerId changed from {0} to {1}, role config file changed from {2} to {3}. " \
                       "Exception type: {4}.".format(old_container_id, new_container_id, old_role_config_name,
                                                     new_role_config_name, type(e).__name__)
-                add_event(name=AGENT_NAME,
-                          version=CURRENT_VERSION,
-                          op=WALAEventOperation.HostPlugin,
-                          is_success=False,
-                          message=msg,
-                          log_event=False)
+                add_periodic(delta=logger.EVERY_SIX_HOURS,
+                             name=AGENT_NAME,
+                             version=CURRENT_VERSION,
+                             op=WALAEventOperation.HostPlugin,
+                             is_success=False,
+                             message=msg,
+                             log_event=True)
                 raise
-
-        add_event(name=AGENT_NAME,
-                  version=CURRENT_VERSION,
-                  op=WALAEventOperation.HostPlugin,
-                  is_success=True,
-                  message="Request succeeded using the host plugin channel.",
-                  log_event=False)
 
         if not HostPluginProtocol.is_default_channel():
             logger.info("Setting host plugin as default channel from now on. "
