@@ -309,6 +309,24 @@ class TestMonitor(AgentTestCase):
 
         monitor_handler.stop()
 
+    @patch("azurelinuxagent.common.logger.reset_periodic", side_effect=Exception())
+    def test_reset_loggers_ensuring_timestamp_gets_updated(self, *args):
+        # Resetting the logger time states.
+        monitor_handler = get_monitor_handler()
+        initial_time = datetime.datetime.utcnow() - timedelta(hours=1)
+        monitor_handler.last_reset_loggers_time = initial_time
+        MonitorHandler.RESET_LOGGERS_PERIOD = timedelta(milliseconds=100)
+
+        # noinspection PyBroadException
+        try:
+            monitor_handler.reset_loggers()
+        except:
+            pass
+
+        # The hash map got cleaned up by the reset_loggers method
+        self.assertGreater(monitor_handler.last_reset_loggers_time, initial_time)
+        monitor_handler.stop()
+
 
 @patch('azurelinuxagent.common.event.EventLogger.add_event')
 @patch('azurelinuxagent.common.osutil.get_osutil')

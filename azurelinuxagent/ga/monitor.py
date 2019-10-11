@@ -296,9 +296,10 @@ class MonitorHandler(object):
 
         if time_now >= (self.last_reset_loggers_time +
                         MonitorHandler.RESET_LOGGERS_PERIOD):
-            logger.reset_periodic()
-
-            self.last_reset_loggers_time = time_now
+            try:
+                logger.reset_periodic()
+            finally:
+                self.last_reset_loggers_time = time_now
 
     def add_sysinfo(self, event):
         sysinfo_names = [v.name for v in self.sysinfo]
