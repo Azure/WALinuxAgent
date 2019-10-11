@@ -21,6 +21,10 @@ from datetime import timedelta
 from azurelinuxagent.common.cgroup import CGroup
 from azurelinuxagent.common.event import EventLogger
 from azurelinuxagent.common.datacontract import get_properties
+from azurelinuxagent.common.logger import DEFAULT_LOGGER
+from azurelinuxagent.common.protocol.restapi import get_properties
+from azurelinuxagent.common.protocol.imds import ComputeInfo, IMDS_IMAGE_ORIGIN_ENDORSED
+from azurelinuxagent.common.protocol.restapi import get_properties, VMInfo
 from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.common.utils import restutil
 from azurelinuxagent.ga.monitor import *
@@ -28,6 +32,13 @@ from nose.plugins.attrib import attr
 from tests.common.test_cgroupstelemetry import make_new_cgroup, consume_cpu_time, consume_memory
 from tests.protocol.mockwiredata import WireProtocolData, DATA_FILE
 from tests.tools import *
+
+
+_MSG_INFO = "This is our test info logging message {0} {1}"
+_MSG_WARN = "This is our test warn logging message {0} {1}"
+_MSG_ERROR = "This is our test error logging message {0} {1}"
+_MSG_VERBOSE = "This is our test verbose logging message {0} {1}"
+_DATA = ["arg1", "arg2"]
 
 
 class ResponseMock(Mock):
@@ -274,6 +285,54 @@ class TestMonitor(AgentTestCase):
         self.assertEqual(1, args[5].call_count)
         self.assertEqual('HostPluginHeartbeatExtended', args[5].call_args[1]['op'])
         self.assertEqual(False, args[5].call_args[1]['is_success'])
+        monitor_handler.stop()
+
+    @patch("azurelinuxagent.ga.monitor.MonitorHandler.send_telemetry_heartbeat")
+    @patch("azurelinuxagent.ga.monitor.MonitorHandler.poll_telemetry_metrics")
+    @patch("azurelinuxagent.ga.monitor.MonitorHandler.send_telemetry_metrics")
+    @patch("azurelinuxagent.ga.monitor.MonitorHandler.collect_and_send_events")
+    @patch("azurelinuxagent.ga.monitor.MonitorHandler.send_host_plugin_heartbeat")
+    @patch("azurelinuxagent.ga.monitor.MonitorHandler.send_imds_heartbeat")
+    @patch("azurelinuxagent.ga.monitor.MonitorHandler.log_altered_network_configuration")
+    @patch('azurelinuxagent.common.logger.Logger.verbose')
+    @patch('azurelinuxagent.common.logger.Logger.warn')
+    @patch('azurelinuxagent.common.logger.Logger.error')
+    @patch('azurelinuxagent.common.logger.Logger.info')
+    def test_reset_loggers(self, mock_info, mock_error, mock_warn, mock_verbose, *args):
+
+        MonitorHandler.TELEMETRY_HEARTBEAT_PERIOD = timedelta(milliseconds=100)
+        MonitorHandler.EVENT_COLLECTION_PERIOD = timedelta(milliseconds=100)
+        MonitorHandler.HOST_PLUGIN_HEARTBEAT_PERIOD = timedelta(milliseconds=100)
+        MonitorHandler.IMDS_HEARTBEAT_PERIOD = timedelta(milliseconds=100)
+        MonitorHandler.CGROUP_TELEMETRY_POLLING_PERIOD = timedelta(milliseconds=100)
+        MonitorHandler.CGROUP_TELEMETRY_REPORTING_PERIOD = timedelta(milliseconds=100)
+
+        # Adding 100 different messages
+        for i in range(100):
+            event_message = "Test {0}".format(i)
+            logger.periodic_info(logger.EVERY_DAY, event_message)
+            self.assertIn(hash(event_message), logger.DEFAULT_LOGGER.periodic_messages)
+            self.assertEqual(i + 1, mock_info.call_count)  # range starts from 0.
+        self.assertEqual(100, len(logger.DEFAULT_LOGGER.periodic_messages))
+
+        # Adding 1 message 100 times, but the same message. Mock Info should be called only once.
+        for i in range(100):
+            logger.periodic_info(logger.EVERY_DAY, "Test-Message")
+
+        self.assertIn(hash("Test-Message"), logger.DEFAULT_LOGGER.periodic_messages)
+        self.assertEqual(101, mock_info.call_count)  # 100 calls from the previos section. Adding only 1.
+        self.assertEqual(101, len(logger.DEFAULT_LOGGER.periodic_messages))  # One new message in the hashmap.
+
+        # Resetting the logger time states.
+        monitor_handler = get_monitor_handler()
+        monitor_handler.last_reset_loggers_time = datetime.datetime.utcnow() - timedelta(hours=1)
+        MonitorHandler.RESET_LOGGERS_PERIOD = timedelta(milliseconds=100)
+
+        monitor_handler.start()
+
+        # The hash map got cleaned up by the reset_loggers method
+        self.assertEqual(0, len(logger.DEFAULT_LOGGER.periodic_messages))
+
         monitor_handler.stop()
 
 

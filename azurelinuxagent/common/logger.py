@@ -200,18 +200,34 @@ def set_prefix(prefix):
 
 
 def periodic_info(delta, msg_format, *args):
+    """
+    The hash-map maintaining the state of the logs gets reset here -
+    azurelinuxagent.ga.monitor.MonitorHandler.reset_loggers. The current time period is defined by RESET_LOGGERS_PERIOD.
+    """
     DEFAULT_LOGGER.periodic_info(delta, msg_format, *args)
 
 
 def periodic_verbose(delta, msg_format, *args):
+    """
+    The hash-map maintaining the state of the logs gets reset here -
+    azurelinuxagent.ga.monitor.MonitorHandler.reset_loggers. The current time period is defined by RESET_LOGGERS_PERIOD.
+    """
     DEFAULT_LOGGER.periodic_verbose(delta, msg_format, *args)
 
 
 def periodic_error(delta, msg_format, *args):
+    """
+    The hash-map maintaining the state of the logs gets reset here -
+    azurelinuxagent.ga.monitor.MonitorHandler.reset_loggers. The current time period is defined by RESET_LOGGERS_PERIOD.
+    """
     DEFAULT_LOGGER.periodic_error(delta, msg_format, *args)
 
 
 def periodic_warn(delta, msg_format, *args):
+    """
+    The hash-map maintaining the state of the logs gets reset here -
+    azurelinuxagent.ga.monitor.MonitorHandler.reset_loggers. The current time period is defined by RESET_LOGGERS_PERIOD.
+    """
     DEFAULT_LOGGER.periodic_warn(delta, msg_format, *args)
 
 

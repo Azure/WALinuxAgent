@@ -114,12 +114,16 @@ class MonitorHandler(object):
     IMDS_HEARTBEAT_PERIOD = datetime.timedelta(minutes=1)
     IMDS_HEALTH_PERIOD = datetime.timedelta(minutes=3)
 
+    # Resetting loggers period
+    RESET_LOGGERS_PERIOD = datetime.timedelta(hours=12)
+
     def __init__(self):
         self.osutil = get_osutil()
         self.protocol_util = get_protocol_util()
         self.imds_client = get_imds_client()
 
         self.event_thread = None
+        self.last_reset_loggers_time = None
         self.last_event_collection = None
         self.last_telemetry_heartbeat = None
         self.last_cgroup_polling_telemetry = None
@@ -277,7 +281,24 @@ class MonitorHandler(object):
             self.send_host_plugin_heartbeat()
             self.send_imds_heartbeat()
             self.log_altered_network_configuration()
+            self.reset_loggers()
             time.sleep(min_delta)
+
+    def reset_loggers(self):
+        """
+        The loggers maintain hash-tables in memory and they need to be cleaned up from time to time.
+        For reference, please check azurelinuxagent.common.logger.Logger and
+        azurelinuxagent.common.event.EventLogger classes
+        """
+        time_now = datetime.datetime.utcnow()
+        if not self.last_reset_loggers_time:
+            self.last_reset_loggers_time = time_now
+
+        if time_now >= (self.last_reset_loggers_time +
+                        MonitorHandler.RESET_LOGGERS_PERIOD):
+            logger.reset_periodic()
+
+            self.last_reset_loggers_time = time_now
 
     def add_sysinfo(self, event):
         sysinfo_names = [v.name for v in self.sysinfo]
