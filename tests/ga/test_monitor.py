@@ -22,9 +22,8 @@ from azurelinuxagent.common.cgroup import CGroup
 from azurelinuxagent.common.event import EventLogger
 from azurelinuxagent.common.datacontract import get_properties
 from azurelinuxagent.common.logger import DEFAULT_LOGGER
-from azurelinuxagent.common.protocol.restapi import get_properties
 from azurelinuxagent.common.protocol.imds import ComputeInfo, IMDS_IMAGE_ORIGIN_ENDORSED
-from azurelinuxagent.common.protocol.restapi import get_properties, VMInfo
+from azurelinuxagent.common.protocol.restapi import VMInfo
 from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.common.utils import restutil
 from azurelinuxagent.ga.monitor import *
@@ -32,13 +31,6 @@ from nose.plugins.attrib import attr
 from tests.common.test_cgroupstelemetry import make_new_cgroup, consume_cpu_time, consume_memory
 from tests.protocol.mockwiredata import WireProtocolData, DATA_FILE
 from tests.tools import *
-
-
-_MSG_INFO = "This is our test info logging message {0} {1}"
-_MSG_WARN = "This is our test warn logging message {0} {1}"
-_MSG_ERROR = "This is our test error logging message {0} {1}"
-_MSG_VERBOSE = "This is our test verbose logging message {0} {1}"
-_DATA = ["arg1", "arg2"]
 
 
 class ResponseMock(Mock):
