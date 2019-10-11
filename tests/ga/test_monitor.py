@@ -18,16 +18,14 @@ import random
 import string
 from datetime import timedelta
 
+from nose.plugins.attrib import attr
+
 from azurelinuxagent.common.cgroup import CGroup
-from azurelinuxagent.common.event import EventLogger
 from azurelinuxagent.common.datacontract import get_properties
-from azurelinuxagent.common.logger import DEFAULT_LOGGER
-from azurelinuxagent.common.protocol.imds import ComputeInfo, IMDS_IMAGE_ORIGIN_ENDORSED
-from azurelinuxagent.common.protocol.restapi import VMInfo
+from azurelinuxagent.common.event import EventLogger
 from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.common.utils import restutil
 from azurelinuxagent.ga.monitor import *
-from nose.plugins.attrib import attr
 from tests.common.test_cgroupstelemetry import make_new_cgroup, consume_cpu_time, consume_memory
 from tests.protocol.mockwiredata import WireProtocolData, DATA_FILE
 from tests.tools import *
