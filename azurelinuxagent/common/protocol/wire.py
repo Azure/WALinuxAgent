@@ -371,7 +371,7 @@ def vm_status_to_v1(vm_status, ext_statuses, extensions_fast_track_enabled):
     # Inform CRP that we support FastTrack, which allows us to retrieve goal state
     # from the VMArtifactsProfile blob instead of from wire server
     if extensions_fast_track_enabled:
-        v1_supported_features = {'FastTrack': '1'}
+        v1_supported_features = {'FastTrack': '1.0'}
     
     v1_agg_status = {
         'guestAgentStatus': v1_ga_status,
@@ -670,11 +670,13 @@ class WireClient(object):
         etag = None
         not_modified = False
         response = self._fetch_response(uri, headers, use_proxy)
-        if response is not None and not restutil.request_not_modified(response):
+        if response is not None or restutil.request_not_modified(response):
             if restutil.request_not_modified(response):
                 not_modified = True
+                logger.verbose('Received not-modified response')
             else:
                 etag = response.getheader(HEADER_ETAG, None)
+                logger.verbose('Received etag of {0}', etag)
                 response_content = response.read()
                 content = self.decode_config(response_content) if decode else response_content
         return content, etag, not_modified
