@@ -283,19 +283,11 @@ class TestEvent(AgentTestCase):
     @patch('azurelinuxagent.common.event.EventLogger.add_event')
     def test_periodic_forwards_args_default_values(self, mock_event, mock_datetime):
         event.__event_logger__.reset_periodic()
-        event_time = datetime.strptime("2019-01-01 01:30:00", '%Y-%m-%d %H:%M:%S').__str__()
-        mock_datetime.utcnow = mock.Mock(return_value=event_time)
-
-        # Doing the partial to mock the passing of default values of the
-        from functools import partial
-        patch_add_periodic = partial(event.add_periodic, event_time_opcode_name=event_time)
-
-        with patch("azurelinuxagent.common.event.add_periodic", patch_add_periodic):
-            event.add_periodic(logger.EVERY_DAY, "FauxEvent", message="FauxEventMessage")
-            mock_event.assert_called_once_with("FauxEvent", op=WALAEventOperation.Unknown, is_success=True, duration=0,
-                                               version=str(CURRENT_VERSION), message="FauxEventMessage", evt_type="",
-                                               is_internal=False, log_event=True, event_time_opcode_name=event_time,
-                                               event_pid=0, event_tid=0, task_name="", keyword_name="")
+        event.add_periodic(logger.EVERY_DAY, "FauxEvent", message="FauxEventMessage")
+        mock_event.assert_called_once_with("FauxEvent", op=WALAEventOperation.Unknown, is_success=True, duration=0,
+                                           version=str(CURRENT_VERSION), message="FauxEventMessage", evt_type="",
+                                           is_internal=False, log_event=True, event_time_opcode_name=None,
+                                           event_pid=0, event_tid=0, task_name="", keyword_name="")
 
     @patch("azurelinuxagent.common.event.EventLogger.add_event")
     def test_add_event_default_variables(self, mock_add_event):
