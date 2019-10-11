@@ -18,13 +18,14 @@ import random
 import string
 from datetime import timedelta
 
+from nose.plugins.attrib import attr
+
 from azurelinuxagent.common.cgroup import CGroup
-from azurelinuxagent.common.event import EventLogger
 from azurelinuxagent.common.datacontract import get_properties
+from azurelinuxagent.common.event import EventLogger
 from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.common.utils import restutil
 from azurelinuxagent.ga.monitor import *
-from nose.plugins.attrib import attr
 from tests.common.test_cgroupstelemetry import make_new_cgroup, consume_cpu_time, consume_memory
 from tests.protocol.mockwiredata import WireProtocolData, DATA_FILE
 from tests.tools import *
@@ -274,6 +275,56 @@ class TestMonitor(AgentTestCase):
         self.assertEqual(1, args[5].call_count)
         self.assertEqual('HostPluginHeartbeatExtended', args[5].call_args[1]['op'])
         self.assertEqual(False, args[5].call_args[1]['is_success'])
+        monitor_handler.stop()
+
+    @patch('azurelinuxagent.common.logger.Logger.info')
+    def test_reset_loggers(self, mock_info, *args):
+        # Adding 100 different messages
+        for i in range(100):
+            event_message = "Test {0}".format(i)
+            logger.periodic_info(logger.EVERY_DAY, event_message)
+
+            self.assertIn(hash(event_message), logger.DEFAULT_LOGGER.periodic_messages)
+            self.assertEqual(i + 1, mock_info.call_count)  # range starts from 0.
+
+        self.assertEqual(100, len(logger.DEFAULT_LOGGER.periodic_messages))
+
+        # Adding 1 message 100 times, but the same message. Mock Info should be called only once.
+        for i in range(100):
+            logger.periodic_info(logger.EVERY_DAY, "Test-Message")
+
+        self.assertIn(hash("Test-Message"), logger.DEFAULT_LOGGER.periodic_messages)
+        self.assertEqual(101, mock_info.call_count)  # 100 calls from the previous section. Adding only 1.
+        self.assertEqual(101, len(logger.DEFAULT_LOGGER.periodic_messages))  # One new message in the hash map.
+
+        # Resetting the logger time states.
+        monitor_handler = get_monitor_handler()
+        monitor_handler.last_reset_loggers_time = datetime.datetime.utcnow() - timedelta(hours=1)
+        MonitorHandler.RESET_LOGGERS_PERIOD = timedelta(milliseconds=100)
+
+        monitor_handler.reset_loggers()
+
+        # The hash map got cleaned up by the reset_loggers method
+        self.assertEqual(0, len(logger.DEFAULT_LOGGER.periodic_messages))
+
+        monitor_handler.stop()
+
+    @patch("azurelinuxagent.common.logger.reset_periodic", side_effect=Exception())
+    def test_reset_loggers_ensuring_timestamp_gets_updated(self, *args):
+        # Resetting the logger time states.
+        monitor_handler = get_monitor_handler()
+        initial_time = datetime.datetime.utcnow() - timedelta(hours=1)
+        monitor_handler.last_reset_loggers_time = initial_time
+        MonitorHandler.RESET_LOGGERS_PERIOD = timedelta(milliseconds=100)
+
+        # noinspection PyBroadException
+        try:
+            monitor_handler.reset_loggers()
+        except:
+            pass
+
+        # The hash map got cleaned up by the reset_loggers method
+        self.assertGreater(monitor_handler.last_reset_loggers_time, initial_time)
         monitor_handler.stop()
 
 
