@@ -1027,7 +1027,7 @@ class WireClient(object):
             if ret:
                 return ret
         else:
-            logger.periodic_info(logger.EVERY_SIX_HOURS, "[PERIODIC] Using host plugin as default channel.")
+            logger.periodic_info(logger.EVERY_HALF_DAY, "[PERIODIC] Using host plugin as default channel.")
 
         try:
             ret = host_func()
@@ -1035,7 +1035,7 @@ class WireClient(object):
             old_container_id = self.host_plugin.container_id
             old_role_config_name = self.host_plugin.role_config_name
 
-            msg = "[PERIODIC] Request failed with the current host plugin configuration." \
+            msg = "[PERIODIC] Request failed with the current host plugin configuration. " \
                   "ContainerId: {0}, role config file: {1}. Fetching new goal state and retrying the call." \
                   "Error: {2}".format(old_container_id, old_role_config_name, ustr(e))
             logger.periodic_info(logger.EVERY_SIX_HOURS, msg)
@@ -1064,8 +1064,8 @@ class WireClient(object):
                                  log_event=True)
 
             except (ResourceGoneError, InvalidContainerError) as e:
-                msg = "[PERIODIC] Request failed using the host plugin channel after goal state refresh." \
-                      "ContainerId changed from {0} to {1}, role config file changed from {2} to {3}." \
+                msg = "[PERIODIC] Request failed using the host plugin channel after goal state refresh. " \
+                      "ContainerId changed from {0} to {1}, role config file changed from {2} to {3}. " \
                       "Exception type: {4}.".format(old_container_id, new_container_id, old_role_config_name,
                                                     new_role_config_name, type(e).__name__)
                 add_periodic(delta=logger.EVERY_SIX_HOURS,
