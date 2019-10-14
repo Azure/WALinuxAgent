@@ -27,7 +27,7 @@ from datetime import datetime
 
 import azurelinuxagent.common.conf as conf
 from azurelinuxagent.common.datacontract import validate_param, set_properties
-from azurelinuxagent.common.event import add_event, add_periodic, WALAEventOperation
+from azurelinuxagent.common.event import add_event, add_periodic, WALAEventOperation, CONTAINER_ID_ENV_VARIABLE
 import azurelinuxagent.common.utils.textutil as textutil
 from azurelinuxagent.common.exception import ProtocolNotFoundError, \
     ResourceGoneError, ExtensionDownloadError, InvalidContainerError, ProtocolError, HttpError
