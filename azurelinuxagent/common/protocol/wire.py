@@ -63,6 +63,8 @@ MANIFEST_FILE_NAME = "{0}.{1}.manifest.xml"
 AGENTS_MANIFEST_FILE_NAME = "{0}.{1}.agentsManifest"
 TRANSPORT_CERT_FILE_NAME = "TransportCert.pem"
 TRANSPORT_PRV_FILE_NAME = "TransportPrivate.pem"
+# Store the last retrieved container id as an environment variable to be shared between threads for telemetry purposes
+CONTAINER_ID_ENV_VARIABLE = "AZURE_GUEST_AGENT_CONTAINER_ID"
 
 PROTOCOL_VERSION = "2012-11-30"
 ENDPOINT_FINE_NAME = "WireServer"
@@ -119,7 +121,6 @@ class WireProtocol(Protocol):
         vminfo.tenantName = hosting_env.deployment_name
         vminfo.roleName = hosting_env.role_name
         vminfo.roleInstanceName = goal_state.role_instance_id
-        vminfo.containerId = goal_state.container_id
         return vminfo
 
     def get_certs(self):
@@ -1388,6 +1389,7 @@ class GoalState(object):
         self.role_config_name = findtext(role_config, "ConfigName")
         container = find(xml_doc, "Container")
         self.container_id = findtext(container, "ContainerId")
+        os.environ[CONTAINER_ID_ENV_VARIABLE] = self.container_id
         self.remote_access_uri = findtext(container, "RemoteAccessInfo")
         lbprobe_ports = find(xml_doc, "LBProbePorts")
         self.load_balancer_probe_port = findtext(lbprobe_ports, "Port")

@@ -64,6 +64,17 @@ _MAX_LENGTH = 120
 
 _MAX_LENGTH_SAFE_REPR = 80
 
+# Mock sleep to reduce test execution time
+_SLEEP = time.sleep
+
+
+def mock_sleep(sec=0.01):
+    """
+    Mocks the time.sleep method to reduce unit test time
+    :param sec: Time to replace the sleep call with, default = 0.01sec
+    """
+    _SLEEP(sec)
+
 
 def safe_repr(obj, short=False):
     try:
@@ -438,12 +449,21 @@ class AgentTestCase(unittest.TestCase):
             fileutil.write_file(f, "faux content")
             time.sleep(with_sleep)
 
-    def _create_script(self, file_name, contents):
+    def create_script(self, file_name, contents, file_path=None):
         """
         Creates an executable script with the given contents.
         If file_name ends with ".py", it creates a Python3 script, otherwise it creates a bash script
+        :param file_name: The name of the file to create the script with
+        :param contents: Contents of the script file
+        :param file_path: The path of the file where to create it in (we use /tmp/ by default)
+        :return:
         """
-        file_path = os.path.join(self.tmp_dir, file_name)
+        if not file_path:
+            file_path = os.path.join(self.tmp_dir, file_name)
+
+        directory = os.path.dirname(file_path)
+        if not os.path.exists(directory):
+            os.mkdir(directory)
 
         with open(file_path, "w") as script:
             if file_name.endswith(".py"):

@@ -8,11 +8,12 @@ from azurelinuxagent.common.exception import HttpError
 from azurelinuxagent.common.future import ustr
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.datacontract import DataContract, set_properties
+from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 
 IMDS_ENDPOINT = '169.254.169.254'
 APIVERSION = '2018-02-01'
-BASE_URI = "http://{0}/metadata/instance/{1}?api-version={2}"
+BASE_METADATA_URI = "http://{0}/metadata/{1}?api-version={2}"
 
 IMDS_IMAGE_ORIGIN_UNKNOWN = 0
 IMDS_IMAGE_ORIGIN_CUSTOM = 1
@@ -227,7 +228,8 @@ class ComputeInfo(DataContract):
                 return IMDS_IMAGE_ORIGIN_PLATFORM
 
         except Exception as e:
-            logger.warn("Could not determine the image origin from IMDS: {0}", str(e))
+            logger.periodic_warn(logger.EVERY_FIFTEEN_MINUTES,
+                                 "[PERIODIC] Could not determine the image origin from IMDS: {0}".format(str(e)))
             return IMDS_IMAGE_ORIGIN_UNKNOWN
 
 
@@ -242,15 +244,48 @@ class ImdsClient(object):
             'User-Agent': restutil.HTTP_USER_AGENT_HEALTH,
             'Metadata': True,
         }
-        pass
+        self._regex_imds_ioerror = re.compile(r".*HTTP Failed. GET http://[^ ]+ -- IOError timed out -- [0-9]+ attempts made")
+        self._protocol_util = get_protocol_util()
 
-    @property
-    def compute_url(self):
-        return BASE_URI.format(IMDS_ENDPOINT, 'compute', self._api_version)
+    def _get_metadata_url(self, endpoint, resource_path):
+        return BASE_METADATA_URI.format(endpoint, resource_path, self._api_version)
 
-    @property
-    def instance_url(self):
-        return BASE_URI.format(IMDS_ENDPOINT, '', self._api_version)
+    def _http_get(self, endpoint, resource_path, headers):
+        url = self._get_metadata_url(endpoint, resource_path)
+        return restutil.http_get(url, headers=headers, use_proxy=False)
+
+    def get_metadata(self, resource_path, is_health):
+        """
+        Get metadata from IMDS, falling back to Wireserver endpoint if necessary.
+
+        :param str resource_path: path of IMDS resource
+        :param bool is_health: True if for health/heartbeat, False otherwise
+        :return: Tuple<is_request_success:bool, response:str>
+            is_request_success: True when connection succeeds, False otherwise
+            response: response from IMDS on request success, failure message otherwise
+        """
+        headers = self._health_headers if is_health else self._headers
+        endpoint = IMDS_ENDPOINT
+        try:
+            resp = self._http_get(endpoint=endpoint, resource_path=resource_path, headers=headers)
+        except HttpError as e:
+            logger.periodic_warn(logger.EVERY_FIFTEEN_MINUTES,
+                                 "[PERIODIC] Unable to connect to primary IMDS endpoint {0}".format(endpoint))
+            if not self._regex_imds_ioerror.match(str(e)):
+                raise
+            endpoint = self._protocol_util.get_wireserver_endpoint()
+            try:
+                resp = self._http_get(endpoint=endpoint, resource_path=resource_path, headers=headers)
+            except HttpError as e:
+                logger.periodic_warn(logger.EVERY_FIFTEEN_MINUTES,
+                                     "[PERIODIC] Unable to connect to backup IMDS endpoint {0}".format(endpoint))
+                if not self._regex_imds_ioerror.match(str(e)):
+                    raise
+                return False, "IMDS error in /metadata/{0}: Unable to connect to endpoint".format(resource_path)
+        if restutil.request_failed(resp):
+            return False, "IMDS error in /metadata/{0}: {1}".format(
+                resource_path, restutil.read_response_error(resp))
+        return True, resp.read()
 
     def get_compute(self):
         """
@@ -260,13 +295,12 @@ class ImdsClient(object):
         :rtype: ComputeInfo
         """
 
-        resp = restutil.http_get(self.compute_url, headers=self._headers)
+        # ensure we get a 200
+        success, resp = self.get_metadata('instance/compute', is_health=False)
+        if not success:
+            raise HttpError(resp)
 
-        if restutil.request_failed(resp):
-            raise HttpError("{0} - GET: {1}".format(resp.status, self.compute_url))
-
-        data = resp.read()
-        data = json.loads(ustr(data, encoding="utf-8"))
+        data = json.loads(ustr(resp, encoding="utf-8"))
 
         compute_info = ComputeInfo()
         set_properties('compute', compute_info, data)
@@ -284,14 +318,13 @@ class ImdsClient(object):
         """
 
         # ensure we get a 200
-        resp = restutil.http_get(self.instance_url, headers=self._health_headers)
-        if restutil.request_failed(resp):
-            return False, "{0}".format(restutil.read_response_error(resp))
+        success, resp = self.get_metadata('instance', is_health=True)
+        if not success:
+            return False, resp
 
         # ensure the response is valid json
-        data = resp.read()
         try:
-            json_data = json.loads(ustr(data, encoding="utf-8"))
+            json_data = json.loads(ustr(resp, encoding="utf-8"))
         except Exception as e:
             return False, "JSON parsing failed: {0}".format(ustr(e))
 

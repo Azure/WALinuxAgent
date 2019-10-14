@@ -23,8 +23,11 @@ from nose.plugins.attrib import attr
 from azurelinuxagent.common.cgroup import CGroup
 from azurelinuxagent.common.datacontract import get_properties
 from azurelinuxagent.common.event import EventLogger
+from azurelinuxagent.common.protocol.imds import ComputeInfo, IMDS_IMAGE_ORIGIN_ENDORSED
+from azurelinuxagent.common.protocol.restapi import VMInfo
 from azurelinuxagent.common.protocol.wire import WireProtocol
 from azurelinuxagent.common.utils import restutil
+from azurelinuxagent.common.version import AGENT_VERSION
 from azurelinuxagent.ga.monitor import *
 from tests.common.test_cgroupstelemetry import make_new_cgroup, consume_cpu_time, consume_memory
 from tests.protocol.mockwiredata import WireProtocolData, DATA_FILE
@@ -46,7 +49,7 @@ def random_generator(size=6, chars=string.ascii_uppercase + string.digits + stri
     return ''.join(random.choice(chars) for x in range(size))
 
 
-def create_event_message(size,
+def create_event_message(size=0,
                          name="DummyExtension",
                          op=WALAEventOperation.Unknown,
                          is_success=True,
@@ -54,9 +57,16 @@ def create_event_message(size,
                          version=CURRENT_VERSION,
                          is_internal=False,
                          evt_type="",
+                         message="DummyMessage",
                          invalid_chars=False):
-    return get_event_message(name=size, op=op, is_success=is_success, duration=duration,
-                             version=version, message=random_generator(size), evt_type=evt_type,
+
+    return get_event_message(name=size if size != 0 else name,
+                             op=op,
+                             is_success=is_success,
+                             duration=duration,
+                             version=version,
+                             message=random_generator(size) if size != 0 else message,
+                             evt_type=evt_type,
                              is_internal=is_internal)
 
 
@@ -98,19 +108,21 @@ class TestMonitor(AgentTestCase):
         tenant_name = 'dummy_tenant'
         role_name = 'dummy_role'
         role_instance_name = 'dummy_role_instance'
-        container_id = 'dummy_container_id'
+        execution_mode_value = "IAAS"
 
         vm_name_param = "VMName"
         tenant_name_param = "TenantName"
         role_name_param = "RoleName"
         role_instance_name_param = "RoleInstanceName"
-        container_id_param = "ContainerId"
+        execution_mode_param = "ExecutionMode"
 
-        sysinfo = [TelemetryEventParam(vm_name_param, vm_name),
-                   TelemetryEventParam(tenant_name_param, tenant_name),
-                   TelemetryEventParam(role_name_param, role_name),
-                   TelemetryEventParam(role_instance_name_param, role_instance_name),
-                   TelemetryEventParam(container_id_param, container_id)]
+        sysinfo = [
+            TelemetryEventParam(role_instance_name_param, role_instance_name),
+            TelemetryEventParam(vm_name_param, vm_name),
+            TelemetryEventParam(execution_mode_param, execution_mode_value),
+            TelemetryEventParam(tenant_name_param, tenant_name),
+            TelemetryEventParam(role_name_param, role_name)
+        ]
         monitor_handler.sysinfo = sysinfo
         monitor_handler.add_sysinfo(event)
 
@@ -131,8 +143,8 @@ class TestMonitor(AgentTestCase):
             elif p.name == role_instance_name_param:
                 self.assertEqual(role_instance_name, p.value)
                 counter += 1
-            elif p.name == container_id_param:
-                self.assertEqual(container_id, p.value)
+            elif p.name == execution_mode_param:
+                self.assertEqual(execution_mode_value, p.value)
                 counter += 1
 
         self.assertEqual(5, counter)
@@ -359,6 +371,79 @@ class TestEventMonitoring(AgentTestCase):
 
         monitor_handler.protocol_util.get_protocol = Mock(return_value=protocol)
         return monitor_handler, protocol
+
+    @patch("azurelinuxagent.common.protocol.imds.ImdsClient.get_compute",
+           return_value=ComputeInfo(subscriptionId="DummySubId",
+                                    location="DummyVMLocation",
+                                    vmId="DummyVmId",
+                                    resourceGroupName="DummyRG",
+                                    publisher=""))
+    @patch("azurelinuxagent.common.protocol.wire.WireProtocol.get_vminfo",
+           return_value=VMInfo(subscriptionId="DummySubId",
+                               vmName="DummyVMName",
+                               containerId="DummyContainerId",
+                               roleName="DummyRoleName",
+                               roleInstanceName="DummyRoleInstanceName", tenantName="DummyTenant"))
+    @patch("platform.release", return_value="platform-release")
+    @patch("platform.system", return_value="Linux")
+    @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_processor_cores", return_value=4)
+    @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_total_mem", return_value=10000)
+    @patch("azurelinuxagent.common.protocol.wire.WireClient.send_event")
+    @patch("azurelinuxagent.common.conf.get_lib_dir")
+    def test_collect_and_send_events(self, mock_lib_dir, patch_send_event, patch_get_total_mem, patch_os_cores,
+                                     patch_platform_system, patch_platform_release, patch_get_vminfo, patch_get_compute,
+                                     *args):
+        mock_lib_dir.return_value = self.lib_dir
+
+        test_data = WireProtocolData(DATA_FILE)
+        monitor_handler, protocol = self._create_mock(test_data, *args)
+        monitor_handler.init_protocols()
+        monitor_handler.init_sysinfo()
+
+        # Replacing OSVersion to make it platform agnostic. We can't mock global constants (eg. DISTRO_NAME,
+        # DISTRO_VERSION, DISTRO_CODENAME), so to make them constant during the test-time, we need to replace the
+        # OSVersion field in the event object.
+        for i in monitor_handler.sysinfo:
+            if i.name == "OSVersion":
+                i.value = "{0}:{1}-{2}-{3}:{4}".format(platform.system(),
+                                                       "DISTRO_NAME",
+                                                       "DISTRO_VERSION",
+                                                       "DISTRO_CODE_NAME",
+                                                       platform.release())
+
+        self.event_logger.save_event(create_event_message(message="Message-Test"))
+        monitor_handler.collect_and_send_events()
+
+        # Validating the crafted message by the collect_and_sent_event call.
+        self.assertEqual(1, patch_send_event.call_count)
+        send_event_call_args = protocol.client.send_event.call_args[0]
+        sample_message = '<Event id="1">' \
+                         '<![CDATA[<Param Name="Name" Value="DummyExtension" T="mt:wstr" />' \
+                         '<Param Name="Version" Value="{0}" T="mt:wstr" />' \
+                         '<Param Name="IsInternal" Value="False" T="mt:bool" />' \
+                         '<Param Name="Operation" Value="Unknown" T="mt:wstr" />' \
+                         '<Param Name="OperationSuccess" Value="True" T="mt:bool" />' \
+                         '<Param Name="Message" Value="Message-Test" T="mt:wstr" />' \
+                         '<Param Name="Duration" Value="0" T="mt:uint64" />' \
+                         '<Param Name="ExtensionType" Value="" T="mt:wstr" />' \
+                         '<Param Name="OSVersion" ' \
+                         'Value="Linux:DISTRO_NAME-DISTRO_VERSION-DISTRO_CODE_NAME:platform-release" T="mt:wstr" />' \
+                         '<Param Name="GAVersion" Value="WALinuxAgent-{0}" T="mt:wstr" />' \
+                         '<Param Name="ExecutionMode" Value="IAAS" T="mt:wstr" />' \
+                         '<Param Name="RAM" Value="10000" T="mt:uint64" />' \
+                         '<Param Name="Processors" Value="4" T="mt:uint64" />' \
+                         '<Param Name="VMName" Value="DummyVMName" T="mt:wstr" />' \
+                         '<Param Name="TenantName" Value="DummyTenant" T="mt:wstr" />' \
+                         '<Param Name="RoleName" Value="DummyRoleName" T="mt:wstr" />' \
+                         '<Param Name="RoleInstanceName" Value="DummyRoleInstanceName" T="mt:wstr" />' \
+                         '<Param Name="Location" Value="DummyVMLocation" T="mt:wstr" />' \
+                         '<Param Name="SubscriptionId" Value="DummySubId" T="mt:wstr" />' \
+                         '<Param Name="ResourceGroupName" Value="DummyRG" T="mt:wstr" />' \
+                         '<Param Name="VMId" Value="DummyVmId" T="mt:wstr" />' \
+                         '<Param Name="ImageOrigin" Value="1" T="mt:uint64" />]]>' \
+                         '</Event>'.format(AGENT_VERSION)
+
+        self.assertEqual(sample_message, send_event_call_args[1])
 
     @patch("azurelinuxagent.common.protocol.wire.WireClient.send_event")
     @patch("azurelinuxagent.common.conf.get_lib_dir")

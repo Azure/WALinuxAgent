@@ -23,7 +23,7 @@ from azurelinuxagent.ga.monitor import get_monitor_handler
 from nose.plugins.attrib import attr
 from tests.protocol.mockwiredata import *
 
-from azurelinuxagent.common.protocol.restapi import Extension
+from azurelinuxagent.common.protocol.restapi import Extension, ExtHandlerProperties
 from azurelinuxagent.ga.exthandlers import *
 from azurelinuxagent.common.protocol.wire import WireProtocol, InVMArtifactsProfile
 
@@ -321,6 +321,14 @@ class TestExtension(ExtensionTestCase):
         self.assertEquals(expected_ext_count, len(handler_status.extensions))
         return
 
+    def _assert_ext_pkg_file_status(self, expected_to_be_present=True, extension_version="1.0.0",
+                                    extension_handler_name="OSTCExtensions.ExampleHandlerLinux"):
+        zip_file_format = "{0}__{1}.zip"
+        if expected_to_be_present:
+            self.assertIn(zip_file_format.format(extension_handler_name, extension_version), os.listdir(conf.get_lib_dir()))
+        else:
+            self.assertNotIn(zip_file_format.format(extension_handler_name, extension_version), os.listdir(conf.get_lib_dir()))
+
     def _assert_no_handler_status(self, report_vm_status):
         self.assertTrue(report_vm_status.called)
         args, kw = report_vm_status.call_args
@@ -343,6 +351,34 @@ class TestExtension(ExtensionTestCase):
 
         handler.protocol_util.get_protocol = Mock(return_value=protocol)
         return handler, protocol
+
+    def _set_up_update_test_and_update_gs(self, patch_command, *args):
+        """
+        This helper function sets up the Update test by setting up the protocol and ext_handler and asserts the
+        ext_handler runs fine the first time before patching a failure command for testing.
+        :param patch_command: The patch_command to setup for failure
+        :param args: Any additional args passed to the function, needed for creating a mock for handler and protocol
+        :return: test_data, exthandlers_handler, protocol
+        """
+        test_data = WireProtocolData(DATA_FILE_EXT_SINGLE)
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+
+        # Ensure initial install and enable is successful
+        exthandlers_handler.run()
+
+        self.assertEqual(0, patch_command.call_count)
+        self._assert_handler_status(protocol.report_vm_status, "Ready", expected_ext_count=1, version="1.0.0")
+        self._assert_ext_status(protocol.report_ext_status, "success", 0)
+
+        # Next incarnation, update version
+        test_data.goal_state = test_data.goal_state.replace("<Incarnation>1<", "<Incarnation>2<")
+        test_data.ext_conf = test_data.ext_conf.replace('version="1.0.0"', 'version="1.0.1"')
+        test_data.manifest = test_data.manifest.replace('1.0.0', '1.0.1')
+
+        # Ensure the patched command fails
+        patch_command.return_value = "exit 1"
+
+        return test_data, exthandlers_handler, protocol
 
     def test_ext_handler(self, *args):
         test_data = WireProtocolData(DATA_FILE)
@@ -406,6 +442,114 @@ class TestExtension(ExtensionTestCase):
                                                             "<Incarnation>7<")
         exthandlers_handler.run()
         self._assert_no_handler_status(protocol.report_vm_status)
+
+    def test_ext_zip_file_packages_removed_in_update_case(self, *args):
+        test_data = WireProtocolData(DATA_FILE)
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+
+        # Test enable scenario.
+        exthandlers_handler.run()
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
+        self._assert_ext_status(protocol.report_ext_status, "success", 0)
+        self._assert_ext_pkg_file_status(expected_to_be_present=True,
+                                         extension_version="1.0.0")
+
+        # Update the package
+        test_data.goal_state = test_data.goal_state.replace("<Incarnation>1<",
+                                                            "<Incarnation>2<")
+        test_data.ext_conf = test_data.ext_conf.replace("seqNo=\"0\"",
+                                                        "seqNo=\"1\"")
+        test_data.ext_conf = test_data.ext_conf.replace("1.0.0", "1.1.0")
+        exthandlers_handler.run()
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.1.0")
+        self._assert_ext_status(protocol.report_ext_status, "success", 1)
+        self._assert_ext_pkg_file_status(expected_to_be_present=False,
+                                         extension_version="1.0.0")
+        self._assert_ext_pkg_file_status(expected_to_be_present=True,
+                                         extension_version="1.1.0")
+
+        # Update the package second time
+        test_data.goal_state = test_data.goal_state.replace("<Incarnation>2<",
+                                                            "<Incarnation>3<")
+        test_data.ext_conf = test_data.ext_conf.replace("seqNo=\"1\"",
+                                                        "seqNo=\"2\"")
+        test_data.ext_conf = test_data.ext_conf.replace("1.1.0", "1.2.0")
+        exthandlers_handler.run()
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.2.0")
+        self._assert_ext_status(protocol.report_ext_status, "success", 2)
+        self._assert_ext_pkg_file_status(expected_to_be_present=False,
+                                         extension_version="1.1.0")
+        self._assert_ext_pkg_file_status(expected_to_be_present=True,
+                                         extension_version="1.2.0")
+
+    def test_ext_zip_file_packages_removed_in_uninstall_case(self, *args):
+        test_data = WireProtocolData(DATA_FILE)
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+        extension_version = "1.0.0"
+
+        # Test enable scenario.
+        exthandlers_handler.run()
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, extension_version)
+        self._assert_ext_status(protocol.report_ext_status, "success", 0)
+        self._assert_ext_pkg_file_status(expected_to_be_present=True,
+                                         extension_version=extension_version)
+
+        # Test uninstall
+        test_data.goal_state = test_data.goal_state.replace("<Incarnation>1<",
+                                                            "<Incarnation>2<")
+        test_data.ext_conf = test_data.ext_conf.replace("enabled", "uninstall")
+        exthandlers_handler.run()
+        self._assert_no_handler_status(protocol.report_vm_status)
+        self._assert_ext_pkg_file_status(expected_to_be_present=False,
+                                         extension_version=extension_version)
+
+    def test_ext_zip_file_packages_removed_in_update_and_uninstall_case(self, *args):
+        test_data = WireProtocolData(DATA_FILE)
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+
+        # Test enable scenario.
+        exthandlers_handler.run()
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.0")
+        self._assert_ext_status(protocol.report_ext_status, "success", 0)
+        self._assert_ext_pkg_file_status(expected_to_be_present=True,
+                                         extension_version="1.0.0")
+
+        # Update the package
+        test_data.goal_state = test_data.goal_state.replace("<Incarnation>1<",
+                                                            "<Incarnation>2<")
+        test_data.ext_conf = test_data.ext_conf.replace("seqNo=\"0\"",
+                                                        "seqNo=\"1\"")
+        test_data.ext_conf = test_data.ext_conf.replace("1.0.0", "1.1.0")
+        exthandlers_handler.run()
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.1.0")
+        self._assert_ext_status(protocol.report_ext_status, "success", 1)
+        self._assert_ext_pkg_file_status(expected_to_be_present=False,
+                                         extension_version="1.0.0")
+        self._assert_ext_pkg_file_status(expected_to_be_present=True,
+                                         extension_version="1.1.0")
+
+        # Update the package second time
+        test_data.goal_state = test_data.goal_state.replace("<Incarnation>2<",
+                                                            "<Incarnation>3<")
+        test_data.ext_conf = test_data.ext_conf.replace("seqNo=\"1\"",
+                                                        "seqNo=\"2\"")
+        test_data.ext_conf = test_data.ext_conf.replace("1.1.0", "1.2.0")
+        exthandlers_handler.run()
+        self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.2.0")
+        self._assert_ext_status(protocol.report_ext_status, "success", 2)
+        self._assert_ext_pkg_file_status(expected_to_be_present=False,
+                                         extension_version="1.1.0")
+        self._assert_ext_pkg_file_status(expected_to_be_present=True,
+                                         extension_version="1.2.0")
+
+        # Test uninstall
+        test_data.goal_state = test_data.goal_state.replace("<Incarnation>3<",
+                                                            "<Incarnation>4<")
+        test_data.ext_conf = test_data.ext_conf.replace("enabled", "uninstall")
+        exthandlers_handler.run()
+        self._assert_no_handler_status(protocol.report_vm_status)
+        self._assert_ext_pkg_file_status(expected_to_be_present=False,
+                                         extension_version="1.2.0")
 
     def test_ext_handler_no_settings(self, *args):
         test_data = WireProtocolData(DATA_FILE_EXT_NO_SETTINGS)
@@ -662,15 +806,11 @@ class TestExtension(ExtensionTestCase):
     def test_ext_handler_download_failure_transient(self, mock_add_event, *args):
         original_sleep = time.sleep
 
-        def mock_sleep(*args, **kwargs):
-            return original_sleep(0.1)
-
         test_data = WireProtocolData(DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
         protocol.download_ext_handler_pkg = Mock(side_effect=ProtocolError)
 
-        with patch("time.sleep", side_effect=mock_sleep):
-            exthandlers_handler.run()
+        exthandlers_handler.run()
 
         self.assertEquals(0, mock_add_event.call_count)
 
@@ -766,26 +906,23 @@ class TestExtension(ExtensionTestCase):
         exthandlers_handler.protocol = Mock()
 
         # disable extension handling in configuration
-        with patch.object(conf, 'get_extensions_enabled',  return_value=False):
+        with patch.object(conf, 'get_extensions_enabled', return_value=False):
             self.assertFalse(exthandlers_handler.extension_processing_allowed())
 
         # enable extension handling in configuration
         with patch.object(conf, "get_extensions_enabled", return_value=True):
-
             # disable overprovisioning in configuration
             with patch.object(conf, 'get_enable_overprovisioning', return_value=False):
                 self.assertTrue(exthandlers_handler.extension_processing_allowed())
 
             # enable overprovisioning in configuration
             with patch.object(conf, "get_enable_overprovisioning", return_value=True):
-
                 # disable protocol support for over-provisioning
                 with patch.object(exthandlers_handler.protocol, 'supports_overprovisioning', return_value=False):
                     self.assertTrue(exthandlers_handler.extension_processing_allowed())
 
                 # enable protocol support for over-provisioning
                 with patch.object(exthandlers_handler.protocol, "supports_overprovisioning", return_value=True):
-
                     with patch.object(exthandlers_handler.protocol.get_artifacts_profile(), "is_on_hold",
                                       side_effect=[True, False]):
                         # Enable on_hold property in artifact_blob
@@ -906,7 +1043,7 @@ class TestExtension(ExtensionTestCase):
         exthandler.properties.extensions.append(extension)
 
         # Override the timeout value to minimize the test duration
-        wait_until = datetime.datetime.utcnow() + datetime.timedelta(seconds=5)
+        wait_until = datetime.datetime.utcnow() + datetime.timedelta(seconds=0.1)
         return exthandlers_handler.wait_for_handler_successful_completion(exthandler, wait_until)
 
     def test_wait_for_handler_successful_completion_no_status(self, *args):
@@ -1142,7 +1279,8 @@ class TestExtension(ExtensionTestCase):
         self._assert_handler_status(protocol.report_vm_status, "Ready", 1, "1.0.1")
         self._assert_ext_status(protocol.report_ext_status, "success", 0)
 
-    @patch('azurelinuxagent.ga.exthandlers.ExtHandlerInstance.install', side_effect=ExtHandlerInstance.install, autospec=True)
+    @patch('azurelinuxagent.ga.exthandlers.ExtHandlerInstance.install', side_effect=ExtHandlerInstance.install,
+           autospec=True)
     @patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_install_command')
     def test_install_failure(self, patch_get_install_command, patch_install, *args):
         """
@@ -1166,7 +1304,8 @@ class TestExtension(ExtensionTestCase):
 
     @patch('azurelinuxagent.ga.exthandlers.ExtHandlersHandler.handle_ext_handler_error')
     @patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_install_command')
-    def test_install_failure_check_exception_handling(self, patch_get_install_command, patch_handle_ext_handler_error, *args):
+    def test_install_failure_check_exception_handling(self, patch_get_install_command, patch_handle_ext_handler_error,
+                                                      *args):
         """
         When extension install fails, the operation should be reported to our telemetry service.
         """
@@ -1325,26 +1464,9 @@ class TestExtension(ExtensionTestCase):
         """
         Extension upgrade failure should not be retried
         """
-        test_data = WireProtocolData(DATA_FILE_EXT_SINGLE)
-        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+        test_data, exthandlers_handler, protocol = self._set_up_update_test_and_update_gs(patch_get_update_command,
+                                                                                          *args)
 
-        # Ensure initial install and enable is successful
-        exthandlers_handler.run()
-        self.assertEqual(0, patch_get_update_command.call_count)
-
-        self._assert_handler_status(protocol.report_vm_status, "Ready", expected_ext_count=1, version="1.0.0")
-        self._assert_ext_status(protocol.report_ext_status, "success", 0)
-
-        # Next incarnation, update version
-        test_data.goal_state = test_data.goal_state.replace("<Incarnation>1<",
-                                                            "<Incarnation>2<")
-        test_data.ext_conf = test_data.ext_conf.replace('version="1.0.0"',
-                                                        'version="1.0.1"')
-        test_data.manifest = test_data.manifest.replace('1.0.0',
-                                                        '1.0.1')
-
-        # Update command should fail
-        patch_get_update_command.return_value = "exit 1"
         exthandlers_handler.run()
         self.assertEqual(1, patch_get_update_command.call_count)
 
@@ -1356,23 +1478,9 @@ class TestExtension(ExtensionTestCase):
 
     @patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_disable_command')
     def test__extension_upgrade_failure_when_prev_version_disable_fails(self, patch_get_disable_command, *args):
-        test_data = WireProtocolData(DATA_FILE_EXT_SINGLE)
-        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+        test_data, exthandlers_handler, protocol = self._set_up_update_test_and_update_gs(patch_get_disable_command,
+                                                                                          *args)
 
-        # Ensure initial install and enable is successful
-        exthandlers_handler.run()
-
-        self.assertEqual(0, patch_get_disable_command.call_count)
-        self._assert_handler_status(protocol.report_vm_status, "Ready", expected_ext_count=1, version="1.0.0")
-        self._assert_ext_status(protocol.report_ext_status, "success", 0)
-
-        # Next incarnation, update version
-        test_data.goal_state = test_data.goal_state.replace("<Incarnation>1<", "<Incarnation>2<")
-        test_data.ext_conf = test_data.ext_conf.replace('version="1.0.0"', 'version="1.0.1"')
-        test_data.manifest = test_data.manifest.replace('1.0.0', '1.0.1')
-
-        # Disable of the old extn fails
-        patch_get_disable_command.return_value = "exit 1"
         exthandlers_handler.run()  # Download the new update the first time, and then we patch the download method.
 
         with patch('azurelinuxagent.common.protocol.restapi.Protocol.download_ext_handler_pkg') as patch_download:
@@ -1390,23 +1498,9 @@ class TestExtension(ExtensionTestCase):
     @patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_disable_command')
     def test__extension_upgrade_failure_when_prev_version_disable_fails_and_recovers(self, patch_get_disable_command,
                                                                                      *args):
-        test_data = WireProtocolData(DATA_FILE_EXT_SINGLE)
-        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+        test_data, exthandlers_handler, protocol = self._set_up_update_test_and_update_gs(patch_get_disable_command,
+                                                                                          *args)
 
-        # Ensure initial install and enable is successful
-        exthandlers_handler.run()
-
-        self.assertEqual(0, patch_get_disable_command.call_count)
-        self._assert_handler_status(protocol.report_vm_status, "Ready", expected_ext_count=1, version="1.0.0")
-        self._assert_ext_status(protocol.report_ext_status, "success", 0)
-
-        # Next incarnation, update version
-        test_data.goal_state = test_data.goal_state.replace("<Incarnation>1<", "<Incarnation>2<")
-        test_data.ext_conf = test_data.ext_conf.replace('version="1.0.0"', 'version="1.0.1"')
-        test_data.manifest = test_data.manifest.replace('1.0.0', '1.0.1')
-
-        # Disable of the old extn fails
-        patch_get_disable_command.return_value = "exit 1"
         exthandlers_handler.run()  # Download the new update the first time, and then we patch the download method.
         self.assertEqual(1, patch_get_disable_command.call_count)
 
@@ -1430,23 +1524,9 @@ class TestExtension(ExtensionTestCase):
     @patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_disable_command')
     def test__extension_upgrade_failure_when_prev_version_disable_fails_incorrect_zip(self, patch_get_disable_command,
                                                                                       *args):
-        test_data = WireProtocolData(DATA_FILE_EXT_SINGLE)
-        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+        test_data, exthandlers_handler, protocol = self._set_up_update_test_and_update_gs(patch_get_disable_command,
+                                                                                          *args)
 
-        # Ensure initial install and enable is successful
-        exthandlers_handler.run()
-        self.assertEqual(0, patch_get_disable_command.call_count)
-
-        self._assert_handler_status(protocol.report_vm_status, "Ready", expected_ext_count=1, version="1.0.0")
-        self._assert_ext_status(protocol.report_ext_status, "success", 0)
-
-        # Next incarnation, update version
-        test_data.goal_state = test_data.goal_state.replace("<Incarnation>1<", "<Incarnation>2<")
-        test_data.ext_conf = test_data.ext_conf.replace('version="1.0.0"', 'version="1.0.1"')
-        test_data.manifest = test_data.manifest.replace('1.0.0', '1.0.1')
-
-        # Disable of the old extn fails
-        patch_get_disable_command.return_value = "exit 1"
         with patch("time.sleep"):  # the download logic has retry logic that sleeps before each try - make sleep a no-op.
             with patch("zipfile.ZipFile.extractall") as patch_zipfile_extractall:
                 patch_zipfile_extractall.side_effect = raise_ioerror
@@ -1470,26 +1550,11 @@ class TestExtension(ExtensionTestCase):
 
     @patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_disable_command')
     def test__old_handler_reports_failure_on_disable_fail_on_update(self, patch_get_disable_command, *args):
-        test_data = WireProtocolData(DATA_FILE_EXT_SINGLE)
-        exthandlers_handler, protocol = self._create_mock(test_data, *args)
         old_version, new_version = "1.0.0", "1.0.1"
-
-        # Ensure initial install and enable is successful
-        exthandlers_handler.run()
-
-        self.assertEqual(0, patch_get_disable_command.call_count)
-
-        self._assert_handler_status(protocol.report_vm_status, "Ready", expected_ext_count=1, version=old_version)
-        self._assert_ext_status(protocol.report_ext_status, "success", 0)
-
-        # Next incarnation, update version
-        test_data.goal_state = test_data.goal_state.replace("<Incarnation>1<", "<Incarnation>2<")
-        test_data.ext_conf = test_data.ext_conf.replace('version="%s"' % old_version, 'version="%s"' % new_version)
-        test_data.manifest = test_data.manifest.replace(old_version, new_version)
+        test_data, exthandlers_handler, protocol = self._set_up_update_test_and_update_gs(patch_get_disable_command,
+                                                                                          *args)
 
         with patch.object(ExtHandlerInstance, "report_event", autospec=True) as patch_report_event:
-            # Disable of the old extn fails
-            patch_get_disable_command.return_value = "exit 1"
             exthandlers_handler.run()  # Download the new update the first time, and then we patch the download method.
             self.assertEqual(1, patch_get_disable_command.call_count)
 
@@ -1509,7 +1574,7 @@ class TestExtension(ExtensionTestCase):
 
             self.assertFalse(old_version_kwargs['is_success'], "The last call to report event should be for a failure")
 
-            self.assertTrue(old_version_kwargs['message'].startswith('[ExtensionError]'), "No error reported")
+            self.assertTrue('Error' in old_version_kwargs['message'], "No error reported")
 
             # This is ensuring that the error status is being written to the new version
         self._assert_handler_status(protocol.report_vm_status, "NotReady", expected_ext_count=0, version=new_version)
@@ -1521,26 +1586,301 @@ class TestExtension(ExtensionTestCase):
         """
         Extension upgrade failure should not be retried
         """
-        test_data = WireProtocolData(DATA_FILE_EXT_SINGLE)
-        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+        test_data, exthandlers_handler, protocol = self._set_up_update_test_and_update_gs(patch_get_update_command,
+                                                                                          *args)
 
-        # Ensure initial install and enable is successful
-        exthandlers_handler.run()
-        self.assertEqual(0, patch_get_update_command.call_count)
-
-        self._assert_handler_status(protocol.report_vm_status, "Ready", expected_ext_count=1, version="1.0.0")
-        self._assert_ext_status(protocol.report_ext_status, "success", 0)
-
-        # Next incarnation, update version
-        test_data.goal_state = test_data.goal_state.replace("<Incarnation>1<", "<Incarnation>2<")
-        test_data.ext_conf = test_data.ext_conf.replace('version="1.0.0"', 'version="1.0.1"')
-        test_data.manifest = test_data.manifest.replace('1.0.0', '1.0.1')
-
-        # Update command should fail
-        patch_get_update_command.return_value = "exit 1"
         exthandlers_handler.run()
         self.assertEqual(1, patch_get_update_command.call_count)
         self.assertEqual(1, patch_handle_ext_handler_error.call_count)
+
+    @patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_disable_command')
+    def test_extension_upgrade_should_pass_when_continue_on_update_failure_is_true_and_prev_version_disable_fails(
+            self, patch_get_disable_command, *args):
+        test_data, exthandlers_handler, protocol = self._set_up_update_test_and_update_gs(patch_get_disable_command,
+                                                                                          *args)
+
+        with patch('azurelinuxagent.ga.exthandlers.HandlerManifest.is_continue_on_update_failure', return_value=True) \
+                as mock_continue_on_update_failure:
+            # These are just testing the mocks have been called and asserting the test conditions have been met
+            exthandlers_handler.run()
+            self.assertEqual(1, patch_get_disable_command.call_count)
+            self.assertEqual(2, mock_continue_on_update_failure.call_count,
+                             "This should be called twice, for both disable and uninstall")
+
+        # Ensure the handler status and ext_status is successful
+        self._assert_handler_status(protocol.report_vm_status, "Ready", expected_ext_count=1, version="1.0.1")
+        self._assert_ext_status(protocol.report_ext_status, "success", 0)
+
+    @patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_uninstall_command')
+    def test_extension_upgrade_should_pass_when_continue_on_update_failue_is_true_and_prev_version_uninstall_fails(
+            self, patch_get_uninstall_command, *args):
+        test_data, exthandlers_handler, protocol = self._set_up_update_test_and_update_gs(patch_get_uninstall_command,
+                                                                                          *args)
+
+        with patch('azurelinuxagent.ga.exthandlers.HandlerManifest.is_continue_on_update_failure', return_value=True) \
+                as mock_continue_on_update_failure:
+            # These are just testing the mocks have been called and asserting the test conditions have been met
+            exthandlers_handler.run()
+            self.assertEqual(1, patch_get_uninstall_command.call_count)
+            self.assertEqual(2, mock_continue_on_update_failure.call_count,
+                             "This should be called twice, for both disable and uninstall")
+
+        # Ensure the handler status and ext_status is successful
+        self._assert_handler_status(protocol.report_vm_status, "Ready", expected_ext_count=1, version="1.0.1")
+        self._assert_ext_status(protocol.report_ext_status, "success", 0)
+
+    @patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_disable_command')
+    def test_extension_upgrade_should_fail_when_continue_on_update_failure_is_false_and_prev_version_disable_fails(
+            self, patch_get_disable_command, *args):
+        test_data, exthandlers_handler, protocol = self._set_up_update_test_and_update_gs(patch_get_disable_command,
+                                                                                          *args)
+
+        with patch('azurelinuxagent.ga.exthandlers.HandlerManifest.is_continue_on_update_failure', return_value=False) \
+                as mock_continue_on_update_failure:
+            # These are just testing the mocks have been called and asserting the test conditions have been met
+            exthandlers_handler.run()
+            self.assertEqual(1, patch_get_disable_command.call_count)
+            self.assertEqual(1, mock_continue_on_update_failure.call_count,
+                             "The first call would raise an exception")
+
+        # Assert test scenario
+        self._assert_handler_status(protocol.report_vm_status, "NotReady", expected_ext_count=0, version="1.0.1")
+
+    @patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_uninstall_command')
+    def test_extension_upgrade_should_fail_when_continue_on_update_failure_is_false_and_prev_version_uninstall_fails(
+            self, patch_get_uninstall_command, *args):
+        test_data, exthandlers_handler, protocol = self._set_up_update_test_and_update_gs(patch_get_uninstall_command,
+                                                                                          *args)
+
+        with patch('azurelinuxagent.ga.exthandlers.HandlerManifest.is_continue_on_update_failure', return_value=False) \
+                as mock_continue_on_update_failure:
+            # These are just testing the mocks have been called and asserting the test conditions have been met
+            exthandlers_handler.run()
+            self.assertEqual(1, patch_get_uninstall_command.call_count)
+            self.assertEqual(2, mock_continue_on_update_failure.call_count,
+                             "The second call would raise an exception")
+
+        # Assert test scenario
+        self._assert_handler_status(protocol.report_vm_status, "NotReady", expected_ext_count=0, version="1.0.1")
+
+    @patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_disable_command')
+    def test_extension_upgrade_should_fail_when_continue_on_update_failure_is_true_and_old_disable_and_new_enable_fails(
+            self, patch_get_disable_command, *args):
+        test_data, exthandlers_handler, protocol = self._set_up_update_test_and_update_gs(patch_get_disable_command,
+                                                                                          *args)
+
+        with patch('azurelinuxagent.ga.exthandlers.HandlerManifest.is_continue_on_update_failure', return_value=True) \
+                as mock_continue_on_update_failure:
+            with patch('azurelinuxagent.ga.exthandlers.HandlerManifest.get_enable_command', return_value="exit 1")\
+                    as patch_get_enable:
+
+                # These are just testing the mocks have been called and asserting the test conditions have been met
+                exthandlers_handler.run()
+                self.assertEqual(1, patch_get_disable_command.call_count)
+                self.assertEqual(2, mock_continue_on_update_failure.call_count)
+                self.assertEqual(1, patch_get_enable.call_count)
+
+        # Assert test scenario
+        self._assert_handler_status(protocol.report_vm_status, "NotReady", expected_ext_count=1, version="1.0.1")
+
+    @patch('azurelinuxagent.ga.exthandlers.HandlerManifest.is_continue_on_update_failure', return_value=True)
+    def test_uninstall_rc_env_var_should_report_not_run_for_non_update_calls_to_exthandler_run(
+            self, patch_continue_on_update, *args):
+        test_data, exthandlers_handler, protocol = self._set_up_update_test_and_update_gs(Mock(), *args)
+
+        with patch.object(CGroupConfigurator.get_instance(), "start_extension_command",
+                          side_effect=[ExtensionError("Disable Failed"), "ok", ExtensionError("uninstall failed"),
+                                       "ok", "ok", "New enable run ok"]) as patch_start_cmd:
+            exthandlers_handler.run()
+            _, update_kwargs = patch_start_cmd.call_args_list[1]
+            _, install_kwargs = patch_start_cmd.call_args_list[3]
+            _, enable_kwargs = patch_start_cmd.call_args_list[4]
+
+            # Ensure that the env variables were present in the first run when failures were thrown for update
+            self.assertEqual(2, patch_continue_on_update.call_count)
+            self.assertTrue(
+                '-update' in update_kwargs['command'] and ExtCommandEnvVariable.DisableReturnCode in update_kwargs['env'],
+                "The update command call should have Disable Failed in env variable")
+            self.assertTrue(
+                '-install' in install_kwargs['command'] and ExtCommandEnvVariable.DisableReturnCode not in install_kwargs[
+                    'env'],
+                "The Disable Failed env variable should be removed from install command")
+            self.assertTrue(
+                '-install' in install_kwargs['command'] and ExtCommandEnvVariable.UninstallReturnCode in install_kwargs[
+                    'env'],
+                "The install command call should have Uninstall Failed in env variable")
+            self.assertTrue(
+                '-enable' in enable_kwargs['command'] and ExtCommandEnvVariable.UninstallReturnCode in enable_kwargs['env'],
+                "The enable command call should have Uninstall Failed in env variable")
+
+            # Initiating another run which shouldn't have any failed env variables in it if no failures
+            # Updating Incarnation
+            test_data.goal_state = test_data.goal_state.replace("<Incarnation>2<", "<Incarnation>3<")
+            exthandlers_handler.run()
+            _, new_enable_kwargs = patch_start_cmd.call_args
+
+            # Ensure the new run didn't have Disable Return Code env variable
+            self.assertNotIn(ExtCommandEnvVariable.DisableReturnCode, new_enable_kwargs['env'])
+
+            # Ensure the new run had Uninstall Return Code env variable == NOT_RUN
+            self.assertIn(ExtCommandEnvVariable.UninstallReturnCode, new_enable_kwargs['env'])
+            self.assertTrue(
+                new_enable_kwargs['env'][ExtCommandEnvVariable.UninstallReturnCode] == NOT_RUN)
+
+        # Ensure the handler status and ext_status is successful
+        self._assert_handler_status(protocol.report_vm_status, "Ready", expected_ext_count=1, version="1.0.1")
+        self._assert_ext_status(protocol.report_ext_status, "success", 0)
+
+    def test_ext_path_and_version_env_variables_set_for_ever_operation(self, *args):
+        test_data = WireProtocolData(DATA_FILE_EXT_SINGLE)
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+
+        with patch.object(CGroupConfigurator.get_instance(), "start_extension_command") as patch_start_cmd:
+            exthandlers_handler.run()
+
+            # Extension Path and Version should be set for all launch_command calls
+            for args, kwargs in patch_start_cmd.call_args_list:
+                self.assertIn(ExtCommandEnvVariable.ExtensionPath, kwargs['env'])
+                self.assertIn('OSTCExtensions.ExampleHandlerLinux-1.0.0',
+                              kwargs['env'][ExtCommandEnvVariable.ExtensionPath])
+                self.assertIn(ExtCommandEnvVariable.ExtensionVersion, kwargs['env'])
+                self.assertEqual("1.0.0", kwargs['env'][ExtCommandEnvVariable.ExtensionVersion])
+
+        self._assert_handler_status(protocol.report_vm_status, "Ready", expected_ext_count=1, version="1.0.0")
+
+    @patch("azurelinuxagent.common.cgroupconfigurator.handle_process_completion", side_effect="Process Successful")
+    def test_ext_sequence_no_should_be_set_for_every_command_call(self, _, *args):
+        test_data = WireProtocolData(DATA_FILE_MULTIPLE_EXT)
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+
+        with patch("subprocess.Popen") as patch_popen:
+            exthandlers_handler.run()
+
+            for _, kwargs in patch_popen.call_args_list:
+                self.assertIn(ExtCommandEnvVariable.ExtensionSeqNumber, kwargs['env'])
+                self.assertEqual(kwargs['env'][ExtCommandEnvVariable.ExtensionSeqNumber], "0")
+
+        self._assert_handler_status(protocol.report_vm_status, "Ready", expected_ext_count=1, version="1.0.0")
+
+        # Next incarnation and seq for extensions, update version
+        test_data.goal_state = test_data.goal_state.replace("<Incarnation>1<", "<Incarnation>2<")
+        test_data.ext_conf = test_data.ext_conf.replace('version="1.0.0"', 'version="1.0.1"')
+        test_data.ext_conf = test_data.ext_conf.replace('seqNo="0"', 'seqNo="1"')
+        test_data.manifest = test_data.manifest.replace('1.0.0', '1.0.1')
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+
+        with patch("subprocess.Popen") as patch_popen:
+            exthandlers_handler.run()
+
+            for _, kwargs in patch_popen.call_args_list:
+                self.assertIn(ExtCommandEnvVariable.ExtensionSeqNumber, kwargs['env'])
+                self.assertEqual(kwargs['env'][ExtCommandEnvVariable.ExtensionSeqNumber], "1")
+
+        self._assert_handler_status(protocol.report_vm_status, "Ready", expected_ext_count=1, version="1.0.1")
+
+    def test_ext_sequence_no_should_be_set_from_within_extension(self, *args):
+
+        test_file_name = "testfile.sh"
+        handler_json = {
+            "installCommand": test_file_name,
+            "uninstallCommand": test_file_name,
+            "updateCommand": test_file_name,
+            "enableCommand": test_file_name,
+            "disableCommand": test_file_name,
+            "rebootAfterInstall": False,
+            "reportHeartbeat": False,
+            "continueOnUpdateFailure": False
+        }
+        manifest = HandlerManifest({'handlerManifest': handler_json})
+
+        # Script prints env variables passed to this process and prints all starting with ConfigSequenceNumber
+        test_file = """
+                printenv | grep ConfigSequenceNumber
+                """
+
+        base_dir = os.path.join(conf.get_lib_dir(), 'OSTCExtensions.ExampleHandlerLinux-1.0.0', test_file_name)
+        self.create_script(test_file_name, test_file, base_dir)
+
+        test_data = WireProtocolData(DATA_FILE_EXT_SINGLE)
+        exthandlers_handler, protocol = self._create_mock(test_data, *args)
+        expected_seq_no = 0
+
+        with patch.object(ExtHandlerInstance, "load_manifest", return_value=manifest):
+            with patch.object(ExtHandlerInstance, 'report_event') as mock_report_event:
+                exthandlers_handler.run()
+
+                for _, kwargs in mock_report_event.call_args_list:
+                    # The output is of the format - 'testfile.sh\n[stdout]ConfigSequenceNumber=N\n[stderr]'
+                    if test_file_name not in kwargs['message']:
+                        continue
+                    self.assertIn("{0}={1}".format(ExtCommandEnvVariable.ExtensionSeqNumber, expected_seq_no),
+                                  kwargs['message'])
+
+            # Update goal state, extension version and seq no
+            test_data.goal_state = test_data.goal_state.replace("<Incarnation>1<", "<Incarnation>2<")
+            test_data.ext_conf = test_data.ext_conf.replace('version="1.0.0"', 'version="1.0.1"')
+            test_data.ext_conf = test_data.ext_conf.replace('seqNo="0"', 'seqNo="1"')
+            test_data.manifest = test_data.manifest.replace('1.0.0', '1.0.1')
+            expected_seq_no = 1
+            base_dir = os.path.join(conf.get_lib_dir(), 'OSTCExtensions.ExampleHandlerLinux-1.0.1', test_file_name)
+            self.create_script(test_file_name, test_file, base_dir)
+
+            with patch.object(ExtHandlerInstance, 'report_event') as mock_report_event:
+                exthandlers_handler.run()
+
+                for _, kwargs in mock_report_event.call_args_list:
+                    # The output is of the format - 'testfile.sh\n[stdout]ConfigSequenceNumber=N\n[stderr]'
+                    if test_file_name not in kwargs['message']:
+                        continue
+                    self.assertIn("{0}={1}".format(ExtCommandEnvVariable.ExtensionSeqNumber, expected_seq_no),
+                                  kwargs['message'])
+
+    def test_correct_exit_code_should_be_set_on_uninstall_cmd_failure(self, *args):
+        test_file_name = "testfile.sh"
+        test_error_file_name = "error.sh"
+        handler_json = {
+            "installCommand": test_file_name + " -install",
+            "uninstallCommand": test_error_file_name,
+            "updateCommand": test_file_name + " -update",
+            "enableCommand": test_file_name + " -enable",
+            "disableCommand": test_error_file_name,
+            "rebootAfterInstall": False,
+            "reportHeartbeat": False,
+            "continueOnUpdateFailure": True
+        }
+        manifest = HandlerManifest({'handlerManifest': handler_json})
+
+        # Script prints env variables passed to this process and prints all starting with ConfigSequenceNumber
+        test_file = """
+            printenv | grep AZURE_
+        """
+
+        exit_code = 151
+        test_error_content = """
+            exit %s
+        """ % exit_code
+
+        error_dir = os.path.join(conf.get_lib_dir(), 'OSTCExtensions.ExampleHandlerLinux-1.0.0', test_error_file_name)
+        self.create_script(test_error_file_name, test_error_content, error_dir)
+
+        test_data, exthandlers_handler, protocol = self._set_up_update_test_and_update_gs(Mock(), *args)
+
+        base_dir = os.path.join(conf.get_lib_dir(), 'OSTCExtensions.ExampleHandlerLinux-1.0.1', test_file_name)
+        self.create_script(test_file_name, test_file, base_dir)
+
+        with patch("azurelinuxagent.ga.exthandlers.ExtHandlerInstance.load_manifest", return_value=manifest):
+            with patch.object(ExtHandlerInstance, 'report_event') as mock_report_event:
+                exthandlers_handler.run()
+
+                _, disable_kwargs = mock_report_event.call_args_list[1]
+                _, update_kwargs = mock_report_event.call_args_list[2]
+                _, uninstall_kwargs = mock_report_event.call_args_list[3]
+                _, install_kwargs = mock_report_event.call_args_list[4]
+                _, enable_kwargs = mock_report_event.call_args_list[5]
+
+                self.assertIn("%s=%s" % (ExtCommandEnvVariable.DisableReturnCode, exit_code), update_kwargs['message'])
+                self.assertIn("%s=%s" % (ExtCommandEnvVariable.UninstallReturnCode, exit_code), install_kwargs['message'])
+                self.assertIn("%s=%s" % (ExtCommandEnvVariable.UninstallReturnCode, exit_code), enable_kwargs['message'])
 
 
 @patch("azurelinuxagent.common.protocol.wire.CryptUtil")
@@ -1747,6 +2087,7 @@ class TestInVMArtifactsProfile(AgentTestCase):
 
 
 @skip_if_predicate_false(are_cgroups_enabled, "Does not run when Cgroups are not enabled")
+@patch('time.sleep', side_effect=lambda _: mock_sleep(0.001))
 @patch("azurelinuxagent.common.cgroupapi.CGroupsApi._is_systemd", return_value=True)
 @patch("azurelinuxagent.common.conf.get_cgroups_enforce_limits", return_value=False)
 @patch("azurelinuxagent.common.protocol.wire.CryptUtil")
@@ -1872,7 +2213,7 @@ class TestExtensionWithCGroupsEnabled(AgentTestCase):
         self.assertTrue(i_am_root(), "Test does not run when non-root")
 
         test_data = WireProtocolData(DATA_FILE)
-        exthandlers_handler, monitor_handler, protocol= self._create_mock(test_data, *args)
+        exthandlers_handler, monitor_handler, protocol = self._create_mock(test_data, *args)
 
         monitor_handler.last_cgroup_polling_telemetry = datetime.datetime.utcnow() - timedelta(hours=1)
         monitor_handler.last_cgroup_report_telemetry = datetime.datetime.utcnow() - timedelta(hours=1)
@@ -1967,6 +2308,307 @@ class TestExtensionWithCGroupsEnabled(AgentTestCase):
                                                             "<Incarnation>7<")
         exthandlers_handler.run()
         self._assert_no_handler_status(protocol.report_vm_status)
+
+
+class TestExtensionUpdateOnFailure(ExtensionTestCase):
+
+    @staticmethod
+    def _get_ext_handler_instance(name, version, handler=None, continue_on_update_failure=False):
+
+        handler_json = {
+            "installCommand": "sample.py -install",
+            "uninstallCommand": "sample.py -uninstall",
+            "updateCommand": "sample.py -update",
+            "enableCommand": "sample.py -enable",
+            "disableCommand": "sample.py -disable",
+            "rebootAfterInstall": False,
+            "reportHeartbeat": False,
+            "continueOnUpdateFailure": continue_on_update_failure
+        }
+
+        if handler:
+            handler_json.update(handler)
+
+        ext_handler_properties = ExtHandlerProperties()
+        ext_handler_properties.version = version
+        ext_handler = ExtHandler(name=name)
+        ext_handler.properties = ext_handler_properties
+        ext_handler_i = ExtHandlerInstance(ext_handler=ext_handler, protocol=None)
+        ext_handler_i.load_manifest = MagicMock(return_value=HandlerManifest({'handlerManifest': handler_json}))
+        fileutil.mkdir(ext_handler_i.get_base_dir())
+        return ext_handler_i
+
+    def test_disable_failed_env_variable_should_be_set_for_update_cmd_when_continue_on_update_failure_is_true(
+            self, *args):
+        old_handler_i = self._get_ext_handler_instance('foo', '1.0.0')
+        new_handler_i = self._get_ext_handler_instance('foo', '1.0.1', continue_on_update_failure=True)
+
+        with patch.object(CGroupConfigurator.get_instance(), "start_extension_command",
+                          side_effect=ExtensionError('disable Failed')) as patch_start_cmd:
+            with self.assertRaises(ExtensionError):
+                ExtHandlersHandler._update_extension_handler_and_return_if_failed(old_handler_i, new_handler_i)
+
+            args, kwargs = patch_start_cmd.call_args
+
+            self.assertTrue('-update' in kwargs['command'] and ExtCommandEnvVariable.DisableReturnCode in kwargs['env'],
+                            "The update command should have Disable Failed in env variable")
+
+    def test_uninstall_failed_env_variable_should_set_for_install_when_continue_on_update_failure_is_true(
+            self, *args):
+        old_handler_i = self._get_ext_handler_instance('foo', '1.0.0')
+        new_handler_i = self._get_ext_handler_instance('foo', '1.0.1', continue_on_update_failure=True)
+
+        with patch.object(CGroupConfigurator.get_instance(), "start_extension_command",
+                          side_effect=['ok', 'ok', ExtensionError('uninstall Failed'), 'ok']) as patch_start_cmd:
+
+            ExtHandlersHandler._update_extension_handler_and_return_if_failed(old_handler_i, new_handler_i)
+
+            args, kwargs = patch_start_cmd.call_args
+
+            self.assertTrue('-install' in kwargs['command'] and ExtCommandEnvVariable.UninstallReturnCode in kwargs['env'],
+                            "The install command should have Uninstall Failed in env variable")
+
+    def test_extension_error_should_be_raised_when_continue_on_update_failure_is_false_on_disable_failure(self, *args):
+        old_handler_i = self._get_ext_handler_instance('foo', '1.0.0')
+        new_handler_i = self._get_ext_handler_instance('foo', '1.0.1', continue_on_update_failure=False)
+
+        with patch.object(ExtHandlerInstance, "disable", side_effect=ExtensionError("Disable Failed")):
+            with self.assertRaises(ExtensionUpdateError) as error:
+                # Ensure the error is of type ExtensionUpdateError
+                ExtHandlersHandler._update_extension_handler_and_return_if_failed(old_handler_i, new_handler_i)
+
+            msg = str(error.exception)
+            self.assertIn("Disable Failed", msg, "Update should fail with Disable Failed error")
+            self.assertIn("ExtensionError", msg, "The Exception should initially be propagated as ExtensionError")
+
+    @patch("azurelinuxagent.common.cgroupconfigurator.handle_process_completion", side_effect="Process Successful")
+    def test_extension_error_should_be_raised_when_continue_on_update_failure_is_false_on_uninstall_failure(self, *args):
+        old_handler_i = self._get_ext_handler_instance('foo', '1.0.0')
+        new_handler_i = self._get_ext_handler_instance('foo', '1.0.1', continue_on_update_failure=False)
+
+        with patch.object(ExtHandlerInstance, "uninstall", side_effect=ExtensionError("Uninstall Failed")):
+            with self.assertRaises(ExtensionUpdateError) as error:
+                # Ensure the error is of type ExtensionUpdateError
+                ExtHandlersHandler._update_extension_handler_and_return_if_failed(old_handler_i, new_handler_i)
+
+            msg = str(error.exception)
+            self.assertIn("Uninstall Failed", msg, "Update should fail with Uninstall Failed error")
+            self.assertIn("ExtensionError", msg, "The Exception should initially be propagated as ExtensionError")
+
+    @patch("azurelinuxagent.common.cgroupconfigurator.handle_process_completion", side_effect="Process Successful")
+    def test_extension_error_should_be_raised_when_continue_on_update_failure_is_true_on_command_failure(self, *args):
+        old_handler_i = self._get_ext_handler_instance('foo', '1.0.0')
+        new_handler_i = self._get_ext_handler_instance('foo', '1.0.1', continue_on_update_failure=True)
+
+        # Disable Failed and update failed
+        with patch.object(ExtHandlerInstance, "disable", side_effect=ExtensionError("Disable Failed")):
+            with patch.object(ExtHandlerInstance, "update", side_effect=ExtensionError("Update Failed")):
+                with self.assertRaises(ExtensionError) as error:
+                    ExtHandlersHandler._update_extension_handler_and_return_if_failed(old_handler_i, new_handler_i)
+                msg = str(error.exception)
+                self.assertIn("Update Failed", msg, "Update should fail with Update Failed error")
+                self.assertNotIn("ExtensionUpdateError", msg, "The exception should not be ExtensionUpdateError")
+
+        # Uninstall Failed and install failed
+        with patch.object(ExtHandlerInstance, "uninstall", side_effect=ExtensionError("Uninstall Failed")):
+            with patch.object(ExtHandlerInstance, "install", side_effect=ExtensionError("Install Failed")):
+                with self.assertRaises(ExtensionError) as error:
+                    ExtHandlersHandler._update_extension_handler_and_return_if_failed(old_handler_i, new_handler_i)
+                msg = str(error.exception)
+                self.assertIn("Install Failed", msg, "Update should fail with Install Failed error")
+                self.assertNotIn("ExtensionUpdateError", msg, "The exception should not be ExtensionUpdateError")
+
+    @patch("azurelinuxagent.common.cgroupconfigurator.handle_process_completion", side_effect="Process Successful")
+    def test_env_variable_should_not_set_when_continue_on_update_failure_is_false(self, *args):
+        old_handler_i = self._get_ext_handler_instance('foo', '1.0.0')
+        new_handler_i = self._get_ext_handler_instance('foo', '1.0.1', continue_on_update_failure=False)
+
+        # When Disable Fails
+        with patch.object(ExtHandlerInstance, "launch_command") as patch_launch_command:
+            with patch.object(ExtHandlerInstance, "disable", side_effect=ExtensionError("Disable Failed")):
+                with self.assertRaises(ExtensionUpdateError):
+                    ExtHandlersHandler._update_extension_handler_and_return_if_failed(old_handler_i, new_handler_i)
+
+                self.assertEqual(0, patch_launch_command.call_count, "Launch command shouldn't be called even once for"
+                                                                     " disable failures")
+
+        # When Uninstall Fails
+        with patch.object(ExtHandlerInstance, "launch_command") as patch_launch_command:
+            with patch.object(ExtHandlerInstance, "uninstall", side_effect=ExtensionError("Uninstall Failed")):
+                with self.assertRaises(ExtensionUpdateError):
+                    ExtHandlersHandler._update_extension_handler_and_return_if_failed(old_handler_i, new_handler_i)
+
+                self.assertEqual(2, patch_launch_command.call_count, "Launch command should be called 2 times for "
+                                                                     "Disable->Update")
+
+    @patch('time.sleep', side_effect=lambda _: mock_sleep(0.001))
+    def test_failed_env_variables_should_be_set_from_within_extension_commands(self, *args):
+        """
+        This test will test from the perspective of the extensions command weather the env variables are
+        being set for those processes
+        """
+
+        test_file_name = "testfile.sh"
+        update_file_name = test_file_name + " -update"
+        install_file_name = test_file_name + " -install"
+        old_handler_i = TestExtensionUpdateOnFailure._get_ext_handler_instance('foo', '1.0.0')
+        new_handler_i = TestExtensionUpdateOnFailure._get_ext_handler_instance(
+            'foo', '1.0.1',
+            handler={"updateCommand": update_file_name, "installCommand": install_file_name},
+            continue_on_update_failure=True
+        )
+
+        # Script prints env variables passed to this process and prints all starting with AZURE_
+        test_file = """
+            printenv | grep AZURE_
+            """
+
+        self.create_script(file_name=test_file_name, contents=test_file,
+                           file_path=os.path.join(new_handler_i.get_base_dir(), test_file_name))
+
+        with patch.object(new_handler_i, 'report_event', autospec=True) as mock_report:
+            # Since we're not mocking the azurelinuxagent.common.cgroupconfigurator..handle_process_completion,
+            # both disable.cmd and uninstall.cmd would raise ExtensionError exceptions and set the
+            # ExtCommandEnvVariable.DisableReturnCode and ExtCommandEnvVariable.UninstallReturnCode env variables.
+            # For update and install we're running the script above to print all the env variables starting with AZURE_
+            # and verify accordingly if the corresponding env variables are set properly or not
+            ExtHandlersHandler._update_extension_handler_and_return_if_failed(old_handler_i, new_handler_i)
+
+            _, update_kwargs = mock_report.call_args_list[0]
+            _, install_kwargs = mock_report.call_args_list[1]
+
+            # Ensure we're checking variables for update scenario
+            self.assertIn(update_file_name, update_kwargs['message'])
+            self.assertIn(ExtCommandEnvVariable.DisableReturnCode, update_kwargs['message'])
+            self.assertTrue(ExtCommandEnvVariable.ExtensionPath in update_kwargs['message'] and
+                            ExtCommandEnvVariable.ExtensionVersion in update_kwargs['message'])
+            self.assertNotIn(ExtCommandEnvVariable.UninstallReturnCode, update_kwargs['message'])
+
+            # Ensure we're checking variables for install scenario
+            self.assertIn(install_file_name, install_kwargs['message'])
+            self.assertIn(ExtCommandEnvVariable.UninstallReturnCode, install_kwargs['message'])
+            self.assertTrue(ExtCommandEnvVariable.ExtensionPath in install_kwargs['message'] and
+                            ExtCommandEnvVariable.ExtensionVersion in install_kwargs['message'])
+            self.assertNotIn(ExtCommandEnvVariable.DisableReturnCode, install_kwargs['message'])
+
+    @patch('time.sleep', side_effect=lambda _: mock_sleep(0.001))
+    def test_correct_exit_code_should_set_on_disable_cmd_failure(self, _):
+        test_env_file_name = "test_env.sh"
+        test_failure_file_name = "test_fail.sh"
+        # update_file_name = test_env_file_name + " -update"
+        old_handler_i = TestExtensionUpdateOnFailure._get_ext_handler_instance('foo', '1.0.0', handler={
+            "disableCommand": test_failure_file_name,
+            "uninstallCommand": test_failure_file_name})
+        new_handler_i = TestExtensionUpdateOnFailure._get_ext_handler_instance(
+            'foo', '1.0.1',
+            handler={"updateCommand": test_env_file_name,
+                     "updateMode": "UpdateWithoutInstall"},
+            continue_on_update_failure=True
+        )
+
+        exit_code = 150
+        error_test_file = """
+                    exit %s
+                    """ % exit_code
+
+        test_env_file = """
+            printenv | grep AZURE_
+            """
+
+        self.create_script(file_name=test_env_file_name, contents=test_env_file,
+                           file_path=os.path.join(new_handler_i.get_base_dir(), test_env_file_name))
+        self.create_script(file_name=test_failure_file_name, contents=error_test_file,
+                           file_path=os.path.join(old_handler_i.get_base_dir(), test_failure_file_name))
+
+        with patch.object(new_handler_i, 'report_event', autospec=True) as mock_report:
+
+            uninstall_rc = ExtHandlersHandler._update_extension_handler_and_return_if_failed(old_handler_i, new_handler_i)
+            _, kwargs = mock_report.call_args
+
+            self.assertEqual(exit_code, uninstall_rc)
+            self.assertIn("%s=%s" % (ExtCommandEnvVariable.DisableReturnCode, exit_code), kwargs['message'])
+
+    @patch('time.sleep', side_effect=lambda _: mock_sleep(0.0001))
+    def test_timeout_code_should_set_on_cmd_timeout(self, _):
+        test_env_file_name = "test_env.sh"
+        test_failure_file_name = "test_fail.sh"
+        old_handler_i = TestExtensionUpdateOnFailure._get_ext_handler_instance('foo', '1.0.0', handler={
+            "disableCommand": test_failure_file_name,
+            "uninstallCommand": test_failure_file_name})
+        new_handler_i = TestExtensionUpdateOnFailure._get_ext_handler_instance(
+            'foo', '1.0.1',
+            handler={"updateCommand": test_env_file_name + " -u", "installCommand": test_env_file_name + " -i"},
+            continue_on_update_failure=True
+        )
+
+        exit_code = 156
+        error_test_file = """
+            sleep 1m
+            exit %s
+        """ % exit_code
+
+        test_env_file = """
+            printenv | grep AZURE_
+        """
+
+        self.create_script(file_name=test_env_file_name, contents=test_env_file,
+                           file_path=os.path.join(new_handler_i.get_base_dir(), test_env_file_name))
+        self.create_script(file_name=test_failure_file_name, contents=error_test_file,
+                           file_path=os.path.join(old_handler_i.get_base_dir(), test_failure_file_name))
+
+        with patch.object(new_handler_i, 'report_event', autospec=True) as mock_report:
+            uninstall_rc = ExtHandlersHandler._update_extension_handler_and_return_if_failed(old_handler_i,
+                                                                                             new_handler_i)
+            _, update_kwargs = mock_report.call_args_list[0]
+            _, install_kwargs = mock_report.call_args_list[1]
+
+            self.assertNotEqual(exit_code, uninstall_rc)
+            self.assertEqual(ExtensionErrorCodes.PluginHandlerScriptTimedout, uninstall_rc)
+            self.assertTrue(test_env_file_name + " -i" in install_kwargs['message'] and "%s=%s" % (
+                ExtCommandEnvVariable.UninstallReturnCode, ExtensionErrorCodes.PluginHandlerScriptTimedout) in
+                            install_kwargs['message'])
+            self.assertTrue(test_env_file_name + " -u" in update_kwargs['message'] and "%s=%s" % (
+                ExtCommandEnvVariable.DisableReturnCode, ExtensionErrorCodes.PluginHandlerScriptTimedout) in
+                            update_kwargs['message'])
+
+    @patch('time.sleep', side_effect=lambda _: mock_sleep(0.0001))
+    def test_success_code_should_set_in_env_variables_on_cmd_success(self, _):
+        test_env_file_name = "test_env.sh"
+        test_success_file_name = "test_success.sh"
+        old_handler_i = TestExtensionUpdateOnFailure._get_ext_handler_instance('foo', '1.0.0', handler={
+            "disableCommand": test_success_file_name,
+            "uninstallCommand": test_success_file_name})
+        new_handler_i = TestExtensionUpdateOnFailure._get_ext_handler_instance(
+            'foo', '1.0.1',
+            handler={"updateCommand": test_env_file_name + " -u", "installCommand": test_env_file_name + " -i"},
+            continue_on_update_failure=False
+        )
+
+        exit_code = 0
+        success_test_file = """
+                exit %s
+            """ % exit_code
+
+        test_env_file = """
+                printenv | grep AZURE_
+            """
+
+        self.create_script(file_name=test_env_file_name, contents=test_env_file,
+                           file_path=os.path.join(new_handler_i.get_base_dir(), test_env_file_name))
+        self.create_script(file_name=test_success_file_name, contents=success_test_file,
+                           file_path=os.path.join(old_handler_i.get_base_dir(), test_success_file_name))
+
+        with patch.object(new_handler_i, 'report_event', autospec=True) as mock_report:
+            uninstall_rc = ExtHandlersHandler._update_extension_handler_and_return_if_failed(old_handler_i,
+                                                                                             new_handler_i)
+            _, update_kwargs = mock_report.call_args_list[0]
+            _, install_kwargs = mock_report.call_args_list[1]
+
+            self.assertEqual(exit_code, uninstall_rc)
+            self.assertTrue(test_env_file_name + " -i" in install_kwargs['message'] and "%s=%s" % (
+                ExtCommandEnvVariable.UninstallReturnCode, exit_code) in install_kwargs['message'])
+            self.assertTrue(test_env_file_name + " -u" in update_kwargs['message'] and "%s=%s" % (
+                ExtCommandEnvVariable.DisableReturnCode, exit_code) in update_kwargs['message'])
 
 
 if __name__ == '__main__':

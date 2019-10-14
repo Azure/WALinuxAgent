@@ -20,9 +20,10 @@ import subprocess
 from azurelinuxagent.common import logger
 from azurelinuxagent.common.cgroupapi import CGroupsApi
 from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
-from azurelinuxagent.common.exception import CGroupsException
+from azurelinuxagent.common.exception import CGroupsException, ExtensionErrorCodes
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.osutil import get_osutil
+from azurelinuxagent.common.utils.extensionprocessutil import handle_process_completion
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 from azurelinuxagent.common.event import add_event, WALAEventOperation
 
@@ -140,42 +141,47 @@ class CGroupConfigurator(object):
 
             self._invoke_cgroup_operation(__impl, "Failed to delete cgroups for extension '{0}'.".format(name))
 
-        def start_extension_command(self, extension_name, command, shell, cwd, env, stdout, stderr):
+        def start_extension_command(self, extension_name, command, timeout, shell, cwd, env, stdout, stderr,
+                                    error_code=ExtensionErrorCodes.PluginUnknownFailure):
             """
             Starts a command (install/enable/etc) for an extension and adds the command's PID to the extension's cgroup
             :param extension_name: The extension executing the command
             :param command: The command to invoke
+            :param timeout: Number of seconds to wait for command completion
             :param cwd: The working directory for the command
             :param env:  The environment to pass to the command's process
             :param stdout: File object to redirect stdout to
             :param stderr: File object to redirect stderr to
+            :param stderr: File object to redirect stderr to
+            :param error_code: Extension error code to raise in case of error
             """
             if not self.enabled():
-                process = subprocess.Popen(
-                    command,
-                    shell=shell,
-                    cwd=cwd,
-                    env=env,
-                    stdout=stdout,
-                    stderr=stderr,
-                    preexec_fn=os.setsid)
+                process = subprocess.Popen(command,
+                                           shell=shell,
+                                           cwd=cwd,
+                                           env=env,
+                                           stdout=stdout,
+                                           stderr=stderr,
+                                           preexec_fn=os.setsid)
+
+                process_output = handle_process_completion(process=process,
+                                                           command=command,
+                                                           timeout=timeout,
+                                                           stdout=stdout,
+                                                           stderr=stderr,
+                                                           error_code=error_code)
             else:
-                process, extension_cgroups = self._cgroups_api.start_extension_command(
-                    extension_name,
-                    command,
-                    shell=shell,
-                    cwd=cwd,
-                    env=env,
-                    stdout=stdout,
-                    stderr=stderr)
+                extension_cgroups, process_output = self._cgroups_api.start_extension_command(extension_name,
+                                                                                              command,
+                                                                                              timeout,
+                                                                                              shell=shell,
+                                                                                              cwd=cwd,
+                                                                                              env=env,
+                                                                                              stdout=stdout,
+                                                                                              stderr=stderr,
+                                                                                              error_code=error_code)
 
-                try:
-                    for cgroup in extension_cgroups:
-                        CGroupsTelemetry.track_cgroup(cgroup)
-                except Exception as e:
-                    logger.warn("Cannot add cgroup '{0}' to tracking list; resource usage will not be tracked. Error: {1}".format(cgroup.path, ustr(e)))
-
-            return process
+            return process_output
 
     # unique instance for the singleton (TODO: find a better pattern for a singleton)
     _instance = None
