@@ -142,9 +142,7 @@ class FreeBSDOSUtil(DefaultOSUtil):
             :rtype: list(dict)
             """
             cmd = "netstat -rn -f inet"
-            ret, output = shellutil.run_get_output(cmd)
-            if ret:
-                raise OSUtilError("Failed to run netstat")
+            output = shellutil.run_command(cmd, log_error=True)
             output_lines = output.split("\n")
             if len(output_lines) < 3:
                 raise OSUtilError("`netstat -rn -f inet` output seems to be empty")
