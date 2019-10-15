@@ -402,7 +402,7 @@ _Type: Boolean_
 _Default: n_
 
 If set to `y` and SSL support is not compiled into Python, the agent will fall-back to
-use HTTP. Otherwise, if SSL support is not compiled into Python, the agent will fail
+use HTTP. Otherwise, if SSL support is compiled into Python, the agent will fail
 all HTTPS requests.
 
 Note: Allowing HTTP may unintentionally expose secure data.
