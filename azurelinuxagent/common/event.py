@@ -28,16 +28,16 @@ import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
 from azurelinuxagent.common.exception import EventError
 from azurelinuxagent.common.future import ustr
-from azurelinuxagent.common.protocol.wire import CONTAINER_ID_ENV_VARIABLE
-from azurelinuxagent.common.protocol.restapi import TelemetryEventParam, \
-    TelemetryEvent, \
-    get_properties
+from azurelinuxagent.common.datacontract import get_properties
+from azurelinuxagent.common.telemetryevent import TelemetryEventParam, TelemetryEvent
 from azurelinuxagent.common.utils import fileutil, textutil
 from azurelinuxagent.common.version import CURRENT_VERSION
 
 _EVENT_MSG = "Event: name={0}, op={1}, message={2}, duration={3}"
 TELEMETRY_EVENT_PROVIDER_ID = "69B669B9-4AF8-4C50-BDC4-6006FA76E975"
 
+# Store the last retrieved container id as an environment variable to be shared between threads for telemetry purposes
+CONTAINER_ID_ENV_VARIABLE = "AZURE_GUEST_AGENT_CONTAINER_ID"
 
 class WALAEventOperation:
     ActivateResourceDisk = "ActivateResourceDisk"
@@ -46,6 +46,7 @@ class WALAEventOperation:
     ArtifactsProfileBlob = "ArtifactsProfileBlob"
     AutoUpdate = "AutoUpdate"
     CustomData = "CustomData"
+    CGroupsCleanUp = "CGroupsCleanUp"
     CGroupsLimitsCrossed = "CGroupsLimitsCrossed"
     ExtensionMetricsData = "ExtensionMetricsData"
     Deploy = "Deploy"
@@ -73,6 +74,7 @@ class WALAEventOperation:
     ProcessGoalState = "ProcessGoalState"
     Provision = "Provision"
     ProvisionGuestAgent = "ProvisionGuestAgent"
+    Release43PR1580 = "Release43PR1580"
     RemoteAccessHandling = "RemoteAccessHandling"
     ReportStatus = "ReportStatus"
     ReportStatusExtended = "ReportStatusExtended"

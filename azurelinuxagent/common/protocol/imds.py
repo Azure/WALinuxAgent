@@ -7,7 +7,7 @@ import azurelinuxagent.common.utils.restutil as restutil
 from azurelinuxagent.common.exception import HttpError
 from azurelinuxagent.common.future import ustr
 import azurelinuxagent.common.logger as logger
-from azurelinuxagent.common.protocol.restapi import DataContract, set_properties
+from azurelinuxagent.common.datacontract import DataContract, set_properties
 from azurelinuxagent.common.protocol.util import get_protocol_util
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 
