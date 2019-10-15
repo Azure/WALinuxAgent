@@ -34,7 +34,7 @@ class TestFreeBSDOSUtil(AgentTestCase):
     def test_empty_proc_net_route(self):
         route_table = ""
 
-        with patch.object(shellutil, 'run_get_output', return_value=[0, route_table]):
+        with patch.object(shellutil, 'run_command', return_value=route_table):
             # Header line only
             self.assertEqual(len(FreeBSDOSUtil().read_route_table()), 1)
 
@@ -45,7 +45,7 @@ Internet:
 Destination        Gateway            Flags     Netif Expire
 """
 
-        with patch.object(shellutil, 'run_get_output', return_value=[0, route_table]):
+        with patch.object(shellutil, 'run_command', return_value=route_table):
             raw_route_list = FreeBSDOSUtil().read_route_table()
 
         self.assertEqual(len(FreeBSDOSUtil().get_list_of_routes(raw_route_list)), 0)
@@ -58,7 +58,7 @@ Destination        Gateway            Flags     Netif Expire
 1.1.1              0.0.0
 """
 
-        with patch.object(shellutil, 'run_get_output', return_value=[0, route_table]):
+        with patch.object(shellutil, 'run_command', return_value=route_table):
             raw_route_list = FreeBSDOSUtil().read_route_table()
     
         self.assertEqual(len(FreeBSDOSUtil().get_list_of_routes(raw_route_list)), 0)
@@ -75,7 +75,7 @@ Destination        Gateway            Flags     Netif Expire
 192.168.43.0       0.0.0.0            US        vtbd0     
 """
 
-        with patch.object(shellutil, 'run_get_output', return_value=[0, route_table]):
+        with patch.object(shellutil, 'run_command', return_value=route_table):
             raw_route_list = FreeBSDOSUtil().read_route_table()
 
         self.assertEqual(len(raw_route_list), 6)
