@@ -52,6 +52,7 @@ REMOTE_ACCESS_FILE_NAME = "RemoteAccess.{0}.xml"
 P7M_FILE_NAME = "Certificates.p7m"
 PEM_FILE_NAME = "Certificates.pem"
 EXT_CONF_FILE_NAME = "ExtensionsConfig.{0}.xml"
+EXT_CONFIG_FAST_TRACK_FILE_NAME = "FastTrackExtensionsConfig.{0}.xml"
 MANIFEST_FILE_NAME = "{0}.{1}.manifest.xml"
 AGENTS_MANIFEST_FILE_NAME = "{0}.{1}.agentsManifest"
 TRANSPORT_CERT_FILE_NAME = "TransportCert.pem"
@@ -371,7 +372,7 @@ def vm_status_to_v1(vm_status, ext_statuses, extensions_fast_track_enabled):
     # Inform CRP that we support FastTrack, which allows us to retrieve goal state
     # from the VMArtifactsProfile blob instead of from wire server
     if extensions_fast_track_enabled:
-        v1_supported_features = {'FastTrack': '1.0'}
+        v1_supported_features = {'Key': 'FastTrack', 'Value': '1.0'}
     
     v1_agg_status = {
         'guestAgentStatus': v1_ga_status,
@@ -382,7 +383,7 @@ def vm_status_to_v1(vm_status, ext_statuses, extensions_fast_track_enabled):
         'timestampUTC': timestamp,
         'aggregateStatus': v1_agg_status,
         'guestOSInfo': v1_ga_guest_info,
-        'supportedFeatures': v1_supported_features
+        'supportedFeatures': [v1_supported_features]
     }
     return v1_vm_status
 
@@ -1915,7 +1916,17 @@ class InVMArtifactsProfile(object):
                 runtime_settings.text = json_settings
 
             config_xml = xml.tostring(root, encoding='unicode', method='xml')
+            self.save_config(config_xml)
             extensions_config = ExtensionsConfig(config_xml)
 
             return extensions_config
         return None
+
+    def save_config(self, config_xml):
+        local_file = os.path.join(conf.get_lib_dir(),
+                                  EXT_CONF_FILE_NAME.format(self.inVMArtifactsProfileBlobSeqNo))
+        try:
+            fileutil.write_file(local_file, config_xml)
+        except IOError as e:
+            fileutil.clean_ioerror(e, paths=[local_file])
+            raise ProtocolError("Failed to write FastTrack extensions config: {0}".format(e))
