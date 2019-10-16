@@ -25,9 +25,14 @@ import sys
 import traceback
 
 import azurelinuxagent.common.conf as conf
+from azurelinuxagent.common.datacontract import get_properties, set_properties, validate_param
+from azurelinuxagent.common.exception import HttpError, ProtocolError
+import azurelinuxagent.common.logger as logger
+from azurelinuxagent.common.utils import restutil
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.utils.shellutil as shellutil
 import azurelinuxagent.common.utils.textutil as textutil
+from azurelinuxagent.common.telemetryevent import TelemetryEventList
 
 from azurelinuxagent.common.future import httpclient
 from azurelinuxagent.common.protocol.restapi import *

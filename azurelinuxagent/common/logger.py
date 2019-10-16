@@ -24,6 +24,7 @@ from datetime import datetime, timedelta
 
 EVERY_DAY = timedelta(days=1)
 EVERY_HALF_DAY = timedelta(hours=12)
+EVERY_SIX_HOURS = timedelta(hours=6)
 EVERY_HOUR = timedelta(hours=1)
 EVERY_HALF_HOUR = timedelta(minutes=30)
 EVERY_FIFTEEN_MINUTES = timedelta(minutes=15)
@@ -199,18 +200,34 @@ def set_prefix(prefix):
 
 
 def periodic_info(delta, msg_format, *args):
+    """
+    The hash-map maintaining the state of the logs gets reset here -
+    azurelinuxagent.ga.monitor.MonitorHandler.reset_loggers. The current time period is defined by RESET_LOGGERS_PERIOD.
+    """
     DEFAULT_LOGGER.periodic_info(delta, msg_format, *args)
 
 
 def periodic_verbose(delta, msg_format, *args):
+    """
+    The hash-map maintaining the state of the logs gets reset here -
+    azurelinuxagent.ga.monitor.MonitorHandler.reset_loggers. The current time period is defined by RESET_LOGGERS_PERIOD.
+    """
     DEFAULT_LOGGER.periodic_verbose(delta, msg_format, *args)
 
 
 def periodic_error(delta, msg_format, *args):
+    """
+    The hash-map maintaining the state of the logs gets reset here -
+    azurelinuxagent.ga.monitor.MonitorHandler.reset_loggers. The current time period is defined by RESET_LOGGERS_PERIOD.
+    """
     DEFAULT_LOGGER.periodic_error(delta, msg_format, *args)
 
 
 def periodic_warn(delta, msg_format, *args):
+    """
+    The hash-map maintaining the state of the logs gets reset here -
+    azurelinuxagent.ga.monitor.MonitorHandler.reset_loggers. The current time period is defined by RESET_LOGGERS_PERIOD.
+    """
     DEFAULT_LOGGER.periodic_warn(delta, msg_format, *args)
 
 

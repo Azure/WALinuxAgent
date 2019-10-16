@@ -64,24 +64,38 @@ class TestLogger(AgentTestCase):
     def test_periodic_does_not_emit_if_previously_sent(self, mock_info, mock_error, mock_warn, mock_verbose):
         # The count does not increase from 1 - the first time it sends the data.
         logger.periodic_info(logger.EVERY_DAY, _MSG_INFO, *_DATA)
+        self.assertIn(hash(_MSG_INFO), logger.DEFAULT_LOGGER.periodic_messages)
         self.assertEqual(1, mock_info.call_count)
+
         logger.periodic_info(logger.EVERY_DAY, _MSG_INFO, *_DATA)
+        self.assertIn(hash(_MSG_INFO), logger.DEFAULT_LOGGER.periodic_messages)
         self.assertEqual(1, mock_info.call_count)
 
         logger.periodic_warn(logger.EVERY_DAY, _MSG_WARN, *_DATA)
+        self.assertIn(hash(_MSG_WARN), logger.DEFAULT_LOGGER.periodic_messages)
         self.assertEqual(1, mock_warn.call_count)
+
         logger.periodic_warn(logger.EVERY_DAY, _MSG_WARN, *_DATA)
+        self.assertIn(hash(_MSG_WARN), logger.DEFAULT_LOGGER.periodic_messages)
         self.assertEqual(1, mock_warn.call_count)
 
         logger.periodic_error(logger.EVERY_DAY, _MSG_ERROR, *_DATA)
+        self.assertIn(hash(_MSG_ERROR), logger.DEFAULT_LOGGER.periodic_messages)
         self.assertEqual(1, mock_error.call_count)
+
         logger.periodic_error(logger.EVERY_DAY, _MSG_ERROR, *_DATA)
+        self.assertIn(hash(_MSG_ERROR), logger.DEFAULT_LOGGER.periodic_messages)
         self.assertEqual(1, mock_error.call_count)
 
         logger.periodic_verbose(logger.EVERY_DAY, _MSG_VERBOSE, *_DATA)
+        self.assertIn(hash(_MSG_VERBOSE), logger.DEFAULT_LOGGER.periodic_messages)
         self.assertEqual(1, mock_verbose.call_count)
+
         logger.periodic_verbose(logger.EVERY_DAY, _MSG_VERBOSE, *_DATA)
+        self.assertIn(hash(_MSG_VERBOSE), logger.DEFAULT_LOGGER.periodic_messages)
         self.assertEqual(1, mock_verbose.call_count)
+
+        self.assertEqual(4, len(logger.DEFAULT_LOGGER.periodic_messages))
 
     @patch('azurelinuxagent.common.logger.Logger.verbose')
     @patch('azurelinuxagent.common.logger.Logger.warn')
