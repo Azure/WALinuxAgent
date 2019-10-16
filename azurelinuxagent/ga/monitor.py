@@ -162,6 +162,7 @@ class MonitorHandler(object):
     def start(self):
         self.event_thread = threading.Thread(target=self.daemon)
         self.event_thread.setDaemon(True)
+        self.event_thread.setName("MonitorHandler")
         self.event_thread.start()
 
     def init_sysinfo(self):

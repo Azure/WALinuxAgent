@@ -18,6 +18,7 @@
 from __future__ import print_function
 
 import json
+import threading
 from datetime import datetime, timedelta
 
 import mock
@@ -271,13 +272,10 @@ class TestEvent(AgentTestCase):
         event_time = datetime.utcnow().__str__()
         event.add_periodic(logger.EVERY_DAY, "FauxEvent", op=WALAEventOperation.Log, is_success=True, duration=0,
                            version=str(CURRENT_VERSION), message="FauxEventMessage", evt_type="", is_internal=False,
-                           log_event=True, force=False, event_time_opcode_name=event_time, event_pid=10, event_tid=
-                           11001001011, task_name="ExtHandler", keyword_name="Yo")
+                           log_event=True, force=False)
         mock_event.assert_called_once_with("FauxEvent", op=WALAEventOperation.Log, is_success=True, duration=0,
                                            version=str(CURRENT_VERSION), message="FauxEventMessage", evt_type="",
-                                           is_internal=False, log_event=True, event_time_opcode_name=event_time,
-                                           event_pid=10, event_tid=11001001011, task_name="ExtHandler", keyword_name=
-                                           "Yo")
+                                           is_internal=False, log_event=True)
 
     @patch("azurelinuxagent.common.event.datetime")
     @patch('azurelinuxagent.common.event.EventLogger.add_event')
@@ -286,16 +284,14 @@ class TestEvent(AgentTestCase):
         event.add_periodic(logger.EVERY_DAY, "FauxEvent", message="FauxEventMessage")
         mock_event.assert_called_once_with("FauxEvent", op=WALAEventOperation.Unknown, is_success=True, duration=0,
                                            version=str(CURRENT_VERSION), message="FauxEventMessage", evt_type="",
-                                           is_internal=False, log_event=True, event_time_opcode_name=None,
-                                           event_pid=0, event_tid=0, task_name="", keyword_name="")
+                                           is_internal=False, log_event=True)
 
     @patch("azurelinuxagent.common.event.EventLogger.add_event")
     def test_add_event_default_variables(self, mock_add_event):
         add_event('test', message='test event')
-        mock_add_event.assert_called_once_with('test', duration=0, event_pid=0, event_tid=0,
-                                               event_time_opcode_name=None, evt_type='', is_internal=False,
-                                               is_success=True, keyword_name='', log_event=True, message='test event',
-                                               op='Unknown', task_name='', version=str(CURRENT_VERSION))
+        mock_add_event.assert_called_once_with('test', duration=0, evt_type='', is_internal=False, is_success=True,
+                                               log_event=True, message='test event', op='Unknown',
+                                               version=str(CURRENT_VERSION))
 
     def test_save_event(self):
         add_event('test', message='test event')
@@ -317,8 +313,11 @@ class TestEvent(AgentTestCase):
         log_msg = "{0}\n{1}".format("DummyCmd", "\n".join([line for line in msg.split('\n') if line != ""]))
 
         with patch("azurelinuxagent.common.event.datetime") as patch_datetime:
-            patch_datetime.utcnow = Mock(return_value=datetime.strptime("2019-01-01 01:30:00", '%Y-%m-%d %H:%M:%S'))
-            add_event('test_extension', message=log_msg, duration=duration)
+            patch_datetime.utcnow = Mock(return_value=datetime.strptime("2019-01-01 01:30:00",
+                                                                        '%Y-%m-%d %H:%M:%S'))
+            with patch('os.getpid', return_value=42):
+                with patch("threading.Thread.getName", return_value="HelloWorldTask"):
+                    add_event('test_extension', message=log_msg, duration=duration)
 
         for tld_file in os.listdir(self.tmp_dir):
             event_str = MonitorHandler.collect_event(os.path.join(self.tmp_dir, tld_file))
@@ -349,15 +348,16 @@ class TestEvent(AgentTestCase):
                 elif i['name'] == 'OpcodeName':
                     self.assertEqual(i['value'], '2019-01-01 01:30:00')
                 elif i['name'] == 'EventTid':
-                    self.assertEqual(i['value'], 0)
+                    self.assertEqual(i['value'], threading.current_thread().ident)
                 elif i['name'] == 'EventPid':
-                    self.assertEqual(i['value'], 0)
+                    self.assertEqual(i['value'], 42)
                 elif i['name'] == 'TaskName':
-                    self.assertEqual(i['value'], '')
+                    self.assertEqual(i['value'], 'HelloWorldTask')
                 elif i['name'] == 'KeywordName':
                     self.assertEqual(i['value'], '')
                 else:
-                    self.assertFalse(True, "Contains a field outside the defaults expected.")
+                    self.assertFalse(True, "Contains a field outside the defaults expected. Field Name: {0}".
+                                     format(i['name']))
 
     def test_save_event_message_with_decode_errors(self):
         tmp_file = os.path.join(self.tmp_dir, "tmp_file")

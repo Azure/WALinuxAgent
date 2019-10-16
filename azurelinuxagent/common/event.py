@@ -20,6 +20,7 @@ import datetime
 import json
 import os
 import sys
+import threading
 import time
 import traceback
 from datetime import datetime
@@ -38,6 +39,11 @@ TELEMETRY_EVENT_PROVIDER_ID = "69B669B9-4AF8-4C50-BDC4-6006FA76E975"
 
 # Store the last retrieved container id as an environment variable to be shared between threads for telemetry purposes
 CONTAINER_ID_ENV_VARIABLE = "AZURE_GUEST_AGENT_CONTAINER_ID"
+
+
+def get_container_id_from_env():
+    return os.environ.get(CONTAINER_ID_ENV_VARIABLE, "UNINITIALIZED")
+
 
 class WALAEventOperation:
     ActivateResourceDisk = "ActivateResourceDisk"
@@ -246,31 +252,24 @@ class EventLogger(object):
 
     def add_periodic(self, delta, name, op=WALAEventOperation.Unknown, is_success=True, duration=0,
                      version=str(CURRENT_VERSION), message="", evt_type="", is_internal=False, log_event=True,
-                     force=False, event_time_opcode_name=None, event_pid=0, event_tid=0, task_name="", keyword_name=""):
+                     force=False):
         h = hash(name + op + ustr(is_success) + message)
 
         if force or self.is_period_elapsed(delta, h):
             self.add_event(name, op=op, is_success=is_success, duration=duration,
                            version=version, message=message, evt_type=evt_type,
-                           is_internal=is_internal, log_event=log_event,
-                           event_time_opcode_name=event_time_opcode_name, event_pid=event_pid, event_tid=event_tid,
-                           task_name=task_name, keyword_name=keyword_name)
+                           is_internal=is_internal, log_event=log_event)
             self.periodic_events[h] = datetime.now()
 
     def add_event(self, name, op=WALAEventOperation.Unknown, is_success=True, duration=0, version=str(CURRENT_VERSION),
-                  message="", evt_type="", is_internal=False, log_event=True,
-                  event_time_opcode_name=None, event_pid=0, event_tid=0, task_name="",
-                  keyword_name=""):
+                  message="", evt_type="", is_internal=False, log_event=True):
 
         if (not is_success) and log_event:
             _log_event(name, op, message, duration, is_success=is_success)
 
-        self._add_event(duration, evt_type, is_internal, is_success, message, name, op, version, event_id=1,
-                        event_time_opcode_name=event_time_opcode_name, event_pid=event_pid, event_tid=event_tid,
-                        task_name=task_name, keyword_name=keyword_name)
+        self._add_event(duration, evt_type, is_internal, is_success, message, name, op, version, event_id=1)
 
-    def _add_event(self, duration, evt_type, is_internal, is_success, message, name, op, version, event_id,
-                   event_time_opcode_name=None, event_pid=0, event_tid=0, task_name=None, keyword_name=None):
+    def _add_event(self, duration, evt_type, is_internal, is_success, message, name, op, version, event_id):
         event = TelemetryEvent(event_id, TELEMETRY_EVENT_PROVIDER_ID)
         event.parameters.append(TelemetryEventParam('Name', name))
         event.parameters.append(TelemetryEventParam('Version', str(version)))
@@ -281,18 +280,14 @@ class EventLogger(object):
         event.parameters.append(TelemetryEventParam('Duration', duration))
         event.parameters.append(TelemetryEventParam('ExtensionType', evt_type))
 
-        self._add_default_parameters_to_event(event, container_id=os.environ.get(
-            CONTAINER_ID_ENV_VARIABLE, "UNINITIALIZED"), event_time_opcode_name=event_time_opcode_name,
-                                              event_pid=event_pid, event_tid=event_tid, task_name=task_name,
-                                              keyword_name=keyword_name)
+        self._add_default_parameters_to_event(event)
         data = get_properties(event)
         try:
             self.save_event(json.dumps(data))
         except EventError as e:
             logger.periodic_error(logger.EVERY_FIFTEEN_MINUTES, "[PERIODIC] {0}".format(ustr(e)))
 
-    def add_log_event(self, level, message, event_time_opcode_name=None, event_pid=0, event_tid=0, task_name="",
-                      keyword_name=""):
+    def add_log_event(self, level, message):
         # By the time the message has gotten to this point it is formatted as
         #
         #   YYYY/MM/DD HH:mm:ss.fffffff LEVEL <text>.
@@ -312,18 +307,14 @@ class EventLogger(object):
         event.parameters.append(TelemetryEventParam('Context2', ''))
         event.parameters.append(TelemetryEventParam('Context3', ''))
 
-        self._add_default_parameters_to_event(event, container_id=os.environ.get(
-            CONTAINER_ID_ENV_VARIABLE, "UNINITIALIZED"), event_time_opcode_name=event_time_opcode_name,
-                                              event_pid=event_pid, event_tid=event_tid, task_name=task_name,
-                                              keyword_name=keyword_name)
+        self._add_default_parameters_to_event(event)
         data = get_properties(event)
         try:
             self.save_event(json.dumps(data))
         except EventError:
             pass
 
-    def add_metric(self, category, counter, instance, value, log_event=False, event_time_opcode_name=None, event_pid=0,
-                   event_tid=0, task_name="", keyword_name=""):
+    def add_metric(self, category, counter, instance, value, log_event=False):
         """
         Create and save an event which contains a telemetry event.
 
@@ -344,10 +335,7 @@ class EventLogger(object):
         event.parameters.append(TelemetryEventParam('Instance', instance))
         event.parameters.append(TelemetryEventParam('Value', value))
 
-        self._add_default_parameters_to_event(event, container_id=os.environ.get(
-            CONTAINER_ID_ENV_VARIABLE, "UNINITIALIZED"), event_time_opcode_name=event_time_opcode_name,
-                                              event_pid=event_pid, event_tid=event_tid, task_name=task_name,
-                                              keyword_name=keyword_name)
+        self._add_default_parameters_to_event(event)
         data = get_properties(event)
         try:
             self.save_event(json.dumps(data))
@@ -355,15 +343,20 @@ class EventLogger(object):
             logger.error("{0}", e)
 
     @staticmethod
-    def _add_default_parameters_to_event(event, container_id="UNINITIALIZED", event_time_opcode_name=None, event_pid=0,
-                                         event_tid=0, task_name='', keyword_name=''):
-        event.parameters.append(TelemetryEventParam('ContainerId', container_id))
-        event.parameters.append(TelemetryEventParam('OpcodeName', event_time_opcode_name if event_time_opcode_name
-                                                    else datetime.utcnow().__str__()))
-        event.parameters.append(TelemetryEventParam('EventTid', event_tid))
-        event.parameters.append(TelemetryEventParam('EventPid', event_pid))
+    def _add_default_parameters_to_event(event):
+        task_name = threading.current_thread().getName()
+
+        # We set thread names for the threads spawned by ExtHandler. We get the name of the thread,
+        # and if it is "MainThread" (the default name from Python. ref threading._MainThread),
+        # then we default to "ExtHandler".
+        task_name = task_name if task_name != "MainThread" else "ExtHandler"
+
+        event.parameters.append(TelemetryEventParam('ContainerId', get_container_id_from_env()))
+        event.parameters.append(TelemetryEventParam('OpcodeName', datetime.utcnow().__str__()))
+        event.parameters.append(TelemetryEventParam('EventTid', threading.current_thread().ident))
+        event.parameters.append(TelemetryEventParam('EventPid', os.getpid()))
         event.parameters.append(TelemetryEventParam("TaskName", task_name))
-        event.parameters.append(TelemetryEventParam("KeywordName", keyword_name))
+        event.parameters.append(TelemetryEventParam("KeywordName", ''))  # Unused field for now.
 
 
 __event_logger__ = EventLogger()
@@ -389,20 +382,16 @@ def report_event(op, is_success=True, message='', log_event=True):
               log_event=log_event)
 
 
-def report_periodic(delta, op, is_success=True, message='', event_time_opcode_name=datetime.utcnow().__str__(),
-                    event_pid=0, event_tid=0, task_name="", keyword_name=""):
+def report_periodic(delta, op, is_success=True, message=''):
     from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
     add_periodic(delta, AGENT_NAME,
                  version=str(CURRENT_VERSION),
                  is_success=is_success,
                  message=message,
-                 op=op,
-                 task_name=task_name, event_pid=event_pid,
-                 event_time_opcode_name=event_time_opcode_name, event_tid=event_tid, keyword_name=keyword_name)
+                 op=op)
 
 
-def report_metric(category, counter, instance, value, log_event=False, reporter=__event_logger__,
-                  event_time_opcode_name=None, event_pid=0, event_tid=0, task_name="", keyword_name=""):
+def report_metric(category, counter, instance, value, log_event=False, reporter=__event_logger__):
     """
     Send a telemetry event reporting a single instance of a performance counter.
     :param str category: The category of the metric (cpu, memory, etc)
@@ -418,13 +407,11 @@ def report_metric(category, counter, instance, value, log_event=False, reporter=
         message = "Metric {0}/{1} [{2}] = {3}".format(category, counter, instance, value)
         _log_event(AGENT_NAME, "METRIC", message, 0)
         return
-    reporter.add_metric(category, counter, instance, value, log_event, task_name=task_name, event_pid=event_pid,
-                        event_time_opcode_name=event_time_opcode_name, event_tid=event_tid, keyword_name=keyword_name)
+    reporter.add_metric(category, counter, instance, value, log_event)
 
 
 def add_event(name, op=WALAEventOperation.Unknown, is_success=True, duration=0, version=str(CURRENT_VERSION), message="",
-              evt_type="", is_internal=False, log_event=True, reporter=__event_logger__, event_time_opcode_name=None,
-              event_pid=0, event_tid=0, task_name="", keyword_name=""):
+              evt_type="", is_internal=False, log_event=True, reporter=__event_logger__):
     if reporter.event_dir is None:
         logger.warn("Cannot add event -- Event reporter is not initialized.")
         _log_event(name, op, message, duration, is_success=is_success)
@@ -433,33 +420,26 @@ def add_event(name, op=WALAEventOperation.Unknown, is_success=True, duration=0, 
     if should_emit_event(name, version, op, is_success):
         mark_event_status(name, version, op, is_success)
         reporter.add_event(name, op=op, is_success=is_success, duration=duration, version=str(version), message=message,
-                           evt_type=evt_type, is_internal=is_internal, log_event=log_event, task_name=task_name,
-                           event_time_opcode_name=event_time_opcode_name, event_pid=event_pid, event_tid=event_tid,
-                           keyword_name=keyword_name)
+                           evt_type=evt_type, is_internal=is_internal, log_event=log_event)
 
 
-def add_log_event(level, message, reporter=__event_logger__, event_time_opcode_name=None,
-                      event_pid=0, event_tid=0, task_name="", keyword_name=""):
+def add_log_event(level, message, reporter=__event_logger__):
     if reporter.event_dir is None:
         return
 
-    reporter.add_log_event(level, message, event_time_opcode_name=event_time_opcode_name, event_pid=event_pid,
-                           event_tid=event_tid, task_name=task_name, keyword_name=keyword_name)
+    reporter.add_log_event(level, message)
 
 
 def add_periodic(delta, name, op=WALAEventOperation.Unknown, is_success=True, duration=0,
                  version=str(CURRENT_VERSION), message="", evt_type="", is_internal=False, log_event=True, force=False,
-                 reporter=__event_logger__, event_time_opcode_name=None, event_pid=0,
-                 event_tid=0, task_name="", keyword_name=""):
+                 reporter=__event_logger__):
     if reporter.event_dir is None:
         logger.warn("Cannot add periodic event -- Event reporter is not initialized.")
         _log_event(name, op, message, duration, is_success=is_success)
         return
 
     reporter.add_periodic(delta, name, op=op, is_success=is_success, duration=duration, version=str(version),
-                          message=message, evt_type=evt_type, is_internal=is_internal, log_event=log_event, force=force,
-                          event_time_opcode_name=event_time_opcode_name, event_pid=event_pid, event_tid=event_tid,
-                          task_name=task_name, keyword_name=keyword_name)
+                          message=message, evt_type=evt_type, is_internal=is_internal, log_event=log_event, force=force)
 
 
 def mark_event_status(name, version, op, status):
