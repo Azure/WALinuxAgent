@@ -137,12 +137,18 @@ class CGroupsTelemetry(object):
                         CGroupsTelemetry._cgroup_metrics[cgroup.name].add_max_memory_usage(max_memory_usage)
                         metrics.append(MetricValue("Memory", "Max Memory Usage", cgroup.name, max_memory_usage))
                     else:
-                        raise CGroupsException('CGroup controller {0} is not supported'.format(cgroup.controller))
+                        msg = 'CGroup controller {0} is not supported for cgroup {1}'.format(cgroup.controller,
+                                                                                             cgroup.name)
+                        logger.periodic_warn(logger.EVERY_HOUR, msg)
+                        raise CGroupsException(msg)
                 except Exception as e:
+                    # There can be scenarios when the CGroup has been deleted by the time we are fetching the values
+                    # from it. This would raise IOError with file entry not found (ERRNO: 2). We do not want to log
+                    # every occurrences of such case as it would be very verbose. We do want to log all the other
+                    # exceptions which could occur, which is why we do a periodic log for all the other errors.
                     if not isinstance(e, (IOError, OSError)) or e.errno != errno.ENOENT:
-                        logger.periodic_warn(logger.EVERY_HALF_HOUR,
-                                             'Could not collect metrics for cgroup {0}. Error : {1}'.format(cgroup.path,
-                                                                                                            ustr(e)))
+                        logger.periodic_warn(logger.EVERY_HOUR, '[PERIODIC] Could not collect metrics for cgroup '
+                                                                '{0}. Error : {1}'.format(cgroup.name, ustr(e)))
                 if not cgroup.is_active():
                     CGroupsTelemetry.stop_tracking(cgroup)
                     CGroupsTelemetry._cgroup_metrics[cgroup.name].marked_for_delete = True
