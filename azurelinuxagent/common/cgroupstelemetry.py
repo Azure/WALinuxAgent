@@ -109,8 +109,6 @@ class CGroupsTelemetry(object):
                     CGroupsTelemetry._cgroup_metrics[key].marked_for_delete]:
             del CGroupsTelemetry._cgroup_metrics[key]
 
-        logger.reset_periodic()
-
         return collected_metrics
 
     @staticmethod

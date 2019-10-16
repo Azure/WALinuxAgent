@@ -18,45 +18,19 @@
 #
 
 import datetime
-import glob
-import json
-import operator
 import os
 import os.path
-import pwd
-import random
-import re
-import shutil
-import stat
-import subprocess
-import textwrap
-import time
 import traceback
-import zipfile
 
 import azurelinuxagent.common.conf as conf
 import azurelinuxagent.common.logger as logger
-import azurelinuxagent.common.utils.fileutil as fileutil
-import azurelinuxagent.common.version as version
-import azurelinuxagent.common.protocol.wire
-import azurelinuxagent.common.protocol.metadata as metadata
 
 from datetime import datetime, timedelta
-from pwd import getpwall
-from azurelinuxagent.common.errorstate import ErrorState
 
-from azurelinuxagent.common.event import add_event, WALAEventOperation, elapsed_milliseconds
-from azurelinuxagent.common.exception import ExtensionError, ProtocolError, RemoteAccessError
+from azurelinuxagent.common.event import add_event, WALAEventOperation
+from azurelinuxagent.common.exception import RemoteAccessError
 from azurelinuxagent.common.future import ustr
-from azurelinuxagent.common.protocol.restapi import ExtHandlerStatus, \
-                                                    ExtensionStatus, \
-                                                    ExtensionSubStatus, \
-                                                    VMStatus, ExtHandler, \
-                                                    get_properties, \
-                                                    set_properties
-from azurelinuxagent.common.protocol.metadata import MetadataProtocol
 from azurelinuxagent.common.utils.cryptutil import CryptUtil
-from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.protocol import get_protocol_util
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION
 from azurelinuxagent.common.osutil import get_osutil
@@ -68,8 +42,10 @@ REMOTE_ACCESS_ACCOUNT_COMMENT = "JIT_Account"
 MAX_TRY_ATTEMPT = 5
 FAILED_ATTEMPT_THROTTLE = 1
 
+
 def get_remote_access_handler():
     return RemoteAccessHandler()
+
 
 class RemoteAccessHandler(object):
     def __init__(self):

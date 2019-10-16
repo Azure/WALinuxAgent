@@ -16,76 +16,11 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 #
+
 import socket
-import azurelinuxagent.common.logger as logger
-import azurelinuxagent.common.utils.restutil as restutil
-from azurelinuxagent.common.exception import ProtocolError, HttpError
 from azurelinuxagent.common.future import ustr
-from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.version import DISTRO_VERSION, DISTRO_NAME, CURRENT_VERSION
-
-
-def validate_param(name, val, expected_type):
-    if val is None:
-        raise ProtocolError("{0} is None".format(name))
-    if not isinstance(val, expected_type):
-        raise ProtocolError(("{0} type should be {1} not {2}"
-                             "").format(name, expected_type, type(val)))
-
-
-def set_properties(name, obj, data):
-    if isinstance(obj, DataContract):
-        validate_param("Property '{0}'".format(name), data, dict)
-        for prob_name, prob_val in data.items():
-            prob_full_name = "{0}.{1}".format(name, prob_name)
-            try:
-                prob = getattr(obj, prob_name)
-            except AttributeError:
-                logger.warn("Unknown property: {0}", prob_full_name)
-                continue
-            prob = set_properties(prob_full_name, prob, prob_val)
-            setattr(obj, prob_name, prob)
-        return obj
-    elif isinstance(obj, DataContractList):
-        validate_param("List '{0}'".format(name), data, list)
-        for item_data in data:
-            item = obj.item_cls()
-            item = set_properties(name, item, item_data)
-            obj.append(item)
-        return obj
-    else:
-        return data
-
-
-def get_properties(obj):
-    if isinstance(obj, DataContract):
-        data = {}
-        props = vars(obj)
-        for prob_name, prob in list(props.items()):
-            data[prob_name] = get_properties(prob)
-        return data
-    elif isinstance(obj, DataContractList):
-        data = []
-        for item in obj:
-            item_data = get_properties(item)
-            data.append(item_data)
-        return data
-    else:
-        return obj
-
-
-class DataContract(object):
-    pass
-
-
-class DataContractList(list):
-    def __init__(self, item_cls):
-        self.item_cls = item_cls
-
-
-"""
-Data contract between guest and host
-"""
+from azurelinuxagent.common.datacontract import DataContract, DataContractList
 
 
 class VMInfo(DataContract):
@@ -284,24 +219,6 @@ class VMAgentStatus(DataContract):
 class VMStatus(DataContract):
     def __init__(self, status, message):
         self.vmAgent = VMAgentStatus(status=status, message=message)
-
-
-class TelemetryEventParam(DataContract):
-    def __init__(self, name=None, value=None):
-        self.name = name
-        self.value = value
-
-
-class TelemetryEvent(DataContract):
-    def __init__(self, eventId=None, providerId=None):
-        self.eventId = eventId
-        self.providerId = providerId
-        self.parameters = DataContractList(TelemetryEventParam)
-
-
-class TelemetryEventList(DataContract):
-    def __init__(self):
-        self.events = DataContractList(TelemetryEvent)
 
 
 class RemoteAccessUser(DataContract):
