@@ -18,20 +18,23 @@
 from __future__ import print_function
 
 import json
+import os
 import threading
 from datetime import datetime, timedelta
 
-import mock
+from mock import patch, Mock
 
+from azurelinuxagent.common import event, logger
 from azurelinuxagent.common.event import add_event, \
     WALAEventOperation, elapsed_milliseconds
 from azurelinuxagent.common.exception import EventError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol.wire import GoalState
+from azurelinuxagent.common.utils import fileutil
 from azurelinuxagent.common.utils.extensionprocessutil import read_output
-from azurelinuxagent.common.version import CURRENT_VERSION
+from azurelinuxagent.common.version import CURRENT_VERSION, CURRENT_AGENT
 from azurelinuxagent.ga.monitor import MonitorHandler
-from tests.tools import *
+from tests.tools import AgentTestCase, load_data, data_dir
 
 
 class TestEvent(AgentTestCase):
@@ -323,7 +326,7 @@ class TestEvent(AgentTestCase):
             event_str = MonitorHandler.collect_event(os.path.join(self.tmp_dir, tld_file))
             event_json = json.loads(event_str)
 
-            self.assertEqual(len(event_json["parameters"]), 14)
+            self.assertEqual(len(event_json["parameters"]), 15)
 
             # Checking the contents passed above, and also validating the default values that were passed in.
             for i in event_json["parameters"]:
@@ -355,6 +358,8 @@ class TestEvent(AgentTestCase):
                     self.assertEqual(i['value'], 'HelloWorldTask')
                 elif i['name'] == 'KeywordName':
                     self.assertEqual(i['value'], '')
+                elif i['name'] == 'GAVersion':
+                    self.assertEqual(i['value'], str(CURRENT_AGENT))
                 else:
                     self.assertFalse(True, "Contains a field outside the defaults expected. Field Name: {0}".
                                      format(i['name']))

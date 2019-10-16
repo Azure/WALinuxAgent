@@ -428,7 +428,6 @@ class TestEventMonitoring(AgentTestCase):
                          '<Param Name="ExtensionType" Value="" T="mt:wstr" />' \
                          '<Param Name="OSVersion" ' \
                          'Value="Linux:DISTRO_NAME-DISTRO_VERSION-DISTRO_CODE_NAME:platform-release" T="mt:wstr" />' \
-                         '<Param Name="GAVersion" Value="WALinuxAgent-{0}" T="mt:wstr" />' \
                          '<Param Name="ExecutionMode" Value="IAAS" T="mt:wstr" />' \
                          '<Param Name="RAM" Value="10000" T="mt:uint64" />' \
                          '<Param Name="Processors" Value="4" T="mt:uint64" />' \

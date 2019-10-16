@@ -172,7 +172,6 @@ class MonitorHandler(object):
                                                  DISTRO_CODE_NAME,
                                                  platform.release())
         self.sysinfo.append(TelemetryEventParam("OSVersion", osversion))
-        self.sysinfo.append(TelemetryEventParam("GAVersion", CURRENT_AGENT))
         self.sysinfo.append(TelemetryEventParam("ExecutionMode", AGENT_EXECUTION_MODE))
 
         try:

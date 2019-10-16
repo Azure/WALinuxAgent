@@ -32,7 +32,7 @@ from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.datacontract import get_properties
 from azurelinuxagent.common.telemetryevent import TelemetryEventParam, TelemetryEvent
 from azurelinuxagent.common.utils import fileutil, textutil
-from azurelinuxagent.common.version import CURRENT_VERSION
+from azurelinuxagent.common.version import CURRENT_VERSION, CURRENT_AGENT
 
 _EVENT_MSG = "Event: name={0}, op={1}, message={2}, duration={3}"
 TELEMETRY_EVENT_PROVIDER_ID = "69B669B9-4AF8-4C50-BDC4-6006FA76E975"
@@ -351,6 +351,7 @@ class EventLogger(object):
         # then we default to "ExtHandler".
         task_name = task_name if task_name != "MainThread" else "ExtHandler"
 
+        event.parameters.append(TelemetryEventParam("GAVersion", CURRENT_AGENT))
         event.parameters.append(TelemetryEventParam('ContainerId', get_container_id_from_env()))
         event.parameters.append(TelemetryEventParam('OpcodeName', datetime.utcnow().__str__()))
         event.parameters.append(TelemetryEventParam('EventTid', threading.current_thread().ident))
