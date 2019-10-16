@@ -21,6 +21,7 @@ from azurelinuxagent.common.protocol import get_protocol_util, \
                                             TAG_FILE_NAME
 from azurelinuxagent.common.utils.restutil import DEFAULT_PROTOCOL_ENDPOINT
 from azurelinuxagent.common.protocol.util import ENDPOINT_FILE_NAME
+from errno import ENOENT
 
 @patch("time.sleep")
 class TestProtocolUtil(AgentTestCase):
@@ -36,18 +37,18 @@ class TestProtocolUtil(AgentTestCase):
         protocol_util.dhcp_handler = MagicMock()
         protocol_util.dhcp_handler.endpoint = "foo.bar"
 
-        #Test wire protocol is available
+        # Test wire protocol is available
         protocol = protocol_util.get_protocol()
         self.assertEquals(WireProtocol.return_value, protocol)
 
-        #Test wire protocol is not available
+        # Test wire protocol is not available
         protocol_util.clear_protocol()
         WireProtocol.return_value.detect.side_effect = ProtocolError()
 
         protocol = protocol_util.get_protocol()
         self.assertEquals(MetadataProtocol.return_value, protocol)
 
-        #Test no protocol is available
+        # Test no protocol is available
         protocol_util.clear_protocol()
         WireProtocol.return_value.detect.side_effect = ProtocolError()
         MetadataProtocol.return_value.detect.side_effect = ProtocolError()
@@ -61,12 +62,12 @@ class TestProtocolUtil(AgentTestCase):
 
         tag_file = os.path.join(self.tmp_dir, TAG_FILE_NAME)
 
-        #Test tag file doesn't exist
+        # Test tag file doesn't exist
         protocol_util.get_protocol(by_file=True)
         protocol_util._detect_wire_protocol.assert_any_call()
         protocol_util._detect_metadata_protocol.assert_not_called()
 
-        #Test tag file exists
+        # Test tag file exists
         protocol_util.clear_protocol()
         protocol_util._detect_wire_protocol.reset_mock()
         protocol_util._detect_metadata_protocol.reset_mock()
@@ -153,6 +154,79 @@ class TestProtocolUtil(AgentTestCase):
 
         self.assertRaises(NotImplementedError, protocol_util.get_protocol)
         protocol_util.get_wireserver_endpoint.assert_not_called()
+
+    @patch("azurelinuxagent.common.utils.fileutil")
+    @patch("azurelinuxagent.common.conf.get_lib_dir")
+    def test_endpoint_file_states(self, mock_get_lib_dir, mock_fileutil, _):
+        mock_get_lib_dir.return_value = self.tmp_dir
+        mock_fileutil = MagicMock()
+
+        protocol_util = get_protocol_util()
+        endpoint_file = protocol_util._get_wireserver_endpoint_file_path()
+
+        # Test get endpoint for io error
+        mock_fileutil.read_file.side_effect = IOError()
+
+        ep = protocol_util.get_wireserver_endpoint()
+        self.assertEquals(ep, DEFAULT_PROTOCOL_ENDPOINT)
+
+        # Test get endpoint when file not found
+        mock_fileutil.read_file.side_effect = IOError(ENOENT, 'File not found')
+
+        ep = protocol_util.get_wireserver_endpoint()
+        self.assertEquals(ep, DEFAULT_PROTOCOL_ENDPOINT)
+
+        # Test get endpoint for empty file
+        mock_fileutil.read_file.return_value = ""
+
+        ep = protocol_util.get_wireserver_endpoint()
+        self.assertEquals(ep, DEFAULT_PROTOCOL_ENDPOINT)
+
+        # Test set endpoint for io error
+        mock_fileutil.write_file.side_effect = IOError()
+
+        ep = protocol_util.get_wireserver_endpoint()
+        self.assertRaises(OSUtilError, protocol_util._set_wireserver_endpoint('abc'))
+
+        # Test clear endpoint for io error
+        with open(endpoint_file, "w+") as ep_fd:
+            ep_fd.write("")
+
+        with patch('os.remove') as mock_remove:
+            protocol_util._clear_wireserver_endpoint()
+            self.assertEqual(1, mock_remove.call_count)
+            self.assertEqual(endpoint_file, mock_remove.call_args_list[0][0][0])
+
+        # Test clear endpoint when file not found
+        with patch('os.remove') as mock_remove:
+            mock_remove = Mock(side_effect=IOError(ENOENT, 'File not found'))
+            protocol_util._clear_wireserver_endpoint()
+            mock_remove.assert_not_called()
+
+    def test_protocol_file_states(self, _):
+        protocol_util = get_protocol_util()
+        protocol_util._clear_wireserver_endpoint = Mock()
+
+        protocol_file = protocol_util._get_protocol_file_path()
+
+        # Test clear protocol for io error
+        with open(protocol_file, "w+") as proto_fd:
+            proto_fd.write("")
+
+        with patch('os.remove') as mock_remove:
+            protocol_util.clear_protocol()
+            self.assertEqual(1, protocol_util._clear_wireserver_endpoint.call_count)
+            self.assertEqual(1, mock_remove.call_count)
+            self.assertEqual(protocol_file, mock_remove.call_args_list[0][0][0])
+
+        # Test clear protocol when file not found
+        protocol_util._clear_wireserver_endpoint.reset_mock()
+
+        with patch('os.remove') as mock_remove:
+            protocol_util.clear_protocol()
+            self.assertEqual(1, protocol_util._clear_wireserver_endpoint.call_count)
+            self.assertEqual(1, mock_remove.call_count)
+            self.assertEqual(protocol_file, mock_remove.call_args_list[0][0][0])
 
 
 if __name__ == '__main__':
