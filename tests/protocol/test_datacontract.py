@@ -15,18 +15,16 @@
 # Requires Python 2.6+ and Openssl 1.0+
 #
 
-from tests.tools import *
-import uuid
 import unittest
-import os
-import shutil
-import time
+from azurelinuxagent.common.datacontract import get_properties, set_properties
 from azurelinuxagent.common.protocol.restapi import *
+
 
 class SampleDataContract(DataContract):
     def __init__(self):
         self.foo = None
         self.bar = DataContractList(int)
+
 
 class TestDataContract(unittest.TestCase):
     def test_get_properties(self):
@@ -45,6 +43,7 @@ class TestDataContract(unittest.TestCase):
         }
         set_properties('sample', obj, data)
         self.assertFalse(hasattr(obj, 'baz'))
+
 
 if __name__ == '__main__':
     unittest.main()

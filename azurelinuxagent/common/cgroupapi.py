@@ -133,7 +133,9 @@ class CGroupsApi(object):
         """
         Executes the given operation on all controllers that need to be tracked; outputs 'message' if the controller
         is not mounted or if an error occurs in the operation
+        :return: Returns a list of error messages or an empty list if no errors occurred
         """
+        errors = []
         mounted_controllers = os.listdir(CGROUPS_FILE_SYSTEM_ROOT)
 
         for controller in CGROUP_CONTROLLERS:
@@ -143,7 +145,10 @@ class CGroupsApi(object):
                 else:
                     operation(controller)
             except Exception as e:
-                logger.warn('Error in cgroup controller "{0}": {1}. {2}'.format(controller, ustr(e), message))
+                msg = 'Error in cgroup controller "{0}": {1}. {2}'.format(controller, ustr(e), message)
+                logger.warn(msg)
+                errors.append(msg)
+        return errors
 
 
 class FileSystemCgroupsApi(CGroupsApi):
@@ -217,8 +222,20 @@ class FileSystemCgroupsApi(CGroupsApi):
                 fileutil.append_file(os.path.join(new_path, "cgroup.procs"), daemon_pid)
                 shutil.rmtree(old_path, ignore_errors=True)
 
-        self._foreach_controller(cleanup_old_controller, "Failed to update the tracking of the daemon; resource usage "
-                                                         "of the agent will not include the daemon process.")
+        errors = self._foreach_controller(cleanup_old_controller,
+                                          "Failed to update the tracking of the daemon; resource usage of the agent "
+                                          "will not include the daemon process.")
+
+        if len(errors) == 0:
+            msg = 'Successfully cleaned up old cgroups in WALinuxAgent/WALinuxAgent.'
+        else:
+            msg = 'Failed to clean up old cgroups in WALinuxAgent/WALinuxAgent. Errors: {0}'.format(errors)
+
+        add_event(AGENT_NAME,
+                  version=CURRENT_VERSION,
+                  op=WALAEventOperation.CGroupsCleanUp,
+                  is_success=len(errors) == 0,
+                  message=msg)
 
     def create_agent_cgroups(self):
         """
