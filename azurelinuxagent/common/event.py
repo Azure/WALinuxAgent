@@ -344,19 +344,12 @@ class EventLogger(object):
 
     @staticmethod
     def _add_default_parameters_to_event(event):
-        task_name = threading.current_thread().getName()
-
-        # We set thread names for the threads spawned by ExtHandler. We get the name of the thread,
-        # and if it is "MainThread" (the default name from Python. ref threading._MainThread),
-        # then we default to "ExtHandler".
-        task_name = task_name if task_name != "MainThread" else "ExtHandler"
-
         event.parameters.append(TelemetryEventParam("GAVersion", CURRENT_AGENT))
         event.parameters.append(TelemetryEventParam('ContainerId', get_container_id_from_env()))
         event.parameters.append(TelemetryEventParam('OpcodeName', datetime.utcnow().__str__()))
         event.parameters.append(TelemetryEventParam('EventTid', threading.current_thread().ident))
         event.parameters.append(TelemetryEventParam('EventPid', os.getpid()))
-        event.parameters.append(TelemetryEventParam("TaskName", task_name))
+        event.parameters.append(TelemetryEventParam("TaskName", threading.current_thread().getName()))
         event.parameters.append(TelemetryEventParam("KeywordName", ''))  # Unused field for now.
 
 
