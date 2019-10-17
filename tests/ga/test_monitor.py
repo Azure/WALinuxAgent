@@ -14,24 +14,39 @@
 #
 # Requires Python 2.6+ and Openssl 1.0+
 #
+import datetime
+import json
+import os
+import platform
 import random
+import shutil
 import string
+import sys
+import tempfile
+import time
 from datetime import timedelta
 
+from mock import Mock, MagicMock, patch
 from nose.plugins.attrib import attr
 
+from azurelinuxagent.common import logger
 from azurelinuxagent.common.cgroup import CGroup
+from azurelinuxagent.common.cgroupstelemetry import CGroupsTelemetry
 from azurelinuxagent.common.datacontract import get_properties
-from azurelinuxagent.common.event import EventLogger
-from azurelinuxagent.common.protocol.imds import ComputeInfo, IMDS_IMAGE_ORIGIN_ENDORSED
+from azurelinuxagent.common.event import EventLogger, WALAEventOperation
+from azurelinuxagent.common.exception import HttpError
+from azurelinuxagent.common.future import ustr
+from azurelinuxagent.common.protocol.imds import ComputeInfo
 from azurelinuxagent.common.protocol.restapi import VMInfo
 from azurelinuxagent.common.protocol.wire import WireProtocol
-from azurelinuxagent.common.utils import restutil
-from azurelinuxagent.common.version import AGENT_VERSION
-from azurelinuxagent.ga.monitor import *
+from azurelinuxagent.common.telemetryevent import TelemetryEventParam, TelemetryEvent
+from azurelinuxagent.common.utils import restutil, fileutil
+from azurelinuxagent.common.version import AGENT_VERSION, CURRENT_VERSION
+from azurelinuxagent.ga.monitor import parse_xml_event, get_monitor_handler, MonitorHandler, \
+    generate_extension_metrics_telemetry_dictionary
 from tests.common.test_cgroupstelemetry import make_new_cgroup, consume_cpu_time, consume_memory
 from tests.protocol.mockwiredata import WireProtocolData, DATA_FILE
-from tests.tools import *
+from tests.tools import load_data, AgentTestCase, data_dir, are_cgroups_enabled, i_am_root, skip_if_predicate_false
 
 
 class ResponseMock(Mock):

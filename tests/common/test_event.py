@@ -293,7 +293,7 @@ class TestEvent(AgentTestCase):
     def test_add_event_default_variables(self, mock_add_event):
         add_event('test', message='test event')
         mock_add_event.assert_called_once_with('test', duration=0, evt_type='', is_internal=False, is_success=True,
-                                               log_event=True, message='test event', op='Unknown',
+                                               log_event=True, message='test event', op=WALAEventOperation.Unknown,
                                                version=str(CURRENT_VERSION))
 
     def test_save_event(self):
