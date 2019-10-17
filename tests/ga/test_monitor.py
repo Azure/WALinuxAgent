@@ -49,16 +49,16 @@ def random_generator(size=6, chars=string.ascii_uppercase + string.digits + stri
     return ''.join(random.choice(chars) for x in range(size))
 
 
-def create_event_message(size=0,
-                         name="DummyExtension",
-                         op=WALAEventOperation.Unknown,
-                         is_success=True,
-                         duration=0,
-                         version=CURRENT_VERSION,
-                         is_internal=False,
-                         evt_type="",
-                         message="DummyMessage",
-                         invalid_chars=False):
+def create_dummy_event(size=0,
+                       name="DummyExtension",
+                       op=WALAEventOperation.Unknown,
+                       is_success=True,
+                       duration=0,
+                       version=CURRENT_VERSION,
+                       is_internal=False,
+                       evt_type="",
+                       message="DummyMessage",
+                       invalid_chars=False):
 
     return get_event_message(name=size if size != 0 else name,
                              op=op,
@@ -411,7 +411,7 @@ class TestEventMonitoring(AgentTestCase):
                                                        "DISTRO_CODE_NAME",
                                                        platform.release())
 
-        self.event_logger.save_event(create_event_message(message="Message-Test"))
+        self.event_logger.save_event(create_dummy_event(message="Message-Test"))
         monitor_handler.collect_and_send_events()
 
         # Validating the crafted message by the collect_and_sent_event call.
@@ -457,7 +457,7 @@ class TestEventMonitoring(AgentTestCase):
 
         for power in sizes:
             size = 2 ** power
-            self.event_logger.save_event(create_event_message(size))
+            self.event_logger.save_event(create_dummy_event(size))
         monitor_handler.collect_and_send_events()
 
         # The send_event call would be called each time, as we are filling up the buffer up to the brim for each call.
@@ -477,7 +477,7 @@ class TestEventMonitoring(AgentTestCase):
 
         for power in sizes:
             size = 2 ** power
-            self.event_logger.save_event(create_event_message(size))
+            self.event_logger.save_event(create_dummy_event(size))
 
         with patch("azurelinuxagent.common.logger.periodic_warn") as patch_periodic_warn:
             monitor_handler.collect_and_send_events()
@@ -545,7 +545,7 @@ class TestEventMonitoring(AgentTestCase):
 
         for power in sizes:
             size = 2 ** power * 1024
-            self.event_logger.save_event(create_event_message(size))
+            self.event_logger.save_event(create_dummy_event(size))
 
         with patch("azurelinuxagent.common.logger.error") as mock_error:
             with patch("azurelinuxagent.common.utils.restutil.http_post") as mock_http_post:
@@ -572,7 +572,7 @@ class TestEventMonitoring(AgentTestCase):
 
         for power in sizes:
             size = 2 ** power * 1024
-            self.event_logger.save_event(create_event_message(size))
+            self.event_logger.save_event(create_dummy_event(size))
 
         monitor_handler.last_event_collection = datetime.datetime.utcnow() - timedelta(hours=1)
         # This test validates that if we hit an issue while sending an event, we never send it again.
@@ -597,7 +597,7 @@ class TestEventMonitoring(AgentTestCase):
 
         for power in sizes:
             size = 2 ** power * 1024
-            self.event_logger.save_event(create_event_message(size))
+            self.event_logger.save_event(create_dummy_event(size))
 
         monitor_handler.last_event_collection = datetime.datetime.utcnow() - timedelta(hours=1)
         with patch("azurelinuxagent.common.logger.error") as mock_error:
