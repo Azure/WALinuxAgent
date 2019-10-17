@@ -404,7 +404,7 @@ class TestMetrics(AgentTestCase):
         else:
             self.fail("Counter '%idle' not found in event parameters: {0}".format(repr(event_dictionary)))
 
-    def test_save_event(self):
+    def test_save_metric(self):
         category_present, counter_present, instance_present, value_present = False, False, False, False
         report_metric("DummyCategory", "DummyCounter", "DummyInstance", 100)
         self.assertTrue(len(os.listdir(self.tmp_dir)) == 1)

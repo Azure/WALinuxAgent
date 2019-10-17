@@ -135,10 +135,8 @@ class CGroupsTelemetry(object):
                         CGroupsTelemetry._cgroup_metrics[cgroup.name].add_max_memory_usage(max_memory_usage)
                         metrics.append(MetricValue("Memory", "Max Memory Usage", cgroup.name, max_memory_usage))
                     else:
-                        msg = 'CGroup controller {0} is not supported for cgroup {1}'.format(cgroup.controller,
-                                                                                             cgroup.name)
-                        logger.periodic_warn(logger.EVERY_HOUR, msg)
-                        raise CGroupsException(msg)
+                        raise CGroupsException('CGroup controller {0} is not supported for cgroup {1}'.format(
+                                               cgroup.controller, cgroup.name))
                 except Exception as e:
                     # There can be scenarios when the CGroup has been deleted by the time we are fetching the values
                     # from it. This would raise IOError with file entry not found (ERRNO: 2). We do not want to log

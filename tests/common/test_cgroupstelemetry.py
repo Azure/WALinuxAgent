@@ -583,7 +583,7 @@ class TestCGroupsTelemetry(AgentTestCase):
     @patch("azurelinuxagent.common.cgroup.MemoryCgroup.get_max_memory_usage", side_effect=raise_ioerror)
     @patch("azurelinuxagent.common.cgroup.CpuCgroup.get_cpu_usage", side_effect=raise_ioerror)
     @patch("azurelinuxagent.common.osutil.default.DefaultOSUtil.get_total_cpu_ticks_since_boot")
-    def test_extension_temetry_not_sent_for_empty_perf_metrics(self, *args):
+    def test_extension_telemetry_not_sent_for_empty_perf_metrics(self, *args):
         num_extensions = 5
         for i in range(num_extensions):
             dummy_cpu_cgroup = CGroup.create("dummy_cpu_path_{0}".format(i), "cpu", "dummy_extension_{0}".format(i))

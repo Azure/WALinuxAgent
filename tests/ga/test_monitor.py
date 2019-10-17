@@ -684,10 +684,12 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
         self.assertEqual(0, patch_add_metric.call_count)
         monitor_handler.stop()
 
+    @patch('azurelinuxagent.common.event.EventLogger.add_metric')
     @patch("azurelinuxagent.common.cgroup.MemoryCgroup.get_memory_usage")
     @patch('azurelinuxagent.common.logger.Logger.periodic_warn')
-    def test_send_extension_metrics_telemetry_handling_memory_cgroup_exceptions(self, patch_periodic_warn,
-                                                                                patch_get_memory_usage, *args):
+    def test_send_extension_metrics_telemetry_handling_memory_cgroup_exceptions_errno2(self, patch_periodic_warn,
+                                                                                       patch_get_memory_usage,
+                                                                                       patch_add_metric, *args):
         ioerror = IOError()
         ioerror.errno = 2
         patch_get_memory_usage.side_effect = ioerror
@@ -700,11 +702,15 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
         monitor_handler.last_cgroup_report_telemetry = datetime.datetime.utcnow() - timedelta(hours=1)
         monitor_handler.poll_telemetry_metrics()
         self.assertEqual(0, patch_periodic_warn.call_count)
+        self.assertEqual(0, patch_add_metric.call_count)  # No metrics should be sent.
         monitor_handler.stop()
 
+    @patch('azurelinuxagent.common.event.EventLogger.add_metric')
     @patch("azurelinuxagent.common.cgroup.CpuCgroup.get_cpu_usage")
     @patch('azurelinuxagent.common.logger.Logger.periodic_warn')
-    def test_send_extension_metrics_telemetry_handling_cpu_cgroup_exceptions_errno2(self, patch_periodic_warn, patch_cpu_usage, *args):
+    def test_send_extension_metrics_telemetry_handling_cpu_cgroup_exceptions_errno2(self, patch_periodic_warn,
+                                                                                    patch_cpu_usage, patch_add_metric,
+                                                                                    *args):
         ioerror = IOError()
         ioerror.errno = 2
         patch_cpu_usage.side_effect = ioerror
@@ -717,10 +723,12 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
         monitor_handler.last_cgroup_report_telemetry = datetime.datetime.utcnow() - timedelta(hours=1)
         monitor_handler.poll_telemetry_metrics()
         self.assertEqual(0, patch_periodic_warn.call_count)
+        self.assertEqual(0, patch_add_metric.call_count)  # No metrics should be sent.
         monitor_handler.stop()
 
+    @patch('azurelinuxagent.common.event.EventLogger.add_metric')
     @patch('azurelinuxagent.common.logger.Logger.periodic_warn')
-    def test_send_extension_metrics_telemetry_for_unsupported_cgroup(self, patch_periodic_warn, *args):
+    def test_send_extension_metrics_telemetry_for_unsupported_cgroup(self, patch_periodic_warn, patch_add_metric, *args):
         CGroupsTelemetry._tracked.append(CGroup("cgroup_name", "/test/path", "io"))
 
         monitor_handler = get_monitor_handler()
@@ -728,7 +736,9 @@ class TestExtensionMetricsDataTelemetry(AgentTestCase):
         monitor_handler.last_cgroup_polling_telemetry = datetime.datetime.utcnow() - timedelta(hours=1)
         monitor_handler.last_cgroup_report_telemetry = datetime.datetime.utcnow() - timedelta(hours=1)
         monitor_handler.poll_telemetry_metrics()
-        self.assertEqual(2, patch_periodic_warn.call_count)
+        self.assertEqual(1, patch_periodic_warn.call_count)
+        self.assertEqual(0, patch_add_metric.call_count)  # No metrics should be sent.
+
         monitor_handler.stop()
 
     @skip_if_predicate_false(are_cgroups_enabled, "Does not run when Cgroups are not enabled")
