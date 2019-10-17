@@ -97,7 +97,7 @@ class ProtocolUtil(object):
         try:
             ovfxml = fileutil.read_file(ovf_file_path_on_dvd, remove_bom=True)
             ovfenv = OvfEnv(ovfxml)
-        except (IOError, OSError), e:
+        except (IOError, OSError) as e:
             raise ProtocolError("[CopyOvfEnv] Error reading file "
                                 "{0}: {1}".format(ovf_file_path_on_dvd,
                                                   ustr(e)))
@@ -107,7 +107,7 @@ class ProtocolUtil(object):
                             PASSWORD_REPLACEMENT,
                             ovfxml)
             fileutil.write_file(ovf_file_path, ovfxml)
-        except (IOError, OSError), e:
+        except (IOError, OSError) as e:
             raise ProtocolError("[CopyOvfEnv] Error writing file "
                                 "{0}: {1}".format(ovf_file_path,
                                                   ustr(e)))
@@ -116,7 +116,7 @@ class ProtocolUtil(object):
             if os.path.isfile(tag_file_path_on_dvd):
                 logger.info("Found {0} in provisioning ISO", TAG_FILE_NAME)
                 shutil.copyfile(tag_file_path_on_dvd, tag_file_path)
-        except (IOError, OSError), e:
+        except (IOError, OSError) as e:
             raise ProtocolError("[CopyOvfEnv] Error copying file "
                                 "{0} to {1}: {2}".format(tag_file_path,
                                                          tag_file_path,
@@ -176,7 +176,7 @@ class ProtocolUtil(object):
                         return self.endpoint
 
                     logger.error("[GetWireserverEndpoint] Unexpected empty file {0}: {1}", file_path, str(e))
-                except (IOError, OSError), e:
+                except (IOError, OSError) as e:
                     logger.error("[GetWireserverEndpoint] Error reading file {0}: {1}", file_path, str(e))
             else:
                 logger.error("[GetWireserverEndpoint] Missing file {0}", file_path)
@@ -194,7 +194,7 @@ class ProtocolUtil(object):
             self.endpoint = endpoint
             file_path = self._get_wireserver_endpoint_file_path()
             fileutil.write_file(file_path, endpoint)
-        except (IOError, OSError), e:
+        except (IOError, OSError) as e:
             raise OSUtilError(ustr(e))
         finally:
             self.lock_wireserver.release()
@@ -214,7 +214,7 @@ class ProtocolUtil(object):
 
             try:
                 os.remove(endpoint_file_path)
-            except (IOError, OSError), e:
+            except (IOError, OSError) as e:
                 # Ignore file-not-found errors (since the file is being removed)
                 if e.errno == errno.ENOENT:
                     return
@@ -305,7 +305,7 @@ class ProtocolUtil(object):
         protocol_file_path = self._get_protocol_file_path()
         try:
             fileutil.write_file(protocol_file_path, protocol_name)
-        except (IOError, OSError), e:
+        except (IOError, OSError) as e:
             logger.error("Failed to save protocol endpoint: {0}", e)
 
     def clear_protocol(self):
@@ -321,7 +321,7 @@ class ProtocolUtil(object):
 
         try:
             os.remove(protocol_file_path)
-        except (IOError, OSError), e:
+        except (IOError, OSError) as e:
             # Ignore file-not-found errors (since the file is being removed)
             if e.errno == errno.ENOENT:
                 return
