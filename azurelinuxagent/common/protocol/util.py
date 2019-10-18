@@ -152,7 +152,7 @@ class ProtocolUtil(object):
             conf.get_lib_dir(),
             TAG_FILE_NAME)
 
-    def _get_wireserver_endpoint(self):
+    def get_wireserver_endpoint(self):
         try:
             file_path = os.path.join(conf.get_lib_dir(), ENDPOINT_FILE_NAME)
             return fileutil.read_file(file_path)
@@ -182,7 +182,7 @@ class ProtocolUtil(object):
                 endpoint = self.dhcp_handler.endpoint
             else:
                 logger.info("_detect_wire_protocol: DHCP not available")
-                endpoint = self._get_wireserver_endpoint()
+                endpoint = self.get_wireserver_endpoint()
                 if endpoint == None:
                     endpoint = conf_endpoint
                     logger.info("Using hardcoded WireServer endpoint {0}", endpoint)
@@ -239,7 +239,7 @@ class ProtocolUtil(object):
 
         protocol_name = fileutil.read_file(protocol_file_path)
         if protocol_name == prots.WireProtocol:
-            endpoint = self._get_wireserver_endpoint()
+            endpoint = self.get_wireserver_endpoint()
             return WireProtocol(endpoint)
         elif protocol_name == prots.MetadataProtocol:
             return MetadataProtocol()
