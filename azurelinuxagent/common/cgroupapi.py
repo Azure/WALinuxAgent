@@ -88,19 +88,10 @@ class CGroupsApi(object):
     @staticmethod
     def _is_systemd():
         """
-        Determine if systemd is managing system services. If this process (presumed to be the agent) is in a CPU cgroup
-        that looks like one created by systemd, we can assume systemd is in use.
-
-        TODO: We need to re-evaluate whether this the right logic to determine if Systemd is managing cgroups.
-
-        :return: True if systemd is managing system services
-        :rtype: Bool
+        Determine if systemd is managing system services; the implementation follows the same strategy as, for example,
+        sd_booted() in libsystemd, or /usr/sbin/service
         """
-        controller_id = CGroupsApi._get_controller_id('cpu')
-        current_process_cgroup_path = CGroupsApi._get_current_process_cgroup_relative_path(controller_id)
-        is_systemd = current_process_cgroup_path == 'system.slice/walinuxagent.service'
-
-        return is_systemd
+        return os.path.exists('/run/systemd/system/')
 
     @staticmethod
     def _get_current_process_cgroup_relative_path(controller_id):
@@ -394,8 +385,8 @@ class SystemdCgroupsApi(CGroupsApi):
         try:
             unit_path = os.path.join(UNIT_FILES_FILE_SYSTEM_PATH, unit_filename)
             fileutil.write_file(unit_path, unit_contents)
-            shellutil.run_get_output("systemctl daemon-reload")
-            shellutil.run_get_output("systemctl start {0}".format(unit_filename))
+            shellutil.run_command(["systemctl", "daemon-reload"])
+            shellutil.run_command(["systemctl", "start", unit_filename])
         except Exception as e:
             raise CGroupsException("Failed to create and start {0}. Error: {1}".format(unit_filename, ustr(e)))
 
@@ -463,9 +454,9 @@ After=system-{1}.slice""".format(extension_name, EXTENSIONS_ROOT_CGROUP_NAME)
         unit_filename = self._get_extension_slice_name(extension_name)
         try:
             unit_path = os.path.join(UNIT_FILES_FILE_SYSTEM_PATH, unit_filename)
-            shellutil.run_get_output("systemctl stop {0}".format(unit_filename))
+            shellutil.run_command(["systemctl", "stop", unit_filename])
             fileutil.rm_files(unit_path)
-            shellutil.run_get_output("systemctl daemon-reload")
+            shellutil.run_command(["systemctl", "daemon-reload"])
         except Exception as e:
             raise CGroupsException("Failed to remove {0}. Error: {1}".format(unit_filename, ustr(e)))
 

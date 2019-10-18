@@ -55,82 +55,40 @@ class CGroupsApiTestCase(AgentTestCase):
         self.assertTrue(type(api) == FileSystemCgroupsApi)
 
     def test_is_systemd_should_return_true_when_systemd_manages_current_process(self):
-        fileutil_read_file = fileutil.read_file
+        path_exists = os.path.exists
 
-        def mock_read_file(filepath, asbin=False, remove_bom=False, encoding='utf-8'):
-            if filepath == "/proc/cgroups":
-                return """
-#subsys_name	hierarchy	num_cgroups	enabled
-cpuset	11	1	1
-cpu	3	77	1
-cpuacct	3	77	1
-blkio	10	70	1
-memory	12	124	1
-devices	9	70	1
-freezer	4	1	1
-net_cls	2	1	1
-perf_event	7	1	1
-net_prio	2	1	1
-hugetlb	8	1	1
-pids	5	76	1
-rdma	6	1	1
-"""
-            if filepath == "/proc/self/cgroup":
-                return """
-12:memory:/system.slice/walinuxagent.service
-11:cpuset:/
-10:blkio:/system.slice/walinuxagent.service
-9:devices:/system.slice/walinuxagent.service
-8:hugetlb:/
-7:perf_event:/
-6:rdma:/
-5:pids:/system.slice/walinuxagent.service
-4:freezer:/
-3:cpu,cpuacct:/system.slice/walinuxagent.service
-2:net_cls,net_prio:/
-1:name=systemd:/system.slice/walinuxagent.service
-0::/system.slice/walinuxagent.service
-"""
-            return fileutil_read_file(filepath, asbin=asbin, remove_bom=remove_bom, encoding=encoding)
+        def mock_path_exists(path):
+            if path in ("/run/systemd/system/", "/run/systemd/system"):
+                mock_path_exists.path_tested = True
+                return True
+            return path_exists(path)
 
-        with patch("azurelinuxagent.common.cgroupapi.fileutil.read_file", mock_read_file):
+        mock_path_exists.path_tested = False
+
+        with patch("azurelinuxagent.common.cgroupapi.os.path.exists", mock_path_exists):
             is_systemd = CGroupsApi._is_systemd()
 
         self.assertTrue(is_systemd)
 
+        self.assertTrue(mock_path_exists.path_tested, 'The expected path was not tested; the implementation of CGroupsApi._is_systemd() may have changed.')
+
     def test_is_systemd_should_return_false_when_systemd_does_not_manage_current_process(self):
-        fileutil_read_file = fileutil.read_file
+        path_exists = os.path.exists
 
-        def mock_read_file(filepath, asbin=False, remove_bom=False, encoding='utf-8'):
-            if filepath == "/proc/cgroups":
-                return """
-#subsys_name	hierarchy	num_cgroups	enabled
-cpuset	11	1	1
-cpu	3	77	1
-cpuacct	3	77	1
-blkio	10	70	1
-memory	12	124	1
-devices	9	70	1
-freezer	4	1	1
-net_cls	2	1	1
-perf_event	7	1	1
-net_prio	2	1	1
-hugetlb	8	1	1
-pids	5	76	1
-rdma	6	1	1
-"""
-            if filepath == "/proc/self/cgroup":
-                return """
-3:name=systemd:/
-2:memory:/walinuxagent.service
-1:cpu,cpuacct:/walinuxagent.service
-"""
-            return fileutil_read_file(filepath, asbin=asbin, remove_bom=remove_bom, encoding=encoding)
+        def mock_path_exists(path):
+            if path in ("/run/systemd/system/", "/run/systemd/system"):
+                mock_path_exists.path_tested = True
+                return True
+            return path_exists(path)
 
-        with patch("azurelinuxagent.common.cgroupapi.fileutil.read_file", mock_read_file):
+        mock_path_exists.path_tested = False
+
+        with patch("azurelinuxagent.common.cgroupapi.os.path.exists", mock_path_exists):
             is_systemd = CGroupsApi._is_systemd()
 
-        self.assertFalse(is_systemd)
+        self.assertTrue(is_systemd)
+
+        self.assertTrue(mock_path_exists.path_tested, 'The expected path was not tested; the implementation of CGroupsApi._is_systemd() may have changed.')
 
     def test_foreach_controller_should_execute_operation_on_all_mounted_controllers(self):
         executed_controllers = []
