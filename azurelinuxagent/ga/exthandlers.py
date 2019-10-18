@@ -218,6 +218,7 @@ class ExtHandlersHandler(object):
         self.protocol_util = get_protocol_util()
         self.protocol = None
         self.ext_handlers = None
+        self.fast_track_ext_handlers = None
         self.last_etag = None
         self.last_instantiation = None
         self.artifacts_profile = None
@@ -308,10 +309,16 @@ class ExtHandlersHandler(object):
         fabric_goal_state_changed = False
         profile_changed = False
 
+        # By default we're not processing FastTrack right now
+        self.protocol.set_fast_track(False)
+
         if self.last_instantiation != instantiation:
             logger.info('Goal state changed with instantiation={0}(last:{1})',
                         instantiation,
                         self.last_instantiation)
+            if self.fast_track_ext_handlers is not None:
+                logger.info("Last goal state came from FastTrack, but this one is from Fabric")
+                self.fast_track_ext_handlers = None
             fabric_goal_state_changed = True
 
         if seqno is not None and self.last_vm_artifacts_seqno != seqno and conf.get_extensions_fast_track_enabled():
@@ -337,9 +344,21 @@ class ExtHandlersHandler(object):
                 if vm_artifacts_ext_conf.ext_handlers is not None and \
                         len(vm_artifacts_ext_conf.ext_handlers.extHandlers) > 0:
                     logger.info('FastTrack goal state changed.')
-                    self.ext_handlers = vm_artifacts_ext_conf.ext_handlers
+                    self.fast_track_ext_handlers = vm_artifacts_ext_conf.ext_handlers
+                    self.protocol.set_fast_track(True, seqno)
+                    self.ext_handlers = self.fast_track_ext_handlers
                     self.handle_ext_handlers(profile_changed)
             self.last_vm_artifacts_seqno = seqno
+        elif self.fast_track_ext_handlers is not None:
+            # Our last goal state came from FastTrack and we still haven't received one via Fabric
+            # therefore replace our extension handlers with those from FastTrack or we'll wind up
+            # reporting on the old sequence numbers in the status blob
+            if self.fast_track_ext_handlers is None:
+                logger.error("Last goal state was from FastTrack, but we no longer have FastTrack extensions")
+                self.fast_track_ext_handlers = None
+            else:
+                logger.verbose("Using FastTrack extension handlers for status")
+                self.ext_handlers = self.fast_track_ext_handlers
 
     def cleanup_outdated_handlers(self):
         handlers = []

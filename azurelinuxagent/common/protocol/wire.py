@@ -162,6 +162,13 @@ class WireProtocol(Protocol):
         logger.verbose("Get In-VM Artifacts Profile")
         return self.client.get_artifacts_profile()
 
+    def set_fast_track(self, fast_track, seqno = None):
+        if self.client.goal_state is None:
+            logger.error("Cannot set FastTrack because we don't have a goal state")
+        else:
+            self.client.goal_state.last_seqno = seqno
+            self.client.goal_state.from_fast_track = fast_track
+
     def download_ext_handler_pkg_through_host(self, uri, destination):
         host = self.client.get_host_plugin()
         uri, headers = host.get_artifact_request(uri, host.manifest_uri)
@@ -798,6 +805,10 @@ class WireClient(object):
             self.host_plugin.role_config_name = role_config_name
 
     def update_goal_state(self, forced=False, max_retry=3):
+        if self.goal_state is not None and self.goal_state.from_fast_track:
+            # No need to update our goal state if we're using FastTrack
+            return
+
         incarnation_file = os.path.join(conf.get_lib_dir(), INCARNATION_FILE_NAME)
         uri = GOAL_STATE_URI.format(self.endpoint)
 
@@ -915,11 +926,16 @@ class WireClient(object):
 
     def get_ext_conf(self):
         if self.ext_conf is None:
+            # TODO: remove
+            logger.info("Reading extension config")
             goal_state = self.get_goal_state()
             if goal_state.ext_uri is None:
                 self.ext_conf = ExtensionsConfig(None)
             else:
-                local_file = EXT_CONF_FILE_NAME.format(goal_state.incarnation)
+                if goal_state.from_fast_track:
+                    local_file = EXT_CONF_FILE_NAME.format(goal_state.last_seqno)
+                else:
+                     local_file = EXT_CONF_FILE_NAME.format(goal_state.incarnation)
                 local_file = os.path.join(conf.get_lib_dir(), local_file)
                 xml_text = self.fetch_cache(local_file)
                 self.ext_conf = ExtensionsConfig(xml_text)
@@ -1404,6 +1420,8 @@ class GoalState(object):
         self.container_id = None
         self.load_balancer_probe_port = None
         self.xml_text = None
+        self.from_fast_track = False
+        self.last_seqno = None
         self.parse(xml_text)
 
     def parse(self, xml_text):
