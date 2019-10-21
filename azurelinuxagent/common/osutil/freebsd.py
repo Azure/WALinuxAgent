@@ -141,7 +141,7 @@ class FreeBSDOSUtil(DefaultOSUtil):
             :return: List of dictionaries representing routes in the ipv4 route priority list from `netstat -rn -f inet`
             :rtype: list(dict)
             """
-            cmd = "netstat -rn -f inet"
+            cmd = [ "netstat", "-rn", "-f", "inet" ]
             output = shellutil.run_command(cmd, log_error=True)
             output_lines = output.split("\n")
             if len(output_lines) < 3:
