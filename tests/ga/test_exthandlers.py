@@ -5,7 +5,7 @@ import subprocess
 
 from azurelinuxagent.common.protocol.restapi import ExtensionStatus, Extension, ExtHandler, ExtHandlerProperties
 from azurelinuxagent.ga.exthandlers import parse_ext_status, ExtHandlerInstance, get_exthandlers_handler, \
-    ExtCommandEnvVariable
+    ExtCommandEnvVariable, ExtHandlersHandler
 from azurelinuxagent.common.exception import ProtocolError, ExtensionError, ExtensionErrorCodes
 from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.utils.extensionprocessutil import TELEMETRY_MESSAGE_MAX_LEN, format_stdout_stderr, read_output
@@ -13,6 +13,53 @@ from tests.tools import *
 
 
 class TestExtHandlers(AgentTestCase):
+    @patch("azurelinuxagent.common.conf.get_extensions_fast_track_enabled")
+    def test_determine_what_changed(self, mock_get_extensions_fast_track_enabled, *args):
+        mock_get_extensions_fast_track_enabled.return_value = True
+
+        handler = ExtHandlersHandler()
+        handler.last_instantiation = 5
+        handler.last_vm_artifacts_seqno = 3
+
+        # Nothing changed
+        fabric_goal_state_changed, fast_track_changed = handler.determine_what_changed(5, None)
+        self.assertFalse(fabric_goal_state_changed)
+        self.assertFalse(fast_track_changed)
+        fabric_goal_state_changed, fast_track_changed = handler.determine_what_changed(5, 3)
+        self.assertFalse(fabric_goal_state_changed)
+        self.assertFalse(fast_track_changed)
+
+        # Only fabric changed
+        fabric_goal_state_changed, fast_track_changed = handler.determine_what_changed(6, None)
+        self.assertTrue(fabric_goal_state_changed)
+        self.assertFalse(fast_track_changed)
+        fabric_goal_state_changed, fast_track_changed = handler.determine_what_changed(6, 3)
+        self.assertTrue(fabric_goal_state_changed)
+        self.assertFalse(fast_track_changed)
+
+        # Only FastTrack changed
+        fabric_goal_state_changed, fast_track_changed = handler.determine_what_changed(5, 4)
+        self.assertFalse(fabric_goal_state_changed)
+        self.assertTrue(fast_track_changed)
+
+        # Both changed
+        fabric_goal_state_changed, fast_track_changed = handler.determine_what_changed(6, 4)
+        self.assertTrue(fabric_goal_state_changed)
+        self.assertTrue(fast_track_changed)
+
+        # Previous change was FastTrack. Now Fabric changed
+        handler.fast_track_ext_handlers = "test"
+        fabric_goal_state_changed, fast_track_changed = handler.determine_what_changed(6, None)
+        self.assertTrue(fabric_goal_state_changed)
+        self.assertFalse(fast_track_changed)
+        self.assertIsNone(handler.fast_track_ext_handlers)
+
+        # FastTrack not enabled
+        mock_get_extensions_fast_track_enabled.return_value = False
+        fabric_goal_state_changed, fast_track_changed = handler.determine_what_changed(5, 4)
+        self.assertFalse(fabric_goal_state_changed)
+        self.assertFalse(fast_track_changed)
+
     def test_parse_extension_status00(self):
         """
         Parse a status report for a successful execution of an extension.
@@ -606,3 +653,5 @@ sys.stderr.write("STDERR")
             # This check is checking if the expected values are set for the extension commands
             for helper_var in helper_env_vars:
                 self.assertIn("%s=%s" % (helper_var, helper_env_vars[helper_var]), output)
+
+

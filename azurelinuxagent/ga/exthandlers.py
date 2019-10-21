@@ -303,11 +303,25 @@ class ExtHandlersHandler(object):
                       message=detailed_msg)
 
     def process_goal_state(self, instantiation, seqno):
-        fabric_goal_state_changed = False
-        profile_changed = False
+        fabric_goal_state_changed, fast_track_changed = self.determine_what_changed(instantiation, seqno)
+        if fabric_goal_state_changed:
+            self.protocol.set_fast_track(False)
 
-        # By default we're not processing FastTrack right now
-        self.protocol.set_fast_track(False)
+        # Fabric goal state takes precedence over VMArtifactsProfile blob goal state
+        # So, process the Fabric goal state first
+        self.handle_ext_handlers(fabric_goal_state_changed)
+        self.last_instantiation = instantiation
+
+        # Now process the VMArtifactsProfile if it changed. Note that just because the VMArtifactsProfile changed
+        # doesn't mean the FastTrack goal state changed
+        if fast_track_changed and self.artifacts_profile is not None:
+            self.process_vm_artifacts_profile_for_fast_track(fast_track_changed, seqno)
+        elif self.fast_track_ext_handlers is not None:
+            self.handle_last_goal_state_from_fast_track()
+
+    def determine_what_changed(self, instantiation, seqno):
+        fabric_goal_state_changed = False
+        fast_track_changed = False
 
         if self.last_instantiation != instantiation:
             logger.info('Goal state changed with instantiation={0}(last:{1})',
@@ -322,40 +336,35 @@ class ExtHandlersHandler(object):
             logger.info('VMArtifactsProfile changed with seqno={0}(last:{1})',
                         seqno,
                         self.last_vm_artifacts_seqno)
-            profile_changed = True
+            fast_track_changed = True
+        return fabric_goal_state_changed, fast_track_changed
 
-        # Fabric goal state takes precedence over VMArtifactsProfile blob goal state
-        # So, process the Fabric goal state first
-        self.handle_ext_handlers(fabric_goal_state_changed)
-        self.last_instantiation = instantiation
+    def handle_last_goal_state_from_fast_track(self):
+        # Our last goal state came from FastTrack and we still haven't received one via Fabric
+        # therefore replace our extension handlers with those from FastTrack or we'll wind up
+        # reporting on the old sequence numbers in the status blob
+        if self.fast_track_ext_handlers is None:
+            logger.error("Last goal state was from FastTrack, but we no longer have FastTrack extensions")
+            self.fast_track_ext_handlers = None
+        else:
+            logger.verbose("Using FastTrack extension handlers for status")
+            self.ext_handlers = self.fast_track_ext_handlers
 
-        # Now process the VMArtifactsProfile if it changed. Note that just because the VMArtifactsProfile changed
-        # doesn't mean the FastTrack goal state changed
-        if profile_changed and self.artifacts_profile is not None:
-            vm_artifacts_ext_conf = self.artifacts_profile.transform_to_extensions_config()
-            if vm_artifacts_ext_conf is not None:
-                # We need to add the status upload blob from Fabric goal state because we don't receive this
-                # from the VMArtifactsProfile blob
-                vm_artifacts_ext_conf.status_upload_blob = self.ext_conf.status_upload_blob
-                vm_artifacts_ext_conf.status_upload_blob_type = self.ext_conf.status_upload_blob_type
-                if vm_artifacts_ext_conf.ext_handlers is not None and \
-                        len(vm_artifacts_ext_conf.ext_handlers.extHandlers) > 0:
-                    logger.info('FastTrack goal state changed.')
-                    self.fast_track_ext_handlers = vm_artifacts_ext_conf.ext_handlers
-                    self.protocol.set_fast_track(True, seqno)
-                    self.ext_handlers = self.fast_track_ext_handlers
-                    self.handle_ext_handlers(profile_changed)
-            self.last_vm_artifacts_seqno = seqno
-        elif self.fast_track_ext_handlers is not None:
-            # Our last goal state came from FastTrack and we still haven't received one via Fabric
-            # therefore replace our extension handlers with those from FastTrack or we'll wind up
-            # reporting on the old sequence numbers in the status blob
-            if self.fast_track_ext_handlers is None:
-                logger.error("Last goal state was from FastTrack, but we no longer have FastTrack extensions")
-                self.fast_track_ext_handlers = None
-            else:
-                logger.verbose("Using FastTrack extension handlers for status")
+    def process_vm_artifacts_profile_for_fast_track(self, fast_track_changed, seqno):
+        vm_artifacts_ext_conf = self.artifacts_profile.transform_to_extensions_config()
+        if vm_artifacts_ext_conf is not None:
+            # We need to add the status upload blob from Fabric goal state because we don't receive this
+            # from the VMArtifactsProfile blob
+            vm_artifacts_ext_conf.status_upload_blob = self.ext_conf.status_upload_blob
+            vm_artifacts_ext_conf.status_upload_blob_type = self.ext_conf.status_upload_blob_type
+            if vm_artifacts_ext_conf.ext_handlers is not None and \
+                    len(vm_artifacts_ext_conf.ext_handlers.extHandlers) > 0:
+                logger.info('FastTrack goal state changed.')
+                self.fast_track_ext_handlers = vm_artifacts_ext_conf.ext_handlers
+                self.protocol.set_fast_track(True, seqno)
                 self.ext_handlers = self.fast_track_ext_handlers
+                self.handle_ext_handlers(fast_track_changed)
+        self.last_vm_artifacts_seqno = seqno
 
     def cleanup_outdated_handlers(self):
         handlers = []

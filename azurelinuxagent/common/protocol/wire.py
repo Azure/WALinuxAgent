@@ -51,6 +51,8 @@ TELEMETRY_URI = "http://{0}/machine?comp=telemetrydata"
 
 WIRE_SERVER_ADDR_FILE_NAME = "WireServer"
 INCARNATION_FILE_NAME = "Incarnation"
+SEQUENCE_NUMBER_FILE_NAME = "SequenceNumber"
+GOAL_STATE_SOURCE_FILE_NAME = "GoalStateSource"
 GOAL_STATE_FILE_NAME = "GoalState.{0}.xml"
 HOSTING_ENV_FILE_NAME = "HostingEnvironmentConfig.xml"
 SHARED_CONF_FILE_NAME = "SharedConfig.xml"
@@ -71,6 +73,9 @@ HEADER_ETAG = "etag"
 
 PROTOCOL_VERSION = "2012-11-30"
 ENDPOINT_FINE_NAME = "WireServer"
+
+GOAL_STATE_SOURCE_FABRIC = "Fabric"
+GOAL_STATE_SOURCE_FASTTRACK = "FastTrack"
 
 SHORT_WAITING_INTERVAL = 1  # 1 second
 
@@ -169,12 +174,14 @@ class WireProtocol(Protocol):
         logger.verbose("Get In-VM Artifacts Profile")
         return self.client.get_artifacts_profile()
 
-    def set_fast_track(self, fast_track, seqno = None):
-        if self.client.goal_state is None:
-            logger.error("Cannot set FastTrack because we don't have a goal state")
+    def set_fast_track(self, fast_track, sequence_number=None):
+        path = os.path.join(conf.get_lib_dir(), GOAL_STATE_SOURCE_FILE_NAME)
+        if fast_track:
+            self.client.save_cache(path, GOAL_STATE_SOURCE_FABRIC)
         else:
-            self.client.goal_state.last_seqno = seqno
-            self.client.goal_state.from_fast_track = fast_track
+            self.client.save_cache(path, GOAL_STATE_SOURCE_FASTTRACK)
+            sequence_number_file_path = os.path.join(conf.get_lib_dir(), SEQUENCE_NUMBER_FILE_NAME)
+            self.client.save_cache(sequence_number_file_path, sequence_number)
 
     def download_ext_handler_pkg_through_host(self, uri, destination):
         host = self.client.get_host_plugin()
@@ -812,7 +819,7 @@ class WireClient(object):
             self.host_plugin.role_config_name = role_config_name
 
     def update_goal_state(self, forced=False, max_retry=3):
-        if self.goal_state is not None and self.goal_state.from_fast_track:
+        if self.goal_state is not None and self.get_use_fast_track():
             # No need to update our goal state if we're using FastTrack
             return
 
@@ -915,34 +922,39 @@ class WireClient(object):
             return None
         return self.certs
 
-    def get_current_handlers(self):
-        handler_list = list()
-        try:
-            incarnation = self.fetch_cache(os.path.join(conf.get_lib_dir(),
-                                                        INCARNATION_FILE_NAME))
-            ext_conf = ExtensionsConfig(self.fetch_cache(os.path.join(conf.get_lib_dir(),
-                                                                      EXT_CONF_FILE_NAME.format(incarnation))))
-            handler_list = ext_conf.ext_handlers.extHandlers
-        except ProtocolError as pe:
-            # cache file is missing, nothing to do
-            logger.verbose(ustr(pe))
-        except Exception as e:
-            logger.error("Could not obtain current handlers: {0}", ustr(e))
+    def get_sequence_number(self):
+        path = os.path.join(conf.get_lib_dir(), SEQUENCE_NUMBER_FILE_NAME)
+        if os.path.exists(path):
+            return fileutil.read_file(path)
+        else:
+            return 0
 
-        return handler_list
+    def get_use_fast_track(self):
+        path = os.path.join(conf.get_lib_dir(), GOAL_STATE_SOURCE_FILE_NAME)
+        if os.path.exists(path):
+            goal_state_source = fileutil.read_file(path)
+            if goal_state_source == GOAL_STATE_SOURCE_FASTTRACK == "FastTrack":
+                return True
+        else:
+            return False
 
     def get_ext_conf(self):
         if self.ext_conf is None:
-            # TODO: remove
-            logger.info("Reading extension config")
             goal_state = self.get_goal_state()
             if goal_state.ext_uri is None:
                 self.ext_conf = ExtensionsConfig(None)
             else:
-                if goal_state.from_fast_track:
-                    local_file = EXT_CONF_FILE_NAME.format(goal_state.last_seqno)
-                else:
-                     local_file = EXT_CONF_FILE_NAME.format(goal_state.incarnation)
+                local_file = None
+                use_fast_track = self.get_use_fast_track()
+                if use_fast_track:
+                    logger.info("Using FastTrack goal state")
+                    sequence_number = self.get_sequence_number()
+                    if sequence_number > 0:
+                        local_file = EXT_CONFIG_FAST_TRACK_FILE_NAME.format(sequence_number)
+                    else:
+                        logger.error("Last goal state was from FastTrack, but no sequence number was found")
+                if local_file is None:
+                    local_file = EXT_CONF_FILE_NAME.format(goal_state.incarnation)
                 local_file = os.path.join(conf.get_lib_dir(), local_file)
                 xml_text = self.fetch_cache(local_file)
                 self.ext_conf = ExtensionsConfig(xml_text)
@@ -1456,8 +1468,6 @@ class GoalState(object):
         self.container_id = None
         self.load_balancer_probe_port = None
         self.xml_text = None
-        self.from_fast_track = False
-        self.last_seqno = None
         self.parse(xml_text)
 
     def parse(self, xml_text):
@@ -1978,7 +1988,7 @@ class InVMArtifactsProfile(object):
 
     def save_config(self, config_xml):
         local_file = os.path.join(conf.get_lib_dir(),
-                                  EXT_CONF_FILE_NAME.format(self.inVMArtifactsProfileBlobSeqNo))
+                                  EXT_CONFIG_FAST_TRACK_FILE_NAME.format(self.inVMArtifactsProfileBlobSeqNo))
         try:
             fileutil.write_file(local_file, config_xml)
         except IOError as e:
