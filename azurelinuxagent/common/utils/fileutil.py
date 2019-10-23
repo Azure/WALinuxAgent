@@ -77,6 +77,15 @@ def write_file(filepath, contents, asbin=False, encoding='utf-8', append=False):
         out_file.write(data)
 
 
+def remove_file(filepath):
+    """
+    Remove the file at 'filepath'.
+    """
+    try:
+        os.remove(filepath)
+    except Exception:
+        logger.info("Could not remove file {0}".format(filepath))
+
 def append_file(filepath, contents, asbin=False, encoding='utf-8'):
     """
     Append 'contents' to 'filepath'.

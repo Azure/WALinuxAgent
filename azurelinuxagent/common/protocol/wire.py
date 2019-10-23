@@ -69,6 +69,8 @@ TRANSPORT_PRV_FILE_NAME = "TransportPrivate.pem"
 # Store the last retrieved container id as an environment variable to be shared between threads for telemetry purposes
 CONTAINER_ID_ENV_VARIABLE = "AZURE_GUEST_AGENT_CONTAINER_ID"
 
+FAST_TRACK_EXTENSIONS_PATTERN = re.compile("^(FastTrackExtensionsConfig)\.(\d+)\.(xml)$", re.IGNORECASE)
+
 HEADER_ETAG = "etag"
 
 PROTOCOL_VERSION = "2012-11-30"
@@ -177,11 +179,12 @@ class WireProtocol(Protocol):
     def set_fast_track(self, fast_track, sequence_number=None):
         path = os.path.join(conf.get_lib_dir(), GOAL_STATE_SOURCE_FILE_NAME)
         if fast_track:
-            self.client.save_cache(path, GOAL_STATE_SOURCE_FABRIC)
-        else:
             self.client.save_cache(path, GOAL_STATE_SOURCE_FASTTRACK)
-            sequence_number_file_path = os.path.join(conf.get_lib_dir(), SEQUENCE_NUMBER_FILE_NAME)
-            self.client.save_cache(sequence_number_file_path, sequence_number)
+            if sequence_number is not None:
+                sequence_number_file_path = os.path.join(conf.get_lib_dir(), SEQUENCE_NUMBER_FILE_NAME)
+                self.client.save_cache(sequence_number_file_path, ustr(sequence_number))
+        else:
+            self.client.save_cache(path, GOAL_STATE_SOURCE_FABRIC)
 
     def download_ext_handler_pkg_through_host(self, uri, destination):
         host = self.client.get_host_plugin()
@@ -819,10 +822,6 @@ class WireClient(object):
             self.host_plugin.role_config_name = role_config_name
 
     def update_goal_state(self, forced=False, max_retry=3):
-        if self.goal_state is not None and self.get_use_fast_track():
-            # No need to update our goal state if we're using FastTrack
-            return
-
         incarnation_file = os.path.join(conf.get_lib_dir(), INCARNATION_FILE_NAME)
         uri = GOAL_STATE_URI.format(self.endpoint)
 
@@ -925,7 +924,7 @@ class WireClient(object):
     def get_sequence_number(self):
         path = os.path.join(conf.get_lib_dir(), SEQUENCE_NUMBER_FILE_NAME)
         if os.path.exists(path):
-            return fileutil.read_file(path)
+            return int(fileutil.read_file(path))
         else:
             return 0
 
@@ -933,32 +932,49 @@ class WireClient(object):
         path = os.path.join(conf.get_lib_dir(), GOAL_STATE_SOURCE_FILE_NAME)
         if os.path.exists(path):
             goal_state_source = fileutil.read_file(path)
-            if goal_state_source == GOAL_STATE_SOURCE_FASTTRACK == "FastTrack":
+            if goal_state_source == GOAL_STATE_SOURCE_FASTTRACK:
                 return True
         else:
             return False
 
-    def get_ext_conf(self):
-        if self.ext_conf is None:
-            goal_state = self.get_goal_state()
-            if goal_state.ext_uri is None:
+    def get_ext_conf(self, force=False):
+        if self.ext_conf is None or force:
+            goal_state = None
+            local_file = None
+            use_fast_track = self.get_use_fast_track()
+            if use_fast_track:
+                local_file = self.get_file_path_for_fast_track()
+            if local_file is None:
+                local_file = self.get_file_path_for_fabric(goal_state)
+            if local_file is None:
+                logger.info("No extensions file to read. Using empty ExtensionsConfig")
                 self.ext_conf = ExtensionsConfig(None)
             else:
-                local_file = None
-                use_fast_track = self.get_use_fast_track()
-                if use_fast_track:
-                    logger.info("Using FastTrack goal state")
-                    sequence_number = self.get_sequence_number()
-                    if sequence_number > 0:
-                        local_file = EXT_CONFIG_FAST_TRACK_FILE_NAME.format(sequence_number)
-                    else:
-                        logger.error("Last goal state was from FastTrack, but no sequence number was found")
-                if local_file is None:
-                    local_file = EXT_CONF_FILE_NAME.format(goal_state.incarnation)
-                local_file = os.path.join(conf.get_lib_dir(), local_file)
                 xml_text = self.fetch_cache(local_file)
                 self.ext_conf = ExtensionsConfig(xml_text)
         return self.ext_conf
+
+    def get_file_path_for_fabric(self, goal_state):
+        if goal_state is None:
+            goal_state = self.get_goal_state()
+        if goal_state.ext_uri is None:
+            return None
+        local_file = EXT_CONF_FILE_NAME.format(goal_state.incarnation)
+        local_file = os.path.join(conf.get_lib_dir(), local_file)
+        return local_file
+
+    def get_file_path_for_fast_track(self):
+        local_file = None
+        sequence_number = self.get_sequence_number()
+        if sequence_number > 0:
+            local_file = EXT_CONFIG_FAST_TRACK_FILE_NAME.format(sequence_number)
+            local_file = os.path.join(conf.get_lib_dir(), local_file)
+            if not os.path.isfile(local_file):
+                logger.error("File {0} is missing".format(local_file))
+                local_file = None
+        else:
+            logger.error("Last goal state was from FastTrack, but no sequence number was found")
+        return local_file
 
     def get_ext_manifest(self, ext_handler, goal_state):
         local_file = MANIFEST_FILE_NAME.format(ext_handler.name, goal_state.incarnation)
@@ -1987,6 +2003,18 @@ class InVMArtifactsProfile(object):
         return None
 
     def save_config(self, config_xml):
+        # before we write the new file, remove all the old ones
+        files_to_delete = []
+        for f in os.listdir(conf.get_lib_dir()):
+            m = FAST_TRACK_EXTENSIONS_PATTERN.match(f)
+            if m is not None:
+                full_path = os.path.join(conf.get_lib_dir(), f)
+                files_to_delete.append(full_path)
+        for file_to_delete in files_to_delete:
+            logger.verbose("Removing old FastTrack file {0}".format(file_to_delete))
+            fileutil.remove_file(files_to_delete)
+
+        # Now write the new file
         local_file = os.path.join(conf.get_lib_dir(),
                                   EXT_CONFIG_FAST_TRACK_FILE_NAME.format(self.inVMArtifactsProfileBlobSeqNo))
         try:

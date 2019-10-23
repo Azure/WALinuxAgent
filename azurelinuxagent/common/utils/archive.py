@@ -38,10 +38,16 @@ ARCHIVE_DIRECTORY_NAME = 'history'
 
 MAX_ARCHIVED_STATES = 50
 
+# These files we'll move - deleting them in the old location
 CACHE_PATTERNS = [
     re.compile("^(.*)\.(\d+)\.(agentsManifest)$", re.IGNORECASE),
     re.compile("^(.*)\.(\d+)\.(manifest\.xml)$", re.IGNORECASE),
     re.compile("^(.*)\.(\d+)\.(xml)$", re.IGNORECASE)
+]
+
+# These files we'll copy only and leave them in the original location
+COPY_PATTERNS = [
+    re.compile("^(FastTrackExtensionsConfig)\.(\d+)\.(xml)$", re.IGNORECASE)
 ]
 
 # 2018-04-06T08:21:37.142697
@@ -63,34 +69,49 @@ class StateFlusher(object):
                     logger.error("{0} : {1}", self._source, e.strerror)
 
     def flush(self, timestamp):
-        files = self._get_files_to_archive()
-        if len(files) == 0:
+        copy_files, move_files = self._get_files_to_archive()
+        if len(copy_files) == 0 and len(move_files) == 0:
             return
 
         if self._mkdir(timestamp):
-            self._archive(files, timestamp)
+            self._archive(move_files, timestamp, copy_only=False)
+            self._archive(copy_files, timestamp, copy_only=True)
         else:
-            self._purge(files)
+            self._purge(move_files)
 
     def history_dir(self, timestamp):
         return os.path.join(self._source, ARCHIVE_DIRECTORY_NAME, timestamp.isoformat())
 
     def _get_files_to_archive(self):
-        files = []
+        move_files = []
+        copy_files = []
         for f in os.listdir(self._source):
             full_path = os.path.join(self._source, f)
-            for pattern in CACHE_PATTERNS:
+            copied_file = False
+            for pattern in COPY_PATTERNS:
                 m = pattern.match(f)
                 if m is not None:
-                    files.append(full_path)
-                    break
+                    copy_files.append(full_path)
+                    copied_file = True
+            if not copied_file:
+                for pattern in CACHE_PATTERNS:
+                    m = pattern.match(f)
+                    if m is not None:
+                        move_files.append(full_path)
+                        break
 
-        return files
+        return copy_files, move_files
 
-    def _archive(self, files, timestamp):
+    def _archive(self, files, timestamp, copy_only):
+        if len(files) == 0:
+            return
+        
         for f in files:
             dst = os.path.join(self.history_dir(timestamp), os.path.basename(f))
-            shutil.move(f, dst)
+            if copy_only:
+                shutil.copy(f, dst)
+            else:
+                shutil.move(f, dst)
 
     def _purge(self, files):
         for f in files:

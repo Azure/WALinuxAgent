@@ -48,11 +48,9 @@ class TestExtHandlers(AgentTestCase):
         self.assertTrue(fast_track_changed)
 
         # Previous change was FastTrack. Now Fabric changed
-        handler.fast_track_ext_handlers = "test"
         fabric_goal_state_changed, fast_track_changed = handler.determine_what_changed(6, None)
         self.assertTrue(fabric_goal_state_changed)
         self.assertFalse(fast_track_changed)
-        self.assertIsNone(handler.fast_track_ext_handlers)
 
         # FastTrack not enabled
         mock_get_extensions_fast_track_enabled.return_value = False
