@@ -94,32 +94,6 @@ class CGroupsApi(object):
         return os.path.exists('/run/systemd/system/')
 
     @staticmethod
-    def _get_current_process_cgroup_relative_path(controller_id):
-        """
-        Get the cgroup path "suffix" for this process for the given controller. The leading "/" is always stripped,
-        so the suffix is suitable for passing to os.path.join(). (If the process is in the root cgroup, an empty
-        string is returned, and os.path.join() will still do the right thing.)
-        """
-        cgroup_paths = fileutil.read_file("/proc/self/cgroup")
-        for entry in cgroup_paths.splitlines():
-            fields = entry.split(':')
-            if fields[0] == controller_id:
-                return fields[2].lstrip(os.path.sep)
-        raise CGroupsException("This process belongs to no cgroup for controller ID {0}".format(controller_id))
-
-    @staticmethod
-    def _get_controller_id(controller):
-        """
-        Get the ID for a given cgroup controller
-        """
-        cgroup_states = fileutil.read_file("/proc/cgroups")
-        for entry in cgroup_states.splitlines():
-            fields = entry.split('\t')
-            if fields[0] == controller:
-                return fields[1]
-        raise CGroupsException("Cgroup controller {0} not found in /proc/cgroups".format(controller))
-
-    @staticmethod
     def _foreach_controller(operation, message):
         """
         Executes the given operation on all controllers that need to be tracked; outputs 'message' if the controller
