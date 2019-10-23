@@ -58,7 +58,7 @@ class CGroupsApiTestCase(AgentTestCase):
         path_exists = os.path.exists
 
         def mock_path_exists(path):
-            if path in ("/run/systemd/system/", "/run/systemd/system"):
+            if path == "/run/systemd/system/":
                 mock_path_exists.path_tested = True
                 return True
             return path_exists(path)
@@ -76,9 +76,9 @@ class CGroupsApiTestCase(AgentTestCase):
         path_exists = os.path.exists
 
         def mock_path_exists(path):
-            if path in ("/run/systemd/system/", "/run/systemd/system"):
+            if path == "/run/systemd/system/":
                 mock_path_exists.path_tested = True
-                return True
+                return False
             return path_exists(path)
 
         mock_path_exists.path_tested = False
@@ -86,7 +86,7 @@ class CGroupsApiTestCase(AgentTestCase):
         with patch("azurelinuxagent.common.cgroupapi.os.path.exists", mock_path_exists):
             is_systemd = CGroupsApi._is_systemd()
 
-        self.assertTrue(is_systemd)
+        self.assertFalse(is_systemd)
 
         self.assertTrue(mock_path_exists.path_tested, 'The expected path was not tested; the implementation of CGroupsApi._is_systemd() may have changed.')
 
