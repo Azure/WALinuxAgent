@@ -40,6 +40,43 @@ class TestArchive(AgentTestCase):
     def history_dir(self):
         return os.path.join(self.tmp_dir, 'history')
 
+    def test_archive_copy_files(self):
+        temp_files = [
+            'ExtensionConfig.5.xml',
+            'FastTrackExtensionsConfig.42.xml',
+            'AFairlyInnocentChipmunk'
+        ]
+
+        for f in temp_files:
+            self._write_file(f)
+
+        flusher = StateFlusher(self.tmp_dir)
+        flusher.flush(datetime.utcnow())
+
+        self.assertTrue(os.path.exists(self.history_dir))
+        self.assertTrue(os.path.isdir(self.history_dir))
+        timestamp_dirs = os.listdir(self.history_dir)
+        self.assertEqual(1, len(timestamp_dirs))
+        history_path = os.path.join(self.history_dir, timestamp_dirs[0])
+
+        # ExtensionsConfig should be moved
+        extensions_config_moved_path = os.path.join(history_path, temp_files[0])
+        extensions_config_original_path = os.path.join(self.tmp_dir, temp_files[0])
+        self.assertTrue(os.path.exists(extensions_config_moved_path), "ExtensionsConfig was not moved")
+        self.assertFalse(os.path.exists(extensions_config_original_path), "ExtensionsConfig is still there")
+
+        # FastTrackExtensionsConfig should be copied
+        fast_track_config_moved_path = os.path.join(history_path, temp_files[1])
+        fast_track_config_original_path = os.path.join(self.tmp_dir, temp_files[1])
+        self.assertTrue(os.path.exists(fast_track_config_moved_path), "FastTrack was not copied")
+        self.assertTrue(os.path.exists(fast_track_config_original_path), "FastTrack was removed")
+
+        # AFairlyInnocentChipmunk should be unharmed
+        chipmunk_moved_path = os.path.join(history_path, temp_files[2])
+        chipmunk_original_path = os.path.join(self.tmp_dir, temp_files[2])
+        self.assertFalse(os.path.exists(chipmunk_moved_path), "Chipmunk was moved")
+        self.assertTrue(os.path.exists(chipmunk_original_path), "Chipmunk was harmed")
+
     def test_archive00(self):
         """
         StateFlusher should move all 'goal state' files to a new directory

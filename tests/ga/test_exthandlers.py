@@ -9,6 +9,8 @@ from azurelinuxagent.ga.exthandlers import parse_ext_status, ExtHandlerInstance,
 from azurelinuxagent.common.exception import ProtocolError, ExtensionError, ExtensionErrorCodes
 from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.utils.extensionprocessutil import TELEMETRY_MESSAGE_MAX_LEN, format_stdout_stderr, read_output
+from azurelinuxagent.common.protocol.wire import InVMArtifactsProfile
+from tests.protocol.mockwiredata import *
 from tests.tools import *
 
 
@@ -57,6 +59,24 @@ class TestExtHandlers(AgentTestCase):
         fabric_goal_state_changed, fast_track_changed = handler.determine_what_changed(5, 4)
         self.assertFalse(fabric_goal_state_changed)
         self.assertFalse(fast_track_changed)
+
+    def test_save_config(self, *args):
+        test_data = WireProtocolData(DATA_FILE)
+        profile = InVMArtifactsProfile(test_data.vm_artifacts_profile)
+        profile.inVMArtifactsProfileBlobSeqNo = 5
+        config_xml = "<blah/>"
+
+        # Write the config file
+        profile.save_config(config_xml)
+        config_file_1 = os.path.join(self.tmp_dir, "FastTrackExtensionsConfig.5.xml")
+        self.assertTrue(os.path.exists(config_file_1))
+
+        # Writing the next one will delete the first
+        profile.inVMArtifactsProfileBlobSeqNo = 6
+        profile.save_config(config_xml)
+        config_file_2 = os.path.join(self.tmp_dir, "FastTrackExtensionsConfig.6.xml")
+        self.assertTrue(os.path.exists(config_file_2))
+        self.assertFalse(os.path.exists(config_file_1))
 
     def test_parse_extension_status00(self):
         """

@@ -2012,7 +2012,7 @@ class InVMArtifactsProfile(object):
                 files_to_delete.append(full_path)
         for file_to_delete in files_to_delete:
             logger.verbose("Removing old FastTrack file {0}".format(file_to_delete))
-            fileutil.remove_file(files_to_delete)
+            fileutil.remove_file(file_to_delete)
 
         # Now write the new file
         local_file = os.path.join(conf.get_lib_dir(),
