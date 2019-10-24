@@ -376,7 +376,10 @@ class TestExtension(ExtensionTestCase):
 
         actual_goal_state_source = fileutil.read_file(goal_state_source_path)
         actual_incarnation = fileutil.read_file(incarnation_path)
-        actual_sequence_number = fileutil.read_file(sequence_number_path)
+        if not os.path.exists(sequence_number_path):
+            actual_sequence_number = '0'
+        else:
+            actual_sequence_number = fileutil.read_file(sequence_number_path)
         actual_ext_conf = parse_doc(fileutil.read_file(ext_conf_path))
 
         self.assertEquals(actual_goal_state_source, goal_state_source)
@@ -421,19 +424,80 @@ class TestExtension(ExtensionTestCase):
         # First Fabric goal state
         handler.run()
         self.assert_status_files(
-            goal_state_source='Fabric', incarnation=1, sequence_number=0, settings_number=1, fast_track=False)
+            goal_state_source='Fabric', incarnation=1, sequence_number=0, settings_number=0, fast_track=False)
 
         # Second Fabric goal state updates the extension
+        test_data.goal_state = test_data.goal_state.replace("<Incarnation>1<", "<Incarnation>2<")
+        test_data.ext_conf = test_data.ext_conf.replace('seqNo="0"', 'seqNo="1"')
+        handler.run()
+        self.assert_status_files(
+            goal_state_source='Fabric', incarnation=2, sequence_number=0, settings_number=1, fast_track=False)
 
         # Third Fabric goal state updates the incarnation but not the extension
+        test_data.goal_state = test_data.goal_state.replace("<Incarnation>2<", "<Incarnation>3<")
+        handler.run()
+        self.assert_status_files(
+            goal_state_source='Fabric', incarnation=3, sequence_number=0, settings_number=1, fast_track=False)
 
     def test_fast_track_then_fabric(self, *args):
         test_data = WireProtocolData(DATA_FILE)
         handler, protocol = self._create_mock(test_data, *args)
+        mock_in_vm_artifacts_profile = InVMArtifactsProfile(test_data.vm_artifacts_profile)
+        protocol.get_artifacts_profile = Mock(return_value=mock_in_vm_artifacts_profile)
+
+        # First FastTrack goal state
+        handler.run()
+        self.assert_status_files(
+            goal_state_source='FastTrack', incarnation=1, sequence_number=1, settings_number=1, fast_track=True)
+
+        # Second FastTrack goal state updates the extension
+        mock_in_vm_artifacts_profile.inVMArtifactsProfileBlobSeqNo = 2
+        mock_in_vm_artifacts_profile.extensionGoalStates[0]['settingsSeqNo'] = '2'
+        handler.run()
+        self.assert_status_files(
+            goal_state_source='FastTrack', incarnation=1, sequence_number=2, settings_number=2, fast_track=True)
+
+        # Next goal state changes nothing
+        handler.run()
+        self.assert_status_files(
+            goal_state_source='FastTrack', incarnation=1, sequence_number=2, settings_number=2, fast_track=True)
+
+        # Fabric goal state updates the extension
+        test_data.goal_state = test_data.goal_state.replace("<Incarnation>1<", "<Incarnation>2<")
+        test_data.ext_conf = test_data.ext_conf.replace('seqNo="0"', 'seqNo="3"')
+        handler.run()
+        self.assert_status_files(
+            goal_state_source='Fabric', incarnation=2, sequence_number=2, settings_number=3, fast_track=False)
 
     def test_fabric_then_fast_track(self, *args):
         test_data = WireProtocolData(DATA_FILE)
         handler, protocol = self._create_mock(test_data, *args)
+
+        # First Fabric goal state
+        handler.run()
+        self.assert_status_files(
+            goal_state_source='Fabric', incarnation=1, sequence_number=0, settings_number=0, fast_track=False)
+
+        # Second Fabric goal state updates the extension
+        test_data.goal_state = test_data.goal_state.replace("<Incarnation>1<", "<Incarnation>2<")
+        test_data.ext_conf = test_data.ext_conf.replace('seqNo="0"', 'seqNo="1"')
+        handler.run()
+        self.assert_status_files(
+            goal_state_source='Fabric', incarnation=2, sequence_number=0, settings_number=1, fast_track=False)
+
+        # Next goal state changes nothing
+        handler.run()
+        self.assert_status_files(
+            goal_state_source='Fabric', incarnation=2, sequence_number=0, settings_number=1, fast_track=False)
+
+        # FastTrack goal state
+        mock_in_vm_artifacts_profile = InVMArtifactsProfile(test_data.vm_artifacts_profile)
+        protocol.get_artifacts_profile = Mock(return_value=mock_in_vm_artifacts_profile)
+        mock_in_vm_artifacts_profile.inVMArtifactsProfileBlobSeqNo = 1
+        mock_in_vm_artifacts_profile.extensionGoalStates[0]['settingsSeqNo'] = '3'
+        handler.run()
+        self.assert_status_files(
+            goal_state_source='FastTrack', incarnation=2, sequence_number=1, settings_number=3, fast_track=True)
 
     def test_ext_handler_profile_blob_not_modified(self, *args):
         test_data = WireProtocolData(DATA_FILE)
