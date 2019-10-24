@@ -19,6 +19,8 @@ import os.path
 
 from datetime import timedelta
 
+from azurelinuxagent.common.utils.textutil import parse_doc
+
 from azurelinuxagent.ga.monitor import get_monitor_handler
 from nose.plugins.attrib import attr
 from tests.protocol.mockwiredata import *
@@ -363,6 +365,76 @@ class TestExtension(ExtensionTestCase):
         handler.protocol_util.get_protocol = Mock(return_value=protocol)
         return handler, protocol
 
+    def assert_status_files(self, goal_state_source, incarnation, sequence_number, settings_number, fast_track):
+        goal_state_source_path = os.path.join(self.tmp_dir, 'GoalStateSource')
+        incarnation_path = os.path.join(self.tmp_dir, 'Incarnation')
+        sequence_number_path = os.path.join(self.tmp_dir, 'SequenceNumber')
+        if fast_track:
+            ext_conf_path = os.path.join(self.tmp_dir, "FastTrackExtensionsConfig.{0}.xml".format(sequence_number))
+        else:
+            ext_conf_path = os.path.join(self.tmp_dir, "ExtensionsConfig.{0}.xml".format(incarnation))
+
+        actual_goal_state_source = fileutil.read_file(goal_state_source_path)
+        actual_incarnation = fileutil.read_file(incarnation_path)
+        actual_sequence_number = fileutil.read_file(sequence_number_path)
+        actual_ext_conf = parse_doc(fileutil.read_file(ext_conf_path))
+
+        self.assertEquals(actual_goal_state_source, goal_state_source)
+        self.assertEquals(actual_incarnation, str(incarnation))
+        self.assertEquals(actual_sequence_number, str(sequence_number))
+
+        extensions_element = actual_ext_conf.getElementsByTagName('Extensions')[0]
+        plugin_settings_element = extensions_element.getElementsByTagName('PluginSettings')[0]
+        plugin_element = plugin_settings_element.getElementsByTagName('Plugin')[0]
+        runtime_settings_element = plugin_element.getElementsByTagName('RuntimeSettings')[0]
+        actual_settings_number = runtime_settings_element.getAttribute('seqNo')
+        self.assertEquals(actual_settings_number, str(settings_number))
+
+    def test_multiple_fast_track_goal_states(self, *args):
+        test_data = WireProtocolData(DATA_FILE)
+        handler, protocol = self._create_mock(test_data, *args)
+        mock_in_vm_artifacts_profile = InVMArtifactsProfile(test_data.vm_artifacts_profile)
+        protocol.get_artifacts_profile = Mock(return_value=mock_in_vm_artifacts_profile)
+
+        # First FastTrack goal state
+        handler.run()
+        self.assert_status_files(
+            goal_state_source='FastTrack', incarnation=1, sequence_number=1, settings_number=1, fast_track=True)
+
+        # Second FastTrack goal state updates the extension
+        mock_in_vm_artifacts_profile.inVMArtifactsProfileBlobSeqNo = 2
+        mock_in_vm_artifacts_profile.extensionGoalStates[0]['settingsSeqNo'] = '2'
+        handler.run()
+        self.assert_status_files(
+            goal_state_source='FastTrack', incarnation=1, sequence_number=2, settings_number=2, fast_track=True)
+
+        # Third FastTrack goal state updates the sequence number but not the extension
+        mock_in_vm_artifacts_profile.inVMArtifactsProfileBlobSeqNo = 3
+        handler.run()
+        self.assert_status_files(
+            goal_state_source='FastTrack', incarnation=1, sequence_number=3, settings_number=2, fast_track=True)
+
+    def test_multiple_fabric_goal_states(self, *args):
+        test_data = WireProtocolData(DATA_FILE)
+        handler, protocol = self._create_mock(test_data, *args)
+
+        # First Fabric goal state
+        handler.run()
+        self.assert_status_files(
+            goal_state_source='Fabric', incarnation=1, sequence_number=0, settings_number=1, fast_track=False)
+
+        # Second Fabric goal state updates the extension
+
+        # Third Fabric goal state updates the incarnation but not the extension
+
+    def test_fast_track_then_fabric(self, *args):
+        test_data = WireProtocolData(DATA_FILE)
+        handler, protocol = self._create_mock(test_data, *args)
+
+    def test_fabric_then_fast_track(self, *args):
+        test_data = WireProtocolData(DATA_FILE)
+        handler, protocol = self._create_mock(test_data, *args)
+
     def test_ext_handler_profile_blob_not_modified(self, *args):
         test_data = WireProtocolData(DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
@@ -373,7 +445,6 @@ class TestExtension(ExtensionTestCase):
         self._assert_ext_status(protocol.report_ext_status, "success", 0)
 
         # Now send a goal state through the VMArtifactsProfile blob
-        from azurelinuxagent.common.protocol.wire import InVMArtifactsProfile
         mock_in_vm_artifacts_profile = InVMArtifactsProfile(test_data.vm_artifacts_profile)
         protocol.get_artifacts_profile = Mock(return_value=mock_in_vm_artifacts_profile)
         exthandlers_handler.run()

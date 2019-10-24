@@ -9,7 +9,7 @@ from azurelinuxagent.ga.exthandlers import parse_ext_status, ExtHandlerInstance,
 from azurelinuxagent.common.exception import ProtocolError, ExtensionError, ExtensionErrorCodes
 from azurelinuxagent.common.event import WALAEventOperation
 from azurelinuxagent.common.utils.extensionprocessutil import TELEMETRY_MESSAGE_MAX_LEN, format_stdout_stderr, read_output
-from azurelinuxagent.common.protocol.wire import InVMArtifactsProfile
+from azurelinuxagent.common.protocol.wire import InVMArtifactsProfile, WireProtocol
 from tests.protocol.mockwiredata import *
 from tests.tools import *
 
