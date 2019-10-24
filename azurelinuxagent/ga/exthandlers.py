@@ -219,6 +219,7 @@ class ExtHandlersHandler(object):
         self.last_instantiation = None
         self.artifacts_profile = None
         self.last_vm_artifacts_seqno = None
+        self.last_etag = None
         self.log_report = False
         self.log_instantiation = True
         self.log_process = False
