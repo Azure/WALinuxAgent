@@ -401,11 +401,10 @@ leverages the system logrotate functionality to rotate logs.
 _Type: Boolean_  
 _Default: n_
 
-If set to `y` and SSL support is not compiled into Python, the agent will fall-back to
-use HTTP. Otherwise, if SSL support is not compiled into Python, the agent will fail
-all HTTPS requests.
+If SSL support is not compiled into Python, the agent will fail all HTTPS requests.
+You can set this option to 'y' to make the agent fall-back to HTTP, instead of failing the requests.
 
-Note: Allowing HTTP may unintentionally expose secure data.
+NOTE: Allowing HTTP may unintentionally expose secure data.
 
 #### __OS.EnableRDMA__
 
