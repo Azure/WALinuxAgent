@@ -20,7 +20,7 @@ from azurelinuxagent.common.osutil.default import DefaultOSUtil
 from azurelinuxagent.common.osutil.arch import ArchUtil
 from azurelinuxagent.common.osutil.clearlinux import ClearLinuxUtil
 from azurelinuxagent.common.osutil.coreos import CoreOSUtil
-from azurelinuxagent.common.osutil.debian import DebianOSUtil, DebianOS8Util
+from azurelinuxagent.common.osutil.debian import DebianOSBaseUtil, DebianOSModernUtil
 from azurelinuxagent.common.osutil.freebsd import FreeBSDOSUtil
 from azurelinuxagent.common.osutil.openbsd import OpenBSDOSUtil
 from azurelinuxagent.common.osutil.redhat import RedhatOSUtil, Redhat6xOSUtil
@@ -125,7 +125,7 @@ class TestOsUtilFactory(AgentTestCase):
                           distro_code_name="",
                           distro_version="",
                           distro_full_name="")
-        self.assertTrue(type(ret) == DebianOSUtil)
+        self.assertTrue(type(ret) == DebianOSBaseUtil)
         self.assertEquals(ret.get_service_name(), "waagent")
 
     def test_get_osutil_it_should_return_coreos(self):
@@ -163,14 +163,14 @@ class TestOsUtilFactory(AgentTestCase):
                           distro_code_name="",
                           distro_full_name="",
                           distro_version="7")
-        self.assertTrue(type(ret) == DebianOSUtil)
+        self.assertTrue(type(ret) == DebianOSBaseUtil)
         self.assertEquals(ret.get_service_name(), "waagent")
 
         ret = _get_osutil(distro_name="debian",
                           distro_code_name="",
                           distro_full_name="",
                           distro_version="8")
-        self.assertTrue(type(ret) == DebianOS8Util)
+        self.assertTrue(type(ret) == DebianOSModernUtil)
         self.assertEquals(ret.get_service_name(), "walinuxagent")
 
     def test_get_osutil_it_should_return_redhat(self):
