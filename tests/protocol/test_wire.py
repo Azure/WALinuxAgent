@@ -300,7 +300,7 @@ class TestWireProtocol(AgentTestCase):
                     HostPluginProtocol.set_default_channel(False)
                     wire_protocol_client.upload_status_blob()
 
-                    patch_prepare.assert_called_once_with("BlockBlob", True)
+                    patch_prepare.assert_called_once_with("BlockBlob", False)
                     patch_default_upload.assert_called_once_with(testurl)
                     patch_get_goal_state.assert_called_once_with()
 

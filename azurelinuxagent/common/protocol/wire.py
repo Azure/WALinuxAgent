@@ -396,7 +396,7 @@ def vm_status_to_v1(vm_status, ext_statuses, extensions_fast_track_enabled):
     # Inform CRP that we support FastTrack, which allows us to retrieve goal state
     # from the VMArtifactsProfile blob instead of from wire server
     if extensions_fast_track_enabled:
-        v1_supported_features = {'Key': 'FastTrack', 'Value': '1.0'}
+        v1_supported_features = [{'Key': 'FastTrack', 'Value': '1.0'}]
     
     v1_agg_status = {
         'guestAgentStatus': v1_ga_status,
@@ -407,7 +407,7 @@ def vm_status_to_v1(vm_status, ext_statuses, extensions_fast_track_enabled):
         'timestampUTC': timestamp,
         'aggregateStatus': v1_agg_status,
         'guestOSInfo': v1_ga_guest_info,
-        'supportedFeatures': [v1_supported_features]
+        'supportedFeatures': v1_supported_features
     }
     return v1_vm_status
 
@@ -597,6 +597,11 @@ class WireClient(object):
                 ustr(e)))
 
         return resp
+
+    def hostgaplugin_supports_fast_track(self):
+        if self.vm_artifacts_profile_etag is None:
+            return False
+        return True
 
     def decode_config(self, data):
         if data is None:
@@ -1212,7 +1217,9 @@ class WireClient(object):
             logger.verbose("Status Blob type is unspecified, assuming BlockBlob")
 
         try:
-            self.status_blob.prepare(blob_type, conf.get_extensions_fast_track_enabled())
+            extensions_fast_track_enabled = conf.get_extensions_fast_track_enabled() and \
+                                            self.hostgaplugin_supports_fast_track()
+            self.status_blob.prepare(blob_type, extensions_fast_track_enabled)
         except Exception as e:
             raise ProtocolError("Exception creating status blob: {0}", ustr(e))
 

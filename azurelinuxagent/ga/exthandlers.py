@@ -216,7 +216,6 @@ class ExtHandlersHandler(object):
         self.protocol = None
         self.ext_conf = None
         self.ext_handlers = None
-        self.last_etag = None
         self.last_instantiation = None
         self.artifacts_profile = None
         self.last_vm_artifacts_seqno = None

@@ -145,14 +145,14 @@ class DeprovisionHandler(object):
             'Incarnation',
             'partition',
             'Protocol',
-            'SequenceNumber'
+            'SequenceNumber',
             'SharedConfig.xml',
             'WireServerEndpoint'
         ]
         known_files_glob = [
             'Extensions.*.xml',
             'ExtensionsConfig.*.xml',
-            'FastTrackExtensionsConfig.*.xml'
+            'FastTrackExtensionsConfig.*.xml',
             'GoalState.*.xml'
         ]
 
