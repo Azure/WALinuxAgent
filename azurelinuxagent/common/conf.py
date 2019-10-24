@@ -300,6 +300,13 @@ def get_provisioning_agent(conf=__conf__):
 
 
 def get_provision_enabled(conf=__conf__):
+    """
+    Provisioning (as far as waagent is concerned) is enabled if either the
+    agent is set to 'auto' or 'waagent'. This wraps logic that was introduced
+    for flexible provisioning agent configuration and detection. The replaces
+    the older bool setting to turn provisioning on or off.
+    """
+
     return get_provisioning_agent(conf) in ("auto", "waagent")
 
 
