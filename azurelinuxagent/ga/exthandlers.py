@@ -37,18 +37,17 @@ import azurelinuxagent.common.logger as logger
 import azurelinuxagent.common.utils.fileutil as fileutil
 import azurelinuxagent.common.version as version
 from azurelinuxagent.common.cgroupconfigurator import CGroupConfigurator
+from azurelinuxagent.common.datacontract import get_properties, set_properties
 from azurelinuxagent.common.errorstate import ErrorState, ERROR_STATE_DELTA_INSTALL
 from azurelinuxagent.common.event import add_event, WALAEventOperation, elapsed_milliseconds, report_event
 from azurelinuxagent.common.exception import ExtensionError, ProtocolError, ProtocolNotFoundError, \
-    ExtensionDownloadError, ExtensionOperationError, ExtensionErrorCodes, ExtensionUpdateError
+    ExtensionDownloadError, ExtensionErrorCodes, ExtensionUpdateError, ExtensionOperationError
 from azurelinuxagent.common.future import ustr
 from azurelinuxagent.common.protocol import get_protocol_util
 from azurelinuxagent.common.protocol.restapi import ExtHandlerStatus, \
     ExtensionStatus, \
     ExtensionSubStatus, \
-    VMStatus, ExtHandler, \
-    get_properties, \
-    set_properties
+    VMStatus, ExtHandler
 from azurelinuxagent.common.utils.flexible_version import FlexibleVersion
 from azurelinuxagent.common.version import AGENT_NAME, CURRENT_VERSION, GOAL_STATE_AGENT_VERSION, \
     DISTRO_NAME, DISTRO_VERSION, PY_VERSION_MAJOR, PY_VERSION_MINOR, PY_VERSION_MICRO
@@ -74,10 +73,20 @@ AGENT_STATUS_FILE = "waagent_status.json"
 
 NUMBER_OF_DOWNLOAD_RETRIES = 5
 
-DISABLE_FAILED = "AZURE_GUEST_AGENT_DISABLE_FAILED"
-UNINSTALL_FAILED = "AZURE_GUEST_AGENT_UNINSTALL_FAILED"
-EXTENSION_PATH = "AZURE_GUEST_AGENT_EXTENSION_PATH"
-EXTENSION_VERSION = "AZURE_GUEST_AGENT_EXTENSION_VERSION"
+# This is the default value for the env variables, whenever we call a command which is not an update scenario, we
+# set the env variable value to NOT_RUN to reduce ambiguity for the extension publishers
+NOT_RUN = "NOT_RUN"
+
+
+class ExtCommandEnvVariable(object):
+    Prefix = "AZURE_GUEST_AGENT"
+    DisableReturnCode = "%s_DISABLE_CMD_EXIT_CODE" % Prefix
+    UninstallReturnCode = "%s_UNINSTALL_CMD_EXIT_CODE" % Prefix
+    ExtensionPath = "%s_EXTENSION_PATH" % Prefix
+    ExtensionVersion = "%s_EXTENSION_VERSION" % Prefix
+    ExtensionSeqNumber = "ConfigSequenceNumber"  # At par with Windows Guest Agent
+    UpdatingFromVersion = "%s_UPDATING_FROM_VERSION" % Prefix
+
 
 def get_traceback(e):
     if sys.version_info[0] == 3:
@@ -442,8 +451,6 @@ class ExtHandlersHandler(object):
         except ExtensionUpdateError as e:
             # Not reporting the error as it has already been reported from the old version
             self.handle_ext_handler_error(ext_handler_i, e, e.code, report_telemetry_event=False)
-        except ExtensionOperationError as e:
-            self.handle_ext_handler_error(ext_handler_i, e, e.code)
         except ExtensionDownloadError as e:
             self.handle_ext_handler_download_error(ext_handler_i, e, e.code)
         except ExtensionError as e:
@@ -471,7 +478,7 @@ class ExtHandlersHandler(object):
 
     def handle_enable(self, ext_handler_i):
         self.log_process = True
-        uninstall_failed = False
+        uninstall_exit_code = None
         old_ext_handler_i = ext_handler_i.get_installed_ext_handler()
 
         handler_state = ext_handler_i.get_handler_state()
@@ -485,12 +492,12 @@ class ExtHandlersHandler(object):
             if old_ext_handler_i is None:
                 ext_handler_i.install()
             elif ext_handler_i.version_ne(old_ext_handler_i):
-                uninstall_failed = ExtHandlersHandler._update_extension_handler_and_return_if_failed(
+                uninstall_exit_code = ExtHandlersHandler._update_extension_handler_and_return_if_failed(
                     old_ext_handler_i, ext_handler_i)
         else:
             ext_handler_i.update_settings()
 
-        ext_handler_i.enable(uninstall_failed=uninstall_failed)
+        ext_handler_i.enable(uninstall_exit_code=uninstall_exit_code)
 
     @staticmethod
     def _update_extension_handler_and_return_if_failed(old_ext_handler_i, ext_handler_i):
@@ -503,6 +510,7 @@ class ExtHandlersHandler(object):
             :return: True if command execution succeeds and False if it fails
             """
             continue_on_update_failure = False
+            exit_code = 0
             try:
                 continue_on_update_failure = ext_handler_i.load_manifest().is_continue_on_update_failure()
                 func()
@@ -514,21 +522,28 @@ class ExtHandlersHandler(object):
                 if not continue_on_update_failure:
                     raise ExtensionUpdateError(msg)
 
-                logger.info("Continue on Update failure flag is set, proceeding with update")
-                return False
-            return True
+                exit_code = e.code
+                if isinstance(e, ExtensionOperationError):
+                    exit_code = e.exit_code
 
-        disable_failed = not execute_old_handler_command_and_return_if_succeeds(func=lambda: old_ext_handler_i.disable())
+                logger.info("Continue on Update failure flag is set, proceeding with update")
+            return exit_code
+
+        disable_exit_code = execute_old_handler_command_and_return_if_succeeds(
+            func=lambda: old_ext_handler_i.disable())
         ext_handler_i.copy_status_files(old_ext_handler_i)
         if ext_handler_i.version_gt(old_ext_handler_i):
-            ext_handler_i.update(disable_failed=disable_failed)
+            ext_handler_i.update(disable_exit_code=disable_exit_code,
+                                 updating_from_version=old_ext_handler_i.ext_handler.properties.version)
         else:
-            old_ext_handler_i.update(version=ext_handler_i.ext_handler.properties.version, disable_failed=disable_failed)
-        uninstall_failed = not execute_old_handler_command_and_return_if_succeeds(
+            updating_from_version = ext_handler_i.ext_handler.properties.version
+            old_ext_handler_i.update(version=updating_from_version,
+                                     disable_exit_code=disable_exit_code, updating_from_version=updating_from_version)
+        uninstall_exit_code = execute_old_handler_command_and_return_if_succeeds(
             func=lambda: old_ext_handler_i.uninstall())
         old_ext_handler_i.remove_ext_handler()
-        ext_handler_i.update_with_install(uninstall_failed=uninstall_failed)
-        return uninstall_failed
+        ext_handler_i.update_with_install(uninstall_exit_code=uninstall_exit_code)
+        return uninstall_exit_code
 
     def handle_disable(self, ext_handler_i):
         self.log_process = True
@@ -846,7 +861,7 @@ class ExtHandlerInstance(object):
         if self.pkg is None or self.pkg.uris is None or len(self.pkg.uris) == 0:
             raise ExtensionDownloadError("No package uri found")
 
-        destination = os.path.join(conf.get_lib_dir(), os.path.basename(self.pkg.uris[0].uri) + ".zip")
+        destination = os.path.join(conf.get_lib_dir(), self.get_extension_package_zipfile_name())
 
         package_exists = False
         if os.path.exists(destination):
@@ -940,10 +955,9 @@ class ExtHandlerInstance(object):
         # Save HandlerEnvironment.json
         self.create_handler_env()
 
-    def enable(self, uninstall_failed=False):
-        env = {}
-        if uninstall_failed:
-            env.update({UNINSTALL_FAILED: '1'})
+    def enable(self, uninstall_exit_code=None):
+        uninstall_exit_code = str(uninstall_exit_code) if uninstall_exit_code is not None else NOT_RUN
+        env = {ExtCommandEnvVariable.UninstallReturnCode: uninstall_exit_code}
 
         self.set_operation(WALAEventOperation.Enable)
         man = self.load_manifest()
@@ -964,10 +978,9 @@ class ExtHandlerInstance(object):
         self.set_handler_state(ExtHandlerState.Installed)
         self.set_handler_status(status="NotReady", message="Plugin disabled")
 
-    def install(self, uninstall_failed=False):
-        env = {}
-        if uninstall_failed:
-            env.update({UNINSTALL_FAILED: '1'})
+    def install(self, uninstall_exit_code=None):
+        uninstall_exit_code = str(uninstall_exit_code) if uninstall_exit_code is not None else NOT_RUN
+        env = {ExtCommandEnvVariable.UninstallReturnCode: uninstall_exit_code}
 
         man = self.load_manifest()
         install_cmd = man.get_install_command()
@@ -986,16 +999,14 @@ class ExtHandlerInstance(object):
 
     def remove_ext_handler(self):
         try:
-            zip_filename = "__".join(os.path.basename(self.get_base_dir()).split("-")) + ".zip"
-            destination = os.path.join(conf.get_lib_dir(), zip_filename)
-            if os.path.exists(destination):
-                self.pkg_file = destination
-                os.remove(self.pkg_file)
+            zip_filename = os.path.join(conf.get_lib_dir(), self.get_extension_package_zipfile_name())
+            if os.path.exists(zip_filename):
+                os.remove(zip_filename)
+                self.logger.verbose("Deleted the extension zip at path {0}", zip_filename)
 
             base_dir = self.get_base_dir()
             if os.path.isdir(base_dir):
-                self.logger.info("Remove extension handler directory: {0}",
-                                 base_dir)
+                self.logger.info("Remove extension handler directory: {0}", base_dir)
 
                 # some extensions uninstall asynchronously so ignore error 2 while removing them
                 def on_rmtree_error(_, __, exc_info):
@@ -1012,13 +1023,13 @@ class ExtHandlerInstance(object):
         # Also remove the cgroups for the extension
         CGroupConfigurator.get_instance().remove_extension_cgroups(self.get_full_name())
 
-    def update(self, version=None, disable_failed=False):
+    def update(self, version=None, disable_exit_code=None, updating_from_version=None):
         if version is None:
             version = self.ext_handler.properties.version
-        env = {'VERSION': version}
 
-        if disable_failed:
-            env.update({DISABLE_FAILED: "1"})
+        disable_exit_code = str(disable_exit_code) if disable_exit_code is not None else NOT_RUN
+        env = {'VERSION': version, ExtCommandEnvVariable.DisableReturnCode: disable_exit_code,
+               ExtCommandEnvVariable.UpdatingFromVersion: updating_from_version}
 
         try:
             self.set_operation(WALAEventOperation.Update)
@@ -1034,10 +1045,10 @@ class ExtHandlerInstance(object):
             self.set_handler_state(ExtHandlerState.Failed)
             raise
 
-    def update_with_install(self, uninstall_failed=False):
+    def update_with_install(self, uninstall_exit_code=None):
         man = self.load_manifest()
         if man.is_update_with_install():
-            self.install(uninstall_failed=uninstall_failed)
+            self.install(uninstall_exit_code=uninstall_exit_code)
         else:
             self.logger.info("UpdateWithInstall not set. "
                              "Skip install during upgrade.")
@@ -1207,8 +1218,9 @@ class ExtHandlerInstance(object):
                     env = {}
                 env.update(os.environ)
                 # Always add Extension Path and version to the current launch_command (Ask from publishers)
-                env.update({EXTENSION_PATH: self.get_base_dir(),
-                            EXTENSION_VERSION: self.ext_handler.properties.version})
+                env.update({ExtCommandEnvVariable.ExtensionPath: base_dir,
+                            ExtCommandEnvVariable.ExtensionVersion: str(self.ext_handler.properties.version),
+                            ExtCommandEnvVariable.ExtensionSeqNumber: str(self.get_seq_no())})
 
                 try:
                     # Some extensions erroneously begin cmd with a slash; don't interpret those
@@ -1227,8 +1239,8 @@ class ExtHandlerInstance(object):
                         error_code=extension_error_code)
 
                 except OSError as e:
-                    raise ExtensionOperationError("Failed to launch '{0}': {1}".format(full_path, e.strerror),
-                                                  code=extension_error_code)
+                    raise ExtensionError("Failed to launch '{0}': {1}".format(full_path, e.strerror),
+                                         code=extension_error_code)
 
                 duration = elapsed_milliseconds(begin_utc)
                 log_msg = "{0}\n{1}".format(cmd, "\n".join([line for line in process_output.split('\n') if line != ""]))
@@ -1362,6 +1374,11 @@ class ExtHandlerInstance(object):
         except (IOError, ValueError) as e:
             self.logger.error("Failed to get handler status: {0}", e)
 
+    def get_extension_package_zipfile_name(self):
+        return "{0}__{1}{2}".format(self.ext_handler.name,
+                                    self.ext_handler.properties.version,
+                                    HANDLER_PKG_EXT)
+
     def get_full_name(self):
         return "{0}-{1}".format(self.ext_handler.name,
                                 self.ext_handler.properties.version)
@@ -1386,6 +1403,17 @@ class ExtHandlerInstance(object):
 
     def get_log_dir(self):
         return os.path.join(conf.get_ext_log_dir(), self.ext_handler.name)
+
+    def get_seq_no(self):
+        runtime_settings = self.ext_handler.properties.extensions
+        # If no runtime_settings available for this ext_handler, then return 0 (this is the behavior we follow
+        # for update_settings)
+        if not runtime_settings or len(runtime_settings) == 0:
+            return "0"
+        # Currently for every runtime settings we use the same sequence number
+        # (Check : def parse_plugin_settings(self, ext_handler, plugin_settings) in wire.py)
+        # Will have to revisit once the feature to enable multiple runtime settings is rolled out by CRP
+        return self.ext_handler.properties.extensions[0].sequenceNumber
 
 
 class HandlerEnvironment(object):

@@ -91,7 +91,6 @@ class CGroup(object):
             if isinstance(e, (IOError, OSError)) and e.errno == errno.ENOENT:
                 raise e
             parameter_filename = self._get_cgroup_file(parameter_name)
-            logger.error("Exception while attempting to read {0}: {1}".format(parameter_filename, ustr(e)))
             raise CGroupsException("Exception while attempting to read {0}".format(parameter_filename), e)
         return result
 

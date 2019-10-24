@@ -55,82 +55,40 @@ class CGroupsApiTestCase(AgentTestCase):
         self.assertTrue(type(api) == FileSystemCgroupsApi)
 
     def test_is_systemd_should_return_true_when_systemd_manages_current_process(self):
-        fileutil_read_file = fileutil.read_file
+        path_exists = os.path.exists
 
-        def mock_read_file(filepath, asbin=False, remove_bom=False, encoding='utf-8'):
-            if filepath == "/proc/cgroups":
-                return """
-#subsys_name	hierarchy	num_cgroups	enabled
-cpuset	11	1	1
-cpu	3	77	1
-cpuacct	3	77	1
-blkio	10	70	1
-memory	12	124	1
-devices	9	70	1
-freezer	4	1	1
-net_cls	2	1	1
-perf_event	7	1	1
-net_prio	2	1	1
-hugetlb	8	1	1
-pids	5	76	1
-rdma	6	1	1
-"""
-            if filepath == "/proc/self/cgroup":
-                return """
-12:memory:/system.slice/walinuxagent.service
-11:cpuset:/
-10:blkio:/system.slice/walinuxagent.service
-9:devices:/system.slice/walinuxagent.service
-8:hugetlb:/
-7:perf_event:/
-6:rdma:/
-5:pids:/system.slice/walinuxagent.service
-4:freezer:/
-3:cpu,cpuacct:/system.slice/walinuxagent.service
-2:net_cls,net_prio:/
-1:name=systemd:/system.slice/walinuxagent.service
-0::/system.slice/walinuxagent.service
-"""
-            return fileutil_read_file(filepath, asbin=asbin, remove_bom=remove_bom, encoding=encoding)
+        def mock_path_exists(path):
+            if path == "/run/systemd/system/":
+                mock_path_exists.path_tested = True
+                return True
+            return path_exists(path)
 
-        with patch("azurelinuxagent.common.cgroupapi.fileutil.read_file", mock_read_file):
+        mock_path_exists.path_tested = False
+
+        with patch("azurelinuxagent.common.cgroupapi.os.path.exists", mock_path_exists):
             is_systemd = CGroupsApi._is_systemd()
 
         self.assertTrue(is_systemd)
 
+        self.assertTrue(mock_path_exists.path_tested, 'The expected path was not tested; the implementation of CGroupsApi._is_systemd() may have changed.')
+
     def test_is_systemd_should_return_false_when_systemd_does_not_manage_current_process(self):
-        fileutil_read_file = fileutil.read_file
+        path_exists = os.path.exists
 
-        def mock_read_file(filepath, asbin=False, remove_bom=False, encoding='utf-8'):
-            if filepath == "/proc/cgroups":
-                return """
-#subsys_name	hierarchy	num_cgroups	enabled
-cpuset	11	1	1
-cpu	3	77	1
-cpuacct	3	77	1
-blkio	10	70	1
-memory	12	124	1
-devices	9	70	1
-freezer	4	1	1
-net_cls	2	1	1
-perf_event	7	1	1
-net_prio	2	1	1
-hugetlb	8	1	1
-pids	5	76	1
-rdma	6	1	1
-"""
-            if filepath == "/proc/self/cgroup":
-                return """
-3:name=systemd:/
-2:memory:/walinuxagent.service
-1:cpu,cpuacct:/walinuxagent.service
-"""
-            return fileutil_read_file(filepath, asbin=asbin, remove_bom=remove_bom, encoding=encoding)
+        def mock_path_exists(path):
+            if path == "/run/systemd/system/":
+                mock_path_exists.path_tested = True
+                return False
+            return path_exists(path)
 
-        with patch("azurelinuxagent.common.cgroupapi.fileutil.read_file", mock_read_file):
+        mock_path_exists.path_tested = False
+
+        with patch("azurelinuxagent.common.cgroupapi.os.path.exists", mock_path_exists):
             is_systemd = CGroupsApi._is_systemd()
 
         self.assertFalse(is_systemd)
+
+        self.assertTrue(mock_path_exists.path_tested, 'The expected path was not tested; the implementation of CGroupsApi._is_systemd() may have changed.')
 
     def test_foreach_controller_should_execute_operation_on_all_mounted_controllers(self):
         executed_controllers = []
@@ -183,7 +141,8 @@ class FileSystemCgroupsApiTestCase(AgentTestCase):
 
         AgentTestCase.tearDown(self)
 
-    def test_cleanup_old_cgroups_should_move_daemon_pid_on_all_controllers(self):
+    @patch('time.sleep', side_effect=lambda _: mock_sleep())
+    def test_cleanup_old_cgroups_should_move_daemon_pid_on_all_controllers(self, _):
         # Set up the mock /var/run/waagent.pid file
         daemon_pid = "42"
         daemon_pid_file_tmp = os.path.join(self.tmp_dir, "waagent.pid")
@@ -210,8 +169,9 @@ class FileSystemCgroupsApiTestCase(AgentTestCase):
         fileutil.write_file(os.path.join(new_cpu_cgroup, "cgroup.procs"), "999\n")
         fileutil.write_file(os.path.join(new_memory_cgroup, "cgroup.procs"), "999\n")
 
-        with patch("azurelinuxagent.common.cgroupapi.get_agent_pid_file_path", return_value=daemon_pid_file_tmp):
-            FileSystemCgroupsApi().cleanup_old_cgroups()
+        with patch("azurelinuxagent.common.cgroupapi.add_event") as mock_add_event:
+            with patch("azurelinuxagent.common.cgroupapi.get_agent_pid_file_path", return_value=daemon_pid_file_tmp):
+                FileSystemCgroupsApi().cleanup_old_cgroups()
 
         # The method should have added the daemon PID to the new controllers and deleted the old ones
         new_cpu_contents = fileutil.read_file(os.path.join(new_cpu_cgroup, "cgroup.procs"))
@@ -222,6 +182,42 @@ class FileSystemCgroupsApiTestCase(AgentTestCase):
 
         self.assertFalse(os.path.exists(old_cpu_cgroup))
         self.assertFalse(os.path.exists(old_memory_cgroup))
+
+        # Assert the event parameters that were sent out
+        _, kwargs = mock_add_event.call_args_list[0]
+        self.assertEquals(kwargs['op'], 'CGroupsCleanUp')
+        self.assertEquals(kwargs['is_success'], True)
+        self.assertEquals(kwargs['message'], 'Successfully cleaned up old cgroups in WALinuxAgent/WALinuxAgent.')
+
+    def test_cleanup_old_cgroups_should_report_errors_from_all_controllers_that_failed(self):
+        # Set up the mock /var/run/waagent.pid file
+        daemon_pid = "42"
+        daemon_pid_file_tmp = os.path.join(self.tmp_dir, "waagent.pid")
+        with open(daemon_pid_file_tmp, "w") as f:
+            f.write(daemon_pid)
+
+        # Set up old controller cgroups and add the daemon PID to them, but don't set up new controllers in order
+        # to force errors on cleanup
+        old_cpu_cgroup = os.path.join(self.cgroups_file_system_root, "cpu", "WALinuxAgent", "WALinuxAgent")
+        old_memory_cgroup = os.path.join(self.cgroups_file_system_root, "memory", "WALinuxAgent", "WALinuxAgent")
+
+        os.makedirs(old_cpu_cgroup)
+        os.makedirs(old_memory_cgroup)
+
+        fileutil.write_file(os.path.join(old_cpu_cgroup, "cgroup.procs"), daemon_pid + "\n")
+        fileutil.write_file(os.path.join(old_memory_cgroup, "cgroup.procs"), daemon_pid + "\n")
+
+        with patch("azurelinuxagent.common.cgroupapi.add_event") as mock_add_event:
+            with patch("azurelinuxagent.common.cgroupapi.get_agent_pid_file_path", return_value=daemon_pid_file_tmp):
+                FileSystemCgroupsApi().cleanup_old_cgroups()
+
+        # Assert there were errors for both controllers
+        _, kwargs = mock_add_event.call_args_list[0]
+        self.assertEquals(kwargs['op'], 'CGroupsCleanUp')
+        self.assertEquals(kwargs['is_success'], False)
+        self.assertIn("Failed to clean up old cgroups in WALinuxAgent/WALinuxAgent.", kwargs['message'])
+        self.assertIn("Error in cgroup controller \"cpu\": [Errno 2] No such file or directory", kwargs['message'])
+        self.assertIn("Error in cgroup controller \"memory\": [Errno 2] No such file or directory", kwargs['message'])
 
     def test_create_agent_cgroups_should_create_cgroups_on_all_controllers(self):
         agent_cgroups = FileSystemCgroupsApi().create_agent_cgroups()
@@ -297,7 +293,8 @@ class FileSystemCgroupsApiTestCase(AgentTestCase):
         for cgroup in created:
             self.assertTrue(any(retrieved_cgroup.path == cgroup.path for retrieved_cgroup in retrieved))
 
-    def test_start_extension_command_should_add_the_child_process_to_the_extension_cgroup(self):
+    @patch('time.sleep', side_effect=lambda _: mock_sleep())
+    def test_start_extension_command_should_add_the_child_process_to_the_extension_cgroup(self, _):
         api = FileSystemCgroupsApi()
         api.create_extension_cgroups_root()
 
@@ -414,7 +411,8 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
         self.assertTrue(cpu_found, 'start_extension_command did not return a cpu cgroup')
         self.assertTrue(memory_found, 'start_extension_command did not return a memory cgroup')
 
-    def test_start_extension_command_should_create_extension_scopes(self):
+    @patch('time.sleep', side_effect=lambda _: mock_sleep())
+    def test_start_extension_command_should_create_extension_scopes(self, _):
         original_popen = subprocess.Popen
 
         def mock_popen(*args, **kwargs):
@@ -436,7 +434,8 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
             self.assert_cgroups_created(extension_cgroups)
 
     @attr('requires_sudo')
-    def test_start_extension_command_should_use_systemd_and_not_the_fallback_option_if_successful(self):
+    @patch('time.sleep', side_effect=lambda _: mock_sleep(0.2))
+    def test_start_extension_command_should_use_systemd_and_not_the_fallback_option_if_successful(self, _):
         self.assertTrue(i_am_root(), "Test does not run when non-root")
 
         with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stdout:
@@ -461,7 +460,8 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
 
                     self.assert_cgroups_created(extension_cgroups)
 
-    def test_start_extension_command_should_use_fallback_option_if_systemd_fails(self):
+    @patch('time.sleep', side_effect=lambda _: mock_sleep(0.2))
+    def test_start_extension_command_should_use_fallback_option_if_systemd_fails(self, _):
         original_popen = subprocess.Popen
 
         def mock_popen(*args, **kwargs):
@@ -505,43 +505,44 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
                         # No cgroups should have been created
                         self.assertEquals(extension_cgroups, [])
 
-    @patch("azurelinuxagent.common.cgroupapi.add_event")
-    def test_start_extension_command_should_use_fallback_option_if_systemd_times_out(self, *args):
+    @patch('time.sleep', side_effect=lambda _: mock_sleep(0.001))
+    def test_start_extension_command_should_use_fallback_option_if_systemd_times_out(self, _):
         # Mock systemd timeout and make sure the failure is only attributed to the extension if the command fails
         # using the fallback option
         original_popen = subprocess.Popen
+        success_cmd = "echo 'success'"
 
         def mock_popen(*args, **kwargs):
             # Inject a syntax error to the call
+            new_args = args
             if "systemd-run" in args[0]:
-                return
-            else:
-                return original_popen(*args, **kwargs)
+                new_args = (args[0].replace(success_cmd, "sleep 1s"),)    # Inject sleep for timeout
+
+            return original_popen(new_args, **kwargs)
 
         expected_output = "[stdout]\n{0}\n\n\n[stderr]\n"
 
         with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stdout:
             with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stderr:
                 with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", side_effect=mock_popen):
-                    with patch("azurelinuxagent.common.cgroupapi.wait_for_process_completion_or_timeout",
-                               return_value=[True, None]):
-                        with patch("azurelinuxagent.common.cgroupapi.SystemdCgroupsApi._is_systemd_failure",
-                                   return_value=True):
-                            extension_cgroups, process_output = SystemdCgroupsApi().start_extension_command(
-                                extension_name="Microsoft.Compute.TestExtension-1.2.3",
-                                command="echo 'success'",
-                                timeout=300,
-                                shell=True,
-                                cwd=self.tmp_dir,
-                                env={},
-                                stdout=stdout,
-                                stderr=stderr)
+                    with patch("azurelinuxagent.common.cgroupapi.SystemdCgroupsApi._is_systemd_failure",
+                               return_value=True):
+                        extension_cgroups, process_output = SystemdCgroupsApi().start_extension_command(
+                            extension_name="Microsoft.Compute.TestExtension-1.2.3",
+                            command="echo 'success'",
+                            timeout=300,
+                            shell=True,
+                            cwd=self.tmp_dir,
+                            env={},
+                            stdout=stdout,
+                            stderr=stderr)
 
-                            self.assertEquals(extension_cgroups, [])
-                            self.assertEquals(expected_output.format("success"), process_output)
+                        self.assertEquals(extension_cgroups, [])
+                        self.assertEquals(expected_output.format("success"), process_output)
 
     @attr('requires_sudo')
     @patch("azurelinuxagent.common.cgroupapi.add_event")
+    @patch('time.sleep', side_effect=lambda _: mock_sleep())
     def test_start_extension_command_should_not_use_fallback_option_if_extension_fails(self, *args):
         self.assertTrue(i_am_root(), "Test does not run when non-root")
 
@@ -575,7 +576,7 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
 
         with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stdout:
             with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stderr:
-                with patch("azurelinuxagent.common.cgroupapi.wait_for_process_completion_or_timeout",
+                with patch("azurelinuxagent.common.utils.extensionprocessutil.wait_for_process_completion_or_timeout",
                            return_value=[True, None]):
                     with patch("azurelinuxagent.common.cgroupapi.SystemdCgroupsApi._is_systemd_failure",
                                return_value=False):
@@ -594,7 +595,8 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
                                           ExtensionErrorCodes.PluginHandlerScriptTimedout)
                         self.assertIn("Timeout", ustr(context_manager.exception))
 
-    def test_start_extension_command_should_capture_only_the_last_subprocess_output(self):
+    @patch('time.sleep', side_effect=lambda _: mock_sleep())
+    def test_start_extension_command_should_capture_only_the_last_subprocess_output(self, _):
         original_popen = subprocess.Popen
 
         def mock_popen(*args, **kwargs):
