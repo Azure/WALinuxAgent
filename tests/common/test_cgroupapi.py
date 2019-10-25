@@ -506,9 +506,9 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
                         self.assertEquals(extension_cgroups, [])
 
     @patch('time.sleep', side_effect=lambda _: mock_sleep(0.001))
-    def test_start_extension_command_should_use_fallback_option_if_systemd_times_out_internally(self, _):
-        # Systemd has its own internal timeout which is not necessarily the same as the timeout we define for
-        # extension operations. When systemd times out, it will write that to stderr and exit with exit code 1.
+    def test_start_extension_command_should_use_fallback_option_if_systemd_times_out(self, _):
+        # Systemd has its own internal timeout which is shorter than what we define for extension operation timeout.
+        # When systemd times out, it will write a message to stderr and exit with exit code 1.
         # In that case, we will internally recognize the failure due to the non-zero exit code, not as a timeout.
         original_popen = subprocess.Popen
         systemd_timeout_command = "echo 'Failed to start transient scope unit: Connection timed out' >&2 && exit 1"
@@ -526,7 +526,8 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
 
         with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stdout:
             with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stderr:
-                with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", side_effect=mock_popen):
+                with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", side_effect=mock_popen) \
+                        as patch_mock_popen:
                     extension_cgroups, process_output = SystemdCgroupsApi().start_extension_command(
                         extension_name="Microsoft.Compute.TestExtension-1.2.3",
                         command="echo 'success'",
@@ -537,43 +538,16 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
                         stdout=stdout,
                         stderr=stderr)
 
+                    # We expect two calls to Popen, first for the systemd-run call, second for the fallback option
+                    self.assertEquals(2, patch_mock_popen.call_count)
+
+                    first_call_args = patch_mock_popen.mock_calls[0][1][0]
+                    second_call_args = patch_mock_popen.mock_calls[1][1][0]
+                    self.assertIn("systemd-run --unit", first_call_args)
+                    self.assertNotIn("systemd-run --unit", second_call_args)
+
                     self.assertEquals(extension_cgroups, [])
                     self.assertEquals(expected_output.format("success"), process_output)
-
-    @patch('time.sleep', side_effect=lambda _: mock_sleep(0.001))
-    def test_start_extension_command_should_use_fallback_option_if_systemd_times_out_externally(self, _):
-        # Mock systemd timeout and make sure the failure is only attributed to the extension if the command fails
-        # using the fallback option
-        original_popen = subprocess.Popen
-        success_cmd = "echo 'success'"
-
-        def mock_popen(*args, **kwargs):
-            # Inject a syntax error to the call
-            new_args = args
-            if "systemd-run" in args[0]:
-                new_args = (args[0].replace(success_cmd, "sleep 1s"),)    # Inject sleep for timeout
-
-            return original_popen(new_args, **kwargs)
-
-        expected_output = "[stdout]\n{0}\n\n\n[stderr]\n"
-
-        with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stdout:
-            with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stderr:
-                with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", side_effect=mock_popen):
-                    with patch("azurelinuxagent.common.cgroupapi.SystemdCgroupsApi._is_systemd_failure",
-                               return_value=True):
-                        extension_cgroups, process_output = SystemdCgroupsApi().start_extension_command(
-                            extension_name="Microsoft.Compute.TestExtension-1.2.3",
-                            command="echo 'success'",
-                            timeout=300,
-                            shell=True,
-                            cwd=self.tmp_dir,
-                            env={},
-                            stdout=stdout,
-                            stderr=stderr)
-
-                        self.assertEquals(extension_cgroups, [])
-                        self.assertEquals(expected_output.format("success"), process_output)
 
     @attr('requires_sudo')
     @patch("azurelinuxagent.common.cgroupapi.add_event")
