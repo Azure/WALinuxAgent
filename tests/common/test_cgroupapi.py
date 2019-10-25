@@ -506,7 +506,42 @@ class SystemdCgroupsApiTestCase(AgentTestCase):
                         self.assertEquals(extension_cgroups, [])
 
     @patch('time.sleep', side_effect=lambda _: mock_sleep(0.001))
-    def test_start_extension_command_should_use_fallback_option_if_systemd_times_out(self, _):
+    def test_start_extension_command_should_use_fallback_option_if_systemd_times_out_internally(self, _):
+        # Systemd has its own internal timeout which is not necessarily the same as the timeout we define for
+        # extension operations. When systemd times out, it will write that to stderr and exit with exit code 1.
+        # In that case, we will internally recognize the failure due to the non-zero exit code, not as a timeout.
+        original_popen = subprocess.Popen
+        systemd_timeout_command = "echo 'Failed to start transient scope unit: Connection timed out' >&2 && exit 1"
+
+        def mock_popen(*args, **kwargs):
+            # If trying to invoke systemd, mock what would happen if systemd timed out internally:
+            # write failure to stderr and exit with exit code 1.
+            new_args = args
+            if "systemd-run" in args[0]:
+                new_args = (systemd_timeout_command,)
+
+            return original_popen(new_args, **kwargs)
+
+        expected_output = "[stdout]\n{0}\n\n\n[stderr]\n"
+
+        with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stdout:
+            with tempfile.TemporaryFile(dir=self.tmp_dir, mode="w+b") as stderr:
+                with patch("azurelinuxagent.common.cgroupapi.subprocess.Popen", side_effect=mock_popen):
+                    extension_cgroups, process_output = SystemdCgroupsApi().start_extension_command(
+                        extension_name="Microsoft.Compute.TestExtension-1.2.3",
+                        command="echo 'success'",
+                        timeout=300,
+                        shell=True,
+                        cwd=self.tmp_dir,
+                        env={},
+                        stdout=stdout,
+                        stderr=stderr)
+
+                    self.assertEquals(extension_cgroups, [])
+                    self.assertEquals(expected_output.format("success"), process_output)
+
+    @patch('time.sleep', side_effect=lambda _: mock_sleep(0.001))
+    def test_start_extension_command_should_use_fallback_option_if_systemd_times_out_externally(self, _):
         # Mock systemd timeout and make sure the failure is only attributed to the extension if the command fails
         # using the fallback option
         original_popen = subprocess.Popen
