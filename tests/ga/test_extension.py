@@ -398,6 +398,7 @@ class TestExtension(ExtensionTestCase):
         handler, protocol = self._create_mock(test_data, *args)
         mock_in_vm_artifacts_profile = InVMArtifactsProfile(test_data.vm_artifacts_profile)
         protocol.get_artifacts_profile = Mock(return_value=mock_in_vm_artifacts_profile)
+        conf.get_extensions_fast_track_enabled = Mock(return_value=True)
 
         # First FastTrack goal state
         handler.run()
@@ -420,6 +421,7 @@ class TestExtension(ExtensionTestCase):
     def test_multiple_fabric_goal_states(self, *args):
         test_data = WireProtocolData(DATA_FILE)
         handler, protocol = self._create_mock(test_data, *args)
+        conf.get_extensions_fast_track_enabled = Mock(return_value=True)
 
         # First Fabric goal state
         handler.run()
@@ -444,6 +446,7 @@ class TestExtension(ExtensionTestCase):
         handler, protocol = self._create_mock(test_data, *args)
         mock_in_vm_artifacts_profile = InVMArtifactsProfile(test_data.vm_artifacts_profile)
         protocol.get_artifacts_profile = Mock(return_value=mock_in_vm_artifacts_profile)
+        conf.get_extensions_fast_track_enabled = Mock(return_value=True)
 
         # First FastTrack goal state
         handler.run()
@@ -472,6 +475,7 @@ class TestExtension(ExtensionTestCase):
     def test_fabric_then_fast_track(self, *args):
         test_data = WireProtocolData(DATA_FILE)
         handler, protocol = self._create_mock(test_data, *args)
+        conf.get_extensions_fast_track_enabled = Mock(return_value=True)
 
         # First Fabric goal state
         handler.run()
@@ -502,6 +506,7 @@ class TestExtension(ExtensionTestCase):
     def test_ext_handler_profile_blob_not_modified(self, *args):
         test_data = WireProtocolData(DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
+        conf.get_extensions_fast_track_enabled = Mock(return_value=True)
 
         # First goal state will be through Fabric.
         exthandlers_handler.run()
@@ -523,6 +528,7 @@ class TestExtension(ExtensionTestCase):
     def test_ext_handler_profile_blob(self, *args):
         test_data = WireProtocolData(DATA_FILE)
         exthandlers_handler, protocol = self._create_mock(test_data, *args)
+        conf.get_extensions_fast_track_enabled = Mock(return_value=True)
 
         # First goal state will be through Fabric.
         exthandlers_handler.run()
