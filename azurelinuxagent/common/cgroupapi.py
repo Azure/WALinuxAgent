@@ -510,6 +510,8 @@ After=system-{1}.slice""".format(extension_name, EXTENSIONS_ROOT_CGROUP_NAME)
                 stderr.truncate(0)
 
                 # Try invoking the process again, this time without systemd-run
+                logger.info('Extension invocation using systemd failed, falling back to regular invocation '
+                            'without cgroups tracking.')
                 process = subprocess.Popen(command,
                                            shell=shell,
                                            cwd=cwd,
