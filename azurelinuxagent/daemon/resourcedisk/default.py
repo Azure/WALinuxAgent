@@ -195,7 +195,7 @@ class ResourceDiskHandler(object):
 
             self.reread_partition_table(device)
 
-            ret, output = shellutil.run_get_output(mount_string)
+            ret, output = shellutil.run_get_output(mount_string, chk_err=False)
             if ret:
                 logger.warn("Failed to mount resource disk. "
                             "Attempting to format and retry mount. [{0}]",
